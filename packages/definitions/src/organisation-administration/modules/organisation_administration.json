@@ -672,10 +672,10 @@
       "storage_contract_id": "srt_org_admin_installed_application",
       "storage_scope": "organization_shared",
       "system_projection": {
-        "protected_view": "installed_applications",
+        "protected_view": "application_store_entries",
         "organization_field": "organization_id",
         "revision_field": "revision",
-        "filterable_fields": ["is_default", "key"],
+        "filterable_fields": ["is_default", "key", "release_revision"],
         "sortable_fields": ["key", "release_revision"]
       },
       "ownership_mode": "none",
@@ -733,7 +733,7 @@
           "label": "Installed release",
           "required": false,
           "unique": false,
-          "filterable": false,
+          "filterable": true,
           "sortable": true,
           "personal_data": "none",
           "public_display": "refused",
@@ -2061,7 +2061,10 @@
       "record_type": "installed_application",
       "inputs": [],
       "select": ["key", "release_revision", "is_default"],
-      "filter": null,
+      "filter": {
+        "field": "release_revision",
+        "operator": "is_not_empty"
+      },
       "group_by": [],
       "aggregates": [],
       "sort": [

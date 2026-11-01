@@ -119,8 +119,7 @@ const targetFacts: BuilderTargetFactsReader = async (transaction, _scope, rootId
   if (rootId === undefined) throw new HistoryRefused();
   const origin = await readBuilderApplicationOrigin(transaction, rootId);
   if (origin === undefined) throw new HistoryRootMissing();
-  if (origin !== "ordinary") throw new HistoryRefused();
-  return { isSystemApplication: false };
+  return { isSystemApplication: origin === "platform_system_application" };
 };
 
 /** A live draft-management decision and database clock fence the complete safe projection. */

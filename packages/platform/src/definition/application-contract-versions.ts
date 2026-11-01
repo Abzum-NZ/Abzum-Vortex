@@ -6,7 +6,7 @@ import { DefinitionError } from "./definition-error";
  * source and in its validation output alike; `supabase/schemas/vortex_definition/accepted_contract_version.sql`
  * holds the same value for the database, and the guard compares the two.
  */
-export const definitionContractVersion = "4.4.0" as const;
+export const definitionContractVersion = "4.5.0" as const;
 
 /** The source and validation pair every stored and authored definition carries. */
 export const definitionContractVersionPairSchema = z

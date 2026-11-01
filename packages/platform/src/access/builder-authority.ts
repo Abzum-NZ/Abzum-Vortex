@@ -170,7 +170,11 @@ export const createBuilderAuthority = (
 
   async require(operation: BuilderOperation): Promise<BuilderAuthorityDecision> {
     const rootId =
-      operation.kind === "installation" ? operation.applicationRootId : operation.rootId;
+      operation.kind === "installation"
+        ? operation.applicationRootId
+        : operation.kind === "application_management"
+          ? undefined
+          : operation.rootId;
     const facts = await dependencies.targetFacts(
       dependencies.transaction,
       dependencies.scope,

@@ -222,6 +222,8 @@ function itemTargets(
         ]);
       if (field === "view_permission") return plain([[...canonicalVortex, "viewPermissionKey"]]);
       if (field === "use_permission") return plain([[...canonicalVortex, "usePermissionKey"]]);
+      if (field === "application_audience")
+        return plain([[...canonicalVortex, "applicationAudience"]]);
       if (field === "query") return plain([[...canonicalVortex, "queryId"]]);
       const conditionFields = {
         visibility_condition: "visibilityCondition",

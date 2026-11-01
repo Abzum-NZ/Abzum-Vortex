@@ -271,4 +271,4 @@ export {
   type PlacementLogPlace,
   type PlacementReadEntry,
 } from "./shared";
-export type { LauncherQueryRow, PlacementReadInput } from "./types";
+export type { ApplicationSurfaceAccess, LauncherQueryRow, PlacementReadInput } from "./types";

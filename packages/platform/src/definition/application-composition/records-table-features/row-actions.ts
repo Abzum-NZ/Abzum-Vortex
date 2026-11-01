@@ -1,10 +1,17 @@
 import type { RecordsTableFeatureProjection } from "../../../pages/records-table-feature-projection";
+import {
+  applicationActionCapabilities,
+  applicationLinkTargets,
+  type ApplicationActionCapability,
+  type ApplicationLinkTarget,
+} from "../../../catalogue/application-link";
 import type { ComponentSettingValue } from "../block-property-schema";
 import {
   featureAvailable,
   featureEnabled,
   featureNotPossible,
   optionalChoice,
+  optionalText,
   requiredChoice,
   requiredGroup,
   requiredItems,
@@ -63,6 +70,10 @@ const rowActionLimitRefusal: GridFeatureRefusal = {
   guidance: "Choose Row menu for the remaining actions.",
 };
 
+/** The record action kinds a configured row or bulk action may require of the viewer. */
+export const recordsTableActionCapabilities = ["update", "delete", "restore"] as const;
+type RecordsTableActionCapability = (typeof recordsTableActionCapabilities)[number];
+
 export const recordsTableRowActionIcons = [
   "workflow",
   "check",
@@ -73,10 +84,6 @@ export const recordsTableRowActionIcons = [
   "plus",
   "undo",
 ] as const;
-
-/** The record action kinds a configured row or bulk action may require of the viewer. */
-export const recordsTableActionCapabilities = ["update", "delete", "restore"] as const;
-type RecordsTableActionCapability = (typeof recordsTableActionCapabilities)[number];
 
 export const recordsTableRowActionsFeature: RecordsTableFeatureDefinition<object, "row_actions"> &
   Readonly<{ property: "rowActions" }> = {
@@ -106,17 +113,22 @@ export const recordsTableRowActionsFeature: RecordsTableFeatureDefinition<object
 };
 
 /**
- * One row action bound to a workflow. `eventId` is the stable identity of the flow binding the
- * command runs; it is unique across one placement's declared behaviours, so a click reaches
- * exactly one flow. `capability`, when declared, names the record action the command needs: the
- * server disables it for a row whose per-row capabilities do not include that kind. A workflow that
- * declares no capability (an open, read or custom command) stays offered, and the server still
- * re-checks every action it runs.
+ * One row action bound to a workflow or to a server-resolved link. `eventId` is the stable identity
+ * of the flow binding the command runs; it is unique across one placement's declared behaviours, so
+ * a click reaches exactly one flow. `link` names an internal application destination the server
+ * resolves per row: the action is offered only where the resolver returns an address for the person.
+ * `capability`, when declared, names the record action the command needs: the server disables it for
+ * a row whose per-row capabilities do not include that kind. `applicationCapability`, when declared,
+ * names what the action needs of the application its row is about: the server decides it once per
+ * read from the application-surface capability read. A workflow that declares no capability (an
+ * open, read or custom command) stays offered, and the server still re-checks every action it runs.
  */
 export type RecordsTableActionContract = Readonly<{
-  eventId: string;
+  eventId?: string;
+  link?: ApplicationLinkTarget;
   label: string;
   capability?: RecordsTableActionCapability | undefined;
+  applicationCapability?: ApplicationActionCapability | undefined;
   icon: (typeof recordsTableRowActionIcons)[number];
   placement: "inline" | "menu";
 }>;
@@ -129,16 +141,29 @@ export const readRecordsTableRowActions = (
   for (const [index, item] of requiredItems(value, "row_actions").entries()) {
     const at = `row_actions[${index}]`;
     const action = requiredGroup(item, at);
-    const eventId = requiredText(action["event_id"], `${at}.event_id`);
-    if (actions.some((entry) => entry.eventId.toLowerCase() === eventId.toLowerCase()))
+    const eventId = optionalText(action["event_id"], `${at}.event_id`);
+    const link = optionalChoice(action["link"], applicationLinkTargets, `${at}.link`);
+    if ((eventId === undefined) === (link === undefined)) return unreadable(`${at}.event_id`);
+    const identity = eventId ?? `link:${link}`;
+    if (
+      actions.some(
+        (entry) => (entry.eventId ?? `link:${entry.link}`).toLowerCase() === identity.toLowerCase(),
+      )
+    )
       return unreadable(`${at}.event_id`);
     const capability = optionalChoice(
       action["capability"],
       recordsTableActionCapabilities,
       `${at}.capability`,
     );
+    const applicationCapability = optionalChoice(
+      action["application_capability"],
+      applicationActionCapabilities,
+      `${at}.application_capability`,
+    );
     actions.push({
-      eventId,
+      ...(eventId === undefined ? {} : { eventId }),
+      ...(link === undefined ? {} : { link }),
       label: requiredText(action["label"], `${at}.label`),
       icon: requiredChoice(action["icon"], recordsTableRowActionIcons, `${at}.icon`),
       placement: requiredChoice(
@@ -147,15 +172,27 @@ export const readRecordsTableRowActions = (
         `${at}.placement`,
       ),
       ...(capability === undefined ? {} : { capability }),
+      ...(applicationCapability === undefined ? {} : { applicationCapability }),
     });
   }
   return actions;
 };
 
 /**
+ * The stable identity a row action's availability decision is reported under: its flow binding's
+ * event, or the link target it resolves to.
+ */
+export const rowActionIdentity = (action: {
+  eventId?: string | undefined;
+  link?: ApplicationLinkTarget | undefined;
+}): string => action.eventId ?? `link:${action.link}`;
+
+/**
  * The row actions a table offers and, per row, whether the capabilities its read decided make each
- * eligible; absent when the feature is off or the table declares none. Named-action eligibility is
- * decided afterwards, in the read's own request, by `projectRowActionAvailability`.
+ * eligible; absent when the feature is off or the table declares none. A server-resolved link or an
+ * application capability starts ineligible and the read's own request decides it per row. Named
+ * action eligibility is decided afterwards, in the read's own request, by
+ * `projectRowActionAvailability`.
  */
 export const recordsTableRowActionsProjection = (
   state: RecordsTableFeatureState<object>,
@@ -172,16 +209,23 @@ export const recordsTableRowActionsProjection = (
                 {
                   recordId: row.recordId,
                   revision: row.revision,
-                  actions: rowBehaviours.rowActions.map((action) =>
-                    action.capability === undefined ||
-                    row.capabilities?.actions.includes(action.capability) === true
-                      ? { action: action.eventId, eligible: true as const }
+                  actions: rowBehaviours.rowActions.map((action) => {
+                    const identity = rowActionIdentity(action);
+                    if (action.applicationCapability !== undefined || action.link !== undefined)
+                      return {
+                        action: identity,
+                        eligible: false as const,
+                        reason: "not_permitted" as const,
+                      };
+                    return action.capability === undefined ||
+                      row.capabilities?.actions.includes(action.capability) === true
+                      ? { action: identity, eligible: true as const }
                       : {
-                          action: action.eventId,
+                          action: identity,
                           eligible: false as const,
                           reason: "not_permitted" as const,
-                        },
-                  ),
+                        };
+                  }),
                 },
               ],
         ),

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { jsonValueSchema, labelSchema } from "../../catalogue/common";
+import { applicationAudienceSchema } from "../../catalogue/application-link";
 import { builderKeySchema, namespacedKeySchema } from "../../catalogue/identifiers";
 import {
   sourceAliasSchema,
@@ -49,6 +50,7 @@ export type SourceItemVortex = {
   block: z.infer<typeof sourcePlatformBlockReferenceSchema>;
   view_permission?: string | undefined;
   use_permission?: string | undefined;
+  application_audience?: z.infer<typeof applicationAudienceSchema> | undefined;
   visibility_condition?: z.infer<typeof sourceQualifiedConditionSchema> | undefined;
   required_condition?: z.infer<typeof sourceQualifiedConditionSchema> | undefined;
   read_only_condition?: z.infer<typeof sourceQualifiedConditionSchema> | undefined;
@@ -165,6 +167,9 @@ const sourceItemVortexSchema = z
     block: sourceProvenanceUnchanged(sourcePlatformBlockReferenceSchema),
     view_permission: sourceProvenanceTarget(namespacedKeySchema.optional(), ["viewPermissionKey"]),
     use_permission: sourceProvenanceTarget(namespacedKeySchema.optional(), ["usePermissionKey"]),
+    application_audience: sourceProvenanceTarget(applicationAudienceSchema.optional(), [
+      "applicationAudience",
+    ]),
     visibility_condition: sourceProvenanceUnchanged(sourceQualifiedConditionSchema.optional()),
     required_condition: sourceProvenanceUnchanged(sourceQualifiedConditionSchema.optional()),
     read_only_condition: sourceProvenanceUnchanged(sourceQualifiedConditionSchema.optional()),

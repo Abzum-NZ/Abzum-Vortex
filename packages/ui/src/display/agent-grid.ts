@@ -91,10 +91,11 @@ export function useAgentGrid(placementId: string, label: string, state: GridStat
         rowActions: () =>
           current.current.events?.row_action === undefined
             ? []
-            : (current.current.features?.rowActions?.actions ?? []).map((action) => ({
-                action: action.eventId,
-                label: action.label,
-              })),
+            : (current.current.features?.rowActions?.actions ?? []).flatMap((action) =>
+                action.eventId === undefined
+                  ? []
+                  : [{ action: action.eventId, label: action.label }],
+              ),
         act: (record, action) => {
           const grid = current.current;
           const row = grid.rows.find((candidate) => same(candidate.recordId, record));

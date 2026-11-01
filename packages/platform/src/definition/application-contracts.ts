@@ -462,6 +462,7 @@ export const applicationExperienceSchema = z
 const experienceGatedPlacementKeys = [
   "viewPermissionKey",
   "usePermissionKey",
+  "applicationAudience",
   "visibilityCondition",
   "requiredCondition",
   "readOnlyCondition",

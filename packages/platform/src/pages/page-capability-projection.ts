@@ -8,6 +8,7 @@ import type { ResolvedPageComposition } from "./page-composition-resolution";
 import { placementViewShown } from "./projected-navigation";
 import { conditionReadsPageValues } from "../rules/typed-condition-core";
 import type { ConditionNode } from "../definition/module-foundation-contracts";
+import type { ApplicationAudience } from "../catalogue/application-link";
 
 type PlacementCapabilityState = Readonly<{
   viewAllowed: boolean;
@@ -24,6 +25,8 @@ type PlacementCapabilityState = Readonly<{
 export type PageCapabilityState = Readonly<{
   pageAllowed: boolean;
   placements: Readonly<Record<string, PlacementCapabilityState>>;
+  /** The audiences this page read allows, when it decided them; absent means none. */
+  applicationAudiences?: Readonly<Record<ApplicationAudience, boolean>>;
   /** Current organisation Access version this projection was decided under, when known. */
   accessVersion?: number;
   /** Exact installed application release revision this projection was decided under, when known. */
@@ -91,6 +94,7 @@ const reservedProps = new Set(["id", "vortex"]);
 const projectItems = (
   itemsCandidate: unknown,
   states: PageCapabilityState["placements"],
+  applicationAudiences: PageCapabilityState["applicationAudiences"],
 ): JsonObject[] =>
   (itemsCandidate as unknown[]).flatMap((candidate) => {
     const item = object(candidate);
@@ -98,8 +102,13 @@ const projectItems = (
     const vortex = object(props.vortex);
     const placementId = String(props.id);
     const state = states[placementId];
+    const audience = vortex.applicationAudience;
     if (
       !placementViewShown(vortex.viewPermissionKey, state?.viewAllowed) ||
+      (audience !== undefined &&
+        (typeof audience !== "string" ||
+          applicationAudiences === undefined ||
+          applicationAudiences[audience as ApplicationAudience] !== true)) ||
       (vortex.visibilityCondition !== undefined && state?.conditionAllowed !== true) ||
       state?.actionAvailable === false
     )
@@ -131,7 +140,7 @@ const projectItems = (
             : value;
         continue;
       }
-      const children = projectItems(value, states);
+      const children = projectItems(value, states, applicationAudiences);
       projectedProps[key] = children;
       slotOrders[key] = filteredOrder(object(vortex.slotOrders)[key], children);
     }
@@ -168,7 +177,7 @@ const projectItems = (
 export const projectPlacementSubtree = (
   item: unknown,
   states: PageCapabilityState["placements"],
-): Readonly<Record<string, unknown>> | undefined => projectItems([item], states)[0];
+): Readonly<Record<string, unknown>> | undefined => projectItems([item], states, undefined)[0];
 
 /** A breakpoint order keeping only the items the projection retained. */
 const filteredOrder = (order: unknown, items: readonly JsonObject[]): JsonObject => {
@@ -185,8 +194,9 @@ const filteredOrder = (order: unknown, items: readonly JsonObject[]): JsonObject
 const projectLayout = (
   layout: CompiledLayout,
   states: PageCapabilityState["placements"],
+  applicationAudiences: PageCapabilityState["applicationAudiences"],
 ): JsonObject => {
-  const content = projectItems(layout.content, states);
+  const content = projectItems(layout.content, states, applicationAudiences);
   return {
     root: {
       props: {
@@ -204,13 +214,14 @@ const projectLayout = (
 const project = (
   resolved: ResolvedPageComposition,
   states: PageCapabilityState["placements"],
+  applicationAudiences: PageCapabilityState["applicationAudiences"],
 ): JsonObject => {
   const page: PageDefinition = resolved.page;
   const source = object(page);
   if (resolved.roots.kind === "page")
     return {
       ...withoutKeys(source, ["accessPermissionKey"]),
-      composition: projectLayout(resolved.roots.main, states),
+      composition: projectLayout(resolved.roots.main, states, applicationAudiences),
     };
   return {
     ...withoutKeys(source, ["accessPermissionKey"]),
@@ -218,7 +229,7 @@ const project = (
       stepContent: Object.fromEntries(
         Object.entries(resolved.roots.stepContent).map(([stepId, root]) => [
           stepId,
-          projectLayout(root, states),
+          projectLayout(root, states, applicationAudiences),
         ]),
       ),
     },
@@ -237,7 +248,7 @@ export const projectPageCapability = (
 ): ProjectedPageCapability => {
   if (!capability.pageAllowed) return undefined;
   return {
-    ...project(resolved, capability.placements),
+    ...project(resolved, capability.placements, capability.applicationAudiences),
     ...(capability.accessVersion === undefined ? {} : { accessVersion: capability.accessVersion }),
     ...(capability.applicationReleaseRevision === undefined
       ? {}

@@ -317,9 +317,13 @@ export const validationPayloadSchema = z
   .readonly();
 export type ValidationPayload = z.output<typeof validationPayloadSchema>;
 
-/** The ready values a button block accepts; a button carries no value of its own. */
+/** The ready values a button block accepts; a button carries no value of its own, and a link button carries its resolved address. */
 export const buttonPayloadSchema = z
-  .object({ kind: z.literal("button") })
+  .object({
+    kind: z.literal("button"),
+    /** The internal address this button opens, when it is a link button. */
+    href: z.string().min(1).max(2048).exactOptional(),
+  })
   .strict()
   .readonly();
 export type ButtonPayload = z.output<typeof buttonPayloadSchema>;

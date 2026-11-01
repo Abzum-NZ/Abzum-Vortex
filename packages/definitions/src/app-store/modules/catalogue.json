@@ -244,6 +244,19 @@
           "sortable": false,
           "personal_data": "none",
           "public_display": "refused",
+          "id": "fld_store_application_is_system_application",
+          "key": "is_system_application",
+          "label": "Platform application",
+          "type": "yes_no",
+          "settings": {}
+        },
+        {
+          "required": false,
+          "unique": false,
+          "filterable": false,
+          "sortable": false,
+          "personal_data": "none",
+          "public_display": "refused",
           "id": "fld_store_application_records_processed",
           "key": "records_processed",
           "label": "Records processed",
@@ -287,7 +300,8 @@
           "installed_version",
           "status",
           "record_update_status",
-          "records_processed"
+          "records_processed",
+          "is_system_application"
         ],
         "changeable_fields": []
       }
@@ -316,7 +330,8 @@
         "installed_version",
         "status",
         "record_update_status",
-        "records_processed"
+        "records_processed",
+        "is_system_application"
       ],
       "filter": null,
       "group_by": [],

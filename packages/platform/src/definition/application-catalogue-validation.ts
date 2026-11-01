@@ -390,8 +390,13 @@ export function validateApplicationSourceCatalogue(
           "record_reference",
         );
       for (const action of behaviours.rowActions)
-        checkRowBehaviour("row_actions", action.eventId, "row_action", "record_reference");
-      const rowActionIds = new Set(behaviours.rowActions.map((action) => action.eventId));
+        if (action.eventId !== undefined)
+          checkRowBehaviour("row_actions", action.eventId, "row_action", "record_reference");
+      const rowActionIds = new Set(
+        behaviours.rowActions.flatMap((action) =>
+          action.eventId === undefined ? [] : [action.eventId],
+        ),
+      );
       for (const binding of source.body.flow_bindings)
         if (
           binding.control === placementAlias &&

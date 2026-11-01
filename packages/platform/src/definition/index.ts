@@ -138,6 +138,12 @@ export type {
   PermittedApplicationsRead,
 } from "./application-launcher-read";
 export {
+  applicationSurfaceCapabilitiesOf,
+  describeApplicationSurfaceCapabilityFailure,
+  readApplicationSurfaceCapabilities,
+  type ApplicationSurfaceCapabilities,
+} from "./application-surface-capabilities";
+export {
   requireInstalledRuntimeContext,
   type InstalledRuntimeContext,
 } from "./installed-runtime-context";

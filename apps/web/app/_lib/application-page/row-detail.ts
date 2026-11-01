@@ -141,6 +141,7 @@ export const loadApplicationRowDetail = async (
         data: {},
         services: services.placementServices(context, readSubject),
         permittedApplicationKeys: undefined,
+        permittedApplications: undefined,
         permittedApplicationsUnavailable: false,
         gridLayouts: await readPageGridLayouts(
           session,
