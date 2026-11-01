@@ -173,7 +173,8 @@ export const readApplicationDefinitionDraft = async (
     throw new DefinitionError("DEFINITION_CONTEXT_REFUSED");
   if (root.kind !== "application") throw new DefinitionError("DEFINITION_ROOT_MISSING");
   const parsedDraft = storedDefinitionDraftSchema.safeParse(normalizeStoredDraft(state.data.draft));
-  if (!parsedDraft.success) throw new DefinitionError("INVALID_DEFINITION_STORAGE_RESULT");
+  if (!parsedDraft.success)
+    throw new DefinitionError("INVALID_DEFINITION_STORAGE_RESULT", { cause: parsedDraft.error });
   const draft = parsedDraft.data;
   if (
     draft.kind !== "application" ||

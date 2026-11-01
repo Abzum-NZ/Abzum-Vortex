@@ -65,6 +65,10 @@ export const unavailableMessage = (
       return "Your session or access changed while this was being checked. Reload the page; sign in again if it persists.";
     case "source_invalid":
       return "The saved draft source is not valid, so it cannot be opened here.";
+    case "source_invalid_platform":
+      return "This draft could not be read because of a platform problem. It has been logged; your published app keeps working.";
+    case "publication_invalid_platform":
+      return "This app could not be prepared because of a platform problem. It has been logged.";
     case "session_unavailable":
     case "request_failed":
     case "unexpected_failure":
