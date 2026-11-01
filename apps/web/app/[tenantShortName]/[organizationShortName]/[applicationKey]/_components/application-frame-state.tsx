@@ -42,11 +42,6 @@ export type ApplicationFramePageState = Readonly<{
   webMcp?: ApplicationWebMcpRuntime;
   /** The page's unsaved-work guard, consulted before the frame leaves the page. */
   unsavedWork?: UnsavedWorkGuard;
-  /** Executes the account menu's freshly read offer through this page's adoption action. */
-  adoptRelease?: (
-    offeredReleaseRevision: number,
-    installedReleaseRevision: number,
-  ) => Promise<void>;
   /** The frame projected with the page, which replaces the frame the layout projected. */
   frame?: ProjectedApplicationFrame;
   /** The viewer's menu projected with the page, which replaces the layout's. */

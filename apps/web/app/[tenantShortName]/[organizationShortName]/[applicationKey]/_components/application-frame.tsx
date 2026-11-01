@@ -32,7 +32,6 @@ import type { ApplicationFrameModel } from "../../../../_lib/application-frame";
 import { signOut } from "../../../../auth/actions";
 import {
   readApplicationSwitcherAction,
-  readReleaseAdoptionAction,
   searchApplicationAction,
   searchLauncherAction,
 } from "../frame-actions";
@@ -44,6 +43,7 @@ import {
   type FramePageStateOwner,
 } from "./application-frame-state";
 import { FrozenRouter } from "./frozen-router";
+import { ReleaseOfferNotice } from "./release-offer-notice";
 
 type ApplicationSearch = NonNullable<PagePuckRendererProps["applicationSearch"]>;
 type Registration = Readonly<{ owner: FramePageStateOwner; value: unknown }>;
@@ -224,43 +224,6 @@ export function ApplicationFrame({
   const applicationSearchPageSubject = searchSubject.success ? searchSubject.data : undefined;
 
   const unsavedWork = pageState.unsavedWork;
-  const adoptRelease = pageState.adoptRelease;
-  // Sign-out waits for an in-flight adoption read to settle, so its server action response cannot
-  // refresh or navigate the page after the sign-out request has gone out.
-  const adoptionRead = useRef<Promise<unknown>>(Promise.resolve());
-  const readReleaseAdoption = useCallback<
-    NonNullable<ApplicationAccountActions["readReleaseAdoption"]>
-  >(async () => {
-    const pending: ReturnType<NonNullable<ApplicationAccountActions["readReleaseAdoption"]>> =
-      (async () => {
-        const result = await readReleaseAdoptionAction(
-          application.tenantShortName,
-          application.organizationShortName,
-          application.key,
-        );
-        if (result.state !== "available") return result;
-        const offer = result.offer;
-        return {
-          state: "available",
-          ...(offer === undefined || adoptRelease === undefined
-            ? {}
-            : {
-                offer: {
-                  version: offer.version,
-                  adopt: () =>
-                    adoptRelease(offer.offeredReleaseRevision, offer.installedReleaseRevision),
-                },
-              }),
-        };
-      })();
-    adoptionRead.current = pending;
-    return pending;
-  }, [
-    adoptRelease,
-    application.tenantShortName,
-    application.organizationShortName,
-    application.key,
-  ]);
   const leaveIfConfirmed = useCallback(
     async (): Promise<boolean> =>
       unsavedWork === undefined ||
@@ -298,11 +261,8 @@ export function ApplicationFrame({
     organizationName: application.organizationDisplayName,
     organizationShortName: application.organizationShortName,
     ...(model.studioHref === undefined ? {} : { studioHref: model.studioHref }),
-    ...(adoptRelease === undefined ? {} : { readReleaseAdoption }),
     signOut: async () => {
       if (!(await leaveIfConfirmed())) return;
-      // A read still in flight settles before the one sign-out request is sent.
-      await adoptionRead.current.catch(() => undefined);
       await signOut();
     },
   };
@@ -363,6 +323,9 @@ export function ApplicationFrame({
       <ApplicationFrameStateProvider value={frameState}>
         <ApplicationAccountActionsProvider actions={accountActions}>
           <PageNavigationBusyContext.Provider value={pageTransitionPending}>
+            {model.releaseOffer === undefined ? null : (
+              <ReleaseOfferNotice applicationName={application.name} offer={model.releaseOffer} />
+            )}
             <PagePuckRenderer
               readSettings={readCompiledItemSettings}
               applicationSurface

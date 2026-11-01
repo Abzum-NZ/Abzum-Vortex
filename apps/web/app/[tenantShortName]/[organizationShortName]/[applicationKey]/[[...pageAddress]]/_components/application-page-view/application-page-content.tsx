@@ -35,7 +35,6 @@ import type {
   PageSelection,
 } from "./types";
 import { ownersByPlacement } from "./form-surface";
-import { releaseAdoptionNotices, type ReleaseAdoptionOutcome } from "./notices";
 import { usePageEvents } from "./use-page-events";
 import { placementEventNamesByPage, applicationLauncherPlacementIds } from "./placement-helpers";
 import { useUnsavedWorkPrompt } from "./use-unsaved-work-prompt";
@@ -77,7 +76,6 @@ export function ApplicationPageViewContent({
   content,
   frame,
   onOpenApplication,
-  adoptReleaseAction,
   platformComponentRegistry,
   fieldInputControlReleases,
   platformThemeTokens,
@@ -88,7 +86,6 @@ export function ApplicationPageViewContent({
   /** The frame projected with this page, handed to the application frame around it. */
   frame: ProjectedApplicationFrame;
   onOpenApplication: (event: DisplaySemanticEvent) => Promise<void>;
-  adoptReleaseAction?: ((formData: FormData) => Promise<ReleaseAdoptionOutcome>) | undefined;
   platformComponentRegistry: ReturnType<typeof createPlatformComponentRegistryForReleases>;
   fieldInputControlReleases: FieldInputControlReleaseMap;
   platformThemeTokens: PlatformThemeTokens;
@@ -588,22 +585,6 @@ export function ApplicationPageViewContent({
     return [own, Object.keys(shell).length === 0 ? undefined : shell] as const;
   }, [contentPlacementIds, currentContentPlacementIds, runtimeInputs]);
   useFramePageState("runtimeInputs", frameRuntimeInputs);
-  const adoptRelease = useMemo(
-    () =>
-      adoptReleaseAction === undefined
-        ? undefined
-        : async (offeredReleaseRevision: number, installedReleaseRevision: number) => {
-            const formData = new FormData();
-            formData.set("applicationKey", application.applicationKey);
-            formData.set("pageKey", application.pageKey);
-            formData.set("targetReleaseRevision", String(offeredReleaseRevision));
-            formData.set("expectedActiveReleaseRevision", String(installedReleaseRevision));
-            const outcome = await adoptReleaseAction(formData);
-            if (outcome !== "adopted") showPageMessage(releaseAdoptionNotices[outcome]);
-          },
-    [adoptReleaseAction, application.applicationKey, application.pageKey, showPageMessage],
-  );
-  useFramePageState("adoptRelease", adoptRelease);
   // A change an earlier page finished after it had gone, and Back or Forward restoring this page,
   // re-read this page's data placements (a placement read answers `reload` when the installed
   // release changed).

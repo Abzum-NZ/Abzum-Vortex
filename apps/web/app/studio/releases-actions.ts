@@ -1,5 +1,12 @@
 "use server";
 
+import { applicationRootIdSchema, organizationIdSchema } from "@vortex/platform/schema";
+import { resolveIdentitySession } from "../auth/_lib/session-server";
+import {
+  readApplicationReleaseStanding as readStanding,
+  type ApplicationReleaseStanding,
+} from "../_lib/application-release-adoption";
+import { loadOrganizationLauncher } from "../_lib/organization-context";
 import {
   listStudioApplicationReleaseHistory,
   type StudioApplicationHistoryListResult,
@@ -40,6 +47,42 @@ export async function restoreApplicationRelease(
   command: unknown,
 ): Promise<StudioApplicationRestoreCommandResult> {
   return restoreStudioApplicationDraft(organizationId, command);
+}
+
+/**
+ * Where the application stands in the builder's organisation (live, waiting or not installed), as
+ * the App Store's review says it, with the App Store page that installs or upgrades it. It reads
+ * only; the upgrade itself happens in the App Store's dialog.
+ */
+export async function readApplicationReleaseStanding(
+  organizationId: string,
+  rootId: string,
+): Promise<ApplicationReleaseStanding> {
+  try {
+    const organization = organizationIdSchema.safeParse(organizationId);
+    const root = applicationRootIdSchema.safeParse(rootId);
+    if (!organization.success || !root.success) return { kind: "unknown" };
+    const resolved = await resolveIdentitySession();
+    if (resolved.kind !== "active") return { kind: "unknown" };
+    const launcher = await loadOrganizationLauncher(resolved.session);
+    const entry =
+      launcher.kind === "available"
+        ? launcher.entries.find(
+            (candidate) =>
+              candidate.organizationId.toLowerCase() === organization.data.toLowerCase(),
+          )
+        : undefined;
+    if (entry === undefined) return { kind: "unknown" };
+    return await readStanding(resolved.session, {
+      tenantShortName: entry.tenantShortName,
+      organizationShortName: entry.organizationShortName,
+      organizationId: organization.data,
+      applicationRootId: root.data,
+    });
+  } catch (error) {
+    console.error("[studio] release standing could not be read", error);
+    return { kind: "unknown" };
+  }
 }
 
 const textField = (formData: FormData, key: string): string | undefined => {

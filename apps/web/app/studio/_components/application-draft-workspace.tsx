@@ -273,12 +273,10 @@ function ExistingApplicationWorkspace(props: ExistingProps) {
     draft,
     compositionContext: canvas.compositionContext,
     structure: structureCommand,
-    installed: place.installed,
     hidden: tab !== "releases",
     initialSection: isStudioReleasesSection(props.initialSection)
       ? props.initialSection
       : ("history" as StudioReleasesSection),
-    appStoreHref: place.appStoreHref,
   });
 
   const centreTitle =

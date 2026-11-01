@@ -1,185 +1,189 @@
 import "server-only";
 
 import {
-  createBuilderAuthority,
-  prepareApplicationRoleTemplatesForHumanRequest,
-} from "@vortex/platform/server";
-import {
-  applicationInstallationActivationRequestSchema,
-  createApplicationInstallationCoordinator,
-  type HumanInstallationDefinitionAccess,
-} from "@vortex/platform/server";
-import type {
-  ApplicationRootId,
-  IdentitySession,
-  OrganizationId,
-  SystemApplicationBoundReleaseSetResult,
-} from "@vortex/platform/schema";
-import {
-  createDatabaseApplicationReleaseAdoptionReleaseSetService,
   createApplicationReleaseAdoptionTargetService,
-  createPreparedInstallationRuntimeSourceReader,
-  resolveModuleContributions,
-  type ApplicationReleaseAdoptionTarget,
+  createBuilderAuthority,
+  readCurrentOrganizationAppStoreAddressAfterAuthorization,
 } from "@vortex/platform/server";
-import {
-  installedReleaseCatalogue,
-  releaseSetContainsCustomComponents,
-} from "./definition-catalogue";
+import type { ApplicationRootId, IdentitySession, OrganizationId } from "@vortex/platform/schema";
+import { describeFailure } from "@vortex/platform/schema";
+import { applicationPageAddressPath } from "./address-paths";
+import { pageSubjectParameter } from "./application-page/placement-helpers";
+import { applicationStoreService } from "./application-store-service";
 import { humanOrganizationRequests } from "./server-composition";
-import { DefinitionError } from "@vortex/platform/server";
 import { platformPermissionSource } from "./platform-permission-source";
 
 /**
- * The deliberate release adoption of one installed application. The offered target is the
- * application root's published-current release, read through the governed human read under the
- * caller's own application scope; the adoption itself is the App installation coordinator. A
- * successful adoption changes the installation the next request resolves; a refusal, stale
- * revision or preparation failure leaves the previous active release exactly as it was.
+ * Where an installed application stands against its latest published release. Publishing only
+ * creates a release; the App Store is the one place an organisation installs or upgrades to it
+ * (its Install or upgrade dialog reviews and accepts the role changes). These reads only say where
+ * the application stands and link to that App Store page; nothing here changes an installation.
  */
 
-const requests = () => humanOrganizationRequests();
+/** The App Store page that shows one application and offers its Install or upgrade dialog. */
+const appStoreApplicationPageKey = "app_store_application";
 
-/**
- * The definition access the coordinator reads through when the deployment cannot mint a system
- * context: the exact release set is read under the installer's own human request, and the role
- * templates are prepared from that same human evidence.
- */
-const humanDefinitionAccess = (): HumanInstallationDefinitionAccess => ({
-  async readReleaseSet(
-    session: IdentitySession,
-    target,
-    purpose,
-  ): Promise<SystemApplicationBoundReleaseSetResult> {
-    const result = await requests().run(
-      session,
-      { organizationId: target.organizationId, applicationRootId: target.applicationRootId },
-      (transaction) =>
-        createDatabaseApplicationReleaseAdoptionReleaseSetService(
-          installedReleaseCatalogue,
-          transaction,
-          purpose,
-        ).read({
-          applicationRootId: target.applicationRootId,
-          applicationReleaseRevision: target.applicationReleaseRevision,
-        }),
-    );
-    if (result.kind !== "available")
-      throw new DefinitionError("APPLICATION_INSTALLATION_RELEASE_UNAVAILABLE");
-    return result.value;
-  },
-  async prepareRegistrationCandidate(target, releaseSet) {
-    return prepareApplicationRoleTemplatesForHumanRequest(
-      target.organizationId,
-      {
-        applicationRootId: target.applicationRootId,
-        releaseRevision: target.applicationReleaseRevision,
-      },
-      releaseSet,
-    );
-  },
-});
+/** The App Store's page for one application: the store's record identity is the application root. */
+const appStoreApplicationHref = (
+  tenantShortName: string,
+  organizationShortName: string,
+  appStoreKey: string,
+  applicationRootId: string,
+): string =>
+  `${applicationPageAddressPath(tenantShortName, organizationShortName, appStoreKey, appStoreApplicationPageKey)}?${pageSubjectParameter}=${encodeURIComponent(applicationRootId)}`;
 
-const coordinator = () =>
-  createApplicationInstallationCoordinator({
-    installerRequests: requests(),
-    resolveModuleContributions,
-    builderAuthority: (transaction, scope) =>
-      createBuilderAuthority({
-        transaction,
-        scope,
-        // The installation/upgrade requirements do not depend on the target being a system
-        // application; an upgrade is never refused on that fact. Reading the fact is a separate
-        // composition concern owned by the system-application work.
-        targetFacts: async () => ({ isSystemApplication: false }),
-        permissions: platformPermissionSource,
-      }),
-    // Derived from the exact release set, so a release that places a custom component also
-    // requires `custom_code.manage` and a recent sign-in.
-    containsCustomComponents: releaseSetContainsCustomComponents,
-    humanDefinitionAccess: humanDefinitionAccess(),
-    preparedRuntimeSource: createPreparedInstallationRuntimeSourceReader(
-      installedReleaseCatalogue,
-      [],
-    ),
-  });
-
-/**
- * The published-current release offered for adoption, or undefined when the caller may not manage
- * installations, the application is not installed, or no target can be proven. The caller's
- * `applications.manage` decision is made first in the same request, so a person without it never
- * reaches the admin-only read; a refusal is indistinguishable from "nothing to adopt", so nothing
- * is disclosed. A temporary read failure is raised so callers can log its cause and offer retry.
- */
-export const readApplicationReleaseAdoption = async (
-  session: IdentitySession,
-  scope: Readonly<{ organizationId: OrganizationId; applicationRootId: ApplicationRootId }>,
-): Promise<ApplicationReleaseAdoptionTarget | undefined> => {
-  const result = await requests().run(
-    session,
-    { organizationId: scope.organizationId, applicationRootId: scope.applicationRootId },
-    async (transaction, requestScope) => {
-      const authority = createBuilderAuthority({
-        transaction,
-        scope: requestScope,
-        targetFacts: async () => ({ isSystemApplication: false }),
-        permissions: platformPermissionSource,
-      });
-      const decision = await authority.require({
-        kind: "installation",
-        applicationRootId: scope.applicationRootId,
-        change: "install_or_upgrade",
-        containsCustomComponents: false,
-        acceptedPermissions: [],
-      });
-      if (decision.outcome !== "allowed") return undefined;
-      return createApplicationReleaseAdoptionTargetService(transaction).read({
-        applicationRootId: scope.applicationRootId,
-      });
-    },
-  );
-  if (result.kind !== "available") {
-    if (result.kind === "temporarily_unavailable")
-      throw new Error("APPLICATION_RELEASE_ADOPTION_TARGET_READ_FAILED", {
-        cause: new Error(result.cause ?? "Human request temporarily unavailable", {
-          cause: { code: result.databaseCode },
-        }),
-      });
-    return undefined;
-  }
-  return result.value;
-};
-
-type AdoptApplicationReleaseRequest = Readonly<{
-  organizationId: string;
-  applicationRootId: string;
-  applicationReleaseRevision: number;
-  expectedActiveReleaseRevision: number;
+/** A newer published release waiting for this organisation, offered to a person who may install. */
+export type ApplicationReleaseOffer = Readonly<{
+  version: string;
+  installedVersion: string;
+  appStoreHref: string;
 }>;
 
+type Address = Readonly<{ tenantShortName: string; organizationShortName: string }>;
+
 /**
- * Deliberately upgrades the installation to the exact offered release, or refuses. The browser's
- * offered target is never trusted: the published-current release is re-read under the caller's
- * own permission-gated request and must be exactly the offered revision and strictly newer than
- * the loaded installation. The installation coordinator then re-checks installation authority and
- * refuses as stale unless the active release is still exactly the one the page loaded.
+ * The newer published release of an installed application, with the link to its App Store page, or
+ * undefined. Only a person who may manage this organisation's installations is told: their
+ * `applications.manage` decision is made first in the same request, so nobody else reaches the
+ * admin-only release read, and a refusal looks the same as "nothing waiting". A read that cannot be
+ * made now is logged and offers nothing, so the application still opens.
  */
-export const adoptApplicationRelease = async (
+export const readApplicationReleaseOffer = async (
   session: IdentitySession,
-  request: AdoptApplicationReleaseRequest,
-): Promise<void> => {
-  const activation = applicationInstallationActivationRequestSchema.parse(request);
-  const target = await readApplicationReleaseAdoption(session, {
-    organizationId: activation.organizationId,
-    applicationRootId: activation.applicationRootId,
-  });
-  if (
-    target === undefined ||
-    target.organizationId.toLowerCase() !== activation.organizationId.toLowerCase() ||
-    target.currentReleaseRevision !== activation.applicationReleaseRevision ||
-    activation.expectedActiveReleaseRevision === null ||
-    activation.applicationReleaseRevision <= activation.expectedActiveReleaseRevision
-  )
-    throw new DefinitionError("APPLICATION_INSTALLATION_STALE");
-  await coordinator().activate(session, activation);
+  scope: Address &
+    Readonly<{
+      organizationId: OrganizationId;
+      applicationRootId: ApplicationRootId;
+      installedReleaseRevision: number;
+      installedVersion: string;
+    }>,
+): Promise<ApplicationReleaseOffer | undefined> => {
+  try {
+    const result = await humanOrganizationRequests().run(
+      session,
+      { organizationId: scope.organizationId, applicationRootId: scope.applicationRootId },
+      async (transaction, requestScope) => {
+        const decision = await createBuilderAuthority({
+          transaction,
+          scope: requestScope,
+          targetFacts: async () => ({ isSystemApplication: false }),
+          permissions: platformPermissionSource,
+        }).require({
+          kind: "installation",
+          applicationRootId: scope.applicationRootId,
+          change: "install_or_upgrade",
+          containsCustomComponents: false,
+          acceptedPermissions: [],
+        });
+        if (decision.outcome !== "allowed") return undefined;
+        const target = await createApplicationReleaseAdoptionTargetService(transaction).read({
+          applicationRootId: scope.applicationRootId,
+        });
+        if (target === undefined || target.currentReleaseRevision <= scope.installedReleaseRevision)
+          return undefined;
+        const appStoreKey =
+          await readCurrentOrganizationAppStoreAddressAfterAuthorization(transaction);
+        if (appStoreKey === null || appStoreKey === "invalid") {
+          console.error(`[release-offer] App Store address ${appStoreKey ?? "not set"}`);
+          return undefined;
+        }
+        return {
+          version: target.currentReleaseVersion,
+          installedVersion: scope.installedVersion,
+          appStoreHref: appStoreApplicationHref(
+            scope.tenantShortName,
+            scope.organizationShortName,
+            appStoreKey,
+            scope.applicationRootId,
+          ),
+        };
+      },
+    );
+    if (result.kind === "available") return result.value;
+    if (result.kind === "temporarily_unavailable")
+      console.error(
+        `[release-offer] read unavailable: ${result.databaseCode ?? result.cause ?? "unknown"}`,
+      );
+    return undefined;
+  } catch (error) {
+    console.error(`[release-offer] read failed: ${describeFailure(error)}`);
+    return undefined;
+  }
+};
+
+/** Where the application stands in the builder's organisation, as the App Store's review says it. */
+export type ApplicationReleaseStanding =
+  | Readonly<{ kind: "live"; version: string; rolesWaiting: boolean; appStoreHref: string }>
+  | Readonly<{
+      kind: "waiting";
+      version: string;
+      installedVersion: string;
+      appStoreHref: string;
+    }>
+  | Readonly<{ kind: "not_installed"; version: string; appStoreHref: string }>
+  | Readonly<{ kind: "not_published" }>
+  /** The person may not manage installations here, or the review cannot be made now. */
+  | Readonly<{ kind: "unknown"; appStoreHref?: string }>;
+
+/**
+ * The App Store's own review of the application for the signed-in person: whether its latest
+ * release is live, waiting, or not installed in the organisation, and the App Store page that
+ * installs or upgrades it. The review changes nothing.
+ */
+export const readApplicationReleaseStanding = async (
+  session: IdentitySession,
+  scope: Address &
+    Readonly<{ organizationId: OrganizationId; applicationRootId: ApplicationRootId }>,
+): Promise<ApplicationReleaseStanding> => {
+  const appStore = await humanOrganizationRequests().run(
+    session,
+    { organizationId: scope.organizationId },
+    (transaction) => readCurrentOrganizationAppStoreAddressAfterAuthorization(transaction),
+  );
+  const appStoreHref =
+    appStore.kind === "available" && appStore.value !== null && appStore.value !== "invalid"
+      ? appStoreApplicationHref(
+          scope.tenantShortName,
+          scope.organizationShortName,
+          appStore.value,
+          scope.applicationRootId,
+        )
+      : undefined;
+  if (appStoreHref === undefined)
+    console.error(
+      `[release-standing] App Store address ${appStore.kind === "available" ? (appStore.value ?? "not set") : appStore.kind}`,
+    );
+  const review = await applicationStoreService().review(
+    session,
+    { organizationId: scope.organizationId },
+    { application_root_id: scope.applicationRootId },
+  );
+  if (review === "conflict" || review === "uncertain" || review.kind !== "available") {
+    console.error(`[release-standing] review ${typeof review === "string" ? review : review.kind}`);
+    return appStoreHref === undefined ? { kind: "unknown" } : { kind: "unknown", appStoreHref };
+  }
+  const value = review.value as Readonly<Record<string, unknown>>;
+  const version = typeof value.release_version === "string" ? value.release_version : "";
+  if (value.change === "unavailable" && value.reason === "not_published")
+    return { kind: "not_published" };
+  if (appStoreHref === undefined || version === "")
+    return appStoreHref === undefined ? { kind: "unknown" } : { kind: "unknown", appStoreHref };
+  switch (value.change) {
+    case "current":
+    case "roles":
+      return { kind: "live", version, rolesWaiting: value.change === "roles", appStoreHref };
+    case "upgrade":
+      return {
+        kind: "waiting",
+        version,
+        installedVersion:
+          typeof value.installed_version === "string" ? value.installed_version : "",
+        appStoreHref,
+      };
+    case "install":
+      return { kind: "not_installed", version, appStoreHref };
+    default:
+      console.error(`[release-standing] review cannot install or upgrade: ${String(value.reason)}`);
+      return { kind: "unknown", appStoreHref };
+  }
 };

@@ -12,6 +12,8 @@ import {
 } from "@vortex/platform/schema";
 import { prepareStudioApplicationPublication, publishStudioApplication } from "../actions";
 import { previewStudioApplication } from "../preview-actions";
+import { readApplicationReleaseStanding } from "../releases-actions";
+import type { ApplicationReleaseStanding } from "../../_lib/application-release-adoption";
 import {
   sameStudioApplicationSourceImportSnapshot,
   type StudioApplicationSourceImportSnapshot,
@@ -141,6 +143,45 @@ const publicationProblemText = (
 };
 
 /**
+ * Where the application stands in the builder's organisation, in plain words, with the App Store
+ * page that installs or upgrades it. `published` names the version a Publish just created.
+ */
+const standingWords = (
+  standing: ApplicationReleaseStanding,
+  published?: string,
+): Readonly<{ text: string; link?: Readonly<{ label: string; href: string }> }> => {
+  const lead = published === undefined ? "" : `Published version ${published}. `;
+  switch (standing.kind) {
+    case "live":
+      return {
+        text: `${lead}Version ${standing.version} is live in your organisation.${standing.rolesWaiting ? " Role changes are waiting: accept them in the App Store." : ""}`,
+        ...(standing.rolesWaiting
+          ? { link: { label: "Open in the App Store", href: standing.appStoreHref } }
+          : {}),
+      };
+    case "waiting":
+      return {
+        text: `${lead}Your organisation runs version ${standing.installedVersion}; version ${standing.version} is waiting. Upgrade it in the App Store to use it.`,
+        link: { label: "Upgrade in the App Store", href: standing.appStoreHref },
+      };
+    case "not_installed":
+      return {
+        text: `${lead}Version ${standing.version} is not installed in your organisation, so people cannot open it yet. Install it from the App Store.`,
+        link: { label: "Install in the App Store", href: standing.appStoreHref },
+      };
+    case "not_published":
+      return { text: `${lead}No version is published yet.` };
+    case "unknown":
+      return {
+        text: `${lead}Someone who manages applications installs or upgrades it in the App Store.`,
+        ...(standing.appStoreHref === undefined
+          ? {}
+          : { link: { label: "Open in the App Store", href: standing.appStoreHref } }),
+      };
+  }
+};
+
+/**
  * The Releases tab and what acts on the saved draft as a whole: Publish (prepare, then publish the
  * prepared release), Preview, the published versions with restore, page adoption and import. Each
  * of them first lets the latest edits finish saving, because only the saved draft is published,
@@ -150,18 +191,12 @@ export function useStudioReleasesTab({
   draft,
   hidden,
   initialSection,
-  appStoreHref,
-  installed,
   compositionContext,
   structure,
 }: Readonly<{
   draft: StudioDraft;
   compositionContext: StudioCompositionContext;
   hidden: boolean;
-  /** The App Store, where a published version is installed or upgraded to; absent when its address is unknown. */
-  appStoreHref: string | undefined;
-  /** Whether this application is installed in the builder's organisation. */
-  installed: boolean;
   initialSection: StudioReleasesSection;
   /** The one Structure command runner, for the one-click offers Publish shows. */
   structure: Readonly<{
@@ -192,6 +227,23 @@ export function useStudioReleasesTab({
     setPreparedState(next);
   }, []);
   const request = useRef<{ cancelled: boolean } | null>(null);
+  // Where the application stands in the organisation: read when the Releases tab opens and after
+  // each Publish; null until read.
+  const [standing, setStanding] = useState<ApplicationReleaseStanding | null>(null);
+  const rootId = draft.state.rootId;
+  const readStanding = useCallback(async (): Promise<ApplicationReleaseStanding> => {
+    const next = await readApplicationReleaseStanding(organizationId, rootId).catch(
+      (error: unknown): ApplicationReleaseStanding => {
+        console.error(`[studio] release standing read failed: ${describeFailure(error)}`);
+        return { kind: "unknown" };
+      },
+    );
+    if (latest.current.isActive()) setStanding(next);
+    return next;
+  }, [organizationId, rootId]);
+  useEffect(() => {
+    if (!hidden) void readStanding();
+  }, [hidden, readStanding]);
 
   /** The saved draft, when it is exactly what the workspace shows: nothing waiting to be saved and nothing held. */
   const readSnapshot = useCallback((): PublicationSnapshot | null => {
@@ -405,11 +457,13 @@ export function useStudioReleasesTab({
         canonicalJson(parsed.data.dependencyManifest) ===
           canonicalJson(confirmation.dependencyManifest)
       ) {
-        studioNotice(
-          `Published version ${parsed.data.releaseVersion}`,
-          "success",
-          appStoreHref === undefined ? undefined : { label: "Open App Store", href: appStoreHref },
-        );
+        // Publishing creates the version; the App Store installs or upgrades to it. The notice says
+        // which of those the organisation still needs.
+        const version = parsed.data.releaseVersion;
+        void readStanding().then((now) => {
+          const words = standingWords(now, version);
+          studioNotice(words.text, "success", words.link);
+        });
         setHistoryGeneration((generation) => generation + 1);
         closePublish(false);
         return { kind: "published", publication: parsed.data };
@@ -602,29 +656,37 @@ export function useStudioReleasesTab({
     ? "Wait for the workspace to finish loading or publishing."
     : savedWait;
 
+  const standingShown = standingWords(standing ?? { kind: "unknown" });
   const panel = panelVisited ? (
     <StudioReleasesPanel hidden={hidden} section={section} onSection={setSection} />
   ) : null;
   const centre: ReactNode = (
     <div className="mx-auto max-w-4xl px-8 py-6 text-foreground">
-      {!installed && appStoreHref !== undefined && (
+      {standing === null || standing.kind === "unknown" ? null : (
         <section
           aria-label="Installation"
           className="mb-4 space-y-2 rounded-md border border-border bg-muted/40 p-4"
         >
-          <p className="font-medium">Not installed yet</p>
-          <p className="text-sm text-muted-foreground">
-            This application is not installed in your organisation, so people cannot open it yet.
-            Install it from the App Store to use the published version.
+          <p className="font-medium">
+            {standing.kind === "live"
+              ? "Live in your organisation"
+              : standing.kind === "waiting"
+                ? "A newer version is waiting"
+                : standing.kind === "not_installed"
+                  ? "Not installed yet"
+                  : "Not published yet"}
           </p>
-          <Button
-            variant="outline"
-            size="sm"
-            nativeButton={false}
-            render={<NavigationLink href={appStoreHref} />}
-          >
-            Install in this organisation
-          </Button>
+          <p className="text-sm text-muted-foreground">{standingShown.text}</p>
+          {standingShown.link === undefined ? null : (
+            <Button
+              variant="outline"
+              size="sm"
+              nativeButton={false}
+              render={<NavigationLink href={standingShown.link.href} />}
+            >
+              {standingShown.link.label}
+            </Button>
+          )}
         </section>
       )}
       {!hidden && section === "history" && (
