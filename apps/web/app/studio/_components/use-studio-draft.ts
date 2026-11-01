@@ -505,7 +505,7 @@ export function useStudioDraft({
               result.kind !== "available" ||
               result.draft.draftRevision < savedRef.current.draftRevision
             )
-              console.error(
+              console.info(
                 `[studio] the saved draft's compile did not answer for revision ${savedRef.current.draftRevision}: STUDIO_COMPILE_REFRESH_${result.kind.toUpperCase()}`,
               );
             setViewProblem(
