@@ -152,6 +152,10 @@ const standingWords = (
 ): Readonly<{ text: string; link?: Readonly<{ label: string; href: string }> }> => {
   const lead = published === undefined ? "" : `Published version ${published}. `;
   switch (standing.kind) {
+    case "system":
+      return {
+        text: `${lead}Latest published version: ${standing.version}. Installed version: ${standing.installedVersion}. System applications move forward through the platform refresh.`,
+      };
     case "live":
       return {
         text: `${lead}Version ${standing.version} is live in your organisation.${standing.rolesWaiting ? " Role changes are waiting: accept them in the App Store." : ""}`,
@@ -668,13 +672,15 @@ export function useStudioReleasesTab({
           className="mb-4 space-y-2 rounded-md border border-border bg-muted/40 p-4"
         >
           <p className="font-medium">
-            {standing.kind === "live"
-              ? "Live in your organisation"
-              : standing.kind === "waiting"
-                ? "A newer version is waiting"
-                : standing.kind === "not_installed"
-                  ? "Not installed yet"
-                  : "Not published yet"}
+            {standing.kind === "system"
+              ? "System application"
+              : standing.kind === "live"
+                ? "Live in your organisation"
+                : standing.kind === "waiting"
+                  ? "A newer version is waiting"
+                  : standing.kind === "not_installed"
+                    ? "Not installed yet"
+                    : "Not published yet"}
           </p>
           <p className="text-sm text-muted-foreground">{standingShown.text}</p>
           {standingShown.link === undefined ? null : (

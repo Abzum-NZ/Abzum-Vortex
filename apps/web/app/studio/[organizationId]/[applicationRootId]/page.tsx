@@ -127,7 +127,7 @@ const loadWorkspacePlace = async (
   // The same read the Releases tab shows, so Studio never calls an installed application installable.
   // An unknown standing is neither installed nor absent, so the toolbar offers neither button.
   const installed =
-    standing.kind === "live" || standing.kind === "waiting"
+    standing.kind === "live" || standing.kind === "waiting" || standing.kind === "system"
       ? true
       : standing.kind === "not_installed" || standing.kind === "not_published"
         ? false
