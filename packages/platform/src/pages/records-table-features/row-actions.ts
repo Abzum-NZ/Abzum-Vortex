@@ -9,9 +9,17 @@ import type { RequestDatabaseTransaction } from "../../db/request-transaction";
 import type { FlowNamedAction } from "../../definition/flow-orchestrator-types";
 import type { InstalledRuntimeContext } from "../../definition/installed-runtime-context";
 import { installedNamedActions } from "../../definition/installed-named-actions";
+import type {
+  ApplicationActionCapability,
+  ApplicationLinkRow,
+} from "../../catalogue/application-link";
+import type { ApplicationSurfaceAccess } from "../placement-read/types";
+import { rowActionIdentity } from "../../definition/application-composition/records-table-features/row-actions";
 import { projectNamedActionAvailability } from "./named-action-availability";
 
 type RowActions = NonNullable<RecordsTableFeatureProjection["rowActions"]>;
+type RowActionDeclaration = RowActions["actions"][number];
+type RowActionDecision = RowActions["availability"][number]["actions"][number];
 type RowActionInstallation = Readonly<{
   bindings: readonly ComponentFlowBinding[];
   flows: ReadonlyMap<string, FlowDefinition>;
@@ -68,6 +76,83 @@ const namedActionFor = (
 };
 
 /**
+ * Whether the surface capabilities allow one application capability for the row's application. An
+ * open needs the application among the ones the person may open; a build needs the organisation's
+ * draft permission (plus the system-application permission for a platform application); installing
+ * and removing need the installation permission, and removing never applies to a platform
+ * application.
+ */
+export const applicationCapabilityAllowed = (
+  capability: ApplicationActionCapability,
+  application: Parameters<ApplicationSurfaceAccess["isOpenable"]>[0] | undefined,
+  surfaces: ApplicationSurfaceAccess,
+): boolean => {
+  if (capability === "install_application") return surfaces.capabilities.mayInstall;
+  if (application === undefined) return false;
+  switch (capability) {
+    case "open_application":
+      return surfaces.isOpenable(application);
+    case "build_application":
+      return application.isSystemApplication
+        ? surfaces.capabilities.mayBuildSystemApplications
+        : surfaces.capabilities.mayBuild;
+    case "remove_application":
+      return surfaces.capabilities.mayInstall && !application.isSystemApplication;
+  }
+};
+
+/**
+ * The application row actions of one read: a link action resolves its address per row (and is
+ * offered only where one exists), and an application capability is decided from the read's one
+ * application-surface decision. Flow actions and named actions are untouched.
+ */
+export const projectApplicationRowActions = (
+  projection: RowActions,
+  applicationOf: (recordId: string) => ApplicationLinkRow | undefined,
+  surfaces: ApplicationSurfaceAccess,
+): RowActions => {
+  if (
+    projection.actions.every(
+      (declaration) =>
+        declaration.applicationCapability === undefined && declaration.link === undefined,
+    )
+  )
+    return projection;
+  const byIdentity = new Map(
+    projection.actions.map((declaration) => [rowActionIdentity(declaration), declaration]),
+  );
+  return {
+    actions: projection.actions,
+    availability: projection.availability.map((row) => {
+      const application = applicationOf(row.recordId);
+      return {
+        ...row,
+        actions: row.actions.map((decision): RowActionDecision => {
+          const declaration = byIdentity.get(decision.action);
+          if (declaration === undefined) return decision;
+          if (declaration.link !== undefined) {
+            const href =
+              application === undefined ? undefined : surfaces.link(declaration.link, application);
+            return href === undefined
+              ? { action: decision.action, eligible: false, reason: "not_permitted" }
+              : { action: decision.action, eligible: true, href };
+          }
+          if (declaration.applicationCapability !== undefined)
+            return applicationCapabilityAllowed(
+              declaration.applicationCapability,
+              application,
+              surfaces,
+            )
+              ? { action: decision.action, eligible: true }
+              : { action: decision.action, eligible: false, reason: "not_permitted" };
+          return decision;
+        }),
+      };
+    }),
+  };
+};
+
+/**
  * The shared named-action eligibility evaluator decides every named-action-backed command for
  * every visible row in one batch. Flow commands retain the capability decisions from the protected
  * page read. Nothing reads another page, changes a record or exposes business values from an
@@ -81,11 +166,13 @@ export const projectRowActionAvailability = async (
   projection: RowActions,
 ): Promise<RowActions> => {
   const named = projection.actions.flatMap((declaration) => {
+    if (declaration.eventId === undefined) return [];
+    const identity = rowActionIdentity(declaration);
     const action = namedActionFor(installed, placementId, declaration.eventId);
     if (action === undefined) return [];
     if (!sameId(action.subjectRecordTypeId, recordTypeId))
       throw new Error("ROW_ACTION_RECORD_TYPE_MISMATCH");
-    return [{ key: declaration.eventId, action: action.action }];
+    return [{ key: identity, action: action.action }];
   });
   if (named.length === 0 || projection.availability.length === 0) return projection;
   const availability = await projectNamedActionAvailability(

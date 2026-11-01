@@ -18,6 +18,7 @@ import { Spinner } from "../../components/spinner";
 import { toast } from "../../components/sonner";
 import { Icon } from "../../icons/icon";
 import { usePendingGesture } from "../../controls/pending-gesture";
+import { NavigationLink } from "../../routing/navigation-link";
 import { rowName } from "../context";
 import type {
   GridFeatureCommandProps,
@@ -46,9 +47,12 @@ function RowCommands({ context, row }: GridFeatureCommandProps): ReactElement | 
     (item) => item.recordId === row.recordId && item.revision === row.revision,
   );
   const commands = projection.actions.map((action) => {
-    const decision = current?.actions.find((item) => item.action === action.eventId);
+    const identity = action.eventId ?? `link:${action.link}`;
+    const decision = current?.actions.find((item) => item.action === identity);
     return {
       action,
+      identity,
+      href: decision?.eligible === true ? decision.href : undefined,
       reason:
         decision?.eligible === true
           ? undefined
@@ -66,12 +70,13 @@ function RowCommands({ context, row }: GridFeatureCommandProps): ReactElement | 
   const menu =
     allInMenu || context.presentation === "cards" || overflow.length === 0 ? commands : overflow;
   const name = rowName(row, context.columns[0]?.key);
-  const run = (action: RecordsTableActionContract): void => {
-    if (gesture.running()) return;
+  const run = (action: { label: string; eventId?: string | undefined }): void => {
+    if (gesture.running() || action.eventId === undefined) return;
+    const eventId = action.eventId;
     const pending = Promise.resolve(
       handler({
         event: "row_action",
-        eventId: action.eventId,
+        eventId,
         recordId: row.recordId,
         revision: row.revision!,
       }),
@@ -100,21 +105,34 @@ function RowCommands({ context, row }: GridFeatureCommandProps): ReactElement | 
       className="flex items-center gap-[var(--vortex-space-xs)]"
       onClick={(event) => event.stopPropagation()}
     >
-      {inline.map(({ action, reason }) => (
-        <Tooltip key={action.eventId}>
+      {inline.map(({ action, identity, reason, href }) => (
+        <Tooltip key={identity}>
           <TooltipTrigger render={<span className="inline-flex" />}>
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              aria-label={`${action.label}: ${name}`}
-              disabled={gesture.pending || reason !== undefined}
-              aria-busy={gesture.pending}
-              onClick={() => run(action)}
-            >
-              {gesture.pending ? <Spinner aria-hidden="true" /> : <Icon name={action.icon} />}
-              {action.label}
-            </Button>
+            {href === undefined ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                aria-label={`${action.label}: ${name}`}
+                disabled={gesture.pending || reason !== undefined}
+                aria-busy={gesture.pending}
+                onClick={() => run(action)}
+              >
+                {gesture.pending ? <Spinner aria-hidden="true" /> : <Icon name={action.icon} />}
+                {action.label}
+              </Button>
+            ) : (
+              <Button
+                variant="ghost"
+                size="sm"
+                aria-label={`${action.label}: ${name}`}
+                nativeButton={false}
+                render={<NavigationLink href={href} />}
+              >
+                <Icon name={action.icon} />
+                {action.label}
+              </Button>
+            )}
           </TooltipTrigger>
           <TooltipContent>
             {reason === undefined ? action.label : `${action.label}: ${reason}`}
@@ -151,11 +169,14 @@ function RowCommands({ context, row }: GridFeatureCommandProps): ReactElement | 
           className="w-auto min-w-64 max-w-[calc(100vw-2rem)]"
           onClick={(event) => event.stopPropagation()}
         >
-          {menu.map(({ action, reason }) => (
+          {menu.map(({ action, identity, reason, href }) => (
             <DropdownMenuItem
-              key={action.eventId}
+              key={identity}
               disabled={gesture.pending || reason !== undefined}
-              onClick={() => run(action)}
+              onClick={() => {
+                if (href === undefined) run(action);
+              }}
+              render={href === undefined ? undefined : <NavigationLink href={href} />}
               className="items-start data-disabled:opacity-100"
             >
               <Icon name={action.icon} />

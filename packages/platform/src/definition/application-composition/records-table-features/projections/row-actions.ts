@@ -1,6 +1,10 @@
 import { z } from "zod";
 import { namedActionAvailabilitySchema } from "../../../../pages/named-action-availability-schema";
 import {
+  applicationActionCapabilities,
+  applicationLinkTargets,
+} from "../../../../catalogue/application-link";
+import {
   recordsTableActionCapabilities,
   recordsTableRowActionIcons,
   recordsTableRowActionsFeature,
@@ -9,11 +13,13 @@ import {
 const textSchema = z.string().min(1);
 const rowActionSchema = z
   .object({
-    eventId: textSchema,
+    eventId: textSchema.optional(),
+    link: z.enum(applicationLinkTargets).optional(),
     label: textSchema,
     icon: z.enum(recordsTableRowActionIcons),
     placement: z.enum(["inline", "menu"]),
     capability: z.enum(recordsTableActionCapabilities).optional(),
+    applicationCapability: z.enum(applicationActionCapabilities).optional(),
   })
   .strict()
   .readonly();
@@ -25,7 +31,9 @@ const rowActionsProjectionSchema = z
       .min(1)
       .max(20)
       .refine(
-        (actions) => new Set(actions.map((action) => action.eventId)).size === actions.length,
+        (actions) =>
+          new Set(actions.map((action) => action.eventId ?? `link:${action.link}`)).size ===
+          actions.length,
         "Each row action is named once",
       )
       .readonly(),

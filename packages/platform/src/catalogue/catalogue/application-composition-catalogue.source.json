@@ -2711,6 +2711,26 @@
       },
       {
         "kind": "text",
+        "key": "studio_link_label",
+        "presentation": true,
+        "label": "Studio link",
+        "help": "Word on each tile's link to the Studio editor; leave it out to offer none",
+        "required": false,
+        "minLength": 1,
+        "maxLength": 40
+      },
+      {
+        "kind": "text",
+        "key": "upgrade_link_label",
+        "presentation": true,
+        "label": "Upgrade link",
+        "help": "Word on each tile's link to the App Store upgrade while a newer release waits; leave it out to offer none",
+        "required": false,
+        "minLength": 1,
+        "maxLength": 40
+      },
+      {
+        "kind": "text",
         "key": "empty_message",
         "presentation": true,
         "label": "Empty message",

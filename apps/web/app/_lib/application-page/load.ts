@@ -29,6 +29,7 @@ import {
   recordsTableParameterPlacement,
 } from "@vortex/platform/schema";
 import { createPlacementReadServices } from "./placement-services";
+import { loadApplicationSurfaces } from "./application-links";
 import { prepareRuntimePreviewPage } from "../runtime-preview-demand";
 import { beginStudioPreviewRead } from "../studio-preview-work";
 import { getQueryContinuationKey } from "../query-continuation-key";
@@ -551,14 +552,37 @@ const loadApplicationPageJoined = async (
     (placement) =>
       isApplicationLauncherPlacement(placement) && typeof placement.vortex.queryId === "string",
   );
-  // The permitted applications a query-bound launcher lists are read alongside the grid layouts.
-  const permittedApplicationsReading = hasQueryBoundLauncher
-    ? loadPermittedApplicationsAtAddress(
-        session,
-        address.tenantShortName,
-        address.organizationShortName,
-      )
-    : undefined;
+  // A placement that declares an application link, or a tile or row action the application
+  // surfaces decide, needs the one surface decision for this page.
+  const declaresApplicationSurface = (placement: (typeof placements)[number]): boolean => {
+    const settings = placement.settings as Readonly<Record<string, unknown>>;
+    if (settings.studio_link_label !== undefined || settings.upgrade_link_label !== undefined)
+      return true;
+    const rowActions = settings.row_actions;
+    const items =
+      isRecord(rowActions) && rowActions.kind === "list" && Array.isArray(rowActions.items)
+        ? rowActions.items
+        : [];
+    return items.some(
+      (item) =>
+        isRecord(item) &&
+        item.kind === "group" &&
+        isRecord(item.properties) &&
+        (item.properties.link !== undefined ||
+          item.properties.application_capability !== undefined),
+    );
+  };
+  const needsApplicationSurfaces = placements.some(declaresApplicationSurface);
+  // The permitted applications a query-bound launcher lists, and the ones an application surface
+  // offers, are read alongside the grid layouts.
+  const permittedApplicationsReading =
+    hasQueryBoundLauncher || needsApplicationSurfaces
+      ? loadPermittedApplicationsAtAddress(
+          session,
+          address.tenantShortName,
+          address.organizationShortName,
+        )
+      : undefined;
   if (permittedApplicationsReading !== undefined) {
     void permittedApplicationsReading.catch(() => undefined);
     startedReads.push(permittedApplicationsReading);
@@ -645,6 +669,24 @@ const loadApplicationPageJoined = async (
     permittedApplicationsRead?.kind === "available"
       ? permittedApplicationsRead.applications.map((application) => application.key)
       : undefined;
+  const permittedApplications =
+    permittedApplicationsRead?.kind === "available"
+      ? permittedApplicationsRead.applications.map((application) => ({
+          applicationRootId: application.applicationRootId,
+          key: application.key,
+          homePageKey: application.homePageKey,
+        }))
+      : undefined;
+  // The one application-surface decision: what this person may build and install, which
+  // applications they may open, and the address each declared link resolves to for them.
+  const applicationSurfaces =
+    needsApplicationSurfaces && permittedApplicationsRead?.kind === "available"
+      ? await loadApplicationSurfaces(session, permittedApplicationsRead.organizationId, {
+          tenantShortName: address.tenantShortName,
+          organizationShortName: address.organizationShortName,
+          openable: permittedApplications ?? [],
+        })
+      : undefined;
   const placementReaderInput: PlacementReaderInput = {
     context,
     session,
@@ -659,7 +701,9 @@ const loadApplicationPageJoined = async (
     data,
     services: services.placementServices(context, readSubject),
     permittedApplicationKeys,
+    permittedApplications,
     permittedApplicationsUnavailable: permittedApplicationsRead?.kind === "temporarily_unavailable",
+    ...(applicationSurfaces === undefined ? {} : { applicationSurfaces }),
     ...(boardReads === undefined ? {} : { boardReads }),
     ...(tableContinuation === undefined ? {} : { tableContinuation }),
     gridLayouts,

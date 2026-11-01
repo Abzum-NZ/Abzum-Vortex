@@ -10,6 +10,8 @@ import type { readCurrentOrganizationRuntimeSettingsAfterAuthorization } from ".
 import type { InstalledRuntimeContext } from "../../definition/installed-runtime-context";
 import type { createProtectedQueryService } from "../../queries/protected-query-service";
 import type { RecordLinkResolver, RecordLinkTitler } from "../component-data-projection";
+import type { ApplicationLinkRow, ApplicationLinkTarget } from "../../catalogue/application-link";
+import type { ApplicationSurfaceCapabilities } from "../../definition/application-surface-capabilities";
 import type { launcherRowsPayloadSchema } from "../display-payload-launcher";
 import type { createLinkTilesQueryResolver } from "../link-tiles-query";
 import type { createQueryNoticeQueryResolver } from "../notice-query-projection";
@@ -33,6 +35,17 @@ import type {
 export type LauncherQueryRow = Readonly<{
   applicationKey: string | undefined;
   cells: Readonly<Record<string, Readonly<{ kind: "text"; text: string }>>>;
+}>;
+
+/**
+ * What the viewer's application surfaces may offer, decided once in the page read: the person's
+ * application capabilities, which applications they may open, and the one resolver that turns a
+ * declared link target into an address for a row (or nothing when the person is not offered it).
+ */
+export type ApplicationSurfaceAccess = Readonly<{
+  capabilities: ApplicationSurfaceCapabilities;
+  isOpenable: (application: ApplicationLinkRow) => boolean;
+  link: (target: ApplicationLinkTarget, application: ApplicationLinkRow) => string | undefined;
 }>;
 
 /** The person's stored layouts of a page's data grids, read once before any grid reads its rows. */
@@ -107,7 +120,16 @@ export type PlacementReadInput = Readonly<{
   services: PlacementReadServices;
   /** The applications the viewer may open, for a query-bound launcher; undefined when unread. */
   permittedApplicationKeys: readonly string[] | undefined;
+  /** The same applications with their stable identities, for the links a surface offers. */
+  permittedApplications:
+    | readonly Readonly<{ applicationRootId: string; key: string; homePageKey: string }>[]
+    | undefined;
   permittedApplicationsUnavailable: boolean;
+  /**
+   * What the viewer's application surfaces may offer, read once for the placements that declare an
+   * application link or capability; absent in every other read.
+   */
+  applicationSurfaces?: ApplicationSurfaceAccess;
   /** The columns each named board shows, or the one column it continues; other boards read their first columns. */
   boardReads?: readonly Readonly<{ placementId: string; request: BoardColumnReadRequest }>[];
   tableContinuation?: Readonly<{

@@ -192,6 +192,7 @@ export {
   projectedUseAvailability,
   resolvedQueryRecordTypeId,
   type LauncherQueryRow,
+  type ApplicationSurfaceAccess,
   type PageDataState,
   type PageSubjectType,
   type PlacementLogPlace,
