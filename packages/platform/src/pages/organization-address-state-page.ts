@@ -25,6 +25,7 @@ export type OrganizationAddressState = Readonly<{
   key:
     | "unavailable"
     | "page_not_open"
+    | "page_missing"
     | "temporarily_unavailable"
     | "suspended"
     | "preview_not_runnable";
@@ -36,6 +37,7 @@ export type OrganizationAddressState = Readonly<{
 const statePageIds: Readonly<Record<OrganizationAddressState["key"], string>> = {
   unavailable: "0d6f2b8a-7c41-4e9a-b3d5-8e2a6c4f1b07",
   page_not_open: "5b9e3d61-a2f7-4c08-9e4b-7f1c2d8a6e35",
+  page_missing: "9b589b68-d075-493f-9f75-30c791c158ea",
   temporarily_unavailable: "e2c84a1f-6d39-4b7e-8a05-3f9d1b6c7e48",
   suspended: "9a7d2e5c-1f48-4b63-b9e0-6c3a8d4f2b19",
   preview_not_runnable: "4f1b8c3e-7a26-4d9f-85e1-2b6d9a3c0f57",

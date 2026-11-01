@@ -210,6 +210,12 @@ export type AddressedApplicationBundleRead = Readonly<{
   context?: InstalledRuntimeContext;
   identity?: AddressedActiveApplicationIdentity;
   /**
+   * Every page key of the authorised release, present with an available read. An address whose
+   * page the viewer may not open is told apart from one naming no page of the release only for an
+   * application the viewer may open; never sent to a browser.
+   */
+  releasePageKeys?: readonly string[];
+  /**
    * The application navigation the viewer may see, decided in the same batch as the addressed
    * page's access. Present with an available whole-application read; a placement refresh (an
    * addressed page key) projects none.
@@ -493,6 +499,8 @@ const projectPermittedApplication = async (
 ): Promise<Readonly<{
   application: PermittedApplication;
   experiences: ApplicationExperience[];
+  /** Every page key of the decided release, open to the viewer or not; never sent to a browser. */
+  releasePageKeys: readonly string[];
   navigation?: ProjectedNavigation;
 }> | null> => {
   const releaseRows = await transaction.query<CurrentReleaseRow>`
@@ -667,6 +675,7 @@ const projectPermittedApplication = async (
   return {
     application,
     experiences,
+    releasePageKeys: candidate.pages.map((page) => page.key),
     ...(projectedNavigation === undefined ? {} : { navigation: projectedNavigation }),
   };
 };
@@ -1007,6 +1016,7 @@ export const readAddressedApplicationFromInstalledBundleAtAddress = async (
       experiences: permitted.experiences,
       context,
       identity: addressedIdentity.identity,
+      releasePageKeys: permitted.releasePageKeys,
       ...(permitted.navigation === undefined ? {} : { navigation: permitted.navigation }),
     };
   } catch (error) {

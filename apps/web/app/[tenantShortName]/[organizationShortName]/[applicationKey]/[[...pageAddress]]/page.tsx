@@ -231,12 +231,12 @@ async function readApplicationAddressPage({ params, searchParams }: ApplicationA
     );
 
   if (resolved.kind !== "application_page") {
-    // A refused page and a missing page of an application the viewer may open both show that
-    // application's own not-found page, in that application's installed theme, or, when it has
-    // none, a refusal that leads back to its home page; everything else shows the fixed neutral
-    // fallback.
-    const experience = resolved.kind === "unavailable" ? resolved.experience : undefined;
-    const permitted = resolved.kind === "unavailable" ? resolved.application : undefined;
+    // Inside an application the viewer may open, a refused page says the role can't open it and
+    // leads back to the application's home; a missing page shows the application's own not-found
+    // page in its installed theme or, when it has none, says the page no longer exists. Everything
+    // else shows the fixed neutral fallback.
+    const permitted = "application" in resolved ? resolved : undefined;
+    const experience = permitted?.page === "missing" ? permitted.experience : undefined;
     if (experience === undefined)
       return (
         <BarePage>
@@ -246,13 +246,13 @@ async function readApplicationAddressPage({ params, searchParams }: ApplicationA
               permitted === undefined
                 ? { kind: "unavailable", back: "organization" }
                 : {
-                    kind: "page_not_open",
-                    applicationName: permitted.name,
+                    kind: permitted.page === "refused" ? "page_not_open" : "page_missing",
+                    applicationName: permitted.application.name,
                     homeHref: addressPath(
                       tenantShortName,
                       organizationShortName,
-                      permitted.key,
-                      permitted.homePageKey,
+                      permitted.application.key,
+                      permitted.application.homePageKey,
                     ),
                   }
             }
@@ -274,8 +274,8 @@ async function readApplicationAddressPage({ params, searchParams }: ApplicationA
       displayName === undefined ? { email } : { email, displayName };
     return (
       <BarePage>
-        {/* The application's own page for an address its viewer cannot open (refused or missing). */}
-        <div className="contents" data-vortex-address-state="page_not_open">
+        {/* The application's own not-found page for an address naming no page of it. */}
+        <div className="contents" data-vortex-address-state="page_missing">
           <ApplicationExperiencePage
             page={experience.page}
             shells={experience.shells}
