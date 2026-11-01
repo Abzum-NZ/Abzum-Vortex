@@ -54,6 +54,7 @@ import {
 } from "@vortex/platform/schema";
 import {
   BuilderAuthorityError,
+  classifyDatabaseError,
   DefinitionError,
   readApplicationDefinitionDraft,
   readSourceIdentityReservations,
@@ -148,8 +149,15 @@ const declined = (
   const message =
     `[studio] ${operation} ${failure.kind} reason=${failure.reason}` +
     (error === undefined ? "" : ` cause=${describeFailure(error)}`);
-  if (failure.kind === "refused") console.info(message);
-  else console.error(message);
+  // A failure the request service returned was logged there with its own severity; an error caught
+  // here was logged nowhere else, so a transient conflict is information and any other cause is an error.
+  if (
+    error !== undefined &&
+    failure.kind === "temporarily_unavailable" &&
+    classifyDatabaseError(error) !== "conflict"
+  )
+    console.error(message);
+  else console.info(message);
   return failure;
 };
 
@@ -227,7 +235,8 @@ type StudioApplicationLoadResult =
       /** One view per request, in request order. */
       views: readonly StudioLoadedView[];
     }>
-  | StudioApplicationFailure;
+  | StudioApplicationFailure
+  | Readonly<{ kind: "validation_failed"; reason: string }>;
 
 type SourcePage = StoredApplicationDefinitionDraft["source"]["body"]["pages"][number];
 /** One compiled content area: its items in desktop order, exactly as the release holds them. */
@@ -419,6 +428,7 @@ export const studioCompileFailure = (error: unknown): StudioCompileFailure => {
         recordTypeKey: keyOf("record_type"),
         fieldKey: keyOf("field"),
         queryKey: keyOf("query"),
+        pageKey: keyOf("page"),
         flowKey: keyOf("flow"),
         taskId: keyOf("flow_node"),
       };
@@ -474,6 +484,8 @@ export const loadStudioApplicationDraft = async (
     !z.array(studioViewRequestSchema).min(1).max(maximumViewsPerRead).safeParse(requests).success
   )
     return declined("application-draft", { kind: "refused", reason: "request_invalid" });
+  let sourceInvalid = false;
+  let publicationInvalid = false;
   try {
     const resolved = await resolveIdentitySession();
     if (resolved.kind !== "active")
@@ -541,17 +553,34 @@ export const loadStudioApplicationDraft = async (
                 installedReleaseCatalogue,
                 transaction,
                 authority,
-              ).readApplicationDraftSnapshot(
-                context,
-                {
-                  rootId: root.data,
-                },
-                { publication: requests.some(publishedOf), releasable: false },
-              );
+              )
+                .readApplicationDraftSnapshot(
+                  context,
+                  {
+                    rootId: root.data,
+                  },
+                  { publication: requests.some(publishedOf), releasable: false },
+                )
+                .catch((error: unknown) => {
+                  if (
+                    error instanceof DefinitionError &&
+                    error.code === "DEFINITION_PUBLICATION_FAILED" &&
+                    error.cause instanceof z.ZodError
+                  )
+                    publicationInvalid = true;
+                  throw error;
+                });
         const draft =
           snapshot === null
             ? await readApplicationDefinitionDraft(transaction, scope, {
                 rootId: root.data,
+              }).catch((error: unknown) => {
+                if (
+                  error instanceof DefinitionError &&
+                  error.code === "INVALID_DEFINITION_STORAGE_RESULT"
+                )
+                  sourceInvalid = true;
+                throw error;
               })
             : snapshot.draft;
         if (draft.kind !== "application") throw new Error("STUDIO_DRAFT_UNAVAILABLE");
@@ -1112,6 +1141,9 @@ export const loadStudioApplicationDraft = async (
         };
       },
     );
+    if (sourceInvalid) return { kind: "validation_failed", reason: "source_invalid_platform" };
+    if (publicationInvalid)
+      return { kind: "validation_failed", reason: "publication_invalid_platform" };
     if (result.kind === "available")
       return result.value.kind === "available"
         ? { kind: "available", ...result.value.value }

@@ -75,19 +75,14 @@ export const createFlowSubscriberConsumer = (
     if ("reason" in opened) {
       // The account's scope is what lists the subscribers, so the history gets one refusal for the
       // whole occurrence, with the named reason.
-      try {
-        await dependencies.adapter().recordRefusal({
-          organizationId,
-          applicationRootId: installation.applicationRootId,
-          actorId,
-          origin: "event",
-          sourceKey: occurrenceId,
-          failureCode: opened.reason,
-        });
-      } catch (error) {
-        console.error(`[subscribers] refusal of occurrence ${occurrenceId} not recorded`, error);
-        return { outcome: "retryable_failure", failureCode: "unclassified" };
-      }
+      await dependencies.adapter().recordRefusal({
+        organizationId,
+        applicationRootId: installation.applicationRootId,
+        actorId,
+        origin: "event",
+        sourceKey: occurrenceId,
+        failureCode: opened.reason,
+      });
       return { outcome: "completed" };
     }
     const subscribers = orderSubscribers(
@@ -95,8 +90,10 @@ export const createFlowSubscriberConsumer = (
         subscribes(flow, occurrence.data.descriptor),
       ),
     );
+    if (subscribers.length === 0) return { outcome: "completed" };
     const adapter = dependencies.adapter();
     let infrastructureFailed = false;
+    let infrastructureFailure: unknown;
     for (const flow of subscribers) {
       try {
         const backendRunId = await adapter.enqueue({
@@ -113,12 +110,11 @@ export const createFlowSubscriberConsumer = (
       } catch (error) {
         // A subscriber that could not be recorded or settled is retried with the delivery; the
         // others still ran.
+        if (!infrastructureFailed) infrastructureFailure = error;
         infrastructureFailed = true;
-        console.error(`[subscribers] flow ${flow.id} for occurrence ${occurrenceId} failed`, error);
       }
     }
-    return infrastructureFailed
-      ? { outcome: "retryable_failure", failureCode: "unclassified" }
-      : { outcome: "completed" };
+    if (infrastructureFailed) throw infrastructureFailure;
+    return { outcome: "completed" };
   },
 });

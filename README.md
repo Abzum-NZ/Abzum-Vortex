@@ -56,7 +56,9 @@ sign-ups; never point it at a hosted database.
    cp apps/web/.env.example apps/web/.env.local
    ```
 
-   Fill in the local Supabase publishable key, identity authority UUID and Query continuation key.
+   Fill in the local Supabase publishable key and identity authority UUID. Generate the Query
+   continuation key using the command in `.env.example`, and keep the same key for this local
+   environment so existing continuation tokens remain valid.
    Set a local-only password for `VORTEX_DEMO_OWNER_PASSWORD`; do not commit `.env.local`.
 
 2. Create the local demo:
@@ -101,11 +103,24 @@ The configured manifest is `apps/web/scripts/development-setup/manifest.ts`. Man
 first sign-in never implies application permission: the account can use only the roles explicitly
 assigned through the protected Access operations.
 
-An interrupted `pnpm setup:local` run resumes from the identifiers recorded in
-`supabase/.temp/development-setup-state.json`; provisioning and record saves replay by their stable
+An interrupted `pnpm setup:local` run resumes from identifiers recorded in the local Supabase
+workdir's `supabase/.temp/development-setup-state.json`; worktrees using the same lane share this
+state. A database reset makes setup start afresh; provisioning and record saves replay by their stable
 idempotency keys. Re-running setup for the same organisation reuses its published releases,
 installations and role assignments. A different nominated account is refused. `pnpm demo:setup`
 deliberately resets the local database before starting a fresh demo.
+
+An older setup state may lack `databaseSystemId`. Setup names the state file and refuses to change it.
+If its database has not been reset since that state was written, query the identifier from the same
+local Supabase workdir, then add `"databaseSystemId": "<identifier>"` to the JSON file by hand:
+
+```sh
+node node_modules/supabase/dist/supabase.js db query --local --workdir <workdir> "select system_identifier::text from pg_control_system()"
+```
+
+For the main local stack, omit `--workdir <workdir>`. If the state does not describe the current
+database, delete that state file and reset the local database before running setup; a reset removes
+all data in that database. Never reset a lane held by someone else.
 
 ### Local environment variables
 
@@ -114,6 +129,10 @@ deliberately resets the local database before starting a fresh demo.
 [apps/web/.env.example](apps/web/.env.example) and fill in local values only; never commit a real
 value. `pnpm db:start` prints the local API URL and publishable key. Setup commands refuse any
 environment or database that is not the local one.
+
+For a database lane, `node tooling/supabase/lane.mjs env <n>` emits the lane's connection values and
+its persistent, randomly generated Query continuation key. Copy the output into the worktree's
+ignored `apps/web/.env.development.local`; it contains secrets and must not be committed or logged.
 
 The custom-component and file pages read additional variables and report a configuration error until
 they are set: `VORTEX_COMPONENT_BUNDLE_ORIGIN`, `VORTEX_FILE_STORAGE_SIGNING_KEY` and

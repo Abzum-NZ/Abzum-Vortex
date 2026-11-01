@@ -149,6 +149,16 @@ type DispatchEventsInput = Readonly<{
 
 type EventDispatchStatus = "idle" | "completed" | "partial_failure" | "interrupted";
 
+type EventDeliveryFailure = Readonly<{
+  consumer: string;
+  occurrenceId: string;
+  eventType: string;
+  operation: string;
+  classification: EventDeliveryFailureClassification;
+  errorName?: string;
+  errorCode?: string;
+}>;
+
 /**
  * Content-free outcome of one bounded dispatch. `interruptedCount` counts
  * claimed occurrences this dispatch did not settle; their leases lapse and
@@ -164,6 +174,7 @@ export type EventDispatchResult = Readonly<{
   interruptedCount: number;
   consumersDispatched: number;
   consumersUnavailable: number;
+  failures: readonly EventDeliveryFailure[];
 }>;
 
 interface EventDispatcher {
@@ -480,6 +491,7 @@ type Tally = {
   interruptedCount: number;
   consumersDispatched: number;
   consumersUnavailable: number;
+  failures: EventDeliveryFailure[];
 };
 
 const tallySettlement = (tally: Tally, settlement: Settlement): void => {
@@ -513,27 +525,58 @@ const createEventDispatcher = (dependencies: EventDispatcherDependencies): Event
   const consumers = registerConsumers(dependencies.consumers);
   const run: EventDispatcherTransactionRunner =
     dependencies.runtimeTransaction ?? withRuntimeTransaction;
-  const logDeliveryError = (consumer: RegisteredConsumer, operation: string, error: unknown) => {
-    const code = (error as { code?: unknown } | null)?.code;
-    console.error("Event delivery interrupted", {
+  const eventType = (occurrence: DispatchOccurrence): string =>
+    "kind" in occurrence
+      ? occurrence.kind
+      : occurrence.descriptor.kind === "standard"
+        ? `standard:${occurrence.descriptor.eventKind}`
+        : `declared:${occurrence.descriptor.key}`;
+
+  const errorDetails = (error: unknown) => {
+    const code =
+      typeof error === "object" && error !== null
+        ? Object.getOwnPropertyDescriptor(error, "code")?.value
+        : undefined;
+    const errorCode =
+      typeof code === "string" && /^[A-Za-z0-9_]{1,100}$/.test(code) ? code : undefined;
+    const name = error instanceof Error ? error.name : typeof error;
+    const errorName = /^[A-Za-z][A-Za-z0-9_]{0,99}$/.test(name) ? name : "Error";
+    const classification: EventDeliveryFailureClassification =
+      errorCode === "57014"
+        ? "transient_timeout"
+        : errorCode?.startsWith("08") && /^[0-9A-Z]{5}$/.test(errorCode)
+          ? "transient_dependency_unavailable"
+          : errorCode === "23505"
+            ? "conflict_or_duplicate"
+            : "unclassified";
+    return { errorName, ...(errorCode === undefined ? {} : { errorCode }), classification };
+  };
+
+  const logDeliveryError = (
+    consumer: RegisteredConsumer,
+    operation: string,
+    error: unknown,
+    occurrence?: DispatchOccurrence,
+  ) => {
+    const details = {
       consumer: consumer.consumerKey,
       operation,
-      cause:
-        typeof code === "string" && /^[A-Z0-9]{5}$/.test(code)
-          ? code
-          : error instanceof TypeError
-            ? "TypeError"
-            : error instanceof Error
-              ? "Error"
-              : typeof error,
-    });
+      ...(occurrence === undefined
+        ? {}
+        : { occurrenceId: occurrence.occurrenceId, eventType: eventType(occurrence) }),
+      ...errorDetails(error),
+    };
+    console.error("Event delivery interrupted", details);
+    return details;
   };
 
   const renew = async (
     consumer: RegisteredConsumer,
     ackCursor: string,
-    occurrenceId: string,
+    occurrence: DispatchOccurrence,
+    tally: Tally,
   ): Promise<string | undefined> => {
+    const occurrenceId = occurrence.occurrenceId;
     try {
       const renewal = await run((transaction) =>
         renewEventConsumerLease(transaction, {
@@ -545,7 +588,8 @@ const createEventDispatcher = (dependencies: EventDispatcherDependencies): Event
       );
       return renewal.outcome === "renewed" ? renewal.leaseExpiresAt : undefined;
     } catch (error) {
-      logDeliveryError(consumer, "renewLease", error);
+      const details = logDeliveryError(consumer, "renewLease", error, occurrence);
+      tally.failures.push({ ...details, occurrenceId, eventType: eventType(occurrence) });
       return undefined;
     }
   };
@@ -553,9 +597,11 @@ const createEventDispatcher = (dependencies: EventDispatcherDependencies): Event
   const settle = async (
     consumer: RegisteredConsumer,
     ackCursor: string,
-    occurrenceId: string,
+    occurrence: DispatchOccurrence,
     outcome: ConsumerOutcome,
+    tally: Tally,
   ): Promise<Settlement> => {
+    const occurrenceId = occurrence.occurrenceId;
     // A paged consumer has committed its checkpoint and released this claim atomically.
     if (outcome.kind === "continued") return "continued";
     try {
@@ -593,11 +639,13 @@ const createEventDispatcher = (dependencies: EventDispatcherDependencies): Event
           return "interrupted";
       }
     } catch (error) {
-      logDeliveryError(
+      const details = logDeliveryError(
         consumer,
         outcome.kind === "completed" ? "acknowledge" : "reportFailure",
         error,
+        occurrence,
       );
+      tally.failures.push({ ...details, occurrenceId, eventType: eventType(occurrence) });
       // Unsettled work keeps its lease, which lapses into an ordinary reclaim.
       return "interrupted";
     }
@@ -607,9 +655,10 @@ const createEventDispatcher = (dependencies: EventDispatcherDependencies): Event
     consumer: RegisteredConsumer,
     ackCursor: string,
     claimed: ClaimedEventOccurrence,
+    tally: Tally,
   ): Promise<Settlement> => {
     const occurrenceId = claimed.occurrence.occurrenceId;
-    const leaseExpiresAt = await renew(consumer, ackCursor, occurrenceId);
+    const leaseExpiresAt = await renew(consumer, ackCursor, claimed.occurrence, tally);
     if (leaseExpiresAt === undefined) return "interrupted";
 
     const delivery: EventConsumerDelivery = Object.freeze({
@@ -618,16 +667,29 @@ const createEventDispatcher = (dependencies: EventDispatcherDependencies): Event
       occurrence: claimed.occurrence,
       causalDepth: claimed.causalDepth,
       leaseExpiresAt,
-      renewLease: async () => (await renew(consumer, ackCursor, occurrenceId)) !== undefined,
+      renewLease: async () =>
+        (await renew(consumer, ackCursor, claimed.occurrence, tally)) !== undefined,
     });
     let outcome: ConsumerOutcome;
     try {
       outcome = parseConsumerOutcome(await consumer.deliver(delivery));
+      if (outcome.kind === "failed") {
+        const failure = {
+          consumer: consumer.consumerKey,
+          occurrenceId,
+          eventType: eventType(claimed.occurrence),
+          operation: "deliver",
+          classification: outcome.failureCode,
+        };
+        tally.failures.push(failure);
+        console.error("Event delivery failed", failure);
+      }
     } catch (error) {
-      logDeliveryError(consumer, "deliver", error);
-      outcome = unsafeOutcome;
+      const details = logDeliveryError(consumer, "deliver", error, claimed.occurrence);
+      tally.failures.push({ ...details, occurrenceId, eventType: eventType(claimed.occurrence) });
+      outcome = { kind: "failed", terminal: false, failureCode: details.classification };
     }
-    return settle(consumer, ackCursor, occurrenceId, outcome);
+    return settle(consumer, ackCursor, claimed.occurrence, outcome, tally);
   };
 
   const dispatchConsumer = async (
@@ -665,7 +727,7 @@ const createEventDispatcher = (dependencies: EventDispatcherDependencies): Event
       const recordKey = `${claimed.occurrence.organizationId}:${subject}`;
       const settlement = unsettledRecords.has(recordKey)
         ? "interrupted"
-        : await deliver(consumer, ackCursor, claimed);
+        : await deliver(consumer, ackCursor, claimed, tally);
       if (settlement !== "acknowledged") unsettledRecords.add(recordKey);
       tallySettlement(tally, settlement);
     }
@@ -691,6 +753,7 @@ const createEventDispatcher = (dependencies: EventDispatcherDependencies): Event
         interruptedCount: 0,
         consumersDispatched: 0,
         consumersUnavailable: 0,
+        failures: [],
       };
       for (const [index, consumer] of selected.entries()) {
         // An even share of what remains, so capacity one consumer leaves

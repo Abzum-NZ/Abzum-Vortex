@@ -37,8 +37,8 @@ export function useStudioStructureCommand({
   describePlacement: StudioPlacementDescriber;
 }>) {
   const publishedFields = useMemo(
-    () => studioFieldPublication(draft.view.published, draft.parsed(draft.saved.source)).fields,
-    [draft, draft.view.published, draft.saved.source],
+    () => new Set(studioFieldPublication(draft.view.published).fields.keys()),
+    [draft.view.published],
   );
   const command = (
     structureCommand: StudioStructureCommand,
