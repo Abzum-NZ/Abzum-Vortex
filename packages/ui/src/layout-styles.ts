@@ -276,11 +276,10 @@ export const LAYOUT_ONLY_STYLES_CSS = `
 }
 
 /* A record page's header actions are one row: the page's own actions with Refresh among them,
-   primary first, Refresh next, destructive last. The row wraps only when it is too narrow to
-   hold its actions, never one action per line. */
+   primary first, Refresh next, destructive last. */
 [data-vortex-record-actions] {
   display: flex;
-  flex-flow: row wrap;
+  flex-flow: row nowrap;
   align-items: center;
   justify-content: flex-end;
   gap: 0.5rem;
