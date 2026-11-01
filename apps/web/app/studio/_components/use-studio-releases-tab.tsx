@@ -142,12 +142,13 @@ const publicationProblemText = (
   }
 };
 
+/** The one wording of how a system application advances, shown in the standing and the history. */
+const systemRefreshMessage = "System applications move forward through the platform refresh.";
+
 /**
  * Where the application stands in the builder's organisation, in plain words, with the App Store
  * page that installs or upgrades it. `published` names the version a Publish just created.
  */
-const systemRefreshMessage = "System applications move forward through the platform refresh.";
-
 const standingWords = (
   standing: ApplicationReleaseStanding,
   published?: string,
