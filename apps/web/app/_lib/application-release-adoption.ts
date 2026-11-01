@@ -154,13 +154,19 @@ export const readApplicationReleaseStanding = async (
           scope.applicationRootId,
         )
       : undefined;
+  if (appStoreHref === undefined)
+    console.error(
+      `[release-standing] App Store address ${appStore.kind === "available" ? (appStore.value ?? "not set") : appStore.kind === "temporarily_unavailable" ? (appStore.databaseCode ?? appStore.cause ?? appStore.kind) : appStore.kind}`,
+    );
   const origin = await humanOrganizationRequests().run(
     session,
     { organizationId: scope.organizationId },
     (transaction) => readBuilderApplicationOrigin(transaction, scope.applicationRootId),
   );
   if (origin.kind !== "available" || origin.value === undefined) {
-    console.error(`[release-standing] application classification unavailable: ${origin.kind}`);
+    console.error(
+      `[release-standing] application classification unavailable: ${origin.kind === "temporarily_unavailable" ? (origin.databaseCode ?? origin.cause ?? origin.kind) : origin.kind}`,
+    );
     return { kind: "unknown" };
   }
   if (origin.value === "platform_system_application") {
@@ -176,7 +182,11 @@ export const readApplicationReleaseStanding = async (
         ? applications.applications.find((application) => application.key === appStore.value)
         : undefined;
     if (store === undefined) {
-      console.info("[release-standing] App Store read unavailable");
+      if (applications.kind === "temporarily_unavailable")
+        console.error(
+          `[release-standing] App Store read unavailable: ${applications.cause ?? applications.kind}`,
+        );
+      else console.info("[release-standing] App Store read unavailable");
       return { kind: "unknown" };
     }
     const selection = {
@@ -186,7 +196,11 @@ export const readApplicationReleaseStanding = async (
     const dependencies = requestDependencies();
     const context = await loadInstalledContext(session, dependencies, selection);
     if (context.kind !== "available") {
-      console.info(`[release-standing] App Store context ${context.kind}`);
+      if (context.kind === "temporarily_unavailable")
+        console.error(
+          `[release-standing] App Store context ${context.databaseCode ?? context.cause ?? context.kind}`,
+        );
+      else console.info(`[release-standing] App Store context ${context.kind}`);
       return { kind: "unknown" };
     }
     const types = context.value.releaseSet.modules
@@ -233,10 +247,6 @@ export const readApplicationReleaseStanding = async (
     }
     return { kind: "system", version, installedVersion };
   }
-  if (appStoreHref === undefined)
-    console.error(
-      `[release-standing] App Store address ${appStore.kind === "available" ? (appStore.value ?? "not set") : appStore.kind}`,
-    );
   const review = await applicationStoreService().review(
     session,
     { organizationId: scope.organizationId },
