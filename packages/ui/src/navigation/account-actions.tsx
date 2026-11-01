@@ -1,14 +1,6 @@
 "use client";
 
-import {
-  createContext,
-  useContext,
-  useEffect,
-  useRef,
-  useState,
-  type ReactElement,
-  type ReactNode,
-} from "react";
+import { createContext, useContext, type ReactElement, type ReactNode } from "react";
 import { Avatar, AvatarFallback } from "../components/avatar";
 import { SIGNED_IN_LANDING_PATH } from "../routing/destination";
 import { useNavigator } from "../routing/navigator";
@@ -25,13 +17,6 @@ import {
 /** The signed-in person as shown to them; an organisation account may have no display name. */
 export type ApplicationAccount = Readonly<{ email: string; displayName?: string }>;
 
-type ReleaseAdoptionData =
-  | Readonly<{
-      state: "available";
-      offer?: Readonly<{ version: string; adopt: () => void | Promise<void> }>;
-    }>
-  | Readonly<{ state: "unavailable" | "temporarily_unavailable" }>;
-
 /** Current account facts and platform actions, supplied by the signed-in route. */
 export type ApplicationAccountActions = Readonly<{
   account: ApplicationAccount;
@@ -40,7 +25,6 @@ export type ApplicationAccountActions = Readonly<{
   organizationShortName?: string;
   /** Where the person opens Studio; present only for people who may change drafts. */
   studioHref?: string;
-  readReleaseAdoption?: () => Promise<ReleaseAdoptionData>;
   signOut: () => void | Promise<void>;
 }>;
 
@@ -72,56 +56,10 @@ export function ApplicationAccountMenu({
   const account = actions?.account;
   const avatarSource = account?.displayName ?? account?.email ?? organizationName;
   const avatarInitial = avatarSource?.slice(0, 1).toUpperCase();
-  const source = actions?.readReleaseAdoption;
   const studioHref = actions?.studioHref;
-  const [adoption, setAdoption] =
-    useState<Readonly<{ source: typeof source; data: ReleaseAdoptionData }>>();
-  const requestToken = useRef(0);
-  // The adoption read starts just after the menu is open, so a menu action pressed at once (most
-  // of all Sign out) wins before the read can send a request that would refresh the page.
-  const openTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  useEffect(
-    () => () => {
-      requestToken.current += 1;
-      if (openTimer.current !== undefined) clearTimeout(openTimer.current);
-    },
-    [source],
-  );
-  const read = () => {
-    if (source === undefined) return;
-    const token = ++requestToken.current;
-    setAdoption(undefined);
-    if (openTimer.current !== undefined) clearTimeout(openTimer.current);
-    openTimer.current = setTimeout(() => {
-      if (token !== requestToken.current) return;
-      void (async () => {
-        try {
-          const data = await source();
-          if (token === requestToken.current) setAdoption({ source, data });
-        } catch (error) {
-          console.error("[application-account] adoption read failed", error);
-          if (token === requestToken.current)
-            setAdoption({ source, data: { state: "temporarily_unavailable" } });
-        }
-      })();
-    }, 350);
-  };
-  const releaseAdoption = adoption?.source === source ? adoption?.data : undefined;
 
   return (
-    <DropdownMenu
-      onOpenChange={(open) => {
-        if (open) read();
-        else {
-          requestToken.current += 1;
-          if (openTimer.current !== undefined) {
-            clearTimeout(openTimer.current);
-            openTimer.current = undefined;
-          }
-          setAdoption(undefined);
-        }
-      }}
-    >
+    <DropdownMenu>
       <DropdownMenuTrigger
         disabled={actions === null}
         aria-label="Account menu"
@@ -153,33 +91,6 @@ export function ApplicationAccountMenu({
           </DropdownMenuLabel>
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
-        {source === undefined ? null : releaseAdoption === undefined ? (
-          <div
-            role="status"
-            aria-busy="true"
-            className="px-[var(--vortex-space-md)] py-[var(--vortex-space-sm)] text-sm text-muted-foreground"
-          >
-            Loading release adoption…
-          </div>
-        ) : releaseAdoption.state !== "available" ? (
-          <>
-            <div
-              role="status"
-              className="px-[var(--vortex-space-md)] py-[var(--vortex-space-sm)] text-sm text-muted-foreground"
-            >
-              {releaseAdoption.state === "temporarily_unavailable"
-                ? "Release adoption temporarily unavailable"
-                : "Release adoption unavailable"}
-            </div>
-            <DropdownMenuItem closeOnClick={false} onClick={() => void read()}>
-              Retry
-            </DropdownMenuItem>
-          </>
-        ) : releaseAdoption.offer === undefined ? null : (
-          <DropdownMenuItem onClick={() => void releaseAdoption.offer?.adopt()}>
-            Adopt release {releaseAdoption.offer.version}
-          </DropdownMenuItem>
-        )}
         {studioHref === undefined ? null : (
           <DropdownMenuItem onClick={() => navigator.navigate(studioHref)}>
             Open Studio
