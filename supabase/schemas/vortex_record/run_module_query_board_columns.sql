@@ -9,7 +9,8 @@ create or replace function vortex_record.run_module_query_board_columns(
   p_filterable_field_ids uuid[],
   p_choice_field_id uuid,
   p_board_columns jsonb,
-  p_page_size integer
+  p_page_size integer,
+  p_sort jsonb
 )
 returns jsonb
 language plpgsql
@@ -34,7 +35,7 @@ begin
   if selector is null then
     return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'descriptor_invalid');
   end if;
-  -- A board's first pages: every requested column, each from its start, in record identity order.
+  -- A board's first pages: every requested column in the record type default order.
   opened := vortex_record.module_query_open_internal(
     p_module_root_id, p_query_id, p_expected_release_revision, p_input_values,
     p_requested_field_ids, p_requested_system_field_keys, p_filter, p_filterable_field_ids,
@@ -47,9 +48,12 @@ begin
   end if;
   bound := vortex_record.module_query_bind_internal(opened);
   if bound ->> 'outcome' <> 'bound' then return bound; end if;
+  if not vortex_record.module_query_board_sort_valid_internal(bound, p_sort) then
+    return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'sort_invalid');
+  end if;
   member := vortex_record.module_query_board_member_internal(bound, selector);
   if member ->> 'outcome' <> 'completed' then return member; end if;
-  plan := vortex_record.module_query_scan_plan_internal(bound, '[]'::jsonb, false, false, false, null);
+  plan := vortex_record.module_query_scan_plan_internal(bound, p_sort, false, false, false, null);
   if plan ->> 'outcome' <> 'planned' then return plan; end if;
   if member ->> 'choiceColumn' is null then
     -- The choice field is not guaranteed readable: the table is read once for every column, each
@@ -86,10 +90,10 @@ begin
 end
 $function$;
 
-alter function vortex_record.run_module_query_board_columns(uuid,uuid,bigint,jsonb,uuid[],text[],jsonb,uuid[],uuid,jsonb,integer) owner to vortex_record_adapter;
-revoke all on function vortex_record.run_module_query_board_columns(uuid,uuid,bigint,jsonb,uuid[],text[],jsonb,uuid[],uuid,jsonb,integer)
+alter function vortex_record.run_module_query_board_columns(uuid,uuid,bigint,jsonb,uuid[],text[],jsonb,uuid[],uuid,jsonb,integer,jsonb) owner to vortex_record_adapter;
+revoke all on function vortex_record.run_module_query_board_columns(uuid,uuid,bigint,jsonb,uuid[],text[],jsonb,uuid[],uuid,jsonb,integer,jsonb)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
-grant execute on function vortex_record.run_module_query_board_columns(uuid,uuid,bigint,jsonb,uuid[],text[],jsonb,uuid[],uuid,jsonb,integer)
+grant execute on function vortex_record.run_module_query_board_columns(uuid,uuid,bigint,jsonb,uuid[],text[],jsonb,uuid[],uuid,jsonb,integer,jsonb)
   to vortex_request;
-comment on function vortex_record.run_module_query_board_columns(uuid,uuid,bigint,jsonb,uuid[],text[],jsonb,uuid[],uuid,jsonb,integer) is
-  'The first page of every requested board column (1 to 13 closed columns, unassigned at most once) of an installed Module query or exact preview query in one invocation, each column with its own rows, capabilities and continuation, plus the reader''s field bound. When the choice field is guaranteed readable on every scanned row each column''s candidate scan is narrowed to its own stored value with its own budget; otherwise the table is read once and each readable row goes to the column its readable choice value names.';
+comment on function vortex_record.run_module_query_board_columns(uuid,uuid,bigint,jsonb,uuid[],text[],jsonb,uuid[],uuid,jsonb,integer,jsonb) is
+  'The first page of every requested board column (1 to 13 closed columns, unassigned at most once) in the record type default order, ending in record identity, of an installed Module query or exact preview query in one invocation, each column with its own rows, capabilities and continuation, plus the reader''s field bound. When the choice field is guaranteed readable on every scanned row each column''s candidate scan is narrowed to its own stored value with its own budget; otherwise the table is read once and each readable row goes to the column its readable choice value names.';
