@@ -145,10 +145,11 @@ const declined = (
   failure: StudioApplicationFailure,
   error?: unknown,
 ): StudioApplicationFailure => {
-  console.error(
+  const message =
     `[studio] ${operation} ${failure.kind} reason=${failure.reason}` +
-      (error === undefined ? "" : ` cause=${describeFailure(error)}`),
-  );
+    (error === undefined ? "" : ` cause=${describeFailure(error)}`);
+  if (failure.kind === "refused") console.info(message);
+  else console.error(message);
   return failure;
 };
 
