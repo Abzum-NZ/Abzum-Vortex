@@ -24,9 +24,10 @@ type BoardReadInput = Pick<
 >;
 
 /**
- * The Board-only browser request path is loaded on the first visible-column read. It answers
- * "deferred" when another read of this board is in
- * flight): the board keeps the column and reads it again when idle. `false` is a real failure.
+ * The Board-only browser request path is loaded on a board's first column read. A continuation
+ * answers the column's next page, which the board keeps in its own state; a refresh of columns
+ * replaces the placement's data and answers `true`. `"deferred"` means another read of this board
+ * is in flight; the board shows its Show more retry. `false` is a real failure.
  */
 export async function readBoardColumns(
   input: BoardReadInput,
