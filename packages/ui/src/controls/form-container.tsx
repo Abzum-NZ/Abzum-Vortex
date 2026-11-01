@@ -207,11 +207,9 @@ export function FormContainer(props: FormContainerProps): ReactElement {
       setSubmitActionHost(ordered[0] ?? null);
     };
     hosts.add(element);
-    element.setAttribute("data-vortex-form-actions", "");
     update();
     return () => {
       hosts.delete(element);
-      element.removeAttribute("data-vortex-form-actions");
       update();
     };
   }, []);

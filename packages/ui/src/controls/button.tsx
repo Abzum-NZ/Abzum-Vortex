@@ -49,7 +49,7 @@ export function Button(props: ButtonProps): ReactElement {
     "primary",
   );
   const form = useFormScope();
-  const buttonRef = useRef<HTMLButtonElement>(null);
+  const submitActionHostRef = useRef<HTMLDivElement>(null);
   const reactions = usePlacementReactions();
   const noteId = useId();
   // The shared scheduler decides whether another action queues, supersedes or is ignored.
@@ -89,8 +89,8 @@ export function Button(props: ButtonProps): ReactElement {
   const registerSubmitActions = form?.registerSubmitActions;
   useEffect(() => {
     if (mode !== "submit" || registerSubmitActions === undefined) return;
-    const wrapper = buttonRef.current?.closest<HTMLElement>("[data-vortex-layout-wrapper]");
-    return wrapper === null || wrapper === undefined ? undefined : registerSubmitActions(wrapper);
+    const host = submitActionHostRef.current;
+    return host === null ? undefined : registerSubmitActions(host);
   }, [mode, registerSubmitActions]);
   useEffect(
     () =>
@@ -115,10 +115,9 @@ export function Button(props: ButtonProps): ReactElement {
     [agent, form?.formId, label, mode, props.placementId],
   );
 
-  return (
+  const button = (
     <>
       <SharedButton
-        ref={buttonRef}
         type={mode === "action" ? "button" : mode}
         variant={SHARED_BUTTON_VARIANTS[variant]}
         data-vortex-control="button"
@@ -139,5 +138,12 @@ export function Button(props: ButtonProps): ReactElement {
         </span>
       )}
     </>
+  );
+  return mode === "submit" ? (
+    <div ref={submitActionHostRef} data-vortex-form-actions="">
+      {button}
+    </div>
+  ) : (
+    button
   );
 }
