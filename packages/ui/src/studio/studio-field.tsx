@@ -114,7 +114,7 @@ export function StudioField({
   return (
     <Field data-invalid={error === undefined ? undefined : true}>
       <div className="flex items-center gap-2">
-        <FieldLabel htmlFor={id} className="normal-case tracking-normal">
+        <FieldLabel htmlFor={id}>
           {label}
         </FieldLabel>
         {optional && <span className="text-xs text-muted-foreground">Optional</span>}

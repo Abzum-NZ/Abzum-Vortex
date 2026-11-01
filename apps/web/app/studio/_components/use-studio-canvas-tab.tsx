@@ -73,7 +73,7 @@ import { StudioPanelShell } from "./studio-frame";
 import { StudioInspector } from "./studio-inspector";
 import { StudioLayoutOutlets, StudioLayoutOutletUses } from "./studio-layout-outlets";
 import type { StudioStructureCommandRunner } from "./use-studio-structure-tab";
-import { StudioUsedIn } from "./studio-used-in";
+import { StudioApplicationUsedIn, StudioUsedIn } from "./studio-used-in";
 import type { StudioModuleOwnerApplication } from "./module-fields-editor";
 import { StudioBlockOutlinePanel } from "./studio-outline-panels";
 import type { StudioRailKey } from "./studio-rail-tabs";
@@ -967,6 +967,7 @@ export function useStudioCanvasTab({
         <StudioLayoutOutletUses source={source} placementAlias={selected.placementAlias} />
       )}
       {selected?.kind === "flow" && flowDeleteNotice}
+      {selected?.kind === "application" && <StudioApplicationUsedIn />}
       {usedIn !== null && (
         <StudioUsedIn source={source} target={usedIn} name={selectedName ?? "it"} />
       )}

@@ -22,7 +22,7 @@ import {
 import { Button } from "@vortex/ui/components/button";
 import { Input } from "@vortex/ui/components/input";
 import { useConfirm } from "@vortex/ui/components/confirm-dialog";
-import { StudioPanelShell } from "./studio-frame";
+import { STUDIO_RAIL_BODY_CLASS } from "./studio-frame";
 import { StudioField } from "./studio-field";
 import { StudioDataPanel } from "./studio-data-panel";
 import { StudioDataCentre, StudioDataEmpty } from "./studio-data-centre";
@@ -834,7 +834,8 @@ export function StudioDataInspectorView({ model }: Readonly<{ model: StudioDataM
     current !== null &&
     JSON.stringify(compileProblem.selection) === JSON.stringify(current);
   return (
-    <StudioPanelShell title="Inspector">
+    <div className="flex min-h-0 flex-1 flex-col">
+      <div className={STUDIO_RAIL_BODY_CLASS} data-studio-rail-body="">
       {compileProblem === null ? null : (
         <div role="alert" className="space-y-2 rounded-md border border-destructive/50 p-3 text-sm">
           <p className="font-semibold text-destructive">
@@ -859,7 +860,8 @@ export function StudioDataInspectorView({ model }: Readonly<{ model: StudioDataM
       {usedIn === null ? null : (
         <StudioUsedIn source={source} target={usedIn} name={describeSelection(modules, current)} />
       )}
-    </StudioPanelShell>
+      </div>
+    </div>
   );
 }
 

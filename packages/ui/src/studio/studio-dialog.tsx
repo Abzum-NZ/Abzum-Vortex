@@ -48,12 +48,12 @@ export function StudioDialog({
   const footer = (
     <DialogFooter>
       <DialogClose
-        render={<Button type="button" variant="outline" className="normal-case tracking-normal" />}
+        render={<Button type="button" variant="outline" />}
       >
         {submitLabel === undefined ? closeLabel : "Cancel"}
       </DialogClose>
       {submitLabel !== undefined && (
-        <Button type="submit" className="normal-case tracking-normal" disabled={submitDisabled}>
+        <Button type="submit" disabled={submitDisabled}>
           {submitLabel}
         </Button>
       )}
@@ -63,7 +63,7 @@ export function StudioDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle className="normal-case tracking-normal">{title}</DialogTitle>
+          <DialogTitle>{title}</DialogTitle>
           {description !== undefined && <DialogDescription>{description}</DialogDescription>}
         </DialogHeader>
         {submitLabel === undefined ? (

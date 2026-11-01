@@ -60,7 +60,6 @@ export function StudioInspectorActions({
             <DropdownMenuItem
               disabled={action.disabled}
               variant={action.destructive ? "destructive" : "default"}
-              className="normal-case tracking-normal"
               onClick={action.onSelect}
             >
               {action.label}

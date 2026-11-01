@@ -1123,7 +1123,7 @@ export function ModuleFieldsEditor({
           fieldLabel={existing?.label ?? form.label}
           onPersonalData={(personalData) => change({ personalData })}
           onPublicDisplay={(publicDisplay) => change({ publicDisplay })}
-          permissionsNote="Field permissions: Access › Permissions"
+          onOpenPermissions={placeOpener.openPermissions}
         />
         {existing === undefined ? null : (
           <>
@@ -1154,7 +1154,6 @@ export function ModuleFieldsEditor({
               type="button"
               size="sm"
               variant="outline"
-              className="normal-case tracking-normal"
               onClick={onCancel}
             >
               Cancel
@@ -1163,7 +1162,6 @@ export function ModuleFieldsEditor({
           <Button
             type="submit"
             size="sm"
-            className="normal-case tracking-normal"
             disabled={disabled || form.label.trim() === ""}
           >
             Add field

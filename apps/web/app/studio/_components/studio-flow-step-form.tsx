@@ -313,7 +313,11 @@ function FieldValues({
               </AlertDescription>
             </Alert>
           )}
-          {entries.length === 0 && fields.length > 0 && <StudioHelp hint="No field is set yet." />}
+          {entries.length === 0 && fields.length > 0 && (
+            <p role="status" className="text-sm text-muted-foreground">
+              No field is set yet.
+            </p>
+          )}
           <StudioEntryList
             label={field.label}
             itemName="field"
@@ -678,10 +682,12 @@ function ConditionControl({
   };
   return (
     <fieldset className="space-y-2" id={id} disabled={disabled}>
-      <legend className="text-sm font-medium">Condition</legend>
-      {tree === undefined && (
-        <StudioHelp hint="Set a condition. The step keeps its saved condition until this is complete." />
-      )}
+      <legend className="flex items-center gap-1 text-sm font-medium">
+        Condition
+        {tree === undefined && (
+          <StudioHelp hint="Set a condition. The step keeps its saved condition until this is complete." />
+        )}
+      </legend>
       <StudioConditionControls
         {...(tree === undefined ? {} : { value: tree })}
         context={context.controls}
@@ -735,14 +741,16 @@ function ControlForm({
     case "stop":
       return (
         <div className="space-y-1.5">
-          <Label htmlFor={id}>Outcome</Label>
+          <div className="flex items-center gap-1">
+            <Label htmlFor={id}>Outcome</Label>
+            <StudioHelp hint="A short name for how the flow ended, such as cancelled." />
+          </div>
           <Input
             id={id}
             disabled={disabled}
             value={control.outcome}
             onChange={(event) => onChange({ kind: "stop", outcome: event.target.value }, null)}
           />
-          <StudioHelp hint="A short name for how the flow ended, such as cancelled." />
         </div>
       );
     case "run_flow":
@@ -876,7 +884,9 @@ function ControlForm({
       );
     case "none":
       return (
-        <StudioHelp hint="This step only groups the steps of its branches; add steps to them on the canvas." />
+        <p role="status" className="text-sm text-muted-foreground">
+          This step only groups the steps of its branches; add steps to them on the canvas.
+        </p>
       );
   }
 }
@@ -920,7 +930,12 @@ export function StudioFlowStepForm({
           );
         })
         .map((field) => (
-          <div key={field.key} className="space-y-1" data-vortex-setting={field.key}>
+          <div
+            key={field.key}
+            className="flex items-start gap-1"
+            data-vortex-setting={field.key}
+          >
+            <div className="min-w-0 flex-1">
             <PropertyControl
               id={`${id}-${field.key}`}
               field={field}
@@ -988,10 +1003,16 @@ export function StudioFlowStepForm({
                 onChange({ ...draft, properties }, problem, field.key);
               }}
             />
+            </div>
             {field.help === undefined ? null : <StudioHelp hint={field.help} />}
           </div>
         ))}
-      <StudioInspectorGroup title="Description">
+      <StudioInspectorGroup
+        title="Description"
+        defaultOpen={false}
+        hint="Shown on the canvas in place of the step's summary."
+        summary={draft.description === "" ? "None" : draft.description}
+      >
         <Label htmlFor={`${id}-description`}>
           Description <span className="text-xs text-muted-foreground">Optional</span>
         </Label>
@@ -1004,7 +1025,6 @@ export function StudioFlowStepForm({
             onChange({ ...draft, description: event.target.value }, null, "description")
           }
         />
-        <StudioHelp hint="Shown on the canvas in place of the step's summary." />
       </StudioInspectorGroup>
     </div>
   );

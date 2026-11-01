@@ -157,6 +157,7 @@ function ExistingApplicationWorkspace(props: ExistingProps) {
       if (next.kind === "role") access.showRole();
       openIn(studioTabOfSelection(next), next);
     },
+    openPermissions: () => openAccessPermissions(),
     nameOf: (open) => {
       const next = studioPlaceSelection(open, state.rootId);
       return next === null ? undefined : labels.get(studioSemanticSelectionKey(next));
@@ -238,6 +239,10 @@ function ExistingApplicationWorkspace(props: ExistingProps) {
     onCommand: commandAccess,
     onPreview: canvas.previewAs,
   });
+  const openAccessPermissions = () => {
+    access.showPermissions();
+    setTab("access");
+  };
   const openAccessPages = () => {
     access.showPages();
     setTab("access");

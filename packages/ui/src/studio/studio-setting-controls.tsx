@@ -1183,7 +1183,7 @@ export function StudioQueryPicker({
     <div className="space-y-2" data-vortex-setting="query">
       <div className="flex items-center justify-between gap-2">
         <span className="flex items-center gap-1">
-          <Label htmlFor={id} className="normal-case tracking-normal">
+          <Label htmlFor={id}>
             Data
           </Label>
           <StudioHelp hint="Choose a record type to show all its records, or use an existing query." />
@@ -1193,7 +1193,6 @@ export function StudioQueryPicker({
             type="button"
             size="xs"
             variant="ghost"
-            className="normal-case tracking-normal"
             disabled={disabled}
             onClick={onNewQuery}
           >

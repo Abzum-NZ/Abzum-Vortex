@@ -624,7 +624,7 @@ export function FieldPrivacySection({
   fieldLabel,
   onPersonalData,
   onPublicDisplay,
-  permissionsNote,
+  onOpenPermissions,
 }: Readonly<{
   personalData: FieldFormState["personalData"];
   publicDisplay: FieldFormState["publicDisplay"];
@@ -634,7 +634,8 @@ export function FieldPrivacySection({
   fieldLabel: string;
   onPersonalData: (value: FieldFormState["personalData"]) => void;
   onPublicDisplay: (value: FieldFormState["publicDisplay"]) => void;
-  permissionsNote: ReactNode;
+  /** Opens the Access tab on its permissions. */
+  onOpenPermissions: () => void;
 }>) {
   return (
     <StudioInspectorGroup
@@ -686,7 +687,16 @@ export function FieldPrivacySection({
           />
         )}
       </StudioField>
-      <p className="text-xs text-muted-foreground">{permissionsNote}</p>
+      <p className="text-xs text-muted-foreground">
+        Field permissions: Access ›{" "}
+        <button
+          type="button"
+          className="text-foreground underline underline-offset-4 hover:no-underline"
+          onClick={onOpenPermissions}
+        >
+          Permissions
+        </button>
+      </p>
     </StudioInspectorGroup>
   );
 }

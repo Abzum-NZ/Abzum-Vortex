@@ -23,6 +23,8 @@ import { Fragment } from "react";
 export type StudioPlaceOpener = Readonly<{
   /** Opens a place's item in its tab with it selected. Places Studio cannot open are not passed. */
   open: (open: ApplicationPlaceOpen) => void;
+  /** Opens the Access tab on its permissions view, with nothing selected. */
+  openPermissions: () => void;
   /** The outline's name of a block or flow step, when the outline knows it. */
   nameOf: (open: ApplicationPlaceOpen) => string | undefined;
 }>;
@@ -139,6 +141,21 @@ export function StudioUsedIn({
 }
 
 /**
+ * The application's own "Used in": no part of the draft refers to the application itself, and
+ * where it is installed lives in the App Store, so the section says so, closed.
+ */
+export function StudioApplicationUsedIn() {
+  return (
+    <StudioInspectorGroup title="Used in" defaultOpen={false} summary="Not used elsewhere">
+      <p className="text-sm text-muted-foreground">
+        Nothing in the draft uses the application itself. Where it is installed is shown in the App
+        Store.
+      </p>
+    </StudioInspectorGroup>
+  );
+}
+
+/**
  * Why a change was refused while something still uses what it would remove: the reason, and behind
  * "Show me where" the places that use it. Shown only while there are places.
  */
@@ -175,7 +192,6 @@ export function StudioReferencesAlert({
           type="button"
           size="xs"
           variant="outline"
-          className="normal-case tracking-normal"
           aria-expanded={showing}
           onClick={() => setShowing(!showing)}
         >

@@ -302,6 +302,44 @@ body {
   }
 }
 
+/*
+ * Studio's own chrome is in sentence case. The sera style capitalises buttons, labels, titles, tabs
+ * and menu items; this rule matches only while Studio is on screen (its surface marker) and stops
+ * at an application preview's own style root, so an application keeps the style it chose.
+ */
+@layer vortex-components {
+  @scope ([data-vortex-surface="studio"]) to (:scope [data-vortex-style]) {
+    :scope
+      :is(
+        .cn-badge,
+        .cn-breadcrumb-list,
+        .cn-button,
+        .cn-card-title,
+        .cn-dialog-title,
+        .cn-dropdown-menu-item,
+        .cn-dropdown-menu-checkbox-item,
+        .cn-dropdown-menu-radio-item,
+        .cn-dropdown-menu-label,
+        .cn-dropdown-menu-sub-trigger,
+        .cn-field-legend,
+        .cn-item-title,
+        .cn-label,
+        .cn-popover-title,
+        .cn-progress-label,
+        .cn-select-label,
+        .cn-sheet-title,
+        .cn-sidebar-group-label,
+        .cn-table-head,
+        .cn-tabs-trigger,
+        .cn-toggle
+      ) {
+      --tw-tracking: normal;
+      letter-spacing: normal;
+      text-transform: none;
+    }
+  }
+}
+
 /* The two translucent menu choices soften the shell-owned sidebar surface. */
 @layer utilities {
   :is([data-vortex-menu="default-translucent"], [data-vortex-menu="inverted-translucent"])
