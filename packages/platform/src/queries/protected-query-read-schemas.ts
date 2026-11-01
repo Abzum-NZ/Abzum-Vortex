@@ -23,6 +23,8 @@ export const inputsReadSchema = z.discriminatedUnion("outcome", [
       moduleReleaseRevision: revisionSchema,
       moduleReleaseVersion: stableDefinitionReleaseVersionSchema,
       inputs: z.unknown(),
+      titleFieldId: fieldIdSchema,
+      sortableFieldIds: z.array(fieldIdSchema).max(500),
     })
     .strict(),
   refusedSchema,
