@@ -528,7 +528,7 @@ export function useStudioFlowsTab({
         {flowProblems.length > 0 || planRefusal != null ? (
           <Alert variant="destructive">
             <AlertDescription>
-              <p>{`Fix ${outline.flow.name} before publishing or running it.`}</p>
+              <p>{`Fix ${labels.get(selectionKey) ?? "this flow"} before publishing or running it.`}</p>
               {flowProblems.map((issue, index) => (
                 <p
                   key={index}
