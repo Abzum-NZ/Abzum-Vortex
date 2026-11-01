@@ -3,7 +3,6 @@
 import {
   lazy,
   Suspense,
-  useCallback,
   useEffect,
   useRef,
   useState,
@@ -741,54 +740,67 @@ export function BoardView(props: DisplayRenderProps<BoardPayload>): ReactElement
           announce: setDropMessage,
         };
 
-  const readBuckets = useCallback(
-    async (targets: readonly BoardBucket[], continuationToken?: string): Promise<void> => {
-      if (pageChanged === undefined || pendingKeyRef.current !== undefined || targets.length === 0)
-        return;
-      const keys = new Set(targets.map((bucket) => bucket.key));
-      const key = targets[0]!.key;
-      pendingKeyRef.current = key;
-      setPendingKeys(keys);
-      setFailedKeys((current) => new Set([...current].filter((candidate) => !keys.has(candidate))));
-      try {
-        const accepted = await Promise.resolve(
-          pageChanged({
-            event: "page_changed",
-            columns: targets.map((bucket) => bucket.selector),
-            ...(continuationToken === undefined ? {} : { continuationToken }),
-          }),
-        );
-        if (accepted === false || accepted === "deferred")
-          setFailedKeys((current) => new Set([...current, ...keys]));
-        else if (continuationToken !== undefined) {
-          if (typeof accepted !== "object" || accepted === null || !("page" in accepted)) {
-            setFailedKeys((current) => new Set([...current, ...keys]));
-          } else {
-            const previous = targets[0]!.values.page;
-            if (previous === null) throw new Error("Board continuation has no previous page");
-            const rows = new Map(previous.rows.map((row) => [row.recordId.toLowerCase(), row]));
-            for (const row of accepted.page.rows) rows.set(row.recordId.toLowerCase(), row);
-            const page = {
-              ...accepted.page,
-              rows: [...rows.values()].slice(0, maximumDisplayedCards),
-            };
-            setContinued((current) => {
-              const pages = new Map(current.source === values ? current.pages : []);
-              pages.set(key, page);
-              return { source: values, pages };
-            });
-          }
-        }
-      } catch (error) {
-        console.error("[board] column read failed", error);
+  const readBuckets = async (
+    targets: readonly BoardBucket[],
+    continuationToken?: string,
+  ): Promise<void> => {
+    if (pageChanged === undefined || pendingKeyRef.current !== undefined || targets.length === 0)
+      return;
+    const keys = new Set(targets.map((bucket) => bucket.key));
+    const key = targets[0]!.key;
+    pendingKeyRef.current = key;
+    setPendingKeys(keys);
+    setFailedKeys((current) => new Set([...current].filter((candidate) => !keys.has(candidate))));
+    try {
+      const accepted = await Promise.resolve(
+        pageChanged({
+          event: "page_changed",
+          columns: targets.map((bucket) => bucket.selector),
+          ...(continuationToken === undefined ? {} : { continuationToken }),
+        }),
+      );
+      if (accepted === false || accepted === "deferred")
         setFailedKeys((current) => new Set([...current, ...keys]));
-      } finally {
-        pendingKeyRef.current = undefined;
-        setPendingKeys(new Set());
+      else if (continuationToken !== undefined) {
+        if (typeof accepted !== "object" || accepted === null || !("page" in accepted)) {
+          setFailedKeys((current) => new Set([...current, ...keys]));
+        } else {
+          const previous = targets[0]!.values.page;
+          if (previous === null) throw new Error("Board continuation has no previous page");
+          const otherRows = new Set(
+            buckets
+              .filter((bucket) => bucket.key !== key)
+              .flatMap(
+                (bucket) => bucket.values.page?.rows.map((row) => row.recordId.toLowerCase()) ?? [],
+              ),
+          );
+          if (accepted.page.rows.some((row) => otherRows.has(row.recordId.toLowerCase()))) {
+            if (events?.refresh === undefined)
+              throw new Error("Board continuation contains a card from another column");
+            await Promise.resolve(events.refresh({ event: "refresh" }));
+            return;
+          }
+          const rows = new Map(previous.rows.map((row) => [row.recordId.toLowerCase(), row]));
+          for (const row of accepted.page.rows) rows.set(row.recordId.toLowerCase(), row);
+          const page = {
+            ...accepted.page,
+            rows: [...rows.values()].slice(0, maximumDisplayedCards),
+          };
+          setContinued((current) => {
+            const pages = new Map(current.source === values ? current.pages : []);
+            pages.set(key, page);
+            return { source: values, pages };
+          });
+        }
       }
-    },
-    [pageChanged, values],
-  );
+    } catch (error) {
+      console.error("[board] column read failed", error);
+      setFailedKeys((current) => new Set([...current, ...keys]));
+    } finally {
+      pendingKeyRef.current = undefined;
+      setPendingKeys(new Set());
+    }
+  };
 
   const addCard = (bucket: BoardBucket): void => {
     if (
