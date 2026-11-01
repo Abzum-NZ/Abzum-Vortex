@@ -90,14 +90,6 @@ begin
   if operation_name in (
     'create_custom', 'create_custom_from_template', 'accept_new_application_role'
   ) then
-    if exists (
-      select 1 from vortex_access.organization_roles as stored
-      where stored.organization_id = context_organization_id
-        and stored.role_id = target_role_id
-    ) then
-      raise exception using errcode = '40001',
-        message = 'Private Organization role-authority change is stale or unavailable';
-    end if;
     authority_before := pg_catalog.jsonb_build_object('kind', 'none');
   else
     if pg_catalog.jsonb_typeof(candidate -> 'expectedRoleRevision')
@@ -207,6 +199,27 @@ begin
   if decision.outcome is distinct from 'eligible' then
     raise exception using errcode = '42501',
       message = 'Private Organization role-authority change is unavailable';
+  end if;
+
+  -- Check only after authorizing the caller, under the exclusive Access lock. The unique
+  -- constraint remains the final protection against any writer outside this path.
+  if operation_name in ('create_custom', 'create_custom_from_template') and exists (
+    select 1 from vortex_access.organization_roles as stored
+    where stored.organization_id = context_organization_id
+      and stored.role_key = candidate ->> 'key'
+  ) then
+    raise exception using errcode = 'V3153',
+      message = 'A role with this key already exists';
+  end if;
+  if operation_name in (
+    'create_custom', 'create_custom_from_template', 'accept_new_application_role'
+  ) and exists (
+    select 1 from vortex_access.organization_roles as stored
+    where stored.organization_id = context_organization_id
+      and stored.role_id = target_role_id
+  ) then
+    raise exception using errcode = '40001',
+      message = 'Private Organization role-authority change is stale or unavailable';
   end if;
 
   select result.* into strict changed

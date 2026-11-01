@@ -1326,7 +1326,8 @@ export const createProtectedOperationExecutor = (
         if (
           result.code === "recent_authentication_required" ||
           result.code === "multi_factor_required" ||
-          result.code === "role_settings_change_required"
+          result.code === "role_settings_change_required" ||
+          result.code === "role_key_in_use"
         )
           return {
             outcome: "refused",

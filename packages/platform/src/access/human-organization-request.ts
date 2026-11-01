@@ -76,6 +76,7 @@ export type HumanOrganizationRequestResult<Result, ExtraRefusal extends string =
         | "recent_authentication_required"
         | "multi_factor_required"
         | "role_settings_change_required"
+        | "role_key_in_use"
         | ExtraRefusal;
       cause?: string;
     }>
@@ -423,6 +424,7 @@ export const createHumanOrganizationRequestService = (
       const recentAuthenticationRequired = code === "V3150";
       const multiFactorRequired = code === "V3152";
       const roleSettingsChangeRequired = code === "V3151";
+      const roleKeyInUse = code === "V3153";
       // Postgres reports a missing privilege (a lost GRANT, a role misconfiguration) with the same
       // code as the access model's refusals, but always as "permission denied for ...".
       const missingPrivilege =
@@ -434,7 +436,8 @@ export const createHumanOrganizationRequestService = (
         (code === "42501" && !missingPrivilege) ||
         recentAuthenticationRequired ||
         multiFactorRequired ||
-        roleSettingsChangeRequired;
+        roleSettingsChangeRequired ||
+        roleKeyInUse;
       const cause = describeFailure(error);
       // A request its caller abandoned (the browser left the page) is stopped on purpose, and a
       // refusal the access model raises is it answering: neither is a failure of the platform, so
@@ -453,13 +456,15 @@ export const createHumanOrganizationRequestService = (
           ? { kind: "unavailable", code: "recent_authentication_required", cause }
           : roleSettingsChangeRequired
             ? { kind: "unavailable", code: "role_settings_change_required", cause }
-            : refused
-              ? { kind: "unavailable" }
-              : {
-                  kind: "temporarily_unavailable",
-                  cause,
-                  ...(code === undefined ? {} : { databaseCode: code }),
-                };
+            : roleKeyInUse
+              ? { kind: "unavailable", code: "role_key_in_use", cause }
+              : refused
+                ? { kind: "unavailable" }
+                : {
+                    kind: "temporarily_unavailable",
+                    cause,
+                    ...(code === undefined ? {} : { databaseCode: code }),
+                  };
     }
   };
 
