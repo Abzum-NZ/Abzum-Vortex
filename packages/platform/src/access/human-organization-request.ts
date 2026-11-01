@@ -456,6 +456,7 @@ export const createHumanOrganizationRequestService = (
         console.info(`[access] human organisation request temporarily unavailable: ${cause}`);
       else if (
         refused ||
+        code === "installation_authority_refused" ||
         code === "DEFINITION_DRAFT_STALE_OR_MISSING" ||
         code === "RECORD_STORAGE_INCOMPATIBLE"
       )

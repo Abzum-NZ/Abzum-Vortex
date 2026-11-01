@@ -159,7 +159,14 @@ export const readApplicationReleaseStanding = async (
     { application_root_id: scope.applicationRootId },
   );
   if (review === "conflict" || review === "uncertain" || review.kind !== "available") {
-    console.error(`[release-standing] review ${typeof review === "string" ? review : review.kind}`);
+    const message = `[release-standing] review ${typeof review === "string" ? review : review.kind}`;
+    if (
+      review === "conflict" ||
+      (review !== "uncertain" &&
+        (review.kind === "unavailable" || review.kind === "confirmed_failure"))
+    )
+      console.info(message);
+    else console.error(message);
     return appStoreHref === undefined ? { kind: "unknown" } : { kind: "unknown", appStoreHref };
   }
   const value = review.value as Readonly<Record<string, unknown>>;
