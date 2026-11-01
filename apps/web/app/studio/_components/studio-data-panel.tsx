@@ -3,6 +3,7 @@ import { useMemo, useState } from "react";
 import { Icon } from "@vortex/ui";
 import { Badge } from "@vortex/ui/components/badge";
 import { Button } from "@vortex/ui/components/button";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@vortex/ui/components/tooltip";
 import { StudioPanelShell, StudioSearchBox, StudioSection } from "./studio-frame";
 import {
   StudioNavEmpty,
@@ -164,17 +165,24 @@ export function StudioDataPanel({
       title="Data"
       hidden={hidden}
       action={
-        <div className="flex items-center gap-1">
-          <Button
-            type="button"
-            size="sm"
-            variant="ghost"
-            onClick={onCreateModule}
-            disabled={disabled}
-          >
-            <Icon name="plus" />
-            Module
-          </Button>
+        <div className="flex shrink-0 items-center gap-1">
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <Button
+                  type="button"
+                  size="icon-sm"
+                  variant="ghost"
+                  aria-label="New module"
+                  onClick={onCreateModule}
+                  disabled={disabled}
+                />
+              }
+            >
+              <Icon name="blocks" />
+            </TooltipTrigger>
+            <TooltipContent>New module</TooltipContent>
+          </Tooltip>
           <Button
             type="button"
             size="sm"

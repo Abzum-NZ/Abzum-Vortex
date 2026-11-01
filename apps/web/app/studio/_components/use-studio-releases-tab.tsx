@@ -418,6 +418,9 @@ export function useStudioReleasesTab({
               return { kind: "unverified" };
             }
           }
+          // The first version needs no thinking up: its note is prefilled and can be changed.
+          if (parsed.data.confirmation.assignedVersion === "1.0.0")
+            setNote((current) => (current.trim() === "" ? "First release" : current));
           setPrepared({
             confirmation: parsed.data.confirmation,
             componentLabels: parsed.data.componentLabels,
@@ -467,9 +470,10 @@ export function useStudioReleasesTab({
         // Publishing creates the version; the App Store installs or upgrades to it. The notice says
         // which of those the organisation still needs.
         const version = parsed.data.releaseVersion;
+        studioNotice(`Version ${version} was published.`, "success");
         void readStanding().then((now) => {
           const words = standingWords(now, version);
-          studioNotice(words.text, "success", words.link);
+          studioNotice(words.text, "info", words.link);
         });
         setHistoryGeneration((generation) => generation + 1);
         closePublish(false);

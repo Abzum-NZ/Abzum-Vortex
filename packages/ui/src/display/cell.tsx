@@ -1,5 +1,4 @@
 import type { ReactElement } from "react";
-import { Badge } from "../components/badge";
 import {
   Table,
   TableBody,
@@ -13,7 +12,7 @@ import { DefinitionRenderError } from "../definition-error";
 import { NavigationLink } from "../routing/navigation-link";
 import { formatIsoDate, INVALID_DATE_TEXT, type DateFormatOptions } from "./date-format";
 import { FormattedTime } from "./date-format-context";
-import { optionToneBadgeClass } from "./option-tone";
+import { OptionToneDot } from "./option-tone";
 import { isSafeLinkAddress } from "@vortex/platform/schema";
 import {
   isInternalAddress,
@@ -125,14 +124,14 @@ export function DisplayCellView({ value }: Readonly<{ value: DisplayDetailCell }
       return <FormattedTime className="vortex-cell-date" iso={value.iso} />;
     case "choice":
       return (
-        <Badge
-          variant="outline"
+        <span
+          className="inline-flex items-center gap-2"
           data-vortex-choice-key={value.key}
           data-vortex-option-tone={value.tone}
-          className={optionToneBadgeClass(value.tone)}
         >
+          <OptionToneDot tone={value.tone} />
           {value.label}
-        </Badge>
+        </span>
       );
     case "link":
       // Re-checked here because this view is exported and may receive unparsed values.

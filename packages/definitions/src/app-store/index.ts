@@ -1,1 +1,0 @@
-export { appStoreApplication } from "./application";

@@ -53,7 +53,7 @@ export const PLATFORM_BLOCK_RELEASE_IDENTITIES = Object.freeze({
     key: "platform.display.table",
     rendererKey: "platform.renderer.table",
     releaseVersion: "2.0.0",
-    contentFingerprint: "sha256:1f0f492f63ffe32ce34a9e768687efaeb1329605e9df6160b579ef7d022e0ad7",
+    contentFingerprint: "sha256:28f525f014b89e7ffd69fcb0466efa910e6b364c26204d45d0db8ef852a607af",
   },
   RECORD_DETAIL_BLOCK_RELEASE: {
     blockId: "e2569df0-2f10-4b20-b41d-177b66cd136c",

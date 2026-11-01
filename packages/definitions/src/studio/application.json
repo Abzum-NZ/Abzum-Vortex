@@ -1,20 +1,20 @@
 {
   "source_contract_version": "4.5.0",
-  "root_alias": "app_app_store",
-  "key": "vortex.app.app_store",
+  "root_alias": "app_studio",
+  "key": "vortex.app.studio",
   "kind": "application",
   "body": {
-    "name": "App Store",
-    "description": "The one place to install, upgrade and remove applications in this organisation.",
+    "name": "Studio",
+    "description": "Build, publish, install and manage the organisation's applications. Its App Store section lists every application.",
     "icon": "blocks",
-    "home_page": "app_store_catalogue",
+    "home_page": "app_store",
     "uses": [],
     "permissions": [
       {
         "id": "app_permission_open",
-        "key": "application.app_store.open",
-        "label": "Open App Store",
-        "description": "Allows opening the App Store.",
+        "key": "application.studio.open",
+        "label": "Open Studio",
+        "description": "Allows opening Studio and its App Store.",
         "action_kind": "named",
         "named_action": "open",
         "administrative": false
@@ -22,28 +22,28 @@
     ],
     "roles": [
       {
-        "id": "role_app_store_user",
-        "key": "app_store_user",
+        "id": "role_studio_user",
+        "key": "studio_user",
         "default_member": true,
-        "name": "App Store user",
-        "home_page": "app_store_catalogue",
-        "permissions": ["application.app_store.open", "vortex.app_store.store_application.read"]
+        "name": "Studio user",
+        "home_page": "app_store",
+        "permissions": ["application.studio.open", "vortex.app_store.store_application.read"]
       }
     ],
     "navigation": [
       {
-        "id": "nav_store",
+        "id": "nav_studio",
         "type": "heading",
-        "label": "App Store",
+        "label": "Studio",
         "icon": "blocks",
         "children": [
           {
-            "id": "nav_applications",
+            "id": "nav_app_store",
             "type": "page",
-            "label": "Applications",
+            "label": "App Store",
             "icon": "app-window",
-            "page": "app_store_catalogue",
-            "permission": "application.app_store.open"
+            "page": "app_store",
+            "permission": "application.studio.open"
           }
         ]
       }
@@ -53,7 +53,7 @@
     "events": [
       {
         "id": "event_install_or_upgrade",
-        "key": "vortex.app.app_store.install_or_upgrade",
+        "key": "vortex.app.studio.install_or_upgrade",
         "label": "Install or upgrade",
         "record_type": "vortex.app_store:store_application",
         "carries": [],
@@ -61,7 +61,7 @@
       },
       {
         "id": "event_open_store_application",
-        "key": "vortex.app.app_store.open_application",
+        "key": "vortex.app.studio.open_application",
         "label": "Open application",
         "record_type": "vortex.app_store:store_application",
         "carries": [],
@@ -69,8 +69,16 @@
       },
       {
         "id": "event_remove_application",
-        "key": "vortex.app.app_store.remove_application",
+        "key": "vortex.app.studio.remove_application",
         "label": "Remove application",
+        "record_type": "vortex.app_store:store_application",
+        "carries": [],
+        "personal_or_sensitive_values_allowed": false
+      },
+      {
+        "id": "event_delete_application",
+        "key": "vortex.app.studio.delete_application",
+        "label": "Delete application",
         "record_type": "vortex.app_store:store_application",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
@@ -79,9 +87,9 @@
     "public_addresses": [],
     "shells": [
       {
-        "id": "shell_app_store",
-        "key": "app_store_shell",
-        "name": "App Store shell",
+        "id": "shell_studio",
+        "key": "studio_shell",
+        "name": "Studio shell",
         "presentation": {
           "sidebar": {
             "collapsible": "icon",
@@ -130,7 +138,7 @@
                           "type": "platform.renderer.application_navigation",
                           "props": {
                             "id": "shell_navigation",
-                            "title": "App Store",
+                            "title": "Studio",
                             "vortex": {
                               "block": {
                                 "block_id": "e2f4a1b7-3c58-4d09-9e62-1a7b5c8d0f24",
@@ -160,6 +168,58 @@
                         "responsive": {
                           "desktop": {
                             "visible": true,
+                            "width": {
+                              "kind": "fill"
+                            },
+                            "height": {
+                              "kind": "content"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  },
+                  {
+                    "type": "platform.renderer.form_container",
+                    "props": {
+                      "id": "studio_purge_form",
+                      "title": "Confirm by typing the application's name",
+                      "content": [
+                        {
+                          "type": "platform.renderer.text_input",
+                          "props": {
+                            "id": "shell_purge_confirm_name",
+                            "name": "confirm_name",
+                            "label": "Application name",
+                            "required": true,
+                            "vortex": {
+                              "block": {
+                                "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
+                                "release_version": "1.0.0"
+                              },
+                              "responsive": {
+                                "desktop": {
+                                  "visible": true,
+                                  "width": {
+                                    "kind": "fill"
+                                  },
+                                  "height": {
+                                    "kind": "content"
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      ],
+                      "vortex": {
+                        "block": {
+                          "block_id": "476e2c35-07d6-40cc-bf01-6ddb22ccca44",
+                          "release_version": "1.0.0"
+                        },
+                        "responsive": {
+                          "desktop": {
+                            "visible": false,
                             "width": {
                               "kind": "fill"
                             },
@@ -216,11 +276,11 @@
     ],
     "pages": [
       {
-        "id": "page_app_store_catalogue",
-        "key": "app_store_catalogue",
-        "name": "Applications",
+        "id": "page_app_store",
+        "key": "app_store",
+        "name": "App Store",
         "type": "dashboard",
-        "permission": "application.app_store.open",
+        "permission": "application.studio.open",
         "composition": {
           "root": {
             "props": {
@@ -228,17 +288,18 @@
                 {
                   "type": "platform.renderer.heading",
                   "props": {
-                    "id": "catalogue_text",
+                    "id": "app_store_heading",
                     "text": "Applications",
                     "level": "two",
                     "actions": [
                       {
                         "type": "platform.renderer.button",
                         "props": {
-                          "id": "catalogue_new_application",
+                          "id": "app_store_new_application",
                           "label": "New application",
                           "action_kind": "action",
                           "link": "studio_new_application",
+                          "variant": "primary",
                           "vortex": {
                             "block": {
                               "block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b",
@@ -256,8 +317,7 @@
                                 }
                               }
                             }
-                          },
-                          "variant": "primary"
+                          }
                         }
                       }
                     ],
@@ -281,35 +341,10 @@
                   }
                 },
                 {
-                  "type": "platform.renderer.text",
-                  "props": {
-                    "id": "catalogue_text_description",
-                    "text": "Every application this organisation has. Open one, change its definition in Studio, or install and upgrade it here.",
-                    "vortex": {
-                      "block": {
-                        "block_id": "addfad00-1b11-4674-83fa-913667f87e79",
-                        "release_version": "1.1.0"
-                      },
-                      "responsive": {
-                        "desktop": {
-                          "visible": true,
-                          "width": {
-                            "kind": "fill"
-                          },
-                          "height": {
-                            "kind": "content"
-                          }
-                        }
-                      }
-                    }
-                  }
-                },
-                {
                   "type": "platform.renderer.table",
                   "props": {
                     "presentation": "grid",
                     "id": "store_applications_region",
-                    "title": "Applications",
                     "empty_message": "No applications yet",
                     "row_click": {
                       "event_id": "event_open_store_application",
@@ -320,26 +355,55 @@
                         "field": "vortex.app_store:store_application.name",
                         "label": "Application",
                         "visible": true,
-                        "pin": "start"
+                        "pin": "start",
+                        "width": "wide"
+                      },
+                      {
+                        "field": "vortex.app_store:store_application.description",
+                        "label": "Description",
+                        "visible": true,
+                        "pin": "unpinned",
+                        "width": "wide"
                       },
                       {
                         "field": "vortex.app_store:store_application.installed_version",
-                        "label": "Installed version",
+                        "label": "Installed",
                         "visible": true,
-                        "pin": "unpinned"
+                        "pin": "unpinned",
+                        "width": "narrow"
                       },
                       {
                         "field": "vortex.app_store:store_application.latest_version",
-                        "label": "Latest version",
+                        "label": "Latest",
                         "visible": true,
-                        "pin": "unpinned"
+                        "pin": "unpinned",
+                        "width": "narrow"
                       },
                       {
                         "field": "vortex.app_store:store_application.status",
                         "label": "Status",
                         "visible": true,
-                        "pin": "unpinned"
+                        "pin": "unpinned",
+                        "width": "medium"
+                      },
+                      {
+                        "field": "vortex.app_store:store_application.owner_type",
+                        "label": "Owner",
+                        "visible": true,
+                        "pin": "unpinned",
+                        "width": "narrow"
                       }
+                    ],
+                    "default_sort": [
+                      {
+                        "field": "vortex.app_store:store_application.listing_order",
+                        "direction": "ascending"
+                      }
+                    ],
+                    "sortable_fields": [
+                      "vortex.app_store:store_application.name",
+                      "vortex.app_store:store_application.status",
+                      "vortex.app_store:store_application.listing_order"
                     ],
                     "row_actions": [
                       {
@@ -351,7 +415,7 @@
                       {
                         "link": "studio_editor",
                         "label": "Edit in Studio",
-                        "icon": "workflow",
+                        "icon": "pencil",
                         "placement": "inline"
                       },
                       {
@@ -366,6 +430,13 @@
                         "application_capability": "remove_application",
                         "label": "Remove",
                         "icon": "minus",
+                        "placement": "menu"
+                      },
+                      {
+                        "event_id": "event_delete_application",
+                        "application_capability": "delete_application",
+                        "label": "Delete",
+                        "icon": "trash",
                         "placement": "menu"
                       }
                     ],
@@ -406,7 +477,7 @@
                 }
               ],
               "vortex": {
-                "shell": "shell_app_store",
+                "shell": "shell_studio",
                 "slot_orders": {}
               }
             }
@@ -420,7 +491,7 @@
         "name": "Application details",
         "type": "detail",
         "record_type": "vortex.app_store:store_application",
-        "permission": "application.app_store.open",
+        "permission": "application.studio.open",
         "composition": {
           "root": {
             "props": {
@@ -438,6 +509,34 @@
                           "id": "store_application_install",
                           "label": "Install or upgrade",
                           "action_kind": "action",
+                          "variant": "primary",
+                          "vortex": {
+                            "block": {
+                              "block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b",
+                              "release_version": "1.0.0"
+                            },
+                            "application_audience": "installers",
+                            "responsive": {
+                              "desktop": {
+                                "visible": true,
+                                "width": {
+                                  "kind": "fill"
+                                },
+                                "height": {
+                                  "kind": "content"
+                                }
+                              }
+                            }
+                          }
+                        }
+                      },
+                      {
+                        "type": "platform.renderer.button",
+                        "props": {
+                          "id": "store_application_open",
+                          "label": "Open app",
+                          "action_kind": "action",
+                          "link": "open_application",
                           "vortex": {
                             "block": {
                               "block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b",
@@ -454,8 +553,86 @@
                                 }
                               }
                             }
-                          },
-                          "variant": "primary"
+                          }
+                        }
+                      },
+                      {
+                        "type": "platform.renderer.button",
+                        "props": {
+                          "id": "store_application_edit",
+                          "label": "Edit in Studio",
+                          "action_kind": "action",
+                          "link": "studio_editor",
+                          "vortex": {
+                            "block": {
+                              "block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b",
+                              "release_version": "1.0.0"
+                            },
+                            "application_audience": "builders",
+                            "responsive": {
+                              "desktop": {
+                                "visible": true,
+                                "width": {
+                                  "kind": "fill"
+                                },
+                                "height": {
+                                  "kind": "content"
+                                }
+                              }
+                            }
+                          }
+                        }
+                      },
+                      {
+                        "type": "platform.renderer.button",
+                        "props": {
+                          "id": "store_application_remove",
+                          "label": "Remove",
+                          "action_kind": "action",
+                          "vortex": {
+                            "block": {
+                              "block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b",
+                              "release_version": "1.0.0"
+                            },
+                            "application_audience": "installers",
+                            "responsive": {
+                              "desktop": {
+                                "visible": true,
+                                "width": {
+                                  "kind": "fill"
+                                },
+                                "height": {
+                                  "kind": "content"
+                                }
+                              }
+                            }
+                          }
+                        }
+                      },
+                      {
+                        "type": "platform.renderer.button",
+                        "props": {
+                          "id": "store_application_delete",
+                          "label": "Delete",
+                          "action_kind": "action",
+                          "vortex": {
+                            "block": {
+                              "block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b",
+                              "release_version": "1.0.0"
+                            },
+                            "application_audience": "installers",
+                            "responsive": {
+                              "desktop": {
+                                "visible": true,
+                                "width": {
+                                  "kind": "fill"
+                                },
+                                "height": {
+                                  "kind": "content"
+                                }
+                              }
+                            }
+                          }
                         }
                       }
                     ],
@@ -503,12 +680,8 @@
                             "label": "Status"
                           },
                           {
-                            "field": "vortex.app_store:store_application.record_update_status",
-                            "label": "Existing records"
-                          },
-                          {
-                            "field": "vortex.app_store:store_application.records_processed",
-                            "label": "Records processed"
+                            "field": "vortex.app_store:store_application.owner_type",
+                            "label": "Owner"
                           },
                           {
                             "field": "vortex.app_store:store_application.installed_version",
@@ -523,8 +696,44 @@
                             "label": "Published"
                           },
                           {
+                            "field": "vortex.app_store:store_application.published_by_name",
+                            "label": "Published by"
+                          },
+                          {
                             "field": "vortex.app_store:store_application.latest_release_note",
                             "label": "What's new"
+                          }
+                        ]
+                      },
+                      {
+                        "key": "contents",
+                        "title": "Contents",
+                        "fields": [
+                          {
+                            "field": "vortex.app_store:store_application.role_count",
+                            "label": "Roles"
+                          },
+                          {
+                            "field": "vortex.app_store:store_application.record_type_count",
+                            "label": "Record types"
+                          },
+                          {
+                            "field": "vortex.app_store:store_application.record_update_status",
+                            "label": "Existing records"
+                          },
+                          {
+                            "field": "vortex.app_store:store_application.records_processed",
+                            "label": "Records processed"
+                          }
+                        ]
+                      },
+                      {
+                        "key": "versions",
+                        "title": "Versions",
+                        "fields": [
+                          {
+                            "field": "vortex.app_store:store_application.release_history",
+                            "label": "Release notes"
                           }
                         ]
                       }
@@ -551,7 +760,7 @@
                 }
               ],
               "vortex": {
-                "shell": "shell_app_store",
+                "shell": "shell_studio",
                 "slot_orders": {}
               }
             }
@@ -2836,7 +3045,7 @@
       {
         "id": "flow_remove_application",
         "key": "remove_application",
-        "description": "Removes an installed ordinary application after confirming the retained records and withdrawn access.",
+        "description": "Removes an installed application, keeping its data or, after a typed confirmation of its name, deleting the data as well.",
         "labels": {
           "name": "Remove application"
         },
@@ -2999,84 +3208,7 @@
                 },
                 "tasks": [
                   {
-                    "id": "confirm_removal",
-                    "type": "interface.confirm",
-                    "version": "1.0.0",
-                    "properties": {
-                      "title": {
-                        "kind": "formula",
-                        "formula": {
-                          "op": "join",
-                          "parts": [
-                            {
-                              "op": "literal",
-                              "type": "text",
-                              "value": "Remove "
-                            },
-                            {
-                              "op": "reference",
-                              "reference": {
-                                "source": "task_output",
-                                "task": "review_removal",
-                                "key": "result",
-                                "path": ["application_name"]
-                              }
-                            },
-                            {
-                              "op": "literal",
-                              "type": "text",
-                              "value": "?"
-                            }
-                          ]
-                        }
-                      },
-                      "message": {
-                        "kind": "literal",
-                        "literal": {
-                          "type": "text",
-                          "value": "Its pages and launcher entry will be removed from this organisation. Its application roles and existing assignments will stop granting access. Records and storage are kept, along with published definitions, so the app can be reinstalled from the App Store. Reinstalling requires accepting roles and assigning access again."
-                        }
-                      },
-                      "confirm_label": {
-                        "kind": "literal",
-                        "literal": {
-                          "type": "text",
-                          "value": "Remove"
-                        }
-                      },
-                      "destructive": {
-                        "kind": "literal",
-                        "literal": {
-                          "type": "yes_no",
-                          "value": true
-                        }
-                      }
-                    }
-                  },
-                  {
-                    "id": "removal_declined",
-                    "type": "if",
-                    "condition": {
-                      "op": "not",
-                      "arg": {
-                        "op": "reference",
-                        "reference": {
-                          "source": "task_output",
-                          "task": "confirm_removal",
-                          "key": "confirmed"
-                        }
-                      }
-                    },
-                    "then": [
-                      {
-                        "id": "stop_removal_declined",
-                        "type": "stop",
-                        "outcome": "declined"
-                      }
-                    ]
-                  },
-                  {
-                    "id": "remove",
+                    "id": "review_purge",
                     "type": "operation.call",
                     "version": "1.0.0",
                     "allowRefusal": true,
@@ -3085,7 +3217,7 @@
                         "kind": "literal",
                         "literal": {
                           "type": "text",
-                          "value": "platform.remove_application"
+                          "value": "platform.review_application_purge"
                         }
                       },
                       "inputs": {
@@ -3096,15 +3228,6 @@
                             "reference": {
                               "source": "input",
                               "name": "application_root_id"
-                            }
-                          },
-                          "expected": {
-                            "kind": "reference",
-                            "reference": {
-                              "source": "task_output",
-                              "task": "review_removal",
-                              "key": "result",
-                              "path": ["expected"]
                             }
                           }
                         }
@@ -3210,153 +3333,761 @@
                     }
                   },
                   {
-                    "id": "remove_result",
+                    "id": "purge_review_result",
                     "type": "switch",
                     "value": {
                       "kind": "reference",
                       "reference": {
                         "source": "task_output",
-                        "task": "remove",
+                        "task": "review_purge",
                         "key": "outcome"
                       }
                     },
                     "cases": [
                       {
-                        "key": "committed",
+                        "key": "completed",
                         "when": {
                           "type": "choice",
-                          "value": "committed"
+                          "value": "completed"
                         },
                         "tasks": [
                           {
-                            "id": "removal_done",
-                            "type": "interface.show_message",
+                            "id": "confirm_removal",
+                            "type": "interface.confirm",
                             "version": "1.0.0",
                             "properties": {
+                              "title": {
+                                "kind": "formula",
+                                "formula": {
+                                  "op": "join",
+                                  "parts": [
+                                    {
+                                      "op": "literal",
+                                      "type": "text",
+                                      "value": "Remove "
+                                    },
+                                    {
+                                      "op": "reference",
+                                      "reference": {
+                                        "source": "task_output",
+                                        "task": "review_purge",
+                                        "key": "result",
+                                        "path": ["application_name"]
+                                      }
+                                    },
+                                    {
+                                      "op": "literal",
+                                      "type": "text",
+                                      "value": "?"
+                                    }
+                                  ]
+                                }
+                              },
                               "message": {
                                 "kind": "literal",
                                 "literal": {
                                   "type": "text",
-                                  "value": "The application has been removed. Its records are kept. Refresh the App Store to reinstall it."
+                                  "value": "Its pages and launcher entry leave this organisation and its roles stop granting access. By default its data is kept, so installing it again brings the data back."
                                 }
                               },
-                              "title": {
+                              "details": {
+                                "kind": "reference",
+                                "reference": {
+                                  "source": "task_output",
+                                  "task": "review_purge",
+                                  "key": "result",
+                                  "path": ["impact_lines"]
+                                }
+                              },
+                              "choice": {
                                 "kind": "literal",
                                 "literal": {
                                   "type": "text",
-                                  "value": "Remove application"
+                                  "value": "Also delete its data permanently"
                                 }
                               },
-                              "target": {
+                              "confirm_label": {
                                 "kind": "literal",
                                 "literal": {
                                   "type": "text",
-                                  "value": "dialog"
+                                  "value": "Remove"
                                 }
                               },
-                              "severity": {
+                              "destructive": {
                                 "kind": "literal",
                                 "literal": {
-                                  "type": "text",
-                                  "value": "info"
+                                  "type": "yes_no",
+                                  "value": true
                                 }
                               }
                             }
-                          }
-                        ]
-                      },
-                      {
-                        "key": "conflict",
-                        "when": {
-                          "type": "choice",
-                          "value": "conflict"
-                        },
-                        "tasks": [
+                          },
                           {
-                            "id": "removal_conflict",
-                            "type": "interface.show_message",
-                            "version": "1.0.0",
-                            "properties": {
-                              "message": {
-                                "kind": "literal",
-                                "literal": {
-                                  "type": "text",
-                                  "value": "The installation changed while you were reviewing it. Refresh the App Store and choose Remove again."
-                                }
-                              },
-                              "title": {
-                                "kind": "literal",
-                                "literal": {
-                                  "type": "text",
-                                  "value": "Remove application"
-                                }
-                              },
-                              "target": {
-                                "kind": "literal",
-                                "literal": {
-                                  "type": "text",
-                                  "value": "dialog"
-                                }
-                              },
-                              "severity": {
-                                "kind": "literal",
-                                "literal": {
-                                  "type": "text",
-                                  "value": "info"
+                            "id": "removal_declined",
+                            "type": "if",
+                            "condition": {
+                              "op": "not",
+                              "arg": {
+                                "op": "reference",
+                                "reference": {
+                                  "source": "task_output",
+                                  "task": "confirm_removal",
+                                  "key": "confirmed"
                                 }
                               }
-                            }
-                          }
-                        ]
-                      },
-                      {
-                        "key": "refused",
-                        "when": {
-                          "type": "choice",
-                          "value": "refused"
-                        },
-                        "tasks": [
+                            },
+                            "then": [
+                              {
+                                "id": "stop_removal_declined",
+                                "type": "stop",
+                                "outcome": "declined"
+                              }
+                            ]
+                          },
                           {
-                            "id": "removal_refused",
-                            "type": "interface.show_message",
-                            "version": "1.0.0",
-                            "properties": {
-                              "message": {
-                                "kind": "literal",
-                                "literal": {
-                                  "type": "text",
-                                  "value": "You cannot remove this application with your current authority."
-                                }
-                              },
-                              "title": {
-                                "kind": "literal",
-                                "literal": {
-                                  "type": "text",
-                                  "value": "Remove application"
-                                }
-                              },
-                              "target": {
-                                "kind": "literal",
-                                "literal": {
-                                  "type": "text",
-                                  "value": "dialog"
-                                }
-                              },
-                              "severity": {
-                                "kind": "literal",
-                                "literal": {
-                                  "type": "text",
-                                  "value": "info"
-                                }
+                            "id": "removal_kind",
+                            "type": "if",
+                            "condition": {
+                              "op": "reference",
+                              "reference": {
+                                "source": "task_output",
+                                "task": "confirm_removal",
+                                "key": "choice"
                               }
-                            }
+                            },
+                            "then": [
+                              {
+                                "id": "purge_name_form",
+                                "type": "interface.show_form",
+                                "version": "1.0.0",
+                                "properties": {
+                                  "form": {
+                                    "kind": "literal",
+                                    "literal": {
+                                      "type": "text",
+                                      "value": "studio_purge_form"
+                                    }
+                                  },
+                                  "inputs": {
+                                    "kind": "map",
+                                    "entries": {
+                                      "confirm_name": {
+                                        "kind": "literal",
+                                        "literal": {
+                                          "type": "text",
+                                          "value": ""
+                                        }
+                                      }
+                                    }
+                                  }
+                                }
+                              },
+                              {
+                                "id": "purge_form_cancelled",
+                                "type": "if",
+                                "condition": {
+                                  "op": "not",
+                                  "arg": {
+                                    "op": "reference",
+                                    "reference": {
+                                      "source": "task_output",
+                                      "task": "purge_name_form",
+                                      "key": "submitted"
+                                    }
+                                  }
+                                },
+                                "then": [
+                                  {
+                                    "id": "stop_purge_cancelled",
+                                    "type": "stop",
+                                    "outcome": "cancelled"
+                                  }
+                                ]
+                              },
+                              {
+                                "id": "purge",
+                                "type": "operation.call",
+                                "version": "1.0.0",
+                                "allowRefusal": true,
+                                "properties": {
+                                  "operation": {
+                                    "kind": "literal",
+                                    "literal": {
+                                      "type": "text",
+                                      "value": "platform.purge_application"
+                                    }
+                                  },
+                                  "inputs": {
+                                    "kind": "map",
+                                    "entries": {
+                                      "application_root_id": {
+                                        "kind": "reference",
+                                        "reference": {
+                                          "source": "input",
+                                          "name": "application_root_id"
+                                        }
+                                      },
+                                      "confirm_name": {
+                                        "kind": "reference",
+                                        "reference": {
+                                          "source": "task_output",
+                                          "task": "purge_name_form",
+                                          "key": "values",
+                                          "path": ["confirm_name"]
+                                        }
+                                      }
+                                    }
+                                  },
+                                  "refusal_feedback": {
+                                    "kind": "map",
+                                    "entries": {
+                                      "applications_manage_required": {
+                                        "kind": "map",
+                                        "entries": {
+                                          "link_label": {
+                                            "kind": "literal",
+                                            "literal": {
+                                              "type": "text",
+                                              "value": "Open IAM People"
+                                            }
+                                          },
+                                          "destination": {
+                                            "kind": "map",
+                                            "entries": {
+                                              "application_key": {
+                                                "kind": "literal",
+                                                "literal": {
+                                                  "type": "text",
+                                                  "value": "vortex.app.iam"
+                                                }
+                                              },
+                                              "page_key": {
+                                                "kind": "literal",
+                                                "literal": {
+                                                  "type": "text",
+                                                  "value": "iam_people"
+                                                }
+                                              }
+                                            }
+                                          }
+                                        }
+                                      },
+                                      "installation_delegation_required": {
+                                        "kind": "map",
+                                        "entries": {
+                                          "link_label": {
+                                            "kind": "literal",
+                                            "literal": {
+                                              "type": "text",
+                                              "value": "Open IAM People"
+                                            }
+                                          },
+                                          "destination": {
+                                            "kind": "map",
+                                            "entries": {
+                                              "application_key": {
+                                                "kind": "literal",
+                                                "literal": {
+                                                  "type": "text",
+                                                  "value": "vortex.app.iam"
+                                                }
+                                              },
+                                              "page_key": {
+                                                "kind": "literal",
+                                                "literal": {
+                                                  "type": "text",
+                                                  "value": "iam_people"
+                                                }
+                                              }
+                                            }
+                                          }
+                                        }
+                                      },
+                                      "assignments_manage_required": {
+                                        "kind": "map",
+                                        "entries": {
+                                          "link_label": {
+                                            "kind": "literal",
+                                            "literal": {
+                                              "type": "text",
+                                              "value": "Open IAM People"
+                                            }
+                                          },
+                                          "destination": {
+                                            "kind": "map",
+                                            "entries": {
+                                              "application_key": {
+                                                "kind": "literal",
+                                                "literal": {
+                                                  "type": "text",
+                                                  "value": "vortex.app.iam"
+                                                }
+                                              },
+                                              "page_key": {
+                                                "kind": "literal",
+                                                "literal": {
+                                                  "type": "text",
+                                                  "value": "iam_people"
+                                                }
+                                              }
+                                            }
+                                          }
+                                        }
+                                      }
+                                    }
+                                  }
+                                }
+                              },
+                              {
+                                "id": "purge_result",
+                                "type": "switch",
+                                "value": {
+                                  "kind": "reference",
+                                  "reference": {
+                                    "source": "task_output",
+                                    "task": "purge",
+                                    "key": "outcome"
+                                  }
+                                },
+                                "cases": [
+                                  {
+                                    "key": "committed",
+                                    "when": {
+                                      "type": "choice",
+                                      "value": "committed"
+                                    },
+                                    "tasks": [
+                                      {
+                                        "id": "purge_done",
+                                        "type": "interface.show_message",
+                                        "version": "1.0.0",
+                                        "properties": {
+                                          "message": {
+                                            "kind": "literal",
+                                            "literal": {
+                                              "type": "text",
+                                              "value": "The application and all of its data were deleted."
+                                            }
+                                          },
+                                          "title": {
+                                            "kind": "literal",
+                                            "literal": {
+                                              "type": "text",
+                                              "value": "Remove application"
+                                            }
+                                          },
+                                          "target": {
+                                            "kind": "literal",
+                                            "literal": {
+                                              "type": "text",
+                                              "value": "dialog"
+                                            }
+                                          },
+                                          "severity": {
+                                            "kind": "literal",
+                                            "literal": {
+                                              "type": "text",
+                                              "value": "info"
+                                            }
+                                          }
+                                        }
+                                      },
+                                      {
+                                        "id": "purge_refresh",
+                                        "type": "interface.refresh",
+                                        "version": "1.0.0",
+                                        "properties": {
+                                          "component": {
+                                            "kind": "literal",
+                                            "literal": {
+                                              "type": "text",
+                                              "value": "store_applications_region"
+                                            }
+                                          }
+                                        }
+                                      }
+                                    ]
+                                  }
+                                ],
+                                "default": [
+                                  {
+                                    "id": "purge_failed",
+                                    "type": "interface.show_message",
+                                    "version": "1.0.0",
+                                    "properties": {
+                                      "message": {
+                                        "kind": "literal",
+                                        "literal": {
+                                          "type": "text",
+                                          "value": "The application could not be removed with its data. Check its state in the list before trying again."
+                                        }
+                                      },
+                                      "title": {
+                                        "kind": "literal",
+                                        "literal": {
+                                          "type": "text",
+                                          "value": "Remove application"
+                                        }
+                                      },
+                                      "target": {
+                                        "kind": "literal",
+                                        "literal": {
+                                          "type": "text",
+                                          "value": "dialog"
+                                        }
+                                      },
+                                      "severity": {
+                                        "kind": "literal",
+                                        "literal": {
+                                          "type": "text",
+                                          "value": "info"
+                                        }
+                                      }
+                                    }
+                                  }
+                                ]
+                              }
+                            ],
+                            "else": [
+                              {
+                                "id": "remove",
+                                "type": "operation.call",
+                                "version": "1.0.0",
+                                "allowRefusal": true,
+                                "properties": {
+                                  "operation": {
+                                    "kind": "literal",
+                                    "literal": {
+                                      "type": "text",
+                                      "value": "platform.remove_application"
+                                    }
+                                  },
+                                  "inputs": {
+                                    "kind": "map",
+                                    "entries": {
+                                      "application_root_id": {
+                                        "kind": "reference",
+                                        "reference": {
+                                          "source": "input",
+                                          "name": "application_root_id"
+                                        }
+                                      },
+                                      "expected": {
+                                        "kind": "reference",
+                                        "reference": {
+                                          "source": "task_output",
+                                          "task": "review_removal",
+                                          "key": "result",
+                                          "path": ["expected"]
+                                        }
+                                      }
+                                    }
+                                  },
+                                  "refusal_feedback": {
+                                    "kind": "map",
+                                    "entries": {
+                                      "applications_manage_required": {
+                                        "kind": "map",
+                                        "entries": {
+                                          "link_label": {
+                                            "kind": "literal",
+                                            "literal": {
+                                              "type": "text",
+                                              "value": "Open IAM People"
+                                            }
+                                          },
+                                          "destination": {
+                                            "kind": "map",
+                                            "entries": {
+                                              "application_key": {
+                                                "kind": "literal",
+                                                "literal": {
+                                                  "type": "text",
+                                                  "value": "vortex.app.iam"
+                                                }
+                                              },
+                                              "page_key": {
+                                                "kind": "literal",
+                                                "literal": {
+                                                  "type": "text",
+                                                  "value": "iam_people"
+                                                }
+                                              }
+                                            }
+                                          }
+                                        }
+                                      },
+                                      "installation_delegation_required": {
+                                        "kind": "map",
+                                        "entries": {
+                                          "link_label": {
+                                            "kind": "literal",
+                                            "literal": {
+                                              "type": "text",
+                                              "value": "Open IAM People"
+                                            }
+                                          },
+                                          "destination": {
+                                            "kind": "map",
+                                            "entries": {
+                                              "application_key": {
+                                                "kind": "literal",
+                                                "literal": {
+                                                  "type": "text",
+                                                  "value": "vortex.app.iam"
+                                                }
+                                              },
+                                              "page_key": {
+                                                "kind": "literal",
+                                                "literal": {
+                                                  "type": "text",
+                                                  "value": "iam_people"
+                                                }
+                                              }
+                                            }
+                                          }
+                                        }
+                                      },
+                                      "assignments_manage_required": {
+                                        "kind": "map",
+                                        "entries": {
+                                          "link_label": {
+                                            "kind": "literal",
+                                            "literal": {
+                                              "type": "text",
+                                              "value": "Open IAM People"
+                                            }
+                                          },
+                                          "destination": {
+                                            "kind": "map",
+                                            "entries": {
+                                              "application_key": {
+                                                "kind": "literal",
+                                                "literal": {
+                                                  "type": "text",
+                                                  "value": "vortex.app.iam"
+                                                }
+                                              },
+                                              "page_key": {
+                                                "kind": "literal",
+                                                "literal": {
+                                                  "type": "text",
+                                                  "value": "iam_people"
+                                                }
+                                              }
+                                            }
+                                          }
+                                        }
+                                      }
+                                    }
+                                  }
+                                }
+                              },
+                              {
+                                "id": "remove_result",
+                                "type": "switch",
+                                "value": {
+                                  "kind": "reference",
+                                  "reference": {
+                                    "source": "task_output",
+                                    "task": "remove",
+                                    "key": "outcome"
+                                  }
+                                },
+                                "cases": [
+                                  {
+                                    "key": "committed",
+                                    "when": {
+                                      "type": "choice",
+                                      "value": "committed"
+                                    },
+                                    "tasks": [
+                                      {
+                                        "id": "removal_done",
+                                        "type": "interface.show_message",
+                                        "version": "1.0.0",
+                                        "properties": {
+                                          "message": {
+                                            "kind": "literal",
+                                            "literal": {
+                                              "type": "text",
+                                              "value": "The application was removed. Its data is kept; install it again to bring it back."
+                                            }
+                                          },
+                                          "title": {
+                                            "kind": "literal",
+                                            "literal": {
+                                              "type": "text",
+                                              "value": "Remove application"
+                                            }
+                                          },
+                                          "target": {
+                                            "kind": "literal",
+                                            "literal": {
+                                              "type": "text",
+                                              "value": "dialog"
+                                            }
+                                          },
+                                          "severity": {
+                                            "kind": "literal",
+                                            "literal": {
+                                              "type": "text",
+                                              "value": "info"
+                                            }
+                                          }
+                                        }
+                                      },
+                                      {
+                                        "id": "removal_refresh",
+                                        "type": "interface.refresh",
+                                        "version": "1.0.0",
+                                        "properties": {
+                                          "component": {
+                                            "kind": "literal",
+                                            "literal": {
+                                              "type": "text",
+                                              "value": "store_applications_region"
+                                            }
+                                          }
+                                        }
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "key": "conflict",
+                                    "when": {
+                                      "type": "choice",
+                                      "value": "conflict"
+                                    },
+                                    "tasks": [
+                                      {
+                                        "id": "removal_conflict",
+                                        "type": "interface.show_message",
+                                        "version": "1.0.0",
+                                        "properties": {
+                                          "message": {
+                                            "kind": "literal",
+                                            "literal": {
+                                              "type": "text",
+                                              "value": "The installation changed while you were reviewing it. Choose Remove again."
+                                            }
+                                          },
+                                          "title": {
+                                            "kind": "literal",
+                                            "literal": {
+                                              "type": "text",
+                                              "value": "Remove application"
+                                            }
+                                          },
+                                          "target": {
+                                            "kind": "literal",
+                                            "literal": {
+                                              "type": "text",
+                                              "value": "dialog"
+                                            }
+                                          },
+                                          "severity": {
+                                            "kind": "literal",
+                                            "literal": {
+                                              "type": "text",
+                                              "value": "info"
+                                            }
+                                          }
+                                        }
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "key": "refused",
+                                    "when": {
+                                      "type": "choice",
+                                      "value": "refused"
+                                    },
+                                    "tasks": [
+                                      {
+                                        "id": "removal_refused",
+                                        "type": "interface.show_message",
+                                        "version": "1.0.0",
+                                        "properties": {
+                                          "message": {
+                                            "kind": "literal",
+                                            "literal": {
+                                              "type": "text",
+                                              "value": "You cannot remove this application with your current authority."
+                                            }
+                                          },
+                                          "title": {
+                                            "kind": "literal",
+                                            "literal": {
+                                              "type": "text",
+                                              "value": "Remove application"
+                                            }
+                                          },
+                                          "target": {
+                                            "kind": "literal",
+                                            "literal": {
+                                              "type": "text",
+                                              "value": "dialog"
+                                            }
+                                          },
+                                          "severity": {
+                                            "kind": "literal",
+                                            "literal": {
+                                              "type": "text",
+                                              "value": "info"
+                                            }
+                                          }
+                                        }
+                                      }
+                                    ]
+                                  }
+                                ],
+                                "default": [
+                                  {
+                                    "id": "removal_failed",
+                                    "type": "interface.show_message",
+                                    "version": "1.0.0",
+                                    "properties": {
+                                      "message": {
+                                        "kind": "literal",
+                                        "literal": {
+                                          "type": "text",
+                                          "value": "The removal could not be confirmed. Check the application in the list before trying again."
+                                        }
+                                      },
+                                      "title": {
+                                        "kind": "literal",
+                                        "literal": {
+                                          "type": "text",
+                                          "value": "Remove application"
+                                        }
+                                      },
+                                      "target": {
+                                        "kind": "literal",
+                                        "literal": {
+                                          "type": "text",
+                                          "value": "dialog"
+                                        }
+                                      },
+                                      "severity": {
+                                        "kind": "literal",
+                                        "literal": {
+                                          "type": "text",
+                                          "value": "info"
+                                        }
+                                      }
+                                    }
+                                  }
+                                ]
+                              }
+                            ]
                           }
                         ]
                       }
                     ],
                     "default": [
                       {
-                        "id": "removal_failed",
+                        "id": "purge_review_failed",
                         "type": "interface.show_message",
                         "version": "1.0.0",
                         "properties": {
@@ -3364,7 +4095,7 @@
                             "kind": "literal",
                             "literal": {
                               "type": "text",
-                              "value": "The removal could not be confirmed. Refresh the App Store before trying again."
+                              "value": "What removing this application takes could not be read. Try again shortly."
                             }
                           },
                           "title": {
@@ -3410,7 +4141,7 @@
                         "kind": "literal",
                         "literal": {
                           "type": "text",
-                          "value": "Only installed ordinary applications can be removed. You need the current installation authority for this organisation."
+                          "value": "Only installed ordinary applications can be removed, and you need permission to manage applications."
                         }
                       },
                       "title": {
@@ -3449,7 +4180,7 @@
                     "kind": "literal",
                     "literal": {
                       "type": "text",
-                      "value": "The installed application could not be read. Refresh the App Store before trying again."
+                      "value": "The application could not be reviewed. Try again shortly."
                     }
                   },
                   "title": {
@@ -3457,6 +4188,645 @@
                     "literal": {
                       "type": "text",
                       "value": "Remove application"
+                    }
+                  },
+                  "target": {
+                    "kind": "literal",
+                    "literal": {
+                      "type": "text",
+                      "value": "dialog"
+                    }
+                  },
+                  "severity": {
+                    "kind": "literal",
+                    "literal": {
+                      "type": "text",
+                      "value": "info"
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        ],
+        "outputs": {},
+        "errors": [],
+        "finally": []
+      },
+      {
+        "id": "flow_delete_application",
+        "key": "delete_application",
+        "description": "Deletes an application that is not installed, with its definition, versions, roles and any data it holds, after a typed confirmation of its name.",
+        "labels": {
+          "name": "Delete application"
+        },
+        "execution": "interactive",
+        "runAs": {
+          "kind": "initiator"
+        },
+        "inputs": {
+          "application_root_id": {
+            "type": "record_reference",
+            "required": true,
+            "recordTypeIds": ["vortex.app_store:store_application"]
+          }
+        },
+        "variables": {},
+        "triggers": [],
+        "tasks": [
+          {
+            "id": "review_delete",
+            "type": "operation.call",
+            "version": "1.0.0",
+            "allowRefusal": true,
+            "properties": {
+              "operation": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "platform.review_application_purge"
+                }
+              },
+              "inputs": {
+                "kind": "map",
+                "entries": {
+                  "application_root_id": {
+                    "kind": "reference",
+                    "reference": {
+                      "source": "input",
+                      "name": "application_root_id"
+                    }
+                  },
+                  "delete_only": {
+                    "kind": "literal",
+                    "literal": {
+                      "type": "yes_no",
+                      "value": true
+                    }
+                  }
+                }
+              },
+              "refusal_feedback": {
+                "kind": "map",
+                "entries": {
+                  "applications_manage_required": {
+                    "kind": "map",
+                    "entries": {
+                      "link_label": {
+                        "kind": "literal",
+                        "literal": {
+                          "type": "text",
+                          "value": "Open IAM People"
+                        }
+                      },
+                      "destination": {
+                        "kind": "map",
+                        "entries": {
+                          "application_key": {
+                            "kind": "literal",
+                            "literal": {
+                              "type": "text",
+                              "value": "vortex.app.iam"
+                            }
+                          },
+                          "page_key": {
+                            "kind": "literal",
+                            "literal": {
+                              "type": "text",
+                              "value": "iam_people"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "installation_delegation_required": {
+                    "kind": "map",
+                    "entries": {
+                      "link_label": {
+                        "kind": "literal",
+                        "literal": {
+                          "type": "text",
+                          "value": "Open IAM People"
+                        }
+                      },
+                      "destination": {
+                        "kind": "map",
+                        "entries": {
+                          "application_key": {
+                            "kind": "literal",
+                            "literal": {
+                              "type": "text",
+                              "value": "vortex.app.iam"
+                            }
+                          },
+                          "page_key": {
+                            "kind": "literal",
+                            "literal": {
+                              "type": "text",
+                              "value": "iam_people"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "assignments_manage_required": {
+                    "kind": "map",
+                    "entries": {
+                      "link_label": {
+                        "kind": "literal",
+                        "literal": {
+                          "type": "text",
+                          "value": "Open IAM People"
+                        }
+                      },
+                      "destination": {
+                        "kind": "map",
+                        "entries": {
+                          "application_key": {
+                            "kind": "literal",
+                            "literal": {
+                              "type": "text",
+                              "value": "vortex.app.iam"
+                            }
+                          },
+                          "page_key": {
+                            "kind": "literal",
+                            "literal": {
+                              "type": "text",
+                              "value": "iam_people"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "id": "delete_review_result",
+            "type": "switch",
+            "value": {
+              "kind": "reference",
+              "reference": {
+                "source": "task_output",
+                "task": "review_delete",
+                "key": "outcome"
+              }
+            },
+            "cases": [
+              {
+                "key": "completed",
+                "when": {
+                  "type": "choice",
+                  "value": "completed"
+                },
+                "tasks": [
+                  {
+                    "id": "confirm_delete",
+                    "type": "interface.confirm",
+                    "version": "1.0.0",
+                    "properties": {
+                      "title": {
+                        "kind": "formula",
+                        "formula": {
+                          "op": "join",
+                          "parts": [
+                            {
+                              "op": "literal",
+                              "type": "text",
+                              "value": "Delete "
+                            },
+                            {
+                              "op": "reference",
+                              "reference": {
+                                "source": "task_output",
+                                "task": "review_delete",
+                                "key": "result",
+                                "path": ["application_name"]
+                              }
+                            },
+                            {
+                              "op": "literal",
+                              "type": "text",
+                              "value": "?"
+                            }
+                          ]
+                        }
+                      },
+                      "message": {
+                        "kind": "literal",
+                        "literal": {
+                          "type": "text",
+                          "value": "This deletes the application for good: its definition, every version, its roles and everything below. It cannot be undone."
+                        }
+                      },
+                      "details": {
+                        "kind": "reference",
+                        "reference": {
+                          "source": "task_output",
+                          "task": "review_delete",
+                          "key": "result",
+                          "path": ["impact_lines"]
+                        }
+                      },
+                      "confirm_label": {
+                        "kind": "literal",
+                        "literal": {
+                          "type": "text",
+                          "value": "Continue"
+                        }
+                      },
+                      "destructive": {
+                        "kind": "literal",
+                        "literal": {
+                          "type": "yes_no",
+                          "value": true
+                        }
+                      }
+                    }
+                  },
+                  {
+                    "id": "delete_declined",
+                    "type": "if",
+                    "condition": {
+                      "op": "not",
+                      "arg": {
+                        "op": "reference",
+                        "reference": {
+                          "source": "task_output",
+                          "task": "confirm_delete",
+                          "key": "confirmed"
+                        }
+                      }
+                    },
+                    "then": [
+                      {
+                        "id": "stop_delete_declined",
+                        "type": "stop",
+                        "outcome": "declined"
+                      }
+                    ]
+                  },
+                  {
+                    "id": "delete_name_form",
+                    "type": "interface.show_form",
+                    "version": "1.0.0",
+                    "properties": {
+                      "form": {
+                        "kind": "literal",
+                        "literal": {
+                          "type": "text",
+                          "value": "studio_purge_form"
+                        }
+                      },
+                      "inputs": {
+                        "kind": "map",
+                        "entries": {
+                          "confirm_name": {
+                            "kind": "literal",
+                            "literal": {
+                              "type": "text",
+                              "value": ""
+                            }
+                          }
+                        }
+                      }
+                    }
+                  },
+                  {
+                    "id": "delete_form_cancelled",
+                    "type": "if",
+                    "condition": {
+                      "op": "not",
+                      "arg": {
+                        "op": "reference",
+                        "reference": {
+                          "source": "task_output",
+                          "task": "delete_name_form",
+                          "key": "submitted"
+                        }
+                      }
+                    },
+                    "then": [
+                      {
+                        "id": "stop_delete_cancelled",
+                        "type": "stop",
+                        "outcome": "cancelled"
+                      }
+                    ]
+                  },
+                  {
+                    "id": "delete",
+                    "type": "operation.call",
+                    "version": "1.0.0",
+                    "allowRefusal": true,
+                    "properties": {
+                      "operation": {
+                        "kind": "literal",
+                        "literal": {
+                          "type": "text",
+                          "value": "platform.delete_application"
+                        }
+                      },
+                      "inputs": {
+                        "kind": "map",
+                        "entries": {
+                          "application_root_id": {
+                            "kind": "reference",
+                            "reference": {
+                              "source": "input",
+                              "name": "application_root_id"
+                            }
+                          },
+                          "confirm_name": {
+                            "kind": "reference",
+                            "reference": {
+                              "source": "task_output",
+                              "task": "delete_name_form",
+                              "key": "values",
+                              "path": ["confirm_name"]
+                            }
+                          }
+                        }
+                      },
+                      "refusal_feedback": {
+                        "kind": "map",
+                        "entries": {
+                          "applications_manage_required": {
+                            "kind": "map",
+                            "entries": {
+                              "link_label": {
+                                "kind": "literal",
+                                "literal": {
+                                  "type": "text",
+                                  "value": "Open IAM People"
+                                }
+                              },
+                              "destination": {
+                                "kind": "map",
+                                "entries": {
+                                  "application_key": {
+                                    "kind": "literal",
+                                    "literal": {
+                                      "type": "text",
+                                      "value": "vortex.app.iam"
+                                    }
+                                  },
+                                  "page_key": {
+                                    "kind": "literal",
+                                    "literal": {
+                                      "type": "text",
+                                      "value": "iam_people"
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          },
+                          "installation_delegation_required": {
+                            "kind": "map",
+                            "entries": {
+                              "link_label": {
+                                "kind": "literal",
+                                "literal": {
+                                  "type": "text",
+                                  "value": "Open IAM People"
+                                }
+                              },
+                              "destination": {
+                                "kind": "map",
+                                "entries": {
+                                  "application_key": {
+                                    "kind": "literal",
+                                    "literal": {
+                                      "type": "text",
+                                      "value": "vortex.app.iam"
+                                    }
+                                  },
+                                  "page_key": {
+                                    "kind": "literal",
+                                    "literal": {
+                                      "type": "text",
+                                      "value": "iam_people"
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          },
+                          "assignments_manage_required": {
+                            "kind": "map",
+                            "entries": {
+                              "link_label": {
+                                "kind": "literal",
+                                "literal": {
+                                  "type": "text",
+                                  "value": "Open IAM People"
+                                }
+                              },
+                              "destination": {
+                                "kind": "map",
+                                "entries": {
+                                  "application_key": {
+                                    "kind": "literal",
+                                    "literal": {
+                                      "type": "text",
+                                      "value": "vortex.app.iam"
+                                    }
+                                  },
+                                  "page_key": {
+                                    "kind": "literal",
+                                    "literal": {
+                                      "type": "text",
+                                      "value": "iam_people"
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  },
+                  {
+                    "id": "delete_result",
+                    "type": "switch",
+                    "value": {
+                      "kind": "reference",
+                      "reference": {
+                        "source": "task_output",
+                        "task": "delete",
+                        "key": "outcome"
+                      }
+                    },
+                    "cases": [
+                      {
+                        "key": "committed",
+                        "when": {
+                          "type": "choice",
+                          "value": "committed"
+                        },
+                        "tasks": [
+                          {
+                            "id": "delete_done",
+                            "type": "interface.show_message",
+                            "version": "1.0.0",
+                            "properties": {
+                              "message": {
+                                "kind": "literal",
+                                "literal": {
+                                  "type": "text",
+                                  "value": "The application was deleted."
+                                }
+                              },
+                              "title": {
+                                "kind": "literal",
+                                "literal": {
+                                  "type": "text",
+                                  "value": "Delete application"
+                                }
+                              },
+                              "target": {
+                                "kind": "literal",
+                                "literal": {
+                                  "type": "text",
+                                  "value": "dialog"
+                                }
+                              },
+                              "severity": {
+                                "kind": "literal",
+                                "literal": {
+                                  "type": "text",
+                                  "value": "info"
+                                }
+                              }
+                            }
+                          },
+                          {
+                            "id": "delete_refresh",
+                            "type": "interface.refresh",
+                            "version": "1.0.0",
+                            "properties": {
+                              "component": {
+                                "kind": "literal",
+                                "literal": {
+                                  "type": "text",
+                                  "value": "store_applications_region"
+                                }
+                              }
+                            }
+                          }
+                        ]
+                      }
+                    ],
+                    "default": [
+                      {
+                        "id": "delete_failed",
+                        "type": "interface.show_message",
+                        "version": "1.0.0",
+                        "properties": {
+                          "message": {
+                            "kind": "literal",
+                            "literal": {
+                              "type": "text",
+                              "value": "The application could not be deleted. Check it in the list before trying again."
+                            }
+                          },
+                          "title": {
+                            "kind": "literal",
+                            "literal": {
+                              "type": "text",
+                              "value": "Delete application"
+                            }
+                          },
+                          "target": {
+                            "kind": "literal",
+                            "literal": {
+                              "type": "text",
+                              "value": "dialog"
+                            }
+                          },
+                          "severity": {
+                            "kind": "literal",
+                            "literal": {
+                              "type": "text",
+                              "value": "info"
+                            }
+                          }
+                        }
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "key": "refused",
+                "when": {
+                  "type": "choice",
+                  "value": "refused"
+                },
+                "tasks": [
+                  {
+                    "id": "delete_review_refused",
+                    "type": "interface.show_message",
+                    "version": "1.0.0",
+                    "properties": {
+                      "message": {
+                        "kind": "literal",
+                        "literal": {
+                          "type": "text",
+                          "value": "Only an application that is not installed can be deleted, and you need permission to manage applications."
+                        }
+                      },
+                      "title": {
+                        "kind": "literal",
+                        "literal": {
+                          "type": "text",
+                          "value": "Delete application"
+                        }
+                      },
+                      "target": {
+                        "kind": "literal",
+                        "literal": {
+                          "type": "text",
+                          "value": "dialog"
+                        }
+                      },
+                      "severity": {
+                        "kind": "literal",
+                        "literal": {
+                          "type": "text",
+                          "value": "info"
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            ],
+            "default": [
+              {
+                "id": "delete_review_failed",
+                "type": "interface.show_message",
+                "version": "1.0.0",
+                "properties": {
+                  "message": {
+                    "kind": "literal",
+                    "literal": {
+                      "type": "text",
+                      "value": "The application could not be reviewed. Try again shortly."
+                    }
+                  },
+                  "title": {
+                    "kind": "literal",
+                    "literal": {
+                      "type": "text",
+                      "value": "Delete application"
                     }
                   },
                   "target": {
@@ -3545,11 +4915,71 @@
         }
       },
       {
+        "id": "binding_delete_application",
+        "control": "store_applications_region",
+        "event_id": "event_delete_application",
+        "event": "row_action",
+        "flow": "flow_delete_application",
+        "inputs": {
+          "application_root_id": {
+            "kind": "caller",
+            "name": "record_id"
+          }
+        },
+        "settings": {
+          "condition": null,
+          "debounceMs": 0,
+          "concurrency": "ignore_while_running",
+          "exclusive": "none",
+          "timeoutMs": null
+        }
+      },
+      {
         "id": "binding_install_from_details",
         "control": "store_application_install",
         "event_id": "event_install_or_upgrade",
         "event": "action",
         "flow": "flow_install_or_upgrade_application",
+        "inputs": {
+          "application_root_id": {
+            "kind": "caller",
+            "name": "record_id"
+          }
+        },
+        "settings": {
+          "condition": null,
+          "debounceMs": 0,
+          "concurrency": "ignore_while_running",
+          "exclusive": "none",
+          "timeoutMs": null
+        }
+      },
+      {
+        "id": "binding_remove_from_details",
+        "control": "store_application_remove",
+        "event_id": "event_remove_application",
+        "event": "action",
+        "flow": "flow_remove_application",
+        "inputs": {
+          "application_root_id": {
+            "kind": "caller",
+            "name": "record_id"
+          }
+        },
+        "settings": {
+          "condition": null,
+          "debounceMs": 0,
+          "concurrency": "ignore_while_running",
+          "exclusive": "none",
+          "timeoutMs": null
+        }
+      },
+      {
+        "id": "binding_delete_from_details",
+        "control": "store_application_delete",
+        "event_id": "event_delete_application",
+        "event": "action",
+        "flow": "flow_delete_application",
         "inputs": {
           "application_root_id": {
             "kind": "caller",

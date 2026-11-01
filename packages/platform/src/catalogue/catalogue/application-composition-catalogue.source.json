@@ -3669,6 +3669,10 @@
                 {
                   "key": "remove_application",
                   "label": "Remove it"
+                },
+                {
+                  "key": "delete_application",
+                  "label": "Delete it"
                 }
               ]
             },
@@ -3745,6 +3749,14 @@
                 {
                   "key": "undo",
                   "label": "Restore"
+                },
+                {
+                  "key": "pencil",
+                  "label": "Edit"
+                },
+                {
+                  "key": "trash",
+                  "label": "Delete"
                 }
               ]
             },

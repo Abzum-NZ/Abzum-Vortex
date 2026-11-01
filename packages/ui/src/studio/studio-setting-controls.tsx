@@ -572,7 +572,11 @@ function SettingControl(props: ControlProps): ReactElement {
             }}
           >
             {property.options.map((option) => (
-              <ToggleGroupItem key={option.key} value={option.key} className="flex-1">
+              <ToggleGroupItem
+                key={option.key}
+                value={option.key}
+                className="h-auto min-w-0 flex-1 whitespace-normal px-2 py-1.5 text-center"
+              >
                 {option.label}
               </ToggleGroupItem>
             ))}

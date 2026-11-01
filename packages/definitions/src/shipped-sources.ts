@@ -1,5 +1,5 @@
 import type { StoredDefinitionSource } from "@vortex/platform/schema";
-import { appStoreApplication } from "./app-store";
+import { studioApplication } from "./studio";
 import { iamApplication } from "./iam";
 import { landingZoneApplication } from "./landing-zone";
 import { operationsApplication } from "./operations";
@@ -24,5 +24,5 @@ export const shippedApplications: readonly Readonly<{
   },
   { source: operationsApplication, applicationOriginKind: "ordinary" },
   { source: landingZoneApplication, applicationOriginKind: "platform_system_application" },
-  { source: appStoreApplication, applicationOriginKind: "platform_system_application" },
+  { source: studioApplication, applicationOriginKind: "platform_system_application" },
 ];

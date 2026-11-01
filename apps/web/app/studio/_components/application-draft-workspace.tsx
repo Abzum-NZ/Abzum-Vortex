@@ -30,7 +30,7 @@ import {
   type StudioReleasesSection,
 } from "./studio-rail-tabs";
 import { StudioSaveState } from "./studio-save-state";
-import { StudioTopBar } from "./studio-top-bar";
+import { StudioHeader, type StudioFrameDefinition } from "./studio-header";
 import { StudioPlaceOpenerProvider, type StudioPlaceOpener } from "./studio-used-in";
 import { useStudioCanvasTab } from "./use-studio-canvas-tab";
 import { useStudioDraft } from "./use-studio-draft";
@@ -52,6 +52,8 @@ import type { StudioStructureForm } from "./studio-structure-editor";
 /** Where the workspace sits: the organisation it belongs to and the running application it builds. */
 export type StudioWorkspacePlace = Readonly<{
   organizationName: string;
+  /** Studio's shared application frame: its top bar, the signed-in person and the addresses. */
+  frame: StudioFrameDefinition;
   /** The running application, for Back to app; absent when the builder may not open it or the organisation's address is unknown. */
   applicationHref: string | undefined;
   /** The App Store, where a published version is installed or upgraded to; absent like the above. */
@@ -326,19 +328,11 @@ function ExistingApplicationWorkspace(props: ExistingProps) {
             onTabChange={setTab}
             selectionKey={draft.selected === null ? "" : studioSemanticSelectionKey(draft.selected)}
             topBar={
-              <StudioTopBar
-                location={{
-                  organizationName: place.organizationName,
-                  organizationHref: `/studio/${encodeURIComponent(organizationId)}`,
-                  applicationName: source.body.name,
-                  item: tab === "releases" ? releases.title : canvas.breadcrumbItem,
-                  applications: applications.map((app) => ({
-                    name: app.name,
-                    href: `/studio/${encodeURIComponent(organizationId)}/${encodeURIComponent(app.rootId)}`,
-                  })),
-                  onApplication: () => {
-                    draft.select({ kind: "application", applicationRootId: state.rootId });
-                  },
+              <StudioHeader
+                frame={place.frame}
+                applicationName={source.body.name}
+                onApplication={() => {
+                  draft.select({ kind: "application", applicationRootId: state.rootId });
                 }}
                 saveState={<StudioSaveState draft={draft} />}
                 canUndo={state.canUndo}

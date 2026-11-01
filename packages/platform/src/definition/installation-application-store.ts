@@ -37,6 +37,7 @@ import {
 import { releaseMemberRole, type ApplicationRoleChange } from "./installation-role-templates";
 import {
   ApplicationPurgeRefused,
+  type ApplicationPurgeImpact,
   purgeApplication,
   readApplicationPurge,
   requireApplicationChangeStepUp,
@@ -499,6 +500,21 @@ const purgeJourney = async (
   }
 };
 
+const plural = (count: number, one: string, many: string): string =>
+  `${count} ${count === 1 ? one : many}`;
+
+/** The impact of a purge as the short lines the confirmation lists, and the facts behind them. */
+const purgeReview = (impact: ApplicationPurgeImpact): Outputs => {
+  const lines = [
+    ...(impact.installed ? ["It is installed now and is removed first."] : []),
+    `${plural(impact.roles, "role", "roles")} and ${plural(impact.role_assignments, "person or group assignment", "person and group assignments")}`,
+    plural(impact.permission_entries, "permission entry", "permission entries"),
+    `${plural(impact.records, "record", "records")} in ${plural(impact.record_tables, "record table", "record tables")}`,
+    plural(impact.releases, "published version", "published versions"),
+  ];
+  return { ...impact, impact_lines: lines.map((text) => ({ text })) };
+};
+
 /** A purge's refusal the person is told by name, or the shared mapping of any other failure. */
 const purgeFailure = (error: unknown): ApplicationStoreResult =>
   error instanceof ApplicationPurgeRefused
@@ -780,12 +796,14 @@ export const createApplicationStoreService = (environment: ApplicationStoreEnvir
     try {
       return {
         kind: "available",
-        value: await readApplicationPurge(
-          environment,
-          session,
-          organizationOf(selection),
-          rootId.data,
-          yes(inputs.delete_only),
+        value: purgeReview(
+          await readApplicationPurge(
+            environment,
+            session,
+            organizationOf(selection),
+            rootId.data,
+            yes(inputs.delete_only),
+          ),
         ),
       };
     } catch (error) {
