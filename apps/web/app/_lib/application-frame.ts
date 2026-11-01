@@ -37,6 +37,10 @@ import { humanOrganizationRequests } from "./server-composition";
 import { loadStudioCreateAccess } from "./studio-application-draft";
 import { pageSubjectParameter } from "./application-page/placement-helpers";
 import type { ApplicationPageModel } from "./application-page";
+import {
+  readApplicationReleaseOffer,
+  type ApplicationReleaseOffer,
+} from "./application-release-adoption";
 
 type ApplicationSearchView = Awaited<ReturnType<typeof loadApplicationSearch>>;
 
@@ -61,6 +65,11 @@ export type ApplicationFrameModel = Readonly<{
   timeZone: string;
   /** Where the viewer opens Studio; absent unless they may change drafts in this organisation. */
   studioHref?: string;
+  /**
+   * A newer published release this organisation has not upgraded to, with its App Store page;
+   * present only for a viewer who may manage the organisation's installations.
+   */
+  releaseOffer?: ApplicationReleaseOffer;
   /** The pages the viewer may open, for the current page's menu state and breadcrumb. */
   pages: readonly Readonly<{ pageId: string; key: string; name: string }>[];
   account: ApplicationAccount;
@@ -223,11 +232,23 @@ export const loadApplicationFrame = cache(
     );
     const navigation = resolved.navigation;
     if (navigation === undefined) throw new Error("FRAME_NAVIGATION_NOT_READ");
-    const [projected, presentation, launcher, studioAccess] = await Promise.all([
+    const preview = runtimePreviewOf(context);
+    const [projected, presentation, launcher, studioAccess, releaseOffer] = await Promise.all([
       projectedPageRead,
       readViewerPresentation(session, context),
       loadOrganizationLauncher(session),
       loadStudioCreateAccess(context.organizationId),
+      // A preview runs a draft, never an installed release, so it offers no upgrade.
+      preview === undefined
+        ? readApplicationReleaseOffer(session, {
+            tenantShortName,
+            organizationShortName,
+            organizationId: context.organizationId,
+            applicationRootId: context.applicationRootId,
+            installedReleaseRevision: context.applicationReleaseRevision,
+            installedVersion: context.releaseSet.application.releaseVersion,
+          })
+        : undefined,
     ]);
     if (launcher.kind !== "available")
       throw new Error(`FRAME_ORGANIZATION_LAUNCHER_${launcher.kind.toUpperCase()}`);
@@ -260,7 +281,6 @@ export const loadApplicationFrame = cache(
           );
 
     const permittedKeys = new Set(resolved.application.pageKeys);
-    const preview = runtimePreviewOf(context);
     // The pages whose record type's preview seed reached the bound, with that type's plural name.
     const boundedRecordTypes = new Map<string, string>();
     for (const module of context.releaseSet.modules)
@@ -300,6 +320,7 @@ export const loadApplicationFrame = cache(
       ...(studioAccess.kind === "available"
         ? { studioHref: `/studio/${encodeURIComponent(studioAccess.organizationId)}` }
         : {}),
+      ...(releaseOffer === undefined ? {} : { releaseOffer }),
       pages: content.pages
         .filter((page) => permittedKeys.has(page.key))
         .map((page) => ({ pageId: page.pageId, key: page.key, name: page.name })),

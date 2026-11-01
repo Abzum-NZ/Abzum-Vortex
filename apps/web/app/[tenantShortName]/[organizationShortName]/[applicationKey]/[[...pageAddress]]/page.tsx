@@ -1,15 +1,13 @@
 import "server-only";
 import { withPageReadAttribution } from "../../../../_lib/page-read-attribution";
 
-import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { splitProjectedPage } from "@vortex/platform/schema";
 import type { ApplicationAccount, DisplaySemanticEvent } from "@vortex/ui";
-import { DEFAULT_PLATFORM_THEME_RELEASE, DefinitionError } from "@vortex/platform/server";
+import { DEFAULT_PLATFORM_THEME_RELEASE } from "@vortex/platform/server";
 import { ApplicationExperiencePage } from "./_components/application-experience-page";
 import { ApplicationPageView } from "./_components/application-page-view";
-import type { ReleaseAdoptionOutcome } from "./_components/application-page-view/notices";
 import { BarePage } from "../_components/bare-page";
 import {
   OrganizationAddressState,
@@ -23,10 +21,7 @@ import {
 import { applicationPageContinuationFromAddress } from "../../../../auth/_lib/sign-in-continuation";
 import { pageSubjectParameter } from "../../../../_lib/application-page/placement-helpers";
 import { continueSessionOrEnd } from "../../../../auth/_lib/session-redirect";
-import {
-  resolveIdentitySession,
-  resolveIdentitySessionWithEmail,
-} from "../../../../auth/_lib/session-server";
+import { resolveIdentitySessionWithEmail } from "../../../../auth/_lib/session-server";
 import { loadOrganizationLauncher } from "../../../../_lib/organization-context";
 import {
   applicationPageAddressPath as addressPath,
@@ -36,39 +31,12 @@ import { resolveApplicationAddress } from "../../../../_lib/application-address"
 import { loadApplicationPage } from "../../../../_lib/application-page";
 import { runtimePreviewOf } from "@vortex/platform/server";
 import { RuntimePreviewIdleFill } from "../../../../studio/_components/runtime-preview-idle-fill";
-import { adoptApplicationRelease } from "../../../../_lib/application-release-adoption";
-import { mapWebError } from "../../../../_lib/web-error-mapper";
 import {
   fieldInputControlReleasesFor,
   platformBlockReleasesFor,
 } from "../../../../_lib/platform-block-releases";
 
 export const dynamic = "force-dynamic";
-
-const adoptionCoordinatorCodes = new Set<string>([
-  "INVALID_APPLICATION_INSTALLATION_COMMAND",
-  "APPLICATION_INSTALLATION_REFUSED",
-  "APPLICATION_INSTALLATION_PERMISSION_REFUSED",
-  "APPLICATION_INSTALLATION_RECENT_AUTHENTICATION_REQUIRED",
-  "APPLICATION_INSTALLATION_MULTI_FACTOR_REQUIRED",
-  "APPLICATION_INSTALLATION_RELEASE_UNAVAILABLE",
-  "APPLICATION_INSTALLATION_STALE",
-  "APPLICATION_INSTALLATION_INCOMPLETE",
-  "APPLICATION_INSTALLATION_STORAGE_INCOMPATIBLE",
-  "APPLICATION_INSTALLATION_TEMPORARILY_UNAVAILABLE",
-  "APPLICATION_INSTALLATION_FAILED",
-]);
-
-/** Only a known coordinator exception can select the display-only authentication notice. */
-const adoptionCoordinatorCode = (error: unknown): string => {
-  try {
-    if (!(error instanceof DefinitionError)) return "UNKNOWN";
-    const code: unknown = Object.getOwnPropertyDescriptor(error, "code")?.value;
-    return typeof code === "string" && adoptionCoordinatorCodes.has(code) ? code : "UNKNOWN";
-  } catch {
-    return "UNKNOWN";
-  }
-};
 
 type ApplicationAddressPageProps = Readonly<{
   params: Promise<{
@@ -115,78 +83,6 @@ async function readApplicationAddressPage({ params, searchParams }: ApplicationA
       ? `${launcherPath(tenantShortName, organizationShortName)}/${encodeURIComponent(applicationKey)}`
       : addressPath(tenantShortName, organizationShortName, applicationKey, pageSegments[0])
   }${query === "" ? "" : `?${query}`}`;
-
-  /**
-   * Deliberately adopts the offered release of the addressed application. The browser supplies the
-   * offered target and the installation revision the page loaded; the server re-resolves the
-   * signed-in person's address, re-reads the offered release and the active installation, and
-   * refuses on any mismatch, so a stale page can never upgrade the wrong release. The page model is
-   * never cached (the page is dynamic, ADR 9): only a committed switch revalidates this address, so
-   * the same reply carries the page under the new release; on any refusal the prior release keeps
-   * rendering and the reply names the outcome the page shows.
-   */
-  async function adoptRelease(formData: FormData): Promise<ReleaseAdoptionOutcome> {
-    "use server";
-    const currentIdentity = await continueSessionOrEnd(await resolveIdentitySession());
-    if (currentIdentity.kind === "temporarily_unavailable") return "refused";
-
-    const addressedApplicationKey = String(formData.get("applicationKey") ?? "");
-    const pageKey = String(formData.get("pageKey") ?? "");
-    const offeredReleaseRevision = Number(formData.get("targetReleaseRevision"));
-    const expectedActiveReleaseRevision = Number(formData.get("expectedActiveReleaseRevision"));
-
-    const rechecked = await resolveApplicationAddress(
-      currentIdentity.session,
-      tenantShortName,
-      organizationShortName,
-      addressedApplicationKey,
-      pageKey,
-    );
-    if (rechecked.kind !== "application_page") return "refused";
-    const back = addressPath(
-      tenantShortName,
-      organizationShortName,
-      rechecked.application.key,
-      rechecked.pageKey,
-    );
-
-    let refused = false;
-    let recentAuthenticationRequired = false;
-    let multiFactorRequired = false;
-    try {
-      await adoptApplicationRelease(currentIdentity.session, {
-        organizationId: rechecked.read.organizationId,
-        applicationRootId: rechecked.application.applicationRootId,
-        applicationReleaseRevision: offeredReleaseRevision,
-        expectedActiveReleaseRevision,
-      });
-    } catch (error) {
-      const coordinatorCode = adoptionCoordinatorCode(error);
-      const refusal = mapWebError(error, {
-        route: "application-address-page",
-        operation: "adopt_application_release",
-        code: coordinatorCode === "UNKNOWN" ? "APPLICATION_INSTALLATION_REFUSED" : coordinatorCode,
-        fallback: {
-          recentAuthenticationRequired:
-            coordinatorCode === "APPLICATION_INSTALLATION_RECENT_AUTHENTICATION_REQUIRED",
-          multiFactorRequired: coordinatorCode === "APPLICATION_INSTALLATION_MULTI_FACTOR_REQUIRED",
-        },
-      });
-      recentAuthenticationRequired = refusal.recentAuthenticationRequired;
-      multiFactorRequired = refusal.multiFactorRequired;
-      refused = true;
-    }
-    // A refusal, a stale revision or a failed preparation changes nothing; the page keeps showing
-    // the prior release. Only a committed switch revalidates the address.
-    if (refused)
-      return multiFactorRequired
-        ? "multi_factor_required"
-        : recentAuthenticationRequired
-          ? "recent_authentication_required"
-          : "refused";
-    revalidatePath(back);
-    return "adopted";
-  }
 
   if (identity.kind === "temporarily_unavailable")
     return (
@@ -389,7 +285,6 @@ async function readApplicationAddressPage({ params, searchParams }: ApplicationA
         fieldInputControlReleases={fieldInputControlReleasesFor(page.model.page.composition)}
         platformThemeTokens={DEFAULT_PLATFORM_THEME_RELEASE.tokens}
         onOpenApplication={openApplication}
-        adoptReleaseAction={adoptRelease}
       />
     </>
   );

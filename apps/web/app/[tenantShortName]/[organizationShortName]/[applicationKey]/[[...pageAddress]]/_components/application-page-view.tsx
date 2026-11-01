@@ -11,7 +11,6 @@ import {
 import type { PlatformBlockRelease, ProjectedApplicationFrame } from "@vortex/platform/schema";
 import type { ApplicationPageModel } from "../../../../../_lib/application-page";
 import { ApplicationPageViewContent } from "./application-page-view/application-page-content";
-import type { ReleaseAdoptionOutcome } from "./application-page-view/notices";
 
 /**
  * Renders the content of one installed application page and carries out what its people do on it.
@@ -25,7 +24,6 @@ export function ApplicationPageView({
   content,
   frame,
   onOpenApplication,
-  adoptReleaseAction,
   platformBlockReleases,
   fieldInputControlReleases,
   platformThemeTokens,
@@ -35,7 +33,6 @@ export function ApplicationPageView({
   content: Readonly<Record<string, unknown>>;
   frame: ProjectedApplicationFrame;
   onOpenApplication: (event: DisplaySemanticEvent) => Promise<void>;
-  adoptReleaseAction?: ((formData: FormData) => Promise<ReleaseAdoptionOutcome>) | undefined;
   platformBlockReleases: readonly PlatformBlockRelease[];
   fieldInputControlReleases: FieldInputControlReleaseMap;
   platformThemeTokens: PlatformThemeTokens;
@@ -51,7 +48,6 @@ export function ApplicationPageView({
         content={content}
         frame={frame}
         onOpenApplication={onOpenApplication}
-        adoptReleaseAction={adoptReleaseAction}
         platformComponentRegistry={platformComponentRegistry}
         fieldInputControlReleases={fieldInputControlReleases}
         platformThemeTokens={platformThemeTokens}
