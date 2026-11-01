@@ -3,6 +3,8 @@ import "server-only";
 import {
   createApplicationReleaseAdoptionTargetService,
   createBuilderAuthority,
+  createPageSubjectReader,
+  readBuilderApplicationOrigin,
   readCurrentOrganizationAppStoreAddressAfterAuthorization,
 } from "@vortex/platform/server";
 import type { ApplicationRootId, IdentitySession, OrganizationId } from "@vortex/platform/schema";
@@ -12,6 +14,8 @@ import { pageSubjectParameter } from "./application-page/placement-helpers";
 import { applicationStoreService } from "./application-store-service";
 import { humanOrganizationRequests } from "./server-composition";
 import { platformPermissionSource } from "./platform-permission-source";
+import { loadPermittedApplicationsAtAddress } from "./organization-context";
+import { loadInstalledContext, requestDependencies } from "./application-page/installed-context";
 
 /**
  * Where an installed application stands against its latest published release. Publishing only
@@ -113,6 +117,7 @@ export const readApplicationReleaseOffer = async (
 
 /** Where the application stands in the builder's organisation, as the App Store's review says it. */
 export type ApplicationReleaseStanding =
+  | Readonly<{ kind: "system"; version: string; installedVersion: string }>
   | Readonly<{ kind: "live"; version: string; rolesWaiting: boolean; appStoreHref: string }>
   | Readonly<{
       kind: "waiting";
@@ -151,8 +156,97 @@ export const readApplicationReleaseStanding = async (
       : undefined;
   if (appStoreHref === undefined)
     console.error(
-      `[release-standing] App Store address ${appStore.kind === "available" ? (appStore.value ?? "not set") : appStore.kind}`,
+      `[release-standing] App Store address ${appStore.kind === "available" ? (appStore.value ?? "not set") : appStore.kind === "temporarily_unavailable" ? (appStore.databaseCode ?? appStore.cause ?? appStore.kind) : appStore.kind}`,
     );
+  const origin = await humanOrganizationRequests().run(
+    session,
+    { organizationId: scope.organizationId },
+    (transaction) => readBuilderApplicationOrigin(transaction, scope.applicationRootId),
+  );
+  if (origin.kind !== "available" || origin.value === undefined) {
+    console.error(
+      `[release-standing] application classification unavailable: ${origin.kind === "temporarily_unavailable" ? (origin.databaseCode ?? origin.cause ?? origin.kind) : origin.kind}`,
+    );
+    return { kind: "unknown" };
+  }
+  if (origin.value === "platform_system_application") {
+    if (appStore.kind !== "available" || appStore.value === null || appStore.value === "invalid")
+      return { kind: "unknown" };
+    const applications = await loadPermittedApplicationsAtAddress(
+      session,
+      scope.tenantShortName,
+      scope.organizationShortName,
+    );
+    const store =
+      applications.kind === "available"
+        ? applications.applications.find((application) => application.key === appStore.value)
+        : undefined;
+    if (store === undefined) {
+      if (applications.kind === "temporarily_unavailable")
+        console.error(
+          `[release-standing] App Store read unavailable: ${applications.cause ?? applications.kind}`,
+        );
+      else console.info("[release-standing] App Store read unavailable");
+      return { kind: "unknown" };
+    }
+    const selection = {
+      organizationId: scope.organizationId,
+      applicationRootId: store.applicationRootId,
+    };
+    const dependencies = requestDependencies();
+    const context = await loadInstalledContext(session, dependencies, selection);
+    if (context.kind !== "available") {
+      if (context.kind === "temporarily_unavailable")
+        console.error(
+          `[release-standing] App Store context ${context.databaseCode ?? context.cause ?? context.kind}`,
+        );
+      else console.info(`[release-standing] App Store context ${context.kind}`);
+      return { kind: "unknown" };
+    }
+    const types = context.value.releaseSet.modules
+      .flatMap((module) => module.content.recordTypes)
+      .filter((type) => type.systemProjection?.protectedView === "application_store_entries");
+    if (types.length !== 1 || types[0] === undefined) {
+      console.error("[release-standing] App Store application record type unavailable");
+      return { kind: "unknown" };
+    }
+    const type = types[0];
+    const fields = ["latest_version", "installed_version", "status", "is_system_application"];
+    const ids = fields.map((key) => type.fields.find((field) => field.key === key)?.fieldId);
+    if (ids.some((id) => id === undefined)) {
+      console.error("[release-standing] App Store application fields unavailable");
+      return { kind: "unknown" };
+    }
+    const read = await createPageSubjectReader(dependencies).read(session, selection, {
+      recordTypeId: type.recordTypeId,
+      recordId: scope.applicationRootId,
+      requestedFieldIds: ids.map(String),
+    });
+    if (read.kind !== "read") {
+      console.info(`[release-standing] App Store record ${read.kind}`);
+      return { kind: "unknown" };
+    }
+    const values = Object.fromEntries(
+      Object.entries(read.row.values).map(([key, value]) => [key.toLowerCase(), value]),
+    );
+    const [version, installedVersion, status, isSystem] = ids.map(
+      (id) => values[String(id).toLowerCase()],
+    );
+    if (
+      isSystem !== true ||
+      typeof version !== "string" ||
+      version === "" ||
+      typeof installedVersion !== "string" ||
+      installedVersion === "" ||
+      (status !== "installed" && status !== "update_available")
+    ) {
+      console.error(
+        "[release-standing] App Store system application record invalid or not installed",
+      );
+      return { kind: "unknown" };
+    }
+    return { kind: "system", version, installedVersion };
+  }
   const review = await applicationStoreService().review(
     session,
     { organizationId: scope.organizationId },

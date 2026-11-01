@@ -142,6 +142,9 @@ const publicationProblemText = (
   }
 };
 
+/** The one wording of how a system application advances, shown in the standing and the history. */
+const systemRefreshMessage = "System applications move forward through the platform refresh.";
+
 /**
  * Where the application stands in the builder's organisation, in plain words, with the App Store
  * page that installs or upgrades it. `published` names the version a Publish just created.
@@ -152,6 +155,10 @@ const standingWords = (
 ): Readonly<{ text: string; link?: Readonly<{ label: string; href: string }> }> => {
   const lead = published === undefined ? "" : `Published version ${published}. `;
   switch (standing.kind) {
+    case "system":
+      return {
+        text: `${lead}Latest published version: ${standing.version}. Installed version: ${standing.installedVersion}. ${systemRefreshMessage}`,
+      };
     case "live":
       return {
         text: `${lead}Version ${standing.version} is live in your organisation.${standing.rolesWaiting ? " Role changes are waiting: accept them in the App Store." : ""}`,
@@ -668,13 +675,15 @@ export function useStudioReleasesTab({
           className="mb-4 space-y-2 rounded-md border border-border bg-muted/40 p-4"
         >
           <p className="font-medium">
-            {standing.kind === "live"
-              ? "Live in your organisation"
-              : standing.kind === "waiting"
-                ? "A newer version is waiting"
-                : standing.kind === "not_installed"
-                  ? "Not installed yet"
-                  : "Not published yet"}
+            {standing.kind === "system"
+              ? "System application"
+              : standing.kind === "live"
+                ? "Live in your organisation"
+                : standing.kind === "waiting"
+                  ? "A newer version is waiting"
+                  : standing.kind === "not_installed"
+                    ? "Not installed yet"
+                    : "Not published yet"}
           </p>
           <p className="text-sm text-muted-foreground">{standingShown.text}</p>
           {standingShown.link === undefined ? null : (
@@ -695,6 +704,13 @@ export function useStudioReleasesTab({
           organizationId={organizationId}
           rootId={draft.state.rootId}
           savedRevision={draft.saved.draftRevision}
+          installationMessage={
+            standing?.kind === "system"
+              ? systemRefreshMessage
+              : standing == null || standing.kind === "unknown"
+                ? undefined
+                : "Organisations install and upgrade a version from the App Store."
+          }
           restoreBlocked={restoreBlocked}
           hold={(on) => draft.hold("restoring", on)}
           onRestored={(restored) => {

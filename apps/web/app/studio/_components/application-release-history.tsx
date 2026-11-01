@@ -63,15 +63,17 @@ const restoreFailureMessage = (
  * The Releases tab's published versions, oldest first: each with when and by whom it was published
  * and what changed, and a way to restore it into the draft. Restoring replaces the saved draft with
  * that version's source as a new draft revision, through the platform's one restore operation; it
- * never publishes or installs anything. Organisations install and upgrade from the App Store.
+ * never publishes or installs anything.
  */
 export function ApplicationReleaseHistory({
   initialPage,
+  installationMessage,
   restoreBlocked,
   hold,
   onRestored,
 }: {
   initialPage: StudioApplicationHistoryPage;
+  installationMessage: string | undefined;
   /** Why restoring cannot start now (unsaved or pending edits in the workspace), or nothing. */
   restoreBlocked: string | undefined;
   /** Holds the workspace's draft while a restore writes the saved draft, so nothing else edits it. */
@@ -251,8 +253,8 @@ export function ApplicationReleaseHistory({
       <header className="space-y-2">
         <h2 className="text-xl font-semibold tracking-tight">Published versions</h2>
         <p className="text-sm text-muted-foreground">
-          Oldest first, 20 at a time. Organisations install and upgrade a version from the App
-          Store.
+          Oldest first, 20 at a time.
+          {installationMessage === undefined ? "" : ` ${installationMessage}`}
         </p>
       </header>
       <div className="flex flex-wrap gap-3">
