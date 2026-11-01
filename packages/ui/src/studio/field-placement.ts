@@ -24,8 +24,9 @@ import { studioQueryChoices } from "./contextual-palette";
  * "Also show it on": the places a new field can be shown in the same draft edit that adds it. A
  * place is a block on one of its record type's detail, list or form pages that holds a list of
  * fields (detail fields, table columns, card details), or a form on a form page, which takes an
- * input for the field. Every placement goes through the one composition command path: a list
- * entry is a settings command, a form input is an add command.
+ * input for the field. A new field starts on every place that can take it; the builder unticks
+ * the ones it should not show on. Every placement goes through the one composition command path:
+ * a list entry is a settings command, a form input is an add command.
  */
 export type StudioFieldPlacement = Readonly<{
   id: string;

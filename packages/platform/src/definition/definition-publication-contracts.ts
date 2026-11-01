@@ -1,4 +1,5 @@
 import "server-only";
+import type { PublishedModuleField } from "./module-field-edit";
 import type { definitionContractVersion } from "./application-contract-versions";
 
 import type {
@@ -139,11 +140,11 @@ export interface DefinitionPublicationReader {
   readCandidate(rootId: string): Promise<DefinitionPublicationCandidate | undefined>;
   /** The internal Module roots one Application owns. */
   readOwnedModuleRoots(applicationRootId: string): Promise<readonly OwnedModuleRoot[]>;
-  /** Published record and field keys, without materialising the owned Module releases. */
+  /** Published records and field capabilities, without materialising the owned Module releases. */
   readOwnedModulePublication(applicationRootId: string): Promise<
     Readonly<{
       recordTypes: readonly string[];
-      fields: readonly string[];
+      fields: readonly PublishedModuleField[];
       extensionPointUses: readonly ModuleExtensionPointUse[];
     }>
   >;

@@ -124,7 +124,7 @@ export function useStudioDataTab({
   useIntentPreload(preloadDataView, "#studio-rail-data");
   const visited = useStudioTabVisited(!hidden);
   const { source, view } = draft;
-  const disabled = draft.locked;
+  const disabled = draft.locked || view.published === null;
   const [searchOpen, setSearchOpen] = useState(false);
   // The query catalogue stays in the centre while one of its queries is open in the inspector.
   const [queriesOpen, setQueriesOpen] = useState(false);
@@ -162,10 +162,7 @@ export function useStudioDataTab({
   );
   const used = view.usedModules;
   const owned = useMemo(() => ownedDataModules(source), [source]);
-  const publication = useMemo(
-    () => studioFieldPublication(view.published, saved),
-    [view.published, saved],
-  );
+  const publication = useMemo(() => studioFieldPublication(view.published), [view.published]);
   // A link may point at a record type of a module the application uses, or at a person of the
   // people directory, which the link then adds to the modules it uses.
   const usedRecordTypes = useMemo((): readonly StudioLinkTarget[] => {
