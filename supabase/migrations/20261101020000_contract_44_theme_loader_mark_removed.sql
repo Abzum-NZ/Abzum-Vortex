@@ -87,7 +87,7 @@ as $function$
   )
 $function$;
 
--- One authored draft: the theme no longer has a loader mark to materialise.
+-- One authored draft: the theme no longer has a loader mark, and the source names the new contract.
 create function pg_temp.contract_44_source(p_source jsonb)
 returns jsonb
 language plpgsql
@@ -95,12 +95,7 @@ immutable
 set search_path = ''
 as $function$
 begin
-  if pg_catalog.jsonb_typeof(p_source -> 'body') is distinct from 'object'
-    or pg_catalog.jsonb_typeof(p_source #> '{body,theme}') is distinct from 'object'
-    or not ((p_source #> '{body,theme}') ? 'loader_mark') then
-    return p_source;
-  end if;
-  return p_source #- '{body,theme,loader_mark}';
+  return pg_catalog.jsonb_set(p_source, '{source_contract_version}', '"4.4.0"'::jsonb) #- '{body,theme,loader_mark}';
 end
 $function$;
 
@@ -125,7 +120,7 @@ begin
       draft_source = converted,
       source_contract_version = '4.4.0',
       source_fingerprint = pg_temp.contract_44_fingerprint(converted),
-      draft_revision = d.draft_revision + case when converted is distinct from d.draft_source then 1 else 0 end,
+      draft_revision = d.draft_revision + 1,
       updated_at = greatest(pg_catalog.statement_timestamp(), d.updated_at),
       restored_from_release_revision = null,
       restored_from_source_fingerprint = null,
