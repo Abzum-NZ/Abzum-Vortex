@@ -40,6 +40,7 @@ import {
   readUpgradeAuthorizedState,
   sameUpgradeSelectedSnapshot,
   sameUpgradeSnapshotState,
+  upgradeModuleChanges,
   type UpgradeSelector,
   type UpgradeSnapshot,
 } from "./installation-upgrade";
@@ -82,11 +83,7 @@ type ApplicationStoreResult =
 
 /** Why the latest version can be neither installed nor upgraded to here, as the review names it. */
 type UnavailableReason =
-  | "not_published"
-  | "module_set_changed"
-  | "installation_incomplete"
-  | "registration_misaligned"
-  | "unsupported";
+  "not_published" | "installation_incomplete" | "registration_misaligned" | "unsupported";
 
 const applicationRootInput = (candidate: unknown) => applicationRootIdSchema.safeParse(candidate);
 
@@ -102,6 +99,7 @@ const reviewOutputs = (
     release_version: "",
     installed_version: "",
     release_note: "",
+    module_changes: "",
     roles: [],
     member_role_name: "",
     member_role_assignable: false,
@@ -221,8 +219,6 @@ const reviewFailure = (error: unknown): ApplicationStoreResult => {
   }
   const problem: InstallationProblemShape = classifyInstallationFailure(error);
   switch (problem.unavailableReason) {
-    case "module_set_changed":
-      return unavailable("module_set_changed");
     case "installation_incomplete":
       return unavailable("installation_incomplete");
     case "registration_misaligned":
@@ -438,6 +434,7 @@ const review = async (
         release_version: authorized.snapshot.selected.releaseVersion,
         installed_version: authorized.snapshot.active.releaseVersion,
         release_note: latest.releaseNote,
+        module_changes: installed ? "" : upgradeModuleChanges(authorized.state),
         role_changes: changes.map(roleChangeSummary),
         role_change_count: changes.length,
         role_template_ids: changes.map((change) => change.sourceRoleId),
