@@ -1,3 +1,5 @@
+set role vortex_owner;
+
 create or replace function vortex_definition.read_owned_module_publication(
   p_application_root_id uuid
 )
@@ -152,3 +154,5 @@ revoke all on function vortex_definition.read_owned_module_publication(uuid)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 grant execute on function vortex_definition.read_owned_module_publication(uuid) to vortex_request;
 alter function vortex_definition.read_owned_module_publication(uuid) owner to vortex_owner;
+
+reset role;
