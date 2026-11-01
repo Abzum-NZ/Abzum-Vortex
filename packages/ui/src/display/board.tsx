@@ -51,8 +51,7 @@ const BoardCardFormat = lazy(async () => ({
 }));
 
 /**
- * What a column read answers: accepted, refused (a real failure), or deferred (put off because the
- * page was busy; the board reads the column again once it is idle).
+ * What a column read answers: accepted, refused, or deferred because the page was busy.
  */
 type BoardColumnReadOutcome = void | boolean | "deferred";
 
@@ -286,22 +285,6 @@ function BoardColumn({
         ) : null}
       </header>
       <div className="flex min-h-32 flex-1 flex-col gap-3">
-        {page === null ? (
-          pending ? (
-            <p className="text-sm text-muted-foreground" role="status">
-              Loading cards…
-            </p>
-          ) : (
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={anyPending || events?.page_changed === undefined}
-              onClick={() => onRetry(bucket)}
-            >
-              Show cards
-            </Button>
-          )
-        ) : null}
         {rows.length === 0 && page !== null ? (
           <p className="text-sm text-muted-foreground" role="status">
             {emptyMessage}
@@ -566,10 +549,6 @@ export function BoardView(props: DisplayRenderProps<BoardPayload>): ReactElement
     : [];
   const [pendingKeys, setPendingKeys] = useState<ReadonlySet<string>>(new Set());
   const [failedKeys, setFailedKeys] = useState<ReadonlySet<string>>(new Set());
-  // Columns whose read was put off because the page was busy or another read of this board was in
-  // flight: not a failure, they are read again as soon as the board is idle.
-  const [deferredKeys, setDeferredKeys] = useState<ReadonlySet<string>>(new Set());
-  const visibleKeysRef = useRef<Set<string>>(new Set());
   const pendingKeyRef = useRef<string | undefined>(undefined);
   const pageChanged = events?.page_changed as
     | ((event: DisplaySemanticEvent) => BoardColumnReadOutcome | Promise<BoardColumnReadOutcome>)
@@ -760,13 +739,8 @@ export function BoardView(props: DisplayRenderProps<BoardPayload>): ReactElement
             ...(continuationToken === undefined ? {} : { continuationToken }),
           }),
         );
-        if (accepted === "deferred") setDeferredKeys((current) => new Set([...current, ...keys]));
-        else {
-          setDeferredKeys(
-            (current) => new Set([...current].filter((candidate) => !keys.has(candidate))),
-          );
-          if (accepted === false) setFailedKeys((current) => new Set([...current, ...keys]));
-        }
+        if (accepted === false || accepted === "deferred")
+          setFailedKeys((current) => new Set([...current, ...keys]));
       } catch (error) {
         console.error("[board] column read failed", error);
         setFailedKeys((current) => new Set([...current, ...keys]));
@@ -777,64 +751,6 @@ export function BoardView(props: DisplayRenderProps<BoardPayload>): ReactElement
     },
     [pageChanged],
   );
-
-  // The viewport clips the horizontal scroller and hidden phone columns. Batch newly visible
-  // placeholders into one bounded read; loaded columns keep their independent pages and cursors.
-  // One observer per payload: it reads the current columns through a ref, not once per render.
-  const unreadRef = useRef({ buckets, failedKeys, readBuckets });
-  unreadRef.current = { buckets, failedKeys, readBuckets };
-  useEffect(() => {
-    const section = cardsRef.current;
-    if (section === null || pageChanged === undefined) return;
-    const visible = visibleKeysRef.current;
-    visible.clear();
-    let frame: number | undefined;
-    const observer = new IntersectionObserver((entries) => {
-      for (const entry of entries) {
-        const key = (entry.target as HTMLElement).dataset.vortexBoardKey!;
-        if (
-          entry.isIntersecting &&
-          entry.intersectionRect.width > 0 &&
-          entry.intersectionRect.height > 0
-        )
-          visible.add(key);
-        else visible.delete(key);
-      }
-      if (frame !== undefined) cancelAnimationFrame(frame);
-      frame = requestAnimationFrame(() => {
-        const { buckets, failedKeys, readBuckets } = unreadRef.current;
-        const unread = buckets.filter(
-          (bucket) =>
-            visible.has(bucket.key) &&
-            bucket.values.state === "unread" &&
-            !failedKeys.has(bucket.key),
-        );
-        void readBuckets(unread);
-      });
-    });
-    for (const node of section.querySelectorAll("[data-vortex-board-key]")) observer.observe(node);
-    return () => {
-      observer.disconnect();
-      if (frame !== undefined) cancelAnimationFrame(frame);
-    };
-  }, [values, pageChanged]);
-
-  // A deferred column is read again once the board is idle and the column is still on screen.
-  useEffect(() => {
-    if (deferredKeys.size === 0 || pendingKeys.size > 0) return;
-    const timer = setTimeout(() => {
-      const { buckets, readBuckets } = unreadRef.current;
-      const again = buckets.filter(
-        (bucket) =>
-          deferredKeys.has(bucket.key) &&
-          visibleKeysRef.current.has(bucket.key) &&
-          bucket.values.state === "unread",
-      );
-      if (again.length === 0) setDeferredKeys(new Set());
-      else void readBuckets(again);
-    }, 250);
-    return () => clearTimeout(timer);
-  }, [deferredKeys, pendingKeys]);
 
   const addCard = (bucket: BoardBucket): void => {
     if (
@@ -976,7 +892,10 @@ export function BoardView(props: DisplayRenderProps<BoardPayload>): ReactElement
                     anyPending={pendingKeys.size > 0}
                     failed={failedKeys.has(bucket.key)}
                     onContinue={continueBucket}
-                    onRetry={(bucket) => void readBuckets([bucket])}
+                    onRetry={(bucket) => {
+                      const token = bucket.values.page?.nextContinuationToken;
+                      if (token !== undefined) void continueBucket(bucket, token);
+                    }}
                     onAdd={values.quickAdd && cardAdded !== undefined ? addCard : undefined}
                     mover={mover}
                     moving={moving}

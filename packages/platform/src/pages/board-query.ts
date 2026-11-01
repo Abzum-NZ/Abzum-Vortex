@@ -418,8 +418,8 @@ export const projectBoardPlacement = async (
       applied: readonly RecordsTableFilterValue[];
     }>;
     /**
-     * The columns the browser shows (their first pages), or one column's continuation. Without it
-     * the first read covers one leading stage; the browser measures any further visible columns.
+     * The columns to refresh (their first pages), or one column's continuation. Without it the
+     * first read covers every stage and the unassigned column.
      */
     read?: unknown;
   }>,
@@ -497,9 +497,10 @@ export const projectBoardPlacement = async (
     if (input.read === undefined) {
       pageRequest = {
         kind: "read",
-        columns: pipeline.stages
-          .slice(0, 1)
-          .map((stage) => ({ kind: "option" as const, value: stage.option })),
+        columns: [
+          ...pipeline.stages.map((stage) => ({ kind: "option" as const, value: stage.option })),
+          { kind: "unassigned" },
+        ],
       };
     } else {
       const read = boardColumnReadRequestSchema.safeParse(input.read);
