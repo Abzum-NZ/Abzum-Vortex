@@ -5,6 +5,7 @@ import { isLoopbackHostname } from "@vortex/platform/schema";
 import {
   isLocalSupabaseApiUrl,
   requireLocalDevelopmentEnvironment,
+  requireLocalSupabaseBinding,
   supabaseWorkdirArguments,
 } from "../development-setup/guards";
 import { ensureLocalDemoOwner, validateDemoOwnerConfiguration } from "./local-demo-owner";
@@ -72,29 +73,7 @@ const main = async (): Promise<void> => {
   const root = findRepositoryRoot();
   const supabaseCli = join(root, "node_modules", "supabase", "dist", "supabase.js");
   const workdir = supabaseWorkdirArguments();
-  const status = spawnSync(
-    process.execPath,
-    [supabaseCli, "status", "--output", "json", ...workdir],
-    { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] },
-  );
-  if (status.status !== 0 || status.error !== undefined)
-    throw new Error("The local Supabase stack is not running (pnpm db:start).");
-  const configured = new URL(process.env.VORTEX_SUPABASE_URL!).origin;
-  try {
-    const parsed = JSON.parse(status.stdout) as Record<string, unknown>;
-    if (typeof parsed.API_URL !== "string" || new URL(parsed.API_URL).origin !== configured)
-      throw new Error(`The local Supabase API is not at ${configured}.`);
-    // The runtime connection must reach the same stack, or a lane reset would be followed by
-    // platform writes against another database (possibly the owner's main demo).
-    const runtimePort = new URL(process.env.VORTEX_RUNTIME_DATABASE_URL!).port;
-    if (typeof parsed.DB_URL !== "string" || new URL(parsed.DB_URL).port !== runtimePort)
-      throw new Error(
-        `The local Supabase API's database is not the one VORTEX_RUNTIME_DATABASE_URL uses (port ${runtimePort}).`,
-      );
-  } catch (error) {
-    if (error instanceof Error && error.message.startsWith("The local Supabase")) throw error;
-    throw new Error("The local Supabase stack status could not be read.", { cause: error });
-  }
+  requireLocalSupabaseBinding();
 
   if (workdir.length === 0) {
     log("resetting the local database");

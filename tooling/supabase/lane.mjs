@@ -1,4 +1,6 @@
 import { spawnSync } from "node:child_process";
+import { Buffer } from "node:buffer";
+import { randomBytes } from "node:crypto";
 import { existsSync } from "node:fs";
 import { cp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
@@ -206,12 +208,26 @@ switch (command) {
     const status = readStatus(lane);
     if (typeof status.PUBLISHABLE_KEY !== "string" || typeof status.SECRET_KEY !== "string")
       fail(`Lane ${lane} status has no publishable or secret key.`);
+    const keyPath = path.join(laneSupabaseDirectory(lane), ".temp", "query-continuation-key");
+    await mkdir(path.dirname(keyPath), { recursive: true });
+    try {
+      await writeFile(keyPath, randomBytes(32).toString("base64"), { flag: "wx", mode: 0o600 });
+    } catch (error) {
+      if (error.code !== "EEXIST") throw error;
+    }
+    const continuationKey = (await readFile(keyPath, "utf8")).trim();
+    if (
+      !/^[A-Za-z0-9+/]{43}=$/.test(continuationKey) ||
+      Buffer.from(continuationKey, "base64").length !== 32
+    )
+      fail(`Lane ${lane} has an invalid query continuation key.`);
     process.stdout.write(
       [
         `VORTEX_SUPABASE_URL=${status.API_URL}`,
         `VORTEX_SUPABASE_PUBLISHABLE_KEY=${status.PUBLISHABLE_KEY}`,
         `VORTEX_RUNTIME_DATABASE_URL=${runtimeDatabaseUrl(status)}`,
         `VORTEX_DEV_SERVICE_ROLE_KEY=${status.SECRET_KEY}`,
+        `VORTEX_QUERY_CONTINUATION_KEY=${continuationKey}`,
         `VORTEX_SUPABASE_WORKDIR=${laneDirectory(lane).replaceAll("\\", "/")}`,
         "",
       ].join("\n"),
