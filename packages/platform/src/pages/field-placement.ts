@@ -9,11 +9,13 @@ import { richTextDocumentSchema } from "../records/rich-text";
 import {
   FIELD_INPUT_BLOCK_RELEASE,
   FIELD_INPUT_CONTROL_RELEASES,
+  placementSettings,
 } from "../definition/application-composition-catalogue";
 import type { InstalledRuntimeContext } from "../definition/installed-runtime-context";
 import type { RequestDatabaseTransaction } from "../db/request-transaction";
 import { decideChoiceOptionPermission } from "../records/choice-option-permission";
 import type { PageDataState, PlacementReadEntry } from "./placement-read/shared";
+import { walkPageComposition } from "./placement-walk";
 
 type PlacementParts = Pick<PlacementReadEntry, "vortex" | "settings">;
 type Modules = InstalledRuntimeContext["releaseSet"]["modules"];
@@ -74,6 +76,40 @@ export const fieldControl = (placement: PlacementParts): string | undefined => {
     typeof settings.control.value === "string"
     ? settings.control.value
     : undefined;
+};
+
+/**
+ * The currency a money field input shows: the field's fixed currency, or the organisation's
+ * currency when the field is in that mode. Undefined for any other placement.
+ */
+export const moneyFieldCurrencyMode = (
+  placement: PlacementParts,
+  modules: Modules,
+): "fixed" | "organization_default" | undefined => {
+  if (fieldControl(placement) !== "number") return undefined;
+  const source = fieldForPlacement(placement, modules);
+  if (source === undefined || source.field.type !== "money") return undefined;
+  return source.field.settings.currencyMode;
+};
+
+/**
+ * Hands the organisation's currency to every money field input on the page that follows it, as a
+ * fixed currency is handed to its input: the placement's one `currency` setting. The page must be
+ * the viewer's own copy, which a page carrying field inputs always is.
+ */
+export const applyOrganizationCurrency = (
+  page: Record<string, unknown>,
+  modules: Modules,
+  currency: string,
+): void => {
+  walkPageComposition(page.composition, ({ props, vortex }) => {
+    if (
+      moneyFieldCurrencyMode({ vortex, settings: placementSettings(props) }, modules) !==
+      "organization_default"
+    )
+      return;
+    props.currency = currency;
+  });
 };
 
 /** A form field may show only a value the page subject read returned for its own record type. */
