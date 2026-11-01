@@ -569,8 +569,6 @@ class RequestOwnedPostgresDriver implements DatabaseDriver {
       { hostname, port: Number(address.port), transport: configuration.transport },
       owner,
     );
-    // The custom socket is documented by Postgres.js but omitted from its public .d.ts. Pass a
-    // structurally typed options value; do not cast/mutate any private driver object or field.
     const options = {
       prepare: false,
       max: 1,
@@ -582,7 +580,7 @@ class RequestOwnedPostgresDriver implements DatabaseDriver {
       socket: this.sockets.open,
       connection: { application_name: "vortex-runtime" },
       onnotice: logDatabaseNotice,
-    } satisfies postgres.Options<{}> & { socket: RequestOwnedSocketFactory["open"] };
+    } satisfies postgres.Options<{}>;
     owner.registerResource({ stop: () => this.stop(), settled: () => this.settled() });
     this.client = postgres(configuration.connectionString, options);
   }

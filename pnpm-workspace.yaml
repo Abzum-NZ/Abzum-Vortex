@@ -31,7 +31,7 @@ catalog:
   "@types/semver": 7.8.0
   "@types/react": 19.3.0
   "@types/ws": 8.18.2
-  postgres: 3.4.9
+  postgres: 4.0.0
   react: 19.3.1
   react-day-picker: 10.0.2
   semver: 7.8.5
@@ -65,9 +65,5 @@ overrides:
   # exceljs reaches 3.x and 5.x through glob 7, which needs minimatch 3 internals, so they stay.
   "minimatch@10": 11.0.3
 
-# Reject writes queued after socket closure until the driver ships the fix.
-# https://github.com/porsager/postgres/pull/1209
-patchedDependencies:
-  postgres@3.4.9: patches/postgres@3.4.9.patch
 minimumReleaseAgeExclude:
   - re2js@2.9.1

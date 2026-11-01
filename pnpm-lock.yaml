@@ -240,8 +240,8 @@ catalogs:
       specifier: 16.4.3
       version: 16.4.3
     postgres:
-      specifier: 3.4.9
-      version: 3.4.9
+      specifier: 4.0.0
+      version: 4.0.0
     prettier:
       specifier: 3.9.10
       version: 3.9.10
@@ -298,9 +298,6 @@ overrides:
   motion-utils: 14.7.0
   happy-dom: 21.0.4
   minimatch@10: 11.0.3
-
-patchedDependencies:
-  postgres@3.4.9: 9d2bd2ed284b630a68d4e65eb6669ac72e880b227732c4f9b259331d1c5a3b4e
 
 importers:
 
@@ -414,7 +411,7 @@ importers:
         version: 22.3.0(supports-color@7.2.0)
       postgres:
         specifier: 'catalog:'
-        version: 3.4.9(patch_hash=9d2bd2ed284b630a68d4e65eb6669ac72e880b227732c4f9b259331d1c5a3b4e)
+        version: 4.0.0
       re2js:
         specifier: 'catalog:'
         version: 2.9.1
@@ -3841,9 +3838,9 @@ packages:
     resolution: {integrity: sha512-YUbWYCgErwnMAVkjUnYa+KlMBzGpHwiIt/DE7f0G33AuX2LH9UcTk6KgWxd3zRU+pN3u/C+Xl3EnMLM4Hea7Sg==}
     engines: {node: ^10 || ^12 || >=14}
 
-  postgres@3.4.9:
-    resolution: {integrity: sha512-GD3qdB0x1z9xgFI6cdRD6xu2Sp2WCOEoe3mtnyB5Ee0XrrL5Pe+e4CCnJrRMnL1zYtRDZmQQVbvOttLnKDLnaw==}
-    engines: {node: '>=12'}
+  postgres@4.0.0:
+    resolution: {integrity: sha512-kBh8qXtcvvIAc00DftQyOxz7M/3Zxww1tRMXZPLzipNXXl5PIzHml+9zB3Mrge2U8ldc0WF1ZdLp1iYQi7Kh3A==}
+    engines: {node: '>=20'}
 
   powershell-utils@0.2.1:
     resolution: {integrity: sha512-C+y9x90UElAddDZmV4qOx9W53B61PO7cIqWz2dQsWlwswuq4mr8NEwytdGKboYbQlGZ3awrkTeNvcZiZNHnQ8A==}
@@ -7787,7 +7784,7 @@ snapshots:
       picocolors: 1.1.1
       source-map-js: 1.2.2
 
-  postgres@3.4.9(patch_hash=9d2bd2ed284b630a68d4e65eb6669ac72e880b227732c4f9b259331d1c5a3b4e): {}
+  postgres@4.0.0: {}
 
   powershell-utils@0.2.1: {}
 
