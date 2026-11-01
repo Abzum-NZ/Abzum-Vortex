@@ -2,7 +2,6 @@ import "server-only";
 
 import { PassThrough, type Transform } from "node:stream";
 import { Temporal } from "@js-temporal/polyfill";
-import { moduleFieldValueSchemas } from "../records/module-field-values";
 import { compareExactDecimals, parseExactDecimal } from "../records/exact-decimal";
 import {
   RECORDS_TABLE_EXPORT_MAXIMUM_ROWS,
@@ -10,20 +9,22 @@ import {
 } from "../definition/application-composition/records-table-features/export";
 
 /**
- * Values already projected by the export authority. Links enter only as permitted titles (text),
- * never as link objects or identifiers. Null includes a value withheld on an individual row.
- * Decimal and temporal values arrive with their stored spelling. Only the Excel encoder converts
- * them to spreadsheet numbers/dates, refusing values Excel cannot represent without losing digits.
+ * What a spreadsheet keeps as a real number, date or yes/no beside the cell's text. The text is
+ * always what the cell shows; `typed` carries the exact value and the spreadsheet number format
+ * that reproduces the text, so Excel cells read the same and still sort and sum.
  */
-export type RecordsExportCell =
-  | null
-  | Readonly<{
-      type: "text" | "decimal_number" | "date" | "date_time";
-      value: string;
-    }>
-  | Readonly<{ type: "whole_number"; value: number }>
-  | Readonly<{ type: "yes_no"; value: boolean }>
-  | Readonly<{ type: "money"; value: Readonly<{ amount: string; currency: string }> }>;
+export type RecordsExportTyped =
+  | Readonly<{ kind: "number"; amount: string; format: string }>
+  | Readonly<{ kind: "date"; iso: string; format: string }>
+  | Readonly<{ kind: "yes_no"; value: boolean; words: boolean }>;
+
+/**
+ * One value already projected by the export authority, as text exactly as the grid shows it (or
+ * as stored, in raw mode). Links enter only as permitted titles (text), never as link objects.
+ * Null is empty. Only the Excel encoder converts `typed` values to spreadsheet numbers/dates,
+ * refusing values Excel cannot represent without losing digits.
+ */
+export type RecordsExportCell = null | Readonly<{ text: string; typed?: RecordsExportTyped }>;
 
 export type RecordsExportPage = readonly (readonly RecordsExportCell[])[];
 
@@ -46,27 +47,29 @@ const csvText = (value: string): string => csvQuote(spreadsheetText(value));
 
 const validateCell = (cell: RecordsExportCell): void => {
   if (cell === null) return;
-  // Record types outside the export contract must not bypass text neutralisation or be coerced.
-  switch (cell.type) {
-    case "text":
-    case "decimal_number":
+  if (typeof cell.text !== "string") throw exportError("cell_invalid");
+  const typed = cell.typed;
+  if (typed === undefined) return;
+  switch (typed.kind) {
+    case "number":
+      if (parseExactDecimal(typed.amount) === undefined || typeof typed.format !== "string")
+        throw exportError("cell_invalid");
+      return;
     case "date":
-    case "date_time":
-    case "whole_number":
+      if (Number.isNaN(Date.parse(typed.iso)) || typeof typed.format !== "string")
+        throw exportError("cell_invalid");
+      return;
     case "yes_no":
-    case "money":
-      break;
+      if (typeof typed.value !== "boolean") throw exportError("cell_invalid");
+      return;
     default:
       throw exportError("cell_type_invalid");
   }
-  const result = moduleFieldValueSchemas[cell.type].safeParse(cell.value);
-  if (!result.success) throw exportError("cell_invalid", result.error);
 };
 
 /**
  * UTF-8 with one BOM, comma delimiter, every cell quoted, doubled quotes and CRLF record ends.
- * Only text receives a formula prefix: typed negative numbers keep their exact decimal value.
- * No object coercion is allowed, so an unresolved link cannot disclose its identifiers by accident.
+ * Only untyped text receives a formula prefix: typed negative numbers keep their sign.
  */
 export const recordsCsvFormat = (): RecordsExportFormat => {
   const encoder = new TextEncoder();
@@ -81,10 +84,8 @@ export const recordsCsvFormat = (): RecordsExportFormat => {
         `${cells
           .map((cell) => {
             if (cell === null) return csvQuote("");
-            // Code first: a leading "-" amount would make spreadsheets parse the cell as a formula.
-            if (cell.type === "money")
-              return csvQuote(`${cell.value.currency} ${cell.value.amount}`);
-            return cell.type === "text" ? csvText(cell.value) : csvQuote(String(cell.value));
+            // Typed numbers, dates and yes/no are never formulas, so a negative amount keeps its sign.
+            return cell.typed === undefined ? csvText(cell.text) : csvQuote(cell.text);
           })
           .join(",")}\r\n`,
       );
@@ -94,28 +95,14 @@ export const recordsCsvFormat = (): RecordsExportFormat => {
   });
 };
 
-/** Authorised column metadata, in the same order as labels/cells; widths are grid CSS pixels. */
-export type RecordsXlsxColumn = Readonly<
-  { width: number } & (
-    | { type: "text" | "whole_number" | "date" | "date_time" | "yes_no" }
-    // Fields without declared precision explicitly preserve the stored amount's scale.
-    | { type: "decimal_number" | "money"; scale: number | "value" }
-  )
->;
-
 const excelNumberText = new Intl.NumberFormat("en", {
   useGrouping: false,
   maximumSignificantDigits: 15,
 });
 
-/** The minor digits of a currency (2 for USD, 0 for JPY), as Intl formats its amounts. */
-const currencyScale = (currency: string): number =>
-  new Intl.NumberFormat("en", { style: "currency", currency }).resolvedOptions()
-    .maximumFractionDigits ?? 0;
-
-const excelNumber = (text: string, scale: number): number => {
+const excelNumber = (text: string): number => {
   const exact = parseExactDecimal(text);
-  if (exact === undefined || exact.scale > scale) throw exportError("number_scale_invalid");
+  if (exact === undefined) throw exportError("cell_invalid");
   const number = Number(text);
   // Excel supports 15 significant decimal digits. Never silently round an exact platform value.
   const represented = Number.isFinite(number)
@@ -128,9 +115,9 @@ const excelNumber = (text: string, scale: number): number => {
   return number;
 };
 
-const excelDate = (value: string, type: "date" | "date_time", timeZone: string): Date => {
+const excelDate = (value: string, timeZone: string): Date => {
   const wall =
-    type === "date"
+    value.length === 10
       ? Temporal.PlainDate.from(value).toPlainDateTime()
       : Temporal.Instant.from(value).toZonedDateTimeISO(timeZone).toPlainDateTime();
   if (wall.year < 1900 || wall.year > 9999 || wall.microsecond !== 0 || wall.nanosecond !== 0)
@@ -157,7 +144,8 @@ const excelText = (value: string): string => {
  */
 export const recordsXlsxFormat = async (
   options: Readonly<{
-    columns: readonly RecordsXlsxColumn[];
+    /** Column widths in grid CSS pixels, in the order of the labels. */
+    widths: readonly number[];
     timeZone: string;
   }>,
 ): Promise<RecordsExportFormat> => {
@@ -282,39 +270,18 @@ export const recordsXlsxFormat = async (
     extension: "xlsx",
     header(labels: readonly string[]) {
       if (workbook !== undefined) throw exportError("excel_header_repeated");
-      if (options.columns.length !== labels.length) throw exportError("columns_invalid");
+      if (options.widths.length !== labels.length) throw exportError("columns_invalid");
       Temporal.Instant.fromEpochMilliseconds(0).toZonedDateTimeISO(options.timeZone);
       const headings = labels.map(excelText);
-      for (const column of options.columns) {
-        if (!Number.isFinite(column.width) || column.width < 1 || column.width > 1_790)
+      for (const width of options.widths)
+        if (!Number.isFinite(width) || width < 1 || width > 1_790)
           throw exportError("column_width_invalid");
-        if (
-          ![
-            "text",
-            "whole_number",
-            "decimal_number",
-            "money",
-            "date",
-            "date_time",
-            "yes_no",
-          ].includes(column.type)
-        )
-          throw exportError("column_type_invalid");
-        if (
-          (column.type === "decimal_number" || column.type === "money") &&
-          column.scale !== "value" &&
-          (!Number.isInteger(column.scale) || column.scale < 0 || column.scale > 12)
-        )
-          throw exportError("number_scale_invalid");
-      }
       workbook = new ExportWorkbook({ stream: output, useSharedStrings: false, useStyles: true });
       workbook.archive.on("error", fail);
       sheet = workbook.addWorksheet("Records", {
         views: [{ state: "frozen", ySplit: 1 }],
       });
-      sheet.columns = options.columns.map((column) => ({
-        width: Math.max(1, (column.width - 5) / 7),
-      }));
+      sheet.columns = options.widths.map((width) => ({ width: Math.max(1, (width - 5) / 7) }));
       return chunks(async () => {
         sheet!.addRow(headings).commit();
         await rowDrained();
@@ -322,50 +289,31 @@ export const recordsXlsxFormat = async (
     },
     row(cells: readonly RecordsExportCell[]) {
       return chunks(async () => {
-        if (sheet === undefined || cells.length !== options.columns.length)
+        if (sheet === undefined || cells.length !== options.widths.length)
           throw exportError("row_width_invalid");
         const row = sheet.addRow([]);
         cells.forEach((cell, index) => {
           if (cell === null) return;
-          const column = options.columns[index]!;
-          if (cell.type !== column.type) throw exportError("column_cell_type_mismatch");
           const target = row.getCell(index + 1);
-          switch (cell.type) {
-            case "text":
-              target.value = excelText(cell.value);
-              break;
-            case "yes_no":
-              target.value = cell.value;
-              break;
-            case "whole_number":
-              target.value = excelNumber(String(cell.value), 0);
-              target.numFmt = "0";
+          const typed = cell.typed;
+          if (typed === undefined) {
+            target.value = excelText(cell.text);
+            return;
+          }
+          switch (typed.kind) {
+            case "number":
+              target.value = excelNumber(typed.amount);
+              target.numFmt = typed.format;
               break;
             case "date":
-            case "date_time":
-              target.value = excelDate(cell.value, cell.type, options.timeZone);
-              target.numFmt = cell.type === "date" ? "yyyy-mm-dd" : "yyyy-mm-dd hh:mm:ss.000";
+              target.value = excelDate(typed.iso, options.timeZone);
+              target.numFmt = typed.format;
               break;
-            case "decimal_number":
-            case "money": {
-              if (column.type !== "decimal_number" && column.type !== "money")
-                throw exportError("column_cell_type_mismatch");
-              const amount = cell.type === "money" ? cell.value.amount : cell.value;
-              // Stored amounts are canonical, so `10.50` arrives as `10.5`: money keeps at least
-              // its currency's minor digits, as the grid shows it.
-              const scale =
-                column.scale === "value"
-                  ? Math.max(
-                      parseExactDecimal(amount)!.scale,
-                      cell.type === "money" ? currencyScale(cell.value.currency) : 0,
-                    )
-                  : column.scale;
-              target.value = excelNumber(amount, scale);
-              const numberFormat = scale === 0 ? "0" : `0.${"0".repeat(scale)}`;
-              target.numFmt =
-                cell.type === "money" ? `"${cell.value.currency}" ${numberFormat}` : numberFormat;
+            case "yes_no":
+              // Words are shown by the number format, so the cell still sorts and counts.
+              target.value = typed.words ? (typed.value ? 1 : 0) : typed.value;
+              if (typed.words) target.numFmt = '"Yes";"Yes";"No"';
               break;
-            }
           }
         });
         // Preserve a record whose permitted cells are all blank; ExcelJS skips valueless rows.

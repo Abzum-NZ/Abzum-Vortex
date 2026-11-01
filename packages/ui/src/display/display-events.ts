@@ -10,6 +10,7 @@ import type {
   GridLayout,
   GridViewCommand,
   RecordsTableExportFormat,
+  RecordsTableExportValues,
 } from "@vortex/platform/schema";
 
 /** The table's gestures over its explicit selection or sealed matching scope. */
@@ -30,6 +31,7 @@ type TableSelectionEvent =
       event: "export_requested";
       scope: "selected" | "view" | "matching";
       format: RecordsTableExportFormat;
+      values: RecordsTableExportValues;
     }>
   /** Stops the export in progress; no file is saved. */
   | Readonly<{ event: "export_cancelled" }>;

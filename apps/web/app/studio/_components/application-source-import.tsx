@@ -1,5 +1,11 @@
 "use client";
-import { formatBytes } from "@vortex/ui/display/date-format";
+import {
+  formatBytes,
+  canonicalJson,
+  sameId,
+  type ApplicationSourceDocument,
+  type DefinitionValidationResult,
+} from "@vortex/platform/schema";
 import { Button } from "@vortex/ui/components/button";
 import { StudioInspectorGroup, StudioSourceView } from "@vortex/ui/studio";
 import { Icon } from "@vortex/ui";
@@ -25,12 +31,6 @@ import {
 import { useConfirm } from "@vortex/ui/components/confirm-dialog";
 
 import { useEffect, useRef, useState } from "react";
-import {
-  canonicalJson,
-  sameId,
-  type ApplicationSourceDocument,
-  type DefinitionValidationResult,
-} from "@vortex/platform/schema";
 import { reviewStudioApplicationSource } from "../actions";
 import {
   maximumApplicationSourceImportBytes,

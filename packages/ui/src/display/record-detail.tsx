@@ -1,12 +1,12 @@
 import type { ReactElement } from "react";
 import { NavigationLink } from "../routing/navigation-link";
-import { readRecordDetailContract } from "@vortex/platform/schema";
+import { readRecordDetailContract, cellValueToText } from "@vortex/platform/schema";
 import { DefinitionRenderError } from "../definition-error";
 import { Badge } from "../components/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/card";
 import { Separator } from "../components/separator";
 import { cn } from "../lib/utils";
-import { cellValueToText, DisplayCellView } from "./cell";
+import { DisplayCellView } from "./cell";
 import { addLabelOf } from "./add-label";
 import { DisplayHeader, DisplayRefreshButton, RowActionControl } from "./controls";
 import { resolveDisplayContext, rowActionEventIdOf, type DisplayRenderProps } from "./context";

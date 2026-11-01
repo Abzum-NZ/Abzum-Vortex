@@ -2,8 +2,10 @@ import {
   featureAvailable,
   featureEnabled,
   featureNotPossible,
+  factsOf,
   optionalNumber,
   requiredChoice,
+  requiredFieldList,
   requiredItems,
   type RecordsTableFeatureDefinition,
   type GridFeatureRefusal,
@@ -18,6 +20,20 @@ export type RecordsTableExportFormat = (typeof recordsTableExportFormats)[number
 export const recordsTableExportFormatLabels: Readonly<Record<RecordsTableExportFormat, string>> = {
   csv: "CSV",
   xlsx: "Excel",
+};
+
+/**
+ * What a file column holds. "shown" is the value exactly as the table shows it: the choice label,
+ * the date in the viewer's locale and time zone, money with its currency, a number as grouped.
+ * "raw" is the stored value: the choice key, the ISO date, the canonical number.
+ */
+export const recordsTableExportValues = ["shown", "raw"] as const;
+export type RecordsTableExportValues = (typeof recordsTableExportValues)[number];
+
+/** The business name of each way of exporting values, as the export menu shows it. */
+export const recordsTableExportValuesLabels: Readonly<Record<RecordsTableExportValues, string>> = {
+  shown: "As shown",
+  raw: "Raw values",
 };
 
 /**
@@ -38,10 +54,12 @@ export const RECORDS_TABLE_EXPORT_MAXIMUM_ROWS = 100_000;
  * Export: people download the selected rows, the current view or every matching record as a file
  * of the columns they see. `formats` are the files offered and `maxRows` the most records one
  * export holds; a selection above it is refused, never truncated. `maxRows` is absent until the
- * builder sets it, which the check refuses.
+ * builder sets it, which the check refuses. A file holds each column as the table shows it;
+ * `rawColumns` are the columns whose file holds the stored value instead.
  */
 export type RecordsTableExportSettings = Readonly<{
   formats: readonly RecordsTableExportFormat[];
+  rawColumns: readonly string[];
   maxRows?: number;
 }>;
 
@@ -67,6 +85,10 @@ const featureSettings = {
             value: "csv",
           },
         ],
+      },
+      raw_columns: {
+        kind: "list",
+        items: [],
       },
     },
   },
@@ -117,6 +139,26 @@ const featureSettings = {
       },
     },
     {
+      kind: "list",
+      key: "raw_columns",
+      label: "Raw value columns",
+      help: "Columns whose file holds the stored value (choice key, ISO date, canonical number) instead of what the table shows",
+      required: false,
+      minimumItems: 0,
+      maximumItems: 200,
+      item: {
+        kind: "field_reference",
+        key: "field",
+        label: "Field",
+        help: "A column of the table",
+        required: true,
+      },
+      defaultValue: {
+        kind: "list",
+        items: [],
+      },
+    },
+    {
       kind: "number",
       key: "max_rows",
       label: "Most records in one export",
@@ -158,6 +200,7 @@ export const recordsTableExportFeature: RecordsTableFeatureDefinition<
       formats: requiredItems(group["formats"], "formats").map((item, index) =>
         requiredChoice(item, recordsTableExportFormats, `formats[${index}]`),
       ),
+      rawColumns: requiredFieldList(group["raw_columns"], "raw_columns"),
       ...(maxRows === undefined ? {} : { maxRows }),
     };
   },
@@ -184,6 +227,15 @@ export const recordsTableExportFeature: RecordsTableFeatureDefinition<
         `Export needs the export action on ${facts.recordTypeLabel || "the record type"}`,
       );
     if (!state.enabled) return featureAvailable;
+    for (const field of state.rawColumns)
+      if (
+        factsOf(facts, field) === undefined ||
+        !facts.columnFieldIds.some((column) => column.toLowerCase() === field.toLowerCase())
+      )
+        return featureNotPossible(
+          featureRefusal,
+          "Raw value columns need a field the table shows as a column.",
+        );
     if (
       state.formats.length === 0 ||
       state.formats.length > recordsTableExportFormats.length ||

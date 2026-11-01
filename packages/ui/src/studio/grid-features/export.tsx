@@ -2,29 +2,36 @@
 
 import { useId, useState, type ReactElement } from "react";
 import {
+  formatCount,
   RECORDS_TABLE_EXPORT_MAXIMUM_ROWS,
   recordsTableExportFormatLabels,
   recordsTableExportFormats,
+  type RecordsTableQueryFacts,
   type SourceBlockPropertyValueContract,
 } from "@vortex/platform/schema";
-import { formatCount } from "../../display/date-format";
 import { Input } from "../../components/input";
 import { Label } from "../../components/label";
 import { Checkbox } from "../../components/checkbox";
+import { StudioGridFieldPicker } from "./field-picker";
 
 type Group = Extract<SourceBlockPropertyValueContract, { kind: "group" }>;
 
 /**
- * The Export feature's two authored settings: file formats and the most records one
- * export holds. A value the check refuses is kept as typed, so the sentence beside the switch
+ * The Export feature's authored settings: file formats, the columns whose file holds the stored
+ * value instead of what the table shows, and the most records one export holds. A value the check refuses is kept as typed, so the sentence beside the switch
  * explains it instead of the field jumping back.
  */
 export function StudioExportEditor({
   value,
+  facts,
+  columns,
   disabled,
   onChange,
 }: Readonly<{
   value: Group;
+  facts: RecordsTableQueryFacts;
+  /** The fields the table shows as columns, as the draft names them; only these can be exported. */
+  columns: readonly string[];
   disabled: boolean;
   onChange: (next: Group) => void;
 }>): ReactElement {
@@ -32,6 +39,11 @@ export function StudioExportEditor({
   const held = value.properties["max_rows"];
   const formats = value.properties["formats"];
   const selected = formats?.kind === "list" ? formats.items : [];
+  const rawHeld = value.properties["raw_columns"];
+  const rawChosen =
+    rawHeld?.kind === "list"
+      ? rawHeld.items.flatMap((item) => (item.kind === "field_reference" ? [item.field] : []))
+      : [];
   const heldText = held?.kind === "number" ? String(held.value) : "";
   const [typed, setTyped] = useState(heldText);
   // Undo, redo or a reload that changes the stored limit shows it; typing keeps what was typed.
@@ -69,6 +81,31 @@ export function StudioExportEditor({
             </div>
           );
         })}
+      </fieldset>
+      <fieldset className="space-y-2" disabled={disabled}>
+        <legend className="text-sm font-medium">Raw value columns</legend>
+        <p className="text-xs text-muted-foreground">
+          Every column downloads as the table shows it. Switch a column on to download its stored
+          value instead: the choice key, the ISO date, the canonical number.
+        </p>
+        <StudioGridFieldPicker
+          fields={facts.fields.filter((field) => columns.includes(field.field))}
+          chosen={rawChosen}
+          disabled={disabled}
+          reason={() => undefined}
+          onChange={(fields) =>
+            onChange({
+              kind: "group",
+              properties: {
+                ...value.properties,
+                raw_columns: {
+                  kind: "list",
+                  items: fields.map((field) => ({ kind: "field_reference" as const, field })),
+                },
+              },
+            })
+          }
+        />
       </fieldset>
       <Label htmlFor={`${id}-max-rows`}>Most records in one export</Label>
       <Input

@@ -210,6 +210,7 @@ const studioGridFeatures: readonly StudioGridFeature[] = [
     // Export starts as CSV with the authored default row limit.
     start: {
       formats: { kind: "list", items: [{ kind: "choice", value: "csv" }] },
+      raw_columns: { kind: "list", items: [] },
       max_rows: { kind: "number", value: 10000 },
     },
   },

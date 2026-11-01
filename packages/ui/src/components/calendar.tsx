@@ -4,7 +4,7 @@ import * as React from "react";
 import { DayPicker, getDefaultClassNames, type DayButton } from "react-day-picker";
 import { Icon } from "../icons/icon";
 import { cn } from "../lib/utils";
-import { formatIsoDate } from "../display/date-format";
+import { formatIsoDate } from "@vortex/platform/schema";
 import { useDateFormatOptions } from "../display/date-format-context";
 
 import { Button, buttonVariants } from "./button";

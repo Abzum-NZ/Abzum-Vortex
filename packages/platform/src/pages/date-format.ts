@@ -197,3 +197,54 @@ export function formatIsoDateTitle(
 ): string | undefined {
   return isCalendarDate(iso) ? undefined : formatIsoDate(iso, options, "full");
 }
+
+/** Spreadsheet number-format characters that need no quoting between date and time codes. */
+const EXCEL_PLAIN_LITERAL = /^[ :/-]+$/;
+const ASCII_DIGITS = /^\d+$/;
+
+/** Text a spreadsheet number format shows as it is. */
+const excelLiteral = (text: string): string =>
+  EXCEL_PLAIN_LITERAL.test(text) ? text : `"${text.replaceAll('"', "")}"`;
+
+/**
+ * The spreadsheet number-format code that displays a date or timestamp the way `formatIsoDate`
+ * does in the same locale and time zone (for example `d mmm yyyy, hh:mm`), built from the same
+ * Intl parts so the file and the grid cannot drift apart. A spreadsheet writes month names in its
+ * own language, so a month the grid writes differently (`Sept`, `sept.`) is carried as the text
+ * the grid shows; the cell still holds the real date, so it sorts and filters as a date.
+ */
+export function isoDateExcelFormat(iso: string, options: DateFormatOptions = {}): string {
+  const timestamp = Date.parse(iso);
+  if (Number.isNaN(timestamp)) throw new Error("A date value for a spreadsheet must be readable");
+  const calendarDate = isCalendarDate(iso);
+  const timeZone = calendarDate ? "UTC" : (options.timeZone ?? DEFAULT_TIME_ZONE);
+  const instant = new Date(timestamp);
+  const parts = formatterFor(
+    calendarDate ? DATE_PARTS : DATE_TIME_PARTS,
+    options.locale ?? DEFAULT_LOCALE,
+    timeZone,
+  ).formatToParts(instant);
+  const spreadsheetMonth = formatterFor(SHORT_MONTH_PARTS, DEFAULT_LOCALE, timeZone).format(
+    instant,
+  );
+  return parts
+    .map((part) => {
+      switch (part.type) {
+        case "day":
+          return ASCII_DIGITS.test(part.value) ? "d" : excelLiteral(part.value);
+        case "month":
+          return part.value === spreadsheetMonth ? "mmm" : excelLiteral(part.value);
+        case "year":
+          return ASCII_DIGITS.test(part.value) ? "yyyy" : excelLiteral(part.value);
+        case "hour":
+          return ASCII_DIGITS.test(part.value) ? "hh" : excelLiteral(part.value);
+        case "minute":
+          return ASCII_DIGITS.test(part.value) ? "mm" : excelLiteral(part.value);
+        case "literal":
+          return excelLiteral(part.value);
+        default:
+          throw new Error(`A date part has no spreadsheet code: ${part.type}`);
+      }
+    })
+    .join("");
+}

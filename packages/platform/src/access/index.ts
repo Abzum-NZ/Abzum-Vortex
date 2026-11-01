@@ -37,6 +37,7 @@ export {
   readCurrentOrganizationDefaultApplicationAfterAuthorization,
   readCurrentOrganizationRuntimeSettingsAfterAuthorization,
   readCurrentOrganizationAppStoreAddressAfterAuthorization,
+  readViewerPresentationAfterAuthorization,
 } from "./organization-runtime-settings-administration";
 export { createOrganizationLocalAdministrationService } from "./organization-local-administration-access";
 export {

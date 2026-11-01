@@ -1,6 +1,14 @@
 "use client";
 
 import {
+  cellValueToText,
+  describeFailure,
+  recordsTableContractOrLog,
+  type BoardColumnSelector,
+  type PipelineStageTone,
+  formatLocaleNumber,
+} from "@vortex/platform/schema";
+import {
   lazy,
   Suspense,
   useEffect,
@@ -10,12 +18,6 @@ import {
   type ReactElement,
   type RefObject,
 } from "react";
-import {
-  describeFailure,
-  recordsTableContractOrLog,
-  type BoardColumnSelector,
-  type PipelineStageTone,
-} from "@vortex/platform/schema";
 import { Badge } from "../components/badge";
 import { Alert, AlertDescription } from "../components/alert";
 import { Button } from "../components/button";
@@ -30,8 +32,7 @@ import {
   DropdownMenuTrigger,
 } from "../components/dropdown-menu";
 import { Icon } from "../icons/icon";
-import { cellValueToText, DisplayCellView } from "./cell";
-import { formatLocaleNumber } from "./date-format";
+import { DisplayCellView } from "./cell";
 import { DisplayHeader } from "./controls";
 import { resolveDisplayContext, type DisplayRenderProps } from "./context";
 import { DisplayStateContainer } from "./display-state-container";
