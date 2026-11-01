@@ -16,7 +16,6 @@ const protectedReadModelKeys = [
   "organization_runtime_settings",
   "tenants",
   "tenant_administrators",
-  "installed_applications",
   "application_role_templates",
   "activity_entry",
   "application_store_entries",
@@ -46,6 +45,6 @@ export const boundedProtectedReadModelSortKeys: Partial<
   organization_runtime_settings: ["record_id", "language"],
   application_role_templates: ["record_id", "source_role_id", "key", "label"],
   activity_entry: ["occurred_at"],
-  application_store_entries: ["record_id", "key", "name"],
+  application_store_entries: ["record_id", "key", "name", "release_revision"],
   connection_instances: ["record_id", "destination_key", "state"],
 };

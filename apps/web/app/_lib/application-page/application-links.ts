@@ -4,9 +4,9 @@ import type { ApplicationLinkRow, ApplicationLinkTarget } from "@vortex/platform
 import type { ApplicationSurfaceCapabilities } from "@vortex/platform/server";
 import type { OrganizationId } from "@vortex/platform/schema";
 import type { IdentitySession } from "@vortex/platform/schema";
+import { appStoreApplicationHref } from "../application-release-adoption";
 import { applicationPageAddressPath } from "../address-paths";
-import { pageSubjectParameter } from "./placement-helpers";
-import { applicationsPageKey, loadOrganizationAppStoreKey } from "../applications-page";
+import { loadOrganizationAppStoreKey } from "../applications-page";
 
 /**
  * What the viewer's application surfaces may offer: the one capability decision, which applications
@@ -23,9 +23,7 @@ export type ApplicationSurfaces = Readonly<{
   ) => string | undefined;
 }>;
 
-/** The App Store page that shows one application and offers its Install or upgrade dialog. */
-const appStoreApplicationPageKey = "app_store_application";
-
+/** What a link resolution needs: the organisation's address and the applications the viewer may open. */
 type ApplicationSurfacesAddress = Readonly<{
   tenantShortName: string;
   organizationShortName: string;
@@ -94,12 +92,12 @@ export const loadApplicationSurfaces = async (
             capabilities.mayInstall &&
             application.status === "update_available" &&
             appStoreKey !== undefined
-            ? applicationPageAddressPath(
+            ? appStoreApplicationHref(
                 address.tenantShortName,
                 address.organizationShortName,
                 appStoreKey,
-                appStoreApplicationPageKey,
-              ) + `?${pageSubjectParameter}=${encodeURIComponent(application.applicationRootId)}`
+                application.applicationRootId,
+              )
             : undefined;
       }
     },

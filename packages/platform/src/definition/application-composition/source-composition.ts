@@ -167,10 +167,9 @@ const sourceItemVortexSchema = z
     block: sourceProvenanceUnchanged(sourcePlatformBlockReferenceSchema),
     view_permission: sourceProvenanceTarget(namespacedKeySchema.optional(), ["viewPermissionKey"]),
     use_permission: sourceProvenanceTarget(namespacedKeySchema.optional(), ["usePermissionKey"]),
-    application_audience: sourceProvenanceTarget(
-      applicationAudienceSchema.optional(),
-      ["applicationAudience"],
-    ),
+    application_audience: sourceProvenanceTarget(applicationAudienceSchema.optional(), [
+      "applicationAudience",
+    ]),
     visibility_condition: sourceProvenanceUnchanged(sourceQualifiedConditionSchema.optional()),
     required_condition: sourceProvenanceUnchanged(sourceQualifiedConditionSchema.optional()),
     read_only_condition: sourceProvenanceUnchanged(sourceQualifiedConditionSchema.optional()),

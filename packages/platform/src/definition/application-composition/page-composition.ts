@@ -1,8 +1,5 @@
 import { z } from "zod";
-import {
-  applicationAudienceSchema,
-  type ApplicationAudience,
-} from "../../catalogue/application-link";
+import { applicationAudienceSchema } from "../../catalogue/application-link";
 import { blockPaletteGroupSchema } from "../../catalogue/catalogues";
 import { labelSchema } from "../../catalogue/common";
 import {

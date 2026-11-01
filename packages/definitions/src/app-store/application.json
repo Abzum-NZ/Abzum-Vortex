@@ -231,6 +231,36 @@
                     "id": "catalogue_text",
                     "text": "Applications",
                     "level": "two",
+                    "actions": [
+                      {
+                        "type": "platform.renderer.button",
+                        "props": {
+                          "id": "catalogue_new_application",
+                          "label": "New application",
+                          "action_kind": "action",
+                          "link": "studio_new_application",
+                          "vortex": {
+                            "block": {
+                              "block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b",
+                              "release_version": "1.0.0"
+                            },
+                            "application_audience": "builders",
+                            "responsive": {
+                              "desktop": {
+                                "visible": true,
+                                "width": {
+                                  "kind": "fill"
+                                },
+                                "height": {
+                                  "kind": "content"
+                                }
+                              }
+                            }
+                          },
+                          "variant": "primary"
+                        }
+                      }
+                    ],
                     "vortex": {
                       "block": {
                         "block_id": "78bfeead-a38d-424a-81b9-7cd553b92bcc",

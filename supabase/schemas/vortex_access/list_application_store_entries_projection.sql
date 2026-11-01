@@ -1,8 +1,9 @@
 -- The organisation's application catalogue: every Application it has, ordinary or a platform
--- system application, with its latest published version and the version installed now, if any.
--- The App Store's Applications page and the Landing Zone's application tiles both read this one
--- projection, so the two surfaces cannot disagree about which applications exist or which
--- versions are installed and waiting.
+-- system application, with its latest published version, the version installed now if any, and
+-- whether it is the organisation's default application. The App Store's Applications page, the
+-- Landing Zone's application tiles and organisation administration's installed applications all
+-- read this one projection, so the surfaces cannot disagree about which applications exist or
+-- which versions are installed and waiting.
 create or replace function vortex_access.list_application_store_entries_projection(
   p_record_ids uuid[], p_sort_key text, p_direction text,
   p_after jsonb, p_limit integer, p_predicate jsonb
@@ -22,11 +23,12 @@ declare
   sort_sql text;
   keyset_sql text := '';
   after_text text;
+  after_revision bigint;
   after_record_id uuid;
   comparison text;
   predicate_plan jsonb;
 begin
-  if p_sort_key not in ('record_id', 'key', 'name')
+  if p_sort_key not in ('record_id', 'key', 'name', 'release_revision')
     or p_direction not in ('ascending', 'descending')
     or p_sort_key is null or p_direction is null
     or (p_limit is not null and p_limit < 1)
@@ -49,11 +51,14 @@ begin
     begin
       after_record_id := (p_after ->> 'recordId')::uuid;
       after_text := p_after -> 'sortKey' ->> 0;
-    exception when invalid_text_representation then
+      if p_sort_key = 'release_revision' then
+        after_revision := after_text::bigint;
+      end if;
+    exception when invalid_text_representation or numeric_value_out_of_range then
       raise exception using errcode = '22023',
         message = 'Application catalogue projection cursor is invalid';
     end;
-    if p_sort_key = 'key' and after_text is null then
+    if p_sort_key in ('key', 'release_revision') and after_text is null then
       raise exception using errcode = '22023',
         message = 'Application catalogue projection cursor is invalid';
     end if;
@@ -62,8 +67,10 @@ begin
   predicate_plan := vortex_record.compile_projection_predicate_internal(
     p_predicate,
     $declared${
-      "key": {"sql": "root.key", "database": "text", "search": true},
-      "name": {"sql": "(latest.application_address ->> 'name')", "database": "text", "filter": true, "search": true}
+      "key": {"sql": "root.key", "database": "text", "filter": true, "search": true},
+      "name": {"sql": "(latest.application_address ->> 'name')", "database": "text", "filter": true, "search": true},
+      "release_revision": {"sql": "installed.release_revision", "database": "integer", "filter": true},
+      "is_default": {"sql": "(root.root_id is not distinct from (select default_settings.default_application_root_id from vortex_identity.organization_runtime_settings as default_settings where default_settings.organization_id = root.organization_id))", "database": "boolean", "filter": true}
     }$declared$::jsonb,
     6
   );
@@ -89,6 +96,7 @@ begin
   sort_column := case p_sort_key
     when 'key' then 'root.key'
     when 'name' then '(latest.application_address ->> ''name'')'
+    when 'release_revision' then 'installed.release_revision'
     else 'root.root_id' end;
   comparison := case when p_direction = 'ascending' then '>' else '<' end;
   if p_after is not null then
@@ -108,6 +116,10 @@ begin
         case when p_direction = 'descending'
           then ' or (latest.application_address ->> ''name'') is null'
           else '' end);
+    elsif p_sort_key = 'release_revision' then
+      keyset_sql := pg_catalog.format(
+        ' and (installed.release_revision, root.root_id) %s ($3::bigint, $4)',
+        comparison);
     else
       keyset_sql := pg_catalog.format(
         ' and (root.key collate "C", root.root_id) %s ($3 collate "C", $4)', comparison);
@@ -152,6 +164,11 @@ begin
           else 'updating' end,
         'records_processed', coalesce((backfill.checkpoint ->> 'processedCount')::bigint, 0),
         'installed_version', coalesce(installed.release_version, 'Not installed'),
+        'release_revision', installed.release_revision,
+        'is_default', root.root_id is not distinct from (
+          select default_settings.default_application_root_id
+          from vortex_identity.organization_runtime_settings as default_settings
+          where default_settings.organization_id = root.organization_id),
         'status', case
           when installed.release_revision is null then 'available'
           when installed.release_revision < root.current_release_revision then 'update_available'
@@ -214,7 +231,7 @@ $function$;
 
 comment on function vortex_access.list_application_store_entries_projection(
   uuid[], text, text, jsonb, integer, jsonb
-) is 'The organisation''s application catalogue: every Application it has, ordinary or platform system, the latest version and its release note, and the version installed now, if any.';
+) is 'The organisation''s application catalogue: every Application it has, ordinary or platform system, the latest version and its release note, the version installed now if any, whether it is the default application, and the release revision installed.';
 
 revoke all on function vortex_access.list_application_store_entries_projection(
   uuid[], text, text, jsonb, integer, jsonb

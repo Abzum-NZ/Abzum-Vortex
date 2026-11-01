@@ -1,10 +1,18 @@
+-- FIX-APP-SURFACES-LINKS (#3862): one applications read.
+--
+-- The App Store's Applications page, the Landing Zone's application tiles and organisation
+-- administration's installed applications all read this one projection, so no two surfaces can
+-- disagree about which applications an organisation has or which versions are installed and
+-- waiting. It gains the revision installed now (absent while nothing is installed) and whether the
+-- application is the organisation's default one, which is what organisation administration lists,
+-- and it sorts by the installed revision as the retired read did.
+--
+-- The retired installed-applications projection, its registration and its access to the record
+-- adapter go in the same change: organisation administration's record type now reads this
+-- projection, filtered to the applications that are installed. Stored storage contracts of older
+-- releases keep their read-model key as history; the live registry no longer names it.
 set role vortex_owner;
 
--- The organisation's application catalogue: every Application it has, ordinary or a platform
--- system application, with its latest published version and the version installed now, if any.
--- The App Store's Applications page and the Landing Zone's application tiles both read this one
--- projection, so the two surfaces cannot disagree about which applications exist or which
--- versions are installed and waiting.
 create or replace function vortex_access.list_application_store_entries_projection(
   p_record_ids uuid[], p_sort_key text, p_direction text,
   p_after jsonb, p_limit integer, p_predicate jsonb
@@ -24,11 +32,12 @@ declare
   sort_sql text;
   keyset_sql text := '';
   after_text text;
+  after_revision bigint;
   after_record_id uuid;
   comparison text;
   predicate_plan jsonb;
 begin
-  if p_sort_key not in ('record_id', 'key', 'name')
+  if p_sort_key not in ('record_id', 'key', 'name', 'release_revision')
     or p_direction not in ('ascending', 'descending')
     or p_sort_key is null or p_direction is null
     or (p_limit is not null and p_limit < 1)
@@ -51,11 +60,14 @@ begin
     begin
       after_record_id := (p_after ->> 'recordId')::uuid;
       after_text := p_after -> 'sortKey' ->> 0;
-    exception when invalid_text_representation then
+      if p_sort_key = 'release_revision' then
+        after_revision := after_text::bigint;
+      end if;
+    exception when invalid_text_representation or numeric_value_out_of_range then
       raise exception using errcode = '22023',
         message = 'Application catalogue projection cursor is invalid';
     end;
-    if p_sort_key = 'key' and after_text is null then
+    if p_sort_key in ('key', 'release_revision') and after_text is null then
       raise exception using errcode = '22023',
         message = 'Application catalogue projection cursor is invalid';
     end if;
@@ -64,8 +76,10 @@ begin
   predicate_plan := vortex_record.compile_projection_predicate_internal(
     p_predicate,
     $declared${
-      "key": {"sql": "root.key", "database": "text", "search": true},
-      "name": {"sql": "(latest.application_address ->> 'name')", "database": "text", "filter": true, "search": true}
+      "key": {"sql": "root.key", "database": "text", "filter": true, "search": true},
+      "name": {"sql": "(latest.application_address ->> 'name')", "database": "text", "filter": true, "search": true},
+      "release_revision": {"sql": "installed.release_revision", "database": "integer", "filter": true},
+      "is_default": {"sql": "(root.root_id is not distinct from (select default_settings.default_application_root_id from vortex_identity.organization_runtime_settings as default_settings where default_settings.organization_id = root.organization_id))", "database": "boolean", "filter": true}
     }$declared$::jsonb,
     6
   );
@@ -91,6 +105,7 @@ begin
   sort_column := case p_sort_key
     when 'key' then 'root.key'
     when 'name' then '(latest.application_address ->> ''name'')'
+    when 'release_revision' then 'installed.release_revision'
     else 'root.root_id' end;
   comparison := case when p_direction = 'ascending' then '>' else '<' end;
   if p_after is not null then
@@ -110,6 +125,10 @@ begin
         case when p_direction = 'descending'
           then ' or (latest.application_address ->> ''name'') is null'
           else '' end);
+    elsif p_sort_key = 'release_revision' then
+      keyset_sql := pg_catalog.format(
+        ' and (installed.release_revision, root.root_id) %s ($3::bigint, $4)',
+        comparison);
     else
       keyset_sql := pg_catalog.format(
         ' and (root.key collate "C", root.root_id) %s ($3 collate "C", $4)', comparison);
@@ -154,6 +173,11 @@ begin
           else 'updating' end,
         'records_processed', coalesce((backfill.checkpoint ->> 'processedCount')::bigint, 0),
         'installed_version', coalesce(installed.release_version, 'Not installed'),
+        'release_revision', installed.release_revision,
+        'is_default', root.root_id is not distinct from (
+          select default_settings.default_application_root_id
+          from vortex_identity.organization_runtime_settings as default_settings
+          where default_settings.organization_id = root.organization_id),
         'status', case
           when installed.release_revision is null then 'available'
           when installed.release_revision < root.current_release_revision then 'update_available'
@@ -216,7 +240,7 @@ $function$;
 
 comment on function vortex_access.list_application_store_entries_projection(
   uuid[], text, text, jsonb, integer, jsonb
-) is 'The organisation''s application catalogue: every Application it has, ordinary or platform system, the latest version and its release note, and the version installed now, if any.';
+) is 'The organisation''s application catalogue: every Application it has, ordinary or platform system, the latest version and its release note, the version installed now if any, whether it is the default application, and the release revision installed.';
 
 revoke all on function vortex_access.list_application_store_entries_projection(
   uuid[], text, text, jsonb, integer, jsonb
@@ -227,5 +251,26 @@ grant execute on function vortex_access.list_application_store_entries_projectio
 alter function vortex_access.list_application_store_entries_projection(
   uuid[], text, text, jsonb, integer, jsonb
 ) owner to vortex_owner;
+
+-- The retired installed-applications read: its function, its registration and the record
+-- adapter's access to it. No definition names the key any more.
+drop function if exists vortex_access.list_installed_applications_projection(
+  uuid[], text, text, jsonb, integer, jsonb
+);
+
+delete from vortex_record.protected_read_model_views
+where protected_read_model_key = 'installed_applications';
+
+alter table vortex_record.protected_read_model_views
+  drop constraint protected_read_model_views_protected_read_model_key_check;
+alter table vortex_record.protected_read_model_views
+  add constraint protected_read_model_views_protected_read_model_key_check
+  check (protected_read_model_key = any (array[
+    'people', 'organization_accounts', 'roles', 'groups', 'effective_assignments',
+    'tenant_structure', 'organization_invitations', 'organization_runtime_settings',
+    'permissions', 'role_activations', 'delegations', 'tenants',
+    'tenant_administrators', 'application_role_templates', 'activity_entry',
+    'application_store_entries'
+  ]));
 
 reset role;

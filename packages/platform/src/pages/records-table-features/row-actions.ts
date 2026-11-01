@@ -18,7 +18,6 @@ import { rowActionIdentity } from "../../definition/application-composition/reco
 import { projectNamedActionAvailability } from "./named-action-availability";
 
 type RowActions = NonNullable<RecordsTableFeatureProjection["rowActions"]>;
-type RowActionDeclaration = RowActions["actions"][number];
 type RowActionDecision = RowActions["availability"][number]["actions"][number];
 type RowActionInstallation = Readonly<{
   bindings: readonly ComponentFlowBinding[];

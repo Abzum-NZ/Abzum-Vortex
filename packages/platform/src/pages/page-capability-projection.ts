@@ -177,8 +177,7 @@ const projectItems = (
 export const projectPlacementSubtree = (
   item: unknown,
   states: PageCapabilityState["placements"],
-): Readonly<Record<string, unknown>> | undefined =>
-  projectItems([item], states, undefined)[0];
+): Readonly<Record<string, unknown>> | undefined => projectItems([item], states, undefined)[0];
 
 /** A breakpoint order keeping only the items the projection retained. */
 const filteredOrder = (order: unknown, items: readonly JsonObject[]): JsonObject => {

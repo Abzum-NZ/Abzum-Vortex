@@ -1,11 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type ReactElement } from "react";
-import {
-  isRecord,
-  type RecordsTableBulkRefusalReason,
-  type RecordsTableActionContract,
-} from "@vortex/platform/schema";
+import { isRecord, type RecordsTableBulkRefusalReason } from "@vortex/platform/schema";
 import { Button } from "../../components/button";
 import {
   DropdownMenu,
