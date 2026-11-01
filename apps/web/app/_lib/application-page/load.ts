@@ -10,6 +10,8 @@ import {
   type RecordLinkResolver,
   pageSubjectFieldIds,
   applyChoiceOptionGates,
+  applyOrganizationCurrency,
+  moneyFieldCurrencyMode,
   pageSubjectType,
   planChoiceOptionGates,
   type DateTimeZones,
@@ -414,6 +416,12 @@ const loadApplicationPageJoined = async (
   let needsDateTimeZones = false;
   for (const placement of allPlacements)
     if (fieldControl(placement) === "date_time") needsDateTimeZones = true;
+  // A money field in the organisation's currency mode shows that currency, resolved for the viewer
+  // here so the input reads the same `currency` setting a fixed currency gives it.
+  const needsOrganizationCurrency = allPlacements.some(
+    (placement) =>
+      moneyFieldCurrencyMode(placement, context.releaseSet.modules) === "organization_default",
+  );
   const choicePlan = planChoiceOptionGates(allPlacements, context);
   if (choicePlan === undefined) return { kind: "temporarily_unavailable" };
 
@@ -424,13 +432,15 @@ const loadApplicationPageJoined = async (
   const subjectId = recordIdSchema.safeParse(first(parameters[pageSubjectParameter]));
 
   let dateTimeZones: DateTimeZones = {};
+  let organizationCurrency: string | undefined;
   let allowedPermissions: ReadonlySet<string> = new Set();
-  if (needsDateTimeZones || choicePlan.permissions.size > 0) {
+  if (needsDateTimeZones || needsOrganizationCurrency || choicePlan.permissions.size > 0) {
     const authorized = await readFieldAccess({
       session,
       dependencies,
       selection,
       needsDateTimeZones,
+      needsOrganizationCurrency,
       choicePlan,
       choiceSubject:
         subjectType !== undefined && subjectId.success
@@ -441,7 +451,14 @@ const loadApplicationPageJoined = async (
     if (page.accessVersion !== authorized.value.accessVersion)
       return { kind: "temporarily_unavailable" };
     dateTimeZones = authorized.value.zones;
+    organizationCurrency = authorized.value.organizationCurrency;
     allowedPermissions = authorized.value.allowed;
+  }
+  // The page is the viewer's own copy (a page carrying field inputs always is), so the resolved
+  // currency joins the settings the placements are read with.
+  if (needsOrganizationCurrency && organizationCurrency !== undefined) {
+    applyOrganizationCurrency(page, context.releaseSet.modules, organizationCurrency);
+    allPlacements = collectPlacements(page);
   }
 
   // A whole page shows the navigation its address request decided; a placement read shows none.

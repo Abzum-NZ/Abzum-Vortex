@@ -14,8 +14,12 @@ import {
 } from "../../_components/application-draft-workspace";
 import { studioViewRequest } from "../../_lib/studio-view-request";
 import { loadStudioOrganizationHome } from "../../../_lib/studio-organization-home";
+import { readApplicationReleaseStanding } from "../../../_lib/application-release-adoption";
 import { readCurrentOrganizationAppStoreAddressAfterAuthorization } from "@vortex/platform/server";
-import { organizationSelectionCandidateSchema } from "@vortex/platform/schema";
+import {
+  organizationSelectionCandidateSchema,
+  type ApplicationRootId,
+} from "@vortex/platform/schema";
 import { humanOrganizationRequests } from "../../../_lib/server-composition";
 
 export const dynamic = "force-dynamic";
@@ -26,6 +30,7 @@ export const dynamic = "force-dynamic";
  */
 const loadWorkspacePlace = async (
   organizationId: string,
+  applicationRootId: ApplicationRootId,
   applicationKey: string,
 ): Promise<
   | { kind: "available"; place: StudioWorkspacePlace }
@@ -84,7 +89,6 @@ const loadWorkspacePlace = async (
     entry.tenantShortName,
     entry.organizationShortName,
   );
-  // Whether this application is installed in the organisation decides Back to app vs Install.
   const applications = await loadPermittedApplicationsAtAddress(
     resolved.session,
     entry.tenantShortName,
@@ -109,9 +113,25 @@ const loadWorkspacePlace = async (
           application.homePageKey,
         );
   };
-  const installed =
+  // Whether the builder may open this application, and whether the organisation has it installed:
+  // the two facts the toolbar needs to offer Back to app, Install in this organisation or neither.
+  const openable =
     applications.kind === "available" &&
     applications.applications.some((candidate) => candidate.key === applicationKey);
+  const standing = await readApplicationReleaseStanding(resolved.session, {
+    tenantShortName: entry.tenantShortName,
+    organizationShortName: entry.organizationShortName,
+    organizationId: entry.organizationId,
+    applicationRootId,
+  });
+  // The same read the Releases tab shows, so Studio never calls an installed application installable.
+  // An unknown standing is neither installed nor absent, so the toolbar offers neither button.
+  const installed =
+    standing.kind === "live" || standing.kind === "waiting"
+      ? true
+      : standing.kind === "not_installed" || standing.kind === "not_published"
+        ? false
+        : undefined;
   // The other applications the builder may open, with the pages they may open there, for a
   // Navigate step that opens one of them.
   const navigationTargets =
@@ -145,7 +165,7 @@ const loadWorkspacePlace = async (
     kind: "available",
     place: {
       organizationName: entry.organizationDisplayName,
-      applicationHref: pathOf(applicationKey),
+      applicationHref: openable ? pathOf(applicationKey) : undefined,
       appStoreHref: pathOf(settings.value),
       installed,
       navigationTargets,
@@ -184,7 +204,7 @@ export default async function StudioApplicationPage({
     return <StudioUnavailable subject="Application draft" result={result} />;
   const view = result.views[0]!;
   const [place, home] = await Promise.all([
-    loadWorkspacePlace(result.organizationId, result.draft.key),
+    loadWorkspacePlace(result.organizationId, result.draft.rootId, result.draft.key),
     loadStudioOrganizationHome(result.organizationId),
   ]);
   if (place.kind !== "available")
