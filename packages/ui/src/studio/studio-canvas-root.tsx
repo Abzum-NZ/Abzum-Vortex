@@ -20,7 +20,7 @@ import { studioPuckIframeCss } from "./studio-puck-style";
  * What the canvas draws the page in: the application frame the page belongs to, the appearance the
  * canvas previews and what the frame's blocks need.
  */
-export type StudioCanvasContext = Readonly<{
+type StudioCanvasContext = Readonly<{
   frame: StudioCanvasFrame | undefined;
   appearance: "light" | "dark";
   platformThemeTokens: PlatformThemeTokens;
