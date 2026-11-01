@@ -9,6 +9,7 @@ const platformGuidanceCodes: ReadonlySet<string> = new Set<FlowRefusalFeedbackCo
   "application_release_changed",
   "recent_authentication_required",
   "multi_factor_required",
+  "role_key_in_use",
   "application_storage_incompatible",
   "application_not_installed",
   "application_not_newer",

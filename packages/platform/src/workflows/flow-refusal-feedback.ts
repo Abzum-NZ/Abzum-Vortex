@@ -14,6 +14,7 @@ export const flowRefusalFeedbackCodeSchema = z.enum([
   "recent_authentication_required",
   "multi_factor_required",
   "role_settings_change_required",
+  "role_key_in_use",
   "application_storage_incompatible",
   "application_republish_required",
   "application_release_changed",
@@ -42,6 +43,7 @@ export const flowRefusalFeedbackSentences: Readonly<Record<FlowRefusalFeedbackCo
   recent_authentication_required:
     "To protect your organisation, this change needs a sign-in within the last 15 minutes. Sign in again, then retry the change.",
   role_acceptance_required: "This role revision needs accepting before it can be assigned.",
+  role_key_in_use: "A role with this key already exists.",
   role_settings_change_required:
     "Accepting application role changes keeps the role settings. Use Manage roles to change its name, description, classification or assignment and activation settings.",
   application_storage_incompatible:
