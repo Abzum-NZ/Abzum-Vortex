@@ -1052,12 +1052,20 @@ export const loadStudioApplicationDraft = async (
             // A failed metadata refresh never makes old choices authoritative or changes the draft.
             // The draft stays open: the person sees the stable reason and can correct or remove the edit.
             compileFailure = studioCompileFailure(error);
-            console.error(
-              "STUDIO_DRAFT_COMPILE_FAILED",
-              compileFailure.reasonCode,
-              compileFailure.family,
-              error,
-            );
+            if (compileFailure.family === "unexpected")
+              console.error(
+                "STUDIO_DRAFT_COMPILE_FAILED",
+                compileFailure.reasonCode,
+                compileFailure.family,
+                error,
+              );
+            else
+              console.info(
+                "STUDIO_DRAFT_COMPILE_REFUSED",
+                compileFailure.reasonCode,
+                compileFailure.family,
+                error,
+              );
             compiledFields = null;
             pageCompiledSlots = requests.map(() => null);
             canvasFrames = requests.map(() => null);
