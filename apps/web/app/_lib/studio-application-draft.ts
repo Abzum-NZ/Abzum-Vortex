@@ -9,6 +9,8 @@ import {
   type BuilderTargetFactsReader,
   readBuilderApplicationOrigin,
   compileFlowPlans,
+  installedFlowFormTypes,
+  FlowPlanError,
   type FlowPlan,
 } from "@vortex/platform/server";
 import type { FieldInputControlReleaseMap, PlatformThemeTokens } from "@vortex/ui";
@@ -89,6 +91,7 @@ type StoredApplicationDefinitionDraft = Extract<StoredDefinitionDraft, { kind: "
 type FlowPlacement = Readonly<{
   tasks: Readonly<Record<string, "page" | "server" | "backend">>;
   bands: readonly Readonly<{ id: string; taskIds: readonly string[] }>[];
+  refusal: Readonly<{ taskId: string | null; reason: string }> | null;
 }>;
 /** Compiled placements by owner key and flow key. */
 export type StudioFlowPlacements = Readonly<
@@ -116,7 +119,7 @@ const flowPlacements = (
     for (const task of segment.tasks) visit(task);
     if (segment.kind === "server") bands.push({ id: segment.id, taskIds: [...ids] });
   }
-  return { tasks, bands };
+  return { tasks, bands, refusal: null };
 };
 
 type StudioAuthorityResult<Value> =
@@ -652,14 +655,63 @@ export const loadStudioApplicationDraft = async (
                     [release.key, release.compilationOutput.canonical.content.flows] as const,
                 ),
               ];
-              const plans = compileFlowPlans(owners.flatMap(([, flows]) => flows)).plans;
+              const content = compiled.compilation.canonical.content;
+              const forms = installedFlowFormTypes({
+                application: { content },
+                modules: compiled.moduleReleases.map((release) => ({
+                  content: release.compilationOutput.canonical.content,
+                })),
+              });
+              const flows = owners.flatMap(([, owned]) => owned);
+              const bindings = new Map<
+                string,
+                (typeof content.flowBindings)[number]["flow"]["inputs"][]
+              >();
+              const conditions = new Map<
+                string,
+                NonNullable<(typeof content.flowBindings)[number]["settings"]["condition"]>[]
+              >();
+              for (const binding of content.flowBindings) {
+                const id = String(binding.flow.flowId);
+                bindings.set(id, [...(bindings.get(id) ?? []), binding.flow.inputs]);
+                if (binding.settings.condition !== null)
+                  conditions.set(id, [...(conditions.get(id) ?? []), binding.settings.condition]);
+              }
+              const refusals = new Map<string, FlowPlanError>();
+              const plans = compileFlowPlans(
+                flows,
+                bindings,
+                new Map(content.flows.map((flow) => [String(flow.id), forms])),
+                conditions,
+                draft.key,
+                (error) => {
+                  refusals.set(String(error.flowId), error);
+                  console.info(
+                    "[studio] flow plan refused",
+                    error.flowId,
+                    error.taskId,
+                    error.reason,
+                  );
+                },
+              ).plans;
               placements = Object.fromEntries(
                 owners.map(([key, flows]) => [
                   key,
                   Object.fromEntries(
                     flows.map((flow) => {
                       const plan = plans.get(String(flow.id));
-                      if (plan === undefined) throw new Error("STUDIO_FLOW_PLAN_MISSING");
+                      if (plan === undefined) {
+                        const refusal = refusals.get(String(flow.id));
+                        if (refusal === undefined) throw new Error("STUDIO_FLOW_PLAN_MISSING");
+                        return [
+                          flow.key,
+                          {
+                            tasks: {},
+                            bands: [],
+                            refusal: { taskId: refusal.taskId ?? null, reason: refusal.reason },
+                          },
+                        ];
+                      }
                       return [flow.key, flowPlacements(flow, plan)];
                     }),
                   ),
