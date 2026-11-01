@@ -14,6 +14,7 @@ import {
   type ReactElement,
   type RefObject,
 } from "react";
+import { createPortal } from "react-dom";
 import type { FlowFieldCorrection } from "@vortex/platform/schema";
 import { DefinitionRenderError } from "../definition-error";
 import { FlowSurfaceContext } from "../flow-runtime/flow-surface-context";
@@ -191,6 +192,29 @@ export function FormContainer(props: FormContainerProps): ReactElement {
   );
   const refusalMessage = message?.refusal;
   const formRef = useRef<HTMLFormElement>(null);
+  const submitActionHosts = useRef(new Set<HTMLElement>());
+  const [submitActionHost, setSubmitActionHost] = useState<HTMLElement | null>(null);
+  const registerSubmitActions = useCallback((element: HTMLElement) => {
+    const hosts = submitActionHosts.current;
+    const update = (): void => {
+      const ordered = [...hosts].sort((left, right) =>
+        left === right
+          ? 0
+          : left.compareDocumentPosition(right) & Node.DOCUMENT_POSITION_FOLLOWING
+            ? -1
+            : 1,
+      );
+      setSubmitActionHost(ordered[0] ?? null);
+    };
+    hosts.add(element);
+    element.setAttribute("data-vortex-form-actions", "");
+    update();
+    return () => {
+      hosts.delete(element);
+      element.removeAttribute("data-vortex-form-actions");
+      update();
+    };
+  }, []);
   const [generation, setGeneration] = useState(0);
   const [ownerGroupChoice, setOwnerGroupChoice] = useState<string | undefined>();
   const [ownerGroupError, setOwnerGroupError] = useState(false);
@@ -302,6 +326,7 @@ export function FormContainer(props: FormContainerProps): ReactElement {
       publish: registry.publish,
       subscribe,
       submit: () => formRef.current?.requestSubmit(),
+      registerSubmitActions,
       reset: () => formRef.current?.reset(),
     }),
     [
@@ -313,6 +338,7 @@ export function FormContainer(props: FormContainerProps): ReactElement {
       draftFeedbackFor,
       reportFieldChanged,
       subscribe,
+      registerSubmitActions,
     ],
   );
 
@@ -457,6 +483,22 @@ export function FormContainer(props: FormContainerProps): ReactElement {
     ownerGroups?.length === 0;
   // Why the form cannot be used now, such as a required field this person cannot fill in.
   const refusal = context.unavailable ? undefined : context.disabledReason;
+  const cancel =
+    context.events?.form_cancel === undefined ? null : (
+      <Button
+        type="button"
+        variant="secondary"
+        disabled={pending}
+        onClick={() =>
+          void context.events?.form_cancel?.({
+            event: "form_cancel",
+            gestureId: crypto.randomUUID(),
+          })
+        }
+      >
+        Cancel
+      </Button>
+    );
   const content = (
     <>
       {refusal === undefined ? null : (
@@ -543,22 +585,10 @@ export function FormContainer(props: FormContainerProps): ReactElement {
             {props.slots.content ?? null}
           </fieldset>
         </FormScopeContext.Provider>
-        {context.events?.form_cancel === undefined ? null : (
-          <div className="flex justify-end">
-            <Button
-              type="button"
-              variant="secondary"
-              disabled={pending}
-              onClick={() =>
-                void context.events?.form_cancel?.({
-                  event: "form_cancel",
-                  gestureId: crypto.randomUUID(),
-                })
-              }
-            >
-              Cancel
-            </Button>
-          </div>
+        {cancel === null ? null : submitActionHost !== null && !fieldsDisabled ? (
+          createPortal(cancel, submitActionHost)
+        ) : (
+          <div className="flex justify-end">{cancel}</div>
         )}
         <FormDraftFeedbackRegion id={feedbackId} summary={summary} />
         <InlineMessage placementId={props.placementId} />

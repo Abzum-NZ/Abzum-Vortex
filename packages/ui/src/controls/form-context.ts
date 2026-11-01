@@ -88,6 +88,8 @@ export type FormScope = Readonly<{
   subscribe: (listener: () => void) => () => void;
   /** Submits the form through its one submit path, as its Submit button does. */
   submit: () => void;
+  /** Registers an authored submit placement as a host for the form's actions. */
+  registerSubmitActions: (element: HTMLElement) => () => void;
   /** Resets the form through its one reset path, as its Reset button does. */
   reset: () => void;
 }>;

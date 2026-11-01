@@ -49,6 +49,7 @@ export function Button(props: ButtonProps): ReactElement {
     "primary",
   );
   const form = useFormScope();
+  const buttonRef = useRef<HTMLButtonElement>(null);
   const reactions = usePlacementReactions();
   const noteId = useId();
   // The shared scheduler decides whether another action queues, supersedes or is ignored.
@@ -85,6 +86,12 @@ export function Button(props: ButtonProps): ReactElement {
   agentState.current = { click, disabled, hidden: reactions.visible === false, form, mode };
   // The registry is the page's one agent registry; a host may wrap the runtime state per render.
   const agent = useContext(FlowRuntimeStateContext)?.agent;
+  const registerSubmitActions = form?.registerSubmitActions;
+  useEffect(() => {
+    if (mode !== "submit" || registerSubmitActions === undefined) return;
+    const wrapper = buttonRef.current?.closest<HTMLElement>("[data-vortex-layout-wrapper]");
+    return wrapper === null || wrapper === undefined ? undefined : registerSubmitActions(wrapper);
+  }, [mode, registerSubmitActions]);
   useEffect(
     () =>
       agent?.register({
@@ -111,6 +118,7 @@ export function Button(props: ButtonProps): ReactElement {
   return (
     <>
       <SharedButton
+        ref={buttonRef}
         type={mode === "action" ? "button" : mode}
         variant={SHARED_BUTTON_VARIANTS[variant]}
         data-vortex-control="button"
