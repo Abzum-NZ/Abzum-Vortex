@@ -20,6 +20,9 @@ export const pipelineStageTones = [
   "chart_3",
   "chart_4",
   "chart_5",
+  "success",
+  "warning",
+  "info",
 ] as const;
 export const pipelineStageToneSchema = z.enum(pipelineStageTones);
 export type PipelineStageTone = z.infer<typeof pipelineStageToneSchema>;

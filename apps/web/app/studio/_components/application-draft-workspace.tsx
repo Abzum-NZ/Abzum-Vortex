@@ -1,9 +1,7 @@
 "use client";
 import { useEffect, useMemo, useRef, useState } from "react";
-import type {
-  ImmutablePlatformBlockCatalogue,
-  SourceIdentityReservation,
-} from "@vortex/platform/schema";
+import { useRouter } from "next/navigation";
+import type { SourceIdentityReservation } from "@vortex/platform/schema";
 import {
   StudioFieldProblemsProvider,
   projectStudioSemanticOutline,
@@ -11,13 +9,11 @@ import {
   type StudioSemanticSelection,
   type StudioStoredApplicationDraft,
 } from "@vortex/ui/studio";
-import type { FieldInputControlReleaseMap, PlatformThemeTokens } from "@vortex/ui";
 import { createStudioPlacementDescriber, studioOutlineLabels } from "../_lib/studio-labels";
 import { studioPlaceSelection, studioTabOfSelection } from "../_lib/studio-places";
 import { describeStudioCompileFailure } from "../_lib/studio-compile-failure";
 import { ApplicationDraftAgentTools } from "./application-draft-agent-tools";
 import type { StudioModuleOwnerApplication } from "./module-fields-editor";
-import { NewApplicationWorkspace } from "./new-application-workspace";
 import { useStudioAccessTab } from "./studio-access-tab";
 import { useStudioDataTab } from "./studio-data-tab";
 import { StudioFrame } from "./studio-frame";
@@ -58,45 +54,30 @@ export type StudioWorkspacePlace = Readonly<{
   applicationHref: string | undefined;
   /** The App Store, where a published version is installed or upgraded to; absent like the above. */
   appStoreHref: string | undefined;
+  /** This application's page in the App Store, whose Publish flow publishes its saved draft. */
+  publishHref: string | undefined;
   /** Whether the organisation has this application installed; undefined when that cannot be read. */
   installed: boolean | undefined;
   /** The other applications a Navigate step can open, with their pages. */
   navigationTargets: readonly StudioNavigationApplication[];
 }>;
 
-type WorkspaceProps =
-  | Readonly<{
-      mode: "new";
-      organizationId: string;
-      frame: StudioFrameDefinition;
-      platformBlockCatalogue: ImmutablePlatformBlockCatalogue;
-      fieldInputControlReleases: FieldInputControlReleaseMap;
-      platformThemeTokens: PlatformThemeTokens;
-    }>
-  | Readonly<{
-      mode: "existing";
-      organizationId: string;
-      draft: StudioStoredApplicationDraft;
-      place: StudioWorkspacePlace;
-      initialTab?: string | undefined;
-      initialSection?: string | undefined;
-      initialModule?: string | undefined;
-      applications: readonly StudioModuleOwnerApplication[];
-      initialView: Parameters<typeof useStudioDraft>[0]["initialView"];
-    }>;
+type WorkspaceProps = Readonly<{
+  mode: "existing";
+  organizationId: string;
+  draft: StudioStoredApplicationDraft;
+  place: StudioWorkspacePlace;
+  initialTab?: string | undefined;
+  initialSection?: string | undefined;
+  initialModule?: string | undefined;
+  applications: readonly StudioModuleOwnerApplication[];
+  initialView: Parameters<typeof useStudioDraft>[0]["initialView"];
+}>;
 
 type ExistingProps = Extract<WorkspaceProps, { mode: "existing" }>;
 
 export function ApplicationDraftWorkspace(props: WorkspaceProps) {
-  return props.mode === "new" ? (
-    <NewApplicationWorkspace
-      frame={props.frame}
-      organizationId={props.organizationId}
-      catalogue={props.platformBlockCatalogue}
-    />
-  ) : (
-    <ExistingApplicationWorkspace {...props} />
-  );
+  return <ExistingApplicationWorkspace {...props} />;
 }
 
 /**
@@ -274,10 +255,12 @@ function ExistingApplicationWorkspace(props: ExistingProps) {
     readRecords: canvas.readRecordChoices,
     structure: structureCommand,
   });
+  const router = useRouter();
   const releases = useStudioReleasesTab({
     draft,
-    compositionContext: canvas.compositionContext,
-    structure: structureCommand,
+    onPublish: () => {
+      if (place.publishHref !== undefined) router.push(place.publishHref);
+    },
     hidden: tab !== "releases",
     initialSection: isStudioReleasesSection(props.initialSection)
       ? props.initialSection
@@ -422,7 +405,6 @@ function ExistingApplicationWorkspace(props: ExistingProps) {
               </>
             )}
           />
-          {releases.dialog}
           {canvas.dialog}
           {data.dialog}
         </div>

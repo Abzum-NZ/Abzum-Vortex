@@ -2008,6 +2008,177 @@
       }
     }
   },
+  "create_application": {
+    "key": "create_application",
+    "name": "Create application",
+    "release": {
+      "serviceId": "fe3c7c34-d0ae-495a-bb1c-314307894980",
+      "operationId": "09d9529c-51a2-482e-ac67-9810f9f2608c",
+      "releaseVersion": "1.0.0"
+    },
+    "descriptor": {
+      "contractVersion": "1.0.0",
+      "operation": {
+        "owner": {
+          "kind": "platform_service",
+          "serviceId": "fe3c7c34-d0ae-495a-bb1c-314307894980"
+        },
+        "operationId": "09d9529c-51a2-482e-ac67-9810f9f2608c"
+      },
+      "inputs": {
+        "name": {
+          "type": "text",
+          "required": true
+        },
+        "description": {
+          "type": "text",
+          "required": true
+        },
+        "key": {
+          "type": "text",
+          "required": false
+        }
+      },
+      "outputs": {
+        "application_name": {
+          "type": "text",
+          "required": true
+        },
+        "application_root_id": {
+          "type": "text",
+          "required": true
+        }
+      },
+      "effect": "change",
+      "expectedRevision": "not_required",
+      "confirmation": "required",
+      "duplicateProtection": "not_required",
+      "safeResults": ["committed", "refused", "validation", "failed"],
+      "requiredAuthority": {
+        "kind": "permission",
+        "permissionId": "0548c061-b1a9-48e5-a04a-eb1d0dae0644",
+        "key": "platform.organization.definition_drafts.manage"
+      }
+    }
+  },
+  "review_application_publication": {
+    "key": "review_application_publication",
+    "name": "Review application publication",
+    "release": {
+      "serviceId": "fe3c7c34-d0ae-495a-bb1c-314307894980",
+      "operationId": "46d1102b-620e-4db8-99fd-25ea7c50c1bd",
+      "releaseVersion": "1.0.0"
+    },
+    "descriptor": {
+      "contractVersion": "1.0.0",
+      "operation": {
+        "owner": {
+          "kind": "platform_service",
+          "serviceId": "fe3c7c34-d0ae-495a-bb1c-314307894980"
+        },
+        "operationId": "46d1102b-620e-4db8-99fd-25ea7c50c1bd"
+      },
+      "inputs": {
+        "application_root_id": {
+          "type": "text",
+          "required": true
+        }
+      },
+      "outputs": {
+        "status": {
+          "type": "text",
+          "required": true
+        },
+        "problem": {
+          "type": "text",
+          "required": true
+        },
+        "application_name": {
+          "type": "text",
+          "required": true
+        },
+        "release_version": {
+          "type": "text",
+          "required": true
+        },
+        "release_note": {
+          "type": "text",
+          "required": true
+        },
+        "summary_lines": {
+          "type": "json",
+          "required": true
+        },
+        "expected": {
+          "type": "json",
+          "required": true
+        }
+      },
+      "effect": "read",
+      "expectedRevision": "not_required",
+      "confirmation": "not_required",
+      "duplicateProtection": "not_required",
+      "safeResults": ["completed", "refused", "validation", "failed"],
+      "requiredAuthority": {
+        "kind": "permission",
+        "permissionId": "dfdd5aba-2b85-4169-b570-92be284e7b5c",
+        "key": "platform.organization.definition_releases.manage"
+      }
+    }
+  },
+  "publish_application": {
+    "key": "publish_application",
+    "name": "Publish application",
+    "release": {
+      "serviceId": "fe3c7c34-d0ae-495a-bb1c-314307894980",
+      "operationId": "c7731b9c-ebe1-4e38-9023-46d25190eca2",
+      "releaseVersion": "1.0.0"
+    },
+    "descriptor": {
+      "contractVersion": "1.0.0",
+      "operation": {
+        "owner": {
+          "kind": "platform_service",
+          "serviceId": "fe3c7c34-d0ae-495a-bb1c-314307894980"
+        },
+        "operationId": "c7731b9c-ebe1-4e38-9023-46d25190eca2"
+      },
+      "inputs": {
+        "application_root_id": {
+          "type": "text",
+          "required": true
+        },
+        "expected": {
+          "type": "json",
+          "required": true
+        },
+        "release_note": {
+          "type": "text",
+          "required": true
+        }
+      },
+      "outputs": {
+        "release_version": {
+          "type": "text",
+          "required": true
+        },
+        "application_root_id": {
+          "type": "text",
+          "required": true
+        }
+      },
+      "effect": "change",
+      "expectedRevision": "not_required",
+      "confirmation": "required",
+      "duplicateProtection": "not_required",
+      "safeResults": ["committed", "refused", "validation", "failed"],
+      "requiredAuthority": {
+        "kind": "permission",
+        "permissionId": "dfdd5aba-2b85-4169-b570-92be284e7b5c",
+        "key": "platform.organization.definition_releases.manage"
+      }
+    }
+  },
   "prepare_role_assignment": {
     "key": "prepare_role_assignment",
     "name": "Review role assignment",

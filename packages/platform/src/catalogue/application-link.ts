@@ -7,7 +7,6 @@ import { z } from "zod";
  *
  * - `open_application`: the application's own home page, for a person who may open it.
  * - `studio_editor`: the Studio editor for that application, for a person who may change its drafts.
- * - `studio_new_application`: Studio's new-application flow, for a person who may change drafts.
  * - `app_store_upgrade`: the page of Studio's App Store section for that application, which
  *   offers its Install or upgrade dialog, for a person who may install and whose organisation runs
  *   an older version.
@@ -15,7 +14,6 @@ import { z } from "zod";
 export const applicationLinkTargets = [
   "open_application",
   "studio_editor",
-  "studio_new_application",
   "app_store_upgrade",
 ] as const;
 export const applicationLinkTargetSchema = z.enum(applicationLinkTargets);
@@ -26,6 +24,7 @@ export const applicationActionCapabilities = [
   "install_application",
   "remove_application",
   "delete_application",
+  "publish_application",
 ] as const;
 export const applicationActionCapabilitySchema = z.enum(applicationActionCapabilities);
 export type ApplicationActionCapability = z.infer<typeof applicationActionCapabilitySchema>;

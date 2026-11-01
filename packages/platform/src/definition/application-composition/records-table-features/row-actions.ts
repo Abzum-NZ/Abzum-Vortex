@@ -85,6 +85,7 @@ export const recordsTableRowActionIcons = [
   "undo",
   "pencil",
   "trash",
+  "arrow-up",
 ] as const;
 
 export const recordsTableRowActionsFeature: RecordsTableFeatureDefinition<object, "row_actions"> &

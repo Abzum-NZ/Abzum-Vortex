@@ -3,9 +3,8 @@ CREATE OR REPLACE FUNCTION vortex_access.refuse_organization_role_history_mutati
     SET search_path TO ''
     AS $$
 begin
-  -- The one application purge function deletes this table's rows; nothing else may.
-  if tg_op = 'DELETE' and current_user = 'vortex_owner'
-    and pg_catalog.current_setting('vortex.application_purge', true) = 'on' then
+  -- Only the history purge role may delete these rows; it owns one function and nothing else.
+  if tg_op = 'DELETE' and current_user = 'vortex_history_purger' then
     return old;
   end if;
   raise exception using errcode = '23514', message = 'Organization role history is immutable';

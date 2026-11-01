@@ -29,6 +29,8 @@ export type ApplicationSurfaceCapabilities = Readonly<{
   mayBuildSystemApplications: boolean;
   /** The person may install and upgrade applications in this organisation. */
   mayInstall: boolean;
+  /** The person may publish versions of the organisation's ordinary applications. */
+  mayPublish: boolean;
 }>;
 
 type ApplicationSurfaceCapabilityDependencies = HumanOrganizationRequestDependencies &
@@ -41,6 +43,7 @@ const noCapabilities: ApplicationSurfaceCapabilities = Object.freeze({
   mayBuild: false,
   mayBuildSystemApplications: false,
   mayInstall: false,
+  mayPublish: false,
 });
 
 const ordinaryApplicationFacts: BuilderTargetFactsReader = async () => ({
@@ -89,6 +92,10 @@ export const readApplicationSurfaceCapabilitiesInTransaction = async (
     mayBuild,
     mayBuildSystemApplications: mayBuild && (await allows(system, { kind: "draft_change" })),
     mayInstall: await allows(ordinary, { kind: "application_management" }),
+    mayPublish: await allows(ordinary, {
+      kind: "publication",
+      rootId: "00000000-0000-0000-0000-000000000000",
+    }),
   };
 };
 

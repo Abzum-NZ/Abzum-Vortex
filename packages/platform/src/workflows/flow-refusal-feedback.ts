@@ -24,6 +24,12 @@ export const flowRefusalFeedbackCodeSchema = z.enum([
   "application_has_dependents",
   "application_is_installed",
   "application_name_mismatch",
+  "application_purge_blocked",
+  "application_key_in_use",
+  "application_input_invalid",
+  "application_publication_no_change",
+  "application_publication_blocked",
+  "definition_drafts_manage_required",
   "applications_manage_required",
   "installation_delegation_required",
   "assignments_manage_required",
@@ -64,6 +70,18 @@ export const flowRefusalFeedbackSentences: Readonly<Record<FlowRefusalFeedbackCo
     "Another application is built on this one. Remove or delete that application first.",
   application_is_installed:
     "This application is installed. Remove it first, then delete it.",
+  application_purge_blocked:
+    "The application could not be removed because something it holds could not be deleted. The cause is in the server log; nothing was changed.",
+  application_key_in_use:
+    "An application with this key already exists in this organisation. Choose a different key.",
+  application_input_invalid:
+    "Give the application a name and a description. A key, if you set one, uses lowercase words separated by dots.",
+  application_publication_no_change:
+    "Nothing has changed since the last version, so there is nothing to publish.",
+  application_publication_blocked:
+    "The draft has a problem that blocks publishing. Open it in Studio, check its pages and flows, and try again.",
+  definition_drafts_manage_required:
+    "Creating an application needs the Manage definition drafts permission. An organisation steward can give you a role that has it.",
   application_name_mismatch:
     "The name you typed does not match the application's name. Type it exactly to confirm.",
   application_not_newer:

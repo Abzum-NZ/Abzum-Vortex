@@ -159,6 +159,9 @@ const optionTones = [
   ["chart_3", "Chart 3"],
   ["chart_4", "Chart 4"],
   ["chart_5", "Chart 5"],
+  ["success", "Green"],
+  ["warning", "Amber"],
+  ["info", "Blue"],
 ] as const;
 /** Fields and table columns author the same money settings, including their stored default. */
 const moneyCurrencyDeclarations = (subject: "field" | "column"): Declaration[] => [

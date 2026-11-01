@@ -16,6 +16,9 @@ export const optionToneFillClass: Readonly<Record<PipelineStageTone, string>> = 
   chart_3: "bg-chart-3",
   chart_4: "bg-chart-4",
   chart_5: "bg-chart-5",
+  success: "bg-success",
+  warning: "bg-warning",
+  info: "bg-info",
 });
 
 /** One small mark in an option's colour, or nothing for the neutral role. */
@@ -33,13 +36,16 @@ export function OptionToneMark({
   );
 }
 
+// guard-allow: ui-literal-style a status dot is a circle, the one round mark in a list cell
+const dotShape = "inline-block size-2 shrink-0 rounded-full";
+
 /** The dot a list or detail puts before a choice option's word; the neutral role is a muted dot. */
 export function OptionToneDot({ tone }: Readonly<{ tone: PipelineStageTone | undefined }>) {
   return (
     <span
       aria-hidden="true"
       data-vortex-option-tone={tone ?? "neutral"}
-      className={cn("inline-block size-2 shrink-0", optionToneFillClass[tone ?? "neutral"])}
+      className={cn(dotShape, optionToneFillClass[tone ?? "neutral"])}
     />
   );
 }

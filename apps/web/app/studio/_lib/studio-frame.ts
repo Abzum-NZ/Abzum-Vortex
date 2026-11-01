@@ -1,8 +1,7 @@
 import "server-only";
 
-import { studioApplication } from "@vortex/definitions";
-import { resolveIdentitySessionWithEmail } from "../../auth/_lib/session-server";
-import { loadOrganizationLauncher } from "../../_lib/organization-context";
+import { compiledPageShellId, sameId } from "@vortex/platform/schema";
+import type { InstalledRuntimeContext } from "@vortex/platform/server";
 import type { StudioFrameDefinition } from "../_components/studio-header";
 
 /** One organisation of the launcher, as the frame names it and the person's account in it. */
@@ -14,20 +13,31 @@ type LauncherEntry = Readonly<{
 }>;
 
 /**
- * Studio's shared application frame: the top bar its own shell definition chooses, so the editor
- * shows the same bar as the pages of its App Store section, and where the person is.
+ * Studio's shared application frame: the top bar the organisation's installed Studio release
+ * chooses for its home page's shell, so the editor shows the same bar as the pages of its App
+ * Store section, and where the person is. Nothing here reads the shipped source.
  */
-export const studioFrameOf = (entry: LauncherEntry, email: string): StudioFrameDefinition => {
-  const topBar = studioApplication.body.shells[0]!.presentation.top_bar;
+export const studioFrameOf = (
+  entry: LauncherEntry,
+  email: string,
+  installed: Readonly<{
+    name: string;
+    homePageKey: string;
+    context: InstalledRuntimeContext;
+  }>,
+): StudioFrameDefinition => {
+  const content = installed.context.releaseSet.application.content;
+  const home = content.pages.find((page) => page.key === installed.homePageKey);
+  const shellId = home === undefined ? undefined : compiledPageShellId(home.composition);
+  const shell =
+    shellId === undefined
+      ? undefined
+      : content.shells.find((candidate) => sameId(candidate.shellId, shellId));
+  if (shell === undefined || shell.presentation === undefined)
+    throw new Error("STUDIO_FRAME_SHELL_MISSING");
   return {
-    shellName: studioApplication.body.name,
-    topBar: {
-      breadcrumbs: topBar.breadcrumbs,
-      organizationSwitcher: topBar.organization_switcher,
-      applicationSwitcher: topBar.application_switcher,
-      accountMenu: topBar.account_menu,
-      appearanceToggle: topBar.appearance_toggle,
-    },
+    shellName: installed.name,
+    topBar: shell.presentation.topBar,
     account:
       entry.accountDisplayName === undefined
         ? { email }
@@ -37,24 +47,4 @@ export const studioFrameOf = (entry: LauncherEntry, email: string): StudioFrameD
     organizationName: entry.organizationDisplayName,
     studioHref: "/studio",
   };
-};
-
-/** The frame for one organisation of the signed-in person, or the reason there is none. */
-export const loadStudioFrame = async (
-  organizationId: string,
-): Promise<
-  | Readonly<{ kind: "available"; frame: StudioFrameDefinition }>
-  | Readonly<{ kind: "refused"; reason: string }>
-> => {
-  const { resolution, email } = await resolveIdentitySessionWithEmail();
-  if (resolution.kind !== "active" || email === undefined)
-    return { kind: "refused", reason: "Sign in to open Studio." };
-  const launcher = await loadOrganizationLauncher(resolution.session);
-  const entry =
-    launcher.kind === "available"
-      ? launcher.entries.find((candidate) => candidate.organizationId === organizationId)
-      : undefined;
-  if (entry === undefined)
-    return { kind: "refused", reason: "This organisation is not available to your account." };
-  return { kind: "available", frame: studioFrameOf(entry, email) };
 };

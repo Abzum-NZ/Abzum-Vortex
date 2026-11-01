@@ -110,15 +110,20 @@ export const applicationCapabilityAllowed = (
   application: Parameters<ApplicationSurfaceAccess["isOpenable"]>[0] | undefined,
   capabilities: ApplicationSurfaceAccess["capabilities"],
 ): boolean => {
-  if (!capabilities.mayInstall || application === undefined) return false;
+  if (application === undefined) return false;
   const installed = application.status === "installed" || application.status === "update_available";
   switch (capability) {
+    case "publish_application":
+      return capabilities.mayPublish && application.isSystemApplication === false;
     case "install_application":
-      return application.status === "available" || application.status === "update_available";
+      return (
+        capabilities.mayInstall &&
+        (application.status === "available" || application.status === "update_available")
+      );
     case "remove_application":
-      return application.isSystemApplication === false && installed;
+      return capabilities.mayInstall && application.isSystemApplication === false && installed;
     case "delete_application":
-      return application.isSystemApplication === false && !installed;
+      return capabilities.mayInstall && application.isSystemApplication === false && !installed;
   }
 };
 

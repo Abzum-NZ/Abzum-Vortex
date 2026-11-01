@@ -58,7 +58,7 @@ function IconAction({
 }
 
 /** The shared application frame top bar for any Studio surface; `actions` are its own commands. */
-export function StudioFrameBar({
+function StudioFrameBar({
   frame,
   pageName,
   actions,

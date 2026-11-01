@@ -179,12 +179,12 @@
               {
                 "value": "installed",
                 "label": "Installed",
-                "tone": "chart_2"
+                "tone": "success"
               },
               {
                 "value": "update_available",
                 "label": "Upgrade available",
-                "tone": "chart_3"
+                "tone": "warning"
               },
               {
                 "value": "available",
@@ -194,7 +194,7 @@
               {
                 "value": "draft_only",
                 "label": "Draft only",
-                "tone": "neutral"
+                "tone": "info"
               }
             ],
             "options_source": {
@@ -370,6 +370,32 @@
           "public_display": "refused",
           "type": "whole_number",
           "settings": {}
+        },
+        {
+          "id": "fld_store_application_records_held",
+          "key": "records_held",
+          "label": "Records",
+          "required": false,
+          "unique": false,
+          "filterable": false,
+          "sortable": false,
+          "personal_data": "none",
+          "public_display": "refused",
+          "type": "whole_number",
+          "settings": {}
+        },
+        {
+          "id": "fld_store_application_data_kept",
+          "key": "data_kept",
+          "label": "Data kept",
+          "required": false,
+          "unique": false,
+          "filterable": false,
+          "sortable": false,
+          "personal_data": "none",
+          "public_display": "refused",
+          "type": "yes_no",
+          "settings": {}
         }
       ],
       "pipelines": [],
@@ -413,7 +439,9 @@
           "record_type_count",
           "record_update_status",
           "records_processed",
-          "is_system_application"
+          "is_system_application",
+          "records_held",
+          "data_kept"
         ],
         "changeable_fields": []
       }
@@ -449,7 +477,9 @@
         "record_type_count",
         "record_update_status",
         "records_processed",
-        "is_system_application"
+        "is_system_application",
+        "records_held",
+        "data_kept"
       ],
       "filter": null,
       "group_by": [],

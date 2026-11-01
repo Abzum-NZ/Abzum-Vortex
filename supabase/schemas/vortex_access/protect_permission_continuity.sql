@@ -6,9 +6,8 @@ declare
   meaning_changed boolean := false;
   must_advance boolean;
 begin
-  -- The one application purge function deletes this table's rows; nothing else may.
-  if tg_op = 'DELETE' and current_user = 'vortex_owner'
-    and pg_catalog.current_setting('vortex.application_purge', true) = 'on' then
+  -- Only the history purge role may delete these rows; it owns one function and nothing else.
+  if tg_op = 'DELETE' and current_user = 'vortex_history_purger' then
     return old;
   end if;
   if tg_op = 'DELETE' then

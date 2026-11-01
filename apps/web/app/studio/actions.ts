@@ -20,19 +20,12 @@ import {
   validateDefinitionSource,
 } from "@vortex/platform/server";
 import { humanOrganizationRequests } from "../_lib/server-composition";
-import {
-  createHumanApplicationDraft,
-  saveHumanApplicationDraft,
-} from "../_lib/definition-draft-write";
+import { saveHumanApplicationDraft } from "../_lib/definition-draft-write";
 import { mapWebError } from "../_lib/web-error-mapper";
 import { loadStudioApplicationDraft } from "../_lib/studio-application-draft";
 import { resolveIdentitySession } from "../auth/_lib/session-server";
 import { readSavedStudioApplicationConditionContext } from "../_lib/studio-application-condition-context";
 import type { StudioApplicationConditionContextResult } from "@vortex/ui/studio";
-import {
-  prepareHumanDefinitionPublication,
-  publishHumanDefinition,
-} from "../_lib/definition-publication";
 import {
   maximumApplicationSourceImportBytes,
   studioApplicationSourceReviewRequestSchema,
@@ -149,18 +142,6 @@ export async function reviewStudioApplicationSource(
   }
 }
 
-/** Separate explicit requests: preparation never installs or publishes a release. */
-export async function prepareStudioApplicationPublication(
-  organizationId: string,
-  candidate: unknown,
-) {
-  return prepareHumanDefinitionPublication(organizationId, candidate);
-}
-
-export async function publishStudioApplication(organizationId: string, candidate: unknown) {
-  return publishHumanDefinition(organizationId, candidate);
-}
-
 /** Metadata is resolved only from the server's active human session and exact saved draft. */
 export async function resolveStudioApplicationConditionContext(
   organizationId: string,
@@ -189,11 +170,6 @@ export async function resolveStudioApplicationConditionContext(
       error,
     );
   }
-}
-
-/** A browser document is authored input, never authority or evidence of an installed Module. */
-export async function createStudioApplication(organizationId: string, candidate: unknown) {
-  return createHumanApplicationDraft(organizationId, { source: candidate });
 }
 
 /** What one autosave came to: the platform's answer, or a conflict that names the newer saved draft. */

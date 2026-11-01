@@ -106,7 +106,7 @@ begin
   begin
     perform vortex_definition.validated_builder_read_context_internal();
     builder_visible := true;
-  exception when others then
+  exception when sqlstate '42501' then
     builder_visible := false;
   end;
 
@@ -163,7 +163,12 @@ begin
         'role_count', (
           select pg_catalog.count(*) from vortex_access.organization_roles as role_row
           where role_row.organization_id = root.organization_id
-            and role_row.application_root_id = root.root_id),
+            and (role_row.application_root_id = root.root_id
+              or role_row.derived_application_root_id = root.root_id)),
+        'records_held', vortex_definition.application_record_count_internal(root.root_id),
+        'data_kept', (installed.release_revision is null
+          and root.current_release_revision is not null
+          and vortex_definition.application_record_count_internal(root.root_id) > 0),
         'record_type_count', (
           select pg_catalog.count(*) from vortex_record.storage_catalogue as storage
           where storage.state = 'active'

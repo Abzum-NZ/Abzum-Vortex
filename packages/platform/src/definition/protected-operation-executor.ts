@@ -360,7 +360,19 @@ const operation = <Schema extends z.ZodType>(definition: {
   });
 
 /** A read-only application catalogue review, run under the person's own authority. */
-const applicationStoreReview = (journey: "review" | "reviewRemoval" | "reviewPurge"): Operation =>
+const applicationStoreReview = (
+  journey: "review" | "reviewRemoval" | "reviewPurge" | "reviewPublication",
+): Operation =>
+  Object.freeze({
+    execute: async (services, caller, inputs) => {
+      const store = services.applicationStore;
+      if (store === undefined) return { kind: "unavailable" };
+      return store[journey](caller.session, caller.selection, inputs);
+    },
+  });
+
+/** Creating an application or publishing a version of it: no installation receipt is involved. */
+const applicationAuthoringJourney = (journey: "create" | "publish"): Operation =>
   Object.freeze({
     execute: async (services, caller, inputs) => {
       const store = services.applicationStore;
@@ -1200,6 +1212,9 @@ const operations: Readonly<Record<PlatformServiceOperationKey, Operation>> = Obj
   review_application_purge: applicationStoreReview("reviewPurge"),
   purge_application: applicationStoreJourney("purge"),
   delete_application: applicationStoreJourney("delete"),
+  create_application: applicationAuthoringJourney("create"),
+  review_application_publication: applicationStoreReview("reviewPublication"),
+  publish_application: applicationAuthoringJourney("publish"),
 } satisfies Record<PlatformServiceOperationKey, Operation>);
 
 /** A value of a declared type the executor does not carry yet is refused, never coerced. */

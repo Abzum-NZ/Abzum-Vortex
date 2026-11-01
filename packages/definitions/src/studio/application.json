@@ -76,6 +76,22 @@
         "personal_or_sensitive_values_allowed": false
       },
       {
+        "id": "event_create_application",
+        "key": "vortex.app.studio.create_application",
+        "label": "Create application",
+        "record_type": "vortex.app_store:store_application",
+        "carries": [],
+        "personal_or_sensitive_values_allowed": false
+      },
+      {
+        "id": "event_publish_application",
+        "key": "vortex.app.studio.publish_application",
+        "label": "Publish application",
+        "record_type": "vortex.app_store:store_application",
+        "carries": [],
+        "personal_or_sensitive_values_allowed": false
+      },
+      {
         "id": "event_delete_application",
         "key": "vortex.app.studio.delete_application",
         "label": "Delete application",
@@ -230,6 +246,162 @@
                         }
                       }
                     }
+                  },
+                  {
+                    "type": "platform.renderer.form_container",
+                    "props": {
+                      "id": "studio_create_form",
+                      "title": "New application",
+                      "content": [
+                        {
+                          "type": "platform.renderer.text_input",
+                          "props": {
+                            "id": "shell_create_name",
+                            "name": "name",
+                            "label": "Name",
+                            "required": true,
+                            "vortex": {
+                              "block": {
+                                "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
+                                "release_version": "1.0.0"
+                              },
+                              "responsive": {
+                                "desktop": {
+                                  "visible": true,
+                                  "width": {
+                                    "kind": "fill"
+                                  },
+                                  "height": {
+                                    "kind": "content"
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "type": "platform.renderer.text_input",
+                          "props": {
+                            "id": "shell_create_description",
+                            "name": "description",
+                            "label": "Description",
+                            "required": true,
+                            "vortex": {
+                              "block": {
+                                "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
+                                "release_version": "1.0.0"
+                              },
+                              "responsive": {
+                                "desktop": {
+                                  "visible": true,
+                                  "width": {
+                                    "kind": "fill"
+                                  },
+                                  "height": {
+                                    "kind": "content"
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "type": "platform.renderer.text_input",
+                          "props": {
+                            "id": "shell_create_key",
+                            "name": "key",
+                            "label": "Key (optional)",
+                            "required": false,
+                            "vortex": {
+                              "block": {
+                                "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
+                                "release_version": "1.0.0"
+                              },
+                              "responsive": {
+                                "desktop": {
+                                  "visible": true,
+                                  "width": {
+                                    "kind": "fill"
+                                  },
+                                  "height": {
+                                    "kind": "content"
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      ],
+                      "vortex": {
+                        "block": {
+                          "block_id": "476e2c35-07d6-40cc-bf01-6ddb22ccca44",
+                          "release_version": "1.0.0"
+                        },
+                        "responsive": {
+                          "desktop": {
+                            "visible": false,
+                            "width": {
+                              "kind": "fill"
+                            },
+                            "height": {
+                              "kind": "content"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  },
+                  {
+                    "type": "platform.renderer.form_container",
+                    "props": {
+                      "id": "studio_publish_form",
+                      "title": "Release note",
+                      "content": [
+                        {
+                          "type": "platform.renderer.text_input",
+                          "props": {
+                            "id": "shell_publish_release_note",
+                            "name": "release_note",
+                            "label": "What changed in this version?",
+                            "required": true,
+                            "vortex": {
+                              "block": {
+                                "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
+                                "release_version": "1.0.0"
+                              },
+                              "responsive": {
+                                "desktop": {
+                                  "visible": true,
+                                  "width": {
+                                    "kind": "fill"
+                                  },
+                                  "height": {
+                                    "kind": "content"
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      ],
+                      "vortex": {
+                        "block": {
+                          "block_id": "476e2c35-07d6-40cc-bf01-6ddb22ccca44",
+                          "release_version": "1.0.0"
+                        },
+                        "responsive": {
+                          "desktop": {
+                            "visible": false,
+                            "width": {
+                              "kind": "fill"
+                            },
+                            "height": {
+                              "kind": "content"
+                            }
+                          }
+                        }
+                      }
+                    }
                   }
                 ],
                 "vortex": {
@@ -298,8 +470,8 @@
                           "id": "app_store_new_application",
                           "label": "New application",
                           "action_kind": "action",
-                          "link": "studio_new_application",
                           "variant": "primary",
+                          "icon": "plus",
                           "vortex": {
                             "block": {
                               "block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b",
@@ -361,7 +533,7 @@
                       {
                         "field": "vortex.app_store:store_application.description",
                         "label": "Description",
-                        "visible": true,
+                        "visible": false,
                         "pin": "unpinned",
                         "width": "medium"
                       },
@@ -392,6 +564,13 @@
                         "visible": true,
                         "pin": "unpinned",
                         "width": "narrow"
+                      },
+                      {
+                        "field": "vortex.app_store:store_application.records_held",
+                        "label": "Records",
+                        "visible": true,
+                        "pin": "unpinned",
+                        "width": "narrow"
                       }
                     ],
                     "default_sort": [
@@ -416,6 +595,13 @@
                         "link": "studio_editor",
                         "label": "Edit in Studio",
                         "icon": "pencil",
+                        "placement": "inline"
+                      },
+                      {
+                        "event_id": "event_publish_application",
+                        "application_capability": "publish_application",
+                        "label": "Publish",
+                        "icon": "arrow-up",
                         "placement": "inline"
                       },
                       {
@@ -497,39 +683,13 @@
             "props": {
               "slot_primary": [
                 {
-                  "type": "platform.renderer.heading",
+                  "type": "platform.renderer.container",
                   "props": {
-                    "id": "store_application_heading",
-                    "text": "Application",
-                    "level": "two",
-                    "actions": [
-                      {
-                        "type": "platform.renderer.button",
-                        "props": {
-                          "id": "store_application_install",
-                          "label": "Install or upgrade",
-                          "action_kind": "action",
-                          "variant": "primary",
-                          "vortex": {
-                            "block": {
-                              "block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b",
-                              "release_version": "1.0.0"
-                            },
-                            "application_audience": "installers",
-                            "responsive": {
-                              "desktop": {
-                                "visible": true,
-                                "width": {
-                                  "kind": "fill"
-                                },
-                                "height": {
-                                  "kind": "content"
-                                }
-                              }
-                            }
-                          }
-                        }
-                      },
+                    "id": "store_application_actions",
+                    "direction": "row",
+                    "gap": "small",
+                    "padding": "none",
+                    "content": [
                       {
                         "type": "platform.renderer.button",
                         "props": {
@@ -537,6 +697,8 @@
                           "label": "Open app",
                           "action_kind": "action",
                           "link": "open_application",
+                          "icon": "eye",
+                          "variant": "ghost",
                           "vortex": {
                             "block": {
                               "block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b",
@@ -563,12 +725,69 @@
                           "label": "Edit in Studio",
                           "action_kind": "action",
                           "link": "studio_editor",
+                          "icon": "pencil",
+                          "variant": "ghost",
                           "vortex": {
                             "block": {
                               "block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b",
                               "release_version": "1.0.0"
                             },
-                            "application_audience": "builders",
+                            "responsive": {
+                              "desktop": {
+                                "visible": true,
+                                "width": {
+                                  "kind": "fill"
+                                },
+                                "height": {
+                                  "kind": "content"
+                                }
+                              }
+                            }
+                          }
+                        }
+                      },
+                      {
+                        "type": "platform.renderer.button",
+                        "props": {
+                          "id": "store_application_publish",
+                          "label": "Publish",
+                          "action_kind": "action",
+                          "application_capability": "publish_application",
+                          "icon": "arrow-up",
+                          "variant": "ghost",
+                          "vortex": {
+                            "block": {
+                              "block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b",
+                              "release_version": "1.0.0"
+                            },
+                            "responsive": {
+                              "desktop": {
+                                "visible": true,
+                                "width": {
+                                  "kind": "fill"
+                                },
+                                "height": {
+                                  "kind": "content"
+                                }
+                              }
+                            }
+                          }
+                        }
+                      },
+                      {
+                        "type": "platform.renderer.button",
+                        "props": {
+                          "id": "store_application_install",
+                          "label": "Install or upgrade",
+                          "action_kind": "action",
+                          "application_capability": "install_application",
+                          "icon": "plus",
+                          "variant": "ghost",
+                          "vortex": {
+                            "block": {
+                              "block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b",
+                              "release_version": "1.0.0"
+                            },
                             "responsive": {
                               "desktop": {
                                 "visible": true,
@@ -589,12 +808,14 @@
                           "id": "store_application_remove",
                           "label": "Remove",
                           "action_kind": "action",
+                          "application_capability": "remove_application",
+                          "icon": "minus",
+                          "variant": "ghost",
                           "vortex": {
                             "block": {
                               "block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b",
                               "release_version": "1.0.0"
                             },
-                            "application_audience": "installers",
                             "responsive": {
                               "desktop": {
                                 "visible": true,
@@ -615,12 +836,14 @@
                           "id": "store_application_delete",
                           "label": "Delete",
                           "action_kind": "action",
+                          "application_capability": "delete_application",
+                          "icon": "trash",
+                          "variant": "ghost",
                           "vortex": {
                             "block": {
                               "block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b",
                               "release_version": "1.0.0"
                             },
-                            "application_audience": "installers",
                             "responsive": {
                               "desktop": {
                                 "visible": true,
@@ -638,8 +861,8 @@
                     ],
                     "vortex": {
                       "block": {
-                        "block_id": "78bfeead-a38d-424a-81b9-7cd553b92bcc",
-                        "release_version": "1.1.0"
+                        "block_id": "11d1a889-531f-4880-a1a4-5dda5289e5ff",
+                        "release_version": "1.3.0"
                       },
                       "responsive": {
                         "desktop": {
@@ -4851,6 +5074,922 @@
         "outputs": {},
         "errors": [],
         "finally": []
+      },
+      {
+        "id": "flow_create_application",
+        "key": "create_application",
+        "description": "Creates an application from a name, a description and an optional key; it starts as a draft that is opened from the list.",
+        "labels": {
+          "name": "New application"
+        },
+        "execution": "interactive",
+        "runAs": {
+          "kind": "initiator"
+        },
+        "inputs": {},
+        "variables": {},
+        "triggers": [],
+        "tasks": [
+          {
+            "id": "create_form",
+            "type": "interface.show_form",
+            "version": "1.0.0",
+            "properties": {
+              "form": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "studio_create_form"
+                }
+              },
+              "inputs": {
+                "kind": "map",
+                "entries": {
+                  "name": {
+                    "kind": "literal",
+                    "literal": {
+                      "type": "text",
+                      "value": ""
+                    }
+                  },
+                  "description": {
+                    "kind": "literal",
+                    "literal": {
+                      "type": "text",
+                      "value": ""
+                    }
+                  },
+                  "key": {
+                    "kind": "literal",
+                    "literal": {
+                      "type": "text",
+                      "value": ""
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "id": "create_form_cancelled",
+            "type": "if",
+            "condition": {
+              "op": "not",
+              "arg": {
+                "op": "reference",
+                "reference": {
+                  "source": "task_output",
+                  "task": "create_form",
+                  "key": "submitted"
+                }
+              }
+            },
+            "then": [
+              {
+                "id": "stop_create_cancelled",
+                "type": "stop",
+                "outcome": "cancelled"
+              }
+            ]
+          },
+          {
+            "id": "create",
+            "type": "operation.call",
+            "version": "1.0.0",
+            "allowRefusal": true,
+            "properties": {
+              "operation": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "platform.create_application"
+                }
+              },
+              "inputs": {
+                "kind": "map",
+                "entries": {
+                  "name": {
+                    "kind": "reference",
+                    "reference": {
+                      "source": "task_output",
+                      "task": "create_form",
+                      "key": "values",
+                      "path": ["name"]
+                    }
+                  },
+                  "description": {
+                    "kind": "reference",
+                    "reference": {
+                      "source": "task_output",
+                      "task": "create_form",
+                      "key": "values",
+                      "path": ["description"]
+                    }
+                  },
+                  "key": {
+                    "kind": "reference",
+                    "reference": {
+                      "source": "task_output",
+                      "task": "create_form",
+                      "key": "values",
+                      "path": ["key"]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "id": "create_result",
+            "type": "switch",
+            "value": {
+              "kind": "reference",
+              "reference": {
+                "source": "task_output",
+                "task": "create",
+                "key": "outcome"
+              }
+            },
+            "cases": [
+              {
+                "key": "committed",
+                "when": {
+                  "type": "choice",
+                  "value": "committed"
+                },
+                "tasks": [
+                  {
+                    "id": "create_done",
+                    "type": "interface.show_message",
+                    "version": "1.0.0",
+                    "properties": {
+                      "message": {
+                        "kind": "literal",
+                        "literal": {
+                          "type": "text",
+                          "value": "The application was created as a draft. Open it with Edit in Studio, add pages and data, then publish it."
+                        }
+                      },
+                      "title": {
+                        "kind": "literal",
+                        "literal": {
+                          "type": "text",
+                          "value": "New application"
+                        }
+                      },
+                      "target": {
+                        "kind": "literal",
+                        "literal": {
+                          "type": "text",
+                          "value": "dialog"
+                        }
+                      },
+                      "severity": {
+                        "kind": "literal",
+                        "literal": {
+                          "type": "text",
+                          "value": "info"
+                        }
+                      }
+                    }
+                  },
+                  {
+                    "id": "create_refresh",
+                    "type": "interface.refresh",
+                    "version": "1.0.0",
+                    "properties": {
+                      "component": {
+                        "kind": "literal",
+                        "literal": {
+                          "type": "text",
+                          "value": "store_applications_region"
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            ],
+            "default": [
+              {
+                "id": "create_failed",
+                "type": "interface.show_message",
+                "version": "1.0.0",
+                "properties": {
+                  "message": {
+                    "kind": "literal",
+                    "literal": {
+                      "type": "text",
+                      "value": "The application could not be created. Check the list before trying again."
+                    }
+                  },
+                  "title": {
+                    "kind": "literal",
+                    "literal": {
+                      "type": "text",
+                      "value": "New application"
+                    }
+                  },
+                  "target": {
+                    "kind": "literal",
+                    "literal": {
+                      "type": "text",
+                      "value": "dialog"
+                    }
+                  },
+                  "severity": {
+                    "kind": "literal",
+                    "literal": {
+                      "type": "text",
+                      "value": "info"
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        ],
+        "outputs": {},
+        "errors": [],
+        "finally": []
+      },
+      {
+        "id": "flow_publish_application",
+        "key": "publish_application",
+        "description": "Publishes the saved draft as the next version of the application, with a release note.",
+        "labels": {
+          "name": "Publish application"
+        },
+        "execution": "interactive",
+        "runAs": {
+          "kind": "initiator"
+        },
+        "inputs": {
+          "application_root_id": {
+            "type": "record_reference",
+            "required": true,
+            "recordTypeIds": ["vortex.app_store:store_application"]
+          }
+        },
+        "variables": {},
+        "triggers": [],
+        "tasks": [
+          {
+            "id": "review_publication",
+            "type": "operation.call",
+            "version": "1.0.0",
+            "allowRefusal": true,
+            "properties": {
+              "operation": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "platform.review_application_publication"
+                }
+              },
+              "inputs": {
+                "kind": "map",
+                "entries": {
+                  "application_root_id": {
+                    "kind": "reference",
+                    "reference": {
+                      "source": "input",
+                      "name": "application_root_id"
+                    }
+                  }
+                }
+              },
+              "refusal_feedback": {
+                "kind": "map",
+                "entries": {
+                  "applications_manage_required": {
+                    "kind": "map",
+                    "entries": {
+                      "link_label": {
+                        "kind": "literal",
+                        "literal": {
+                          "type": "text",
+                          "value": "Open IAM People"
+                        }
+                      },
+                      "destination": {
+                        "kind": "map",
+                        "entries": {
+                          "application_key": {
+                            "kind": "literal",
+                            "literal": {
+                              "type": "text",
+                              "value": "vortex.app.iam"
+                            }
+                          },
+                          "page_key": {
+                            "kind": "literal",
+                            "literal": {
+                              "type": "text",
+                              "value": "iam_people"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "installation_delegation_required": {
+                    "kind": "map",
+                    "entries": {
+                      "link_label": {
+                        "kind": "literal",
+                        "literal": {
+                          "type": "text",
+                          "value": "Open IAM People"
+                        }
+                      },
+                      "destination": {
+                        "kind": "map",
+                        "entries": {
+                          "application_key": {
+                            "kind": "literal",
+                            "literal": {
+                              "type": "text",
+                              "value": "vortex.app.iam"
+                            }
+                          },
+                          "page_key": {
+                            "kind": "literal",
+                            "literal": {
+                              "type": "text",
+                              "value": "iam_people"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "assignments_manage_required": {
+                    "kind": "map",
+                    "entries": {
+                      "link_label": {
+                        "kind": "literal",
+                        "literal": {
+                          "type": "text",
+                          "value": "Open IAM People"
+                        }
+                      },
+                      "destination": {
+                        "kind": "map",
+                        "entries": {
+                          "application_key": {
+                            "kind": "literal",
+                            "literal": {
+                              "type": "text",
+                              "value": "vortex.app.iam"
+                            }
+                          },
+                          "page_key": {
+                            "kind": "literal",
+                            "literal": {
+                              "type": "text",
+                              "value": "iam_people"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "id": "publication_review_result",
+            "type": "switch",
+            "value": {
+              "kind": "reference",
+              "reference": {
+                "source": "task_output",
+                "task": "review_publication",
+                "key": "outcome"
+              }
+            },
+            "cases": [
+              {
+                "key": "completed",
+                "when": {
+                  "type": "choice",
+                  "value": "completed"
+                },
+                "tasks": [
+                  {
+                    "id": "publication_ready",
+                    "type": "if",
+                    "condition": {
+                      "op": "eq",
+                      "left": {
+                        "op": "reference",
+                        "reference": {
+                          "source": "task_output",
+                          "task": "review_publication",
+                          "key": "result",
+                          "path": ["status"]
+                        }
+                      },
+                      "right": {
+                        "op": "literal",
+                        "type": "text",
+                        "value": "ready"
+                      }
+                    },
+                    "then": [
+                      {
+                        "id": "confirm_publication",
+                        "type": "interface.confirm",
+                        "version": "1.0.0",
+                        "properties": {
+                          "title": {
+                            "kind": "formula",
+                            "formula": {
+                              "op": "join",
+                              "parts": [
+                                {
+                                  "op": "literal",
+                                  "type": "text",
+                                  "value": "Publish "
+                                },
+                                {
+                                  "op": "reference",
+                                  "reference": {
+                                    "source": "task_output",
+                                    "task": "review_publication",
+                                    "key": "result",
+                                    "path": ["application_name"]
+                                  }
+                                },
+                                {
+                                  "op": "literal",
+                                  "type": "text",
+                                  "value": " "
+                                },
+                                {
+                                  "op": "reference",
+                                  "reference": {
+                                    "source": "task_output",
+                                    "task": "review_publication",
+                                    "key": "result",
+                                    "path": ["release_version"]
+                                  }
+                                },
+                                {
+                                  "op": "literal",
+                                  "type": "text",
+                                  "value": "?"
+                                }
+                              ]
+                            }
+                          },
+                          "message": {
+                            "kind": "literal",
+                            "literal": {
+                              "type": "text",
+                              "value": "Publishing makes this the version organisations can install or upgrade to. The saved draft is what is published."
+                            }
+                          },
+                          "details": {
+                            "kind": "reference",
+                            "reference": {
+                              "source": "task_output",
+                              "task": "review_publication",
+                              "key": "result",
+                              "path": ["summary_lines"]
+                            }
+                          },
+                          "confirm_label": {
+                            "kind": "literal",
+                            "literal": {
+                              "type": "text",
+                              "value": "Continue"
+                            }
+                          }
+                        }
+                      },
+                      {
+                        "id": "publication_declined",
+                        "type": "if",
+                        "condition": {
+                          "op": "not",
+                          "arg": {
+                            "op": "reference",
+                            "reference": {
+                              "source": "task_output",
+                              "task": "confirm_publication",
+                              "key": "confirmed"
+                            }
+                          }
+                        },
+                        "then": [
+                          {
+                            "id": "stop_publication_declined",
+                            "type": "stop",
+                            "outcome": "declined"
+                          }
+                        ]
+                      },
+                      {
+                        "id": "publish_note_form",
+                        "type": "interface.show_form",
+                        "version": "1.0.0",
+                        "properties": {
+                          "form": {
+                            "kind": "literal",
+                            "literal": {
+                              "type": "text",
+                              "value": "studio_publish_form"
+                            }
+                          },
+                          "inputs": {
+                            "kind": "map",
+                            "entries": {
+                              "release_note": {
+                                "kind": "reference",
+                                "reference": {
+                                  "source": "task_output",
+                                  "task": "review_publication",
+                                  "key": "result",
+                                  "path": ["release_note"]
+                                }
+                              }
+                            }
+                          }
+                        }
+                      },
+                      {
+                        "id": "publish_note_cancelled",
+                        "type": "if",
+                        "condition": {
+                          "op": "not",
+                          "arg": {
+                            "op": "reference",
+                            "reference": {
+                              "source": "task_output",
+                              "task": "publish_note_form",
+                              "key": "submitted"
+                            }
+                          }
+                        },
+                        "then": [
+                          {
+                            "id": "stop_publish_cancelled",
+                            "type": "stop",
+                            "outcome": "cancelled"
+                          }
+                        ]
+                      },
+                      {
+                        "id": "publish",
+                        "type": "operation.call",
+                        "version": "1.0.0",
+                        "allowRefusal": true,
+                        "properties": {
+                          "operation": {
+                            "kind": "literal",
+                            "literal": {
+                              "type": "text",
+                              "value": "platform.publish_application"
+                            }
+                          },
+                          "inputs": {
+                            "kind": "map",
+                            "entries": {
+                              "application_root_id": {
+                                "kind": "reference",
+                                "reference": {
+                                  "source": "input",
+                                  "name": "application_root_id"
+                                }
+                              },
+                              "expected": {
+                                "kind": "reference",
+                                "reference": {
+                                  "source": "task_output",
+                                  "task": "review_publication",
+                                  "key": "result",
+                                  "path": ["expected"]
+                                }
+                              },
+                              "release_note": {
+                                "kind": "reference",
+                                "reference": {
+                                  "source": "task_output",
+                                  "task": "publish_note_form",
+                                  "key": "values",
+                                  "path": ["release_note"]
+                                }
+                              }
+                            }
+                          }
+                        }
+                      },
+                      {
+                        "id": "publish_result",
+                        "type": "switch",
+                        "value": {
+                          "kind": "reference",
+                          "reference": {
+                            "source": "task_output",
+                            "task": "publish",
+                            "key": "outcome"
+                          }
+                        },
+                        "cases": [
+                          {
+                            "key": "committed",
+                            "when": {
+                              "type": "choice",
+                              "value": "committed"
+                            },
+                            "tasks": [
+                              {
+                                "id": "publish_done",
+                                "type": "interface.show_message",
+                                "version": "1.0.0",
+                                "properties": {
+                                  "message": {
+                                    "kind": "formula",
+                                    "formula": {
+                                      "op": "join",
+                                      "parts": [
+                                        {
+                                          "op": "literal",
+                                          "type": "text",
+                                          "value": "Version "
+                                        },
+                                        {
+                                          "op": "reference",
+                                          "reference": {
+                                            "source": "task_output",
+                                            "task": "publish",
+                                            "key": "result",
+                                            "path": ["release_version"]
+                                          }
+                                        },
+                                        {
+                                          "op": "literal",
+                                          "type": "text",
+                                          "value": " was published. Install or upgrade it from the list to use it."
+                                        }
+                                      ]
+                                    }
+                                  },
+                                  "title": {
+                                    "kind": "literal",
+                                    "literal": {
+                                      "type": "text",
+                                      "value": "Publish application"
+                                    }
+                                  },
+                                  "target": {
+                                    "kind": "literal",
+                                    "literal": {
+                                      "type": "text",
+                                      "value": "dialog"
+                                    }
+                                  },
+                                  "severity": {
+                                    "kind": "literal",
+                                    "literal": {
+                                      "type": "text",
+                                      "value": "success"
+                                    }
+                                  }
+                                }
+                              },
+                              {
+                                "id": "publish_refresh",
+                                "type": "interface.refresh",
+                                "version": "1.0.0",
+                                "properties": {
+                                  "component": {
+                                    "kind": "literal",
+                                    "literal": {
+                                      "type": "text",
+                                      "value": "store_applications_region"
+                                    }
+                                  }
+                                }
+                              }
+                            ]
+                          },
+                          {
+                            "key": "conflict",
+                            "when": {
+                              "type": "choice",
+                              "value": "conflict"
+                            },
+                            "tasks": [
+                              {
+                                "id": "publish_conflict",
+                                "type": "interface.show_message",
+                                "version": "1.0.0",
+                                "properties": {
+                                  "message": {
+                                    "kind": "literal",
+                                    "literal": {
+                                      "type": "text",
+                                      "value": "The draft changed while you were reviewing it. Choose Publish again."
+                                    }
+                                  },
+                                  "title": {
+                                    "kind": "literal",
+                                    "literal": {
+                                      "type": "text",
+                                      "value": "Publish application"
+                                    }
+                                  },
+                                  "target": {
+                                    "kind": "literal",
+                                    "literal": {
+                                      "type": "text",
+                                      "value": "dialog"
+                                    }
+                                  },
+                                  "severity": {
+                                    "kind": "literal",
+                                    "literal": {
+                                      "type": "text",
+                                      "value": "info"
+                                    }
+                                  }
+                                }
+                              }
+                            ]
+                          }
+                        ],
+                        "default": [
+                          {
+                            "id": "publish_failed",
+                            "type": "interface.show_message",
+                            "version": "1.0.0",
+                            "properties": {
+                              "message": {
+                                "kind": "literal",
+                                "literal": {
+                                  "type": "text",
+                                  "value": "The version could not be published. Check the application in Studio before trying again."
+                                }
+                              },
+                              "title": {
+                                "kind": "literal",
+                                "literal": {
+                                  "type": "text",
+                                  "value": "Publish application"
+                                }
+                              },
+                              "target": {
+                                "kind": "literal",
+                                "literal": {
+                                  "type": "text",
+                                  "value": "dialog"
+                                }
+                              },
+                              "severity": {
+                                "kind": "literal",
+                                "literal": {
+                                  "type": "text",
+                                  "value": "info"
+                                }
+                              }
+                            }
+                          }
+                        ]
+                      }
+                    ],
+                    "else": [
+                      {
+                        "id": "publication_not_ready",
+                        "type": "interface.show_message",
+                        "version": "1.0.0",
+                        "properties": {
+                          "message": {
+                            "kind": "reference",
+                            "reference": {
+                              "source": "task_output",
+                              "task": "review_publication",
+                              "key": "result",
+                              "path": ["problem"]
+                            }
+                          },
+                          "title": {
+                            "kind": "literal",
+                            "literal": {
+                              "type": "text",
+                              "value": "Publish application"
+                            }
+                          },
+                          "target": {
+                            "kind": "literal",
+                            "literal": {
+                              "type": "text",
+                              "value": "dialog"
+                            }
+                          },
+                          "severity": {
+                            "kind": "literal",
+                            "literal": {
+                              "type": "text",
+                              "value": "info"
+                            }
+                          }
+                        }
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "key": "refused",
+                "when": {
+                  "type": "choice",
+                  "value": "refused"
+                },
+                "tasks": [
+                  {
+                    "id": "publication_review_refused",
+                    "type": "interface.show_message",
+                    "version": "1.0.0",
+                    "properties": {
+                      "message": {
+                        "kind": "literal",
+                        "literal": {
+                          "type": "text",
+                          "value": "You cannot publish this application: you need permission to publish versions of applications."
+                        }
+                      },
+                      "title": {
+                        "kind": "literal",
+                        "literal": {
+                          "type": "text",
+                          "value": "Publish application"
+                        }
+                      },
+                      "target": {
+                        "kind": "literal",
+                        "literal": {
+                          "type": "text",
+                          "value": "dialog"
+                        }
+                      },
+                      "severity": {
+                        "kind": "literal",
+                        "literal": {
+                          "type": "text",
+                          "value": "info"
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            ],
+            "default": [
+              {
+                "id": "publication_review_failed",
+                "type": "interface.show_message",
+                "version": "1.0.0",
+                "properties": {
+                  "message": {
+                    "kind": "literal",
+                    "literal": {
+                      "type": "text",
+                      "value": "The application could not be reviewed for publication. Try again shortly."
+                    }
+                  },
+                  "title": {
+                    "kind": "literal",
+                    "literal": {
+                      "type": "text",
+                      "value": "Publish application"
+                    }
+                  },
+                  "target": {
+                    "kind": "literal",
+                    "literal": {
+                      "type": "text",
+                      "value": "dialog"
+                    }
+                  },
+                  "severity": {
+                    "kind": "literal",
+                    "literal": {
+                      "type": "text",
+                      "value": "info"
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        ],
+        "outputs": {},
+        "errors": [],
+        "finally": []
       }
     ],
     "flow_bindings": [
@@ -4966,6 +6105,61 @@
             "name": "record_id"
           }
         },
+        "settings": {
+          "condition": null,
+          "debounceMs": 0,
+          "concurrency": "ignore_while_running",
+          "exclusive": "none",
+          "timeoutMs": null
+        }
+      },
+      {
+        "id": "binding_publish_application",
+        "control": "store_applications_region",
+        "event_id": "event_publish_application",
+        "event": "row_action",
+        "flow": "flow_publish_application",
+        "inputs": {
+          "application_root_id": {
+            "kind": "caller",
+            "name": "record_id"
+          }
+        },
+        "settings": {
+          "condition": null,
+          "debounceMs": 0,
+          "concurrency": "ignore_while_running",
+          "exclusive": "none",
+          "timeoutMs": null
+        }
+      },
+      {
+        "id": "binding_publish_from_details",
+        "control": "store_application_publish",
+        "event_id": "event_publish_application",
+        "event": "action",
+        "flow": "flow_publish_application",
+        "inputs": {
+          "application_root_id": {
+            "kind": "caller",
+            "name": "record_id"
+          }
+        },
+        "settings": {
+          "condition": null,
+          "debounceMs": 0,
+          "concurrency": "ignore_while_running",
+          "exclusive": "none",
+          "timeoutMs": null
+        }
+      },
+      {
+        "id": "binding_create_application",
+        "control": "app_store_new_application",
+        "event_id": "event_create_application",
+        "event": "action",
+        "flow": "flow_create_application",
+        "inputs": {},
         "settings": {
           "condition": null,
           "debounceMs": 0,

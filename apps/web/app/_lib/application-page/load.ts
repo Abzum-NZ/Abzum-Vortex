@@ -33,7 +33,10 @@ import {
   compiledPageShellId,
   recordsTableParameterPlacement,
   applicationLinkTargetSchema,
+  applicationActionCapabilitySchema,
+  type ApplicationLinkRow,
 } from "@vortex/platform/schema";
+import { applicationCapabilityAllowed, applicationLinkRowOf } from "@vortex/platform/server";
 import { createPlacementReadServices } from "./placement-services";
 import { loadApplicationSurfaces } from "./application-links";
 import { prepareRuntimePreviewPage } from "../runtime-preview-demand";
@@ -208,7 +211,8 @@ const pageApplicationDeclarations = (
     if (
       settings.studio_link_label !== undefined ||
       settings.upgrade_link_label !== undefined ||
-      settings.link !== undefined
+      settings.link !== undefined ||
+      settings.application_capability !== undefined
     )
       surfaces = true;
     const rowActions = settings.row_actions;
@@ -229,6 +233,17 @@ const pageApplicationDeclarations = (
       surfaces = true;
   }
   return { audiences, surfaces };
+};
+
+/** The fields of an application record the surfaces decide a link or an action from, when it has them. */
+const applicationFactKeys = ["key", "status", "is_system_application"] as const;
+const applicationFactFieldIds = (
+  recordType: Readonly<{ fields: readonly Readonly<{ key: string; fieldId: unknown }>[] }>,
+): string[] => {
+  const found = applicationFactKeys.flatMap((key) =>
+    recordType.fields.filter((field) => field.key === key).map((field) => String(field.fieldId)),
+  );
+  return found.length === applicationFactKeys.length ? found.map((id) => id.toLowerCase()) : [];
 };
 
 /**
@@ -490,11 +505,14 @@ const loadApplicationPageJoined = async (
         sameId(String(recordType.recordTypeId), String(subjectType.recordTypeId)),
     );
   let subjectRead: Promise<PageSubjectReadResult> | undefined;
+  let subjectApplication: ApplicationLinkRow | undefined;
   const requestedSubjectFieldIds =
     pageDefinition.type === "detail" || pageDefinition.type === "public"
       ? [
           ...new Set([
             ...pageSubjectFieldIds(allPlacements),
+            // The application facts a button's link or capability is decided from.
+            ...(subjectRecordType === undefined ? [] : applicationFactFieldIds(subjectRecordType)),
             // A field refresh still needs its form's complete visible baseline. Named controls
             // consume the same field that form projection resolves, even without a field reference.
             ...allPlacements.filter(isEditFieldPlacement).flatMap((placement) => {
@@ -534,6 +552,18 @@ const loadApplicationPageJoined = async (
     if (addressedSubject.kind === "temporarily_unavailable")
       return { kind: "temporarily_unavailable" };
     if (addressedSubject.kind !== "read") return { kind: "unavailable" };
+    subjectApplication =
+      subjectRecordType === undefined
+        ? undefined
+        : applicationLinkRowOf(
+            { recordId: subjectId.data, values: addressedSubject.row.values },
+            new Map(
+              subjectRecordType.fields.map((field) => [
+                field.key,
+                String(field.fieldId).toLowerCase(),
+              ]),
+            ),
+          );
     // A contributed field the viewer's permissions do not let them read is left out of the detail,
     // not shown as restricted: the person has no relationship to a field they cannot know exists.
     const contributedIds = contributedFieldIdsOf(context, pageDefinition);
@@ -768,7 +798,30 @@ const loadApplicationPageJoined = async (
     for (const placement of placements) {
       const release = placementBlockRelease(placement.vortex.block as unknown);
       if (release.blockId !== BUTTON_BLOCK_RELEASE.blockId) continue;
-      const declaredLink = (placement.settings as Readonly<Record<string, unknown>>).link;
+      const settings = placement.settings as Readonly<Record<string, unknown>>;
+      const declaredLink = settings.link;
+      const declaredCapability = settings.application_capability;
+      // A button for an action the viewer may not take on this application is not drawn.
+      if (
+        isRecord(declaredCapability) &&
+        declaredCapability.kind === "choice" &&
+        typeof declaredCapability.value === "string"
+      ) {
+        const capability = applicationActionCapabilitySchema.safeParse(declaredCapability.value);
+        if (
+          capability.success &&
+          !applicationCapabilityAllowed(
+            capability.data,
+            subjectApplication,
+            applicationSurfaces.capabilities,
+          )
+        )
+          data[placement.placementId] = {
+            status: "ready",
+            values: { kind: "button", hidden: true },
+          };
+        continue;
+      }
       if (
         !isRecord(declaredLink) ||
         declaredLink.kind !== "choice" ||
@@ -777,9 +830,11 @@ const loadApplicationPageJoined = async (
         continue;
       const parsed = applicationLinkTargetSchema.safeParse(declaredLink.value);
       if (!parsed.success) continue;
-      const href = applicationSurfaces.link(parsed.data, undefined);
-      if (href !== undefined)
-        data[placement.placementId] = { status: "ready", values: { kind: "button", href } };
+      const href = applicationSurfaces.link(parsed.data, subjectApplication);
+      data[placement.placementId] = {
+        status: "ready",
+        values: href === undefined ? { kind: "button", hidden: true } : { kind: "button", href },
+      };
     }
   const placementReaderInput: PlacementReaderInput = {
     context,

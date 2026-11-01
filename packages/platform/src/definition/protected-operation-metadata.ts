@@ -188,5 +188,20 @@ export const protectedOperationMetadata: Record<
     transaction: "change",
     workflow: "multi_transaction",
   },
+  create_application: {
+    authorityKind: "permission",
+    transaction: "change",
+    workflow: "multi_transaction",
+  },
+  review_application_publication: {
+    authorityKind: "permission",
+    transaction: "read",
+    workflow: "multi_transaction",
+  },
+  publish_application: {
+    authorityKind: "permission",
+    transaction: "change",
+    workflow: "multi_transaction",
+  },
   prepare_role_assignment: { authorityKind: "permission", transaction: "read", workflow: "single" },
 };

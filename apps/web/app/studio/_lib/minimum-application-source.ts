@@ -26,7 +26,7 @@ type MinimumApplicationSourceResult =
     }>;
 
 /** The key a new application gets from its name: `app.` and the name's words, `app.assets_hub`, cut to the 40-character segment limit. */
-export const applicationKeyFromName = (name: string): string => {
+const applicationKeyFromName = (name: string): string => {
   const words = name
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "_")

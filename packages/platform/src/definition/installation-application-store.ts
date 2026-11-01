@@ -42,6 +42,10 @@ import {
   readApplicationPurge,
   requireApplicationChangeStepUp,
 } from "./installation-purge";
+import {
+  createApplicationAuthoringService,
+  type NewApplicationSourceBuilder,
+} from "./installation-application-authoring";
 import { readApplicationRemoval, removeApplication } from "./installation-removal";
 import {
   readUpgradeAuthorizedState,
@@ -71,7 +75,9 @@ import {
  * showed (`expected`); the install and the upgrade refuse as a conflict when that state moved, so
  * a person only ever confirms what is still true.
  */
-type ApplicationStoreEnvironment = FirstInstallFlowEnvironment & UpgradeRoleEnvironment;
+type ApplicationStoreEnvironment = FirstInstallFlowEnvironment &
+  UpgradeRoleEnvironment &
+  Readonly<{ newApplicationSource: NewApplicationSourceBuilder }>;
 
 export type { StoreReceiptCompletion };
 
@@ -752,6 +758,7 @@ const upgrade = async (
 
 /** The application catalogue's journeys, bound to the application's installation environment. */
 export const createApplicationStoreService = (environment: ApplicationStoreEnvironment) => ({
+  ...createApplicationAuthoringService(environment),
   reviewRemoval: async (
     session: IdentitySession,
     selection: OrganizationSelectionCandidate,
