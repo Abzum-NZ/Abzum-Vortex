@@ -7,6 +7,7 @@ import {
   readCurrentOrganizationDefaultApplicationAfterAuthorization,
   readCurrentOrganizationAppStoreAddressAfterAuthorization,
   readCurrentOrganizationRuntimeSettingsAfterAuthorization,
+  withRuntimeTransaction,
 } from "@vortex/platform/server";
 import {
   applicationRootIdSchema,
@@ -39,7 +40,7 @@ import {
   mintSystemContext,
   nominatedOwnerSession,
 } from "./development-authority";
-import { loadSetupState } from "./state";
+import { loadSetupState, prepareSetupState } from "./state";
 import { loadLocalWebEnvironment } from "../demo-setup/local-environment";
 import { createInProcessEventDispatcher } from "../../app/_lib/event-dispatch";
 
@@ -132,7 +133,7 @@ const initializeLandingZoneDefault = async (
     const attemptRevision = state.defaultApplicationInitializationAttemptRevision;
     if (attemptRevision === null)
       throw new Error(
-        "Development setup state has inconsistent default initialization metadata. Run `pnpm demo:setup` to reset the local database, or delete `supabase/.temp/development-setup-state.json`.",
+        "Development setup state has inconsistent default initialization metadata; inspect the local database's setup state.",
       );
     const writeWasObserved =
       observed.value.revision === attemptRevision + 1 &&
@@ -328,6 +329,15 @@ export const runDevelopmentSetup = async (
   const args = parseSetupArguments(argv);
   const identityAuthorityId = requireLocalDevelopmentEnvironment(process.env);
   const manifest = developmentSetupManifestFor(args.tenantShortName, args.organizationShortName);
+  const databaseSystemId = await withRuntimeTransaction(async (transaction) => {
+    const rows =
+      await transaction.query`select system_identifier::text as system_identifier from pg_catalog.pg_control_system()`;
+    const value = rows.length === 1 ? rows[0]?.system_identifier : undefined;
+    if (typeof value !== "string" || !/^\d+$/.test(value))
+      throw new Error("Local database system identifier is unavailable.");
+    return value;
+  });
+  prepareSetupState(databaseSystemId);
   const stewardIdentityId = await resolveFirstOwnerIdentity(args.firstOwner);
   log(`first owner identity ${stewardIdentityId}`);
 
@@ -379,7 +389,7 @@ export const runDevelopmentSetup = async (
     systemActorId: manifest.definitionActorId,
     accessVersion: provisioned.accessVersion,
   };
-  const state = loadSetupState(provisioned.rootOrganizationId, {
+  const state = loadSetupState(provisioned.rootOrganizationId, databaseSystemId, {
     tenantId: provisioned.tenantId,
     tenantShortName: manifest.provisioning.tenant.shortName,
     organizationShortName: manifest.provisioning.rootOrganization.shortName,

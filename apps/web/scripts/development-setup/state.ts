@@ -1,11 +1,10 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { z } from "zod";
 
 /**
- * The setup's own record of what it published, kept in the ignored `supabase/.temp` directory so a
- * re-run reuses the releases instead of creating duplicates. It holds identifiers only and is
- * discarded when it belongs to another organisation (a reset database creates a new one).
+ * The setup's own record of what it published, kept with the local Supabase database so another
+ * worktree using that database reuses its releases instead of creating duplicates.
  */
 
 export type PublishedRelease = Readonly<{
@@ -56,7 +55,12 @@ export const findRepositoryRoot = (start = process.cwd()): string => {
 };
 
 const stateFile = (): string =>
-  join(findRepositoryRoot(), "supabase", ".temp", "development-setup-state.json");
+  join(
+    process.env.VORTEX_SUPABASE_WORKDIR ?? findRepositoryRoot(),
+    "supabase",
+    ".temp",
+    "development-setup-state.json",
+  );
 
 const developmentSetupMetadataSchema = z
   .object({
@@ -71,8 +75,7 @@ const developmentSetupMetadataSchema = z
   .strict();
 
 const setupRevisionSchema = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER);
-const setupStateRepairInstruction =
-  "Run `pnpm demo:setup` to reset the local database, or delete `supabase/.temp/development-setup-state.json`.";
+const setupStateRepairInstruction = "Inspect the development setup state for this local database.";
 const createdDraftSchema = z
   .object({
     rootId: z.uuid(),
@@ -86,10 +89,14 @@ const publishedReleaseSchema = z
     releaseVersion: z.string().min(1),
   })
   .strict();
-const setupStateEnvelopeSchema = z.object({ organizationId: z.uuid() }).passthrough();
+const databaseSystemIdSchema = z.string().regex(/^\d+$/);
+const setupStateEnvelopeSchema = z
+  .object({ organizationId: z.uuid(), databaseSystemId: databaseSystemIdSchema })
+  .passthrough();
 const setupStateDocumentSchema = z
   .object({
     organizationId: z.uuid(),
+    databaseSystemId: databaseSystemIdSchema,
     metadata: developmentSetupMetadataSchema,
     drafts: z.record(z.string(), createdDraftSchema),
     releases: z.record(z.string(), publishedReleaseSchema),
@@ -150,14 +157,24 @@ const requiredStateEnvelope = (value: unknown) => {
   const parsed = setupStateEnvelopeSchema.safeParse(value);
   if (!parsed.success)
     throw stateFailure(
-      "Development setup state has a malformed organisation identity.",
+      "Development setup state has a malformed organisation or database identity.",
       parsed.error,
     );
   return parsed.data;
 };
 
+/** A reset creates a new local database cluster; its predecessor's setup state no longer applies. */
+export const prepareSetupState = (databaseSystemId: string): void => {
+  databaseSystemIdSchema.parse(databaseSystemId);
+  const document = readSetupStateDocument();
+  if (document === undefined) return;
+  const envelope = requiredStateEnvelope(document);
+  if (envelope.databaseSystemId !== databaseSystemId) unlinkSync(stateFile());
+};
+
 export const loadSetupState = (
   organizationId: string,
+  databaseSystemId: string,
   initialMetadata?: DevelopmentSetupMetadata,
 ): SetupState => {
   const parsedInitialMetadata =
@@ -181,25 +198,29 @@ export const loadSetupState = (
   const document = readSetupStateDocument();
   if (document !== undefined) {
     const envelope = requiredStateEnvelope(document);
-    if (envelope.organizationId.toLowerCase() === organizationId.toLowerCase()) {
-      const parsed = setupStateDocumentSchema.safeParse(document);
-      if (!parsed.success)
-        throw stateFailure(
-          "Development setup state does not match the current schema.",
-          parsed.error,
-        );
-      const stored = parsed.data;
-      if (initialMetadata === undefined) metadata = stored.metadata;
-      releases = stored.releases;
-      drafts = stored.drafts;
-      installerRoleGranted = stored.installerRoleGranted;
-      definitionRoleGranted = stored.definitionRoleGranted;
-      setupCompleted = stored.setupCompleted;
-      defaultApplicationInitializationAttempted = stored.defaultApplicationInitializationAttempted;
-      defaultApplicationInitializationAttemptRevision =
-        stored.defaultApplicationInitializationAttemptRevision;
-      defaultApplicationInitializationCompleted = stored.defaultApplicationInitializationCompleted;
-    }
+    if (envelope.databaseSystemId !== databaseSystemId)
+      throw new Error("The local database changed while development setup was running.");
+    if (envelope.organizationId.toLowerCase() !== organizationId.toLowerCase())
+      throw new Error(
+        `Development setup state belongs to organisation ${envelope.organizationId}, but the database returned organisation ${organizationId}.`,
+      );
+    const parsed = setupStateDocumentSchema.safeParse(document);
+    if (!parsed.success)
+      throw stateFailure(
+        "Development setup state does not match the current schema.",
+        parsed.error,
+      );
+    const stored = parsed.data;
+    if (initialMetadata === undefined) metadata = stored.metadata;
+    releases = stored.releases;
+    drafts = stored.drafts;
+    installerRoleGranted = stored.installerRoleGranted;
+    definitionRoleGranted = stored.definitionRoleGranted;
+    setupCompleted = stored.setupCompleted;
+    defaultApplicationInitializationAttempted = stored.defaultApplicationInitializationAttempted;
+    defaultApplicationInitializationAttemptRevision =
+      stored.defaultApplicationInitializationAttemptRevision;
+    defaultApplicationInitializationCompleted = stored.defaultApplicationInitializationCompleted;
   }
   if (metadata === undefined)
     throw new Error("Development setup metadata is unavailable for the selected organisation.");
@@ -221,6 +242,7 @@ export const loadSetupState = (
         `${JSON.stringify(
           {
             organizationId: state.organizationId,
+            databaseSystemId,
             metadata: state.metadata,
             drafts: state.drafts,
             releases: state.releases,

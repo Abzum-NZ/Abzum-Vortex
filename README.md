@@ -103,8 +103,9 @@ The configured manifest is `apps/web/scripts/development-setup/manifest.ts`. Man
 first sign-in never implies application permission: the account can use only the roles explicitly
 assigned through the protected Access operations.
 
-An interrupted `pnpm setup:local` run resumes from the identifiers recorded in
-`supabase/.temp/development-setup-state.json`; provisioning and record saves replay by their stable
+An interrupted `pnpm setup:local` run resumes from identifiers recorded in the local Supabase
+workdir's `supabase/.temp/development-setup-state.json`; worktrees using the same lane share this
+state. A database reset makes setup start afresh; provisioning and record saves replay by their stable
 idempotency keys. Re-running setup for the same organisation reuses its published releases,
 installations and role assignments. A different nominated account is refused. `pnpm demo:setup`
 deliberately resets the local database before starting a fresh demo.
