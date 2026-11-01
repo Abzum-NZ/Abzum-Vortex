@@ -93,7 +93,7 @@ const stateContent = (
         page: {
           key: "page_missing",
           title: "This page no longer exists",
-          detail: `${state.applicationName} has no page at this address. It may have been removed or renamed.`,
+          detail: `This page no longer exists in ${state.applicationName}. It may have been removed or renamed.`,
           actionLabel: `Back to ${state.applicationName}`,
         },
         href: state.homeHref,
