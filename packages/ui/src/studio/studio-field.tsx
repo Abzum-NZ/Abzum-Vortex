@@ -9,7 +9,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { Field, FieldDescription, FieldError, FieldLabel } from "../components/field";
+import { Field, FieldError, FieldLabel } from "../components/field";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../components/tooltip";
 import { Button } from "../components/button";
 import { Info } from "lucide-react";
@@ -53,15 +53,11 @@ export function StudioFieldProblemsProvider({ children }: Readonly<{ children: R
 
 export const useStudioFieldProblems = () => useContext(FieldProblemsContext);
 
-/** Long help is available on focus and remains the control's accessible description. */
+/** Help is an info icon with a tooltip, and remains the control's accessible description. */
 export function StudioHelp({ hint, id }: Readonly<{ hint: string; id?: string }>) {
   const generated = useId();
   const descriptionId = id ?? generated;
-  return hint.length <= 80 ? (
-    <FieldDescription id={descriptionId} className="text-sm">
-      {hint}
-    </FieldDescription>
-  ) : (
+  return (
     <>
       <span id={descriptionId} className="sr-only">
         {hint}
@@ -120,14 +116,13 @@ export function StudioField({
       <div className="flex items-center gap-2">
         <FieldLabel htmlFor={id}>{label}</FieldLabel>
         {optional && <span className="text-xs text-muted-foreground">Optional</span>}
-        {hint !== undefined && hint.length > 80 && <StudioHelp hint={hint} id={id + "-hint"} />}
+        {hint !== undefined && <StudioHelp hint={hint} id={id + "-hint"} />}
       </div>
       {children({
         id,
         ...(error === undefined ? {} : { "aria-invalid": true as const }),
         ...(description === "" ? {} : { "aria-describedby": description }),
       })}
-      {hint !== undefined && hint.length <= 80 && <StudioHelp hint={hint} id={id + "-hint"} />}
       {error !== undefined && <FieldError id={id + "-error"}>{error}</FieldError>}
     </Field>
   );

@@ -53,13 +53,17 @@ export type ApplicationPlaceOpen =
   | Readonly<{ kind: "none" }>;
 
 /**
- * One place that uses a part of the draft: its name for a person, the item that shows it and, for a
- * block or a flow step, what holds it ("page Contacts"), so Studio can name the block its own way.
+ * One place that uses a part of the draft. `label` is its noun phrase for sentences (refusals);
+ * `trail` is its path as Studio's navigation shows it: the application, the Studio area, then the
+ * item, in sentence case. `open` is the item that shows it. Studio names blocks and flow steps by
+ * its outline, so `named` lists the trail segments (by position) it may rename with the item they
+ * stand for.
  */
 export type ApplicationUsePlace = Readonly<{
   label: string;
+  trail: readonly string[];
+  named?: readonly Readonly<{ at: number; open: ApplicationPlaceOpen }>[];
   open: ApplicationPlaceOpen;
-  within?: string;
 }>;
 
 /** A part of the draft that other parts can use. */
@@ -107,10 +111,10 @@ const at = (value: unknown, path: Path): unknown =>
   );
 const quoted = (name: string) => `“${name}”`;
 
-/** The innermost block (a Puck item with an id) along a path under a page or layout. */
-const blockAlong = (root: unknown, rest: Path): string | undefined => {
+/** Every block (a Puck item with an id) along a path under a page or layout, outermost first. */
+const blocksAlong = (root: unknown, rest: Path): string[] => {
   let node = root;
-  let found: string | undefined;
+  const found: string[] = [];
   for (const segment of rest) {
     node = (node as Record<string | number, unknown> | undefined)?.[segment];
     if (
@@ -119,10 +123,14 @@ const blockAlong = (root: unknown, rest: Path): string | undefined => {
       isObject(node.props) &&
       typeof node.props.id === "string"
     )
-      found = node.props.id;
+      found.push(node.props.id);
   }
   return found;
 };
+
+/** The innermost block along a path under a page or layout. */
+const blockAlong = (root: unknown, rest: Path): string | undefined =>
+  blocksAlong(root, rest).at(-1);
 
 const taskLists: ReadonlySet<string | number> = new Set([
   "tasks",
@@ -151,33 +159,40 @@ const taskAlong = (flow: unknown, rest: Path): string | undefined => {
   return found;
 };
 
-const navigationAt = (source: Source, path: Path): { id?: string; label?: string } | undefined => {
+/** The menu entries along a path, outermost first: the entry's parents, then the entry. */
+const navigationAlong = (source: Source, path: Path): { id?: string; label?: string }[] => {
   let node: unknown = source.body.navigation;
-  let found: { id?: string; label?: string } | undefined;
+  const found: { id?: string; label?: string }[] = [];
   for (let index = 2; index < path.length; index += 1) {
     const segment = path[index]!;
     node = (node as Record<string | number, unknown> | undefined)?.[segment];
     if (typeof segment === "number" && isObject(node))
-      found = node as { id?: string; label?: string };
+      found.push(node as { id?: string; label?: string });
   }
   return found;
 };
 
+/** A flow, or the step of it a path sits in; `base` is the trail to the flow's list. */
 const flowPlace = (
   flow: Json,
   rest: Path,
   name: string,
+  flowName: string,
+  base: readonly string[],
   moduleKey: string | null,
 ): ApplicationUsePlace => {
   const flowAlias = String(flow.id ?? "");
   const taskId = taskAlong(flow, rest);
-  return taskId === undefined
-    ? { label: name, open: { kind: "flow", flowAlias, moduleKey } }
-    : {
-        label: `A step of ${name.charAt(0).toLowerCase()}${name.slice(1)}`,
-        within: name.charAt(0).toLowerCase() + name.slice(1),
-        open: { kind: "flow_step", flowAlias, moduleKey, taskId },
-      };
+  const trail = [...base, flowName];
+  if (taskId === undefined)
+    return { label: name, trail, open: { kind: "flow", flowAlias, moduleKey } };
+  const open = { kind: "flow_step", flowAlias, moduleKey, taskId } as const;
+  return {
+    label: `A step of ${name.charAt(0).toLowerCase()}${name.slice(1)}`,
+    trail: [...trail, taskId.replaceAll("_", " ")],
+    named: [{ at: trail.length, open }],
+    open,
+  };
 };
 
 /** The page or layout block, by its alias, that a form binding names. */
@@ -196,21 +211,37 @@ const placementPath = (source: Source, alias: string): Path | undefined => {
   return found;
 };
 
-const areaWords: Readonly<Record<string, string>> = {
-  interfaces: "An interface operation",
-  public_addresses: "A public address",
-  events: "A form event of the application",
-  connection_bindings: "A connection of the application",
-  search: "Search settings",
-  experiences: "A page shown when another cannot be opened",
+/** Application settings that hold references: the noun phrase for sentences and the trail's name. */
+const areaWords: Readonly<Record<string, Readonly<{ label: string; trail: string }>>> = {
+  interfaces: { label: "An interface operation", trail: "Interface operations" },
+  public_addresses: { label: "A public address", trail: "Public addresses" },
+  events: { label: "A form event of the application", trail: "Form events" },
+  connection_bindings: { label: "A connection of the application", trail: "Connections" },
+  search: { label: "Search settings", trail: "Search" },
+  experiences: {
+    label: "A page shown when another cannot be opened",
+    trail: "Fallback pages",
+  },
 };
 
-/** Names the place in the source a reference sits at, with what Studio opens to show it. */
+/** A module's trail in the Data area; the module's name appears only when there are several. */
+const dataTrail = (source: Source, moduleName: string): readonly string[] =>
+  source.body.modules.length > 1
+    ? [source.body.name, "Data", moduleName]
+    : [source.body.name, "Data"];
+
+/**
+ * Names the place in the source a reference sits at, with what Studio opens to show it. The trail
+ * starts with the application, then the Studio area, then the item; Studio renames the segments
+ * in `named` (blocks, flow steps) with the names its outline shows.
+ */
 export const describeSourcePlace = (source: Source, path: Path): ApplicationUsePlace => {
   const [, section, index] = path;
   const body = source.body;
+  const app = body.name;
   if (section === "modules" && typeof index === "number") {
     const module = body.modules[index]!;
+    const data = dataTrail(source, module.name);
     const [, , , part, partIndex, child, childIndex] = path;
     if (part === "record_types" && typeof partIndex === "number") {
       const record = module.record_types[partIndex]!;
@@ -219,11 +250,15 @@ export const describeSourcePlace = (source: Source, path: Path): ApplicationUseP
         moduleKey: module.key,
         recordKey: record.key,
       } as const;
-      if (child === "pipelines" && typeof childIndex === "number")
+      const recordTrail = [...data, record.name];
+      if (child === "pipelines" && typeof childIndex === "number") {
+        const pipeline = record.pipelines[childIndex]!;
         return {
-          label: `Pipeline ${record.pipelines[childIndex]!.name} of ${record.name}`,
+          label: `Pipeline ${pipeline.name} of ${record.name}`,
+          trail: [...recordTrail, "Pipelines", pipeline.name],
           open: recordOpen,
         };
+      }
       const field =
         child === "fields" && typeof childIndex === "number"
           ? record.fields[childIndex]
@@ -233,9 +268,10 @@ export const describeSourcePlace = (source: Source, path: Path): ApplicationUseP
               )
             : undefined;
       return field === undefined
-        ? { label: `Record type ${record.name}`, open: recordOpen }
+        ? { label: `Record type ${record.name}`, trail: recordTrail, open: recordOpen }
         : {
             label: `Field ${field.label} of ${record.name}`,
+            trail: [...recordTrail, field.label],
             open: { ...recordOpen, kind: "field", fieldKey: field.key },
           };
     }
@@ -256,64 +292,114 @@ export const describeSourcePlace = (source: Source, path: Path): ApplicationUseP
       case "queries":
         return {
           label: `Query ${itemName}`,
+          trail: [...data, "Queries", itemName],
           open: { kind: "query", moduleKey: module.key, queryKey: String(item?.key ?? "") },
         };
       case "permissions":
-        return { label: `Permission ${itemName} in ${module.name}`, open: { kind: "none" } };
+        return {
+          label: `Permission ${itemName} in ${module.name}`,
+          trail: [app, "Access", "Permissions", itemName],
+          open: { kind: "none" },
+        };
       case "actions":
         return {
           label: `Action ${itemName} in ${module.name}`,
+          trail: [...data, "Actions", itemName],
           open:
             typeof item?.record_type === "string"
               ? { kind: "record_type", moduleKey: module.key, recordKey: item.record_type }
               : moduleOpen,
         };
       case "events":
-        return { label: `Event ${itemName} in ${module.name}`, open: moduleOpen };
+        return {
+          label: `Event ${itemName} in ${module.name}`,
+          trail: [...data, "Events", itemName],
+          open: moduleOpen,
+        };
       case "flows":
         return item === undefined
-          ? { label: `Module ${module.name}`, open: moduleOpen }
+          ? { label: `Module ${module.name}`, trail: data, open: moduleOpen }
           : flowPlace(
               item,
               path.slice(5),
               `Rule or flow ${itemName} in ${module.name}`,
+              itemName,
+              [...data, "Flows"],
               module.key,
             );
       case "extension_points":
-        return { label: `Extension point ${itemName} in ${module.name}`, open: moduleOpen };
+        return {
+          label: `Extension point ${itemName} in ${module.name}`,
+          trail: [...data, "Extension points", itemName],
+          open: moduleOpen,
+        };
       case "sharing_conditions":
-        return { label: `Sharing condition ${itemName} in ${module.name}`, open: moduleOpen };
+        return {
+          label: `Sharing condition ${itemName} in ${module.name}`,
+          trail: [...data, "Sharing conditions", itemName],
+          open: moduleOpen,
+        };
       default:
-        return { label: `Module ${module.name}`, open: moduleOpen };
+        return { label: `Module ${module.name}`, trail: data, open: moduleOpen };
     }
   }
   if ((section === "pages" || section === "shells") && typeof index === "number") {
     const owner = section === "pages" ? body.pages[index]! : body.shells[index]!;
     const within = `${section === "pages" ? "page" : "layout"} ${quoted(owner.name)}`;
-    const block = blockAlong(owner, path.slice(3));
+    const ownerTrail = section === "pages" ? [app, owner.name] : [app, "Layouts", owner.name];
+    const blocks = blocksAlong(owner, path.slice(3));
+    const block = blocks.at(-1);
     if (block !== undefined)
       return {
         label: `A block on the ${within}`,
-        within,
+        // The platform does not name blocks: Studio replaces each "Block" with its outline's name.
+        trail: [...ownerTrail, ...blocks.map(() => "Block")],
+        named: blocks.map((alias, at) => ({
+          at: ownerTrail.length + at,
+          open: { kind: "placement", placementAlias: alias },
+        })),
         open: { kind: "placement", placementAlias: block },
       };
-    return section === "pages"
-      ? { label: `Page ${owner.name}`, open: { kind: "page", pageAlias: owner.id } }
-      : { label: `Layout ${owner.name}`, open: { kind: "shell", shellAlias: owner.id } };
+    if (section === "shells")
+      return {
+        label: `Layout ${owner.name}`,
+        trail: ownerTrail,
+        open: { kind: "shell", shellAlias: owner.id },
+      };
+    const valueKey = path[3] === "values" ? path[4] : undefined;
+    const valueLabel =
+      typeof valueKey === "string"
+        ? (at(owner, ["values", valueKey, "label"]) as string | undefined)
+        : undefined;
+    return {
+      label: `Page ${owner.name}`,
+      trail:
+        typeof valueKey === "string"
+          ? [...ownerTrail, "Page values", valueLabel ?? valueKey]
+          : ownerTrail,
+      open: { kind: "page", pageAlias: owner.id },
+    };
   }
   if (section === "flows" && typeof index === "number") {
     const flow = body.flows[index]!;
+    const flowName = String(Object.values(flow.labels)[0] ?? flow.key.replaceAll("_", " "));
     return flowPlace(
       flow as unknown as Json,
       path.slice(3),
-      `Flow ${Object.values(flow.labels)[0] ?? flow.key.replaceAll("_", " ")}`,
+      `Flow ${flowName}`,
+      flowName,
+      [app, "Flows"],
       null,
     );
   }
   if (section === "navigation") {
-    const entry = navigationAt(source, path);
+    const entries = navigationAlong(source, path);
+    const entry = entries.at(-1);
     return {
       label: `Menu entry ${entry?.label ?? ""}`.trim(),
+      trail: [app, "Menu", ...entries.map((item) => item.label ?? "")].filter(
+        (segment) => segment !== "",
+      ),
       open:
         entry?.id === undefined
           ? { kind: "none" }
@@ -325,6 +411,7 @@ export const describeSourcePlace = (source: Source, path: Path): ApplicationUseP
     return {
       label:
         path[3] === "home_page" ? `The start page of the role ${role.name}` : `Role ${role.name}`,
+      trail: [app, "Access", role.name],
       open: { kind: "role", roleKey: role.key },
     };
   }
@@ -333,19 +420,43 @@ export const describeSourcePlace = (source: Source, path: Path): ApplicationUseP
     // The page is the control of its own events.
     const page = body.pages.find((entry) => entry.id === control);
     if (page !== undefined)
-      return { label: `Page ${page.name}`, open: { kind: "page", pageAlias: page.id } };
+      return {
+        label: `Page ${page.name}`,
+        trail: [app, page.name],
+        open: { kind: "page", pageAlias: page.id },
+      };
     const block = control === undefined ? undefined : placementPath(source, control);
     return block === undefined
-      ? { label: "A form of the application", open: { kind: "none" } }
+      ? {
+          label: "A form of the application",
+          trail: [app, "Settings", "Forms"],
+          open: { kind: "none" },
+        }
       : describeSourcePlace(source, block);
   }
-  if (section === "home_page")
-    return { label: "The application's home page", open: { kind: "application" } };
-  if (section === "permissions" && typeof index === "number")
-    return { label: `Permission ${body.permissions[index]!.label}`, open: { kind: "none" } };
+  if (section === "home_page") {
+    const home = body.pages.find((entry) => entry.id === body.home_page);
+    return {
+      label: "The application's home page",
+      trail: [app, home?.name ?? "Home page"],
+      open: { kind: "application" },
+    };
+  }
+  if (section === "permissions" && typeof index === "number") {
+    const permission = body.permissions[index]!;
+    return {
+      label: `Permission ${permission.label}`,
+      trail: [app, "Access", "Permissions", permission.label],
+      open: { kind: "none" },
+    };
+  }
   if (typeof section === "string" && areaWords[section] !== undefined)
-    return { label: areaWords[section]!, open: { kind: "none" } };
-  return { label: "An application setting", open: { kind: "none" } };
+    return {
+      label: areaWords[section]!.label,
+      trail: [app, "Settings", areaWords[section]!.trail],
+      open: { kind: "none" },
+    };
+  return { label: "An application setting", trail: [app, "Settings"], open: { kind: "none" } };
 };
 
 // ---------------------------------------------------------------------------------------------
@@ -409,8 +520,11 @@ const applicationUseTargetKey = (target: ApplicationUseTarget): string => {
   }
 };
 
-/** A use: where it sits, and the label it is named by when its place's own name says too little. */
-type Use = Readonly<{ path: Path; label?: string }>;
+/**
+ * A use: where it sits, the label it is named by when its place's own name says too little, and the
+ * last trail segment it adds to its place's path ("Title field", "Start condition").
+ */
+type Use = Readonly<{ path: Path; label?: string; tail?: string }>;
 const starts = (path: Path, prefix: Path): boolean =>
   prefix.every((segment, index) => path[index] === segment);
 
@@ -641,7 +755,11 @@ const fieldUses = (
         continue;
       uses.push(
         path[5] === "title_field" && path.length === 6
-          ? { path, label: `${record.name} names each record by it (its title field)` }
+          ? {
+              path,
+              label: `${record.name} names each record by it (its title field)`,
+              tail: "Title field",
+            }
           : { path },
       );
     }
@@ -1175,7 +1293,7 @@ const pageValueUses = (source: Source, index: UseIndex, pageAlias: string, name:
     } else if (path[1] === "flow_bindings" && typeof path[2] === "number") {
       const binding = source.body.flow_bindings[path[2]];
       if (binding !== undefined && controls.has(binding.control))
-        uses.push({ path, label: "a start condition" });
+        uses.push({ path, label: "a start condition", tail: "Start condition" });
     }
   }
   return uses;
@@ -1253,8 +1371,17 @@ const usesOf = (source: Source, index: UseIndex, target: ApplicationUseTarget): 
 
 const placesOf = (source: Source, uses: readonly Use[]): readonly ApplicationUsePlace[] => {
   const found = new Map<string, ApplicationUsePlace>();
+  const isStartPage = (use: Use) => use.path[1] === "roles" && use.path[3] === "home_page";
+  // A role's start page is named on its own unless the role is used in other ways too.
+  const otherRoleUses = new Set(
+    uses.filter((use) => use.path[1] === "roles" && !isStartPage(use)).map((use) => use.path[2]),
+  );
   for (const use of uses) {
-    const place = describeSourcePlace(source, use.path);
+    const described = describeSourcePlace(source, use.path);
+    const tail =
+      use.tail ?? (isStartPage(use) && otherRoleUses.has(use.path[2]) ? "Start page" : undefined);
+    const place =
+      tail === undefined ? described : { ...described, trail: [...described.trail, tail] };
     const named = use.label === undefined ? place : { ...place, label: use.label };
     // One entry per place a person can tell apart; two blocks on one page are two places.
     const identity = `${named.label}\u0000${JSON.stringify(named.open)}`;

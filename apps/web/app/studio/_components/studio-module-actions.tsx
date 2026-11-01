@@ -405,8 +405,9 @@ export function StudioModuleActions({
                       variant="outline"
                       onClick={() =>
                         opener.open({
-                          label: action.label,
-                          open: { kind: "flow", flowAlias: action.flow!, moduleKey: module.key },
+                          kind: "flow",
+                          flowAlias: action.flow!,
+                          moduleKey: module.key,
                         })
                       }
                     >
@@ -450,7 +451,7 @@ export function StudioModuleActions({
                   </ItemDescription>
                 ) : null}
                 {unused ? null : (
-                  <StudioUsedIn source={source} target={target} name={action.label} collapsed />
+                  <StudioUsedIn source={source} target={target} name={action.label} />
                 )}
               </ItemContent>
             </Item>
@@ -486,10 +487,7 @@ export function StudioModuleActions({
           edit={edit}
           onSaved={(_actionKey, flowAlias) => {
             if (editing === "new" && flowAlias !== undefined)
-              opener.open({
-                label: "New action",
-                open: { kind: "flow", flowAlias, moduleKey: module.key },
-              });
+              opener.open({ kind: "flow", flowAlias, moduleKey: module.key });
           }}
         />
       )}

@@ -80,6 +80,7 @@ export const setInlineRecordStandardActions = (
         references: [
           {
             label: `The start page of ${role.name}`,
+            trail: [current.body.name, "Access", role.name],
             open: { kind: "role", roleKey: role.key },
           },
         ],

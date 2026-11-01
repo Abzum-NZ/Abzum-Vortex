@@ -68,11 +68,9 @@ export function StudioRecordRules({
     ?.record_types.find((entry) => entry.key === recordKey);
   if (record === undefined) return null;
   const rules = studioRecordRules(source, moduleKey, recordKey);
-  const open = (flowAlias: string, label: string) =>
-    opener.open({ label, open: { kind: "flow", flowAlias, moduleKey } });
+  const open = (flowAlias: string) => opener.open({ kind: "flow", flowAlias, moduleKey });
   const add = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    const label = name.trim();
     const result = edit((current) => {
       const created = applyStudioFlowCreate(
         current,
@@ -105,7 +103,7 @@ export function StudioRecordRules({
     setName("");
     setMessage("");
     setProblem("");
-    open(result.flowAlias, label);
+    open(result.flowAlias);
   };
   const remove = async (flowAlias: string, label: string) => {
     setProblem("");
@@ -267,7 +265,7 @@ export function StudioRecordRules({
                   type="button"
                   size="sm"
                   variant="outline"
-                  onClick={() => open(rule.flowAlias, rule.name)}
+                  onClick={() => open(rule.flowAlias)}
                 >
                   Open
                 </Button>

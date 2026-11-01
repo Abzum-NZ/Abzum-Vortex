@@ -3,6 +3,7 @@ import { Alert, AlertDescription } from "@vortex/ui/components/alert";
 import { plainSourceSettingValue, recordsTableBoardFeature } from "@vortex/platform/schema";
 import type { StudioCompiledFields } from "../_lib/studio-data-model";
 import {
+  StudioDialog,
   StudioField,
   StudioInspectorActions,
   StudioInspectorGroup,
@@ -203,6 +204,7 @@ export function ApplicationCompositionEditor(props: Props) {
   // The query sheet answers after the draft changed: it chooses through the latest settings.
   const chooseQuery = useRef<(reference: string) => void>(() => undefined);
   const [wrapSetup, setWrapSetup] = useState<StudioBlockSetupRequest | null>(null);
+  const [dialog, setDialog] = useState<"move" | "wrap" | null>(null);
 
   if (model.kind !== "available" || layout.value === null)
     return (
@@ -244,6 +246,13 @@ export function ApplicationCompositionEditor(props: Props) {
     );
   const destinations = moveModel.kind === "available" ? moveModel.destinations : [];
   const inputs = layout.value;
+  const widthWord =
+    inputs.width === "fill"
+      ? "Full width"
+      : inputs.width === "content"
+        ? "Fits content"
+        : `${inputs.span} columns`;
+  const layoutSummary = `${breakpoint.charAt(0).toUpperCase()}${breakpoint.slice(1)} · ${widthWord}`;
   const orderEditable = breakpoint === "desktop" || model.responsiveOrder;
   const selectedIndex = model.order.indexOf(model.placementAlias);
   const command = (next: StudioCompositionCommand, merge?: string, done = "Changed."): boolean => {
@@ -438,6 +447,19 @@ export function ApplicationCompositionEditor(props: Props) {
               onSelect: () => move(1),
             },
             {
+              label: "Move to…",
+              disabled: props.disabled,
+              onSelect: () => setDialog("move"),
+            },
+            {
+              label: "Wrap in container…",
+              disabled:
+                props.disabled ||
+                wrapModel.kind !== "available" ||
+                wrapModel.containers.length === 0,
+              onSelect: () => setDialog("wrap"),
+            },
+            {
               label: "Remove",
               destructive: true,
               disabled: props.disabled || removalModel.kind !== "available",
@@ -449,7 +471,7 @@ export function ApplicationCompositionEditor(props: Props) {
         />
       </header>
       {settingsModel.kind === "available" ? (
-        <StudioInspectorGroup title="Settings">
+        <StudioInspectorGroup title="Settings" hint="A setting you leave unset uses its default.">
           <fieldset className="space-y-4" disabled={props.disabled}>
             {settingsModel.readsQuery && (
               <StudioQueryPicker
@@ -545,7 +567,6 @@ export function ApplicationCompositionEditor(props: Props) {
                 />
               ))}
           </fieldset>
-          <StudioHelp hint="A setting you leave unset uses its default." />
           {settings.problem !== "" && problemArea === "settings" && (
             <Alert variant="destructive">
               <AlertDescription>{settings.problem}</AlertDescription>
@@ -630,7 +651,7 @@ export function ApplicationCompositionEditor(props: Props) {
           }
         />
       )}
-      <StudioInspectorGroup title="Behaviour">
+      <StudioInspectorGroup title="Layout" defaultOpen={false} summary={layoutSummary}>
         <StudioField label="Screen size">
           {() => (
             <StudioSegmentedControl
@@ -651,7 +672,19 @@ export function ApplicationCompositionEditor(props: Props) {
           disabled={props.disabled || !orderEditable}
           aria-describedby={hintId}
         >
-          <legend className="text-sm font-medium">Order among its neighbours</legend>
+          <legend className="flex items-center gap-1 text-sm font-medium">
+            Order among its neighbours
+            <StudioHelp
+              id={hintId}
+              hint={
+                breakpoint !== "desktop" && !model.responsiveOrder
+                  ? "This area uses one order at every screen size."
+                  : model.explicitOrder
+                    ? "This order is set for this screen size."
+                    : "This order is inherited from the larger screen size."
+              }
+            />
+          </legend>
           <ol className="space-y-px">
             {model.order.map((alias, index) => (
               <li
@@ -668,16 +701,6 @@ export function ApplicationCompositionEditor(props: Props) {
               </li>
             ))}
           </ol>
-          <StudioHelp
-            id={hintId}
-            hint={
-              breakpoint !== "desktop" && !model.responsiveOrder
-                ? "This area uses one order at every screen size."
-                : model.explicitOrder
-                  ? "This order is set for this screen size."
-                  : "This order is inherited from the larger screen size."
-            }
-          />
           {breakpoint !== "desktop" && (
             <Button
               type="button"
@@ -694,7 +717,16 @@ export function ApplicationCompositionEditor(props: Props) {
           )}
         </fieldset>
         <fieldset className="space-y-4" disabled={props.disabled}>
-          <legend className="text-sm font-medium">Size</legend>
+          <legend className="flex items-center gap-1 text-sm font-medium">
+            Size
+            <StudioHelp
+              hint={
+                model.explicitLayout
+                  ? "This size is set for this screen size."
+                  : "This size is inherited from the larger screen size."
+              }
+            />
+          </legend>
           <label className="flex items-center justify-between gap-2 text-sm">
             Shown at this screen size
             <Switch
@@ -793,13 +825,6 @@ export function ApplicationCompositionEditor(props: Props) {
               <AlertDescription>{layout.problem}</AlertDescription>
             </Alert>
           )}
-          <StudioHelp
-            hint={
-              model.explicitLayout
-                ? "This size is set for this screen size."
-                : "This size is inherited from the larger screen size."
-            }
-          />
           {breakpoint !== "desktop" && (
             <Button
               type="button"
@@ -815,67 +840,6 @@ export function ApplicationCompositionEditor(props: Props) {
             </Button>
           )}
         </fieldset>
-        <StudioField
-          label="Move to another area"
-          hint="Moves this item, with what is inside it, to the end of the area you choose in this page or layout. Required content and nesting limits are checked first."
-        >
-          {(control) => (
-            <StudioReferencePicker
-              {...control}
-              value=""
-              unset="Choose a destination"
-              disabled={props.disabled || destinations.length === 0}
-              options={destinations.map((item) => ({
-                value: destinationOptionKey(item.destination),
-                label:
-                  item.destination.kind === "child"
-                    ? `${names.get(item.destination.parentAlias) ?? "Item"} / ${item.label.slice(item.label.indexOf(" / ") + 3)}`
-                    : item.label,
-              }))}
-              onChange={(next) => {
-                if (next !== "") moveTo(next);
-              }}
-            />
-          )}
-        </StudioField>
-        {destinations.length === 0 && (
-          <p role="status" className="text-sm text-muted-foreground">
-            {moveModel.kind === "unsupported"
-              ? {
-                  page_kind: "Items on this kind of page can't be moved.",
-                  manifest_mismatch:
-                    "This page uses a block version Studio can't edit. Reload Studio.",
-                }[moveModel.reason]
-              : moveModel.kind === "invalid"
-                ? "This item's move destinations could not be read. Reload Studio."
-                : "There is no other area this item can move to."}
-          </p>
-        )}
-        {wrapModel.kind === "available" && wrapModel.containers.length > 0 && (
-          <StudioField
-            label="Place in a new container"
-            hint="Puts this item into a new container that takes its place. The item keeps its name, settings and order. Containers that cannot hold it say why."
-          >
-            {(control) => (
-              <StudioReferencePicker
-                {...control}
-                value=""
-                unset="Choose a container"
-                disabled={props.disabled}
-                options={wrapModel.containers.map((item) => ({
-                  value: `${item.blockId}:${item.releaseVersion}`,
-                  label:
-                    item.unavailable === undefined
-                      ? item.name
-                      : `${item.name} (not possible: ${item.unavailable})`,
-                }))}
-                onChange={(next) => {
-                  if (next !== "") wrapIn(next);
-                }}
-              />
-            )}
-          </StudioField>
-        )}
         {removalModel.kind !== "available" && (
           <p
             role="status"
@@ -907,6 +871,85 @@ export function ApplicationCompositionEditor(props: Props) {
       <p role="status" aria-live="polite">
         {message}
       </p>
+      <StudioDialog
+        open={dialog === "move"}
+        onOpenChange={(open) => {
+          if (!open) setDialog(null);
+        }}
+        title="Move to another area"
+        description="Moves this item, with what is inside it, to the end of the area you choose in this page or layout. Required content and nesting limits are checked first."
+        closeLabel="Cancel"
+      >
+        <StudioField label="Destination">
+          {(control) => (
+            <StudioReferencePicker
+              {...control}
+              value=""
+              unset="Choose a destination"
+              disabled={props.disabled || destinations.length === 0}
+              options={destinations.map((item) => ({
+                value: destinationOptionKey(item.destination),
+                label:
+                  item.destination.kind === "child"
+                    ? `${names.get(item.destination.parentAlias) ?? "Item"} / ${item.label.slice(item.label.indexOf(" / ") + 3)}`
+                    : item.label,
+              }))}
+              onChange={(next) => {
+                if (next === "") return;
+                moveTo(next);
+                setDialog(null);
+              }}
+            />
+          )}
+        </StudioField>
+        {destinations.length === 0 && (
+          <p role="status" className="text-sm text-muted-foreground">
+            {moveModel.kind === "unsupported"
+              ? {
+                  page_kind: "Items on this kind of page can't be moved.",
+                  manifest_mismatch:
+                    "This page uses a block version Studio can't edit. Reload Studio.",
+                }[moveModel.reason]
+              : moveModel.kind === "invalid"
+                ? "This item's move destinations could not be read. Reload Studio."
+                : "There is no other area this item can move to."}
+          </p>
+        )}
+      </StudioDialog>
+      <StudioDialog
+        open={dialog === "wrap"}
+        onOpenChange={(open) => {
+          if (!open) setDialog(null);
+        }}
+        title="Wrap in container"
+        description="Puts this item into a new container that takes its place. The item keeps its name, settings and order. Containers that cannot hold it say why."
+        closeLabel="Cancel"
+      >
+        {wrapModel.kind === "available" && wrapModel.containers.length > 0 && (
+          <StudioField label="Container">
+            {(control) => (
+              <StudioReferencePicker
+                {...control}
+                value=""
+                unset="Choose a container"
+                disabled={props.disabled}
+                options={wrapModel.containers.map((item) => ({
+                  value: `${item.blockId}:${item.releaseVersion}`,
+                  label:
+                    item.unavailable === undefined
+                      ? item.name
+                      : `${item.name} (not possible: ${item.unavailable})`,
+                }))}
+                onChange={(next) => {
+                  if (next === "") return;
+                  setDialog(null);
+                  wrapIn(next);
+                }}
+              />
+            )}
+          </StudioField>
+        )}
+      </StudioDialog>
       {confirmDialog}
       <StudioBlockSetupDialog
         request={wrapSetup}

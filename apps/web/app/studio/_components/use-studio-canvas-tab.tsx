@@ -55,7 +55,6 @@ import { readWhenPreviewReady } from "../_lib/studio-preview-gate";
 import {
   applyStudioItemLabels,
   applyStudioPageValue,
-  studioReactionSlots,
   type StudioPageValueCommand,
   type StudioPageValueResult,
   type StudioPlacementDescriber,
@@ -66,8 +65,7 @@ import { pageUsingLayout } from "../_lib/studio-view-request";
 import type { StudioApplicationCanvasFrames } from "../../_lib/studio-application-draft";
 import { studioMenuPosition, type StudioInspectorAction } from "@vortex/ui/studio";
 import { ApplicationCompositionEditor } from "./application-composition-editor";
-import { StudioBlockGate } from "./studio-block-gate";
-import { ApplicationReactionConditionEditor } from "./application-reaction-condition-editor";
+import { StudioBlockVisibility } from "./studio-block-gate";
 import { StudioBlockSetupDialog, type StudioBlockSetupRequest } from "./studio-block-setup-dialog";
 import { StudioQuerySheet } from "./studio-query-sheet";
 import { StudioCanvasToolbar, type StudioCanvasZoom } from "./studio-canvas-toolbar";
@@ -705,7 +703,7 @@ export function useStudioCanvasTab({
       : outcome.result;
   };
 
-  const commandReaction: Parameters<typeof ApplicationReactionConditionEditor>[0]["onCommand"] = (
+  const commandReaction: Parameters<typeof StudioBlockVisibility>[0]["onReaction"] = (
     expected,
     expectedSelection,
     metadata,
@@ -946,27 +944,16 @@ export function useStudioCanvasTab({
         />
       )}
       {selected?.kind === "placement" && inspector.status === "resolved" && (
-        <StudioBlockGate
-          key={`gate:${draft.lifetime}:${selectionKey}`}
+        <StudioBlockVisibility
+          key={`visibility:${draft.lifetime}:${selectionKey}`}
           context={compositionContext}
           selection={selected}
+          saved={draft.saved}
           disabled={draft.locked}
           onCommand={commandComposition}
+          onReaction={commandReaction}
         />
       )}
-      {selected?.kind === "placement" &&
-        inspector.status === "resolved" &&
-        studioReactionSlots.map(({ slot }) => (
-          <ApplicationReactionConditionEditor
-            key={`${draft.lifetime}:${selectionKey}:${slot}`}
-            slot={slot}
-            context={compositionContext}
-            selection={selected}
-            saved={draft.saved}
-            disabled={draft.locked}
-            onCommand={commandReaction}
-          />
-        ))}
       {selected?.kind === "page" && inspector.status === "resolved" && (
         <StudioPageValuesPanel
           source={source}

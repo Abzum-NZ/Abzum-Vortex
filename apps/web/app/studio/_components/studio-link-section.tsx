@@ -1,7 +1,7 @@
 "use client";
 import { Label } from "@vortex/ui/components/label";
 import { RadioGroup, RadioGroupItem } from "@vortex/ui/components/radio-group";
-import { StudioHelp, StudioInspectorGroup, type StudioSettingValues } from "@vortex/ui/studio";
+import { StudioInspectorGroup, type StudioSettingValues } from "@vortex/ui/studio";
 import { peopleDirectory, type LinkCardinality } from "@vortex/platform/schema";
 
 type LinkTarget = Readonly<{ key: string; label: string; titleLabel: string | undefined }>;
@@ -61,7 +61,14 @@ export function StudioLinkSection({
   const linksPerson = chosen.some((target) => target.key === peopleDirectory.recordType);
   const name = label.trim() === "" ? "this link" : `"${label.trim()}"`;
   return (
-    <StudioInspectorGroup title="Relationship">
+    <StudioInspectorGroup
+      title="Relationship"
+      {...(linksPerson
+        ? {
+            hint: `People come from the organisation's shared people directory.${usesDirectory ? "" : " The link also adds the directory to the modules this application uses."} Every role that can read ${recordPlural.toLowerCase()} can also read the names of the people they link to.`,
+          }
+        : {})}
+    >
       <fieldset className="space-y-2">
         <legend className="text-sm font-medium">
           How many {recordPlural.toLowerCase()} may link to one {names}?
@@ -117,11 +124,6 @@ export function StudioLinkSection({
           </dd>
         </div>
       </dl>
-      {linksPerson && (
-        <StudioHelp
-          hint={`People come from the organisation's shared people directory.${usesDirectory ? "" : " The link also adds the directory to the modules this application uses."} Every role that can read ${recordPlural.toLowerCase()} can also read the names of the people they link to.`}
-        />
-      )}
     </StudioInspectorGroup>
   );
 }

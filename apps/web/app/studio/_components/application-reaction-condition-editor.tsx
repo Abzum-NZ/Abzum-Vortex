@@ -4,8 +4,6 @@ import { Button } from "@vortex/ui/components/button";
 import { useEffect, useRef, useState } from "react";
 import { applicationModuleKeys, type ConditionNode } from "@vortex/platform/schema";
 import {
-  StudioHelp,
-  StudioInspectorGroup,
   StudioConditionControls,
   parseStudioApplicationConditionContext,
   projectStudioReactionEditor,
@@ -200,8 +198,7 @@ export function ApplicationReactionConditionEditor(props: Props) {
   const value =
     held === null ? (model?.kind === "available" ? model.condition : undefined) : held.value;
   return (
-    <StudioInspectorGroup title={slotInfo.title}>
-      <StudioHelp hint={slotInfo.help} />
+    <div className="space-y-3">
       {needsFields && status && (
         <p role="status" className="text-sm text-muted-foreground">
           {status}
@@ -250,6 +247,6 @@ export function ApplicationReactionConditionEditor(props: Props) {
       <p role="status" aria-live="polite">
         {message}
       </p>
-    </StudioInspectorGroup>
+    </div>
   );
 }

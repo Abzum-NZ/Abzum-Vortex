@@ -505,7 +505,6 @@ function PipelineDialog({
                           option: stage.option,
                         }}
                         name={label(stage.option)}
-                        collapsed
                         onBeforeOpen={onClose}
                       />
                     </div>

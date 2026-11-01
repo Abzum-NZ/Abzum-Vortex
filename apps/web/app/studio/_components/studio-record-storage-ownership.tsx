@@ -80,9 +80,15 @@ export function StudioRecordStorageOwnership({
   const current = sources.find((item) => item.key === relationship);
   const mode: RecordOwnershipMode = choosingLink ? "inherited" : record.ownership_mode;
 
+  const summary = `${recordStorageLabels[record.storage_scope]} · ${recordOwnershipLabels[record.ownership_mode]}`;
   if (published)
     return (
-      <StudioInspectorGroup title="Storage and ownership">
+      <StudioInspectorGroup
+        title="Storage and ownership"
+        defaultOpen={false}
+        summary={summary}
+        hint="Fixed since the first publication: records are already kept this way."
+      >
         <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
           <dt className="text-muted-foreground">Records are kept</dt>
           <dd>{recordStorageLabels[record.storage_scope]}</dd>
@@ -92,9 +98,6 @@ export function StudioRecordStorageOwnership({
             {current === undefined ? null : ` (${current.label})`}
           </dd>
         </dl>
-        <p className="text-sm text-muted-foreground">
-          Fixed since the first publication: records are already kept this way.
-        </p>
       </StudioInspectorGroup>
     );
 
@@ -117,7 +120,7 @@ export function StudioRecordStorageOwnership({
       : { mode: record.ownership_mode as "none" | "organization_account" | "group" };
   const eligible = sources.filter((item) => item.problem === undefined);
   return (
-    <StudioInspectorGroup title="Storage and ownership">
+    <StudioInspectorGroup title="Storage and ownership" defaultOpen={false} summary={summary}>
       <StudioField label="Records are kept" hint="Fixed once the record type is published.">
         {() => (
           <StudioSegmentedControl

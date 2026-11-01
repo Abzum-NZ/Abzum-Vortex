@@ -73,6 +73,18 @@ function LabelsForm({ labels }: Readonly<{ labels: StudioLabelsForm }>) {
 }
 
 /**
+ * The inspector's one footer: the primary action of a create form, pinned to the bottom of the
+ * scroll body. It is the last child of the body, so it pins without touching the frame.
+ */
+export function StudioInspectorFooter({ children }: Readonly<{ children: ReactNode }>) {
+  return (
+    <div className="sticky bottom-0 z-10 -mx-4 -mb-3 flex justify-end gap-2 border-t bg-background px-4 py-3">
+      {children}
+    </div>
+  );
+}
+
+/**
  * The right-hand inspector: what is selected, its name (when it has one) and the editors for it,
  * which the workspace passes in as `children` because they edit its one draft history.
  */
@@ -83,6 +95,7 @@ export function StudioInspector({
   labelsKey,
   note,
   extraActions = [],
+  footer,
   children,
 }: Readonly<{
   inspector: InspectorContext;
@@ -95,6 +108,8 @@ export function StudioInspector({
   note: string | undefined;
   /** More header menu entries for the selection, after Copy alias. */
   extraActions?: readonly StudioInspectorAction[];
+  /** The selection's create or apply action, pinned below the sections. */
+  footer?: ReactNode;
   children: ReactNode;
 }>) {
   if (inspector.status !== "resolved")
@@ -135,31 +150,34 @@ export function StudioInspector({
         </header>
       )}
       <div className={STUDIO_RAIL_BODY_CLASS} data-studio-rail-body="">
-        {labels !== undefined ? (
-          <StudioInspectorGroup title="General">
-            <LabelsForm key={labelsKey} labels={labels} />
-          </StudioInspectorGroup>
-        ) : note === undefined ? null : (
-          <p className="text-sm">{note}</p>
-        )}
-        {children}
-        <StudioInspectorGroup title="Details" defaultOpen={false}>
-          <dl className="space-y-3 font-mono text-xs">
-            {[
-              ["Kind", descriptor.kind],
-              ["Alias", descriptor.alias],
-              ["Source path", descriptor.sourcePath || "/"],
-            ].map(([label, value]) => (
-              <div key={label} className="flex items-start justify-between gap-2">
-                <div className="min-w-0">
-                  <dt className="font-semibold">{label}</dt>
-                  <dd className="break-all">{value}</dd>
+        <div>
+          {labels !== undefined ? (
+            <StudioInspectorGroup title="General">
+              <LabelsForm key={labelsKey} labels={labels} />
+            </StudioInspectorGroup>
+          ) : note === undefined ? null : (
+            <p className="text-sm">{note}</p>
+          )}
+          {children}
+          <StudioInspectorGroup title="Details" defaultOpen={false}>
+            <dl className="space-y-3 font-mono text-xs">
+              {[
+                ["Kind", descriptor.kind],
+                ["Alias", descriptor.alias],
+                ["Source path", descriptor.sourcePath || "/"],
+              ].map(([label, value]) => (
+                <div key={label} className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <dt className="font-semibold">{label}</dt>
+                    <dd className="break-all">{value}</dd>
+                  </div>
+                  <StudioCopyButton label={`Copy ${label?.toLowerCase()}`} value={value!} />
                 </div>
-                <StudioCopyButton label={`Copy ${label?.toLowerCase()}`} value={value!} />
-              </div>
-            ))}
-          </dl>
-        </StudioInspectorGroup>
+              ))}
+            </dl>
+          </StudioInspectorGroup>
+        </div>
+        {footer}
       </div>
     </div>
   );
