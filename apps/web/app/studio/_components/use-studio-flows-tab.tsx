@@ -304,7 +304,7 @@ export function useStudioFlowsTab({
         const current = live();
         const result = apply(current);
         if (result.kind !== "applied") {
-          console.error(
+          console.info(
             `[studio] ${what} refused (${result.kind}): ${result.reason}`,
             result.cause === undefined ? "" : describeFailure(result.cause),
           );
