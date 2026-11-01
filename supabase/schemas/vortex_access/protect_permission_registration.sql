@@ -1,4 +1,4 @@
-CREATE FUNCTION vortex_access.protect_permission_registration() RETURNS trigger
+CREATE OR REPLACE FUNCTION vortex_access.protect_permission_registration() RETURNS trigger
     LANGUAGE plpgsql
     SET search_path TO ''
     AS $$

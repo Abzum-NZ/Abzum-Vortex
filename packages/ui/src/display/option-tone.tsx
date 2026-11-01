@@ -39,10 +39,7 @@ export function OptionToneDot({ tone }: Readonly<{ tone: PipelineStageTone | und
     <span
       aria-hidden="true"
       data-vortex-option-tone={tone ?? "neutral"}
-      className={cn(
-        "inline-block size-2 shrink-0 rounded-full",
-        optionToneFillClass[tone ?? "neutral"],
-      )}
+      className={cn("inline-block size-2 shrink-0", optionToneFillClass[tone ?? "neutral"])}
     />
   );
 }

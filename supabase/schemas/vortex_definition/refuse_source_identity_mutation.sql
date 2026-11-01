@@ -1,4 +1,4 @@
-CREATE FUNCTION vortex_definition.refuse_source_identity_mutation() RETURNS trigger
+CREATE OR REPLACE FUNCTION vortex_definition.refuse_source_identity_mutation() RETURNS trigger
     LANGUAGE plpgsql
     SET search_path TO ''
     AS $$

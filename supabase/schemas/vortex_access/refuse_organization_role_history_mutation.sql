@@ -1,4 +1,4 @@
-CREATE FUNCTION vortex_access.refuse_organization_role_history_mutation() RETURNS trigger
+CREATE OR REPLACE FUNCTION vortex_access.refuse_organization_role_history_mutation() RETURNS trigger
     LANGUAGE plpgsql
     SET search_path TO ''
     AS $$

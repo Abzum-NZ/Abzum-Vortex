@@ -1,4 +1,4 @@
-CREATE FUNCTION vortex_access.protect_application_role_template_continuity() RETURNS trigger
+CREATE OR REPLACE FUNCTION vortex_access.protect_application_role_template_continuity() RETURNS trigger
     LANGUAGE plpgsql
     SET search_path TO ''
     AS $$
