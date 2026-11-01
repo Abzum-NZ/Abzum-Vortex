@@ -176,6 +176,48 @@ export const requireLocalDevelopmentEnvironment = (
   return authority.data;
 };
 
+/** Verify that the runtime database and API belong to the selected local Supabase workdir. */
+export const requireLocalSupabaseBinding = (): void => {
+  const root = findRepositoryRoot();
+  const cli = join(root, "node_modules", "supabase", "dist", "supabase.js");
+  const result = spawnSync(
+    process.execPath,
+    [cli, "status", "--output", "json", ...supabaseWorkdirArguments()],
+    { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] },
+  );
+  let selectedApi: string;
+  let selectedPort: string;
+  let configuredApi: string;
+  let runtimePort: string;
+  try {
+    if (result.status !== 0 || result.error !== undefined) throw new Error();
+    const status = JSON.parse(result.stdout) as Record<string, unknown>;
+    if (typeof status.API_URL !== "string" || typeof status.DB_URL !== "string") throw new Error();
+    selectedApi = new URL(status.API_URL).origin;
+    selectedPort = new URL(status.DB_URL).port;
+    configuredApi = new URL(process.env.VORTEX_SUPABASE_URL ?? "").origin;
+    runtimePort = new URL(process.env.VORTEX_RUNTIME_DATABASE_URL ?? "").port;
+    if (!selectedPort || !runtimePort) throw new Error();
+  } catch (error) {
+    // CLI status contains keys, so log only the error type, never the response or message.
+    console.error(
+      "[setup] local Supabase status unavailable:",
+      error instanceof Error ? error.name : typeof error,
+    );
+    throw new DevelopmentSetupRefusal(
+      "The selected local Supabase stack status could not be read.",
+    );
+  }
+  if (selectedPort !== runtimePort)
+    throw new DevelopmentSetupRefusal(
+      `The selected local Supabase database port ${selectedPort} does not match VORTEX_RUNTIME_DATABASE_URL port ${runtimePort}.`,
+    );
+  if (selectedApi !== configuredApi)
+    throw new DevelopmentSetupRefusal(
+      "VORTEX_SUPABASE_URL does not match the selected local Supabase workdir.",
+    );
+};
+
 type LocalSupabaseStatus = Readonly<{ API_URL: string; SECRET_KEY: string }>;
 
 const readLocalSupabaseStatus = (): LocalSupabaseStatus => {

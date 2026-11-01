@@ -19,6 +19,7 @@ import {
   DevelopmentSetupRefusal,
   parseSetupArguments,
   requireLocalDevelopmentEnvironment,
+  requireLocalSupabaseBinding,
   resolveFirstOwnerIdentity,
 } from "./guards";
 import { createConfiguredTenantAdministrationService } from "@vortex/platform/server";
@@ -328,6 +329,7 @@ export const runDevelopmentSetup = async (
   loadLocalWebEnvironment();
   const args = parseSetupArguments(argv);
   const identityAuthorityId = requireLocalDevelopmentEnvironment(process.env);
+  requireLocalSupabaseBinding();
   const manifest = developmentSetupManifestFor(args.tenantShortName, args.organizationShortName);
   const databaseSystemId = await withRuntimeTransaction(async (transaction) => {
     const rows =
