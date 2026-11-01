@@ -275,26 +275,31 @@ export const LAYOUT_ONLY_STYLES_CSS = `
   display: none;
 }
 
-/* A record page's header actions are one row: the page's own actions with Refresh among them,
-   primary first, Refresh next, destructive last. */
+/* A page's header actions are one row: the record detail's own actions with Refresh among them, primary
+   first, Refresh next, destructive last, and a heading's actions in the order the page declares them.
+   The row wraps only when it is too narrow to hold its actions, never one action per line. */
 [data-vortex-record-actions] {
   display: flex;
-  flex-flow: row nowrap;
+  flex-flow: row wrap;
   align-items: center;
   justify-content: flex-end;
   gap: 0.5rem;
 }
-[data-vortex-record-actions] > .vortex-puck-slot {
+:is([data-vortex-record-actions], [data-vortex-heading-actions]) > .vortex-puck-slot {
   display: contents;
 }
-[data-vortex-record-actions] > .vortex-puck-slot > [data-vortex-layout-wrapper] {
+:is([data-vortex-record-actions], [data-vortex-heading-actions])
+  > .vortex-puck-slot
+  > [data-vortex-layout-wrapper] {
   width: auto;
   flex: none;
 }
 [data-vortex-record-actions] > button {
   order: 1;
 }
-[data-vortex-record-actions] > .vortex-puck-slot > [data-vortex-layout-wrapper]:has([data-vortex-variant="danger"]) {
+[data-vortex-record-actions]
+  > .vortex-puck-slot
+  > [data-vortex-layout-wrapper]:has([data-vortex-variant="danger"]) {
   order: 2;
 }
 

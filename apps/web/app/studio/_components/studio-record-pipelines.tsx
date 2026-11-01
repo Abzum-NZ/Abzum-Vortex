@@ -13,6 +13,7 @@ import {
   type PipelineStageTone,
 } from "@vortex/platform/schema";
 import { Icon } from "@vortex/ui";
+import { Alert, AlertDescription } from "@vortex/ui/components/alert";
 import { Badge } from "@vortex/ui/components/badge";
 import {
   Empty,
@@ -42,7 +43,7 @@ import {
   ItemTitle,
 } from "@vortex/ui/components/item";
 import { Label } from "@vortex/ui/components/label";
-import { NativeSelect, NativeSelectOption } from "@vortex/ui/components/native-select";
+import { StudioOptionControl } from "@vortex/ui/studio";
 import {
   Table,
   TableBody,
@@ -211,21 +212,19 @@ function NewPipelineDialog({
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="pipeline-field">Stages come from</Label>
-            <NativeSelect
+            <StudioOptionControl
               id="pipeline-field"
-              className="w-full"
               value={stageField}
-              onChange={(event) => {
-                setStageField(event.target.value);
+              options={free.map((candidate) => ({
+                value: candidate.key,
+                label: candidate.label,
+              }))}
+              disabled={free.length === 0}
+              onChange={(next) => {
+                setStageField(next);
                 setIssues([]);
               }}
-            >
-              {free.map((candidate) => (
-                <NativeSelectOption key={candidate.key} value={candidate.key}>
-                  {candidate.label}
-                </NativeSelectOption>
-              ))}
-            </NativeSelect>
+            />
             <p className="text-sm text-muted-foreground">
               Options become stages. Filtering is enabled so Boards can show them.
             </p>
@@ -407,9 +406,9 @@ function PipelineDialog({
               onChange={(event) => name.change(event.target.value)}
             />
             {name.problem === "" ? null : (
-              <p role="alert" className="text-xs text-destructive">
-                {name.problem}
-              </p>
+              <Alert variant="destructive">
+                <AlertDescription>{name.problem}</AlertDescription>
+              </Alert>
             )}
           </div>
           <div className="space-y-1.5">
@@ -471,31 +470,29 @@ function PipelineDialog({
                     </p>
                     <div className="space-y-1">
                       <Label htmlFor={`stage-gate-${stage.option}`}>Moving here</Label>
-                      <NativeSelect
+                      <StudioOptionControl
                         id={`stage-gate-${stage.option}`}
-                        className="w-full"
                         value={gates[stage.option] ?? ""}
-                        onChange={(event) => {
-                          if (event.target.value === createAction) {
+                        unset="Is a plain save"
+                        options={[
+                          ...gatesFor(stage.option).map((action) => ({
+                            value: action.key,
+                            label: `Runs ${action.label}`,
+                          })),
+                          { value: createAction, label: "Runs a new action…" },
+                        ]}
+                        disabled={false}
+                        onChange={(next) => {
+                          if (next === createAction) {
                             setCreatingFor(stage.option);
                             return;
                           }
-                          const next = { ...gates };
-                          if (event.target.value === "") delete next[stage.option];
-                          else next[stage.option] = event.target.value;
-                          change({ gates: next });
+                          const updated = { ...gates };
+                          if (next === "") delete updated[stage.option];
+                          else updated[stage.option] = next;
+                          change({ gates: updated });
                         }}
-                      >
-                        <NativeSelectOption value="">Is a plain save</NativeSelectOption>
-                        {gatesFor(stage.option).map((action) => (
-                          <NativeSelectOption key={action.key} value={action.key}>
-                            Runs {action.label}
-                          </NativeSelectOption>
-                        ))}
-                        <NativeSelectOption value={createAction}>
-                          Runs a new action…
-                        </NativeSelectOption>
-                      </NativeSelect>
+                      />
                     </div>
                     <div className="sm:col-span-2">
                       <StudioUsedIn

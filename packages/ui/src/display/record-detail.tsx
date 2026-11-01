@@ -137,7 +137,12 @@ export function RecordDetailDisplay(props: DisplayRenderProps<RecordDetailPayloa
                     />
                   </div>
                   {actions === undefined && events?.refresh === undefined ? null : (
-                    <div data-vortex-record-actions="" className="shrink-0">
+                    <div
+                      data-vortex-record-actions=""
+                      // One row: the page's actions, Refresh among them, a destructive action last. It
+                      // wraps only when the row is too narrow, never one action per line.
+                      className="flex min-w-0 flex-wrap items-center justify-end gap-2"
+                    >
                       {actions}
                       {events?.refresh === undefined ? null : (
                         <DisplayRefreshButton

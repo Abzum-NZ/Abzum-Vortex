@@ -21,7 +21,6 @@ const release = (definition: {
   catalogueThemeId: string;
   releaseVersion: string;
   tokens: unknown;
-  loaderMark: unknown;
 }): PlatformThemeRelease =>
   deepFreeze(
     platformThemeReleaseSchema.parse({
@@ -29,14 +28,13 @@ const release = (definition: {
       releaseVersion: definition.releaseVersion,
       ...platformThemeReleaseContentHash(definition),
       tokens: definition.tokens,
-      loaderMark: definition.loaderMark,
     }),
   );
 
 /**
  * The one theme set the platform ships: the owner's Sera Mist preset (the default) and four
- * modern themes that differ in surface, accent, radius, density, card elevation and type. Each is
- * a complete light-and-dark token set, so an interface can paint from it without a selection.
+ * modern themes that differ in surface, accent, radius and type. Each is a complete
+ * light-and-dark token set, so an interface can paint from it without a selection.
  */
 export const PLATFORM_THEME_RELEASES = Object.freeze({
   sera_mist: release(source.PLATFORM_THEME_RELEASE_3_1_0),
@@ -55,7 +53,7 @@ export const DEFAULT_PLATFORM_THEME_RELEASE: PlatformThemeRelease =
 
 // The one theme changes in place. Applications pinning older content must be republished.
 const DEFAULT_PLATFORM_THEME_CONTENT_FINGERPRINT =
-  "sha256:24f69d4999ef512a924a90b034f0b3b2cba91f87dc2bbdab6f6cf1e7555c0c6a";
+  "sha256:9c67529226e29aa5cc9fa63ac1099b11271448fa3d96adfa171da839c4b0ecc4";
 
 if (
   DEFAULT_PLATFORM_THEME_RELEASE.contentFingerprint !== DEFAULT_PLATFORM_THEME_CONTENT_FINGERPRINT

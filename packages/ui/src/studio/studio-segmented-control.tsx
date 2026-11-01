@@ -21,7 +21,7 @@ export function StudioSegmentedControl<T extends string>({
       aria-label={label}
       variant="outline"
       size="sm"
-      className="w-full"
+      className="w-full flex-wrap"
       value={[value]}
       disabled={disabled}
       onValueChange={(next) => {
@@ -34,7 +34,8 @@ export function StudioSegmentedControl<T extends string>({
           key={option.value}
           value={option.value}
           disabled={option.disabled}
-          className="flex-1"
+          // A segment's label reads in full: it wraps and grows taller rather than clipping.
+          className="h-auto min-w-0 flex-1 whitespace-normal px-2 py-1 leading-tight"
         >
           {option.icon}
           {option.label}

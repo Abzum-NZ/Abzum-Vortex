@@ -114,18 +114,14 @@ export const platformBlockReleaseContentHash = (definition: {
   return { contentFingerprint };
 };
 
-/** A theme release's content is its token map and loader mark. */
+/** A theme release's content is its token map. */
 export const platformThemeReleaseContentHash = (definition: {
   catalogueThemeId: string;
   releaseVersion: string;
   tokens: unknown;
-  loaderMark: unknown;
 }): CatalogueReleaseContentHash => {
   return {
-    contentFingerprint: fingerprintCanonicalValue({
-      tokens: definition.tokens,
-      loaderMark: definition.loaderMark,
-    }),
+    contentFingerprint: fingerprintCanonicalValue({ tokens: definition.tokens }),
   };
 };
 

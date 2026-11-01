@@ -33,7 +33,6 @@ type ThemeVariableName =
   | "--vortex-space-xs"
   | "--vortex-space-sm"
   | "--vortex-space-md"
-  | "--vortex-space-lg"
   | "--background"
   | "--foreground"
   | "--card"
@@ -226,9 +225,8 @@ function filledPair(tokens: ThemeTokens, key: string): readonly [ColorPair, Colo
  * - colour: the validated `background` with `text`; `muted_text`; `border_color`; `primary`
  *   (accent); the filled pairs `primary`, `secondary`, `danger` with `<key>_foreground`;
  *   `danger_text`, `warning_text`, `info_text`, `success_text`.
- * - typography `body` and `heading`; spacing `space_xs`..`space_lg`; corners
- *   `radius_sm`..`radius_lg` which the shadcn radius scale derives from `radius_base`; focus
- *   `focus`.
+ * - typography `body` and `heading`; spacing `space_xs`..`space_md`; corner `radius_base`,
+ *   which the shadcn radius scale derives `--radius-sm`..`--radius-lg` from; focus `focus`.
  *
  * Every shadcn CSS variable the shared components read is set from the same resolved theme:
  * `--background`/`--foreground` from the validated surface and text; `--card`, `--popover`,
@@ -289,8 +287,6 @@ function generateThemeCssVariables(
   const focus = tokenOfKind(tokens, "focus", "focus");
   const focusColor =
     focus === undefined || !surfaceValidated ? undefined : colorPair(tokens, focus.colorToken);
-  const border = tokenOfKind(tokens, "border", "border");
-  const borderColor = border === undefined ? undefined : colorPair(tokens, border.colorToken);
 
   const body = tokenOfKind(tokens, "body", "typography");
   const heading = tokenOfKind(tokens, "heading", "typography");
@@ -347,7 +343,6 @@ function generateThemeCssVariables(
     "--vortex-space-xs": spacing("space_xs", "0.25rem"),
     "--vortex-space-sm": spacing("space_sm", "0.5rem"),
     "--vortex-space-md": spacing("space_md", "1rem"),
-    "--vortex-space-lg": spacing("space_lg", "1.5rem"),
     "--background": colorValue(surface),
     "--foreground": colorValue(text),
     "--card": card,
@@ -368,7 +363,7 @@ function generateThemeCssVariables(
     "--success": onSurface("success_text", platformColor(platformTokens, "success_text")),
     "--warning": onSurface("warning_text", platformColor(platformTokens, "warning_text")),
     "--info": onSurface("info_text", platformColor(platformTokens, "info_text")),
-    "--border": colorValue(borderColor ?? PLATFORM_DEFAULTS.border),
+    "--border": colorValue(colorPair(tokens, "border_color") ?? PLATFORM_DEFAULTS.border),
     "--input": shadcnColour("input"),
     // The ring paints visible focus, so it is the focus token's colour that validation checked.
     "--ring": colorValue(focusColor ?? (surfaceValidated ? text : PLATFORM_DEFAULTS.focus)),
