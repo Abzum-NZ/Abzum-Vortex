@@ -68,6 +68,7 @@ type WorkspaceProps =
   | Readonly<{
       mode: "new";
       organizationId: string;
+      frame: StudioFrameDefinition;
       platformBlockCatalogue: ImmutablePlatformBlockCatalogue;
       fieldInputControlReleases: FieldInputControlReleaseMap;
       platformThemeTokens: PlatformThemeTokens;
@@ -89,6 +90,7 @@ type ExistingProps = Extract<WorkspaceProps, { mode: "existing" }>;
 export function ApplicationDraftWorkspace(props: WorkspaceProps) {
   return props.mode === "new" ? (
     <NewApplicationWorkspace
+      frame={props.frame}
       organizationId={props.organizationId}
       catalogue={props.platformBlockCatalogue}
     />

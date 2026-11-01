@@ -57,6 +57,58 @@ function IconAction({
   );
 }
 
+/** The shared application frame top bar for any Studio surface; `actions` are its own commands. */
+export function StudioFrameBar({
+  frame,
+  pageName,
+  actions,
+}: Readonly<{ frame: StudioFrameDefinition; pageName: string; actions?: ReactNode }>) {
+  const switcherSource = useMemo<ApplicationSwitcherSource>(
+    () =>
+      Object.assign(
+        () => readApplicationSwitcherAction(frame.tenantShortName, frame.organizationShortName),
+        {
+          search: (expression: string, groupKey?: string, cursor?: string) =>
+            searchLauncherAction(
+              frame.tenantShortName,
+              frame.organizationShortName,
+              expression,
+              groupKey,
+              cursor,
+            ),
+        },
+      ),
+    [frame.tenantShortName, frame.organizationShortName],
+  );
+  const runtime: ApplicationShellRuntime = {
+    applicationName: frame.shellName,
+    applicationHref: frame.studioHref,
+    organizationName: frame.organizationName,
+    organizationShortName: frame.organizationShortName,
+    pageName,
+  };
+  return (
+    <ApplicationAccountActionsProvider
+      actions={{
+        account: frame.account,
+        organizationName: frame.organizationName,
+        organizationShortName: frame.organizationShortName,
+        studioHref: frame.studioHref,
+        signOut,
+      }}
+    >
+      <ApplicationSwitcherContext.Provider value={switcherSource}>
+        <ApplicationFrameHeader
+          shellName={frame.shellName}
+          topBar={frame.topBar}
+          runtime={runtime}
+          actions={actions}
+        />
+      </ApplicationSwitcherContext.Provider>
+    </ApplicationAccountActionsProvider>
+  );
+}
+
 /**
  * Studio's editor top bar is the shared application frame bar, the one every Vortex application
  * has. The draft's commands sit in its action area as icon buttons with tooltips.
@@ -100,30 +152,6 @@ export function StudioHeader({
   onPublish: () => void;
   publishDisabled: boolean;
 }>) {
-  const switcherSource = useMemo<ApplicationSwitcherSource>(
-    () =>
-      Object.assign(
-        () => readApplicationSwitcherAction(frame.tenantShortName, frame.organizationShortName),
-        {
-          search: (expression: string, groupKey?: string, cursor?: string) =>
-            searchLauncherAction(
-              frame.tenantShortName,
-              frame.organizationShortName,
-              expression,
-              groupKey,
-              cursor,
-            ),
-        },
-      ),
-    [frame.tenantShortName, frame.organizationShortName],
-  );
-  const runtime: ApplicationShellRuntime = {
-    applicationName: frame.shellName,
-    applicationHref: frame.studioHref,
-    organizationName: frame.organizationName,
-    organizationShortName: frame.organizationShortName,
-    pageName: applicationName,
-  };
   const actions = (
     <>
       {saveState}
@@ -230,24 +258,5 @@ export function StudioHeader({
       <Separator orientation="vertical" className="mx-1 h-6" />
     </>
   );
-  return (
-    <ApplicationAccountActionsProvider
-      actions={{
-        account: frame.account,
-        organizationName: frame.organizationName,
-        organizationShortName: frame.organizationShortName,
-        studioHref: frame.studioHref,
-        signOut,
-      }}
-    >
-      <ApplicationSwitcherContext.Provider value={switcherSource}>
-        <ApplicationFrameHeader
-          shellName={frame.shellName}
-          topBar={frame.topBar}
-          runtime={runtime}
-          actions={actions}
-        />
-      </ApplicationSwitcherContext.Provider>
-    </ApplicationAccountActionsProvider>
-  );
+  return <StudioFrameBar frame={frame} pageName={applicationName} actions={actions} />;
 }

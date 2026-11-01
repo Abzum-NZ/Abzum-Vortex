@@ -5,7 +5,7 @@ import {
   loadPermittedApplicationsAtAddress,
 } from "../../../_lib/organization-context";
 import { resolveIdentitySessionWithEmail } from "../../../auth/_lib/session-server";
-import { studioApplication } from "@vortex/definitions";
+import { studioFrameOf } from "../../_lib/studio-frame";
 import { resolveApplicationAddress } from "../../../_lib/application-address";
 import { continueStudioSession } from "../../_lib/studio-session";
 import { StudioUnavailable } from "../../_components/studio-unavailable";
@@ -24,22 +24,6 @@ import {
 import { humanOrganizationRequests } from "../../../_lib/server-composition";
 
 export const dynamic = "force-dynamic";
-
-/** The top bar Studio's own shell definition chooses; the editor shows the same bar as its App Store pages. */
-const studioFrameOf = () => {
-  const shell = studioApplication.body.shells[0]!;
-  const topBar = shell.presentation.top_bar;
-  return {
-    shellName: studioApplication.body.name,
-    topBar: {
-      breadcrumbs: topBar.breadcrumbs,
-      organizationSwitcher: topBar.organization_switcher,
-      applicationSwitcher: topBar.application_switcher,
-      accountMenu: topBar.account_menu,
-      appearanceToggle: topBar.appearance_toggle,
-    },
-  };
-};
 
 /**
  * The organisation's name and addresses: the running application, for the breadcrumb and Back to app,
@@ -183,17 +167,7 @@ const loadWorkspacePlace = async (
     kind: "available",
     place: {
       organizationName: entry.organizationDisplayName,
-      frame: {
-        ...studioFrameOf(),
-        account:
-          entry.accountDisplayName === undefined
-            ? { email }
-            : { email, displayName: entry.accountDisplayName },
-        tenantShortName: entry.tenantShortName,
-        organizationShortName: entry.organizationShortName,
-        organizationName: entry.organizationDisplayName,
-        studioHref: "/studio",
-      },
+      frame: studioFrameOf(entry, email),
       applicationHref: openable ? pathOf(applicationKey) : undefined,
       appStoreHref: pathOf(settings.value),
       installed,

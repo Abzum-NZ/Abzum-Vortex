@@ -19,6 +19,7 @@ import {
   CardTitle,
 } from "@vortex/ui/components/card";
 import { StudioField } from "./studio-field";
+import { StudioFrameBar, type StudioFrameDefinition } from "./studio-header";
 import { conflictMessage, refusalMessage } from "./studio-refusal-messages";
 
 const inputClass = "w-full";
@@ -29,9 +30,11 @@ const inputClass = "w-full";
  * made with it, and it starts in a layout with the application menu.
  */
 export function NewApplicationWorkspace({
+  frame,
   organizationId,
   catalogue,
 }: Readonly<{
+  frame: StudioFrameDefinition;
   organizationId: string;
   catalogue: ImmutablePlatformBlockCatalogue;
 }>) {
@@ -112,76 +115,79 @@ export function NewApplicationWorkspace({
   };
 
   return (
-    <main className="flex min-h-dvh items-start justify-center px-6 py-12">
-      <Card className="w-full max-w-lg">
-        <CardHeader>
-          <CardTitle>
-            <h1 className="text-xl font-semibold tracking-tight">New application</h1>
-          </CardTitle>
-          <CardDescription>
-            Start with a name and description, then add pages and records.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={create} className="grid gap-4" aria-busy={isCreating} noValidate>
-            <StudioField
-              label="Name"
-              hint="Give your application a clear name."
-              error={fieldErrors.name}
-            >
-              {(control) => (
-                <Input
-                  {...control}
-                  required
-                  maxLength={120}
-                  value={inputs.name}
-                  autoFocus
-                  disabled={isCreating}
-                  onChange={(event) => edit({ name: event.target.value })}
-                />
-              )}
-            </StudioField>
-            <StudioField
-              label="Description"
-              hint="What people use this application for."
-              error={fieldErrors.description}
-            >
-              {(control) => (
-                <Textarea
-                  {...control}
-                  className={inputClass}
-                  required
-                  maxLength={1000}
-                  value={inputs.description}
-                  disabled={isCreating}
-                  onChange={(event) => edit({ description: event.target.value })}
-                />
-              )}
-            </StudioField>
-            <StudioField
-              label="Key"
-              error={fieldErrors.key}
-              hint="Made from the name. Review it before creating; it cannot be changed later."
-            >
-              {(control) => (
-                <Input
-                  {...control}
-                  maxLength={100}
-                  value={inputs.key || applicationKeyFromName(inputs.name)}
-                  disabled={isCreating}
-                  onChange={(event) => edit({ key: event.target.value })}
-                />
-              )}
-            </StudioField>
-            <Button type="submit" disabled={isCreating}>
-              Create application
-            </Button>
-            <p role="status" aria-live="polite">
-              {message}
-            </p>
-          </form>
-        </CardContent>
-      </Card>
-    </main>
+    <div className="flex min-h-dvh flex-col">
+      <StudioFrameBar frame={frame} pageName="New application" />
+      <main className="flex flex-1 items-start justify-center px-6 py-12">
+        <Card className="w-full max-w-lg">
+          <CardHeader>
+            <CardTitle>
+              <h1 className="text-xl font-semibold tracking-tight">New application</h1>
+            </CardTitle>
+            <CardDescription>
+              Start with a name and description, then add pages and records.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={create} className="grid gap-4" aria-busy={isCreating} noValidate>
+              <StudioField
+                label="Name"
+                hint="Give your application a clear name."
+                error={fieldErrors.name}
+              >
+                {(control) => (
+                  <Input
+                    {...control}
+                    required
+                    maxLength={120}
+                    value={inputs.name}
+                    autoFocus
+                    disabled={isCreating}
+                    onChange={(event) => edit({ name: event.target.value })}
+                  />
+                )}
+              </StudioField>
+              <StudioField
+                label="Description"
+                hint="What people use this application for."
+                error={fieldErrors.description}
+              >
+                {(control) => (
+                  <Textarea
+                    {...control}
+                    className={inputClass}
+                    required
+                    maxLength={1000}
+                    value={inputs.description}
+                    disabled={isCreating}
+                    onChange={(event) => edit({ description: event.target.value })}
+                  />
+                )}
+              </StudioField>
+              <StudioField
+                label="Key"
+                error={fieldErrors.key}
+                hint="Made from the name. Review it before creating; it cannot be changed later."
+              >
+                {(control) => (
+                  <Input
+                    {...control}
+                    maxLength={100}
+                    value={inputs.key || applicationKeyFromName(inputs.name)}
+                    disabled={isCreating}
+                    onChange={(event) => edit({ key: event.target.value })}
+                  />
+                )}
+              </StudioField>
+              <Button type="submit" disabled={isCreating}>
+                Create application
+              </Button>
+              <p role="status" aria-live="polite">
+                {message}
+              </p>
+            </form>
+          </CardContent>
+        </Card>
+      </main>
+    </div>
   );
 }
