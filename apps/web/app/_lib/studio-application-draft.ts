@@ -531,6 +531,8 @@ export const loadStudioApplicationDraft = async (
               issuedAt,
             })
           : null;
+        // A view read returns the current saved head so a stale tab can reopen it. Writes still
+        // require their exact expected revision through the draft's protected save operation.
         const snapshot =
           context === null
             ? null
@@ -542,7 +544,6 @@ export const loadStudioApplicationDraft = async (
                 context,
                 {
                   rootId: root.data,
-                  ...(expectedDraftRevision === undefined ? {} : { expectedDraftRevision }),
                 },
                 { publication: requests.some(publishedOf), releasable: false },
               );
@@ -550,10 +551,11 @@ export const loadStudioApplicationDraft = async (
           snapshot === null
             ? await readApplicationDefinitionDraft(transaction, scope, {
                 rootId: root.data,
-                ...(expectedDraftRevision === undefined ? {} : { expectedDraftRevision }),
               })
             : snapshot.draft;
         if (draft.kind !== "application") throw new Error("STUDIO_DRAFT_UNAVAILABLE");
+        if (expectedDraftRevision !== undefined && draft.draftRevision < expectedDraftRevision)
+          throw new Error("STUDIO_DRAFT_REVISION_BEHIND");
         const identityReservations = requests.some((request) => request.kind === "access")
           ? await readSourceIdentityReservations(transaction, draft.rootId)
           : null;
