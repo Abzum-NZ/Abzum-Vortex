@@ -24,7 +24,7 @@ import { platformPermissionSource } from "./platform-permission-source";
 const appStoreApplicationPageKey = "app_store_application";
 
 /** The App Store's page for one application: the store's record identity is the application root. */
-export const appStoreApplicationHref = (
+const appStoreApplicationHref = (
   tenantShortName: string,
   organizationShortName: string,
   appStoreKey: string,
