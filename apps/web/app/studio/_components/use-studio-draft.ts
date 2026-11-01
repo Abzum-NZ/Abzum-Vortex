@@ -448,6 +448,24 @@ export function useStudioDraft({
   if (switchedTo !== undefined)
     setView((previous) => viewOf(switchedTo, switchedTo.loaded, previous.generation + 1, previous));
 
+  const adoptLatest = useCallback(
+    (result: LoadedResult, requested: typeof requestRef.current): boolean => {
+      if (!history.reopen(result.draft)) return false;
+      savedRef.current = result.draft;
+      setSaved(result.draft);
+      remember(result, [requested]);
+      generation.current += 1;
+      const loaded = { ...result.views[0]!, catalogue: result.catalogue };
+      setView((previous) => viewOf(result, loaded, generation.current, previous));
+      lifetimeRef.current += 1;
+      setLifetime(lifetimeRef.current);
+      setStatus({ kind: "saved" });
+      setViewProblem("");
+      return true;
+    },
+    [history, remember],
+  );
+
   // The compile of the saved head, asked for only once no edit is waiting, so a batch costs one save and one compile.
   const refreshCompiled = useCallback(async (): Promise<void> => {
     if (compiling.current !== null) {
@@ -487,6 +505,15 @@ export function useStudioDraft({
               result.draft.draftRevision > savedRef.current.draftRevision &&
               statusRef.current.kind !== "conflict"
             ) {
+              const current = history.getState();
+              if (
+                !current.isDirty &&
+                !current.isSaving &&
+                saving.current === null &&
+                holds.current.size === 0 &&
+                adoptLatest(result, requested)
+              )
+                continue;
               // Another window or person saved since: say so now rather than at the next edit.
               setStatus({
                 kind: "conflict",
@@ -505,7 +532,7 @@ export function useStudioDraft({
               result.kind !== "available" ||
               result.draft.draftRevision < savedRef.current.draftRevision
             )
-              console.error(
+              console.info(
                 `[studio] the saved draft's compile did not answer for revision ${savedRef.current.draftRevision}: STUDIO_COMPILE_REFRESH_${result.kind.toUpperCase()}`,
               );
             setViewProblem(
@@ -533,7 +560,7 @@ export function useStudioDraft({
     } finally {
       compiling.current = null;
     }
-  }, [organizationId, remember, adoptKnown]);
+  }, [organizationId, remember, adoptKnown, adoptLatest, history]);
 
   const loadAuthoringResources = useCallback(async () => {
     const target = savedRef.current;
@@ -830,22 +857,13 @@ export function useStudioDraft({
       if (
         result.kind !== "available" ||
         result.organizationId !== draft.organizationId ||
-        !history.reopen(result.draft)
+        !adoptLatest(result, requested)
       ) {
         console.error(
           `[studio] the latest saved draft could not be loaded: STUDIO_RELOAD_${result.kind.toUpperCase()}`,
         );
         return false;
       }
-      savedRef.current = result.draft;
-      setSaved(result.draft);
-      remember(result, [requested]);
-      generation.current += 1;
-      const loaded = { ...result.views[0]!, catalogue: result.catalogue };
-      setView((previous) => viewOf(result, loaded, generation.current, previous));
-      lifetimeRef.current += 1;
-      setLifetime(lifetimeRef.current);
-      setStatus({ kind: "saved" });
       return true;
     } catch (error) {
       console.error("[studio] loading the latest saved draft failed", describeFailure(error));
@@ -853,7 +871,7 @@ export function useStudioDraft({
     } finally {
       hold("reopening", false);
     }
-  }, [organizationId, draft.rootId, draft.organizationId, history, hold, remember]);
+  }, [organizationId, draft.rootId, draft.organizationId, hold, adoptLatest]);
 
   const source = parsed(state.source);
   const retry = useCallback(async () => {

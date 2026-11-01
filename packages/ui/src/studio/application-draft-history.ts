@@ -300,8 +300,13 @@ export const createStudioApplicationDraftHistoryController = (
           outcome = Object.freeze({ kind: "saved", draftRevision });
         }
       } catch (error) {
-        console.error(`[studio] application draft save failed: ${describeFailure(error)}`);
         outcome = saveFailureOutcome(error);
+        if (outcome.kind === "failed")
+          console.error(`[studio] application draft save failed: ${describeFailure(error)}`);
+        else
+          console.info(
+            `[studio] application draft save ${outcome.kind}: ${describeFailure(error)}`,
+          );
       }
 
       isSaving = false;

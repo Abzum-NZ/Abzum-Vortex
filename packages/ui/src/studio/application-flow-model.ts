@@ -71,6 +71,7 @@ export type StudioFlowOutline = Readonly<{
 /** An edit the draft took, or why it refused it, in words a person can act on. */
 export type StudioFlowEditResult =
   | Readonly<{ kind: "applied"; source: ApplicationSourceDocument; taskId: string }>
+  | Readonly<{ kind: "failed"; reason: string; cause: unknown }>
   | Readonly<{ kind: "stale" | "unsupported" | "invalid"; reason: string; cause?: unknown }>;
 
 export const samePath = (left: StudioFlowPath, right: StudioFlowPath): boolean =>
