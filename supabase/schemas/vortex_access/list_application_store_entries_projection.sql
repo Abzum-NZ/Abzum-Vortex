@@ -142,7 +142,7 @@ begin
   end if;
 
   return query execute $scan$
-    select $1, root.root_id, coalesce(root.current_release_revision, 0),
+    select $1, root.root_id, coalesce(root.current_release_revision, 1),
       pg_catalog.jsonb_build_object(
         'key', root.key,
         'name', $scan$ || name_sql || $scan$,
@@ -202,7 +202,7 @@ begin
       select pg_catalog.string_agg(
         entry.release_version || ' (' || pg_catalog.to_char(entry.published_at, 'YYYY-MM-DD') || ')'
           || case when entry.release_note = '' then '' else ': ' || entry.release_note end,
-        E'\n' order by entry.release_revision desc) as lines
+        '; ' order by entry.release_revision desc) as lines
       from (
         select release.release_version, release.published_at, release.release_note,
           release.release_revision

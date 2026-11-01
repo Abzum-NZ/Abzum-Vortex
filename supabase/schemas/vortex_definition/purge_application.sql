@@ -59,7 +59,7 @@ begin
       message = 'The organisation default application cannot be removed or deleted';
   end if;
 
-  select pg_catalog.coalesce(pg_catalog.array_agg(module.root_id), array[]::uuid[]) into module_ids
+  select coalesce(pg_catalog.array_agg(module.root_id), array[]::uuid[]) into module_ids
   from vortex_definition.roots as module
   where module.organization_id = authority.organization_id
     and module.owner_application_root_id = p_application_root_id;
@@ -78,13 +78,13 @@ begin
   from vortex_definition.installation_bindings as binding
   where binding.organization_id = authority.organization_id
     and binding.application_root_id = p_application_root_id;
-  installed := pg_catalog.coalesce(installed, false);
+  installed := coalesce(installed, false);
   if p_delete_only and installed then
     raise exception using errcode = '55006',
       message = 'An installed application cannot be deleted';
   end if;
 
-  select pg_catalog.coalesce(pg_catalog.array_agg(role_row.role_id), array[]::uuid[]) into role_ids
+  select coalesce(pg_catalog.array_agg(role_row.role_id), array[]::uuid[]) into role_ids
   from vortex_access.organization_roles as role_row
   where role_row.organization_id = authority.organization_id
     and (role_row.application_root_id = p_application_root_id
@@ -119,7 +119,7 @@ begin
 
   if not p_apply then
     return pg_catalog.jsonb_build_object(
-      'application_name', pg_catalog.coalesce((
+      'application_name', coalesce((
         select release.application_address ->> 'name'
         from vortex_definition.roots as root
         join vortex_definition.releases as release

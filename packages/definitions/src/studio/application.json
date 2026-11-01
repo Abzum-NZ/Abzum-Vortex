@@ -356,14 +356,14 @@
                         "label": "Application",
                         "visible": true,
                         "pin": "start",
-                        "width": "wide"
+                        "width": "medium"
                       },
                       {
                         "field": "vortex.app_store:store_application.description",
                         "label": "Description",
                         "visible": true,
                         "pin": "unpinned",
-                        "width": "wide"
+                        "width": "medium"
                       },
                       {
                         "field": "vortex.app_store:store_application.installed_version",
@@ -669,7 +669,7 @@
                         "fields": [
                           {
                             "field": "vortex.app_store:store_application.name",
-                            "label": "Application"
+                            "label": "Name"
                           },
                           {
                             "field": "vortex.app_store:store_application.description",
@@ -3387,7 +3387,7 @@
                                 "kind": "literal",
                                 "literal": {
                                   "type": "text",
-                                  "value": "Its pages and launcher entry leave this organisation and its roles stop granting access. By default its data is kept, so installing it again brings the data back."
+                                  "value": "Its pages and launcher entry leave this organisation and its roles stop granting access. By default its data is kept, so installing it again brings the data back. Ticking the box below deletes the data as well, for good: everything listed goes."
                                 }
                               },
                               "details": {

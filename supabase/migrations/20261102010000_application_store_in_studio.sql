@@ -7,6 +7,12 @@
 -- removes, everything an ordinary application and the modules it own hold in one transaction.
 -- The history tables' immutability triggers let that one function, running as vortex_owner with
 -- its transaction-local marker set, delete their rows; no other path can.
+-- The purge also deletes an application's record lifecycle effects, a table the record adapter
+-- owns, so its owner role is granted exactly that delete.
+set role vortex_record_adapter;
+grant delete on vortex_record.record_lifecycle_command_effects to vortex_owner;
+reset role;
+
 set role vortex_owner;
 
 CREATE OR REPLACE FUNCTION vortex_access.protect_application_role_template_continuity() RETURNS trigger
@@ -507,7 +513,7 @@ begin
   end if;
 
   return query execute $scan$
-    select $1, root.root_id, coalesce(root.current_release_revision, 0),
+    select $1, root.root_id, coalesce(root.current_release_revision, 1),
       pg_catalog.jsonb_build_object(
         'key', root.key,
         'name', $scan$ || name_sql || $scan$,
@@ -567,7 +573,7 @@ begin
       select pg_catalog.string_agg(
         entry.release_version || ' (' || pg_catalog.to_char(entry.published_at, 'YYYY-MM-DD') || ')'
           || case when entry.release_note = '' then '' else ': ' || entry.release_note end,
-        E'\n' order by entry.release_revision desc) as lines
+        '; ' order by entry.release_revision desc) as lines
       from (
         select release.release_version, release.published_at, release.release_note,
           release.release_revision
@@ -705,7 +711,7 @@ begin
       message = 'The organisation default application cannot be removed or deleted';
   end if;
 
-  select pg_catalog.coalesce(pg_catalog.array_agg(module.root_id), array[]::uuid[]) into module_ids
+  select coalesce(pg_catalog.array_agg(module.root_id), array[]::uuid[]) into module_ids
   from vortex_definition.roots as module
   where module.organization_id = authority.organization_id
     and module.owner_application_root_id = p_application_root_id;
@@ -724,13 +730,13 @@ begin
   from vortex_definition.installation_bindings as binding
   where binding.organization_id = authority.organization_id
     and binding.application_root_id = p_application_root_id;
-  installed := pg_catalog.coalesce(installed, false);
+  installed := coalesce(installed, false);
   if p_delete_only and installed then
     raise exception using errcode = '55006',
       message = 'An installed application cannot be deleted';
   end if;
 
-  select pg_catalog.coalesce(pg_catalog.array_agg(role_row.role_id), array[]::uuid[]) into role_ids
+  select coalesce(pg_catalog.array_agg(role_row.role_id), array[]::uuid[]) into role_ids
   from vortex_access.organization_roles as role_row
   where role_row.organization_id = authority.organization_id
     and (role_row.application_root_id = p_application_root_id
@@ -765,7 +771,7 @@ begin
 
   if not p_apply then
     return pg_catalog.jsonb_build_object(
-      'application_name', pg_catalog.coalesce((
+      'application_name', coalesce((
         select release.application_address ->> 'name'
         from vortex_definition.roots as root
         join vortex_definition.releases as release
@@ -954,5 +960,10 @@ comment on function vortex_definition.purge_application(uuid, boolean, boolean) 
   'Counts, or with p_apply removes, everything one ordinary Application and the Modules it owns hold in the validated organisation: roots, releases, drafts, source identities, roles and their assignments and permission entries, catalogue entries, installation bindings, records and record tables, back-end runs, outbox events, in one transaction under the application installation authority. A system application, the default application and an application another one depends on are refused; p_delete_only also refuses an installed application.';
 
 alter function vortex_definition.purge_application(uuid, boolean, boolean) owner to vortex_owner;
+
+-- The read pages by status and by its listing order (core applications first) as well.
+update vortex_record.protected_read_model_views
+set cursor_sort_keys = array['record_id', 'key', 'name', 'release_revision', 'status', 'listing_order']::text[]
+where protected_read_model_key = 'application_store_entries';
 
 reset role;
