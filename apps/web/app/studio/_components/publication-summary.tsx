@@ -117,6 +117,30 @@ const plainSummary = (
   if (confirmation.outcome === "initial_release") return [];
   const reasons = confirmation.reasons;
   const lines: string[] = [];
+  // Why this release is breaking, or what is new in it, leads the summary: the reasons that set the
+  // impact, in plain words, at most three then how many more there are.
+  if (confirmation.impact === "major" || confirmation.impact === "minor") {
+    const leading = reasons.filter((reason) => reason.impact === confirmation.impact);
+    const ordered =
+      confirmation.impact === "minor"
+        ? [
+            ...leading.filter((reason) => reason.code === "component_added"),
+            ...leading.filter((reason) => reason.code !== "component_added"),
+          ]
+        : leading;
+    const described: string[] = [];
+    for (const reason of ordered) {
+      const component = names.get(reason.location.componentId?.toLowerCase() ?? "");
+      const line =
+        component === undefined ? reasonLabels[reason.code] : sentence(reason, component);
+      if (!described.includes(line)) described.push(line);
+    }
+    lines.push(
+      ...(described.length > 3
+        ? [...described.slice(0, 3), `and ${described.length - 3} more`]
+        : described),
+    );
+  }
   const pages = (code: "component_added" | "component_removed") =>
     reasons.filter((reason) => reason.location.componentKind === "page" && reason.code === code);
   const addedPages = pages("component_added").length;
@@ -127,10 +151,7 @@ const plainSummary = (
     if (reason.location.componentKind !== "role" || reason.location.property !== "permission")
       continue;
     const role = names.get(reason.location.componentId?.toLowerCase() ?? "");
-    if (role === undefined) continue;
-    if (role.addedAccess?.length) lines.push(`${role.label} can now ${actions(role.addedAccess)}`);
-    if (role.removedAccess?.length)
-      lines.push(`${role.label} can no longer ${actions(role.removedAccess)}`);
+    if (role !== undefined) lines.push(sentence(reason, role));
   }
   if (reasons.some((reason) => reason.location.componentKind === "pipeline_stage"))
     lines.push("Stage colours changed");
@@ -146,7 +167,7 @@ const plainSummary = (
     ];
     lines.push(`Changes to ${list(kinds)}`);
   }
-  return [...new Set(lines)].slice(0, 3);
+  return [...new Set(lines)];
 };
 
 export function PublicationSummary({
