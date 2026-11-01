@@ -497,6 +497,7 @@ function PlacementBlock(props: {
 
   return (
     <div
+      ref={puck.dragRef ?? undefined}
       data-vortex-layout-wrapper=""
       data-vortex-placement-id={placementId}
       data-vortex-block-id={release.blockId}
@@ -616,6 +617,9 @@ function createVortexPuckConfig(
     const hasRepeatableSlot = release.slots.some((slot) => slot.repeats !== undefined);
     components[rendererKey] = {
       label: release.name,
+      // The editor measures and drags the placement's own wrapper (it attaches `puck.dragRef`), so a
+      // slot's child is the wrapper itself and grid and content-width CSS applies as at runtime.
+      inline: true,
       defaultProps: {
         ...Object.fromEntries(
           Object.entries(defaults).map(([key, value]) => [key, plainSettingValue(value)]),

@@ -1,17 +1,14 @@
 "use client";
 
-import { compiledItemSettings } from "@vortex/platform/schema";
-import { Puck, createUsePuck, useGetPuck, type Content, type Data } from "@puckeditor/core";
-import { useEffect, useRef, type ReactNode, type RefObject, type SyntheticEvent } from "react";
+import { createUsePuck, useGetPuck, type Content, type Data } from "@puckeditor/core";
+import { useEffect, useRef, type RefObject } from "react";
 import type {
   ApplicationShell,
   ProjectedApplicationFrame,
   ProjectedNavigation,
 } from "@vortex/platform/schema";
 import type { Breakpoint } from "../definition-error";
-import type { FieldInputControlReleaseMap, PlatformComponentRegistry } from "../registry";
-import type { ApplicationTheme, PlatformThemeTokens } from "../theme";
-import { PagePuckRenderer } from "../page-puck-renderer";
+import type { ApplicationTheme } from "../theme";
 
 /**
  * The application frame the page being edited is drawn inside: the shell the page uses, the
@@ -86,24 +83,23 @@ const sameContent = (left: Data, right: Data): boolean =>
   JSON.stringify(left.content) === JSON.stringify(right.content);
 
 /**
- * Runs inside Puck: keeps Puck's private state in step with the workspace draft and its shared
- * selection, and draws Puck's canvas in the application's frame. The workspace draft is the
- * source of truth; Puck only ever receives data derived from it.
+ * Runs inside Puck and draws nothing: it keeps Puck's private state in step with the workspace
+ * draft and its shared selection, and Puck's preview mode in step with the toolbar. The workspace
+ * draft is the source of truth; Puck only ever receives data derived from it.
  */
 export function StudioCanvasBridge({
   arrangeGrid,
+  onArrangeGrid,
   data,
   resync,
   synchronizing,
   selectedAlias,
   onSelect,
-  frame,
-  breakpoint,
-  registry,
-  fieldInputControlReleases,
-  platformThemeTokens,
+  onDragging,
 }: Readonly<{
   arrangeGrid: boolean;
+  /** Puck's own hotkey changed the preview mode: the toolbar follows. */
+  onArrangeGrid: (arrange: boolean) => void;
   data: Data;
   /** Changes when Puck holds a change the draft refused, so the draft is shown again. */
   resync: number;
@@ -112,17 +108,19 @@ export function StudioCanvasBridge({
   selectedAlias: string | null;
   /** Reports a canvas selection; `false` means the workspace kept its own selection. */
   onSelect: (alias: string | null) => Promise<boolean>;
-  frame: StudioCanvasFrame | undefined;
-  breakpoint: Breakpoint;
-  registry: PlatformComponentRegistry;
-  fieldInputControlReleases: FieldInputControlReleaseMap;
-  platformThemeTokens: PlatformThemeTokens;
+  /** A block is being dragged (from the palette or on the canvas). */
+  onDragging?: ((dragging: boolean) => void) | undefined;
 }>) {
   const getPuck = useGetPuck();
   const puckSelected = usePuckSelector((state) => {
     const id = state.selectedItem?.props.id;
     return typeof id === "string" ? id : null;
   });
+  const previewMode = usePuckSelector((state) => state.appState.ui.previewMode);
+  const dragging = usePuckSelector((state) => state.appState.ui.isDragging);
+  useEffect(() => {
+    onDragging?.(dragging);
+  }, [dragging]);
   const selectedRef = useRef(selectedAlias);
   selectedRef.current = selectedAlias;
   // The selection the canvas and the workspace last agreed on. Each side reacts only to a change
@@ -133,12 +131,17 @@ export function StudioCanvasBridge({
   // The canvas's own empty selection before it ever selected a block is not a click, so it is not reported.
   const everSelected = useRef(false);
 
+  // The toolbar owns the mode; Puck's own hotkey for it is reported back, so both agree.
   useEffect(() => {
     getPuck().dispatch({
       type: "setUi",
       ui: { previewMode: arrangeGrid ? "interactive" : "edit" },
     });
   }, [arrangeGrid, getPuck]);
+  useEffect(() => {
+    if ((previewMode === "interactive") !== arrangeGrid)
+      onArrangeGrid(previewMode === "interactive");
+  }, [previewMode]);
 
   const puckSelection = (): string | null => {
     const id = getPuck().selectedItem?.props.id;
@@ -153,54 +156,19 @@ export function StudioCanvasBridge({
   };
 
   // The workspace draft changed (an edit, Undo, Redo, a save or Revert): show exactly that draft,
-  // keeping the selected block selected while it is still on the canvas.
-  // Reconcile the root items with atomic actions. Replacing a changed item includes its slots,
-  // so nested edits and structural changes update only their owning subtree. These actions are
-  // draft synchronization, not palette drops or entries in Puck's separate history.
+  // keeping the selected block selected while it is still on the canvas. One Puck action replaces
+  // the data; it is draft synchronization, not an entry in Puck's separate history.
   useEffect(() => {
     const { appState, dispatch } = getPuck();
-    const rootChanged = JSON.stringify(appState.data.root) !== JSON.stringify(data.root);
-    if (sameContent(appState.data, data) && !rootChanged) return;
+    if (
+      sameContent(appState.data, data) &&
+      JSON.stringify(appState.data.root) === JSON.stringify(data.root)
+    )
+      return;
     const kept = puckSelection();
     synchronizing.current = true;
     try {
-      const current = [...appState.data.content];
-      const zone = "root:default-zone";
-      if (rootChanged) dispatch({ type: "replaceRoot", root: data.root, recordHistory: false });
-      for (const [index, block] of data.content.entries()) {
-        const previous = current.findIndex((item) => item.props.id === block.props.id);
-        if (previous === -1) {
-          dispatch({
-            type: "insert",
-            componentType: block.type,
-            id: block.props.id,
-            destinationIndex: index,
-            destinationZone: zone,
-            recordHistory: false,
-          });
-          current.splice(index, 0, block);
-        } else if (previous !== index) {
-          dispatch({
-            type: "move",
-            sourceIndex: previous,
-            sourceZone: zone,
-            destinationIndex: index,
-            destinationZone: zone,
-            recordHistory: false,
-          });
-          current.splice(index, 0, current.splice(previous, 1)[0]!);
-        }
-        if (previous === -1 || JSON.stringify(current[index]) !== JSON.stringify(block))
-          dispatch({
-            type: "replace",
-            destinationIndex: index,
-            destinationZone: zone,
-            data: block,
-            recordHistory: false,
-          });
-      }
-      for (let index = current.length - 1; index >= data.content.length; index -= 1)
-        dispatch({ type: "remove", index, zone, recordHistory: false });
+      dispatch({ type: "setData", data, recordHistory: false });
       showSelection(kept);
     } finally {
       synchronizing.current = false;
@@ -227,67 +195,5 @@ export function StudioCanvasBridge({
     });
   }, [puckSelected]);
 
-  // The canvas is a design surface: no link in it (menu pages, external addresses, links inside
-  // blocks) leaves Studio, so unsaved edits are never lost to a click.
-  const inert = (event: SyntheticEvent) => {
-    if (event.target instanceof Element && event.target.closest("a[href]") !== null)
-      event.preventDefault();
-  };
-  // The canvas is the frame's page outlet, edited: the frame keeps its region while the page is empty,
-  // and empty slots of the page's blocks stay, so each remains a drop target.
-  const canvas = (
-    <div
-      data-vortex-studio-canvas=""
-      data-vortex-shell-outlet=""
-      data-vortex-editing=""
-      className="min-h-24"
-    >
-      <Puck.Preview id="vortex-studio-canvas" />
-    </div>
-  );
-  if (frame === undefined)
-    return (
-      <div className="contents" onClickCapture={inert} onAuxClickCapture={inert}>
-        {canvas}
-      </div>
-    );
-  const shellId = frame.frame.shellId;
-  const shell =
-    shellId === undefined
-      ? undefined
-      : frame.shells.find((candidate) => String(candidate.shellId) === shellId);
-  return (
-    <div
-      className="contents"
-      data-vortex-studio-frame=""
-      onClickCapture={inert}
-      onAuxClickCapture={inert}
-    >
-      <PagePuckRenderer
-        readSettings={compiledItemSettings}
-        composition={frame.frame}
-        breakpoint={breakpoint}
-        registry={registry}
-        fieldInputControlReleases={fieldInputControlReleases}
-        platformThemeTokens={platformThemeTokens}
-        {...(shell === undefined ? {} : { shell })}
-        theme={frame.theme}
-        projectedNavigation={frame.navigation}
-        resolvePageHref={() => "#"}
-        currentPageId={frame.pageId}
-        // The switcher names only the application being designed.
-        applicationSwitcherSource={async () => ({
-          state: "available",
-          applications: [{ key: frame.applicationName, name: frame.applicationName, href: "#" }],
-        })}
-        applicationShellRuntime={{
-          applicationName: frame.applicationName,
-          applicationHref: "#",
-          organizationName: "",
-          pageName: frame.pageName,
-        }}
-        outlet={{ location: frame.frame.outlet, content: canvas as ReactNode }}
-      />
-    </div>
-  );
+  return null;
 }

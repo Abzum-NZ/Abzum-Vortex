@@ -41,10 +41,13 @@ export function StudioCanvasToolbar({
   onAppearance,
   viewAs,
   arrangeGrid,
+  arrangeableGrids,
   onArrangeGrid,
 }: Readonly<{
   title: string;
   arrangeGrid: boolean;
+  /** Whether a data grid on the open page has columns to arrange. */
+  arrangeableGrids: boolean;
   onArrangeGrid: () => void;
   /** "Who can see this": the roles the canvas and its menu can be previewed as, and the one shown (`null` is the design view). */
   viewAs: Readonly<{
@@ -87,13 +90,18 @@ export function StudioCanvasToolbar({
                     variant={arrangeGrid ? "secondary" : "ghost"}
                     aria-label="Arrange grid columns"
                     aria-pressed={arrangeGrid}
+                    disabled={!arrangeGrid && !arrangeableGrids}
                     onClick={onArrangeGrid}
                   />
                 }
               >
                 <Icon name="table-columns" />
               </TooltipTrigger>
-              <TooltipContent>Arrange grid columns</TooltipContent>
+              <TooltipContent>
+                {arrangeGrid || arrangeableGrids
+                  ? "Arrange grid columns"
+                  : "Arrange grid columns: this page has no data grid with columns yet"}
+              </TooltipContent>
             </Tooltip>
             <label className="flex items-center gap-2 text-sm">
               <span>View as:</span>

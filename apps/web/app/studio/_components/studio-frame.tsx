@@ -33,6 +33,7 @@ import {
 } from "@vortex/ui/components/collapsible";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@vortex/ui/components/tooltip";
 import { Separator } from "@vortex/ui/components/separator";
+import { Kbd } from "@vortex/ui/components/kbd";
 import { cn } from "@vortex/ui/lib/utils";
 
 /** The one scroll body of a Studio rail panel and its inspector; positioned, so screen-reader-only text stays inside the scroll area. */
@@ -75,6 +76,22 @@ const readStoredWidths = (): Record<string, number> => {
   } catch {
     // A private window or blocked storage: every tab opens at its own width.
     return {};
+  }
+};
+const collapsedStorageKey = "vortex.studio.panel-collapsed";
+const readCollapsed = (): boolean => {
+  try {
+    return window.localStorage.getItem(collapsedStorageKey) === "true";
+  } catch {
+    // A private window or blocked storage: the panel opens, as it does by default.
+    return false;
+  }
+};
+const storeCollapsed = (collapsed: boolean): void => {
+  try {
+    window.localStorage.setItem(collapsedStorageKey, String(collapsed));
+  } catch {
+    // The choice is a convenience; without storage it lasts for this visit only.
   }
 };
 const storeWidths = (widths: Readonly<Record<string, number>>): void => {
@@ -156,12 +173,17 @@ function StudioRail<Key extends string>({
   open,
   onChoose,
   label,
+  collapsed,
+  onToggleCollapsed,
 }: Readonly<{
   tabs: readonly StudioRailTab<Key>[];
   active: Key;
   open: boolean;
   onChoose: (key: Key) => void;
   label: string;
+  collapsed: boolean;
+  /** Collapses or expands the panel beside the rail; absent where the panel is a sheet. */
+  onToggleCollapsed: (() => void) | undefined;
 }>) {
   const buttons = useRef(new Map<Key, HTMLButtonElement>());
   const [focusKey, setFocusKey] = useState<Key>(active);
@@ -230,6 +252,26 @@ function StudioRail<Key extends string>({
           </div>
         );
       })}
+      {onToggleCollapsed !== undefined && (
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <button
+                type="button"
+                aria-label={collapsed ? "Expand panel" : "Collapse panel"}
+                aria-pressed={collapsed}
+                onClick={onToggleCollapsed}
+                className="mt-2 flex size-9 shrink-0 items-center justify-center rounded-lg text-muted-foreground outline-none hover:bg-sidebar-accent/60 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+              />
+            }
+          >
+            <Icon name="panel-left" className="size-5" />
+          </TooltipTrigger>
+          <TooltipContent>
+            {collapsed ? "Expand panel" : "Collapse panel"} <Kbd>Ctrl B</Kbd>
+          </TooltipContent>
+        </Tooltip>
+      )}
     </div>
   );
 }
@@ -313,7 +355,10 @@ export function StudioFrame<Key extends string>({
   inspector,
   selectionKey,
   inspectorLabel = "Inspector",
+  dragging = false,
 }: Readonly<{
+  /** A block is being dragged: a collapsed panel's overlay gets out of its way until the drop. */
+  dragging?: boolean;
   topBar: ReactNode;
   tabs: readonly StudioRailTab<Key>[];
   activeTab: Key;
@@ -338,6 +383,32 @@ export function StudioFrame<Key extends string>({
   const dockInspector = viewport >= 1280;
   const { widthOf, setWidth } = useStudioPanelWidths<Key>();
   const [panelOpen, setPanelOpen] = useState(true);
+  // Collapsed: the panel is closed until the pointer visits the rail, and then it overlays the canvas.
+  const [collapsed, setCollapsed] = useState(false);
+  const [peeking, setPeeking] = useState(false);
+  const peekTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const peek = useCallback((open: boolean) => {
+    clearTimeout(peekTimer.current);
+    if (open) setPeeking(true);
+    else peekTimer.current = setTimeout(() => setPeeking(false), 300);
+  }, []);
+  useEffect(() => {
+    setCollapsed(readCollapsed());
+    return () => clearTimeout(peekTimer.current);
+  }, []);
+  const toggleCollapsed = useCallback(() => {
+    setCollapsed((held) => {
+      storeCollapsed(!held);
+      return !held;
+    });
+    setPeeking(false);
+  }, []);
+  // The drag ended: the overlay closes after the drop.
+  const wasDragging = useRef(false);
+  useEffect(() => {
+    if (wasDragging.current && !dragging) setPeeking(false);
+    wasDragging.current = dragging;
+  }, [dragging]);
   const [inspectorOpen, setInspectorOpen] = useState(true);
   const [narrowPanelOpen, setNarrowPanelOpen] = useState(false);
   const [narrowInspectorOpen, setNarrowInspectorOpen] = useState(false);
@@ -379,10 +450,14 @@ export function StudioFrame<Key extends string>({
         event.preventDefault();
         focusCanvas();
       }
+      if (event.key === "b" && dialog === null) {
+        event.preventDefault();
+        toggleCollapsed();
+      }
     };
     window.addEventListener("keydown", shortcut);
     return () => window.removeEventListener("keydown", shortcut);
-  }, [focusCanvas, toggleInspector]);
+  }, [focusCanvas, toggleInspector, toggleCollapsed]);
   const previousSelection = useRef(selectionKey);
   const [hosts, setHosts] = useState<PaneHosts | null>(null);
   // The hosts are made once per frame: effects run again when a suspended part of Studio shows again,
@@ -416,8 +491,10 @@ export function StudioFrame<Key extends string>({
     setFocused(false);
     // Selecting a tab always reveals its pane, including the tab restored from the URL on reload.
     onTabChange(key);
-    if (wide) setPanelOpen(true);
-    else setNarrowPanelOpen(true);
+    if (wide) {
+      setPanelOpen(true);
+      if (collapsed) peek(true);
+    } else setNarrowPanelOpen(true);
   };
   const active = tabs.find((tab) => tab.key === activeTab);
   const defaultWidth =
@@ -428,19 +505,46 @@ export function StudioFrame<Key extends string>({
         : (active?.width ?? 17);
   const width = widthOf(activeTab, defaultWidth);
   const inspectorWidth = widthOf("inspector", viewport >= 1920 ? 24 : viewport >= 1440 ? 22 : 20);
-  const showPanel = wide && panelOpen;
+  const showPanel = wide && panelOpen && !collapsed;
+  const overlayPanel = wide && panelOpen && collapsed && (peeking || dragging);
   const showInspector = hasInspector && dockInspector && inspectorOpen;
   return (
     <div className="flex h-dvh min-w-0 flex-col bg-background text-foreground">
       {topBar}
       <div className="flex min-h-0 min-w-0 flex-1">
-        <StudioRail
-          tabs={tabs}
-          active={activeTab}
-          open={wide ? panelOpen : narrowPanelOpen}
-          onChoose={choose}
-          label="Studio areas"
-        />
+        <div
+          className="relative flex min-h-0 shrink-0"
+          onPointerEnter={() => collapsed && wide && peek(true)}
+          onPointerLeave={() => collapsed && peek(false)}
+        >
+          <StudioRail
+            tabs={tabs}
+            active={activeTab}
+            open={wide ? panelOpen && (!collapsed || peeking) : narrowPanelOpen}
+            onChoose={choose}
+            label="Studio areas"
+            collapsed={collapsed}
+            onToggleCollapsed={wide ? toggleCollapsed : undefined}
+          />
+          {collapsed && wide && (
+            <section
+              id="studio-rail-panel"
+              role="tabpanel"
+              aria-labelledby={`studio-rail-${activeTab}`}
+              aria-hidden={!overlayPanel}
+              data-studio-panel-overlay=""
+              className={cn(
+                "absolute inset-y-0 left-full z-30 flex min-h-0 flex-col border-r border-border bg-sidebar shadow-lg transition-opacity",
+                overlayPanel ? "opacity-100" : "pointer-events-none invisible opacity-0",
+                // The drag source stays mounted while it is dragged from; only its look leaves.
+                dragging && "pointer-events-none !visible opacity-0",
+              )}
+              style={{ width: `${width}rem` }}
+            >
+              <PaneSlot host={hosts?.panel ?? null} />
+            </section>
+          )}
+        </div>
         {showPanel && (
           <>
             <section

@@ -193,6 +193,9 @@ export function useStudioCanvasTab({
   const [blockSetup, setBlockSetup] = useState<StudioBlockSetupRequest | null>(null);
   const [notice, setNotice] = useState("");
   const [arrangeGrid, setArrangeGrid] = useState(false);
+  const [arrangeableGrids, setArrangeableGrids] = useState(false);
+  // A block is being dragged on the canvas or from the palette: a collapsed panel gets out of its way.
+  const [dragging, onDragging] = useState(false);
   const [gridStates, setGridStates] = useState<ReadonlyMap<string, StudioCanvasGridState>>(
     new Map(),
   );
@@ -991,7 +994,7 @@ export function useStudioCanvasTab({
     <section
       className={
         canvasPage !== undefined
-          ? "space-y-3"
+          ? "flex min-h-0 flex-1 flex-col gap-3"
           : "space-y-3 rounded-xl border border-border bg-card p-4 text-card-foreground"
       }
       aria-label="Selected item"
@@ -1050,7 +1053,7 @@ export function useStudioCanvasTab({
         fieldInputControlReleases !== null &&
         platformThemeTokens !== null && (
           // The canvas previews the application in light or dark: the appearance is set on the canvas only, never on Studio's frame.
-          <div>
+          <div className="flex min-h-0 flex-1 flex-col">
             {/* A newly chosen icon library loads before the canvas draws with it; only the canvas
                 waits, and it draws no placeholder meanwhile. */}
             <Suspense fallback={null}>
@@ -1101,6 +1104,9 @@ export function useStudioCanvasTab({
                 onChange={applyPuckPageEdit}
                 readRecords={readCanvasRecords}
                 arrangeGrid={arrangeGrid && !draft.locked}
+                onArrangeGrid={setArrangeGrid}
+                onArrangeableGrids={setArrangeableGrids}
+                onDragging={onDragging}
                 onGridChange={onGridChange}
                 gridReads={gridReads}
                 updating={draft.updatingCanvas}
@@ -1139,6 +1145,7 @@ export function useStudioCanvasTab({
       onZoom={setCanvasZoom}
       showsCanvas={showsCanvas && canvasPage !== undefined}
       arrangeGrid={arrangeGrid}
+      arrangeableGrids={arrangeableGrids}
       onArrangeGrid={() => setArrangeGrid((held) => !held)}
       appearance={appearance}
       onAppearance={setAppearance}
@@ -1176,6 +1183,7 @@ export function useStudioCanvasTab({
   );
 
   return {
+    dragging,
     panels,
     inspector: inspectorPanel,
     centre,

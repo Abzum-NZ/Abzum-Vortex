@@ -19,30 +19,18 @@ import {
   type PageSlotAddress,
   type ImmutablePlatformBlockCatalogue,
   compiledItemSettings,
+  PLATFORM_BLOCK_RELEASE_IDENTITIES,
 } from "@vortex/platform/schema";
 import type { CompiledItem, SourceItem, SourcePageZone } from "@vortex/platform/schema";
 import type { FieldInputControlReleaseMap } from "../registry";
-import {
-  createAppearanceRootProps,
-  createThemeRootProps,
-  type PlatformThemeTokens,
-} from "../theme";
+import type { PlatformThemeTokens } from "../theme";
 import { createPlatformComponentRegistryForReleases } from "../combined-registry";
 import { getVortexPuckConfig } from "../puck-config";
-import { contentConfigFor } from "../shell-outlet";
 import { studioPageAreaLabel } from "./application-page-layout";
 import type { Breakpoint } from "../definition-error";
 
 export type { Breakpoint as StudioCanvasBreakpoint } from "../definition-error";
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type CSSProperties,
-  type ReactNode,
-} from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Icon } from "../icons";
 import { regions } from "./application-composition-regions";
 import {
@@ -86,7 +74,7 @@ import {
   StudioCanvasBridge,
   type StudioCanvasFrame,
 } from "./studio-canvas-bridge";
-import { studioPuckStyle } from "./studio-puck-style";
+import type { StudioCanvasMetadata } from "./studio-canvas-root";
 import { StudioCanvasActions, studioCanvasOverrides } from "./studio-canvas-actions";
 import {
   StudioCanvasGridContext,
@@ -255,6 +243,12 @@ export type ApplicationPagePuckEditorProps = Readonly<{
   viewer?: StudioCanvasViewer | null | undefined;
   /** Lets the normal grid controls arrange its live canvas preview. */
   arrangeGrid?: boolean | undefined;
+  /** Puck's own hotkey for the preview mode changed it; the toolbar follows. */
+  onArrangeGrid?: ((arrange: boolean) => void) | undefined;
+  /** Reports whether any data grid on the open page has columns to arrange. */
+  onArrangeableGrids?: ((arrangeable: boolean) => void) | undefined;
+  /** A block is being dragged, from the palette or on the canvas. */
+  onDragging?: ((dragging: boolean) => void) | undefined;
   /** The one channel the grid's layout, sort, filter, search and refresh events arrive on. */
   onGridChange?: ((change: StudioCanvasGridChange) => void) | undefined;
   /** The query state and projection each grid is read with; changes only when a grid is read again. */
@@ -335,7 +329,7 @@ export function ApplicationPagePuckEditor(props: ApplicationPagePuckEditorProps)
       />
     );
   return (
-    <div className="space-y-3">
+    <div className="flex min-h-0 flex-1 flex-col gap-3">
       {addresses.length < 2 ? null : (
         <div className="flex flex-col gap-1.5">
           <Label htmlFor={selectorId}>Content area</Label>
@@ -426,15 +420,20 @@ function ApplicationPageSlotPuckEditor({
   updating,
   viewer,
   arrangeGrid,
+  onArrangeGrid,
+  onArrangeableGrids,
+  onDragging,
   onGridChange,
   gridReads,
 }: ApplicationPagePuckEditorProps & { at: PageSlotAddress }) {
   const well = useRef<HTMLDivElement>(null);
   const [visible, setVisible] = useState(false);
   const [actionsHost, setActionsHost] = useState<HTMLDivElement | null>(null);
-  const [availableWidth, setAvailableWidth] = useState(0);
+  // The canvas is a device screen: the iframe is as wide as the chosen screen and as tall as the
+  // well, in the iframe's own pixels. The zoom only scales the iframe as a whole.
+  const [available, setAvailable] = useState({ width: 0, height: 0 });
   const width = deviceWidths[breakpoint];
-  const scale = zoom === "fit" ? Math.min(1, availableWidth / width) : zoom / 100;
+  const scale = zoom === "fit" ? Math.min(1, available.width / width) : zoom / 100;
   const registry = useMemo(
     () => createPlatformComponentRegistryForReleases(platformBlockCatalogue.releases),
     [platformBlockCatalogue],
@@ -452,14 +451,25 @@ function ApplicationPageSlotPuckEditor({
       }),
     [registry],
   );
-  // The content renders inside the frame's outlet, exactly as a running page's content does.
+  // The application frame is the canvas root, so the content renders in its outlet inside the iframe.
   const config = useMemo(
-    () =>
-      studioCanvasConfig(
-        contentConfigFor(getVortexPuckConfig(registry, fieldInputControlReleases)),
-        registry,
-      ),
+    () => studioCanvasConfig(getVortexPuckConfig(registry, fieldInputControlReleases), registry),
     [registry, fieldInputControlReleases],
+  );
+  const metadata = useMemo(
+    (): StudioCanvasMetadata => ({
+      breakpoint,
+      readSettings: compiledItemSettings,
+      studio: {
+        frame,
+        appearance,
+        platformThemeTokens,
+        registry,
+        fieldInputControlReleases,
+        breakpoint,
+      },
+    }),
+    [breakpoint, frame, appearance, platformThemeTokens, registry, fieldInputControlReleases],
   );
   const compiledSlot = compiledSlots?.[at.key];
   const [message, setMessage] = useState("");
@@ -632,10 +642,15 @@ function ApplicationPageSlotPuckEditor({
     if (element === null) return;
     const measure = () => {
       const style = getComputedStyle(element);
-      const available =
-        element.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
-      setAvailableWidth(available);
-      onFitZoom(Math.min(1, available / width) * 100);
+      const measured = {
+        width: element.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight),
+        height:
+          element.clientHeight - parseFloat(style.paddingTop) - parseFloat(style.paddingBottom),
+      };
+      setAvailable((current) =>
+        current.width === measured.width && current.height === measured.height ? current : measured,
+      );
+      onFitZoom(Math.min(1, measured.width / width) * 100);
     };
     measure();
     const observer = new ResizeObserver(measure);
@@ -643,6 +658,25 @@ function ApplicationPageSlotPuckEditor({
     return () => observer.disconnect();
   }, [shown !== undefined, width, onFitZoom]);
   const editable = !disabled && readOnlyCause === undefined && breakpoint === "desktop";
+  // Whether a data grid of this area has columns the person can arrange.
+  const arrangeable = useMemo(
+    () =>
+      slot === undefined
+        ? false
+        : sourceItemTree(slot.items).some((item) => {
+            const release = storedItemRelease(catalogue, item);
+            const columns = compiled.settings?.[item.props.id]?.columns;
+            return (
+              release?.blockId === PLATFORM_BLOCK_RELEASE_IDENTITIES.TABLE_BLOCK_RELEASE.blockId &&
+              Array.isArray(columns) &&
+              columns.length > 0
+            );
+          }),
+    [slot, catalogue, compiled],
+  );
+  useEffect(() => {
+    onArrangeableGrids?.(arrangeable);
+  }, [arrangeable, onArrangeableGrids]);
 
   // Every canvas change goes back through the definition: Puck's data is converted to the
   // authored content area, placed in the current draft and validated before the history takes it.
@@ -768,13 +802,17 @@ function ApplicationPageSlotPuckEditor({
     );
 
   return (
-    <section className="space-y-3" aria-label="Page canvas" aria-busy={disabled}>
+    <section
+      className="flex min-h-0 flex-1 flex-col gap-3"
+      aria-label="Page canvas"
+      aria-busy={disabled}
+    >
       {/* The screen size is chosen in Studio's canvas toolbar. */}
       {slot.items.length === 0 && (
-        <CanvasEmpty
-          title="Build this page"
-          description="Add a block from Blocks, or add a record type in Data and its List page in Structure. This guidance only appears in Studio."
-        />
+        <p role="status" className="px-4 text-sm font-medium">
+          Build this page: add a block from Blocks, or add a record type in Data and its List page
+          in Structure. This guidance only appears in Studio.
+        </p>
       )}
       <div className="flex flex-wrap items-center gap-2">
         <p className="px-4 text-sm text-muted-foreground">
@@ -796,87 +834,113 @@ function ApplicationPageSlotPuckEditor({
       <div
         ref={well}
         data-vortex-studio-canvas-well=""
-        className="min-h-96 overflow-x-auto bg-muted/40 px-4 py-4"
+        className="min-h-96 flex-1 overflow-auto bg-muted/40 p-4"
       >
-        <div
-          {...createThemeRootProps(frame?.theme, platformThemeTokens)}
-          {...createAppearanceRootProps(appearance)}
-          data-vortex-studio-page-frame=""
-          className="mx-auto overflow-clip rounded-xl bg-background text-foreground shadow-lg ring-1 ring-border"
-          style={
-            {
-              ...createThemeRootProps(frame?.theme, platformThemeTokens).style,
-              ...createAppearanceRootProps(appearance).style,
+        <div className="mx-auto" style={{ width: width * scale, height: available.height }}>
+          <div
+            data-vortex-studio-page-frame=""
+            className="rounded-xl shadow-lg ring-1 ring-border"
+            style={{
               width,
-              zoom: scale > 0 ? scale : 1,
-              visibility: zoom === "fit" && availableWidth === 0 ? "hidden" : "visible",
-              ...studioPuckStyle,
-            } as CSSProperties
-          }
-        >
-          <StudioCanvasCompiledSettings settings={compiled.settings ?? {}}>
-            <StudioCanvasRecordsProvider records={canvasRecords}>
-              <StudioCanvasControlsProvider onValue={chooseControlValue}>
-                <StudioCanvasViewerProvider viewer={viewer ?? null}>
-                  <StudioCanvasGridContext.Provider value={gridContext}>
-                    <Puck
-                      config={config}
-                      data={shown}
-                      onChange={change}
-                      onAction={dropped}
-                      iframe={{ enabled: false }}
-                      height="auto"
-                      overrides={studioCanvasOverrides}
-                      metadata={{ breakpoint, readSettings: compiledItemSettings }}
-                      permissions={{
-                        drag: editable,
-                        duplicate: editable,
-                        delete: editable,
-                        edit: false,
-                        insert: false,
-                      }}
-                    >
-                      <StudioCanvasActions host={actionsHost} />
-                      {palette?.targets.kind !== "available"
-                        ? paletteNote(
-                            palette?.targets.kind === "unsupported"
-                              ? "Blocks can't be added to this kind of page in Studio yet."
-                              : "This page is not in the current draft.",
-                          )
-                        : inPalette(
-                            palette,
-                            <StudioBlockPalette
-                              targets={placesHere}
-                              editable={editable}
-                              owner={palette.owner}
-                              message={palette.message}
-                              onAdd={(request) => {
-                                palette.onAdd(request);
-                              }}
-                            />,
-                          )}
-                      <StudioCanvasBridge
-                        arrangeGrid={arrangeGrid === true}
+              height: scale > 0 ? available.height / scale : available.height,
+              transform: `scale(${scale > 0 ? scale : 1})`,
+              transformOrigin: "0 0",
+              visibility: available.width === 0 ? "hidden" : "visible",
+            }}
+          >
+            <StudioCanvasCompiledSettings settings={compiled.settings ?? {}}>
+              <StudioCanvasRecordsProvider records={canvasRecords}>
+                <StudioCanvasControlsProvider onValue={chooseControlValue}>
+                  <StudioCanvasViewerProvider viewer={viewer ?? null}>
+                    <StudioCanvasGridContext.Provider value={gridContext}>
+                      <Puck
+                        config={config}
                         data={shown}
-                        resync={resync}
-                        synchronizing={synchronizing}
-                        selectedAlias={selectedPlacementAlias}
-                        onSelect={onSelectPlacement}
-                        frame={frame}
-                        breakpoint={breakpoint}
-                        registry={registry}
-                        fieldInputControlReleases={fieldInputControlReleases}
-                        platformThemeTokens={platformThemeTokens}
-                      />
-                    </Puck>
-                  </StudioCanvasGridContext.Provider>
-                </StudioCanvasViewerProvider>
-              </StudioCanvasControlsProvider>
-            </StudioCanvasRecordsProvider>
-          </StudioCanvasCompiledSettings>
+                        onChange={change}
+                        onAction={dropped}
+                        iframe={{ enabled: true, waitForStyles: true, syncHostStyles: true }}
+                        height="100%"
+                        overrides={studioCanvasOverrides}
+                        metadata={metadata}
+                        permissions={{
+                          drag: editable,
+                          duplicate: editable,
+                          delete: editable,
+                          edit: false,
+                          insert: false,
+                        }}
+                      >
+                        {arrangeGrid === true ? (
+                          <StudioArrangeBar
+                            host={actionsHost}
+                            arrangeable={arrangeable}
+                            onDone={() => onArrangeGrid?.(false)}
+                          />
+                        ) : (
+                          <StudioCanvasActions host={actionsHost} />
+                        )}
+                        {palette?.targets.kind !== "available"
+                          ? paletteNote(
+                              palette?.targets.kind === "unsupported"
+                                ? "Blocks can't be added to this kind of page in Studio yet."
+                                : "This page is not in the current draft.",
+                            )
+                          : inPalette(
+                              palette,
+                              <StudioBlockPalette
+                                targets={placesHere}
+                                editable={editable}
+                                owner={palette.owner}
+                                message={palette.message}
+                                onAdd={(request) => {
+                                  palette.onAdd(request);
+                                }}
+                              />,
+                            )}
+                        <StudioCanvasBridge
+                          arrangeGrid={arrangeGrid === true}
+                          onArrangeGrid={(arrange) => onArrangeGrid?.(arrange)}
+                          data={shown}
+                          resync={resync}
+                          synchronizing={synchronizing}
+                          selectedAlias={selectedPlacementAlias}
+                          onSelect={onSelectPlacement}
+                          onDragging={onDragging}
+                        />
+                        <Puck.Preview id="vortex-studio-canvas" />
+                      </Puck>
+                    </StudioCanvasGridContext.Provider>
+                  </StudioCanvasViewerProvider>
+                </StudioCanvasControlsProvider>
+              </StudioCanvasRecordsProvider>
+            </StudioCanvasCompiledSettings>
+          </div>
         </div>
       </div>
     </section>
+  );
+}
+
+/** The on-canvas state of the Arrange grid columns mode, in the bar above the canvas. */
+function StudioArrangeBar({
+  host,
+  arrangeable,
+  onDone,
+}: Readonly<{ host: HTMLElement | null; arrangeable: boolean; onDone: () => void }>) {
+  if (host === null) return null;
+  return createPortal(
+    <div role="status" className="flex min-h-9 min-w-0 items-center gap-2">
+      <Icon name="table-columns" aria-hidden="true" />
+      <p className="mr-auto min-w-0 text-sm">
+        {arrangeable
+          ? "Arranging grid columns: drag column edges to resize, drag headers to move."
+          : "This page has no data grid with columns to arrange. Add a data grid and choose its query first."}
+      </p>
+      <Button type="button" size="sm" onClick={onDone}>
+        Done
+      </Button>
+    </div>,
+    host,
   );
 }
 
