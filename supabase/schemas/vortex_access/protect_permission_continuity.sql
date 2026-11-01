@@ -6,6 +6,11 @@ declare
   meaning_changed boolean := false;
   must_advance boolean;
 begin
+  -- The one application purge function deletes this table's rows; nothing else may.
+  if tg_op = 'DELETE' and current_user = 'vortex_owner'
+    and pg_catalog.current_setting('vortex.application_purge', true) = 'on' then
+    return old;
+  end if;
   if tg_op = 'DELETE' then
     raise exception using errcode = '23514', message = 'Permission continuity cannot be deleted';
   end if;

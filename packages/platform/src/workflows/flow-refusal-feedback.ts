@@ -20,6 +20,10 @@ export const flowRefusalFeedbackCodeSchema = z.enum([
   "application_release_changed",
   "application_not_installed",
   "application_not_newer",
+  "application_is_default",
+  "application_has_dependents",
+  "application_is_installed",
+  "application_name_mismatch",
   "applications_manage_required",
   "installation_delegation_required",
   "assignments_manage_required",
@@ -54,6 +58,14 @@ export const flowRefusalFeedbackSentences: Readonly<Record<FlowRefusalFeedbackCo
     "A newer application version was published. Review it before trying again.",
   application_not_installed:
     "This application is not installed in this organisation, so there is nothing to upgrade or remove. Install it first if it is needed here.",
+  application_is_default:
+    "This is the organisation's default application. Choose another default application in the organisation settings first.",
+  application_has_dependents:
+    "Another application is built on this one. Remove or delete that application first.",
+  application_is_installed:
+    "This application is installed. Remove it first, then delete it.",
+  application_name_mismatch:
+    "The name you typed does not match the application's name. Type it exactly to confirm.",
   application_not_newer:
     "There is no newer application release to install. Review the latest published release before trying again.",
   applications_manage_required:

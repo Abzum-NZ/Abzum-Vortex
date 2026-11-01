@@ -1817,6 +1817,193 @@
       }
     }
   },
+  "review_application_purge": {
+    "key": "review_application_purge",
+    "name": "Review application purge",
+    "release": {
+      "serviceId": "fe3c7c34-d0ae-495a-bb1c-314307894980",
+      "operationId": "6458bbdc-6cce-4835-a184-473bbc99a9ae",
+      "releaseVersion": "1.0.0"
+    },
+    "descriptor": {
+      "contractVersion": "1.0.0",
+      "operation": {
+        "owner": {
+          "kind": "platform_service",
+          "serviceId": "fe3c7c34-d0ae-495a-bb1c-314307894980"
+        },
+        "operationId": "6458bbdc-6cce-4835-a184-473bbc99a9ae"
+      },
+      "inputs": {
+              "application_root_id": {
+                      "type": "text",
+                      "required": true
+              },
+              "delete_only": {
+                      "type": "yes_no",
+                      "required": false
+              }
+      },
+      "outputs": {
+              "application_name": {
+                      "type": "text",
+                      "required": true
+              },
+              "installed": {
+                      "type": "yes_no",
+                      "required": true
+              },
+              "roles": {
+                      "type": "whole_number",
+                      "required": true
+              },
+              "role_assignments": {
+                      "type": "whole_number",
+                      "required": true
+              },
+              "permission_entries": {
+                      "type": "whole_number",
+                      "required": true
+              },
+              "releases": {
+                      "type": "whole_number",
+                      "required": true
+              },
+              "records": {
+                      "type": "whole_number",
+                      "required": true
+              },
+              "record_tables": {
+                      "type": "whole_number",
+                      "required": true
+              }
+      },
+      "effect": "read",
+      "expectedRevision": "not_required",
+      "confirmation": "not_required",
+      "duplicateProtection": "not_required",
+      "safeResults": ["completed", "refused", "validation", "failed"],
+      "requiredAuthority": {
+        "kind": "permission",
+        "permissionId": "7ecd3304-f16c-47d4-94db-0964980091ba",
+        "key": "platform.organization.applications.manage"
+      }
+    }
+  },
+  "purge_application": {
+    "key": "purge_application",
+    "name": "Purge application",
+    "release": {
+      "serviceId": "fe3c7c34-d0ae-495a-bb1c-314307894980",
+      "operationId": "7eeaa4a7-4357-41a9-a066-2009b6ce3bfc",
+      "releaseVersion": "1.0.0"
+    },
+    "descriptor": {
+      "contractVersion": "1.0.0",
+      "operation": {
+        "owner": {
+          "kind": "platform_service",
+          "serviceId": "fe3c7c34-d0ae-495a-bb1c-314307894980"
+        },
+        "operationId": "7eeaa4a7-4357-41a9-a066-2009b6ce3bfc"
+      },
+      "inputs": {
+              "application_root_id": {
+                      "type": "text",
+                      "required": true
+              },
+              "confirm_name": {
+                      "type": "text",
+                      "required": true
+              }
+      },
+      "outputs": {
+              "application_name": {
+                      "type": "text",
+                      "required": true
+              },
+              "roles": {
+                      "type": "whole_number",
+                      "required": true
+              },
+              "records": {
+                      "type": "whole_number",
+                      "required": true
+              },
+              "record_tables": {
+                      "type": "whole_number",
+                      "required": true
+              }
+      },
+      "effect": "change",
+      "expectedRevision": "not_required",
+      "confirmation": "required",
+      "duplicateProtection": "not_required",
+      "safeResults": ["committed", "refused", "conflict", "validation", "failed"],
+      "requiredAuthority": {
+        "kind": "permission",
+        "permissionId": "7ecd3304-f16c-47d4-94db-0964980091ba",
+        "key": "platform.organization.applications.manage"
+      }
+    }
+  },
+  "delete_application": {
+    "key": "delete_application",
+    "name": "Delete application",
+    "release": {
+      "serviceId": "fe3c7c34-d0ae-495a-bb1c-314307894980",
+      "operationId": "91daea22-e890-4fcc-a88c-9441b864de97",
+      "releaseVersion": "1.0.0"
+    },
+    "descriptor": {
+      "contractVersion": "1.0.0",
+      "operation": {
+        "owner": {
+          "kind": "platform_service",
+          "serviceId": "fe3c7c34-d0ae-495a-bb1c-314307894980"
+        },
+        "operationId": "91daea22-e890-4fcc-a88c-9441b864de97"
+      },
+      "inputs": {
+              "application_root_id": {
+                      "type": "text",
+                      "required": true
+              },
+              "confirm_name": {
+                      "type": "text",
+                      "required": true
+              }
+      },
+      "outputs": {
+              "application_name": {
+                      "type": "text",
+                      "required": true
+              },
+              "roles": {
+                      "type": "whole_number",
+                      "required": true
+              },
+              "records": {
+                      "type": "whole_number",
+                      "required": true
+              },
+              "record_tables": {
+                      "type": "whole_number",
+                      "required": true
+              }
+      },
+      "effect": "change",
+      "expectedRevision": "not_required",
+      "confirmation": "required",
+      "duplicateProtection": "not_required",
+      "safeResults": ["committed", "refused", "conflict", "validation", "failed"],
+      "requiredAuthority": {
+        "kind": "permission",
+        "permissionId": "7ecd3304-f16c-47d4-94db-0964980091ba",
+        "key": "platform.organization.applications.manage"
+      }
+    }
+  },
   "prepare_role_assignment": {
     "key": "prepare_role_assignment",
     "name": "Review role assignment",

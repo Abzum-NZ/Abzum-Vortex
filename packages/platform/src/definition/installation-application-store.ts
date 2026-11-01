@@ -35,6 +35,12 @@ import {
   resumeFirstInstallRoles,
 } from "./installation-first-install-roles";
 import { releaseMemberRole, type ApplicationRoleChange } from "./installation-role-templates";
+import {
+  ApplicationPurgeRefused,
+  purgeApplication,
+  readApplicationPurge,
+  requireApplicationChangeStepUp,
+} from "./installation-purge";
 import { readApplicationRemoval, removeApplication } from "./installation-removal";
 import {
   readUpgradeAuthorizedState,
@@ -401,6 +407,7 @@ const review = async (
   if (!rootId.success) return { kind: "unavailable" };
   const organizationId = organizationOf(selection);
   try {
+    await requireApplicationChangeStepUp(environment, session, organizationId, rootId.data);
     const latest = await readCurrentApplicationLatestRelease(
       environment,
       session,
@@ -458,6 +465,49 @@ const review = async (
 };
 
 const yes = (value: unknown): boolean => value === true;
+
+/**
+ * Removes an application and everything it holds after the typed name matches: a removed or
+ * installed application is purged, and deleting refuses an installed one.
+ */
+const purgeJourney = async (
+  environment: ApplicationStoreEnvironment,
+  deleteOnly: boolean,
+  session: IdentitySession,
+  selection: OrganizationSelectionCandidate,
+  inputs: Readonly<Record<string, unknown>>,
+  receipt?: StoreReceiptCompletion,
+): Promise<ApplicationStoreResult> => {
+  const rootId = applicationRootInput(inputs.application_root_id);
+  const confirmedName = z.string().min(1).max(200).safeParse(inputs.confirm_name);
+  if (!rootId.success || !confirmedName.success) return { kind: "unavailable" };
+  try {
+    return {
+      kind: "available",
+      value: await purgeApplication(
+        environment,
+        session,
+        organizationOf(selection),
+        rootId.data,
+        confirmedName.data,
+        deleteOnly,
+        receipt,
+      ),
+    };
+  } catch (error) {
+    return purgeFailure(error);
+  }
+};
+
+/** A purge's refusal the person is told by name, or the shared mapping of any other failure. */
+const purgeFailure = (error: unknown): ApplicationStoreResult =>
+  error instanceof ApplicationPurgeRefused
+    ? {
+        kind: "confirmed_failure",
+        outcome: "refused",
+        diagnostic: { code: error.code },
+      }
+    : commandFailureOf(error);
 
 const firstInstallExpectedSchema = z
   .object({ selected: z.object({ releaseRevision: z.number().int().positive() }).passthrough() })
@@ -695,6 +745,12 @@ export const createApplicationStoreService = (environment: ApplicationStoreEnvir
     const rootId = applicationRootInput(inputs.application_root_id);
     if (!rootId.success) return { kind: "unavailable" };
     try {
+      await requireApplicationChangeStepUp(
+        environment,
+        session,
+        organizationOf(selection),
+        rootId.data,
+      );
       const current = await readApplicationRemoval(
         environment,
         session,
@@ -714,6 +770,40 @@ export const createApplicationStoreService = (environment: ApplicationStoreEnvir
       return result === "conflict" ? { kind: "unavailable" } : result;
     }
   },
+  reviewPurge: async (
+    session: IdentitySession,
+    selection: OrganizationSelectionCandidate,
+    inputs: Readonly<Record<string, unknown>>,
+  ): Promise<ApplicationStoreResult> => {
+    const rootId = applicationRootInput(inputs.application_root_id);
+    if (!rootId.success) return { kind: "unavailable" };
+    try {
+      return {
+        kind: "available",
+        value: await readApplicationPurge(
+          environment,
+          session,
+          organizationOf(selection),
+          rootId.data,
+          yes(inputs.delete_only),
+        ),
+      };
+    } catch (error) {
+      return purgeFailure(error);
+    }
+  },
+  purge: (
+    session: IdentitySession,
+    selection: OrganizationSelectionCandidate,
+    inputs: Readonly<Record<string, unknown>>,
+    receipt?: StoreReceiptCompletion,
+  ) => purgeJourney(environment, false, session, selection, inputs, receipt),
+  delete: (
+    session: IdentitySession,
+    selection: OrganizationSelectionCandidate,
+    inputs: Readonly<Record<string, unknown>>,
+    receipt?: StoreReceiptCompletion,
+  ) => purgeJourney(environment, true, session, selection, inputs, receipt),
   remove: async (
     session: IdentitySession,
     selection: OrganizationSelectionCandidate,
