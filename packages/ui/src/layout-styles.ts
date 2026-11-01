@@ -278,7 +278,7 @@ export const LAYOUT_ONLY_STYLES_CSS = `
 /* A page's header actions are one row: the record detail's own actions with Refresh among them, primary
    first, Refresh next, destructive last, and a heading's actions in the order the page declares them.
    The row wraps only when it is too narrow to hold its actions, never one action per line. */
-[data-vortex-record-actions] {
+:is([data-vortex-record-actions], [data-vortex-form-actions]) {
   display: flex;
   flex-flow: row wrap;
   align-items: center;
