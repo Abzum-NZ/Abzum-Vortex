@@ -34,10 +34,12 @@ function findStyleRoot(anchor: HTMLElement | null): HTMLElement | null {
     sibling = sibling.previousElementSibling;
   }
 
-  const focusedRoot = document.activeElement?.closest("[data-vortex-style-root]");
+  // The anchor's own document: the Studio canvas draws blocks inside an iframe.
+  const ownerDocument = anchor.ownerDocument;
+  const focusedRoot = ownerDocument.activeElement?.closest("[data-vortex-style-root]");
   if (focusedRoot instanceof HTMLElement) return focusedRoot;
 
-  const roots = document.querySelectorAll("[data-vortex-style-root]");
+  const roots = ownerDocument.querySelectorAll("[data-vortex-style-root]");
   const onlyRoot = roots.length === 1 ? roots.item(0) : null;
   return onlyRoot instanceof HTMLElement ? onlyRoot : null;
 }

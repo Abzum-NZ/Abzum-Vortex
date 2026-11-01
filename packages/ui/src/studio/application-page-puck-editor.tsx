@@ -19,7 +19,6 @@ import {
   type PageSlotAddress,
   type ImmutablePlatformBlockCatalogue,
   compiledItemSettings,
-  PLATFORM_BLOCK_RELEASE_IDENTITIES,
 } from "@vortex/platform/schema";
 import type { CompiledItem, SourceItem, SourcePageZone } from "@vortex/platform/schema";
 import type { FieldInputControlReleaseMap } from "../registry";
@@ -78,6 +77,7 @@ import { StudioCanvasFrameProvider } from "./studio-canvas-root";
 import { StudioCanvasActions, studioCanvasOverrides } from "./studio-canvas-actions";
 import {
   StudioCanvasGridContext,
+  studioCanvasGridArrangeable,
   type StudioCanvasGridChange,
   type StudioCanvasGridRead,
 } from "./studio-canvas-grid";
@@ -665,18 +665,18 @@ function ApplicationPageSlotPuckEditor({
       slot === undefined
         ? false
         : sourceItemTree(slot.items).some((item) => {
-            const release = storedItemRelease(catalogue, item);
-            const columns = compiled.settings?.[item.props.id]?.columns;
+            const settings = compiled.settings?.[item.props.id];
             return (
-              release?.blockId === PLATFORM_BLOCK_RELEASE_IDENTITIES.TABLE_BLOCK_RELEASE.blockId &&
-              Array.isArray(columns) &&
-              columns.length > 0
+              settings !== undefined &&
+              studioCanvasGridArrangeable(item.props, settings, storedItemRelease(catalogue, item))
             );
           }),
     [slot, catalogue, compiled],
   );
   useEffect(() => {
     onArrangeableGrids?.(arrangeable);
+    // A page change must not leave the previous page's answer behind.
+    return () => onArrangeableGrids?.(false);
   }, [arrangeable, onArrangeableGrids]);
 
   // Every canvas change goes back through the definition: Puck's data is converted to the
@@ -810,10 +810,10 @@ function ApplicationPageSlotPuckEditor({
     >
       {/* The screen size is chosen in Studio's canvas toolbar. */}
       {slot.items.length === 0 && (
-        <p role="status" className="px-4 text-sm font-medium">
-          Build this page: add a block from Blocks, or add a record type in Data and its List page
-          in Structure. This guidance only appears in Studio.
-        </p>
+        <CanvasEmpty
+          title="Build this page"
+          description="Add a block from Blocks, or add a record type in Data and its List page in Structure. This guidance only appears in Studio."
+        />
       )}
       <div className="flex flex-wrap items-center gap-2">
         <p className="px-4 text-sm text-muted-foreground">
@@ -861,6 +861,7 @@ function ApplicationPageSlotPuckEditor({
                           onChange={change}
                           onAction={dropped}
                           iframe={{ enabled: true, waitForStyles: true, syncHostStyles: true }}
+                          // Puck's own wrapper fills the frame, so the iframe has the height of the well.
                           height="100%"
                           overrides={studioCanvasOverrides}
                           metadata={metadata}

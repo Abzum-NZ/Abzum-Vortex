@@ -320,7 +320,7 @@ export const LAYOUT_ONLY_STYLES_CSS = `
   width: auto !important;
 }
 [data-vortex-studio-canvas] .vortex-puck-slot:empty {
-  min-height: var(--vortex-studio-empty-slot, 4rem);
+  min-height: 4rem;
 }
 [data-vortex-studio-canvas]
   :is([data-vortex-record-actions], [data-vortex-heading-actions])

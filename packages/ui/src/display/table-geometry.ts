@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useSyncExternalStore, type RefObject } from "react";
+import { useCallback, useEffect, useSyncExternalStore, type RefObject } from "react";
 import {
   RECORDS_TABLE_COLUMN_MAXIMUM_WIDTH,
   RECORDS_TABLE_COLUMN_MINIMUM_WIDTH,
@@ -93,9 +93,11 @@ export const useBoundedGridViewport = <Element extends HTMLElement>(
         : "none";
     };
     const updateFade = (): void => writeFade(element.scrollTop < overflow - 1);
+    // The grid's own window: the Studio canvas draws it inside an iframe.
+    const view = element.ownerDocument.defaultView ?? window;
     const measure = (): (() => void) => {
-      const viewport = window.visualViewport;
-      const bottom = viewport === null ? window.innerHeight : viewport.offsetTop + viewport.height;
+      const viewport = view.visualViewport;
+      const bottom = viewport === null ? view.innerHeight : viewport.offsetTop + viewport.height;
       let followingHeight = 0;
       for (
         let sibling = element.nextElementSibling;
@@ -132,8 +134,8 @@ export const useBoundedGridViewport = <Element extends HTMLElement>(
     if (content !== null) observer.observe(content);
     const children = new MutationObserver(schedule);
     children.observe(element, { childList: true });
-    window.addEventListener("resize", schedule);
-    window.visualViewport?.addEventListener("resize", schedule);
+    view.addEventListener("resize", schedule);
+    view.visualViewport?.addEventListener("resize", schedule);
     element.addEventListener("scroll", updateFade, { passive: true });
     element.addEventListener("vortex-row-settled", schedule);
     // The server-rendered rows are usable before these overflow decorations need measuring.
@@ -146,8 +148,8 @@ export const useBoundedGridViewport = <Element extends HTMLElement>(
       children.disconnect();
       cancelAnimationFrame(firstFrame);
       cancelGridMeasurement(measure);
-      window.removeEventListener("resize", schedule);
-      window.visualViewport?.removeEventListener("resize", schedule);
+      view.removeEventListener("resize", schedule);
+      view.visualViewport?.removeEventListener("resize", schedule);
       element.removeEventListener("scroll", updateFade);
       element.removeEventListener("vortex-row-settled", schedule);
       element.style.removeProperty("--grid-available-height");
@@ -156,19 +158,13 @@ export const useBoundedGridViewport = <Element extends HTMLElement>(
   }, [scroll, bounded]);
 };
 
-const subscribeToMedia =
-  (query: string) =>
-  (notify: () => void): (() => void) => {
-    const media = window.matchMedia(query);
-    media.addEventListener("change", notify);
-    return () => media.removeEventListener("change", notify);
-  };
 const PHONE_QUERY = LAYOUT_BREAKPOINT_MEDIA.phone;
-const subscribeToPhone = subscribeToMedia(PHONE_QUERY);
 const subscribeToNothing = (): (() => void) => () => undefined;
-const isPhone = (): boolean => window.matchMedia(PHONE_QUERY).matches;
 const never = (): boolean => false;
 const unknownOnServer = (): undefined => undefined;
+/** The window the table is drawn in: its own element's, as the Studio canvas draws it in an iframe. */
+const viewOf = (element: RefObject<HTMLElement | null>): Window =>
+  element.current?.ownerDocument.defaultView ?? window;
 
 /**
  * The presentation the table shows now: the grid, or the phone cards when the definition asks for
@@ -179,8 +175,21 @@ const unknownOnServer = (): undefined => undefined;
  */
 export const useTablePresentation = (
   contract: RecordsTableContract | undefined,
+  element: RefObject<HTMLElement | null>,
 ): "grid" | "cards" | undefined => {
   const cards = contract?.presentation === "grid" && contract.phonePresentation === "cards";
+  const subscribeToPhone = useCallback(
+    (notify: () => void): (() => void) => {
+      const media = viewOf(element).matchMedia(PHONE_QUERY);
+      media.addEventListener("change", notify);
+      return () => media.removeEventListener("change", notify);
+    },
+    [element],
+  );
+  const isPhone = useCallback(
+    (): boolean => viewOf(element).matchMedia(PHONE_QUERY).matches,
+    [element],
+  );
   const phone = useSyncExternalStore<boolean | undefined>(
     cards ? subscribeToPhone : subscribeToNothing,
     cards ? isPhone : never,

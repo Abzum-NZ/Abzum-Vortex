@@ -459,7 +459,7 @@ function EditableCell({
             phaseNow.current === "editing" &&
             !committing.current &&
             message === undefined &&
-            !linkEditor.current?.contains(document.activeElement)
+            !linkEditor.current?.contains(linkEditor.current.ownerDocument.activeElement)
           ) {
             restoreFocus.current = false;
             cancelRef.current();

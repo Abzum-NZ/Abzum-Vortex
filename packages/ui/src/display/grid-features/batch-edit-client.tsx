@@ -87,7 +87,7 @@ export const focusedCell = (
   root: HTMLElement,
   context: GridFeatureContext,
 ): Readonly<{ line: number; column: number }> | undefined => {
-  const active = document.activeElement;
+  const active = root.ownerDocument.activeElement;
   if (!(active instanceof HTMLElement)) return undefined;
   const cell = active.closest<HTMLElement>("[data-grid-cell]");
   if (cell === null || cell.closest(GRID_ROOT) !== root) return undefined;

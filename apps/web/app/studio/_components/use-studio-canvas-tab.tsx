@@ -194,6 +194,10 @@ export function useStudioCanvasTab({
   const [notice, setNotice] = useState("");
   const [arrangeGrid, setArrangeGrid] = useState(false);
   const [arrangeableGrids, setArrangeableGrids] = useState(false);
+  // A locked draft takes no arrangement: the toolbar and Puck's mode both stay off, however it was asked for.
+  useEffect(() => {
+    if (draft.locked) setArrangeGrid(false);
+  }, [draft.locked, arrangeGrid]);
   // A block is being dragged on the canvas or from the palette: a collapsed panel gets out of its way.
   const [dragging, onDragging] = useState(false);
   const [gridStates, setGridStates] = useState<ReadonlyMap<string, StudioCanvasGridState>>(
@@ -1103,7 +1107,7 @@ export function useStudioCanvasTab({
                 compileFailure={view.failure}
                 onChange={applyPuckPageEdit}
                 readRecords={readCanvasRecords}
-                arrangeGrid={arrangeGrid && !draft.locked}
+                arrangeGrid={arrangeGrid}
                 onArrangeGrid={setArrangeGrid}
                 onArrangeableGrids={setArrangeableGrids}
                 onDragging={onDragging}

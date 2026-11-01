@@ -296,6 +296,18 @@ export const StudioCanvasGridContext = createContext<
   Readonly<{ report: ((change: StudioCanvasGridChange) => void) | undefined; interactive: boolean }>
 >({ report: undefined, interactive: false });
 
+/**
+ * Whether a placement is a table whose columns the canvas can arrange: the one check the grid's
+ * events and the toolbar's Arrange grid columns both use.
+ */
+export const studioCanvasGridArrangeable = (
+  props: Readonly<Record<string, unknown>>,
+  compiled: Readonly<Record<string, unknown>>,
+  release: PlatformBlockRelease | undefined,
+): boolean =>
+  release?.blockId === PLATFORM_BLOCK_RELEASE_IDENTITIES.TABLE_BLOCK_RELEASE.blockId &&
+  gridSetup(props, compiled, release) !== undefined;
+
 /** The canvas uses the grid's normal events; no personal preference is written. */
 export function useStudioCanvasGridEvents(
   props: Readonly<Record<string, unknown>>,

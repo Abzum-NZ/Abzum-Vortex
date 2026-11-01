@@ -706,8 +706,9 @@ export function RecordsGrid({
   // focus back on the tab stop.
   useEffect(() => {
     if (!gridHasFocus.current) return;
-    const focused = document.activeElement;
-    if (focused === null || focused === document.body)
+    const ownerDocument = gridRef.current?.ownerDocument ?? document;
+    const focused = ownerDocument.activeElement;
+    if (focused === null || focused === ownerDocument.body)
       cellElement(activeRowRef.current, activeColumnIdRef.current)?.focus();
   }, [lines]);
 
@@ -816,9 +817,10 @@ export function RecordsGrid({
   };
 
   const pageStep = (): number => {
+    const view = (scrollRef.current ?? gridRef.current)?.ownerDocument.defaultView ?? window;
     const height = bounded
-      ? (scrollRef.current?.clientHeight ?? window.innerHeight)
-      : window.innerHeight;
+      ? (scrollRef.current?.clientHeight ?? view.innerHeight)
+      : view.innerHeight;
     return Math.max(1, Math.floor(height / rowHeight) - 1);
   };
 

@@ -90,7 +90,10 @@ export function StudioCanvasToolbar({
                     variant={arrangeGrid ? "secondary" : "ghost"}
                     aria-label="Arrange grid columns"
                     aria-pressed={arrangeGrid}
+                    // Stays focusable and hoverable, so its tooltip explains why it is off.
                     disabled={!arrangeGrid && !arrangeableGrids}
+                    focusableWhenDisabled
+                    className="aria-disabled:opacity-50"
                     onClick={onArrangeGrid}
                   />
                 }

@@ -71,7 +71,35 @@ export function StudioCanvasIframe({
     style.dataset.vortexStudioPuck = "";
     style.textContent = studioPuckIframeCss;
     frameDocument.head.append(style);
-    return () => style.remove();
+    // Keys pressed while focus is inside the iframe reach only its own document. Studio's shortcuts
+    // (Undo, Redo, the inspector, the panel) listen on the host window, so they are passed on there,
+    // as Puck passes on pointer moves. Typing in a field is left alone.
+    const forward = (event: KeyboardEvent) => {
+      const target = event.target;
+      if (
+        target instanceof (frameDocument.defaultView?.HTMLElement ?? HTMLElement) &&
+        (target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName))
+      )
+        return;
+      const copy = new KeyboardEvent("keydown", {
+        key: event.key,
+        code: event.code,
+        ctrlKey: event.ctrlKey,
+        metaKey: event.metaKey,
+        shiftKey: event.shiftKey,
+        altKey: event.altKey,
+        repeat: event.repeat,
+        bubbles: true,
+        cancelable: true,
+      });
+      window.dispatchEvent(copy);
+      if (copy.defaultPrevented) event.preventDefault();
+    };
+    frameDocument.addEventListener("keydown", forward);
+    return () => {
+      style.remove();
+      frameDocument.removeEventListener("keydown", forward);
+    };
   }, [frameDocument]);
   if (studio === null) throw new Error("The Studio canvas has no frame context");
   // The canvas is a design surface: no link in it (menu pages, external addresses, links inside

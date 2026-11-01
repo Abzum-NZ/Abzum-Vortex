@@ -168,7 +168,9 @@ export function StudioCanvasBridge({
     const kept = puckSelection();
     synchronizing.current = true;
     try {
-      dispatch({ type: "setData", data, recordHistory: false });
+      // One walk of the data per outside draft change (an edit, Undo, Revert); the function form is
+      // the same action without Puck's warning about the object form.
+      dispatch({ type: "setData", data: () => data, recordHistory: false });
       showSelection(kept);
     } finally {
       synchronizing.current = false;

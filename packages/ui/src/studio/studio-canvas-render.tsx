@@ -2,7 +2,7 @@
 
 import { Item, ItemContent, ItemDescription, ItemTitle } from "../components/item";
 import { Component, createContext, useContext, type ReactElement, type ReactNode } from "react";
-import { computePlacementClassName, computePlacementStyle } from "../layout-styles";
+import { placementWrapperGeometry } from "../puck-config";
 import type { ComponentConfig, Config, Field } from "@puckeditor/core";
 import {
   canonicalResponsivePlacement,
@@ -235,19 +235,16 @@ function CanvasPlaceholder({
     vortex?.responsive === undefined
       ? undefined
       : (canonicalResponsivePlacement(vortex.responsive) as ResponsivePlacement);
-  const layout = responsive?.[breakpoint];
-  const gridChild =
-    responsive !== undefined &&
-    Object.values(responsive).some((entry) => entry.width.kind === "grid");
+  const geometry = placementWrapperGeometry(responsive, breakpoint);
   return (
     <div
       ref={dragRef ?? undefined}
       data-vortex-layout-wrapper=""
       data-vortex-placement-id={typeof props.id === "string" ? props.id : ""}
-      {...(gridChild ? { "data-vortex-grid-child": "" } : {})}
+      {...(geometry.gridChild ? { "data-vortex-grid-child": "" } : {})}
       {...data}
-      className={computePlacementClassName(layout)}
-      style={computePlacementStyle(layout)}
+      className={geometry.className}
+      style={geometry.style}
     >
       {children}
     </div>

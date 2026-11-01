@@ -79,6 +79,12 @@ export function useGridFullScreen(
   const activeRef = useRef(active);
   activeRef.current = active;
 
+  // The table's own document: the Studio canvas draws the table inside an iframe, which has its own
+  // full screen state and, without permission, refuses the browser's full screen (the layer stays).
+  const own = useCallback(
+    (): Document => container.current?.ownerDocument ?? document,
+    [container],
+  );
   const leave = useCallback(() => {
     if (!activeRef.current) return;
     setActive(false);
@@ -86,38 +92,40 @@ export function useGridFullScreen(
     announce("Left full screen");
     if (browser.current) {
       browser.current = false;
-      if (document.fullscreenElement === document.documentElement)
-        document.exitFullscreen().catch((error: unknown) => {
+      const ownerDocument = own();
+      if (ownerDocument.fullscreenElement === ownerDocument.documentElement)
+        ownerDocument.exitFullscreen().catch((error: unknown) => {
           console.error("[display] the browser did not leave full screen", error);
         });
     }
-  }, [announce]);
+  }, [announce, own]);
   const enter = useCallback(() => {
     if (activeRef.current) return;
     setActive(true);
     announce("Full screen. Press Escape to leave");
-    const root = document.documentElement;
-    if (document.fullscreenEnabled && document.fullscreenElement === null) {
+    const ownerDocument = own();
+    if (ownerDocument.fullscreenEnabled && ownerDocument.fullscreenElement === null) {
       browser.current = true;
       // A refusal (a policy or a frame without permission) keeps the in-app layer.
-      root.requestFullscreen().catch(() => {
+      ownerDocument.documentElement.requestFullscreen().catch(() => {
         browser.current = false;
       });
     }
-  }, [announce]);
+  }, [announce, own]);
   const toggle = useCallback(() => (activeRef.current ? leave() : enter()), [enter, leave]);
 
   // The browser's own Escape ends its full screen; the layer follows.
   useEffect(() => {
+    const ownerDocument = own();
     const onChange = (): void => {
-      if (browser.current && document.fullscreenElement === null) {
+      if (browser.current && ownerDocument.fullscreenElement === null) {
         browser.current = false;
         leave();
       }
     };
-    document.addEventListener("fullscreenchange", onChange);
-    return () => document.removeEventListener("fullscreenchange", onChange);
-  }, [leave]);
+    ownerDocument.addEventListener("fullscreenchange", onChange);
+    return () => ownerDocument.removeEventListener("fullscreenchange", onChange);
+  }, [leave, own]);
 
   // The shortcut toggles from anywhere inside the table; Escape leaves the in-app layer. Menus are
   // portalled outside the table, so their own Escape never reaches this listener. It listens on the
@@ -146,22 +154,22 @@ export function useGridFullScreen(
     };
     // Capture keeps the order the table's own listener had: before the grid's React handlers.
     // The table's own document: the Studio canvas draws it inside an iframe.
-    const own = container.current?.ownerDocument ?? document;
-    own.addEventListener("keydown", onKeyDown, true);
-    return () => own.removeEventListener("keydown", onKeyDown, true);
-  }, [container, allowed, toggle, leave]);
+    const ownerDocument = own();
+    ownerDocument.addEventListener("keydown", onKeyDown, true);
+    return () => ownerDocument.removeEventListener("keydown", onKeyDown, true);
+  }, [container, allowed, toggle, leave, own]);
 
   // A table that stops allowing full screen, or unmounts, leaves it.
   useEffect(() => {
     if (!allowed) leave();
   }, [allowed, leave]);
-  useEffect(
-    () => () => {
-      if (browser.current && document.fullscreenElement === document.documentElement)
-        void document.exitFullscreen().catch(() => undefined);
-    },
-    [],
-  );
+  useEffect(() => {
+    const ownerDocument = own();
+    return () => {
+      if (browser.current && ownerDocument.fullscreenElement === ownerDocument.documentElement)
+        void ownerDocument.exitFullscreen().catch(() => undefined);
+    };
+  }, [own]);
 
   useEffect(() => {
     if (active || !restoreFocus.current) return;

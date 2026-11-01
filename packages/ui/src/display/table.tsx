@@ -162,7 +162,9 @@ function RecordsTableView(props: DisplayRenderProps<DisplayTablePayload>): React
   // Publication refuses a Records table without its contract, so a missing one is a definition
   // error: it renders the error state below, never a second way of choosing columns or controls.
   const contract = useMemo(() => recordsTableContractOrLog(settings, "table display"), [settings]);
-  const presentation = useTablePresentation(contract);
+  // The table's own element: it names the window the table is drawn in (the Studio canvas is an iframe).
+  const containerRef = useRef<HTMLDivElement>(null);
+  const presentation = useTablePresentation(contract, containerRef);
   const projectedColumns = values?.columns;
   const projectedHidden = values?.hiddenColumns;
   const sortableFields = values?.sortableFields;
@@ -369,7 +371,6 @@ function RecordsTableView(props: DisplayRenderProps<DisplayTablePayload>): React
     rowEditor,
   } = gridFeatures;
   // Full screen keeps this same tree and changes only the container classes.
-  const containerRef = useRef<HTMLDivElement>(null);
   const fullScreen = useGridFullScreen(containerRef, contract?.allowFullScreen === true, announce);
 
   // Configured row behaviours: a row click and named row actions. Each declared control carries

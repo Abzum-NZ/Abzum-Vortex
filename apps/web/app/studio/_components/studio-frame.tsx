@@ -209,21 +209,17 @@ function StudioRail<Key extends string>({
     buttons.current.get(next)?.focus();
   };
   return (
-    <div
-      role="tablist"
-      aria-orientation="vertical"
-      aria-label={label}
-      onKeyDown={move}
-      className="flex w-18 shrink-0 flex-col items-center gap-1 overflow-y-auto border-r border-sidebar-border bg-sidebar px-1 py-2 text-sidebar-foreground"
-    >
+    <div className="flex w-18 shrink-0 flex-col items-center gap-1 overflow-y-auto border-r border-sidebar-border bg-sidebar px-1 py-2 text-sidebar-foreground">
       {onToggleCollapsed !== undefined && (
         <Tooltip>
           <TooltipTrigger
             render={
               <button
                 type="button"
-                aria-label={collapsed ? "Expand panel" : "Collapse panel"}
-                aria-pressed={collapsed}
+                id="studio-panel-toggle"
+                aria-label="Collapse panel"
+                aria-expanded={!collapsed}
+                aria-controls="studio-rail-panel"
                 onClick={onToggleCollapsed}
                 className="mb-1 flex size-9 shrink-0 items-center justify-center rounded-lg text-muted-foreground outline-none hover:bg-sidebar-accent/60 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
               />
@@ -236,42 +232,50 @@ function StudioRail<Key extends string>({
           </TooltipContent>
         </Tooltip>
       )}
-      {tabs.map((tab, index) => {
-        const selected = tab.key === active;
-        const divided = index > 0 && tabs[index - 1]?.group !== tab.group;
-        return (
-          <div key={tab.key} className={cn("w-full", tab.group === "releases" && "mt-auto")}>
-            {divided && <Separator className="my-2" />}
-            <button
-              key={tab.key}
-              type="button"
-              role="tab"
-              id={`studio-rail-${tab.key}`}
-              aria-selected={selected}
-              aria-controls="studio-rail-panel"
-              aria-expanded={selected ? open : undefined}
-              tabIndex={tab.key === focusKey ? 0 : -1}
-              title={tab.label}
-              ref={(node) => {
-                if (node === null) buttons.current.delete(tab.key);
-                else buttons.current.set(tab.key, node);
-              }}
-              onFocus={() => setFocusKey(tab.key)}
-              onClick={() => onChoose(tab.key)}
-              className={cn(
-                "relative flex h-13 w-full flex-col items-center justify-center gap-1 rounded-lg border-0 px-1 py-0 text-xs font-medium outline-none transition-colors",
-                "hover:bg-sidebar-accent/60 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring",
-                selected
-                  ? "bg-sidebar-accent text-sidebar-accent-foreground before:absolute before:inset-y-3 before:-left-1 before:w-0.75 before:rounded-full before:bg-primary"
-                  : "bg-transparent text-muted-foreground",
-              )}
-            >
-              <Icon name={tab.icon} className="size-5" />
-              <span className="max-w-full truncate">{tab.label}</span>
-            </button>
-          </div>
-        );
-      })}
+      <div
+        role="tablist"
+        aria-orientation="vertical"
+        aria-label={label}
+        onKeyDown={move}
+        className="flex w-full flex-col items-center gap-1"
+      >
+        {tabs.map((tab, index) => {
+          const selected = tab.key === active;
+          const divided = index > 0 && tabs[index - 1]?.group !== tab.group;
+          return (
+            <div key={tab.key} className={cn("w-full", tab.group === "releases" && "mt-auto")}>
+              {divided && <Separator className="my-2" />}
+              <button
+                key={tab.key}
+                type="button"
+                role="tab"
+                id={`studio-rail-${tab.key}`}
+                aria-selected={selected}
+                aria-controls="studio-rail-panel"
+                aria-expanded={selected ? open : undefined}
+                tabIndex={tab.key === focusKey ? 0 : -1}
+                title={tab.label}
+                ref={(node) => {
+                  if (node === null) buttons.current.delete(tab.key);
+                  else buttons.current.set(tab.key, node);
+                }}
+                onFocus={() => setFocusKey(tab.key)}
+                onClick={() => onChoose(tab.key)}
+                className={cn(
+                  "relative flex h-13 w-full flex-col items-center justify-center gap-1 rounded-lg border-0 px-1 py-0 text-xs font-medium outline-none transition-colors",
+                  "hover:bg-sidebar-accent/60 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring",
+                  selected
+                    ? "bg-sidebar-accent text-sidebar-accent-foreground before:absolute before:inset-y-3 before:-left-1 before:w-0.75 before:rounded-full before:bg-primary"
+                    : "bg-transparent text-muted-foreground",
+                )}
+              >
+                <Icon name={tab.icon} className="size-5" />
+                <span className="max-w-full truncate">{tab.label}</span>
+              </button>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -384,25 +388,34 @@ export function StudioFrame<Key extends string>({
   const { widthOf, setWidth } = useStudioPanelWidths<Key>();
   const [panelOpen, setPanelOpen] = useState(true);
   // Collapsed: the panel is closed until the pointer visits the rail, and then it overlays the canvas.
-  const [collapsed, setCollapsed] = useState(false);
+  // `null` until the stored choice is read, so a reload never shows the panel and then folds it away.
+  const [storedCollapsed, setCollapsed] = useState<boolean | null>(null);
+  const collapsed = storedCollapsed === true;
   const [peeking, setPeeking] = useState(false);
   const peekTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  const peek = useCallback((open: boolean) => {
+  const pointerInside = useRef(false);
+  // Opening waits a moment, so passing over the rail does not pop the panel; closing waits longer.
+  const peek = useCallback((open: boolean, immediately = false) => {
     clearTimeout(peekTimer.current);
-    if (open) setPeeking(true);
-    else peekTimer.current = setTimeout(() => setPeeking(false), 300);
+    if (open && immediately) setPeeking(true);
+    else peekTimer.current = setTimeout(() => setPeeking(open), open ? 150 : 300);
   }, []);
   useEffect(() => {
     setCollapsed(readCollapsed());
     return () => clearTimeout(peekTimer.current);
   }, []);
   const toggleCollapsed = useCallback(() => {
+    if (!wide) return;
+    const inPanel = document.activeElement?.closest("#studio-rail-panel") != null;
     setCollapsed((held) => {
-      storeCollapsed(!held);
-      return !held;
+      storeCollapsed(held !== true);
+      return held !== true;
     });
+    clearTimeout(peekTimer.current);
     setPeeking(false);
-  }, []);
+    // The panel leaves the page with the focus inside it: the toggle keeps it.
+    if (inPanel) document.getElementById("studio-panel-toggle")?.focus();
+  }, [wide]);
   // The drag ended: the overlay closes after the drop.
   const wasDragging = useRef(false);
   useEffect(() => {
@@ -450,14 +463,14 @@ export function StudioFrame<Key extends string>({
         event.preventDefault();
         focusCanvas();
       }
-      if (event.key === "b" && dialog === null) {
+      if (event.key === "b" && dialog === null && wide) {
         event.preventDefault();
         toggleCollapsed();
       }
     };
     window.addEventListener("keydown", shortcut);
     return () => window.removeEventListener("keydown", shortcut);
-  }, [focusCanvas, toggleInspector, toggleCollapsed]);
+  }, [focusCanvas, toggleInspector, toggleCollapsed, wide]);
   const previousSelection = useRef(selectionKey);
   const [hosts, setHosts] = useState<PaneHosts | null>(null);
   // The hosts are made once per frame: effects run again when a suspended part of Studio shows again,
@@ -493,7 +506,7 @@ export function StudioFrame<Key extends string>({
     onTabChange(key);
     if (wide) {
       setPanelOpen(true);
-      if (collapsed) peek(true);
+      if (collapsed) peek(true, true);
     } else setNarrowPanelOpen(true);
   };
   const active = tabs.find((tab) => tab.key === activeTab);
@@ -505,7 +518,7 @@ export function StudioFrame<Key extends string>({
         : (active?.width ?? 17);
   const width = widthOf(activeTab, defaultWidth);
   const inspectorWidth = widthOf("inspector", viewport >= 1920 ? 24 : viewport >= 1440 ? 22 : 20);
-  const showPanel = wide && panelOpen && !collapsed;
+  const showPanel = wide && panelOpen && storedCollapsed === false;
   const overlayPanel = wide && panelOpen && collapsed && (peeking || dragging);
   const showInspector = hasInspector && dockInspector && inspectorOpen;
   return (
@@ -514,8 +527,30 @@ export function StudioFrame<Key extends string>({
       <div className="flex min-h-0 min-w-0 flex-1">
         <div
           className="relative flex min-h-0 shrink-0"
-          onPointerEnter={() => collapsed && wide && peek(true)}
-          onPointerLeave={() => collapsed && peek(false)}
+          onPointerEnter={() => {
+            pointerInside.current = true;
+            if (collapsed && wide) peek(true);
+          }}
+          onPointerLeave={() => {
+            pointerInside.current = false;
+            if (collapsed) peek(false);
+          }}
+          onBlur={(event) => {
+            // Keyboard use: focus leaving the rail and its panel closes the overlay.
+            if (
+              collapsed &&
+              !pointerInside.current &&
+              !event.currentTarget.contains(event.relatedTarget)
+            )
+              peek(false);
+          }}
+          onKeyDown={(event) => {
+            if (event.key !== "Escape" || !collapsed || !overlayPanel) return;
+            event.stopPropagation();
+            clearTimeout(peekTimer.current);
+            setPeeking(false);
+            document.getElementById(`studio-rail-${activeTab}`)?.focus();
+          }}
         >
           <StudioRail
             tabs={tabs}
