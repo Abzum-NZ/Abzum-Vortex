@@ -1448,7 +1448,8 @@
           { "key": "install_application", "label": "Install or upgrade it" },
           { "key": "remove_application", "label": "Remove it" },
           { "key": "delete_application", "label": "Delete it" },
-          { "key": "publish_application", "label": "Publish it" }
+          { "key": "publish_application", "label": "Publish it" },
+          { "key": "create_application", "label": "Create one" }
         ]
       },
       {

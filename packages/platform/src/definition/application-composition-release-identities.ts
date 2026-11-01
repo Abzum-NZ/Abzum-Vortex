@@ -123,7 +123,7 @@ export const PLATFORM_BLOCK_RELEASE_IDENTITIES = Object.freeze({
     key: "platform.action.button",
     rendererKey: "platform.renderer.button",
     releaseVersion: "1.0.0",
-    contentFingerprint: "sha256:aafe8685a4a858ba6ca166c48afc0fd46c34efda84df90100ed320881feedf6e",
+    contentFingerprint: "sha256:3ecee15178597ec8a9c93b0f286568e7130a6775c7cf21f478150fdaf7aae906",
   },
   TABS_BLOCK_RELEASE: {
     blockId: "a3b7065b-47ef-4c92-93d1-59300f8b059c",

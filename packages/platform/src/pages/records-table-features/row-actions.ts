@@ -110,6 +110,8 @@ export const applicationCapabilityAllowed = (
   application: Parameters<ApplicationSurfaceAccess["isOpenable"]>[0] | undefined,
   capabilities: ApplicationSurfaceAccess["capabilities"],
 ): boolean => {
+  // Creating needs no application: it is for whoever may change drafts.
+  if (capability === "create_application") return capabilities.mayBuild;
   if (application === undefined) return false;
   const installed = application.status === "installed" || application.status === "update_available";
   switch (capability) {

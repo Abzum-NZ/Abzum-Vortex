@@ -36,7 +36,6 @@ export function OptionToneMark({
   );
 }
 
-// guard-allow: ui-literal-style a status dot is a circle, the one round mark in a list cell
 const dotShape = "inline-block size-2 shrink-0 rounded-full";
 
 /** The dot a list or detail puts before a choice option's word; the neutral role is a muted dot. */

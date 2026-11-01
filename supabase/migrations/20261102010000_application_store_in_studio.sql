@@ -22,8 +22,7 @@ begin
 end
 $role$;
 grant vortex_history_purger to postgres;
-grant usage on schema vortex_access, vortex_definition, vortex_platform, vortex_record
-  to vortex_history_purger;
+grant usage on schema vortex_access, vortex_definition to vortex_history_purger;
 grant create on schema vortex_definition to vortex_history_purger;
 
 -- The purge also deletes an application's record lifecycle effects, a table the record adapter
@@ -34,6 +33,7 @@ reset role;
 
 set role vortex_owner;
 
+grant usage on schema vortex_platform, vortex_record to vortex_history_purger;
 grant execute on function vortex_access.lock_application_installation_authority()
   to vortex_history_purger;
 grant select, delete on vortex_access.organization_role_assignments to vortex_history_purger;
@@ -857,6 +857,9 @@ begin
     where counter.storage_contract_id = storage_row.storage_contract_id;
     delete from vortex_record.index_catalogue as index_row
     where index_row.storage_contract_id = storage_row.storage_contract_id;
+    -- A lifecycle policy of any application that names this storage goes with it.
+    delete from vortex_record.record_type_lifecycle_policies as policy
+    where policy.storage_contract_id = storage_row.storage_contract_id;
     execute pg_catalog.format('drop table if exists record_data.%I', storage_row.physical_table_token);
     delete from vortex_record.field_storage_mappings as mapping
     where mapping.storage_contract_id = storage_row.storage_contract_id;
@@ -1284,3 +1287,5 @@ where protected_read_model_key = 'application_store_entries';
 reset role;
 
 revoke vortex_history_purger from postgres;
+
+reset role;

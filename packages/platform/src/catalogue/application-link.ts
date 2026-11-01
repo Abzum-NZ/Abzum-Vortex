@@ -25,6 +25,7 @@ export const applicationActionCapabilities = [
   "remove_application",
   "delete_application",
   "publish_application",
+  "create_application",
 ] as const;
 export const applicationActionCapabilitySchema = z.enum(applicationActionCapabilities);
 export type ApplicationActionCapability = z.infer<typeof applicationActionCapabilitySchema>;

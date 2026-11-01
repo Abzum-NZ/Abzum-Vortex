@@ -97,6 +97,9 @@ begin
     where counter.storage_contract_id = storage_row.storage_contract_id;
     delete from vortex_record.index_catalogue as index_row
     where index_row.storage_contract_id = storage_row.storage_contract_id;
+    -- A lifecycle policy of any application that names this storage goes with it.
+    delete from vortex_record.record_type_lifecycle_policies as policy
+    where policy.storage_contract_id = storage_row.storage_contract_id;
     execute pg_catalog.format('drop table if exists record_data.%I', storage_row.physical_table_token);
     delete from vortex_record.field_storage_mappings as mapping
     where mapping.storage_contract_id = storage_row.storage_contract_id;
