@@ -10,6 +10,8 @@ import {
   type ReactNode,
 } from "react";
 import { Avatar, AvatarFallback } from "../components/avatar";
+import { SIGNED_IN_LANDING_PATH } from "../routing/destination";
+import { useNavigator } from "../routing/navigator";
 import { Button } from "../components/button";
 import {
   DropdownMenu,
@@ -39,9 +41,7 @@ export type ApplicationAccountActions = Readonly<{
   /** Where the person opens Studio; present only for people who may change drafts. */
   studioHref?: string;
   readReleaseAdoption?: () => Promise<ReleaseAdoptionData>;
-  chooseOrganization: () => void | Promise<void>;
   signOut: () => void | Promise<void>;
-  openApplication: (href: string) => void | Promise<void>;
 }>;
 
 const AccountActionsContext = createContext<ApplicationAccountActions | null>(null);
@@ -67,6 +67,7 @@ export function ApplicationAccountMenu({
   offerOrganizationSwitch = false,
 }: Readonly<{ offerOrganizationSwitch?: boolean }>): ReactElement {
   const actions = useApplicationAccountActions();
+  const navigator = useNavigator();
   const organizationName = actions?.organizationName;
   const account = actions?.account;
   const avatarSource = account?.displayName ?? account?.email ?? organizationName;
@@ -180,14 +181,14 @@ export function ApplicationAccountMenu({
           </DropdownMenuItem>
         )}
         {studioHref === undefined ? null : (
-          <DropdownMenuItem onClick={() => void actions?.openApplication(studioHref)}>
+          <DropdownMenuItem onClick={() => navigator.navigate(studioHref)}>
             Open Studio
           </DropdownMenuItem>
         )}
         {offerOrganizationSwitch ? (
           <DropdownMenuItem
             disabled={actions === null}
-            onClick={() => void actions?.chooseOrganization()}
+            onClick={() => navigator.navigate(SIGNED_IN_LANDING_PATH)}
           >
             Switch organisation
           </DropdownMenuItem>

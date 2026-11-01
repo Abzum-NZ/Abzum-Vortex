@@ -2,7 +2,6 @@
 
 import { readCompiledItemSettings } from "@vortex/platform/schema";
 import { useMemo, type ComponentProps, type ReactElement } from "react";
-import { useRouter } from "next/navigation";
 import type { ApplicationShell, PageDefinition } from "@vortex/platform/schema";
 import {
   ApplicationAccountActionsProvider,
@@ -44,7 +43,6 @@ export function ApplicationExperiencePage({
   fieldInputControlReleases: FieldInputControlReleaseMap;
   platformThemeTokens: PlatformThemeTokens;
 }>): ReactElement {
-  const router = useRouter();
   const platformComponentRegistry = useMemo(
     () => createPlatformComponentRegistryForReleases(platformBlockReleases),
     [platformBlockReleases],
@@ -56,9 +54,7 @@ export function ApplicationExperiencePage({
         account,
         organizationName,
         organizationShortName,
-        chooseOrganization: () => router.push("/signed-in"),
         signOut,
-        openApplication: (href) => router.push(href),
       }}
     >
       <PagePuckRenderer

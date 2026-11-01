@@ -2,6 +2,7 @@
 
 import { useContext, useSyncExternalStore, type ReactElement } from "react";
 import { Button } from "../components/button";
+import { NavigationLink } from "../routing/navigation-link";
 import { FlowRuntimeStateContext } from "./flow-runtime-state-context";
 import type { PageMessage } from "./messages";
 
@@ -22,9 +23,9 @@ export function InlineMessageContent({
       {message.title === undefined ? null : <strong>{message.title}: </strong>}
       {message.text}
       {message.action === undefined ? null : message.action.kind === "link" ? (
-        <a className="underline" href={message.action.href}>
+        <NavigationLink className="underline" href={message.action.href}>
           {message.action.label}
-        </a>
+        </NavigationLink>
       ) : (
         <Button type="button" variant="ghost" size="xs" onClick={message.action.run}>
           {message.action.label}

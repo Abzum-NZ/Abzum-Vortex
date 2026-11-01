@@ -1,13 +1,6 @@
 "use client";
 
-import {
-  createContext,
-  useContext,
-  useLayoutEffect,
-  useState,
-  type MouseEvent,
-  type RefObject,
-} from "react";
+import { createContext, useContext, useLayoutEffect, useState, type RefObject } from "react";
 import { usePagePresence } from "@vortex/ui";
 import type { ProjectedApplicationFrame, ProjectedNavigation } from "@vortex/platform/schema";
 import type { ApplicationWebMcpRuntime, PagePuckRendererProps, UnsavedWorkGuard } from "@vortex/ui";
@@ -78,10 +71,6 @@ export type ApplicationFrameStateValue = Readonly<{
   ) => void;
   /** Clears one part of the page state, only while `owner` is still the one that set it. */
   clearPageState: (key: keyof ApplicationFramePageState, owner: FramePageStateOwner) => void;
-  /** A client-side page change that keeps the frame mounted. */
-  navigateToPage: (pageId: string, event: MouseEvent<HTMLAnchorElement>) => void;
-  /** Runs a client-side address change the page starts inside the frame's page transition. */
-  startPageChange: (navigate: () => void) => void;
   /** The application search the header shows, also offered to a search block in the content. */
   applicationSearch: PagePuckRendererProps["applicationSearch"];
   applicationSearchPageSubject: string | undefined;

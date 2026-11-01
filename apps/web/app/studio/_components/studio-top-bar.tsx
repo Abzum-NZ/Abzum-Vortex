@@ -1,5 +1,5 @@
 "use client";
-import Link from "next/link";
+import { NavigationLink } from "@vortex/ui/routing";
 import type { ComponentProps, ReactNode } from "react";
 import { AppearanceToggle } from "@vortex/ui/appearance-toggle";
 import { Icon } from "@vortex/ui/icons";
@@ -99,7 +99,7 @@ export function StudioTopBar({
         size="icon-sm"
         nativeButton={false}
         aria-label="All applications"
-        render={<Link href="/studio" prefetch={false} />}
+        render={<NavigationLink href="/studio" />}
       >
         <Icon name="grid" />
       </ToolbarButton>
@@ -108,7 +108,7 @@ export function StudioTopBar({
           <BreadcrumbItem className="hidden min-w-0 lg:inline-flex">
             <BreadcrumbLink
               className="truncate"
-              render={<Link href={location.organizationHref} prefetch={false} />}
+              render={<NavigationLink href={location.organizationHref} />}
             >
               {location.organizationName}
             </BreadcrumbLink>
@@ -130,10 +130,7 @@ export function StudioTopBar({
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 {location.applications.map((app) => (
-                  <DropdownMenuItem
-                    key={app.href}
-                    render={<Link href={app.href} prefetch={false} />}
-                  >
+                  <DropdownMenuItem key={app.href} render={<NavigationLink href={app.href} />}>
                     {app.name}
                   </DropdownMenuItem>
                 ))}
@@ -195,7 +192,7 @@ export function StudioTopBar({
               variant="ghost"
               size="sm"
               nativeButton={false}
-              render={<Link href={backToAppHref} prefetch={false} />}
+              render={<NavigationLink href={backToAppHref} />}
             >
               <Icon name="chevron-left" />
               Back to app
@@ -205,7 +202,7 @@ export function StudioTopBar({
               variant="ghost"
               size="sm"
               nativeButton={false}
-              render={<Link href={appStoreHref} prefetch={false} />}
+              render={<NavigationLink href={appStoreHref} />}
             >
               <Icon name="plus" />
               Install in this organisation
@@ -259,11 +256,11 @@ export function StudioTopBar({
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               {installed && backToAppHref !== undefined ? (
-                <DropdownMenuItem render={<Link href={backToAppHref} prefetch={false} />}>
+                <DropdownMenuItem render={<NavigationLink href={backToAppHref} />}>
                   <Icon name="chevron-left" /> Back to app
                 </DropdownMenuItem>
               ) : !installed && appStoreHref !== undefined ? (
-                <DropdownMenuItem render={<Link href={appStoreHref} prefetch={false} />}>
+                <DropdownMenuItem render={<NavigationLink href={appStoreHref} />}>
                   <Icon name="plus" /> Install in this organisation
                 </DropdownMenuItem>
               ) : null}
@@ -279,7 +276,7 @@ export function StudioTopBar({
                 Publish
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem render={<Link href={location.organizationHref} prefetch={false} />}>
+              <DropdownMenuItem render={<NavigationLink href={location.organizationHref} />}>
                 {location.organizationName}
               </DropdownMenuItem>
             </DropdownMenuContent>

@@ -90,6 +90,32 @@ export const reauthenticationPath = "/auth/session-ended?status=reauthenticate";
 /** Verifying with, or setting up, an authenticator for the two-step verification a change needs. */
 export const multiFactorPath = "/auth/sign-in?mfa=1";
 
+/** The reply of a deliberate release adoption; a committed switch also carries the new page. */
+export type ReleaseAdoptionOutcome =
+  "adopted" | "refused" | "recent_authentication_required" | "multi_factor_required";
+
+/** What the page tells the person after an adoption that changed nothing. */
+export const releaseAdoptionNotices: Readonly<
+  Record<Exclude<ReleaseAdoptionOutcome, "adopted">, PageMessageDraft>
+> = {
+  refused: {
+    target: "banner",
+    severity: "error",
+    text: "The release could not be adopted. The current release is still in use.",
+  },
+  recent_authentication_required: {
+    target: "banner",
+    severity: "error",
+    text: "A recent sign-in is required to adopt this release. Sign out, then sign in again with your email address and password before adopting. The current release is still in use.",
+  },
+  multi_factor_required: {
+    target: "banner",
+    severity: "error",
+    text: flowRefusalFeedbackSentences.multi_factor_required,
+    action: { kind: "link", label: "Verify", href: multiFactorPath },
+  },
+};
+
 export const refusalNotices: Readonly<
   Record<Extract<FormFlowFeedback, { kind: "refusal" }>["code"], PageMessageDraft>
 > = Object.fromEntries(

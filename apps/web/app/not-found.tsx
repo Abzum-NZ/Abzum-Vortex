@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { NavigationLink } from "@vortex/ui/routing";
 import { Alert, AlertDescription, AlertTitle } from "@vortex/ui/components/alert";
 import { Button } from "@vortex/ui/components/button";
 
@@ -15,7 +15,7 @@ export default function NotFound() {
         <AlertDescription>This address does not lead to a page you can open.</AlertDescription>
       </Alert>
       <div>
-        <Button variant="outline" nativeButton={false} render={<Link href="/" />}>
+        <Button variant="outline" nativeButton={false} render={<NavigationLink href="/" />}>
           Go to the start page
         </Button>
       </div>

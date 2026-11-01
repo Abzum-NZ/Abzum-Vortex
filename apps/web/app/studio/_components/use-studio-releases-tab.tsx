@@ -1,6 +1,6 @@
 "use client";
 import dynamic from "next/dynamic";
-import Link from "next/link";
+import { NavigationLink } from "@vortex/ui/routing";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import {
   applicationSourceDocumentSchema,
@@ -621,7 +621,7 @@ export function useStudioReleasesTab({
             variant="outline"
             size="sm"
             nativeButton={false}
-            render={<Link href={appStoreHref} prefetch={false} />}
+            render={<NavigationLink href={appStoreHref} />}
           >
             Install in this organisation
           </Button>

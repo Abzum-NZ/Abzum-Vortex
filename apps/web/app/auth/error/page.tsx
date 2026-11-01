@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { NavigationLink } from "@vortex/ui/routing";
 import { AuthShell } from "../_components/auth-shell";
 
 export default function AuthErrorPage() {
@@ -9,12 +9,12 @@ export default function AuthErrorPage() {
       description="This request could not be completed. Start again to receive a new code."
       footer={
         <div className="text-center text-sm">
-          <Link
+          <NavigationLink
             className="font-medium text-foreground underline underline-offset-4 hover:text-primary transition-colors"
             href="/auth/sign-in"
           >
             Return to sign in
-          </Link>
+          </NavigationLink>
         </div>
       }
     >
@@ -39,18 +39,18 @@ export default function AuthErrorPage() {
           </svg>
         </div>
         <div className="flex w-full flex-wrap justify-between gap-3 text-sm">
-          <Link
+          <NavigationLink
             className="font-medium text-foreground underline underline-offset-4 hover:text-primary transition-colors"
             href="/auth/register"
           >
             Create account
-          </Link>
-          <Link
+          </NavigationLink>
+          <NavigationLink
             className="font-medium text-foreground underline underline-offset-4 hover:text-primary transition-colors"
             href="/auth/recover"
           >
             Recover password
-          </Link>
+          </NavigationLink>
         </div>
       </div>
     </AuthShell>

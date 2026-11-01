@@ -1,10 +1,11 @@
 import { loadStudioApplicationDraft } from "../../../_lib/studio-application-draft";
-import { organizationAddressPath } from "../../../_lib/address-paths";
+import { applicationPageAddressPath, organizationAddressPath } from "../../../_lib/address-paths";
 import {
   loadOrganizationLauncher,
   loadPermittedApplicationsAtAddress,
 } from "../../../_lib/organization-context";
 import { resolveIdentitySession } from "../../../auth/_lib/session-server";
+import { resolveApplicationAddress } from "../../../_lib/application-address";
 import { continueStudioSession } from "../../_lib/studio-session";
 import { StudioUnavailable } from "../../_components/studio-unavailable";
 import {
@@ -93,16 +94,61 @@ const loadWorkspacePlace = async (
     console.error(
       `[studio] installed applications could not be read: ${applications.kind}${applications.kind === "temporarily_unavailable" && applications.cause !== undefined ? ` (${applications.cause})` : ""}`,
     );
+  // Links name an installed application's home page, never its address that would redirect there.
+  const pathOf = (key: string): string => {
+    const application =
+      applications.kind === "available"
+        ? applications.applications.find((candidate) => candidate.key === key)
+        : undefined;
+    return application === undefined
+      ? `${organizationPath}/${encodeURIComponent(key)}`
+      : applicationPageAddressPath(
+          entry.tenantShortName,
+          entry.organizationShortName,
+          application.key,
+          application.homePageKey,
+        );
+  };
   const installed =
     applications.kind === "available" &&
     applications.applications.some((candidate) => candidate.key === applicationKey);
+  // The other applications the builder may open, with the pages they may open there, for a
+  // Navigate step that opens one of them.
+  const navigationTargets =
+    applications.kind !== "available"
+      ? []
+      : (
+          await Promise.all(
+            applications.applications
+              .filter((candidate) => candidate.key !== applicationKey)
+              .map(async (candidate) => {
+                const addressed = await resolveApplicationAddress(
+                  resolved.session,
+                  entry.tenantShortName,
+                  entry.organizationShortName,
+                  candidate.key,
+                );
+                return addressed.kind === "application_page"
+                  ? [
+                      {
+                        key: candidate.key,
+                        label: candidate.name,
+                        homePageKey: candidate.homePageKey,
+                        pageKeys: addressed.application.pageKeys,
+                      },
+                    ]
+                  : [];
+              }),
+          )
+        ).flat();
   return {
     kind: "available",
     place: {
       organizationName: entry.organizationDisplayName,
-      applicationHref: `${organizationPath}/${encodeURIComponent(applicationKey)}`,
-      appStoreHref: `${organizationPath}/${encodeURIComponent(settings.value)}`,
+      applicationHref: pathOf(applicationKey),
+      appStoreHref: pathOf(settings.value),
       installed,
+      navigationTargets,
     },
   };
 };

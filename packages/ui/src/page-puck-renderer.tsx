@@ -1,6 +1,6 @@
 // The render-only entry: the main entry would also bundle the whole editor for every page view.
 import { Render } from "@puckeditor/core/rsc";
-import type { CSSProperties, MouseEvent, ReactElement, ReactNode } from "react";
+import type { CSSProperties, ReactElement, ReactNode } from "react";
 import type { Data } from "@puckeditor/core";
 import {
   compiledItemTree,
@@ -186,11 +186,6 @@ export type PagePuckRendererProps = Readonly<{
   projectedNavigation?: ProjectedNavigation;
   /** Page-address resolver supplied by the shell; route composition owns the address shape. */
   resolvePageHref?: (pageId: string) => string;
-  /**
-   * Internal page activation supplied by the shell. It performs the client-side transition, so
-   * the shell stays mounted; without it the browser follows the resolved address.
-   */
-  onNavigatePage?: (pageId: string, event: MouseEvent<HTMLAnchorElement>) => void;
   /** Internal page identity currently shown, for a navigation placement's current-page state. */
   currentPageId?: string;
   /** Resolved application theme; without one the readable platform defaults apply. */
@@ -244,7 +239,6 @@ export function PagePuckRenderer({
   runtimeState,
   projectedNavigation,
   resolvePageHref,
-  onNavigatePage,
   currentPageId,
   theme,
   locale,
@@ -289,7 +283,6 @@ export function PagePuckRenderer({
     ...(runtimeState === undefined ? {} : { runtimeState }),
     ...(projectedNavigation === undefined ? {} : { projectedNavigation }),
     ...(resolvePageHref === undefined ? {} : { resolvePageHref }),
-    ...(onNavigatePage === undefined ? {} : { onNavigatePage }),
     ...(currentPageId === undefined ? {} : { currentPageId }),
     ...(componentBundleOrigin === undefined ? {} : { componentBundleOrigin }),
     ...(applicationShellRuntime === undefined ? {} : { applicationShellRuntime }),

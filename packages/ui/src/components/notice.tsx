@@ -3,6 +3,7 @@
 import { safeHttpsUrlMaximumLength, safeHttpsUrlSchema } from "@vortex/platform/schema";
 import { Fragment, useState, type ReactElement, type ReactNode } from "react";
 import { Alert, AlertDescription, AlertTitle } from "./alert";
+import { NavigationLink } from "../routing/navigation-link";
 import { Button } from "./button";
 
 export type NoticeSeverity = "info" | "success" | "warning" | "error";
@@ -79,17 +80,32 @@ function renderNoticeContent(content: NoticeContent): ReactNode {
     return href === undefined ? (
       <Fragment key={key}>{part.label}</Fragment>
     ) : (
-      <a
+      <NavigationLink
         key={key}
         href={href}
-        referrerPolicy={external ? "no-referrer" : undefined}
+        {...(external ? { referrerPolicy: "no-referrer" as const } : {})}
         className="underline underline-offset-2 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
       >
         {part.label}
         {external ? <span className="ml-1 text-xs">(external)</span> : null}
-      </a>
+      </NavigationLink>
     );
   });
+}
+
+/** A notice's link action: a refused address shows its label without a link. */
+function NoticeLinkAction({
+  label,
+  href,
+}: Readonly<{ label: string; href: string }>): ReactElement {
+  const safe = safeNoticeHref(href);
+  return safe === undefined ? (
+    <span>{label}</span>
+  ) : (
+    <NavigationLink className="underline" href={safe}>
+      {label}
+    </NavigationLink>
+  );
 }
 
 /**
@@ -128,9 +144,7 @@ export function Notice({
           {dismissible || action !== undefined ? (
             <div data-slot="notice-actions" className="mt-2 flex flex-wrap items-center gap-1">
               {action === undefined ? null : action.kind === "link" ? (
-                <a className="underline" href={safeNoticeHref(action.href)}>
-                  {action.label}
-                </a>
+                <NoticeLinkAction label={action.label} href={action.href} />
               ) : (
                 <Button type="button" variant="ghost" size="xs" onClick={action.run}>
                   {action.label}

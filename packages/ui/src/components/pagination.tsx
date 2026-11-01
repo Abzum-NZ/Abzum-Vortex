@@ -1,6 +1,7 @@
 import * as React from "react";
 import { Icon } from "../icons/icon";
 import { cn } from "../lib/utils";
+import { NavigationLink, type NavigationLinkProps } from "../routing/navigation-link";
 
 import { Button } from "./button";
 
@@ -33,7 +34,7 @@ function PaginationItem({ ...props }: React.ComponentProps<"li">) {
 type PaginationLinkProps = {
   isActive?: boolean;
 } & Pick<React.ComponentProps<typeof Button>, "size"> &
-  React.ComponentProps<"a">;
+  NavigationLinkProps;
 
 function PaginationLink({ className, isActive, size = "icon", ...props }: PaginationLinkProps) {
   return (
@@ -43,7 +44,7 @@ function PaginationLink({ className, isActive, size = "icon", ...props }: Pagina
       className={cn(className)}
       nativeButton={false}
       render={
-        <a
+        <NavigationLink
           aria-current={isActive ? "page" : undefined}
           data-slot="pagination-link"
           data-active={isActive}

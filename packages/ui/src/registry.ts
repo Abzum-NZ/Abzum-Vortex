@@ -1,4 +1,4 @@
-import type { ComponentType, MouseEvent, ReactNode } from "react";
+import type { ComponentType, ReactNode } from "react";
 import type {
   BlockPropertyValueContract,
   FieldInputControlKey,
@@ -83,7 +83,6 @@ const RESERVED_RENDER_PROP_NAMES: ReadonlySet<string> = new Set([
   "unavailableReason",
   "projectedNavigation",
   "resolvePageHref",
-  "onNavigatePage",
   "currentPageId",
   "themeTokens",
   "componentBundleOrigin",
@@ -189,11 +188,6 @@ export type PlatformBlockRenderProps = Readonly<{
    * without a resolver is refused.
    */
   resolvePageHref?: (pageId: string) => string;
-  /**
-   * Internal page activation supplied by the shell, which performs the client-side transition so
-   * the shell stays mounted. Without it the browser follows the resolved address.
-   */
-  onNavigatePage?: (pageId: string, event: MouseEvent<HTMLAnchorElement>) => void;
   /** Exact internal page identity currently shown, for the current-page state. */
   currentPageId?: string;
   /**

@@ -2,14 +2,7 @@
 
 import { compiledItemSettings } from "@vortex/platform/schema";
 import { Puck, createUsePuck, useGetPuck, type Content, type Data } from "@puckeditor/core";
-import {
-  useEffect,
-  useRef,
-  type MouseEvent,
-  type ReactNode,
-  type RefObject,
-  type SyntheticEvent,
-} from "react";
+import { useEffect, useRef, type ReactNode, type RefObject, type SyntheticEvent } from "react";
 import type {
   ApplicationShell,
   ProjectedApplicationFrame,
@@ -263,8 +256,6 @@ export function StudioCanvasBridge({
     shellId === undefined
       ? undefined
       : frame.shells.find((candidate) => String(candidate.shellId) === shellId);
-  const ignoreNavigation = (_pageId: string, event: MouseEvent<HTMLAnchorElement>) =>
-    event.preventDefault();
   return (
     <div
       className="contents"
@@ -283,7 +274,6 @@ export function StudioCanvasBridge({
         theme={frame.theme}
         projectedNavigation={frame.navigation}
         resolvePageHref={() => "#"}
-        onNavigatePage={ignoreNavigation}
         currentPageId={frame.pageId}
         // The switcher names only the application being designed.
         applicationSwitcherSource={async () => ({

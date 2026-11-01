@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { NavigationLink } from "@vortex/ui/routing";
 import { VORTEX_ICON_NAMES } from "@vortex/platform/schema";
 import type { OrganizationBuilderRoot } from "@vortex/platform/server";
 import { AppearanceToggle } from "@vortex/ui/appearance-toggle";
@@ -6,6 +6,7 @@ import { FormattedTime } from "@vortex/ui/display/date-format-context";
 import { Icon } from "@vortex/ui/icons";
 import { resolveIdentitySessionWithEmail } from "../../auth/_lib/session-server";
 import { StudioAccount } from "./studio-account";
+import { RestoredPageReread } from "../../_components/restored-page-reread";
 import { Badge } from "@vortex/ui/components/badge";
 import { Button } from "@vortex/ui/components/button";
 import { Card, CardContent, CardFooter, CardHeader } from "@vortex/ui/components/card";
@@ -49,7 +50,7 @@ function NewApplication({
     <Button
       variant={variant}
       nativeButton={false}
-      render={<Link href={`/studio/${organizationId}/new`} />}
+      render={<NavigationLink href={`/studio/${organizationId}/new`} />}
     >
       <Icon name="plus" />
       New application
@@ -70,6 +71,7 @@ export async function StudioHome({
   if (email === undefined) throw new Error("Active identity session resolved without an email");
   return (
     <main className="mx-auto min-h-dvh max-w-7xl space-y-8 px-8 py-8">
+      <RestoredPageReread />
       <header className="flex flex-wrap items-center justify-between gap-4">
         <div className="space-y-2">
           <h1 className="text-3xl font-semibold tracking-tight">Applications</h1>
@@ -90,7 +92,7 @@ export async function StudioHome({
                 {organizations.map((organization) => (
                   <DropdownMenuItem
                     key={organization.organizationId}
-                    render={<Link href={`/studio/${organization.organizationId}/new`} />}
+                    render={<NavigationLink href={`/studio/${organization.organizationId}/new`} />}
                   >
                     {organization.name}
                   </DropdownMenuItem>
@@ -98,7 +100,11 @@ export async function StudioHome({
               </DropdownMenuContent>
             </DropdownMenu>
           )}
-          <Button variant="outline" nativeButton={false} render={<Link href="/signed-in" />}>
+          <Button
+            variant="outline"
+            nativeButton={false}
+            render={<NavigationLink href="/signed-in" />}
+          >
             <Icon name="chevron-left" />
             Back to applications
           </Button>
@@ -143,7 +149,11 @@ export async function StudioHome({
                       variant="outline"
                     />
                   ) : (
-                    <Button variant="outline" nativeButton={false} render={<Link href={base} />}>
+                    <Button
+                      variant="outline"
+                      nativeButton={false}
+                      render={<NavigationLink href={base} />}
+                    >
                       First page
                     </Button>
                   )}
@@ -179,7 +189,9 @@ export async function StudioHome({
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
                               <DropdownMenuItem
-                                render={<Link href={`${href}?tab=releases&section=history`} />}
+                                render={
+                                  <NavigationLink href={`${href}?tab=releases&section=history`} />
+                                }
                               >
                                 Published versions
                               </DropdownMenuItem>
@@ -187,13 +199,12 @@ export async function StudioHome({
                           </DropdownMenu>
                         </div>
                         <h3 className="text-base font-semibold">
-                          <Link
+                          <NavigationLink
                             href={href}
-                            prefetch={false}
                             className="outline-none after:absolute after:inset-0 after:rounded-xl"
                           >
                             {root.name}
-                          </Link>
+                          </NavigationLink>
                         </h3>
                       </CardHeader>
                       <CardContent className="flex-1">

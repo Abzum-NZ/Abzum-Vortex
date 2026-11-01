@@ -3,7 +3,6 @@
 import { readCompiledItemSettings } from "@vortex/platform/schema";
 import type { ReactElement } from "react";
 import { useMemo } from "react";
-import { useRouter } from "next/navigation";
 import type {
   ApplicationShell,
   PageDefinition,
@@ -20,6 +19,7 @@ import {
   type LauncherRowsPayload,
   type PlatformThemeTokens,
 } from "@vortex/ui";
+import { RestoredPageReread } from "../../_components/restored-page-reread";
 import { signOut } from "../../auth/actions";
 
 /**
@@ -48,47 +48,47 @@ export function OrganizationChooserPage({
   fieldInputControlReleases: FieldInputControlReleaseMap;
   platformThemeTokens: PlatformThemeTokens;
 }>): ReactElement {
-  const router = useRouter();
   const registry = useMemo(
     () => createPlatformComponentRegistryForReleases(platformBlockReleases),
     [platformBlockReleases],
   );
   const rendered = useMemo(() => renderedPageOf(page, [shell]), [page, shell]);
   return (
-    <ApplicationAccountActionsProvider
-      actions={{
-        account,
-        organizationName: page.name,
-        chooseOrganization: () => router.push("/signed-in"),
-        signOut,
-        openApplication: (href) => router.push(href),
-      }}
-    >
-      <PagePuckRenderer
-        readSettings={readCompiledItemSettings}
-        composition={rendered.page}
-        {...(rendered.shell === undefined ? {} : { shell: rendered.shell })}
-        registry={registry}
-        fieldInputControlReleases={fieldInputControlReleases}
-        platformThemeTokens={platformThemeTokens}
-        pageId={page.pageId}
-        applicationSurface
-        applicationShellRuntime={{
-          applicationName: shell.name,
-          applicationHref: "/signed-in",
+    <>
+      <RestoredPageReread />
+      <ApplicationAccountActionsProvider
+        actions={{
+          account,
           organizationName: page.name,
-          pageName: page.name,
+          signOut,
         }}
-        runtimeInputs={Object.fromEntries(
-          launchers.map((launcher) => [
-            launcher.placementId,
-            {
-              data: { status: "ready", values: launcher.values },
-              events: { row_action: launcher.onRowAction },
-            },
-          ]),
-        )}
-      />
-    </ApplicationAccountActionsProvider>
+      >
+        <PagePuckRenderer
+          readSettings={readCompiledItemSettings}
+          composition={rendered.page}
+          {...(rendered.shell === undefined ? {} : { shell: rendered.shell })}
+          registry={registry}
+          fieldInputControlReleases={fieldInputControlReleases}
+          platformThemeTokens={platformThemeTokens}
+          pageId={page.pageId}
+          applicationSurface
+          applicationShellRuntime={{
+            applicationName: shell.name,
+            applicationHref: "/signed-in",
+            organizationName: page.name,
+            pageName: page.name,
+          }}
+          runtimeInputs={Object.fromEntries(
+            launchers.map((launcher) => [
+              launcher.placementId,
+              {
+                data: { status: "ready", values: launcher.values },
+                events: { row_action: launcher.onRowAction },
+              },
+            ]),
+          )}
+        />
+      </ApplicationAccountActionsProvider>
+    </>
   );
 }
