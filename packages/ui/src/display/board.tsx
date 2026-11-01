@@ -191,6 +191,7 @@ function BoardColumn({
   );
   if (moving?.targetKey === bucket.key && !rows.some((row) => row.recordId === moving.recordId))
     rows.unshift(moving.row);
+  rows.splice(maximumDisplayedCards);
   const canContinue =
     events?.page_changed !== undefined &&
     page?.nextContinuationToken !== undefined &&
