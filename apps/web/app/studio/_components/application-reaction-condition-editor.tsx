@@ -53,19 +53,16 @@ const readFieldsOnce = (key: string, read: () => FieldsRead): FieldsRead => {
 type Held = Readonly<{ value: ConditionNode | undefined; validation: StudioConditionValidation }>;
 
 /**
- * One of the selected item's reactions (when it shows, is required, is read-only or is enabled):
- * one condition over the record's fields, the page's values and its forms' answers. The record's
- * fields it can name are read once for the saved page
- * (again when its modules change, or on Reload fields); a valid rule reaches the draft as it changes,
- * and a rule that is not valid yet stays here with its problems and never reaches the draft.
+ * The fields a page's conditions can name, read once for the saved page (again when its modules
+ * change, or on Reload fields). `enabled` false reads nothing.
  */
-export function ApplicationReactionConditionEditor(props: Props) {
+export function useStudioReactionFields(
+  props: Pick<Props, "context" | "selection" | "saved">,
+  enabled = true,
+) {
   const [metadata, setMetadata] = useState<StudioApplicationConditionContext | null>(null);
-  const [held, setHeld] = useState<Held | null>(null);
   const [status, setStatus] = useState("Reading the fields this page can use…");
-  const [message, setMessage] = useState("");
   const [reload, setReload] = useState(0);
-  const slotInfo = studioReactionSlots.find((entry) => entry.slot === props.slot)!;
   const latest = useRef(props);
   latest.current = props;
   const selectionKey = studioSemanticSelectionKey(props.selection);
@@ -84,7 +81,7 @@ export function ApplicationReactionConditionEditor(props: Props) {
         modules === JSON.stringify(applicationModuleKeys(props.saved.source))));
 
   useEffect(() => {
-    if (!needsFields) return;
+    if (!enabled || !needsFields) return;
     if (!readable) {
       setStatus(
         "A condition on a record page needs the same modules as the saved draft. Waiting for your latest change to save…",
@@ -136,7 +133,31 @@ export function ApplicationReactionConditionEditor(props: Props) {
     return () => {
       current = false;
     };
-  }, [selectionKey, readable, modules, reload]);
+  }, [selectionKey, readable, modules, reload, enabled]);
+
+  return {
+    metadata,
+    status,
+    needsFields,
+    target,
+    reload: () => setReload((count) => count + 1),
+  };
+}
+
+/**
+ * One of the selected item's reactions (when it shows, is required, is read-only or is enabled):
+ * one condition over the record's fields, the page's values and its forms' answers. A valid rule
+ * reaches the draft as it changes, and a rule that is not valid yet stays here with its problems
+ * and never reaches the draft.
+ */
+export function ApplicationReactionConditionEditor(props: Props) {
+  const [held, setHeld] = useState<Held | null>(null);
+  const [message, setMessage] = useState("");
+  const slotInfo = studioReactionSlots.find((entry) => entry.slot === props.slot)!;
+  const latest = useRef(props);
+  latest.current = props;
+  const selectionKey = studioSemanticSelectionKey(props.selection);
+  const { metadata, status, needsFields, target, reload } = useStudioReactionFields(props);
 
   const model =
     target === undefined || (needsFields && metadata === null)
@@ -230,7 +251,7 @@ export function ApplicationReactionConditionEditor(props: Props) {
           size="sm"
           className="self-start"
           disabled={props.disabled}
-          onClick={() => setReload((count) => count + 1)}
+          onClick={reload}
         >
           Reload fields
         </Button>

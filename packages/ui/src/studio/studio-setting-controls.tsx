@@ -36,6 +36,7 @@ import {
   type StudioReferencePickerOption,
 } from "./studio-reference-picker";
 import { StudioField, StudioHelp } from "./studio-field";
+import { splitMoreSettings } from "./studio-more-settings";
 import { StudioEntryList, useStudioEntryKeys } from "./studio-entry-list";
 import { useConfirm } from "../components/confirm-dialog";
 import { StudioInspectorGroup } from "./studio-inspector-group";
@@ -1183,19 +1184,11 @@ export function StudioQueryPicker({
     <div className="space-y-2" data-vortex-setting="query">
       <div className="flex items-center justify-between gap-2">
         <span className="flex items-center gap-1">
-          <Label htmlFor={id}>
-            Data
-          </Label>
+          <Label htmlFor={id}>Data</Label>
           <StudioHelp hint="Choose a record type to show all its records, or use an existing query." />
         </span>
         {onNewQuery === undefined ? null : (
-          <Button
-            type="button"
-            size="xs"
-            variant="ghost"
-            disabled={disabled}
-            onClick={onNewQuery}
-          >
+          <Button type="button" size="xs" variant="ghost" disabled={disabled} onClick={onNewQuery}>
             <Plus />
             New query
           </Button>
@@ -1238,6 +1231,8 @@ export function StudioQueryPicker({
  */
 type SettingFieldsProps = Readonly<{
   idPrefix: string;
+  /** Optional settings that start in a closed "More settings" section. */
+  moreKeys?: ReadonlySet<string> | undefined;
   properties: readonly BlockPropertySchemaContract[];
   values: StudioSettingValues;
   onChange: (values: StudioSettingValues) => void;
@@ -1299,6 +1294,7 @@ export function StudioSettingFields(props: SettingFieldsProps): ReactElement {
 
 function SettingFields({
   idPrefix,
+  moreKeys,
   properties,
   values,
   onChange,
@@ -1346,124 +1342,127 @@ function SettingFields({
   };
   return (
     <div className="space-y-4">
-      {properties.map((property) => {
-        if (!componentSettingApplies(property, values)) return null;
-        const value = Object.hasOwn(values, property.key) ? values[property.key] : undefined;
-        const set = (next: SettingValue) => {
-          setTouched((previous) => ({
-            id: idPrefix,
-            keys: new Set([...(previous.id === idPrefix ? previous.keys : []), property.key]),
-          }));
-          const result: Record<string, SourceBlockPropertyValueContract> = { ...values };
-          if (next === undefined) delete result[property.key];
-          // A group's declared defaults are part of its typed value. Materialize them here,
-          // including new list entries, before the composition command checks its round trip.
-          // Incomplete user input stays in the ordinary settings validation path.
-          else
-            result[property.key] =
-              typedSourceSettingValue(
-                plainSourceSettingValue(next),
-                property,
-                [property.key],
-                [],
-              ) ?? next;
-          for (const sibling of properties) {
-            if (!componentSettingApplies(sibling, result)) delete result[sibling.key];
-            else if (result[sibling.key] === undefined && sibling.defaultValue !== undefined) {
-              const initial = typedSourceSettingValue(
-                plainSettingValue(sibling.defaultValue),
-                sibling,
-                [sibling.key],
-                [],
-              );
-              if (initial === undefined)
-                throw new TypeError(`The declared default for ${sibling.key} is invalid.`);
-              result[sibling.key] = initial;
-            }
-          }
-          onChange(result);
-        };
-        return (
-          <div key={property.key} className="space-y-2" data-vortex-setting={property.key}>
-            <StudioField
-              label={property.label}
-              optional={!property.required}
-              hint={property.help}
-              error={
-                property.required &&
-                property.showWhen !== undefined &&
-                property.defaultValue === undefined &&
-                value === undefined
-                  ? conditionalRequiredMessage(property)
-                  : undefined
+      {splitMoreSettings(
+        properties.map((property) => {
+          if (!componentSettingApplies(property, values)) return null;
+          const value = Object.hasOwn(values, property.key) ? values[property.key] : undefined;
+          const set = (next: SettingValue) => {
+            setTouched((previous) => ({
+              id: idPrefix,
+              keys: new Set([...(previous.id === idPrefix ? previous.keys : []), property.key]),
+            }));
+            const result: Record<string, SourceBlockPropertyValueContract> = { ...values };
+            if (next === undefined) delete result[property.key];
+            // A group's declared defaults are part of its typed value. Materialize them here,
+            // including new list entries, before the composition command checks its round trip.
+            // Incomplete user input stays in the ordinary settings validation path.
+            else
+              result[property.key] =
+                typedSourceSettingValue(
+                  plainSourceSettingValue(next),
+                  property,
+                  [property.key],
+                  [],
+                ) ?? next;
+            for (const sibling of properties) {
+              if (!componentSettingApplies(sibling, result)) delete result[sibling.key];
+              else if (result[sibling.key] === undefined && sibling.defaultValue !== undefined) {
+                const initial = typedSourceSettingValue(
+                  plainSettingValue(sibling.defaultValue),
+                  sibling,
+                  [sibling.key],
+                  [],
+                );
+                if (initial === undefined)
+                  throw new TypeError(`The declared default for ${sibling.key} is invalid.`);
+                result[sibling.key] = initial;
               }
-            >
-              {(control) => (
-                <SettingControl
-                  id={control.id}
-                  descriptionId={control["aria-describedby"]}
-                  property={studioTotalMeasureProperty(
-                    property,
-                    properties,
-                    values,
-                    choices.fields,
-                  )}
-                  value={value}
-                  onChange={set}
-                  choices={choices}
-                  disabled={disabled}
-                />
-              )}
-            </StudioField>
-            {property.key === "auto_size" && fieldProperty !== undefined && (
-              <p className="text-sm text-muted-foreground">
-                {fieldReference !== undefined
-                  ? "Available"
-                  : `Not possible - ${labelText?.trim() || "Column"} has no field to measure`}
-              </p>
-            )}
-            {property.key === "allow_full_screen" && (
-              <p className="text-sm text-muted-foreground">Available</p>
-            )}
-            {property === labelProperty && fieldProperty !== undefined && (
-              <div className="space-y-1 text-sm text-muted-foreground">
-                {field === undefined &&
-                touched.id === idPrefix &&
-                (touched.keys.has(fieldProperty.key) || touched.keys.has(property.key)) ? (
-                  <Alert variant="destructive">
-                    <AlertDescription>
-                      Choose a field offered by this data to resolve its label.
-                    </AlertDescription>
-                  </Alert>
-                ) : field === undefined ? null : label?.kind === "text" ? (
-                  <>
-                    {fieldChanged && label.value !== field.label && (
-                      <Alert variant="destructive">
-                        <AlertDescription>
-                          The field changed since this label was set. Keep it as a custom label, or
-                          use &ldquo;{field.label}&rdquo;.
-                        </AlertDescription>
-                      </Alert>
+            }
+            onChange(result);
+          };
+          return (
+            <div key={property.key} className="space-y-2" data-vortex-setting={property.key}>
+              <StudioField
+                label={property.label}
+                optional={!property.required}
+                hint={property.help}
+                error={
+                  property.required &&
+                  property.showWhen !== undefined &&
+                  property.defaultValue === undefined &&
+                  value === undefined
+                    ? conditionalRequiredMessage(property)
+                    : undefined
+                }
+              >
+                {(control) => (
+                  <SettingControl
+                    id={control.id}
+                    descriptionId={control["aria-describedby"]}
+                    property={studioTotalMeasureProperty(
+                      property,
+                      properties,
+                      values,
+                      choices.fields,
                     )}
-                    <Button
-                      type="button"
-                      variant="link"
-                      size="sm"
-                      disabled={disabled}
-                      className="h-auto px-0 whitespace-normal text-left"
-                      onClick={useFieldLabel}
-                    >
-                      Use field label: {field.label}
-                    </Button>
-                  </>
-                ) : (
-                  <p className="text-muted-foreground">Uses field label: {field.label}</p>
+                    value={value}
+                    onChange={set}
+                    choices={choices}
+                    disabled={disabled}
+                  />
                 )}
-              </div>
-            )}
-          </div>
-        );
-      })}
+              </StudioField>
+              {property.key === "auto_size" && fieldProperty !== undefined && (
+                <p className="text-sm text-muted-foreground">
+                  {fieldReference !== undefined
+                    ? "Available"
+                    : `Not possible - ${labelText?.trim() || "Column"} has no field to measure`}
+                </p>
+              )}
+              {property.key === "allow_full_screen" && (
+                <p className="text-sm text-muted-foreground">Available</p>
+              )}
+              {property === labelProperty && fieldProperty !== undefined && (
+                <div className="space-y-1 text-sm text-muted-foreground">
+                  {field === undefined &&
+                  touched.id === idPrefix &&
+                  (touched.keys.has(fieldProperty.key) || touched.keys.has(property.key)) ? (
+                    <Alert variant="destructive">
+                      <AlertDescription>
+                        Choose a field offered by this data to resolve its label.
+                      </AlertDescription>
+                    </Alert>
+                  ) : field === undefined ? null : label?.kind === "text" ? (
+                    <>
+                      {fieldChanged && label.value !== field.label && (
+                        <Alert variant="destructive">
+                          <AlertDescription>
+                            The field changed since this label was set. Keep it as a custom label,
+                            or use &ldquo;{field.label}&rdquo;.
+                          </AlertDescription>
+                        </Alert>
+                      )}
+                      <Button
+                        type="button"
+                        variant="link"
+                        size="sm"
+                        disabled={disabled}
+                        className="h-auto px-0 whitespace-normal text-left"
+                        onClick={useFieldLabel}
+                      >
+                        Use field label: {field.label}
+                      </Button>
+                    </>
+                  ) : (
+                    <p className="text-muted-foreground">Uses field label: {field.label}</p>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        }),
+        moreKeys,
+      )}
     </div>
   );
 }

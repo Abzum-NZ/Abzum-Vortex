@@ -5,7 +5,6 @@ import { Button } from "../components/button";
 import { ChevronsDown, RotateCcw } from "lucide-react";
 import { useRecordChoicePager } from "../controls/use-record-choice-pager";
 import { StudioReferencePicker } from "./studio-reference-picker";
-import { StudioHelp } from "./studio-field";
 
 /** One record a record reference can point at: its identity and the title the person reads. */
 export type StudioRecordChoice = Readonly<{ recordId: string; label: string }>;
@@ -206,7 +205,11 @@ function StudioRecordChoicesPage({
         ]}
         onChange={onPick}
       />
-      {note !== undefined && <StudioHelp hint={note} />}
+      {note !== undefined && (
+        <p role="status" className="text-sm text-muted-foreground">
+          {note}
+        </p>
+      )}
       <div className="flex flex-wrap gap-1">
         {pager.next !== undefined && (
           <Button

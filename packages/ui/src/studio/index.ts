@@ -23,6 +23,7 @@ export type {
   StudioConditionValidation,
 } from "./condition-model";
 export {
+  describeCondition,
   studioConditionOperatorsFor,
   createInitialStudioCondition,
   validateStudioCondition,

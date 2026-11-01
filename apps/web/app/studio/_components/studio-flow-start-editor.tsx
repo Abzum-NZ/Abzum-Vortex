@@ -1,8 +1,6 @@
 "use client";
 import { Alert, AlertDescription } from "@vortex/ui/components/alert";
 import { useEffect, useState } from "react";
-import { Icon } from "@vortex/ui";
-import { Button } from "@vortex/ui/components/button";
 import { Checkbox } from "@vortex/ui/components/checkbox";
 import { Input } from "@vortex/ui/components/input";
 import { Label } from "@vortex/ui/components/label";
@@ -12,7 +10,7 @@ import {
   useStudioEntryKeys,
   StudioOptionControl,
   StudioReferencePicker,
-  StudioHelp,
+  StudioAddButton,
   StudioInspectorGroup,
   studioWords,
   studioBindingSentence,
@@ -547,9 +545,7 @@ export function StudioFlowStartEditor({
         defaultOpen={shown.inputs.length > 0}
         hint="The values the flow is given when it starts. Its steps read them."
         summary={shown.inputs.length === 1 ? "1 input" : `${shown.inputs.length} inputs`}
-        action={
-          <StudioAddButton label="Add an input" disabled={disabled} onClick={addInput} />
-        }
+        action={<StudioAddButton label="Add an input" disabled={disabled} onClick={addInput} />}
       >
         <StudioEntryList
           label="Inputs"

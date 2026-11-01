@@ -145,6 +145,10 @@ function ModuleInspector({
   );
   return (
     <div className="space-y-3">
+      <div>
+        <h3 className="text-base font-semibold">{module.name}</h3>
+        <p className="text-xs text-muted-foreground">Module</p>
+      </div>
       <StudioField
         label="Module name"
         error={name.problem === "" ? undefined : name.problem}
@@ -836,30 +840,37 @@ export function StudioDataInspectorView({ model }: Readonly<{ model: StudioDataM
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className={STUDIO_RAIL_BODY_CLASS} data-studio-rail-body="">
-      {compileProblem === null ? null : (
-        <div role="alert" className="space-y-2 rounded-md border border-destructive/50 p-3 text-sm">
-          <p className="font-semibold text-destructive">
-            {problemHere
-              ? "This stops the draft from compiling"
-              : "The draft does not compile, so it can't be previewed or published yet"}
-          </p>
-          <p className="break-words">{compileProblem.message}</p>
-          {compileProblem.selection === null || problemHere ? null : (
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              onClick={() => select(compileProblem.selection)}
-            >
-              Show me
-            </Button>
-          )}
-        </div>
-      )}
-      {inspectorBody}
-      {usedIn === null ? null : (
-        <StudioUsedIn source={source} target={usedIn} name={describeSelection(modules, current)} />
-      )}
+        {compileProblem === null ? null : (
+          <div
+            role="alert"
+            className="space-y-2 rounded-md border border-destructive/50 p-3 text-sm"
+          >
+            <p className="font-semibold text-destructive">
+              {problemHere
+                ? "This stops the draft from compiling"
+                : "The draft does not compile, so it can't be previewed or published yet"}
+            </p>
+            <p className="break-words">{compileProblem.message}</p>
+            {compileProblem.selection === null || problemHere ? null : (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => select(compileProblem.selection)}
+              >
+                Show me
+              </Button>
+            )}
+          </div>
+        )}
+        {inspectorBody}
+        {usedIn === null ? null : (
+          <StudioUsedIn
+            source={source}
+            target={usedIn}
+            name={describeSelection(modules, current)}
+          />
+        )}
       </div>
     </div>
   );

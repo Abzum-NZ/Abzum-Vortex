@@ -53,7 +53,7 @@ export function StudioFieldProblemsProvider({ children }: Readonly<{ children: R
 
 export const useStudioFieldProblems = () => useContext(FieldProblemsContext);
 
-/** Help is an info icon with a tooltip, and remains the control's accessible description. */
+/** Help is a tooltip on an information button; it remains the control's accessible description. */
 export function StudioHelp({ hint, id }: Readonly<{ hint: string; id?: string }>) {
   const generated = useId();
   const descriptionId = id ?? generated;
@@ -114,9 +114,7 @@ export function StudioField({
   return (
     <Field data-invalid={error === undefined ? undefined : true}>
       <div className="flex items-center gap-2">
-        <FieldLabel htmlFor={id}>
-          {label}
-        </FieldLabel>
+        <FieldLabel htmlFor={id}>{label}</FieldLabel>
         {optional && <span className="text-xs text-muted-foreground">Optional</span>}
         {hint !== undefined && <StudioHelp hint={hint} id={id + "-hint"} />}
       </div>

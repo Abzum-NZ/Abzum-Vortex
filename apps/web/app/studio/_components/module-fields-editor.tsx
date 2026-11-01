@@ -1,13 +1,5 @@
 "use client";
 import { useMemo, useState, type FormEvent } from "react";
-import { Icon } from "@vortex/ui";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@vortex/ui/components/dropdown-menu";
 import { Alert, AlertDescription, AlertTitle } from "@vortex/ui/components/alert";
 import { Button } from "@vortex/ui/components/button";
 import { useConfirm } from "@vortex/ui/components/confirm-dialog";
@@ -17,6 +9,7 @@ import {
   studioFieldPlacements,
   studioRelationshipChoices,
   studioSettingProblems,
+  StudioInspectorActions,
   StudioInspectorGroup,
   studioSourceRecordTypes,
   type StudioCompositionContext,
@@ -900,52 +893,31 @@ export function ModuleFieldsEditor({
             <h3 className="text-base font-semibold">{existing.label}</h3>
             <p className="text-xs text-muted-foreground">Field</p>
           </div>
-          <DropdownMenu>
-            <DropdownMenuTrigger
-              render={
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-sm"
-                  aria-label={`More options for ${existing.label}`}
-                />
-              }
-            >
-              <Icon name="more-horizontal" />
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem
-                disabled={disabled || record.fields[0]?.key === existing.key}
-                onClick={() => move(-1)}
-              >
-                Move earlier
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                disabled={disabled || record.fields.at(-1)?.key === existing.key}
-                onClick={() => move(1)}
-              >
-                Move later
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                variant="destructive"
+          <StudioInspectorActions
+            actions={[
+              {
+                label: "Move earlier",
+                disabled: disabled || record.fields[0]?.key === existing.key,
+                onSelect: () => move(-1),
+              },
+              {
+                label: "Move later",
+                disabled: disabled || record.fields.at(-1)?.key === existing.key,
+                onSelect: () => move(1),
+              },
+              {
                 // A published field keeps its stored values, so it is not offered for deletion.
-                disabled={disabled || published}
-                onClick={() => {
-                  void remove();
-                }}
-              >
-                {published
+                label: published
                   ? "Remove field (published: take it off the pages instead)"
-                  : "Remove field"}
-              </DropdownMenuItem>
-              {!published && (
-                <p className="px-2 py-1 text-xs text-muted-foreground">
-                  Deletes it from the draft. It was never published, so no stored value is lost.
-                </p>
-              )}
-            </DropdownMenuContent>
-          </DropdownMenu>
+                  : "Remove field",
+                destructive: true,
+                disabled: disabled || published,
+                onSelect: () => {
+                  void remove();
+                },
+              },
+            ]}
+          />
         </div>
       )}
       {issues.length === 0 ? null : (
@@ -1123,7 +1095,11 @@ export function ModuleFieldsEditor({
           fieldLabel={existing?.label ?? form.label}
           onPersonalData={(personalData) => change({ personalData })}
           onPublicDisplay={(publicDisplay) => change({ publicDisplay })}
-          onOpenPermissions={placeOpener.openPermissions}
+          permissionsPlace={{
+            label: "Field permissions",
+            trail: [source.body.name, "Access", "Permissions"],
+            open: { kind: "access_permissions" },
+          }}
         />
         {existing === undefined ? null : (
           <>
@@ -1150,20 +1126,11 @@ export function ModuleFieldsEditor({
       {adding && (
         <StudioInspectorFooter>
           {onCancel !== undefined && (
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              onClick={onCancel}
-            >
+            <Button type="button" size="sm" variant="outline" onClick={onCancel}>
               Cancel
             </Button>
           )}
-          <Button
-            type="submit"
-            size="sm"
-            disabled={disabled || form.label.trim() === ""}
-          >
+          <Button type="submit" size="sm" disabled={disabled || form.label.trim() === ""}>
             Add field
           </Button>
         </StudioInspectorFooter>

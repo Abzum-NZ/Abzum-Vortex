@@ -930,79 +930,77 @@ export function StudioFlowStepForm({
           );
         })
         .map((field) => (
-          <div
-            key={field.key}
-            className="flex items-start gap-1"
-            data-vortex-setting={field.key}
-          >
+          <div key={field.key} className="flex items-start gap-1" data-vortex-setting={field.key}>
             <div className="min-w-0 flex-1">
-            <PropertyControl
-              id={`${id}-${field.key}`}
-              field={field}
-              disabled={disabled}
-              value={
-                Object.hasOwn(draft.properties, field.key) ? draft.properties[field.key]! : null
-              }
-              references={references}
-              choices={choices}
-              flows={flows}
-              onChange={(value) => {
-                const properties = { ...draft.properties, [field.key]: value };
-                if (
-                  field.key === "result_type" &&
-                  fields.some(
-                    (entry) => entry.key === "formula" && entry.control === "calculation",
-                  ) &&
-                  value?.kind === "text"
-                ) {
-                  if (value.value === "decimal_number" || value.value === "money") {
-                    properties.places = {
-                      kind: "whole",
-                      source: studioFlowValueSourceOf({
-                        kind: "literal",
-                        literal: { type: "whole_number", value: 2 },
-                      }),
-                    };
-                    properties.rounding = { kind: "text", value: "half_up" };
-                  } else {
-                    properties.places = null;
-                    properties.rounding = null;
-                  }
+              <PropertyControl
+                id={`${id}-${field.key}`}
+                field={field}
+                disabled={disabled}
+                value={
+                  Object.hasOwn(draft.properties, field.key) ? draft.properties[field.key]! : null
                 }
-                // A message shown in a slot or inline names its component, any other does not: the two
-                // settings change together, so neither edit is refused for the other being unset.
-                let problem: string | null = null;
-                if (
-                  (field.key === "target" || field.key === "component") &&
-                  fields.some((entry) => entry.key === "component")
-                ) {
-                  if (field.key === "target" && value?.kind === "text") {
-                    const placed = value.value === "inline" || value.value === "slot";
-                    const current = choices.messagePlacements.find(
-                      (entry) =>
-                        properties.component?.kind === "text" &&
-                        entry.alias === properties.component.value,
-                    );
-                    const chosen =
-                      current?.kind === value.value
-                        ? current
-                        : choices.messagePlacements.find((entry) => entry.kind === value.value);
-                    properties.component =
-                      placed && chosen !== undefined ? { kind: "text", value: chosen.alias } : null;
-                    if (placed && chosen === undefined)
-                      problem = `This page has no ${value.value === "slot" ? "Notice slot" : "block to show a message under"}. Add one on the page first.`;
+                references={references}
+                choices={choices}
+                flows={flows}
+                onChange={(value) => {
+                  const properties = { ...draft.properties, [field.key]: value };
+                  if (
+                    field.key === "result_type" &&
+                    fields.some(
+                      (entry) => entry.key === "formula" && entry.control === "calculation",
+                    ) &&
+                    value?.kind === "text"
+                  ) {
+                    if (value.value === "decimal_number" || value.value === "money") {
+                      properties.places = {
+                        kind: "whole",
+                        source: studioFlowValueSourceOf({
+                          kind: "literal",
+                          literal: { type: "whole_number", value: 2 },
+                        }),
+                      };
+                      properties.rounding = { kind: "text", value: "half_up" };
+                    } else {
+                      properties.places = null;
+                      properties.rounding = null;
+                    }
                   }
-                  if (field.key === "component" && value?.kind === "text") {
-                    const placement = choices.messagePlacements.find(
-                      (entry) => entry.alias === value.value,
-                    );
-                    if (placement !== undefined)
-                      properties.target = { kind: "text", value: placement.kind };
+                  // A message shown in a slot or inline names its component, any other does not: the two
+                  // settings change together, so neither edit is refused for the other being unset.
+                  let problem: string | null = null;
+                  if (
+                    (field.key === "target" || field.key === "component") &&
+                    fields.some((entry) => entry.key === "component")
+                  ) {
+                    if (field.key === "target" && value?.kind === "text") {
+                      const placed = value.value === "inline" || value.value === "slot";
+                      const current = choices.messagePlacements.find(
+                        (entry) =>
+                          properties.component?.kind === "text" &&
+                          entry.alias === properties.component.value,
+                      );
+                      const chosen =
+                        current?.kind === value.value
+                          ? current
+                          : choices.messagePlacements.find((entry) => entry.kind === value.value);
+                      properties.component =
+                        placed && chosen !== undefined
+                          ? { kind: "text", value: chosen.alias }
+                          : null;
+                      if (placed && chosen === undefined)
+                        problem = `This page has no ${value.value === "slot" ? "Notice slot" : "block to show a message under"}. Add one on the page first.`;
+                    }
+                    if (field.key === "component" && value?.kind === "text") {
+                      const placement = choices.messagePlacements.find(
+                        (entry) => entry.alias === value.value,
+                      );
+                      if (placement !== undefined)
+                        properties.target = { kind: "text", value: placement.kind };
+                    }
                   }
-                }
-                onChange({ ...draft, properties }, problem, field.key);
-              }}
-            />
+                  onChange({ ...draft, properties }, problem, field.key);
+                }}
+              />
             </div>
             {field.help === undefined ? null : <StudioHelp hint={field.help} />}
           </div>

@@ -151,13 +151,16 @@ function ExistingApplicationWorkspace(props: ExistingProps) {
   // Every "Used in" entry and "Show me where" link opens its place in its own tab, selected.
   const placeOpener: StudioPlaceOpener = {
     open: (target) => {
+      if (target.kind === "access_permissions") {
+        openAccessPermissions();
+        return;
+      }
       const next = studioPlaceSelection(target, state.rootId);
       if (next === null) return;
       // The Access tab may be showing another of its views while the role is already selected.
       if (next.kind === "role") access.showRole();
       openIn(studioTabOfSelection(next), next);
     },
-    openPermissions: () => openAccessPermissions(),
     nameOf: (open) => {
       const next = studioPlaceSelection(open, state.rootId);
       return next === null ? undefined : labels.get(studioSemanticSelectionKey(next));

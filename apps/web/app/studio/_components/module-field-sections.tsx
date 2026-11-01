@@ -1,5 +1,5 @@
 "use client";
-import type { ReactNode } from "react";
+
 import { Alert, AlertDescription, AlertTitle } from "@vortex/ui/components/alert";
 import { Button } from "@vortex/ui/components/button";
 import { Checkbox } from "@vortex/ui/components/checkbox";
@@ -19,6 +19,7 @@ import {
   moduleFieldTypeLabels,
   plainSourceSettingValue,
   type ApplicationSourceDocument,
+  type ApplicationUsePlace,
   type CalculationSettings,
   type FormulaField,
   type moduleFieldSettingDeclarations,
@@ -28,6 +29,7 @@ import {
   type TotalSettings,
 } from "@vortex/platform/schema";
 import { StudioField } from "./studio-field";
+import { StudioPlaceList } from "./studio-used-in";
 import { StudioCalculationEditor } from "./studio-calculation-editor";
 import { StudioTotalEditor } from "./studio-total-editor";
 
@@ -69,6 +71,7 @@ type DraftText = Readonly<{
 
 type Declarations = ReturnType<typeof moduleFieldSettingDeclarations>;
 
+const personalDataLabels = { none: "None", personal: "Personal", sensitive: "Sensitive" } as const;
 const problemOf = (text: string) => (text === "" ? undefined : text);
 
 /**
@@ -624,7 +627,7 @@ export function FieldPrivacySection({
   fieldLabel,
   onPersonalData,
   onPublicDisplay,
-  onOpenPermissions,
+  permissionsPlace,
 }: Readonly<{
   personalData: FieldFormState["personalData"];
   publicDisplay: FieldFormState["publicDisplay"];
@@ -634,14 +637,14 @@ export function FieldPrivacySection({
   fieldLabel: string;
   onPersonalData: (value: FieldFormState["personalData"]) => void;
   onPublicDisplay: (value: FieldFormState["publicDisplay"]) => void;
-  /** Opens the Access tab on its permissions. */
-  onOpenPermissions: () => void;
+  /** Where the field's permissions are managed, shown as a path to the Access tab's permissions. */
+  permissionsPlace: ApplicationUsePlace;
 }>) {
   return (
     <StudioInspectorGroup
       title="Privacy"
       defaultOpen={false}
-      summary={`Personal data: ${personalData}`}
+      summary={`Personal data: ${personalDataLabels[personalData]}`}
     >
       {carriedBy.length === 0 ? null : (
         <Alert variant="destructive">
@@ -687,16 +690,10 @@ export function FieldPrivacySection({
           />
         )}
       </StudioField>
-      <p className="text-xs text-muted-foreground">
-        Field permissions: Access ›{" "}
-        <button
-          type="button"
-          className="text-foreground underline underline-offset-4 hover:no-underline"
-          onClick={onOpenPermissions}
-        >
-          Permissions
-        </button>
-      </p>
+      <div className="space-y-1">
+        <p className="text-xs text-muted-foreground">Field permissions are managed in Access:</p>
+        <StudioPlaceList places={[permissionsPlace]} label="Field permissions" />
+      </div>
     </StudioInspectorGroup>
   );
 }

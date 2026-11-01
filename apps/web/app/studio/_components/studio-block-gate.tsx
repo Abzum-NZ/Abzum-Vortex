@@ -2,7 +2,9 @@
 import { useMemo, useState } from "react";
 import type { ConditionNode } from "@vortex/platform/schema";
 import {
+  describeCondition,
   describeStudioCompositionGate,
+  projectStudioReactionEditor,
   resolveStudioReactionTarget,
   StudioDialog,
   StudioHelp,
@@ -19,21 +21,10 @@ import {
   type StudioStoredApplicationDraft,
 } from "@vortex/ui/studio";
 import { StudioGateSelect } from "./studio-gate-select";
-import { ApplicationReactionConditionEditor } from "./application-reaction-condition-editor";
-
-/** How many comparisons a stored condition holds, however deeply they are nested. */
-const comparisonsIn = (node: unknown): number =>
-  typeof node !== "object" || node === null
-    ? 0
-    : "operator" in node
-      ? 1
-      : Object.values(node).reduce<number>((total, child) => total + comparisonsIn(child), 0);
-
-const conditionSummary = (condition: unknown): string => {
-  if (condition === undefined) return "Always";
-  const count = comparisonsIn(condition);
-  return count === 1 ? "1 comparison" : `${count} comparisons`;
-};
+import {
+  ApplicationReactionConditionEditor,
+  useStudioReactionFields,
+} from "./application-reaction-condition-editor";
 
 /**
  * Who sees the selected block and when: its permission gate and its four conditions (when it shows,
@@ -72,7 +63,8 @@ export function StudioBlockVisibility({
   );
   const target = resolveStudioReactionTarget(context.source, selection);
   const [feedback, setFeedback] = useState<StudioCompositionOutcome | null>(null);
-  const [editing, setEditing] = useState<StudioReactionSlot | null>(null);
+  const [slot, setSlot] = useState<StudioReactionSlot>("visibility_condition");
+  const [editing, setEditing] = useState(false);
   const change = (next: string | null): boolean => {
     if (disabled) return false;
     const result = onCommand(context, selection, { kind: "gate", gate: next });
@@ -87,14 +79,27 @@ export function StudioBlockVisibility({
           .find((item) => item.key === gate.permission)?.label ??
         gate.permission)
       : undefined;
-  const set = studioReactionSlots.filter(
-    ({ slot }) => target !== undefined && target.placement[slot] !== undefined,
-  );
+  const isSet = (name: StudioReactionSlot) =>
+    target !== undefined && target.placement[name] !== undefined;
+  const anySet = studioReactionSlots.some((entry) => isSet(entry.slot));
+  // The condition in words needs the fields it names; they are read only when a condition is set.
+  const fields = useStudioReactionFields({ context, selection, saved }, anySet);
+  const wordsOf = (name: StudioReactionSlot): string => {
+    if (!isSet(name)) return "Always";
+    const model = projectStudioReactionEditor(context, selection, fields.metadata, name);
+    return model.kind === "available" && model.condition !== undefined
+      ? describeCondition(model.condition, model.controls)
+      : fields.needsFields && fields.metadata === null
+        ? "Reading the fields…"
+        : "Set";
+  };
   const summary = [
     permissionLabel === undefined ? undefined : `Needs ${permissionLabel}`,
-    set.length === 0 ? undefined : set.map(({ title }) => title).join(", "),
+    ...studioReactionSlots
+      .filter((entry) => isSet(entry.slot))
+      .map((entry) => `${entry.title} ${wordsOf(entry.slot)}`),
   ].filter((part) => part !== undefined);
-  const slotInfo = studioReactionSlots.find((entry) => entry.slot === editing);
+  const slotInfo = studioReactionSlots.find((entry) => entry.slot === slot)!;
   return (
     <StudioInspectorGroup
       title="Visibility and access"
@@ -138,43 +143,47 @@ export function StudioBlockVisibility({
         </p>
       ) : (
         <ul className="space-y-2" aria-label="Conditions">
-          {studioReactionSlots.map(({ slot, title }) => (
-            <li key={slot} className="flex items-center justify-between gap-2">
+          {studioReactionSlots.map((entry) => (
+            <li key={entry.slot} className="flex items-center justify-between gap-2">
               <span className="min-w-0">
-                <span className="block text-sm">{title}</span>
-                <span className="block truncate text-xs text-muted-foreground">
-                  {conditionSummary(target.placement[slot])}
+                <span className="block text-sm">{entry.title}</span>
+                <span
+                  className="block truncate text-xs text-muted-foreground"
+                  title={wordsOf(entry.slot)}
+                >
+                  {wordsOf(entry.slot)}
                 </span>
               </span>
               <StudioEditButton
-                label={`Edit ${title.toLowerCase()} condition`}
+                label={`Edit ${entry.title.toLowerCase()} condition`}
                 disabled={disabled}
-                onClick={() => setEditing(slot)}
+                onClick={() => {
+                  setSlot(entry.slot);
+                  setEditing(true);
+                }}
               />
             </li>
           ))}
         </ul>
       )}
-      {slotInfo !== undefined && (
-        <StudioDialog
-          open
-          onOpenChange={(open) => {
-            if (!open) setEditing(null);
-          }}
-          title="Edit condition"
-          description={`${slotInfo.title}. ${slotInfo.help}`}
-          closeLabel="Done"
-        >
+      <StudioDialog
+        open={editing}
+        onOpenChange={setEditing}
+        title={slotInfo.title}
+        description={slotInfo.help}
+        closeLabel="Done"
+      >
+        {editing && (
           <ApplicationReactionConditionEditor
-            slot={slotInfo.slot}
+            slot={slot}
             context={context}
             selection={selection}
             saved={saved}
             disabled={disabled}
             onCommand={onReaction}
           />
-        </StudioDialog>
-      )}
+        )}
+      </StudioDialog>
     </StudioInspectorGroup>
   );
 }

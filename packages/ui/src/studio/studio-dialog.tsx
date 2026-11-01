@@ -47,9 +47,7 @@ export function StudioDialog({
   };
   const footer = (
     <DialogFooter>
-      <DialogClose
-        render={<Button type="button" variant="outline" />}
-      >
+      <DialogClose render={<Button type="button" variant="outline" />}>
         {submitLabel === undefined ? closeLabel : "Cancel"}
       </DialogClose>
       {submitLabel !== undefined && (

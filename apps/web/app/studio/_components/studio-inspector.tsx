@@ -95,7 +95,6 @@ export function StudioInspector({
   labelsKey,
   note,
   extraActions = [],
-  footer,
   children,
 }: Readonly<{
   inspector: InspectorContext;
@@ -108,8 +107,6 @@ export function StudioInspector({
   note: string | undefined;
   /** More header menu entries for the selection, after Copy alias. */
   extraActions?: readonly StudioInspectorAction[];
-  /** The selection's create or apply action, pinned below the sections. */
-  footer?: ReactNode;
   children: ReactNode;
 }>) {
   if (inspector.status !== "resolved")
@@ -177,7 +174,6 @@ export function StudioInspector({
             </dl>
           </StudioInspectorGroup>
         </div>
-        {footer}
       </div>
     </div>
   );

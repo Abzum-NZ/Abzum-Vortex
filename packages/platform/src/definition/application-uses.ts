@@ -50,6 +50,8 @@ export type ApplicationPlaceOpen =
   | Readonly<{ kind: "field"; moduleKey: string; recordKey: string; fieldKey: string }>
   | Readonly<{ kind: "query"; moduleKey: string; queryKey: string }>
   | Readonly<{ kind: "role"; roleKey: string }>
+  /** The Access tab's permissions view, which has no single selected item. */
+  | Readonly<{ kind: "access_permissions" }>
   | Readonly<{ kind: "none" }>;
 
 /**
@@ -74,6 +76,8 @@ export type ApplicationUseTarget =
       recordKey: string;
       action: StandardRecordAction;
     }>
+  /** The application itself: where it is entered or offered (home page, addresses, default role, menu). */
+  | Readonly<{ kind: "application" }>
   | Readonly<{ kind: "record_type"; moduleKey: string; recordKey: string }>
   | Readonly<{ kind: "field"; moduleKey: string; recordKey: string; fieldKey: string }>
   | Readonly<{ kind: "query"; moduleKey: string; queryKey: string }>
@@ -141,10 +145,13 @@ const taskLists: ReadonlySet<string | number> = new Set([
   "finally",
 ]);
 
-/** The innermost task along a path under a flow, by its id. */
-const taskAlong = (flow: unknown, rest: Path): string | undefined => {
+/** The innermost task along a path under a flow: its id and the name a person gave it, if any. */
+const taskAlong = (
+  flow: unknown,
+  rest: Path,
+): Readonly<{ id: string; name: string | undefined }> | undefined => {
   let node = flow;
-  let found: string | undefined;
+  let found: Readonly<{ id: string; name: string | undefined }> | undefined;
   rest.forEach((segment, index) => {
     node = (node as Record<string | number, unknown> | undefined)?.[segment];
     const container = rest[index - 1];
@@ -154,7 +161,13 @@ const taskAlong = (flow: unknown, rest: Path): string | undefined => {
       (taskLists.has(container) ||
         (typeof container === "number" && rest[index - 2] === "branches"));
     if (inList && isObject(node) && typeof node.id === "string" && typeof node.type === "string")
-      found = node.id;
+      found = {
+        id: node.id,
+        name:
+          typeof node.description === "string" && node.description.trim() !== ""
+            ? node.description.trim()
+            : undefined,
+      };
   });
   return found;
 };
@@ -182,14 +195,14 @@ const flowPlace = (
   moduleKey: string | null,
 ): ApplicationUsePlace => {
   const flowAlias = String(flow.id ?? "");
-  const taskId = taskAlong(flow, rest);
+  const task = taskAlong(flow, rest);
   const trail = [...base, flowName];
-  if (taskId === undefined)
+  if (task === undefined)
     return { label: name, trail, open: { kind: "flow", flowAlias, moduleKey } };
-  const open = { kind: "flow_step", flowAlias, moduleKey, taskId } as const;
+  const open = { kind: "flow_step", flowAlias, moduleKey, taskId: task.id } as const;
   return {
     label: `A step of ${name.charAt(0).toLowerCase()}${name.slice(1)}`,
-    trail: [...trail, taskId.replaceAll("_", " ")],
+    trail: [...trail, task.name ?? "Step"],
     named: [{ at: trail.length, open }],
     open,
   };
@@ -299,7 +312,7 @@ export const describeSourcePlace = (source: Source, path: Path): ApplicationUseP
         return {
           label: `Permission ${itemName} in ${module.name}`,
           trail: [app, "Access", "Permissions", itemName],
-          open: { kind: "none" },
+          open: { kind: "access_permissions" },
         };
       case "actions":
         return {
@@ -324,7 +337,7 @@ export const describeSourcePlace = (source: Source, path: Path): ApplicationUseP
               path.slice(5),
               `Rule or flow ${itemName} in ${module.name}`,
               itemName,
-              [...data, "Flows"],
+              [app, "Flows", ...data.slice(2)],
               module.key,
             );
       case "extension_points":
@@ -447,7 +460,7 @@ export const describeSourcePlace = (source: Source, path: Path): ApplicationUseP
     return {
       label: `Permission ${permission.label}`,
       trail: [app, "Access", "Permissions", permission.label],
-      open: { kind: "none" },
+      open: { kind: "access_permissions" },
     };
   }
   if (typeof section === "string" && areaWords[section] !== undefined)
@@ -491,6 +504,8 @@ const occurrences = (index: UseIndex, text: string): readonly Occurrence[] =>
 /** A stable key for a target. */
 const applicationUseTargetKey = (target: ApplicationUseTarget): string => {
   switch (target.kind) {
+    case "application":
+      return "application";
     case "standard_action":
       return `standard_action:${target.moduleKey}:${target.recordKey}.${target.action}`;
     case "record_type":
@@ -1316,6 +1331,19 @@ const messageTargetUses = (source: Source, index: UseIndex, placementAlias: stri
     })
     .map(({ path }) => ({ path, label: flowName(source, path)! }));
 
+/**
+ * Where the application is entered or offered: its home page, each public address, the role a
+ * first install offers by default and every top-level menu entry.
+ */
+const applicationUsePaths = (source: Source): Path[] => [
+  ...(source.body.home_page === undefined ? [] : [["body", "home_page"] as Path]),
+  ...source.body.public_addresses.map((_, at): Path => ["body", "public_addresses", at]),
+  ...source.body.roles.flatMap((role, at): Path[] =>
+    role.default_member === true ? [["body", "roles", at, "default_member"]] : [],
+  ),
+  ...source.body.navigation.map((_, at): Path => ["body", "navigation", at]),
+];
+
 /** A menu entry is used where its alias appears outside the entry itself. */
 const navigationUses = (index: UseIndex, alias: string): Use[] =>
   namedUses(index, [alias], undefined);
@@ -1334,6 +1362,8 @@ const queryUses = (source: Source, index: UseIndex, moduleKey: string, queryKey:
 
 const usesOf = (source: Source, index: UseIndex, target: ApplicationUseTarget): Use[] => {
   switch (target.kind) {
+    case "application":
+      return applicationUsePaths(source).map((path) => ({ path }));
     case "standard_action":
       return standardActionUses(source, index, target.moduleKey, target.recordKey, target.action);
     case "record_type":
