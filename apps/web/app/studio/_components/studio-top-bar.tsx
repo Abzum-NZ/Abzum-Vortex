@@ -83,8 +83,8 @@ export function StudioTopBar({
   backToAppHref: string | undefined;
   /** The App Store page, for installing this application when it is not installed yet. */
   appStoreHref: string | undefined;
-  /** Whether the application is installed in the builder's organisation. */
-  installed: boolean;
+  /** Whether the organisation has the application installed; undefined when that cannot be read. */
+  installed: boolean | undefined;
   onPreview: () => void;
   previewDisabled: boolean;
   previewPending: boolean;
@@ -187,7 +187,7 @@ export function StudioTopBar({
             <Icon name="redo" />
           </ToolbarButton>
           <Separator orientation="vertical" className="mx-2 h-6" />
-          {installed && backToAppHref !== undefined ? (
+          {installed === true && backToAppHref !== undefined ? (
             <Button
               variant="ghost"
               size="sm"
@@ -197,7 +197,7 @@ export function StudioTopBar({
               <Icon name="chevron-left" />
               Back to app
             </Button>
-          ) : !installed && appStoreHref !== undefined ? (
+          ) : installed === false && appStoreHref !== undefined ? (
             <Button
               variant="ghost"
               size="sm"
@@ -255,11 +255,11 @@ export function StudioTopBar({
                 <Icon name="redo" /> Redo
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              {installed && backToAppHref !== undefined ? (
+              {installed === true && backToAppHref !== undefined ? (
                 <DropdownMenuItem render={<NavigationLink href={backToAppHref} />}>
                   <Icon name="chevron-left" /> Back to app
                 </DropdownMenuItem>
-              ) : !installed && appStoreHref !== undefined ? (
+              ) : installed === false && appStoreHref !== undefined ? (
                 <DropdownMenuItem render={<NavigationLink href={appStoreHref} />}>
                   <Icon name="plus" /> Install in this organisation
                 </DropdownMenuItem>
