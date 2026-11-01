@@ -47,7 +47,6 @@ type InstallationUnavailableReason =
   | "republish_required"
   | "not_installed"
   | "not_newer"
-  | "module_set_changed"
   | "storage_incompatible"
   | "installation_incomplete"
   | "registration_misaligned"

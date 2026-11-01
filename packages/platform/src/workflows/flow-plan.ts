@@ -705,6 +705,19 @@ const compileFlowPlan = (
   lookupFlow: (id: string) => FlowDefinition | undefined = () => undefined,
 ): FlowPlan => {
   prepareFlowFormulas(flow);
+  for (const step of allSteps([...flow.tasks, ...flow.errors, ...flow.finally]).reverse()) {
+    const missing = flowValueReferences(step).find(
+      (reference) =>
+        reference.source === "form" &&
+        formTypes[reference.form]?.[reference.field] === undefined,
+    );
+    if (missing?.source === "form")
+      throw new FlowPlanError(
+        flow.id,
+        step.id,
+        `Flow ${flow.key}, step ${step.id} reads form field ${missing.form}.${missing.field}, which is no longer available`,
+      );
+  }
   for (const step of allSteps([...flow.tasks, ...flow.errors, ...flow.finally])) {
     if (step.type === "for_each") {
       const pin = allSteps(flowTaskChildLists(step).flatMap((list) => list.tasks)).find((child) =>
@@ -1070,7 +1083,17 @@ const linkFlowPlans = (plans: ReadonlyMap<string, FlowPlan>, applicationKey?: st
         const childId = String(step.flowId);
         if (!plans.has(childId))
           throw new FlowPlanError(id, step.id, `Flow ${id} cannot run unavailable flow ${childId}`);
-        const child = visit(childId, next);
+        let child: FlowPlan;
+        try {
+          child = visit(childId, next);
+        } catch (error) {
+          if (!(error instanceof FlowPlanError)) throw error;
+          throw new FlowPlanError(
+            id,
+            step.id,
+            `Step ${step.id} cannot run flow ${plans.get(childId)!.definition.key}: ${error.reason}`,
+          );
+        }
         const pageReference = (value: unknown) =>
           flowValueReferences(value).some(
             (reference) => reference.source === "page" || reference.source === "form",
@@ -1172,33 +1195,55 @@ const linkFlowPlans = (plans: ReadonlyMap<string, FlowPlan>, applicationKey?: st
   return (id: string) => visit(id, new Set());
 };
 
-/** Compiles every flow of one release. One flow per identity; an ambiguous release is refused. */
+/** Compiles each flow; Studio can report refusals while publication refuses the release. */
 export const compileFlowPlans = (
   flows: readonly FlowDefinition[],
   bindings: ReadonlyMap<string, readonly FlowBindingInputs[]> = new Map(),
   formTypes: ReadonlyMap<string, FlowFormTypes> = new Map(),
   conditions: ReadonlyMap<string, readonly FlowFormula[]> = new Map(),
   applicationKey?: string,
+  onRefusal?: (error: FlowPlanError) => void,
 ): FlowPlanSet => {
   const plans = new Map<string, FlowPlan>();
+  const identities = new Set<string>();
+  const refuse = (error: unknown): void => {
+    if (!(error instanceof FlowPlanError) || onRefusal === undefined) throw error;
+    onRefusal(error);
+  };
   const flowLookup = new Map(flows.map((flow) => [String(flow.id), flow]));
   for (const flow of flows) {
     const id = String(flow.id);
-    if (plans.has(id)) throw new FlowPlanError(id, undefined, "two flows share one identity");
-    plans.set(
-      id,
-      compileFlowPlan(
-        flow,
-        bindings.get(id),
-        formTypes.get(id),
-        conditions.get(id),
-        applicationKey,
-        (childId) => flowLookup.get(childId),
-      ),
-    );
+    try {
+      if (identities.has(id)) {
+        plans.delete(id);
+        throw new FlowPlanError(id, undefined, "two flows share one identity");
+      }
+      identities.add(id);
+      plans.set(
+        id,
+        compileFlowPlan(
+          flow,
+          bindings.get(id),
+          formTypes.get(id),
+          conditions.get(id),
+          applicationKey,
+          (childId) => flowLookup.get(childId),
+        ),
+      );
+    } catch (error) {
+      refuse(error);
+    }
   }
   const link = linkFlowPlans(plans, applicationKey);
-  return planSet(new Map([...plans.keys()].map((id) => [id, link(id)])));
+  const available = new Map<string, FlowPlan>();
+  for (const id of plans.keys()) {
+    try {
+      available.set(id, link(id));
+    } catch (error) {
+      refuse(error);
+    }
+  }
+  return planSet(available);
 };
 
 /** The first server segments reachable along any page-side path of this flow. */

@@ -9,6 +9,8 @@ import {
   type BuilderTargetFactsReader,
   readBuilderApplicationOrigin,
   compileFlowPlans,
+  installedFlowFormTypes,
+  type FlowPlanError,
   type FlowPlan,
 } from "@vortex/platform/server";
 import type { FieldInputControlReleaseMap, PlatformThemeTokens } from "@vortex/ui";
@@ -52,6 +54,7 @@ import {
 } from "@vortex/platform/schema";
 import {
   BuilderAuthorityError,
+  classifyDatabaseError,
   DefinitionError,
   readApplicationDefinitionDraft,
   readSourceIdentityReservations,
@@ -89,6 +92,7 @@ type StoredApplicationDefinitionDraft = Extract<StoredDefinitionDraft, { kind: "
 type FlowPlacement = Readonly<{
   tasks: Readonly<Record<string, "page" | "server" | "backend">>;
   bands: readonly Readonly<{ id: string; taskIds: readonly string[] }>[];
+  refusal: Readonly<{ taskId: string | null; reason: string }> | null;
 }>;
 /** Compiled placements by owner key and flow key. */
 export type StudioFlowPlacements = Readonly<
@@ -116,7 +120,7 @@ const flowPlacements = (
     for (const task of segment.tasks) visit(task);
     if (segment.kind === "server") bands.push({ id: segment.id, taskIds: [...ids] });
   }
-  return { tasks, bands };
+  return { tasks, bands, refusal: null };
 };
 
 type StudioAuthorityResult<Value> =
@@ -142,10 +146,18 @@ const declined = (
   failure: StudioApplicationFailure,
   error?: unknown,
 ): StudioApplicationFailure => {
-  console.error(
+  const message =
     `[studio] ${operation} ${failure.kind} reason=${failure.reason}` +
-      (error === undefined ? "" : ` cause=${describeFailure(error)}`),
-  );
+    (error === undefined ? "" : ` cause=${describeFailure(error)}`);
+  // A failure the request service returned was logged there with its own severity; an error caught
+  // here was logged nowhere else, so a transient conflict is information and any other cause is an error.
+  if (
+    error !== undefined &&
+    failure.kind === "temporarily_unavailable" &&
+    classifyDatabaseError(error) !== "conflict"
+  )
+    console.error(message);
+  else console.info(message);
   return failure;
 };
 
@@ -223,7 +235,8 @@ type StudioApplicationLoadResult =
       /** One view per request, in request order. */
       views: readonly StudioLoadedView[];
     }>
-  | StudioApplicationFailure;
+  | StudioApplicationFailure
+  | Readonly<{ kind: "validation_failed"; reason: string }>;
 
 type SourcePage = StoredApplicationDefinitionDraft["source"]["body"]["pages"][number];
 /** One compiled content area: its items in desktop order, exactly as the release holds them. */
@@ -415,6 +428,7 @@ export const studioCompileFailure = (error: unknown): StudioCompileFailure => {
         recordTypeKey: keyOf("record_type"),
         fieldKey: keyOf("field"),
         queryKey: keyOf("query"),
+        pageKey: keyOf("page"),
         flowKey: keyOf("flow"),
         taskId: keyOf("flow_node"),
       };
@@ -470,6 +484,8 @@ export const loadStudioApplicationDraft = async (
     !z.array(studioViewRequestSchema).min(1).max(maximumViewsPerRead).safeParse(requests).success
   )
     return declined("application-draft", { kind: "refused", reason: "request_invalid" });
+  let sourceInvalid = false;
+  let publicationInvalid = false;
   try {
     const resolved = await resolveIdentitySession();
     if (resolved.kind !== "active")
@@ -528,6 +544,8 @@ export const loadStudioApplicationDraft = async (
               issuedAt,
             })
           : null;
+        // A view read returns the current saved head so a stale tab can reopen it. Writes still
+        // require their exact expected revision through the draft's protected save operation.
         const snapshot =
           context === null
             ? null
@@ -535,22 +553,39 @@ export const loadStudioApplicationDraft = async (
                 installedReleaseCatalogue,
                 transaction,
                 authority,
-              ).readApplicationDraftSnapshot(
-                context,
-                {
-                  rootId: root.data,
-                  ...(expectedDraftRevision === undefined ? {} : { expectedDraftRevision }),
-                },
-                { publication: requests.some(publishedOf), releasable: false },
-              );
+              )
+                .readApplicationDraftSnapshot(
+                  context,
+                  {
+                    rootId: root.data,
+                  },
+                  { publication: requests.some(publishedOf), releasable: false },
+                )
+                .catch((error: unknown) => {
+                  if (
+                    error instanceof DefinitionError &&
+                    error.code === "DEFINITION_PUBLICATION_FAILED" &&
+                    error.cause instanceof z.ZodError
+                  )
+                    publicationInvalid = true;
+                  throw error;
+                });
         const draft =
           snapshot === null
             ? await readApplicationDefinitionDraft(transaction, scope, {
                 rootId: root.data,
-                ...(expectedDraftRevision === undefined ? {} : { expectedDraftRevision }),
+              }).catch((error: unknown) => {
+                if (
+                  error instanceof DefinitionError &&
+                  error.code === "INVALID_DEFINITION_STORAGE_RESULT"
+                )
+                  sourceInvalid = true;
+                throw error;
               })
             : snapshot.draft;
         if (draft.kind !== "application") throw new Error("STUDIO_DRAFT_UNAVAILABLE");
+        if (expectedDraftRevision !== undefined && draft.draftRevision < expectedDraftRevision)
+          throw new Error("STUDIO_DRAFT_REVISION_BEHIND");
         const identityReservations = requests.some((request) => request.kind === "access")
           ? await readSourceIdentityReservations(transaction, draft.rootId)
           : null;
@@ -652,14 +687,63 @@ export const loadStudioApplicationDraft = async (
                     [release.key, release.compilationOutput.canonical.content.flows] as const,
                 ),
               ];
-              const plans = compileFlowPlans(owners.flatMap(([, flows]) => flows)).plans;
+              const content = compiled.compilation.canonical.content;
+              const forms = installedFlowFormTypes({
+                application: { content },
+                modules: compiled.moduleReleases.map((release) => ({
+                  content: release.compilationOutput.canonical.content,
+                })),
+              });
+              const flows = owners.flatMap(([, owned]) => owned);
+              const bindings = new Map<
+                string,
+                (typeof content.flowBindings)[number]["flow"]["inputs"][]
+              >();
+              const conditions = new Map<
+                string,
+                NonNullable<(typeof content.flowBindings)[number]["settings"]["condition"]>[]
+              >();
+              for (const binding of content.flowBindings) {
+                const id = String(binding.flow.flowId);
+                bindings.set(id, [...(bindings.get(id) ?? []), binding.flow.inputs]);
+                if (binding.settings.condition !== null)
+                  conditions.set(id, [...(conditions.get(id) ?? []), binding.settings.condition]);
+              }
+              const refusals = new Map<string, FlowPlanError>();
+              const plans = compileFlowPlans(
+                flows,
+                bindings,
+                new Map(content.flows.map((flow) => [String(flow.id), forms])),
+                conditions,
+                draft.key,
+                (error) => {
+                  refusals.set(String(error.flowId), error);
+                  console.info(
+                    "[studio] flow plan refused",
+                    error.flowId,
+                    error.taskId,
+                    error.reason,
+                  );
+                },
+              ).plans;
               placements = Object.fromEntries(
                 owners.map(([key, flows]) => [
                   key,
                   Object.fromEntries(
                     flows.map((flow) => {
                       const plan = plans.get(String(flow.id));
-                      if (plan === undefined) throw new Error("STUDIO_FLOW_PLAN_MISSING");
+                      if (plan === undefined) {
+                        const refusal = refusals.get(String(flow.id));
+                        if (refusal === undefined) throw new Error("STUDIO_FLOW_PLAN_MISSING");
+                        return [
+                          flow.key,
+                          {
+                            tasks: {},
+                            bands: [],
+                            refusal: { taskId: refusal.taskId ?? null, reason: refusal.reason },
+                          },
+                        ];
+                      }
                       return [flow.key, flowPlacements(flow, plan)];
                     }),
                   ),
@@ -998,12 +1082,20 @@ export const loadStudioApplicationDraft = async (
             // A failed metadata refresh never makes old choices authoritative or changes the draft.
             // The draft stays open: the person sees the stable reason and can correct or remove the edit.
             compileFailure = studioCompileFailure(error);
-            console.error(
-              "STUDIO_DRAFT_COMPILE_FAILED",
-              compileFailure.reasonCode,
-              compileFailure.family,
-              error,
-            );
+            if (compileFailure.family === "unexpected")
+              console.error(
+                "STUDIO_DRAFT_COMPILE_FAILED",
+                compileFailure.reasonCode,
+                compileFailure.family,
+                error,
+              );
+            else
+              console.info(
+                "STUDIO_DRAFT_COMPILE_REFUSED",
+                compileFailure.reasonCode,
+                compileFailure.family,
+                error,
+              );
             compiledFields = null;
             pageCompiledSlots = requests.map(() => null);
             canvasFrames = requests.map(() => null);
@@ -1049,6 +1141,9 @@ export const loadStudioApplicationDraft = async (
         };
       },
     );
+    if (sourceInvalid) return { kind: "validation_failed", reason: "source_invalid_platform" };
+    if (publicationInvalid)
+      return { kind: "validation_failed", reason: "publication_invalid_platform" };
     if (result.kind === "available")
       return result.value.kind === "available"
         ? { kind: "available", ...result.value.value }

@@ -251,6 +251,7 @@ export const createEventDispatcherWakeup = (
         result.interruptedCount += dispatch.result.interruptedCount;
         result.consumersDispatched += dispatch.result.consumersDispatched;
         result.consumersUnavailable += dispatch.result.consumersUnavailable;
+        result.failures = [...result.failures, ...dispatch.result.failures];
       }
       return {
         outcome: "dispatched",

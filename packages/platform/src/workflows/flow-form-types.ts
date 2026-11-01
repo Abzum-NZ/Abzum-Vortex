@@ -11,9 +11,16 @@ import { flowRuntimeValueOf } from "../rules/flow-runtime-value";
 /** Declared field types under the permanent identities of installed form placements. */
 export type FlowFormTypes = Readonly<Record<string, Readonly<Record<string, string>>>>;
 
-/** Derives form types from the installed release, never from a submitted field value. */
+/** Derives form types from compiled definitions, never from a submitted field value. */
 export const installedFlowFormTypes = (
-  releaseSet: SystemApplicationBoundReleaseSetResult,
+  releaseSet: Readonly<{
+    application: Readonly<{
+      content: Pick<SystemApplicationBoundReleaseSetResult["application"]["content"], "pages" | "shells">;
+    }>;
+    modules: readonly Readonly<{
+      content: Pick<SystemApplicationBoundReleaseSetResult["modules"][number]["content"], "recordTypes">;
+    }>[];
+  }>,
 ): FlowFormTypes => {
   const forms: Record<string, Record<string, string>> = {};
   const fields = releaseSet.modules.flatMap((module) =>
