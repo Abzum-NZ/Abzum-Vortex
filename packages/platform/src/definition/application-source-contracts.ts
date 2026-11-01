@@ -134,9 +134,9 @@ const inspectSourceBounds = (value: unknown, context: z.RefinementCtx) => {
 
 /**
  * The fixed set of application experience pages an application may declare: the page shown
- * when an addressed page is refused or missing, when the application or its installation is
- * temporarily unavailable, and when resolving it fails unexpectedly. A refused page and a
- * missing page resolve to the same experience, so their surfaces stay indistinguishable.
+ * when an address names no page of the application, when the application or its installation is
+ * temporarily unavailable, and when resolving it fails unexpectedly. A page the viewer's role
+ * can't open shows the platform refusal, not an experience page.
  */
 const sourceApplicationExperienceSchema = z
   .object({
