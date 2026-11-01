@@ -15,6 +15,7 @@ export function StudioHistoryTab({
   organizationId,
   rootId,
   savedRevision,
+  installationMessage,
   restoreBlocked,
   hold,
   onRestored,
@@ -23,6 +24,7 @@ export function StudioHistoryTab({
   rootId: string;
   /** Changes when the draft is saved, so the list is read again against the new saved state. */
   savedRevision: number;
+  installationMessage: string | undefined;
   /** Why a version cannot be restored into the draft now, or nothing. */
   restoreBlocked: string | undefined;
   /** Holds the workspace's draft while a restore runs. */
@@ -60,6 +62,7 @@ export function StudioHistoryTab({
     <ApplicationReleaseHistory
       key={`${snapshot.organizationId}:${snapshot.rootId}:${snapshot.draftRevision}:${snapshot.sourceFingerprint}:${snapshot.anchorReleaseRevision}`}
       initialPage={load.page}
+      installationMessage={installationMessage}
       restoreBlocked={restoreBlocked}
       hold={hold}
       onRestored={onRestored}

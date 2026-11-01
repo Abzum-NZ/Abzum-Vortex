@@ -146,6 +146,8 @@ const publicationProblemText = (
  * Where the application stands in the builder's organisation, in plain words, with the App Store
  * page that installs or upgrades it. `published` names the version a Publish just created.
  */
+const systemRefreshMessage = "System applications move forward through the platform refresh.";
+
 const standingWords = (
   standing: ApplicationReleaseStanding,
   published?: string,
@@ -154,7 +156,7 @@ const standingWords = (
   switch (standing.kind) {
     case "system":
       return {
-        text: `${lead}Latest published version: ${standing.version}. Installed version: ${standing.installedVersion}. System applications move forward through the platform refresh.`,
+        text: `${lead}Latest published version: ${standing.version}. Installed version: ${standing.installedVersion}. ${systemRefreshMessage}`,
       };
     case "live":
       return {
@@ -701,6 +703,13 @@ export function useStudioReleasesTab({
           organizationId={organizationId}
           rootId={draft.state.rootId}
           savedRevision={draft.saved.draftRevision}
+          installationMessage={
+            standing?.kind === "system"
+              ? systemRefreshMessage
+              : standing == null || standing.kind === "unknown"
+                ? undefined
+                : "Organisations install and upgrade a version from the App Store."
+          }
           restoreBlocked={restoreBlocked}
           hold={(on) => draft.hold("restoring", on)}
           onRestored={(restored) => {
