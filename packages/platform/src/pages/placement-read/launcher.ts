@@ -97,6 +97,25 @@ export const readLauncher = async (
     !requestedFieldIds.includes(descriptionField.fieldId)
   )
     requestedFieldIds.push(descriptionField.fieldId);
+  const displayedFieldIds = new Set(requestedFieldIds.map((id) => id.toLowerCase()));
+  // Link eligibility needs current status and platform origin, but neither is a display cell.
+  if (studioLinkLabel !== undefined || upgradeLinkLabel !== undefined) {
+    const decisionFields = ["status", "is_system_application"].map((key) =>
+      targetRecordType.fields.find((field) => field.key === key),
+    );
+    if (
+      decisionFields.some(
+        (field) => field === undefined || !selectedFieldIds.has(field.fieldId.toLowerCase()),
+      )
+    ) {
+      logPlacementFailure(address, placementId, "launcher_query_invalid");
+      data[placementId] = { status: "error" };
+      return;
+    }
+    for (const field of decisionFields)
+      if (field !== undefined && !requestedFieldIds.includes(field.fieldId))
+        requestedFieldIds.push(field.fieldId);
+  }
   const command = protectedQueryCommandSchema.safeParse({
     moduleRootId: bound.module.rootId,
     queryId: bound.query.queryId,
@@ -140,6 +159,7 @@ export const readLauncher = async (
   const launcherRows: LauncherQueryRow[] = queryRows.map((row) => {
     const cells: Record<string, { kind: "text"; text: string }> = {};
     for (const [fieldId, value] of Object.entries(row.values)) {
+      if (!displayedFieldIds.has(fieldId.toLowerCase())) continue;
       const fieldKey = fieldKeys.get(fieldId.toLowerCase());
       if (fieldKey !== undefined && typeof value === "string")
         cells[fieldKey] = { kind: "text", text: value };
