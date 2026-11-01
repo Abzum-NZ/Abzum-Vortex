@@ -1,4 +1,5 @@
 import {
+  defaultRecordOrderField,
   defaultDeleteFlowSource,
   type DefaultFlowAfter,
   defaultOpenFlowSource,
@@ -214,9 +215,21 @@ export const listQuery = (
     resolved.qualified,
     columns.map((entry) => entry.key),
   );
-  plan.details.push(
-    `${query.created ? "A new" : "The existing"} query returns all ${resolved.record.plural_name.toLowerCase()}, sorted by ${resolved.title.label}.`,
-  );
+  if (query.created) {
+    const orderField = defaultRecordOrderField(
+      resolved.record.fields,
+      resolved.record.title_field,
+      (entry) => entry.key,
+    );
+    if (orderField === undefined) throw new Error("STUDIO_RECORD_QUERY_ORDER_MISSING");
+    plan.details.push(
+      `A new query returns all ${resolved.record.plural_name.toLowerCase()}, sorted by ${orderField.label}.`,
+    );
+  } else {
+    plan.details.push(
+      `The existing query returns all ${resolved.record.plural_name.toLowerCase()}.`,
+    );
+  }
   return query;
 };
 
