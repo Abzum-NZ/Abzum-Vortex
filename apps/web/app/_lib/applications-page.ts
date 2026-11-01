@@ -6,7 +6,7 @@ import { applicationPageAddressPath } from "./address-paths";
 import { humanOrganizationRequests } from "./server-composition";
 
 /** The App Store's page that lists the organisation's applications; the one Applications page. */
-export const applicationsPageKey = "app_store_catalogue";
+const applicationsPageKey = "app_store_catalogue";
 
 /** One organisation as the launcher names it, with the addresses an Applications link needs. */
 export type ApplicationsPageOrganization = Readonly<{
