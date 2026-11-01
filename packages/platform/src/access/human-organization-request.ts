@@ -39,6 +39,7 @@ import {
 } from "../db/request-transaction";
 
 import { databaseClockOf } from "./live-context";
+import { DefinitionError } from "../definition/definition-error";
 
 type ResolvedRequestTransactionRunner = <Scope, Result>(
   resolve: (transaction: RequestDatabaseTransaction) => Promise<ResolvedRequestContext<Scope>>,
@@ -444,7 +445,13 @@ export const createHumanOrganizationRequestService = (
         error instanceof Error &&
         error.name === "VortexDatabaseError" &&
         error.message === "DATABASE_REQUEST_STOPPED";
-      if (abandoned) console.info(`[access] human organisation request stopped: ${cause}`);
+      const alreadyLogged =
+        error instanceof DefinitionError &&
+        error.code === "DEFINITION_PUBLICATION_FAILED" &&
+        error.cause instanceof z.ZodError;
+      if (alreadyLogged) {
+        // Publication storage logged the schema failure at its source.
+      } else if (abandoned) console.info(`[access] human organisation request stopped: ${cause}`);
       else if (
         refused ||
         code === "DEFINITION_DRAFT_STALE_OR_MISSING" ||

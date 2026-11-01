@@ -28,7 +28,13 @@ export function StudioUnavailable({
           {subject} {titles[result.kind]}
         </AlertTitle>
         <AlertDescription>
-          <p role="status">{unavailableMessage(result.kind, result.reason)}</p>
+          <p role="status">
+            {result.reason === "source_invalid_platform"
+              ? "This draft could not be read because of a platform problem. It has been logged; your published app keeps working."
+              : result.reason === "publication_invalid_platform"
+                ? "This app could not be prepared because of a platform problem. It has been logged."
+                : unavailableMessage(result.kind, result.reason)}
+          </p>
           {result.reason === undefined ? null : <p className="text-xs">Reason: {result.reason}</p>}
         </AlertDescription>
       </Alert>

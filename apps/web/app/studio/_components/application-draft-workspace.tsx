@@ -14,6 +14,7 @@ import {
 import type { FieldInputControlReleaseMap, PlatformThemeTokens } from "@vortex/ui";
 import { createStudioPlacementDescriber, studioOutlineLabels } from "../_lib/studio-labels";
 import { studioPlaceSelection, studioTabOfSelection } from "../_lib/studio-places";
+import { describeStudioCompileFailure } from "../_lib/studio-compile-failure";
 import { ApplicationDraftAgentTools } from "./application-draft-agent-tools";
 import type { StudioModuleOwnerApplication } from "./module-fields-editor";
 import { NewApplicationWorkspace } from "./new-application-workspace";
@@ -384,19 +385,26 @@ function ExistingApplicationWorkspace(props: ExistingProps) {
                   focused,
                   focusCanvas,
                 )}
-                {draft.viewProblem !== "" ? (
+                {draft.viewProblem !== null ? (
                   <div role="alert" className="px-4 py-2 text-sm">
-                    {draft.viewProblem}{" "}
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        void draft.refreshView();
-                      }}
-                    >
-                      Try again
-                    </Button>
+                    {draft.viewProblem.message}{" "}
+                    {draft.viewProblem.retry ? (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          void draft.refreshView();
+                        }}
+                      >
+                        Try again
+                      </Button>
+                    ) : null}
                   </div>
+                ) : draft.view.failure !== null ? (
+                  <p role="alert" className="px-4 py-2 text-sm">
+                    This draft cannot be published:{" "}
+                    {describeStudioCompileFailure(draft.view.failure, draft.source).message}
+                  </p>
                 ) : draft.loadingView ? (
                   <p role="status" className="px-4 py-2 text-sm">
                     Loading this editor…
