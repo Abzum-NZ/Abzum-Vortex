@@ -53,7 +53,9 @@ const BoardCardFormat = lazy(async () => ({
 /**
  * What a column read answers: accepted, refused, or deferred because the page was busy.
  */
-type BoardColumnReadOutcome = void | boolean | "deferred";
+type BoardPage = NonNullable<BoardBucketPayload["page"]>;
+type BoardColumnReadOutcome = void | boolean | "deferred" | Readonly<{ page: BoardPage }>;
+const maximumDisplayedCards = 200;
 
 type BoardBucket = Readonly<{
   key: string;
@@ -191,7 +193,9 @@ function BoardColumn({
   if (moving?.targetKey === bucket.key && !rows.some((row) => row.recordId === moving.recordId))
     rows.unshift(moving.row);
   const canContinue =
-    events?.page_changed !== undefined && page?.nextContinuationToken !== undefined;
+    events?.page_changed !== undefined &&
+    page?.nextContinuationToken !== undefined &&
+    rows.length < maximumDisplayedCards;
   // While a card is dragged, every other column says whether the pipeline lets it go there.
   const from = mover?.draggingFrom;
   const dropAllowed = from !== undefined && mayMove(from, bucket);
@@ -430,7 +434,12 @@ function BoardColumn({
             </AlertDescription>
           </Alert>
         ) : null}
-        {canContinue ? (
+        {rows.length >= maximumDisplayedCards && rowCount !== null && rowCount > rows.length ? (
+          <p className="text-sm text-muted-foreground">
+            Showing {formatLocaleNumber(maximumDisplayedCards)} of{" "}
+            {countText(rowCount ?? rows.length)}
+          </p>
+        ) : canContinue ? (
           <Button
             type="button"
             variant="outline"
@@ -549,6 +558,12 @@ export function BoardView(props: DisplayRenderProps<BoardPayload>): ReactElement
     : [];
   const [pendingKeys, setPendingKeys] = useState<ReadonlySet<string>>(new Set());
   const [failedKeys, setFailedKeys] = useState<ReadonlySet<string>>(new Set());
+  const [continued, setContinued] = useState<
+    Readonly<{
+      source: BoardPayload | undefined;
+      pages: ReadonlyMap<string, BoardPage>;
+    }>
+  >({ source: values, pages: new Map() });
   const pendingKeyRef = useRef<string | undefined>(undefined);
   const pageChanged = events?.page_changed as
     | ((event: DisplaySemanticEvent) => BoardColumnReadOutcome | Promise<BoardColumnReadOutcome>)
@@ -586,6 +601,10 @@ export function BoardView(props: DisplayRenderProps<BoardPayload>): ReactElement
     };
   }, [values]);
 
+  const shownPage = (key: string, bucket: BoardBucketPayload): BoardBucketPayload => {
+    const page = continued.source === values ? continued.pages.get(key) : undefined;
+    return page === undefined || bucket.page === null ? bucket : { ...bucket, page };
+  };
   const buckets: BoardBucket[] =
     values === undefined
       ? []
@@ -594,7 +613,7 @@ export function BoardView(props: DisplayRenderProps<BoardPayload>): ReactElement
             key: `option:${column.value}`,
             label: column.label,
             selector: { kind: "option" as const, value: column.value },
-            values: column,
+            values: shownPage(`option:${column.value}`, column),
             moves: column.moves,
             stage: {
               tone: column.tone,
@@ -610,7 +629,7 @@ export function BoardView(props: DisplayRenderProps<BoardPayload>): ReactElement
                   key: "unassigned",
                   label: "Unassigned",
                   selector: { kind: "unassigned" as const },
-                  values: values.unassigned,
+                  values: shownPage("unassigned", values.unassigned),
                   moves: values.unassigned.moves,
                 },
               ]),
@@ -741,6 +760,25 @@ export function BoardView(props: DisplayRenderProps<BoardPayload>): ReactElement
         );
         if (accepted === false || accepted === "deferred")
           setFailedKeys((current) => new Set([...current, ...keys]));
+        else if (continuationToken !== undefined) {
+          if (typeof accepted !== "object" || accepted === null || !("page" in accepted)) {
+            setFailedKeys((current) => new Set([...current, ...keys]));
+          } else {
+            const previous = targets[0]!.values.page;
+            if (previous === null) throw new Error("Board continuation has no previous page");
+            const rows = new Map(previous.rows.map((row) => [row.recordId.toLowerCase(), row]));
+            for (const row of accepted.page.rows) rows.set(row.recordId.toLowerCase(), row);
+            const page = {
+              ...accepted.page,
+              rows: [...rows.values()].slice(0, maximumDisplayedCards),
+            };
+            setContinued((current) => {
+              const pages = new Map(current.source === values ? current.pages : []);
+              pages.set(key, page);
+              return { source: values, pages };
+            });
+          }
+        }
       } catch (error) {
         console.error("[board] column read failed", error);
         setFailedKeys((current) => new Set([...current, ...keys]));
@@ -749,7 +787,7 @@ export function BoardView(props: DisplayRenderProps<BoardPayload>): ReactElement
         setPendingKeys(new Set());
       }
     },
-    [pageChanged],
+    [pageChanged, values],
   );
 
   const addCard = (bucket: BoardBucket): void => {
