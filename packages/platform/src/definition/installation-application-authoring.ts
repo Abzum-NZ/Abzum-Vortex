@@ -36,7 +36,7 @@ export type ApplicationAuthoringResult =
 /** The source of a new application from what a builder enters, or the reason it cannot be made. */
 export type NewApplicationSourceBuilder = (
   inputs: Readonly<{ name: string; description: string; key: string }>,
-) => Readonly<{ kind: "valid"; source: unknown }> | Readonly<{ kind: "invalid" }>;
+) => Promise<Readonly<{ kind: "valid"; source: unknown }> | Readonly<{ kind: "invalid" }>>;
 
 export type ApplicationAuthoringEnvironment = Readonly<{
   requests: ReturnType<typeof createHumanOrganizationRequestService>;
@@ -152,7 +152,7 @@ export const createApplicationAuthoringService = (environment: ApplicationAuthor
         ...(typeof inputs.key === "string" && inputs.key.trim() !== "" ? { key: inputs.key } : {}),
       });
       if (!parsed.success) return refuse("application_input_invalid");
-      const built = environment.newApplicationSource({
+      const built = await environment.newApplicationSource({
         name: parsed.data.name,
         description: parsed.data.description,
         key: parsed.data.key ?? "",

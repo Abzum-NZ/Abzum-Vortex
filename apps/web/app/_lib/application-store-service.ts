@@ -11,7 +11,6 @@ import {
   releaseSetContainsCustomComponents,
 } from "./definition-catalogue";
 import { platformPermissionSource } from "./platform-permission-source";
-import { minimumApplicationSource } from "../studio/_lib/minimum-application-source";
 import {
   humanOrganizationRequestDependencies,
   humanOrganizationRequests,
@@ -27,7 +26,10 @@ export const applicationStoreService = (): ApplicationStoreService =>
     permissions: platformPermissionSource,
     containsCustomComponents: releaseSetContainsCustomComponents,
     // The starting frame of a new application is built where the editor builds every frame.
-    newApplicationSource: (inputs) => {
+    newApplicationSource: async (inputs) => {
+      // Loaded when an application is created: the editor frame it builds is browser-side code.
+      const { minimumApplicationSource } =
+        await import("../studio/_lib/minimum-application-source");
       const built = minimumApplicationSource(inputs, IMMUTABLE_PLATFORM_BLOCK_CATALOGUE);
       return built.kind === "valid" ? { kind: "valid", source: built.source } : { kind: "invalid" };
     },

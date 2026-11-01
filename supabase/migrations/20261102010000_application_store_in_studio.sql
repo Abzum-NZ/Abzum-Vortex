@@ -22,6 +22,9 @@ begin
 end
 $role$;
 grant vortex_history_purger to postgres;
+grant usage on schema vortex_access, vortex_definition, vortex_platform, vortex_record
+  to vortex_history_purger;
+grant create on schema vortex_definition to vortex_history_purger;
 
 -- The purge also deletes an application's record lifecycle effects, a table the record adapter
 -- owns, so its owner role is granted exactly that delete.
@@ -31,9 +34,6 @@ reset role;
 
 set role vortex_owner;
 
-grant usage on schema vortex_access, vortex_definition, vortex_platform, vortex_record
-  to vortex_history_purger;
-grant create on schema vortex_definition to vortex_history_purger;
 grant execute on function vortex_access.lock_application_installation_authority()
   to vortex_history_purger;
 grant select, delete on vortex_access.organization_role_assignments to vortex_history_purger;
@@ -896,10 +896,12 @@ begin
 end
 $function$;
 
--- Step 2 (owned by vortex_history_purger): the protected history. It proves a permitted human request in
--- this organisation and an ordinary application before it deletes anything, and only
--- vortex_owner may execute it.
-create or replace function vortex_definition.purge_application_history_internal(
+-- Step 2 (owned by vortex_history_purger): the protected history. Two functions, both owned by
+-- the purger: the unchecked deletion, which only the purger itself can execute (the purge
+-- function reaches it through the checked one, and a migration converting an old application
+-- runs it as the purger), and the checked one, which proves a permitted human request in this
+-- organisation and an ordinary application first and is executable by vortex_owner only.
+create or replace function vortex_definition.purge_application_history_rows_internal(
   p_organization_id uuid,
   p_application_root_id uuid
 )
@@ -910,25 +912,9 @@ security definer
 set search_path = ''
 as $function$
 declare
-  authority record;
   all_ids uuid[];
   role_ids uuid[];
 begin
-  select locked.* into strict authority
-  from vortex_access.lock_application_installation_authority() as locked;
-  if authority.organization_id is distinct from p_organization_id then
-    raise exception using errcode = '42501', message = 'Application purge organisation mismatch';
-  end if;
-  if not exists (
-    select 1 from vortex_definition.roots as root
-    where root.root_id = p_application_root_id
-      and root.organization_id = p_organization_id
-      and root.kind = 'application'
-      and root.application_origin_kind = 'ordinary'
-  ) then
-    raise exception using errcode = '42501', message = 'Only an ordinary application can be purged';
-  end if;
-
   select pg_catalog.array_agg(root.root_id) into all_ids
   from vortex_definition.roots as root
   where root.organization_id = p_organization_id
@@ -978,6 +964,38 @@ begin
   delete from vortex_definition.source_identity_aliases as alias where alias.root_id = any(all_ids);
   delete from vortex_definition.source_identities as identity_row
   where identity_row.root_id = any(all_ids);
+end
+$function$;
+
+create or replace function vortex_definition.purge_application_history_internal(
+  p_organization_id uuid,
+  p_application_root_id uuid
+)
+returns void
+language plpgsql
+volatile
+security definer
+set search_path = ''
+as $function$
+declare
+  authority record;
+begin
+  select locked.* into strict authority
+  from vortex_access.lock_application_installation_authority() as locked;
+  if authority.organization_id is distinct from p_organization_id then
+    raise exception using errcode = '42501', message = 'Application purge organisation mismatch';
+  end if;
+  if not exists (
+    select 1 from vortex_definition.roots as root
+    where root.root_id = p_application_root_id
+      and root.organization_id = p_organization_id
+      and root.kind = 'application'
+      and root.application_origin_kind = 'ordinary'
+  ) then
+    raise exception using errcode = '42501', message = 'Only an ordinary application can be purged';
+  end if;
+  perform vortex_definition.purge_application_history_rows_internal(
+    p_organization_id, p_application_root_id);
 end
 $function$;
 
@@ -1184,6 +1202,8 @@ revoke all on function vortex_definition.purge_application_rows_internal(uuid, u
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_adapter;
 revoke all on function vortex_definition.purge_application_roots_internal(uuid, uuid)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_adapter;
+revoke all on function vortex_definition.purge_application_history_rows_internal(uuid, uuid)
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_adapter, vortex_owner;
 revoke all on function vortex_definition.purge_application_history_internal(uuid, uuid)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_adapter;
 revoke all on function vortex_definition.purge_application(uuid, boolean, boolean, text)
@@ -1209,54 +1229,52 @@ alter function vortex_definition.purge_application(uuid, boolean, boolean, text)
 reset role;
 
 -- The history purge function belongs to the one role the history protection lets delete.
+grant vortex_history_purger to vortex_owner;
+set role vortex_owner;
+alter function vortex_definition.purge_application_history_rows_internal(uuid, uuid)
+  owner to vortex_history_purger;
 alter function vortex_definition.purge_application_history_internal(uuid, uuid)
   owner to vortex_history_purger;
-set role vortex_owner;
+reset role;
 revoke create on schema vortex_definition from vortex_history_purger;
-reset role;
+revoke vortex_history_purger from vortex_owner;
 
--- The App Store application becomes the Studio system application, in place.
-do $conversion$
-begin
-  if exists (
-    select 1 from vortex_definition.roots as old_root
-    join vortex_definition.roots as new_root
-      on new_root.organization_id = old_root.organization_id and new_root.key = 'vortex.app.studio'
-    where old_root.kind = 'application' and old_root.key = 'vortex.app.app_store'
-  ) then
-    raise exception 'An organisation already has both the App Store and Studio applications';
-  end if;
-end
-$conversion$;
-
-alter table vortex_definition.roots disable trigger roots_protect_identity;
-update vortex_definition.roots
-set key = 'vortex.app.studio'
-where kind = 'application' and key = 'vortex.app.app_store';
-alter table vortex_definition.roots enable trigger roots_protect_identity;
-
-alter table vortex_access.permission_registrations disable trigger permission_registrations_protect_change;
-update vortex_access.permission_registrations
-set source_definition_key = 'vortex.app.studio'
-where source_definition_key = 'vortex.app.app_store';
-alter table vortex_access.permission_registrations enable trigger permission_registrations_protect_change;
-
--- The source's root alias is part of the application's identity; it follows the key.
-set role vortex_owner;
-create temporary table legacy_source_aliases on commit drop as
-  select * from vortex_definition.source_identity_aliases where alias = 'app_app_store';
-reset role;
+-- Ownership took the function's grants with it: only vortex_owner may execute it.
 set role vortex_history_purger;
-delete from vortex_definition.source_identity_aliases where alias = 'app_app_store';
-reset role;
-set role vortex_owner;
-update legacy_source_aliases set alias = 'app_studio';
-insert into vortex_definition.source_identity_aliases select * from legacy_source_aliases;
+revoke all on function vortex_definition.purge_application_history_internal(uuid, uuid)
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_adapter;
+grant execute on function vortex_definition.purge_application_history_internal(uuid, uuid)
+  to vortex_owner;
+grant execute on function vortex_definition.purge_application_history_rows_internal(uuid, uuid)
+  to vortex_history_purger;
 reset role;
 
+-- The App Store application is removed with what it held and replaced by Studio: its release history
+-- names the old key, so it cannot be re-keyed, and the shipped-release path publishes and installs
+-- the Studio application and its App Store module fresh. The stored App Store address follows.
+set role vortex_owner;
+update vortex_identity.organization_runtime_settings as settings
+set default_application_root_id = null
+where settings.default_application_root_id in (
+  select root.root_id from vortex_definition.roots as root
+  where root.kind = 'application' and root.key = 'vortex.app.app_store');
 update vortex_identity.organization_runtime_settings
 set extension_values = pg_catalog.jsonb_set(extension_values, '{app_store_address}', '"vortex.app.studio"')
 where extension_values ->> 'app_store_address' = 'vortex.app.app_store';
+select vortex_definition.purge_application_rows_internal(root.organization_id, root.root_id)
+from vortex_definition.roots as root
+where root.kind = 'application' and root.key = 'vortex.app.app_store';
+reset role;
+set role vortex_history_purger;
+select vortex_definition.purge_application_history_rows_internal(root.organization_id, root.root_id)
+from vortex_definition.roots as root
+where root.kind = 'application' and root.key = 'vortex.app.app_store';
+reset role;
+set role vortex_owner;
+select vortex_definition.purge_application_roots_internal(root.organization_id, root.root_id)
+from vortex_definition.roots as root
+where root.kind = 'application' and root.key = 'vortex.app.app_store';
+reset role;
 
 set role vortex_owner;
 -- The read pages by status and by its listing order (core applications first) as well.
