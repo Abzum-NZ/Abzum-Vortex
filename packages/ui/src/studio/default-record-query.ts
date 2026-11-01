@@ -1,4 +1,8 @@
-import { defaultQueryPageSize, type ApplicationSourceDocument } from "@vortex/platform/schema";
+import {
+  defaultQueryPageSize,
+  defaultRecordOrderField,
+  type ApplicationSourceDocument,
+} from "@vortex/platform/schema";
 import { sourceNames } from "./composition-references";
 import { uniqueKey } from "./application-structure-common";
 
@@ -28,6 +32,12 @@ export const studioDefaultRecordQuery = (
   );
   if (existing !== undefined) return existing;
   if (module.queries.length >= 100) return undefined;
+  const orderField = defaultRecordOrderField(
+    record.fields,
+    record.title_field,
+    (field) => field.key,
+  );
+  if (orderField === undefined) return undefined;
   const label = `All ${record.plural_name.toLowerCase()}`;
   const key = uniqueKey(label, "", new Set(module.queries.map((query) => query.key)), 40);
   return {
@@ -41,7 +51,7 @@ export const studioDefaultRecordQuery = (
     filter: null,
     group_by: [],
     aggregates: [],
-    sort: [{ field: record.title_field, direction: "ascending" }],
+    sort: [{ field: orderField.key, direction: "ascending" }],
     page_size: defaultQueryPageSize,
     relationship_hops: 0,
   } as SourceQuery;
