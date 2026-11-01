@@ -888,7 +888,7 @@ export function ModuleFieldsEditor({
       aria-label={adding ? `New field of ${record.name}` : `Field ${existing!.label}`}
     >
       {existing === undefined ? null : (
-        <div className="flex items-start justify-between gap-2">
+        <div className="sticky top-0 z-10 -mx-4 -mt-3 bg-background px-4 pb-2 pt-3 flex items-start justify-between gap-2">
           <div>
             <h3 className="text-base font-semibold">{existing.label}</h3>
             <p className="text-xs text-muted-foreground">Field</p>

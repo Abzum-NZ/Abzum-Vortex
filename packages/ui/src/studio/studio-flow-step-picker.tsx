@@ -15,6 +15,7 @@ import { InputGroup } from "../components/input-group";
 import { StudioReferencePicker } from "./studio-reference-picker";
 import { Plus } from "lucide-react";
 import { Label } from "../components/label";
+import { StudioHelp } from "./studio-field";
 import { Textarea } from "../components/textarea";
 import { Input } from "../components/input";
 import {
@@ -80,6 +81,7 @@ export function StudioFlowStepPicker({
   onAdd,
   action,
   context,
+  hint,
   depth = 0,
 }: Readonly<{
   id: string;
@@ -89,6 +91,8 @@ export function StudioFlowStepPicker({
   onAdd: (type: string, settings: StudioFlowNewStepSettings) => boolean;
   action: string;
   context: StudioFlowStepPickerContext;
+  /** Instruction text for the picker, shown as an info tooltip beside its label. */
+  hint?: string;
   depth?: number;
 }>) {
   const [chosen, setChosen] = useState<StudioFlowStepChoice | null>(null);
@@ -130,7 +134,10 @@ export function StudioFlowStepPicker({
     );
   return (
     <div className="space-y-2">
-      <Label htmlFor={id}>{label}</Label>
+      <div className="flex items-center gap-1">
+        <Label htmlFor={id}>{label}</Label>
+        {hint !== undefined && <StudioHelp hint={hint} />}
+      </div>
       <Combobox
         items={types}
         value={chosen}

@@ -682,12 +682,12 @@ function ConditionControl({
   };
   return (
     <fieldset className="space-y-2" id={id} disabled={disabled}>
-      <legend className="flex items-center gap-1 text-sm font-medium">
-        Condition
-        {tree === undefined && (
-          <StudioHelp hint="Set a condition. The step keeps its saved condition until this is complete." />
-        )}
-      </legend>
+      <legend className="flex items-center gap-1 text-sm font-medium">Condition</legend>
+      {tree === undefined && (
+        <p role="status" className="text-sm text-muted-foreground">
+          Set a condition. The step keeps its saved condition until this is complete.
+        </p>
+      )}
       <StudioConditionControls
         {...(tree === undefined ? {} : { value: tree })}
         context={context.controls}
@@ -930,7 +930,14 @@ export function StudioFlowStepForm({
           );
         })
         .map((field) => (
-          <div key={field.key} className="flex items-start gap-1" data-vortex-setting={field.key}>
+          <div
+            key={field.key}
+            role="group"
+            aria-label={field.label}
+            aria-describedby={field.help === undefined ? undefined : `${id}-${field.key}-help`}
+            className="flex items-start gap-1"
+            data-vortex-setting={field.key}
+          >
             <div className="min-w-0 flex-1">
               <PropertyControl
                 id={`${id}-${field.key}`}
@@ -1002,7 +1009,9 @@ export function StudioFlowStepForm({
                 }}
               />
             </div>
-            {field.help === undefined ? null : <StudioHelp hint={field.help} />}
+            {field.help === undefined ? null : (
+              <StudioHelp hint={field.help} id={`${id}-${field.key}-help`} />
+            )}
           </div>
         ))}
       <StudioInspectorGroup

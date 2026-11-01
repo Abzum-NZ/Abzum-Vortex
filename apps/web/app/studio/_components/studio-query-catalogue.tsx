@@ -35,7 +35,7 @@ import {
 /** One row of the catalogue: a query and the module that holds it. */
 type Row = Readonly<{ module: StudioDataModule; query: StudioDataQuery }>;
 
-const headClass = "normal-case text-xs text-foreground";
+const headClass = "text-xs text-foreground";
 
 /** The inputs a query asks for: name, type and whether it needs a value. */
 function Inputs({ inputs }: Readonly<{ inputs: readonly StudioQueryInput[] }>) {

@@ -72,10 +72,9 @@ export function StudioPlaceList({
         const last = trail.length - 1;
         return (
           <li key={index} className="break-words">
-            {trail.map((segment, at) => (
-              <Fragment key={at}>
-                {at > 0 && <span className="text-muted-foreground">{" › "}</span>}
-                {at === last && place.open.kind !== "none" ? (
+            {trail.map((segment, at) => {
+              const text =
+                at === last && place.open.kind !== "none" ? (
                   <button
                     type="button"
                     aria-label={`Go to ${trail.join(" › ")}`}
@@ -91,9 +90,20 @@ export function StudioPlaceList({
                   <span className={at === last ? undefined : "text-muted-foreground"}>
                     {segment}
                   </span>
-                )}
-              </Fragment>
-            ))}
+                );
+              // The separator and the segment after it are one unit, so a line never ends in " › ".
+              return at === 0 ? (
+                <Fragment key={at}>{text}</Fragment>
+              ) : (
+                <Fragment key={at}>
+                  {" "}
+                  <span className="inline-block max-w-full align-top">
+                    <span className="text-muted-foreground">› </span>
+                    {text}
+                  </span>
+                </Fragment>
+              );
+            })}
           </li>
         );
       })}

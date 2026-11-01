@@ -347,16 +347,6 @@ export function StudioFlowInspector({
             {ownerNote}
           </p>
         )}
-        <StudioInspectorGroup
-          title="Steps"
-          hint="Select a step on the canvas to change its settings, move it or add a step after it."
-          summary={main?.tasks.length === 1 ? "1 step" : `${main?.tasks.length ?? 0} steps`}
-        >
-          <p role="status" className="text-sm text-muted-foreground">
-            {main?.tasks.length === 1 ? "1 step" : `${main?.tasks.length ?? 0} steps`} in the main
-            flow.
-          </p>
-        </StudioInspectorGroup>
         {messages}
         {confirmDialog}
         {main !== undefined && (
@@ -366,6 +356,7 @@ export function StudioFlowInspector({
                 context={pickerContext([...main.path, main.tasks.length])}
                 id="flow-add-last"
                 label="Add a step at the end"
+                hint="Select a step on the canvas to change its settings, move it or add a step after it."
                 types={typesAt(main.path)}
                 disabled={disabled}
                 action="Add"

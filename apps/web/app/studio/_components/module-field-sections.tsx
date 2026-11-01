@@ -71,7 +71,11 @@ type DraftText = Readonly<{
 
 type Declarations = ReturnType<typeof moduleFieldSettingDeclarations>;
 
-const personalDataLabels = { none: "None", personal: "Personal", sensitive: "Sensitive" } as const;
+const personalDataOptions = [
+  { value: "none", label: "None" },
+  { value: "personal", label: "Personal" },
+  { value: "sensitive", label: "Sensitive" },
+] as const;
 const problemOf = (text: string) => (text === "" ? undefined : text);
 
 /**
@@ -644,7 +648,7 @@ export function FieldPrivacySection({
     <StudioInspectorGroup
       title="Privacy"
       defaultOpen={false}
-      summary={`Personal data: ${personalDataLabels[personalData]}`}
+      summary={`Personal data: ${personalDataOptions.find((option) => option.value === personalData)?.label ?? personalData}`}
     >
       {carriedBy.length === 0 ? null : (
         <Alert variant="destructive">
@@ -664,11 +668,7 @@ export function FieldPrivacySection({
             {...control}
             value={personalData}
             disabled={disabled}
-            options={[
-              { value: "none", label: "None" },
-              { value: "personal", label: "Personal" },
-              { value: "sensitive", label: "Sensitive" },
-            ]}
+            options={personalDataOptions}
             onChange={(next) => onPersonalData(next as FieldFormState["personalData"])}
           />
         )}
@@ -690,10 +690,7 @@ export function FieldPrivacySection({
           />
         )}
       </StudioField>
-      <div className="space-y-1">
-        <p className="text-xs text-muted-foreground">Field permissions are managed in Access:</p>
-        <StudioPlaceList places={[permissionsPlace]} label="Field permissions" />
-      </div>
+      <StudioPlaceList places={[permissionsPlace]} label="Field permissions" />
     </StudioInspectorGroup>
   );
 }

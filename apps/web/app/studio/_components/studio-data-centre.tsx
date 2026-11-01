@@ -67,14 +67,10 @@ function SchemaGrid({
         <TableCaption className="sr-only">Fields of {record.pluralName}</TableCaption>
         <TableHeader className="sticky top-0 bg-muted/50">
           <TableRow>
-            <TableHead className="normal-case text-xs text-foreground">Name</TableHead>
-            <TableHead className="normal-case text-xs text-foreground">Type</TableHead>
-            <TableHead className="normal-case w-20 text-center text-xs text-foreground">
-              Required
-            </TableHead>
-            <TableHead className="normal-case w-20 text-center text-xs text-foreground">
-              Used in
-            </TableHead>
+            <TableHead className="text-xs text-foreground">Name</TableHead>
+            <TableHead className="text-xs text-foreground">Type</TableHead>
+            <TableHead className="w-20 text-center text-xs text-foreground">Required</TableHead>
+            <TableHead className="w-20 text-center text-xs text-foreground">Used in</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -264,15 +260,11 @@ function SummaryResults({
           <TableHeader>
             <TableRow>
               {result.groupColumns.map((column) => (
-                <TableHead key={column.key} className="normal-case">
-                  {column.label}
-                </TableHead>
+                <TableHead key={column.key}>{column.label}</TableHead>
               ))}
-              <TableHead className="normal-case">Records</TableHead>
+              <TableHead>Records</TableHead>
               {totalColumns.map((column) => (
-                <TableHead key={column.alias} className="normal-case">
-                  {column.label}
-                </TableHead>
+                <TableHead key={column.alias}>{column.label}</TableHead>
               ))}
             </TableRow>
           </TableHeader>
@@ -476,9 +468,7 @@ function PreviewResults({
                 <TableHeader className="bg-muted/50">
                   <TableRow>
                     {current.columns.map((column) => (
-                      <TableHead key={column.key} className="normal-case">
-                        {column.label}
-                      </TableHead>
+                      <TableHead key={column.key}>{column.label}</TableHead>
                     ))}
                   </TableRow>
                 </TableHeader>
@@ -593,10 +583,8 @@ export function StudioDataCentre({
             <Table>
               <TableHeader className="bg-muted/50">
                 <TableRow>
-                  <TableHead className="normal-case text-xs text-foreground">Record type</TableHead>
-                  <TableHead className="normal-case w-20 text-center text-xs text-foreground">
-                    Fields
-                  </TableHead>
+                  <TableHead className="text-xs text-foreground">Record type</TableHead>
+                  <TableHead className="w-20 text-center text-xs text-foreground">Fields</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>

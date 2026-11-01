@@ -93,11 +93,13 @@ export function StudioBlockVisibility({
         ? "Reading the fields…"
         : "Set";
   };
+  // Read each condition once per render: the words are shown in its row and in the summary.
+  const words = new Map(studioReactionSlots.map((entry) => [entry.slot, wordsOf(entry.slot)]));
   const summary = [
     permissionLabel === undefined ? undefined : `Needs ${permissionLabel}`,
     ...studioReactionSlots
       .filter((entry) => isSet(entry.slot))
-      .map((entry) => `${entry.title} ${wordsOf(entry.slot)}`),
+      .map((entry) => `${entry.title} ${words.get(entry.slot)}`),
   ].filter((part) => part !== undefined);
   const slotInfo = studioReactionSlots.find((entry) => entry.slot === slot)!;
   return (
@@ -149,9 +151,9 @@ export function StudioBlockVisibility({
                 <span className="block text-sm">{entry.title}</span>
                 <span
                   className="block truncate text-xs text-muted-foreground"
-                  title={wordsOf(entry.slot)}
+                  title={words.get(entry.slot)}
                 >
-                  {wordsOf(entry.slot)}
+                  {words.get(entry.slot)}
                 </span>
               </span>
               <StudioEditButton

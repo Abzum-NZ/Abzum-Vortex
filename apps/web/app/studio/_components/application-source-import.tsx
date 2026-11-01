@@ -87,9 +87,9 @@ function SourceChangeTable({
       <Table containerClassName="border-0">
         <TableHeader className="bg-muted/50 text-xs">
           <TableRow>
-            <TableHead className="text-foreground normal-case">Area</TableHead>
-            <TableHead className="text-foreground normal-case">Item</TableHead>
-            <TableHead className="text-foreground normal-case">Change</TableHead>
+            <TableHead className="text-foreground">Area</TableHead>
+            <TableHead className="text-foreground">Item</TableHead>
+            <TableHead className="text-foreground">Change</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>

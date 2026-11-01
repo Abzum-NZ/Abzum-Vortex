@@ -452,7 +452,7 @@ export const describeSourcePlace = (source: Source, path: Path): ApplicationUseP
     return {
       label: "The application's home page",
       trail: [app, home?.name ?? "Home page"],
-      open: { kind: "application" },
+      open: home === undefined ? { kind: "application" } : { kind: "page", pageAlias: home.id },
     };
   }
   if (section === "permissions" && typeof index === "number") {

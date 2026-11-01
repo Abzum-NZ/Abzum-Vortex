@@ -1,5 +1,5 @@
 "use client";
-import { Children, isValidElement, type ReactElement, type ReactNode } from "react";
+import type { ReactElement, ReactNode } from "react";
 import { StudioInspectorGroup } from "./studio-inspector-group";
 
 /**
@@ -9,23 +9,22 @@ import { StudioInspectorGroup } from "./studio-inspector-group";
  * the already-built controls out, so every setting stays in the one settings form and its rules.
  */
 export function splitMoreSettings(
-  controls: readonly ReactNode[],
+  controls: readonly Readonly<{ key: string; node: ReactNode }>[],
   moreKeys: ReadonlySet<string> | undefined,
 ): ReactElement {
-  if (moreKeys === undefined || moreKeys.size === 0) return <>{controls}</>;
-  const shown = Children.toArray(controls).filter(isValidElement);
-  const more = shown.filter((control) => moreKeys.has(String(control.key).replace(/^\.\$/, "")));
-  const primary = shown.filter((control) => !more.includes(control));
+  const more = controls.filter((control) => moreKeys?.has(control.key) === true);
+  const primary = controls.filter((control) => !more.includes(control));
   return (
     <>
-      {primary}
+      {primary.map((control) => control.node)}
       {more.length > 0 && (
         <StudioInspectorGroup
           title="More settings"
           defaultOpen={false}
+          persist={false}
           summary={`${more.length} more`}
         >
-          {more}
+          {more.map((control) => control.node)}
         </StudioInspectorGroup>
       )}
     </>

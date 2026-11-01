@@ -1343,8 +1343,8 @@ function SettingFields({
   return (
     <div className="space-y-4">
       {splitMoreSettings(
-        properties.map((property) => {
-          if (!componentSettingApplies(property, values)) return null;
+        properties.flatMap((property) => {
+          if (!componentSettingApplies(property, values)) return [];
           const value = Object.hasOwn(values, property.key) ? values[property.key] : undefined;
           const set = (next: SettingValue) => {
             setTouched((previous) => ({
@@ -1380,86 +1380,89 @@ function SettingFields({
             }
             onChange(result);
           };
-          return (
-            <div key={property.key} className="space-y-2" data-vortex-setting={property.key}>
-              <StudioField
-                label={property.label}
-                optional={!property.required}
-                hint={property.help}
-                error={
-                  property.required &&
-                  property.showWhen !== undefined &&
-                  property.defaultValue === undefined &&
-                  value === undefined
-                    ? conditionalRequiredMessage(property)
-                    : undefined
-                }
-              >
-                {(control) => (
-                  <SettingControl
-                    id={control.id}
-                    descriptionId={control["aria-describedby"]}
-                    property={studioTotalMeasureProperty(
-                      property,
-                      properties,
-                      values,
-                      choices.fields,
-                    )}
-                    value={value}
-                    onChange={set}
-                    choices={choices}
-                    disabled={disabled}
-                  />
-                )}
-              </StudioField>
-              {property.key === "auto_size" && fieldProperty !== undefined && (
-                <p className="text-sm text-muted-foreground">
-                  {fieldReference !== undefined
-                    ? "Available"
-                    : `Not possible - ${labelText?.trim() || "Column"} has no field to measure`}
-                </p>
-              )}
-              {property.key === "allow_full_screen" && (
-                <p className="text-sm text-muted-foreground">Available</p>
-              )}
-              {property === labelProperty && fieldProperty !== undefined && (
-                <div className="space-y-1 text-sm text-muted-foreground">
-                  {field === undefined &&
-                  touched.id === idPrefix &&
-                  (touched.keys.has(fieldProperty.key) || touched.keys.has(property.key)) ? (
-                    <Alert variant="destructive">
-                      <AlertDescription>
-                        Choose a field offered by this data to resolve its label.
-                      </AlertDescription>
-                    </Alert>
-                  ) : field === undefined ? null : label?.kind === "text" ? (
-                    <>
-                      {fieldChanged && label.value !== field.label && (
-                        <Alert variant="destructive">
-                          <AlertDescription>
-                            The field changed since this label was set. Keep it as a custom label,
-                            or use &ldquo;{field.label}&rdquo;.
-                          </AlertDescription>
-                        </Alert>
+          return {
+            key: property.key,
+            node: (
+              <div key={property.key} className="space-y-2" data-vortex-setting={property.key}>
+                <StudioField
+                  label={property.label}
+                  optional={!property.required}
+                  hint={property.help}
+                  error={
+                    property.required &&
+                    property.showWhen !== undefined &&
+                    property.defaultValue === undefined &&
+                    value === undefined
+                      ? conditionalRequiredMessage(property)
+                      : undefined
+                  }
+                >
+                  {(control) => (
+                    <SettingControl
+                      id={control.id}
+                      descriptionId={control["aria-describedby"]}
+                      property={studioTotalMeasureProperty(
+                        property,
+                        properties,
+                        values,
+                        choices.fields,
                       )}
-                      <Button
-                        type="button"
-                        variant="link"
-                        size="sm"
-                        disabled={disabled}
-                        className="h-auto px-0 whitespace-normal text-left"
-                        onClick={useFieldLabel}
-                      >
-                        Use field label: {field.label}
-                      </Button>
-                    </>
-                  ) : (
-                    <p className="text-muted-foreground">Uses field label: {field.label}</p>
+                      value={value}
+                      onChange={set}
+                      choices={choices}
+                      disabled={disabled}
+                    />
                   )}
-                </div>
-              )}
-            </div>
-          );
+                </StudioField>
+                {property.key === "auto_size" && fieldProperty !== undefined && (
+                  <p className="text-sm text-muted-foreground">
+                    {fieldReference !== undefined
+                      ? "Available"
+                      : `Not possible - ${labelText?.trim() || "Column"} has no field to measure`}
+                  </p>
+                )}
+                {property.key === "allow_full_screen" && (
+                  <p className="text-sm text-muted-foreground">Available</p>
+                )}
+                {property === labelProperty && fieldProperty !== undefined && (
+                  <div className="space-y-1 text-sm text-muted-foreground">
+                    {field === undefined &&
+                    touched.id === idPrefix &&
+                    (touched.keys.has(fieldProperty.key) || touched.keys.has(property.key)) ? (
+                      <Alert variant="destructive">
+                        <AlertDescription>
+                          Choose a field offered by this data to resolve its label.
+                        </AlertDescription>
+                      </Alert>
+                    ) : field === undefined ? null : label?.kind === "text" ? (
+                      <>
+                        {fieldChanged && label.value !== field.label && (
+                          <Alert variant="destructive">
+                            <AlertDescription>
+                              The field changed since this label was set. Keep it as a custom label,
+                              or use &ldquo;{field.label}&rdquo;.
+                            </AlertDescription>
+                          </Alert>
+                        )}
+                        <Button
+                          type="button"
+                          variant="link"
+                          size="sm"
+                          disabled={disabled}
+                          className="h-auto px-0 whitespace-normal text-left"
+                          onClick={useFieldLabel}
+                        >
+                          Use field label: {field.label}
+                        </Button>
+                      </>
+                    ) : (
+                      <p className="text-muted-foreground">Uses field label: {field.label}</p>
+                    )}
+                  </div>
+                )}
+              </div>
+            ),
+          };
         }),
         moreKeys,
       )}

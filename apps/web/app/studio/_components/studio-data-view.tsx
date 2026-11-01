@@ -145,7 +145,7 @@ function ModuleInspector({
   );
   return (
     <div className="space-y-3">
-      <div>
+      <div className="sticky top-0 z-10 -mx-4 -mt-3 bg-background px-4 pb-2 pt-3">
         <h3 className="text-base font-semibold">{module.name}</h3>
         <p className="text-xs text-muted-foreground">Module</p>
       </div>
@@ -271,7 +271,7 @@ function RecordTypeInspector({
       ) ?? [];
   return (
     <div className="space-y-4">
-      <div className="flex items-start justify-between gap-2">
+      <div className="sticky top-0 z-10 -mx-4 -mt-3 bg-background px-4 pb-2 pt-3 flex items-start justify-between gap-2">
         <div className="min-w-0">
           <h3 className="truncate text-base font-semibold">{record.name}</h3>
           <p className="text-xs text-muted-foreground">Record type</p>
@@ -730,10 +730,13 @@ export function StudioDataInspectorView({ model }: Readonly<{ model: StudioDataM
   const { source, organizationId, view } = draft;
   const inspectorBody =
     current === null || module === undefined ? (
-      <StudioDataEmpty
-        title="Nothing selected"
-        description="Select a field or record type to change it."
-      />
+      <>
+        <h2 className="text-base font-semibold">Inspector</h2>
+        <StudioDataEmpty
+          title="Nothing selected"
+          description="Select a field or record type to change it."
+        />
+      </>
     ) : !isOwned ? (
       <ReadOnlyInspector
         key={JSON.stringify(current)}
@@ -773,7 +776,9 @@ export function StudioDataInspectorView({ model }: Readonly<{ model: StudioDataM
     ) : current.kind === "record_type" ? (
       adding?.scope === scope ? (
         <div className="space-y-4">
-          <h3 className="text-base font-semibold">New field</h3>
+          <h3 className="sticky top-0 z-10 -mx-4 -mt-3 bg-background px-4 pb-2 pt-3 text-base font-semibold">
+            New field
+          </h3>
           <ModuleFieldsEditor
             key={`${scope}:${adding.type}`}
             source={source}
