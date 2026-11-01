@@ -10,7 +10,6 @@ import {
   type IdentityAuthorityId,
 } from "../catalogue/identifiers";
 import { databaseRevision, databaseCode, describeFailure } from "../catalogue/runtime-primitives";
-import { FirstInstallUnavailable } from "../definition/installation-first-install";
 import {
   protectedOperationChannelSchema,
   type ProtectedOperationChannel,
@@ -431,7 +430,6 @@ export const createHumanOrganizationRequestService = (
         error instanceof Error &&
         error.message.startsWith("permission denied for ");
       const refused =
-        error instanceof FirstInstallUnavailable ||
         (address !== undefined && code === "P0002") ||
         (code === "42501" && !missingPrivilege) ||
         recentAuthenticationRequired ||

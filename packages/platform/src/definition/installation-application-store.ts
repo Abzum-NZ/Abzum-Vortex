@@ -209,7 +209,7 @@ const unavailable = (reason: UnavailableReason): ApplicationStoreResult => ({
 /** The review's answer to a failure: a named unavailability the flow explains, or the failure itself. */
 const reviewFailure = (error: unknown): ApplicationStoreResult => {
   if (error instanceof FirstInstallUnavailable) {
-    console.info(`[installation] application review unavailable: ${describeFailure(error)}`);
+    console.error(`[installation] application review unavailable: ${describeFailure(error)}`);
     switch (error.reason) {
       case "release_not_published":
         return unavailable("not_published");
@@ -296,7 +296,7 @@ const commandFailure = (problem: InstallationProblemShape): ApplicationStoreResu
 
 const commandFailureOf = (error: unknown): ApplicationStoreResult => {
   if (error instanceof FirstInstallUnavailable) {
-    console.info(`[installation] application command unavailable: ${describeFailure(error)}`);
+    console.error(`[installation] application command unavailable: ${describeFailure(error)}`);
     return error.reason === "already_installed" ? "conflict" : { kind: "unavailable" };
   }
   if (error instanceof InstallationProblem && error.code === "first_install_latest_release_moved") {
