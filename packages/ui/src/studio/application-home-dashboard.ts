@@ -1,4 +1,9 @@
-import { PLATFORM_BLOCK_RELEASE_IDENTITIES, type SourceItem } from "@vortex/platform/schema";
+import {
+  PLATFORM_BLOCK_RELEASE_IDENTITIES,
+  sourcePageItems,
+  sourcePageShell,
+  type SourceItem,
+} from "@vortex/platform/schema";
 import { takenIds } from "./application-record-page-kinds";
 import {
   field,
@@ -10,7 +15,9 @@ import {
 } from "./application-record-page-shared";
 import { freshAlias, type Plan } from "./application-record-plan";
 import {
+  admitBlocks,
   blockItem,
+  frameArea,
   judged,
   quoted,
   refuse,
@@ -24,13 +31,20 @@ import {
  * A generated home dashboard keeps one card count, one recent-records table and, where the record
  * type has a pipeline with a money field, one open-amount-by-stage chart per record type. Every
  * block is an ordinary block reading an ordinary query, so the builder can edit or remove it.
+ * The blocks go where the home page keeps its blocks: `content` in the platform default frame,
+ * the frame's first content area in an application layout.
  */
 const homeBlockQueries = (page: Page): ReadonlySet<string> =>
   new Set(
-    (page.composition as { content?: SourceItem[] }).content?.flatMap((item) =>
+    sourcePageItems(page.composition).flatMap((item) =>
       typeof item.props.vortex.query === "string" ? [item.props.vortex.query] : [],
-    ) ?? [],
+    ),
   );
+
+type HomeData = {
+  root: { props: Record<string, unknown> };
+  content: SourceItem[];
+};
 
 const countQuery = (plan: Plan, resolved: Resolved): string => {
   const { module, record, title } = resolved;
@@ -128,8 +142,22 @@ export const ensureHomeDashboard = (
 ): boolean => {
   const home = plan.source.body.pages.find((page) => page.key === plan.source.body.home_page);
   if (home === undefined || home.type !== "dashboard") return false;
-  const composition = home.composition as { content?: SourceItem[] };
-  const items = composition.content ?? [];
+  const data = home.composition as unknown as HomeData;
+  let frame: ReturnType<typeof frameArea>;
+  try {
+    frame = frameArea(plan.source, sourcePageShell(home.composition));
+  } catch (error) {
+    if (!(error instanceof StructureRefusal)) throw error;
+    return refuse(
+      `The home page ${quoted(home.name)} has no content area in its layout, so its dashboard could not be added. Give the home page a layout with a content area.`,
+    );
+  }
+  const area = frame.area;
+  const placed =
+    area === undefined
+      ? data.content
+      : ((data.root.props[area.id] as SourceItem[] | undefined) ?? []);
+  const items = [...placed];
   const existing = homeBlockQueries(home);
   let changed = false;
   if (items.length === 0)
@@ -233,7 +261,16 @@ export const ensureHomeDashboard = (
       }
     }
   if (!changed) return false;
-  composition.content = items;
+  try {
+    admitBlocks(context, frame, items.slice(placed.length), home.name);
+  } catch (error) {
+    if (!(error instanceof StructureRefusal)) throw error;
+    return refuse(
+      `The home page ${quoted(home.name)} could not take its dashboard: ${error.message}`,
+    );
+  }
+  if (area === undefined) data.content = items;
+  else data.root.props[area.id] = items;
   plan.source = judged(plan.source);
   return true;
 };
