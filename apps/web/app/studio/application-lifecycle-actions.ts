@@ -130,13 +130,11 @@ export async function runStudioApplicationLifecycle(organizationId: string, cand
         message:
           result.value.reason === "not_published"
             ? "Publish a release before installing this application."
-            : result.value.reason === "module_set_changed"
-              ? "This release changes the application's modules, so it cannot upgrade the current installation."
-              : result.value.reason === "installation_incomplete"
-                ? "The current installation is incomplete. Ask an administrator to finish it before continuing."
-                : result.value.reason === "registration_misaligned"
-                  ? "The application's registered access does not match this release. Ask an administrator to review it."
-                  : "This application's release cannot be installed or upgraded here. Review its dependencies and installation before continuing.",
+            : result.value.reason === "installation_incomplete"
+              ? "The current installation is incomplete. Ask an administrator to finish it before continuing."
+              : result.value.reason === "registration_misaligned"
+                ? "The application's registered access does not match this release. Ask an administrator to review it."
+                : "This application's release cannot be installed or upgraded here. Review its dependencies and installation before continuing.",
       };
     if (result.kind === "available")
       return {
@@ -149,7 +147,12 @@ export async function runStudioApplicationLifecycle(organizationId: string, cand
                 ? "uninstalled"
                 : "reviewed",
         report: result.value,
-        message: completedMessage(tool, result.value.change),
+        message: [
+          completedMessage(tool, result.value.change),
+          typeof result.value.module_changes === "string" ? result.value.module_changes : "",
+        ]
+          .filter(Boolean)
+          .join("\n\n"),
       };
     const code =
       result.kind === "confirmed_failure"

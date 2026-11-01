@@ -1499,6 +1499,10 @@
           "type": "text",
           "required": true
         },
+        "module_changes": {
+          "type": "text",
+          "required": true
+        },
         "release_note": {
           "type": "text",
           "required": true
