@@ -475,6 +475,13 @@ set protected_read_model_key = 'application_store_entries',
   changed_at = pg_catalog.statement_timestamp()
 where protected_read_model_key = 'installed_applications';
 
+-- A protected read model's registration names the sort keys its reader pages by. The one
+-- applications read pages by name and by the installed revision, which the retired read's
+-- registration never had to say because its reader was the only one that listed applications.
+update vortex_record.protected_read_model_views
+set cursor_sort_keys = array['record_id', 'key', 'name', 'release_revision']::text[]
+where protected_read_model_key = 'application_store_entries';
+
 drop function if exists vortex_access.list_installed_applications_projection(
   uuid[], text, text, jsonb, integer, jsonb
 );
