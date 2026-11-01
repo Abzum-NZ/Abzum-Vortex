@@ -164,6 +164,15 @@ export const requireLocalDevelopmentEnvironment = (
     throw new DevelopmentSetupRefusal(
       "VORTEX_IDENTITY_AUTHORITY_ID must be set to the same value the local web application uses.",
     );
+  const continuationKey = environment.VORTEX_QUERY_CONTINUATION_KEY?.trim();
+  if (
+    continuationKey === undefined ||
+    !/^[A-Za-z0-9+/]{43}=$/.test(continuationKey) ||
+    Buffer.from(continuationKey, "base64").length !== 32
+  )
+    throw new DevelopmentSetupRefusal(
+      "VORTEX_QUERY_CONTINUATION_KEY must be set to 32 random bytes encoded as base64.",
+    );
   return authority.data;
 };
 

@@ -56,7 +56,9 @@ sign-ups; never point it at a hosted database.
    cp apps/web/.env.example apps/web/.env.local
    ```
 
-   Fill in the local Supabase publishable key, identity authority UUID and Query continuation key.
+   Fill in the local Supabase publishable key and identity authority UUID. Generate the Query
+   continuation key using the command in `.env.example`, and keep the same key for this local
+   environment so existing continuation tokens remain valid.
    Set a local-only password for `VORTEX_DEMO_OWNER_PASSWORD`; do not commit `.env.local`.
 
 2. Create the local demo:
@@ -114,6 +116,10 @@ deliberately resets the local database before starting a fresh demo.
 [apps/web/.env.example](apps/web/.env.example) and fill in local values only; never commit a real
 value. `pnpm db:start` prints the local API URL and publishable key. Setup commands refuse any
 environment or database that is not the local one.
+
+For a database lane, `node tooling/supabase/lane.mjs env <n>` emits the lane's connection values and
+its persistent, randomly generated Query continuation key. Copy the output into the worktree's
+ignored `apps/web/.env.development.local`; it contains secrets and must not be committed or logged.
 
 The custom-component and file pages read additional variables and report a configuration error until
 they are set: `VORTEX_COMPONENT_BUNDLE_ORIGIN`, `VORTEX_FILE_STORAGE_SIGNING_KEY` and
