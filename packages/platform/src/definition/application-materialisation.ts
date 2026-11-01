@@ -902,6 +902,9 @@ export const materialiseApplicationComposition = (
         ...(authoredPlacement.use_permission === undefined
           ? {}
           : { usePermissionKey: resolution.permission(authoredPlacement.use_permission) }),
+        ...(authoredPlacement.application_audience === undefined
+          ? {}
+          : { applicationAudience: authoredPlacement.application_audience }),
         ...(authoredPlacement.visibility_condition === undefined
           ? {}
           : { visibilityCondition: resolution.condition(authoredPlacement.visibility_condition) }),

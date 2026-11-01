@@ -1,21 +1,12 @@
 import "server-only";
 
-import {
-  applicationSurfaceCapabilitiesOf,
-  readApplicationSurfaceCapabilities,
-  readCurrentOrganizationAppStoreAddressAfterAuthorization,
-} from "@vortex/platform/server";
 import type { ApplicationLinkRow, ApplicationLinkTarget } from "@vortex/platform/schema";
 import type { ApplicationSurfaceCapabilities } from "@vortex/platform/server";
 import type { OrganizationId } from "@vortex/platform/schema";
 import type { IdentitySession } from "@vortex/platform/schema";
 import { applicationPageAddressPath } from "../address-paths";
 import { pageSubjectParameter } from "./placement-helpers";
-import {
-  humanOrganizationRequestDependencies,
-  humanOrganizationRequestsFor,
-} from "../server-composition";
-import { platformPermissionSource } from "../platform-permission-source";
+import { applicationsPageKey, loadOrganizationAppStoreKey } from "../applications-page";
 
 /**
  * What the viewer's application surfaces may offer: the one capability decision, which applications
@@ -26,8 +17,14 @@ import { platformPermissionSource } from "../platform-permission-source";
 export type ApplicationSurfaces = Readonly<{
   capabilities: ApplicationSurfaceCapabilities;
   isOpenable: (application: ApplicationLinkRow) => boolean;
-  link: (target: ApplicationLinkTarget, application: ApplicationLinkRow) => string | undefined;
+  link: (
+    target: ApplicationLinkTarget,
+    application: ApplicationLinkRow | undefined,
+  ) => string | undefined;
 }>;
+
+/** The App Store page that shows one application and offers its Install or upgrade dialog. */
+const appStoreApplicationPageKey = "app_store_application";
 
 type ApplicationSurfacesAddress = Readonly<{
   tenantShortName: string;
@@ -49,15 +46,9 @@ export const loadApplicationSurfaces = async (
   session: IdentitySession,
   organizationId: OrganizationId,
   address: ApplicationSurfacesAddress,
+  capabilities: ApplicationSurfaceCapabilities,
 ): Promise<ApplicationSurfaces> => {
-  const selection = { organizationId };
-  const capabilities = applicationSurfaceCapabilitiesOf(
-    await readApplicationSurfaceCapabilities(session, selection, {
-      ...humanOrganizationRequestDependencies(),
-      permissions: platformPermissionSource,
-    }),
-  );
-  const appStoreKey = await readCurrentOrganizationAppStoreKey(session, organizationId);
+  const appStoreKey = await loadOrganizationAppStoreKey(session, organizationId);
   const openableByKey = new Map(
     address.openable.map(
       (entry) =>
@@ -79,6 +70,7 @@ export const loadApplicationSurfaces = async (
     link: (target, application) => {
       switch (target) {
         case "open_application": {
+          if (application === undefined) return undefined;
           const entry = openableByKey.get(application.key.toLowerCase());
           return entry === undefined
             ? undefined
@@ -90,7 +82,7 @@ export const loadApplicationSurfaces = async (
               );
         }
         case "studio_editor":
-          return mayBuild(application)
+          return application !== undefined && mayBuild(application)
             ? `/studio/${encodeURIComponent(organizationId)}/${encodeURIComponent(application.applicationRootId)}`
             : undefined;
         case "studio_new_application":
@@ -98,7 +90,8 @@ export const loadApplicationSurfaces = async (
             ? `/studio/${encodeURIComponent(organizationId)}/new`
             : undefined;
         case "app_store_upgrade":
-          return capabilities.mayInstall &&
+          return application !== undefined &&
+            capabilities.mayInstall &&
             application.status === "update_available" &&
             appStoreKey !== undefined
             ? applicationPageAddressPath(
@@ -111,30 +104,4 @@ export const loadApplicationSurfaces = async (
       }
     },
   };
-};
-
-/** The App Store page that shows one application and offers its Install or upgrade dialog. */
-const appStoreApplicationPageKey = "app_store_application";
-
-/**
- * The App Store's application key at this organisation as the runtime settings name it; absent when
- * the organisation names none or it cannot be read now (logged, and the upgrade link is not offered).
- */
-const readCurrentOrganizationAppStoreKey = async (
-  session: IdentitySession,
-  organizationId: OrganizationId,
-): Promise<string | undefined> => {
-  const result = await humanOrganizationRequestsFor(humanOrganizationRequestDependencies()).run(
-    session,
-    { organizationId },
-    async (transaction) => {
-      const key = await readCurrentOrganizationAppStoreAddressAfterAuthorization(transaction);
-      return key === null || key === "invalid" ? undefined : key;
-    },
-  );
-  if (result.kind === "available") return result.value;
-  console.error(
-    `[application-surfaces] App Store address ${result.kind === "unavailable" ? (result.cause ?? result.kind) : result.kind}`,
-  );
-  return undefined;
 };

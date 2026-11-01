@@ -1,4 +1,8 @@
 import { z } from "zod";
+import {
+  applicationAudienceSchema,
+  type ApplicationAudience,
+} from "../../catalogue/application-link";
 import { blockPaletteGroupSchema } from "../../catalogue/catalogues";
 import { labelSchema } from "../../catalogue/common";
 import {
@@ -146,6 +150,7 @@ export type CompiledItemVortex = {
   block: z.infer<typeof platformBlockReferenceSchema>;
   viewPermissionKey?: string | undefined;
   usePermissionKey?: string | undefined;
+  applicationAudience?: z.infer<typeof applicationAudienceSchema> | undefined;
   visibilityCondition?: z.infer<typeof conditionNodeSchema> | undefined;
   requiredCondition?: z.infer<typeof conditionNodeSchema> | undefined;
   readOnlyCondition?: z.infer<typeof conditionNodeSchema> | undefined;
@@ -253,6 +258,7 @@ const compiledItemVortexSchema = z
     block: platformBlockReferenceSchema,
     viewPermissionKey: namespacedKeySchema.optional(),
     usePermissionKey: namespacedKeySchema.optional(),
+    applicationAudience: applicationAudienceSchema.optional(),
     visibilityCondition: conditionNodeSchema.optional(),
     requiredCondition: conditionNodeSchema.optional(),
     readOnlyCondition: conditionNodeSchema.optional(),

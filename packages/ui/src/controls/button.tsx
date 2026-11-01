@@ -14,6 +14,7 @@ import { useFormScope } from "./form-context";
 import { usePendingGesture } from "./pending-gesture";
 import { usePlacementReactions } from "../flow-runtime/placement-reactions";
 import { FlowRuntimeStateContext } from "../flow-runtime/flow-runtime-state-context";
+import { NavigationLink } from "../routing/navigation-link";
 
 export type ButtonProps = ControlRenderProps<ButtonPayload>;
 
@@ -61,6 +62,7 @@ export function Button(props: ButtonProps): ReactElement {
     );
 
   const label = context.accessibleName ?? props.metadata.name;
+  const href = context.values?.kind === "button" ? context.values.href : undefined;
   const pending =
     context.pending || gesture.pending || (mode === "submit" && form?.pending === true);
   const disabled =
@@ -110,21 +112,37 @@ export function Button(props: ButtonProps): ReactElement {
 
   return (
     <>
-      <SharedButton
-        type={mode === "action" ? "button" : mode}
-        variant={SHARED_BUTTON_VARIANTS[variant]}
-        data-vortex-control="button"
-        data-vortex-placement-id={props.placementId}
-        data-vortex-action-kind={mode}
-        data-vortex-variant={variant}
-        disabled={disabled}
-        aria-busy={pending}
-        {...(note === undefined ? {} : { "aria-describedby": noteId })}
-        onClick={click}
-      >
-        {pending ? <Spinner data-icon="inline-start" aria-hidden="true" /> : null}
-        {label}
-      </SharedButton>
+      {href === undefined ? (
+        <SharedButton
+          type={mode === "action" ? "button" : mode}
+          variant={SHARED_BUTTON_VARIANTS[variant]}
+          data-vortex-control="button"
+          data-vortex-placement-id={props.placementId}
+          data-vortex-action-kind={mode}
+          data-vortex-variant={variant}
+          disabled={disabled}
+          aria-busy={pending}
+          {...(note === undefined ? {} : { "aria-describedby": noteId })}
+          onClick={click}
+        >
+          {pending ? <Spinner data-icon="inline-start" aria-hidden="true" /> : null}
+          {label}
+        </SharedButton>
+      ) : (
+        <SharedButton
+          variant={SHARED_BUTTON_VARIANTS[variant]}
+          data-vortex-control="button"
+          data-vortex-placement-id={props.placementId}
+          data-vortex-action-kind="link"
+          data-vortex-variant={variant}
+          disabled={disabled}
+          {...(note === undefined ? {} : { "aria-describedby": noteId })}
+          nativeButton={false}
+          render={<NavigationLink href={href} />}
+        >
+          {label}
+        </SharedButton>
+      )}
       {note === undefined ? null : (
         <span id={noteId} className="text-muted-foreground">
           {note}

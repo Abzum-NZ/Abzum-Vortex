@@ -3,6 +3,7 @@ import {
   placementBlockRelease,
   placementSettings,
   DRAWER_BLOCK_RELEASE,
+  BUTTON_BLOCK_RELEASE,
   type InstalledRuntimeContext,
   createStoredPageCapabilityService,
   type PageSubjectReadResult,
@@ -17,6 +18,8 @@ import {
   formFieldOf,
   flowPlansOf,
   installedFlowFormTypes,
+  readApplicationSurfaceCapabilities,
+  applicationSurfaceCapabilitiesOf,
 } from "@vortex/platform/server";
 import { runtimeContextSelection, runtimePreviewOf } from "@vortex/platform/server";
 import {
@@ -27,6 +30,7 @@ import {
   isRecord,
   compiledPageShellId,
   recordsTableParameterPlacement,
+  applicationLinkTargetSchema,
 } from "@vortex/platform/schema";
 import { createPlacementReadServices } from "./placement-services";
 import { loadApplicationSurfaces } from "./application-links";
@@ -117,6 +121,29 @@ export const readPageProjection = cache(
       sameId(page.pageId, pageId),
     );
     if (definition === undefined) throw new Error("PAGE_DEFINITION_MISSING");
+    // What the page's definitions ask of the application surfaces, read once before the projection:
+    // an audience a placement names, and a link a button, tile or row action declares.
+    const declared = pageApplicationDeclarations(definition);
+    const applicationCapabilitiesReading =
+      declared.audiences || declared.surfaces
+        ? readApplicationSurfaceCapabilities(session, selection, {
+            ...dependencies,
+            permissions: platformPermissionSource,
+          })
+        : undefined;
+    if (applicationCapabilitiesReading !== undefined) {
+      void applicationCapabilitiesReading.catch(() => undefined);
+    }
+    const applicationAudiencesReading = Promise.resolve(applicationCapabilitiesReading).then(
+      (read) => {
+        const capabilities =
+          read === undefined ? undefined : applicationSurfaceCapabilitiesOf(read);
+        return {
+          builders: capabilities?.mayBuild === true,
+          installers: capabilities?.mayInstall === true,
+        };
+      },
+    );
     // Projection conditions may read the addressed subject; it must exist before projection.
     const subjectReady = prepareRuntimePreviewPage(
       session,
@@ -135,6 +162,7 @@ export const readPageProjection = cache(
         ...dependencies,
         context,
         permissions: platformPermissionSource,
+        applicationAudiences: await applicationAudiencesReading,
         selection: { pageId, ...(subjectRecordId === undefined ? {} : { subjectRecordId }) },
       }).project(session, selection);
       if (projected.kind !== "available" || projected.value === undefined) return projected;
@@ -160,6 +188,46 @@ export const readPageProjection = cache(
     return projectedPageRead;
   },
 );
+
+/**
+ * What one page's definitions ask of the application surfaces, read from the compiled page before
+ * the projection: a placement offered to builders or installers, and a link a button, tile or row
+ * action declares. A page that asks nothing never reads the capability decision.
+ */
+const pageApplicationDeclarations = (
+  definition: Readonly<Record<string, unknown>>,
+): Readonly<{ audiences: boolean; surfaces: boolean }> => {
+  let audiences = false;
+  let surfaces = false;
+  for (const placement of collectPlacements(definition)) {
+    const vortex = placement.vortex as Readonly<Record<string, unknown>>;
+    if (vortex.applicationAudience !== undefined) audiences = true;
+    const settings = placement.settings as Readonly<Record<string, unknown>>;
+    if (
+      settings.studio_link_label !== undefined ||
+      settings.upgrade_link_label !== undefined ||
+      settings.link !== undefined
+    )
+      surfaces = true;
+    const rowActions = settings.row_actions;
+    const items =
+      isRecord(rowActions) && rowActions.kind === "list" && Array.isArray(rowActions.items)
+        ? rowActions.items
+        : [];
+    if (
+      items.some(
+        (item) =>
+          isRecord(item) &&
+          item.kind === "group" &&
+          isRecord(item.properties) &&
+          (item.properties.link !== undefined ||
+            item.properties.application_capability !== undefined),
+      )
+    )
+      surfaces = true;
+  }
+  return { audiences, surfaces };
+};
 
 /**
  * Loads one page. Reads the loader starts ahead of where their results are consulted are joined
@@ -552,27 +620,7 @@ const loadApplicationPageJoined = async (
     (placement) =>
       isApplicationLauncherPlacement(placement) && typeof placement.vortex.queryId === "string",
   );
-  // A placement that declares an application link, or a tile or row action the application
-  // surfaces decide, needs the one surface decision for this page.
-  const declaresApplicationSurface = (placement: (typeof placements)[number]): boolean => {
-    const settings = placement.settings as Readonly<Record<string, unknown>>;
-    if (settings.studio_link_label !== undefined || settings.upgrade_link_label !== undefined)
-      return true;
-    const rowActions = settings.row_actions;
-    const items =
-      isRecord(rowActions) && rowActions.kind === "list" && Array.isArray(rowActions.items)
-        ? rowActions.items
-        : [];
-    return items.some(
-      (item) =>
-        isRecord(item) &&
-        item.kind === "group" &&
-        isRecord(item.properties) &&
-        (item.properties.link !== undefined ||
-          item.properties.application_capability !== undefined),
-    );
-  };
-  const needsApplicationSurfaces = placements.some(declaresApplicationSurface);
+  const needsApplicationSurfaces = pageApplicationDeclarations(pageDefinition).surfaces;
   // The permitted applications a query-bound launcher lists, and the ones an application surface
   // offers, are read alongside the grid layouts.
   const permittedApplicationsReading =
@@ -681,12 +729,41 @@ const loadApplicationPageJoined = async (
   // applications they may open, and the address each declared link resolves to for them.
   const applicationSurfaces =
     needsApplicationSurfaces && permittedApplicationsRead?.kind === "available"
-      ? await loadApplicationSurfaces(session, permittedApplicationsRead.organizationId, {
-          tenantShortName: address.tenantShortName,
-          organizationShortName: address.organizationShortName,
-          openable: permittedApplications ?? [],
-        })
+      ? await loadApplicationSurfaces(
+          session,
+          permittedApplicationsRead.organizationId,
+          {
+            tenantShortName: address.tenantShortName,
+            organizationShortName: address.organizationShortName,
+            openable: permittedApplications ?? [],
+          },
+          applicationSurfaceCapabilitiesOf(
+            await readApplicationSurfaceCapabilities(session, selection, {
+              ...dependencies,
+              permissions: platformPermissionSource,
+            }),
+          ),
+        )
       : undefined;
+  // A button that declares an internal application link carries the address the person is offered;
+  // the definition names the destination and the surfaces decide it, so no component decides.
+  if (applicationSurfaces !== undefined)
+    for (const placement of placements) {
+      const release = placementBlockRelease(placement.vortex.block as unknown);
+      if (release.blockId !== BUTTON_BLOCK_RELEASE.blockId) continue;
+      const declaredLink = (placement.settings as Readonly<Record<string, unknown>>).link;
+      if (
+        !isRecord(declaredLink) ||
+        declaredLink.kind !== "choice" ||
+        typeof declaredLink.value !== "string"
+      )
+        continue;
+      const parsed = applicationLinkTargetSchema.safeParse(declaredLink.value);
+      if (!parsed.success) continue;
+      const href = applicationSurfaces.link(parsed.data, undefined);
+      if (href !== undefined)
+        data[placement.placementId] = { status: "ready", values: { kind: "button", href } };
+    }
   const placementReaderInput: PlacementReaderInput = {
     context,
     session,

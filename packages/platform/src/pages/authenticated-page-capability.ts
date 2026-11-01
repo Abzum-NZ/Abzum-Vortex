@@ -1,5 +1,6 @@
 import "server-only";
 import { conditionReadsPageValues } from "../rules/typed-condition-core";
+import type { ApplicationAudience } from "../catalogue/application-link";
 
 import type { SelectedOrganizationScope } from "../access/identity-access";
 import type {
@@ -79,6 +80,8 @@ export type FixedAuthenticatedPageCapability = Readonly<{
 
 /** The decisions a page capability projection takes in its own verified transaction. */
 export type PageCapabilityEvaluators = Readonly<{
+  /** The audiences this page read allows, decided once before the projection. */
+  applicationAudiences: Readonly<Record<ApplicationAudience, boolean>>;
   /** Server-owned operand resolution, under the same verified transaction as the view gates. */
   evaluateVisibilityCondition: (
     transaction: RequestDatabaseTransaction,
@@ -426,6 +429,7 @@ export const projectAuthenticatedPageCapability = async (
   const projected = projectPageCapability(resolved, {
     pageAllowed: true,
     placements: states,
+    applicationAudiences: evaluators.applicationAudiences,
     accessVersion: scope.accessVersion,
     ...(loaded.applicationReleaseRevision === undefined
       ? {}

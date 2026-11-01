@@ -31,6 +31,15 @@ export const applicationActionCapabilitySchema = z.enum(applicationActionCapabil
 export type ApplicationActionCapability = z.infer<typeof applicationActionCapabilitySchema>;
 
 /**
+ * Who a placement is offered to. The page read drops a placement declared for builders or
+ * installers unless the one application-surface decision allows that audience, so a definition
+ * names its audience and no component decides who sees what.
+ */
+export const applicationAudienceValues = ["builders", "installers"] as const;
+export const applicationAudienceSchema = z.enum(applicationAudienceValues);
+export type ApplicationAudience = z.infer<typeof applicationAudienceSchema>;
+
+/**
  * The application facts a link is resolved for: its stable root identity, its key as the address
  * names it, the status the shared read reports, and whether the platform supplies it.
  */

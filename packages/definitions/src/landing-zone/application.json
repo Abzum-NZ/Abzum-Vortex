@@ -461,6 +461,8 @@
                     "name_key": "name",
                     "icon_key": "icon",
                     "action_label": "Open",
+                    "studio_link_label": "Edit in Studio",
+                    "upgrade_link_label": "Upgrade available",
                     "empty_message": "No applications to show",
                     "side_panel": [],
                     "vortex": {
@@ -1013,6 +1015,8 @@
                     "name_key": "name",
                     "icon_key": "icon",
                     "action_label": "Open",
+                    "studio_link_label": "Edit in Studio",
+                    "upgrade_link_label": "Upgrade available",
                     "empty_message": "No applications to show",
                     "side_panel": [],
                     "vortex": {

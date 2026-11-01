@@ -45,7 +45,11 @@ export type LauncherQueryRow = Readonly<{
 export type ApplicationSurfaceAccess = Readonly<{
   capabilities: ApplicationSurfaceCapabilities;
   isOpenable: (application: ApplicationLinkRow) => boolean;
-  link: (target: ApplicationLinkTarget, application: ApplicationLinkRow) => string | undefined;
+  /** The address a declared link target opens for the viewer; nothing when it is not offered. */
+  link: (
+    target: ApplicationLinkTarget,
+    application: ApplicationLinkRow | undefined,
+  ) => string | undefined;
 }>;
 
 /** The person's stored layouts of a page's data grids, read once before any grid reads its rows. */

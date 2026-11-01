@@ -1383,6 +1383,31 @@
       },
       {
         "kind": "choice",
+        "key": "link",
+        "label": "Link",
+        "help": "Internal destination the button opens instead of emitting an action; the server offers it only to the people the destination allows",
+        "required": false,
+        "options": [
+          {
+            "key": "open_application",
+            "label": "Open the application"
+          },
+          {
+            "key": "studio_editor",
+            "label": "Edit in Studio"
+          },
+          {
+            "key": "studio_new_application",
+            "label": "New application in Studio"
+          },
+          {
+            "key": "app_store_upgrade",
+            "label": "Upgrade in the App Store"
+          }
+        ]
+      },
+      {
+        "kind": "choice",
         "key": "variant",
         "label": "Variant",
         "help": "Visual appearance style",
@@ -3534,10 +3559,60 @@
               "kind": "text",
               "key": "event_id",
               "label": "Event identity",
-              "help": "Stable identity of the flow binding this command runs",
-              "required": true,
+              "help": "Stable identity of the flow binding this command runs; leave it out for a link",
+              "required": false,
               "minLength": 1,
               "maxLength": 60
+            },
+            {
+              "kind": "choice",
+              "key": "link",
+              "label": "Link",
+              "help": "Internal destination the server resolves for each row; leave it out for a flow",
+              "required": false,
+              "options": [
+                {
+                  "key": "open_application",
+                  "label": "Open the application"
+                },
+                {
+                  "key": "studio_editor",
+                  "label": "Edit in Studio"
+                },
+                {
+                  "key": "studio_new_application",
+                  "label": "New application in Studio"
+                },
+                {
+                  "key": "app_store_upgrade",
+                  "label": "Upgrade in the App Store"
+                }
+              ]
+            },
+            {
+              "kind": "choice",
+              "key": "application_capability",
+              "label": "Needs of the application",
+              "help": "What the viewer must be able to do with the row's application for this command to appear",
+              "required": false,
+              "options": [
+                {
+                  "key": "open_application",
+                  "label": "Open it"
+                },
+                {
+                  "key": "build_application",
+                  "label": "Change its definition"
+                },
+                {
+                  "key": "install_application",
+                  "label": "Install or upgrade it"
+                },
+                {
+                  "key": "remove_application",
+                  "label": "Remove it"
+                }
+              ]
             },
             {
               "kind": "text",
