@@ -443,9 +443,7 @@ export function ModuleFieldsEditor({
    * The builder's ticks of "Also show it on", by place. A new field starts on every place of its
    * record type that can take it; an existing field is shown on more places only when ticked.
    */
-  const [placementChoices, setPlacementChoices] = useState<ReadonlyMap<string, boolean>>(
-    new Map(),
-  );
+  const [placementChoices, setPlacementChoices] = useState<ReadonlyMap<string, boolean>>(new Map());
   const [issues, setIssues] = useState<readonly string[]>([]);
   const [references, setReferences] = useState<readonly ApplicationUsePlace[]>([]);
   const [titleRefusal, setTitleRefusal] = useState<string | null>(null);
@@ -943,9 +941,7 @@ export function ModuleFieldsEditor({
         id={`module-field-${key}`}
         checked={form[key]}
         disabled={
-          disabled ||
-          (shapeLocked && (key === "required" || key === "unique")) ||
-          extraDisabled
+          disabled || (shapeLocked && (key === "required" || key === "unique")) || extraDisabled
         }
         onCheckedChange={(checked) => change({ [key]: checked })}
       />

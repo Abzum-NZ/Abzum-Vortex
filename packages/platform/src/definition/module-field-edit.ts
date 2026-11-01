@@ -510,9 +510,7 @@ export const changeInlineModuleField = (
           canonicalJson(storedSettings(settings)) || field.type !== change.type
           ? []
           : ["settings"]),
-        ...(["required", "unique"] as const).filter(
-          (key) => field[key] !== change[key],
-        ),
+        ...(["required", "unique"] as const).filter((key) => field[key] !== change[key]),
         ...(field.type === change.type &&
         record.relationships.some(
           (relationship) =>
