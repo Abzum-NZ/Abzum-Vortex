@@ -46,6 +46,6 @@ export const boundedProtectedReadModelSortKeys: Partial<
   organization_runtime_settings: ["record_id", "language"],
   application_role_templates: ["record_id", "source_role_id", "key", "label"],
   activity_entry: ["occurred_at"],
-  application_store_entries: ["record_id", "key"],
+  application_store_entries: ["record_id", "key", "name"],
   connection_instances: ["record_id", "destination_key", "state"],
 };

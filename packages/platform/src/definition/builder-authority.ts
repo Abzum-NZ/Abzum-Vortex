@@ -46,6 +46,10 @@ export type BuilderOperation =
   | Readonly<{ kind: "draft_change"; rootId?: string }>
   | Readonly<{ kind: "publication"; rootId: string }>
   | Readonly<{
+      /** Whether the person may install and upgrade applications in this organisation. */
+      kind: "application_management";
+    }>
+  | Readonly<{
       kind: "installation";
       applicationRootId: string;
       change: "install_or_upgrade" | "uninstall";
@@ -117,6 +121,13 @@ export const deriveBuilderRequirements = (
     case "publication":
       return {
         permissionKeys: unique([builderPermissionKeys.definitionReleasesManage, ...system]),
+        recentAuthentication: false,
+        delegatedPermissions: [],
+        refused: false,
+      };
+    case "application_management":
+      return {
+        permissionKeys: [builderPermissionKeys.applicationsManage],
         recentAuthentication: false,
         delegatedPermissions: [],
         refused: false,

@@ -1,5 +1,8 @@
--- The organisation's application catalogue: every ordinary Application it owns with a published
--- version, the latest version and its release note, and the version installed now, if any.
+-- The organisation's application catalogue: every Application it has, ordinary or a platform
+-- system application, with its latest published version and the version installed now, if any.
+-- The App Store's Applications page and the Landing Zone's application tiles both read this one
+-- projection, so the two surfaces cannot disagree about which applications exist or which
+-- versions are installed and waiting.
 create or replace function vortex_access.list_application_store_entries_projection(
   p_record_ids uuid[], p_sort_key text, p_direction text,
   p_after jsonb, p_limit integer, p_predicate jsonb
@@ -15,6 +18,7 @@ declare
   context_value jsonb;
   visible_organization_id uuid;
   actor_identity_id uuid;
+  sort_column text;
   sort_sql text;
   keyset_sql text := '';
   after_text text;
@@ -22,20 +26,22 @@ declare
   comparison text;
   predicate_plan jsonb;
 begin
-  if p_sort_key not in ('record_id', 'key')
+  if p_sort_key not in ('record_id', 'key', 'name')
     or p_direction not in ('ascending', 'descending')
     or p_sort_key is null or p_direction is null
-    or (p_limit is not null and p_limit < 1) then
+    or (p_limit is not null and p_limit < 1)
+    or (p_sort_key not in ('record_id', 'key') and p_limit is null) then
     raise exception using errcode = '22023',
       message = 'Application catalogue projection bounds are invalid';
   end if;
   if p_after is not null then
     if pg_catalog.jsonb_typeof(p_after) is distinct from 'object'
       or pg_catalog.jsonb_typeof(p_after -> 'recordId') is distinct from 'string'
-      or (p_sort_key = 'key' and (
+      or (p_sort_key <> 'record_id' and (
         pg_catalog.jsonb_typeof(p_after -> 'sortKey') is distinct from 'array'
         or pg_catalog.jsonb_array_length(p_after -> 'sortKey') is distinct from 1
-        or pg_catalog.jsonb_typeof(p_after -> 'sortKey' -> 0) is distinct from 'string'
+        or pg_catalog.jsonb_typeof(p_after -> 'sortKey' -> 0)
+          not in ('string', 'null')
       )) then
       raise exception using errcode = '22023',
         message = 'Application catalogue projection cursor is invalid';
@@ -47,6 +53,10 @@ begin
       raise exception using errcode = '22023',
         message = 'Application catalogue projection cursor is invalid';
     end;
+    if p_sort_key = 'key' and after_text is null then
+      raise exception using errcode = '22023',
+        message = 'Application catalogue projection cursor is invalid';
+    end if;
   end if;
 
   predicate_plan := vortex_record.compile_projection_predicate_internal(
@@ -76,24 +86,55 @@ begin
     return;
   end;
 
+  sort_column := case p_sort_key
+    when 'key' then 'root.key'
+    when 'name' then '(latest.application_address ->> ''name'')'
+    else 'root.root_id' end;
   comparison := case when p_direction = 'ascending' then '>' else '<' end;
   if p_after is not null then
-    keyset_sql := case p_sort_key
-      when 'key' then pg_catalog.format(
-        ' and (root.key collate "C", root.root_id) %s ($3 collate "C", $4)', comparison)
-      else pg_catalog.format(' and root.root_id %s $4', comparison) end;
+    if p_sort_key = 'record_id' then
+      keyset_sql := pg_catalog.format(' and root.root_id %s $4', comparison);
+    elsif p_sort_key = 'name' and after_text is null then
+      keyset_sql := case when p_direction = 'ascending'
+        then ' and (((latest.application_address ->> ''name'') is null
+            and root.root_id > $4)
+          or (latest.application_address ->> ''name'') is not null)'
+        else ' and (latest.application_address ->> ''name'') is null
+          and root.root_id < $4' end;
+    elsif p_sort_key = 'name' then
+      keyset_sql := pg_catalog.format(
+        ' and ((%s collate "C", root.root_id) %s ($3 collate "C", $4)%s)',
+        sort_column, comparison,
+        case when p_direction = 'descending'
+          then ' or (latest.application_address ->> ''name'') is null'
+          else '' end);
+    else
+      keyset_sql := pg_catalog.format(
+        ' and (root.key collate "C", root.root_id) %s ($3 collate "C", $4)', comparison);
+    end if;
   end if;
-  sort_sql := case p_sort_key
-    when 'key' then pg_catalog.format('root.key collate "C" %1$s, root.root_id %1$s',
-      case when p_direction = 'ascending' then 'asc' else 'desc' end)
-    else pg_catalog.format('root.root_id %s',
-      case when p_direction = 'ascending' then 'asc' else 'desc' end) end;
+  sort_sql := pg_catalog.format('%s%s %s%s, %s %s',
+    sort_column,
+    case when p_sort_key in ('key', 'name') then ' collate "C"' else '' end,
+    case when p_direction = 'ascending' then 'asc' else 'desc' end,
+    case when p_sort_key = 'name' then
+      case when p_direction = 'ascending' then ' nulls first' else ' nulls last' end
+      else '' end,
+    'root.root_id',
+    case when p_direction = 'ascending' then 'asc' else 'desc' end);
+  if p_sort_key = 'record_id' then
+    sort_sql := pg_catalog.format('root.root_id %s',
+      case when p_direction = 'ascending' then 'asc' else 'desc' end);
+  end if;
 
   return query execute $scan$
     select $1, root.root_id, root.current_release_revision,
       pg_catalog.jsonb_build_object(
         'key', root.key,
         'name', latest.application_address ->> 'name',
+        'icon', latest.application_address ->> 'icon',
+        'is_system_application',
+          root.application_origin_kind = 'platform_system_application',
         'description', latest.compilation_output #>> '{canonical,content,description}',
         'latest_version', latest.release_version,
         'latest_release_note', latest.release_note,
@@ -162,7 +203,6 @@ begin
     ) as backfill on true
     where root.organization_id = $1
       and root.kind = 'application'
-      and root.application_origin_kind = 'ordinary'
       and root.current_release_revision is not null
       and ($2 is null or root.root_id = any($2))
       and latest.application_address ->> 'kind' = 'application'
@@ -174,7 +214,7 @@ $function$;
 
 comment on function vortex_access.list_application_store_entries_projection(
   uuid[], text, text, jsonb, integer, jsonb
-) is 'The organisation''s application catalogue: its ordinary Applications with a published version, the latest version and the installed one.';
+) is 'The organisation''s application catalogue: every Application it has, ordinary or platform system, the latest version and its release note, and the version installed now, if any.';
 
 revoke all on function vortex_access.list_application_store_entries_projection(
   uuid[], text, text, jsonb, integer, jsonb
