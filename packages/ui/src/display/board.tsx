@@ -3,7 +3,6 @@
 import {
   lazy,
   Suspense,
-  useCallback,
   useEffect,
   useRef,
   useState,
@@ -51,10 +50,11 @@ const BoardCardFormat = lazy(async () => ({
 }));
 
 /**
- * What a column read answers: accepted, refused (a real failure), or deferred (put off because the
- * page was busy; the board reads the column again once it is idle).
+ * What a column read answers: accepted, refused, or deferred because the page was busy.
  */
-type BoardColumnReadOutcome = void | boolean | "deferred";
+type BoardPage = NonNullable<BoardBucketPayload["page"]>;
+type BoardColumnReadOutcome = void | boolean | "deferred" | Readonly<{ page: BoardPage }>;
+const maximumDisplayedCards = 200;
 
 type BoardBucket = Readonly<{
   key: string;
@@ -191,8 +191,11 @@ function BoardColumn({
   );
   if (moving?.targetKey === bucket.key && !rows.some((row) => row.recordId === moving.recordId))
     rows.unshift(moving.row);
+  rows.splice(maximumDisplayedCards);
   const canContinue =
-    events?.page_changed !== undefined && page?.nextContinuationToken !== undefined;
+    events?.page_changed !== undefined &&
+    page?.nextContinuationToken !== undefined &&
+    rows.length < maximumDisplayedCards;
   // While a card is dragged, every other column says whether the pipeline lets it go there.
   const from = mover?.draggingFrom;
   const dropAllowed = from !== undefined && mayMove(from, bucket);
@@ -286,28 +289,12 @@ function BoardColumn({
         ) : null}
       </header>
       <div className="flex min-h-32 flex-1 flex-col gap-3">
-        {page === null ? (
-          pending ? (
-            <p className="text-sm text-muted-foreground" role="status">
-              Loading cards…
-            </p>
-          ) : (
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={anyPending || events?.page_changed === undefined}
-              onClick={() => onRetry(bucket)}
-            >
-              Show cards
-            </Button>
-          )
-        ) : null}
         {rows.length === 0 && page !== null ? (
           <p className="text-sm text-muted-foreground" role="status">
             {emptyMessage}
           </p>
         ) : rows.length > 0 ? (
-          <ul className="flex list-none flex-col gap-[var(--vortex-space-sm)]">
+          <ul className="m-0 flex list-none flex-col gap-[var(--vortex-space-sm)] p-0">
             {rows.map((row) => {
               const fieldById = new Map(
                 row.fields.map((field) => [field.key.toLowerCase(), field] as const),
@@ -447,7 +434,12 @@ function BoardColumn({
             </AlertDescription>
           </Alert>
         ) : null}
-        {canContinue ? (
+        {rows.length >= maximumDisplayedCards && rowCount !== null && rowCount > rows.length ? (
+          <p className="text-sm text-muted-foreground">
+            Showing {formatLocaleNumber(maximumDisplayedCards)} of{" "}
+            {countText(rowCount ?? rows.length)}
+          </p>
+        ) : canContinue ? (
           <Button
             type="button"
             variant="outline"
@@ -568,10 +560,12 @@ export function BoardView(props: DisplayRenderProps<BoardPayload>): ReactElement
     : [];
   const [pendingKeys, setPendingKeys] = useState<ReadonlySet<string>>(new Set());
   const [failedKeys, setFailedKeys] = useState<ReadonlySet<string>>(new Set());
-  // Columns whose read was put off because the page was busy or another read of this board was in
-  // flight: not a failure, they are read again as soon as the board is idle.
-  const [deferredKeys, setDeferredKeys] = useState<ReadonlySet<string>>(new Set());
-  const visibleKeysRef = useRef<Set<string>>(new Set());
+  const [continued, setContinued] = useState<
+    Readonly<{
+      source: BoardPayload | undefined;
+      pages: ReadonlyMap<string, BoardPage>;
+    }>
+  >({ source: values, pages: new Map() });
   const pendingKeyRef = useRef<string | undefined>(undefined);
   const pageChanged = events?.page_changed as
     | ((event: DisplaySemanticEvent) => BoardColumnReadOutcome | Promise<BoardColumnReadOutcome>)
@@ -609,6 +603,10 @@ export function BoardView(props: DisplayRenderProps<BoardPayload>): ReactElement
     };
   }, [values]);
 
+  const shownPage = (key: string, bucket: BoardBucketPayload): BoardBucketPayload => {
+    const page = continued.source === values ? continued.pages.get(key) : undefined;
+    return page === undefined || bucket.page === null ? bucket : { ...bucket, page };
+  };
   const buckets: BoardBucket[] =
     values === undefined
       ? []
@@ -617,7 +615,7 @@ export function BoardView(props: DisplayRenderProps<BoardPayload>): ReactElement
             key: `option:${column.value}`,
             label: column.label,
             selector: { kind: "option" as const, value: column.value },
-            values: column,
+            values: shownPage(`option:${column.value}`, column),
             moves: column.moves,
             stage: {
               tone: column.tone,
@@ -633,7 +631,7 @@ export function BoardView(props: DisplayRenderProps<BoardPayload>): ReactElement
                   key: "unassigned",
                   label: "Unassigned",
                   selector: { kind: "unassigned" as const },
-                  values: values.unassigned,
+                  values: shownPage("unassigned", values.unassigned),
                   moves: values.unassigned.moves,
                 },
               ]),
@@ -745,98 +743,67 @@ export function BoardView(props: DisplayRenderProps<BoardPayload>): ReactElement
           announce: setDropMessage,
         };
 
-  const readBuckets = useCallback(
-    async (targets: readonly BoardBucket[], continuationToken?: string): Promise<void> => {
-      if (pageChanged === undefined || pendingKeyRef.current !== undefined || targets.length === 0)
-        return;
-      const keys = new Set(targets.map((bucket) => bucket.key));
-      const key = targets[0]!.key;
-      pendingKeyRef.current = key;
-      setPendingKeys(keys);
-      setFailedKeys((current) => new Set([...current].filter((candidate) => !keys.has(candidate))));
-      try {
-        const accepted = await Promise.resolve(
-          pageChanged({
-            event: "page_changed",
-            columns: targets.map((bucket) => bucket.selector),
-            ...(continuationToken === undefined ? {} : { continuationToken }),
-          }),
-        );
-        if (accepted === "deferred") setDeferredKeys((current) => new Set([...current, ...keys]));
-        else {
-          setDeferredKeys(
-            (current) => new Set([...current].filter((candidate) => !keys.has(candidate))),
-          );
-          if (accepted === false) setFailedKeys((current) => new Set([...current, ...keys]));
-        }
-      } catch (error) {
-        console.error("[board] column read failed", error);
-        setFailedKeys((current) => new Set([...current, ...keys]));
-      } finally {
-        pendingKeyRef.current = undefined;
-        setPendingKeys(new Set());
-      }
-    },
-    [pageChanged],
-  );
-
-  // The viewport clips the horizontal scroller and hidden phone columns. Batch newly visible
-  // placeholders into one bounded read; loaded columns keep their independent pages and cursors.
-  // One observer per payload: it reads the current columns through a ref, not once per render.
-  const unreadRef = useRef({ buckets, failedKeys, readBuckets });
-  unreadRef.current = { buckets, failedKeys, readBuckets };
-  useEffect(() => {
-    const section = cardsRef.current;
-    if (section === null || pageChanged === undefined) return;
-    const visible = visibleKeysRef.current;
-    visible.clear();
-    let frame: number | undefined;
-    const observer = new IntersectionObserver((entries) => {
-      for (const entry of entries) {
-        const key = (entry.target as HTMLElement).dataset.vortexBoardKey!;
-        if (
-          entry.isIntersecting &&
-          entry.intersectionRect.width > 0 &&
-          entry.intersectionRect.height > 0
-        )
-          visible.add(key);
-        else visible.delete(key);
-      }
-      if (frame !== undefined) cancelAnimationFrame(frame);
-      frame = requestAnimationFrame(() => {
-        const { buckets, failedKeys, readBuckets } = unreadRef.current;
-        const unread = buckets.filter(
-          (bucket) =>
-            visible.has(bucket.key) &&
-            bucket.values.state === "unread" &&
-            !failedKeys.has(bucket.key),
-        );
-        void readBuckets(unread);
-      });
-    });
-    for (const node of section.querySelectorAll("[data-vortex-board-key]")) observer.observe(node);
-    return () => {
-      observer.disconnect();
-      if (frame !== undefined) cancelAnimationFrame(frame);
-    };
-  }, [values, pageChanged]);
-
-  // A deferred column is read again once the board is idle and the column is still on screen.
-  useEffect(() => {
-    if (deferredKeys.size === 0 || pendingKeys.size > 0) return;
-    const timer = setTimeout(() => {
-      const { buckets, readBuckets } = unreadRef.current;
-      const again = buckets.filter(
-        (bucket) =>
-          deferredKeys.has(bucket.key) &&
-          visibleKeysRef.current.has(bucket.key) &&
-          bucket.values.state === "unread",
+  const readBuckets = async (
+    targets: readonly BoardBucket[],
+    continuationToken?: string,
+  ): Promise<void> => {
+    if (pageChanged === undefined || pendingKeyRef.current !== undefined || targets.length === 0)
+      return;
+    const keys = new Set(targets.map((bucket) => bucket.key));
+    const key = targets[0]!.key;
+    pendingKeyRef.current = key;
+    setPendingKeys(keys);
+    setFailedKeys((current) => new Set([...current].filter((candidate) => !keys.has(candidate))));
+    try {
+      const accepted = await Promise.resolve(
+        pageChanged({
+          event: "page_changed",
+          columns: targets.map((bucket) => bucket.selector),
+          ...(continuationToken === undefined ? {} : { continuationToken }),
+        }),
       );
-      if (again.length === 0) setDeferredKeys(new Set());
-      else void readBuckets(again);
-    }, 250);
-    return () => clearTimeout(timer);
-  }, [deferredKeys, pendingKeys]);
+      if (accepted === false || accepted === "deferred")
+        setFailedKeys((current) => new Set([...current, ...keys]));
+      else if (continuationToken !== undefined) {
+        if (typeof accepted !== "object" || accepted === null || !("page" in accepted)) {
+          setFailedKeys((current) => new Set([...current, ...keys]));
+        } else {
+          const previous = targets[0]!.values.page;
+          if (previous === null) throw new Error("Board continuation has no previous page");
+          const otherRows = new Set(
+            buckets
+              .filter((bucket) => bucket.key !== key)
+              .flatMap(
+                (bucket) => bucket.values.page?.rows.map((row) => row.recordId.toLowerCase()) ?? [],
+              ),
+          );
+          if (accepted.page.rows.some((row) => otherRows.has(row.recordId.toLowerCase()))) {
+            if (events?.refresh === undefined)
+              throw new Error("Board continuation contains a card from another column");
+            await Promise.resolve(events.refresh({ event: "refresh" }));
+            return;
+          }
+          const rows = new Map(previous.rows.map((row) => [row.recordId.toLowerCase(), row]));
+          for (const row of accepted.page.rows) rows.set(row.recordId.toLowerCase(), row);
+          const page = {
+            ...accepted.page,
+            rows: [...rows.values()].slice(0, maximumDisplayedCards),
+          };
+          setContinued((current) => {
+            const pages = new Map(current.source === values ? current.pages : []);
+            pages.set(key, page);
+            return { source: values, pages };
+          });
+        }
+      }
+    } catch (error) {
+      console.error("[board] column read failed", error);
+      setFailedKeys((current) => new Set([...current, ...keys]));
+    } finally {
+      pendingKeyRef.current = undefined;
+      setPendingKeys(new Set());
+    }
+  };
 
   const addCard = (bucket: BoardBucket): void => {
     if (
@@ -978,7 +945,10 @@ export function BoardView(props: DisplayRenderProps<BoardPayload>): ReactElement
                     anyPending={pendingKeys.size > 0}
                     failed={failedKeys.has(bucket.key)}
                     onContinue={continueBucket}
-                    onRetry={(bucket) => void readBuckets([bucket])}
+                    onRetry={(bucket) => {
+                      const token = bucket.values.page?.nextContinuationToken;
+                      if (token !== undefined) void continueBucket(bucket, token);
+                    }}
                     onAdd={values.quickAdd && cardAdded !== undefined ? addCard : undefined}
                     mover={mover}
                     moving={moving}

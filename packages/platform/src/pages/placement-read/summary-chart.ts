@@ -205,6 +205,8 @@ const projectChart = (input: {
         cause: "A summary group is missing its category or chosen total",
       };
     const cell = summaryAggregateCellValue(aggregate, measureField, result);
+    // A group with no values has no measure to plot; other groups can still be drawn.
+    if (cell?.kind === "empty") continue;
     const money =
       measureField?.type === "money" && result.outcome !== "refused"
         ? moneyValueSchema.safeParse(result.value)
