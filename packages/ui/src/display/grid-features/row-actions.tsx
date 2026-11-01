@@ -42,21 +42,30 @@ function RowCommands({ context, row }: GridFeatureCommandProps): ReactElement | 
   const current = projection.availability.find(
     (item) => item.recordId === row.recordId && item.revision === row.revision,
   );
-  const commands = projection.actions.map((action) => {
+  const commands = projection.actions.flatMap((action) => {
     const identity = action.eventId ?? `link:${action.link}`;
     const decision = current?.actions.find((item) => item.action === identity);
-    return {
-      action,
-      identity,
-      href: decision?.eligible === true ? decision.href : undefined,
-      reason:
-        decision?.eligible === true
-          ? undefined
-          : decision?.eligible === false
-            ? reasons[decision.reason]
-            : "Refresh to check whether this action is available.",
-    };
+    if (
+      (action.link !== undefined || action.applicationCapability !== undefined) &&
+      decision?.eligible === false &&
+      decision.reason === "not_permitted"
+    )
+      return [];
+    return [
+      {
+        action,
+        identity,
+        href: decision?.eligible === true ? decision.href : undefined,
+        reason:
+          decision?.eligible === true
+            ? undefined
+            : decision?.eligible === false
+              ? reasons[decision.reason]
+              : "Refresh to check whether this action is available.",
+      },
+    ];
   });
+  if (commands.length === 0) return null;
   const inline =
     context.presentation === "cards"
       ? []

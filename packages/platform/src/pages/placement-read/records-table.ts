@@ -304,6 +304,12 @@ export const readRecordsTable = async (
   const applicationFieldIds = new Map(
     (listed?.fields ?? []).map((field) => [field.key, String(field.fieldId).toLowerCase()]),
   );
+  const decisionFieldIds = wantsApplicationRowActions
+    ? ["key", "status", "is_system_application"].flatMap((key) => {
+        const fieldId = applicationFieldIds.get(key);
+        return fieldId === undefined ? [] : [fieldId];
+      })
+    : [];
   const applicationOf = (row: ProtectedQueryRow): ApplicationLinkRow | undefined => {
     const values = new Map(
       Object.entries(row.values).map(([fieldId, value]) => [fieldId.toLowerCase(), value] as const),
@@ -313,13 +319,15 @@ export const readRecordsTable = async (
       return fieldId === undefined ? undefined : values.get(fieldId);
     };
     const key = valueOf("key");
-    if (typeof key !== "string" || key.length === 0) return undefined;
+    const isSystemApplication = valueOf("is_system_application");
+    if (typeof key !== "string" || key.length === 0 || typeof isSystemApplication !== "boolean")
+      return undefined;
     const status = valueOf("status");
     return {
       applicationRootId: row.recordId,
       key,
       status: typeof status === "string" ? status : null,
-      isSystemApplication: valueOf("is_system_application") === true,
+      isSystemApplication,
     };
   };
   // A draft preview offers no export.
@@ -399,6 +407,7 @@ export const readRecordsTable = async (
         ? { fieldEditors: fieldEditorsOf(bound.module, read.context.releaseSet.modules) }
         : {}),
       ...(decide === undefined ? {} : { decide }),
+      ...(decisionFieldIds.length === 0 ? {} : { decisionFieldIds }),
       ...(timeZone === undefined ? {} : { timeZone }),
       titleRecordLinks: read.services.titleRecordLinks,
       state: { ...effectiveState, page },
