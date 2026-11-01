@@ -318,10 +318,8 @@ export const createFlowInvocationHandler =
                   undefined,
                   true,
                 );
-                return privateResponse(
-                  { ...result, refresh: rows.kind === "available" ? rows : { kind: "reload" } },
-                  200,
-                );
+                // The reread's own outcome: `reload` only when the installed release changed.
+                return privateResponse({ ...result, refresh: rows }, 200);
               };
             return privateResponse(result, result.kind === "reload" ? 409 : 200);
           };

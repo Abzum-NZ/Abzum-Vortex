@@ -4787,10 +4787,6 @@
     color: var(--sidebar-accent-foreground);
   }
 }
-.cn-skeleton {
-  border-radius: var(--vs-f73fa31d, calc(var(--radius) * 0.8));
-  background-color: var(--muted);
-}
 
 .cn-toast {
   border-radius: calc(var(--radius) * 1.8);

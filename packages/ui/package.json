@@ -12,6 +12,7 @@
     "./appearance-toggle": "./src/navigation/appearance-toggle.tsx",
     "./display/date-format-context": "./src/display/date-format-context.tsx",
     "./display/date-format": "./src/display/date-format.ts",
+    "./routing": "./src/routing/index.ts",
     "./theme": "./src/theme/index.ts",
     "./theme/appearance": "./src/theme/appearance.ts",
     "./theme/styles": "./src/theme/theme-styles.ts",

@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { NavigationLink } from "@vortex/ui/routing";
 import { newPasswordPolicy, readPrivacyNotice } from "@vortex/platform/server";
 import { Checkbox } from "@vortex/ui/components/checkbox";
 import { Field, FieldDescription } from "@vortex/ui/components/field";
@@ -24,12 +24,12 @@ export default async function RegisterPage({ searchParams }: RegisterPageProps) 
       footer={
         <p className="text-center text-sm text-muted-foreground">
           Already have an account?{" "}
-          <Link
+          <NavigationLink
             className="font-medium text-foreground underline underline-offset-4 hover:text-primary transition-colors"
             href="/auth/sign-in"
           >
             Sign in
-          </Link>
+          </NavigationLink>
         </p>
       }
     >
@@ -43,9 +43,9 @@ export default async function RegisterPage({ searchParams }: RegisterPageProps) 
         <form className="flex flex-col gap-5" action={register}>
           <p className="text-sm text-muted-foreground">
             {notice.content.collectionNotice}{" "}
-            <Link className="underline underline-offset-4" href={notice.locator}>
+            <NavigationLink className="underline underline-offset-4" href={notice.locator}>
               Privacy Policy
-            </Link>
+            </NavigationLink>
           </p>
           <input type="hidden" name="notice_version_id" value={notice.id} />
           <Field>

@@ -1,5 +1,6 @@
 import { useMemo, useRef, type Dispatch, type SetStateAction, type RefObject } from "react";
 import type { useRouter } from "next/navigation";
+import { useNavigator } from "@vortex/ui/routing";
 import type {
   createFormBlockRuntime,
   DisplayTablePayload,
@@ -226,6 +227,7 @@ export function useRuntimeInputs({
   unsavedWorkRegistry: ReturnType<typeof useUnsavedWorkRegistry>;
   setPanelRef: RefObject<FlowIntentHost["setPanel"]>;
 }>) {
+  const navigator = useNavigator();
   const pageParameters = usePageParameters({
     model,
     address,
@@ -925,6 +927,7 @@ export function useRuntimeInputs({
                   application,
                   currentSearch,
                   router,
+                  navigator,
                 });
               },
             }),
@@ -962,6 +965,7 @@ export function useRuntimeInputs({
     model.guidedForm,
     placementEventNames,
     router,
+    navigator,
     refreshPlacements,
     runBinding,
     selection,

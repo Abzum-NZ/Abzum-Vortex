@@ -43,7 +43,6 @@ import {
   EmptyTitle,
   EmptyDescription,
 } from "@vortex/ui/components/empty";
-import { Spinner } from "@vortex/ui/components/spinner";
 import { Button } from "@vortex/ui/components/button";
 import type {
   StudioCanvasAddRequest,
@@ -1052,18 +1051,9 @@ export function useStudioCanvasTab({
         platformThemeTokens !== null && (
           // The canvas previews the application in light or dark: the appearance is set on the canvas only, never on Studio's frame.
           <div>
-            {/* A newly chosen icon library loads before the canvas draws with it; only the canvas waits. */}
-            <Suspense
-              fallback={
-                <Empty role="status" className="min-h-64">
-                  <EmptyHeader>
-                    <Spinner />
-                    <EmptyTitle>Drawing the canvas</EmptyTitle>
-                    <EmptyDescription>Loading the application theme.</EmptyDescription>
-                  </EmptyHeader>
-                </Empty>
-              }
-            >
+            {/* A newly chosen icon library loads before the canvas draws with it; only the canvas
+                waits, and it draws no placeholder meanwhile. */}
+            <Suspense fallback={null}>
               <ApplicationPagePuckEditor
                 key={`canvas:${canvasPage.id}`}
                 source={source}

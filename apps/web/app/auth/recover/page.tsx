@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { NavigationLink } from "@vortex/ui/routing";
 import { Field } from "@vortex/ui/components/field";
 import { Input } from "@vortex/ui/components/input";
 import { Label } from "@vortex/ui/components/label";
@@ -19,12 +19,12 @@ export default async function RecoverPage({ searchParams }: RecoverPageProps) {
       description="Enter your email address. If it is connected to an account, a one-time recovery code and instructions will be sent."
       footer={
         <div className="text-center text-sm">
-          <Link
+          <NavigationLink
             className="font-medium text-foreground underline underline-offset-4 hover:text-primary transition-colors"
             href="/auth/sign-in"
           >
             Return to sign in
-          </Link>
+          </NavigationLink>
         </div>
       }
     >

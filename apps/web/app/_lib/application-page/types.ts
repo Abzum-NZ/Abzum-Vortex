@@ -35,11 +35,6 @@ export type PlacementReadModel = Readonly<{
   /** Ready display data per data placement, by stable placement identity. */
   data: Readonly<Record<string, PageDataState>>;
   /**
-   * Placements whose read was not awaited before the page was sent: their `data` entry is loading
-   * and the settled state follows on the same response, by stable placement identity.
-   */
-  streamedData?: Readonly<Record<string, Promise<PageDataState>>>;
-  /**
    * The table query state of the address this data was read for: every sort, filter, search,
    * visible-column and page parameter of a table placement, by parameter name. A client that finds
    * its address holding another state for a table rereads only that table.
@@ -120,8 +115,6 @@ export type ApplicationPageModel = PlacementReadModel &
 export type PageLoadOptions = Readonly<{
   /** Omit navigation from a document's page payload; the frame carries the shared projection. */
   includeNavigation?: boolean;
-  /** Send the page before the placements that only show their own query's rows have read. */
-  streamPlacementReads?: boolean;
 }>;
 
 export type ApplicationPageResult =

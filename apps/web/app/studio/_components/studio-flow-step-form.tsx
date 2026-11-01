@@ -399,7 +399,12 @@ const pickerOptions = (
     case "record_type":
       return choices.recordTypes.map((entry) => ({ value: entry.key, label: entry.label }));
     case "page":
-      return choices.pages.map((entry) => ({ value: entry.key, label: entry.label }));
+      // Another application's pages, when the step opens one, else this application's.
+      return (
+        field.options ?? choices.pages.map((entry) => ({ value: entry.key, label: entry.label }))
+      );
+    case "application":
+      return field.options;
     case "form":
       return choices.forms.map((entry) => ({ value: entry.alias, label: entry.label }));
     case "query":

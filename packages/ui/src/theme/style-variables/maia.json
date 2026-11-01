@@ -155,7 +155,6 @@
   "--vs-ab0e4756": "calc(var(--spacing, 0.25rem) * 9)",
   "--vs-92446e66": "calc(var(--spacing, 0.25rem) * 8)",
   "--vs-691cbede": "calc(var(--spacing, 0.25rem) * 14)",
-  "--vs-f73fa31d": "calc(var(--radius) * 1.4)",
   "--vs-baee2b68": "calc(var(--radius) * 2.6)",
   "--vs-359e43ad": "calc(var(--spacing, 0.25rem) * 3)",
   "--vs-105074d4": "calc(var(--spacing, 0.25rem) * 4)",

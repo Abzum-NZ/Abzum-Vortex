@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { NavigationLink } from "@vortex/ui/routing";
 import type { ReactNode } from "react";
 import { organizationChooserShell } from "@vortex/platform/server";
 import { Badge } from "@vortex/ui/components/badge";
@@ -43,13 +43,13 @@ export function AuthShell({
         <Card className="border-border bg-card text-card-foreground shadow-sm">
           <CardHeader>
             <div className="flex items-center justify-between">
-              <Link
+              <NavigationLink
                 className="text-xs font-bold tracking-widest text-primary uppercase transition-colors hover:text-primary/80"
-                href="/"
+                href="/auth/sign-in"
                 aria-label={`${organizationChooserShell.name} home`}
               >
                 {organizationChooserShell.name}
-              </Link>
+              </NavigationLink>
               {eyebrow ? (
                 <Badge
                   variant="secondary"
