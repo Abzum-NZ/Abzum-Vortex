@@ -35,7 +35,7 @@ import type {
 } from "../_lib/studio-data-model";
 import { studioViewRequest, type StudioViewRequest } from "../_lib/studio-view-request";
 import { summarizeSourceChange, type SourceChangeRow } from "../_lib/source-change-summary";
-import { conflictMessage, refusalMessage } from "./studio-refusal-messages";
+import { conflictMessage, refusalMessage, unavailableMessage } from "./studio-refusal-messages";
 import { useLeaveWarning } from "./use-leave-warning";
 import { useStudioSession } from "./use-studio-session";
 
@@ -538,10 +538,7 @@ export function useStudioDraft({
             setViewProblem(
               result.kind === "validation_failed"
                 ? {
-                    message:
-                      result.reason === "source_invalid_platform"
-                        ? "This draft could not be read because of a platform problem. It has been logged; your published app keeps working."
-                        : "This app could not be prepared because of a platform problem. It has been logged.",
+                    message: unavailableMessage(result.kind, result.reason),
                     retry: false,
                   }
                 : {

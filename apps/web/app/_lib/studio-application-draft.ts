@@ -54,6 +54,7 @@ import {
 } from "@vortex/platform/schema";
 import {
   BuilderAuthorityError,
+  classifyDatabaseError,
   DefinitionError,
   readApplicationDefinitionDraft,
   readSourceIdentityReservations,
@@ -148,7 +149,15 @@ const declined = (
   const message =
     `[studio] ${operation} ${failure.kind} reason=${failure.reason}` +
     (error === undefined ? "" : ` cause=${describeFailure(error)}`);
-  console.info(message);
+  // A failure the request service returned was logged there with its own severity; an error caught
+  // here was logged nowhere else, so a transient conflict is information and any other cause is an error.
+  if (
+    error !== undefined &&
+    failure.kind === "temporarily_unavailable" &&
+    classifyDatabaseError(error) !== "conflict"
+  )
+    console.error(message);
+  else console.info(message);
   return failure;
 };
 
