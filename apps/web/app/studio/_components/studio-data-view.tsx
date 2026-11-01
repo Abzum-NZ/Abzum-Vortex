@@ -1,5 +1,5 @@
 "use client";
-import Link from "next/link";
+import { NavigationLink } from "@vortex/ui/routing";
 import { useState } from "react";
 import {
   StudioInspectorGroup,
@@ -505,12 +505,12 @@ function ReadOnlyInspector({
           {owner === undefined ? null : (
             <>
               {" "}
-              <Link
+              <NavigationLink
                 className="underline underline-offset-4"
                 href={`/studio/${encodeURIComponent(organizationId)}/${encodeURIComponent(owner.rootId)}?tab=data&module=${encodeURIComponent(module.key)}`}
               >
                 Open {owner.name} in Studio
-              </Link>
+              </NavigationLink>
             </>
           )}
         </p>

@@ -43,6 +43,7 @@ import {
   studioAccessIdentityReservations,
   type StudioAccessCommand,
   type StudioAccessResult,
+  type StudioNavigationApplication,
 } from "@vortex/ui/studio";
 import { Button } from "@vortex/ui/components/button";
 import type { StudioStructureForm } from "./studio-structure-editor";
@@ -56,6 +57,8 @@ export type StudioWorkspacePlace = Readonly<{
   appStoreHref: string | undefined;
   /** Whether this application is installed in the builder's organisation. */
   installed: boolean;
+  /** The other applications a Navigate step can open, with their pages. */
+  navigationTargets: readonly StudioNavigationApplication[];
 }>;
 
 type WorkspaceProps =
@@ -172,6 +175,7 @@ function ExistingApplicationWorkspace(props: ExistingProps) {
     catalogue,
     labels,
     applications,
+    navigationTargets: place.navigationTargets,
     hidden: tab !== "flows",
     openFlowsTab: () => setTab("flows"),
   });

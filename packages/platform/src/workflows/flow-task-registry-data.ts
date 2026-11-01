@@ -578,10 +578,18 @@ const registeredDefinitions: Record<FlowRegisteredTaskTypeKey, DefinitionInput> 
   },
   "interface.navigate": {
     title: "Navigate",
-    summary: "Opens a page.",
+    summary:
+      "Opens a page of this application, or of another application of the organisation, with a record when the page shows one.",
     runLocations: ["browser"],
     effect: "interface",
-    properties: { page: required("page_id"), parameters: optional("input_map") },
+    // Without `application` the page is one of this application's pages, resolved when the flow
+    // is published. With it, the page is a page key of that other installed application of the same
+    // organisation, resolved against the person's own access when the step runs.
+    properties: {
+      application: optional("application_key"),
+      page: required("page_id"),
+      parameters: optional("input_map"),
+    },
   },
   "interface.refresh": {
     title: "Refresh",

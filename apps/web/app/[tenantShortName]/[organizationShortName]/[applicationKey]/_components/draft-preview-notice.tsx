@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { NavigationLink } from "@vortex/ui/routing";
 import { FormattedTime, Icon } from "@vortex/ui";
 import { Button } from "@vortex/ui/components/button";
 import { DraftPreviewBoundNotice } from "./draft-preview-bound-notice";
@@ -35,7 +35,12 @@ export function DraftPreviewNotice({
         <FormattedTime iso={expiresAt} />.
       </p>
       <DraftPreviewBoundNotice seedBound={seedBound} seedBoundedPages={seedBoundedPages} />
-      <Button variant="outline" size="sm" nativeButton={false} render={<Link href={studioHref} />}>
+      <Button
+        variant="outline"
+        size="sm"
+        nativeButton={false}
+        render={<NavigationLink href={studioHref} />}
+      >
         <Icon name="chevron-left" />
         Back to Studio
       </Button>

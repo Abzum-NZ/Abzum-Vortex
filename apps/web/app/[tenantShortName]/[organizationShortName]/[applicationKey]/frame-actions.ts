@@ -5,6 +5,7 @@ import { resolveIdentitySession } from "../../../auth/_lib/session-server";
 import { loadApplicationSearch } from "../../../_lib/application-search";
 import { loadPermittedApplicationsAtAddress } from "../../../_lib/organization-context";
 import { resolveApplicationAddress } from "../../../_lib/application-address";
+import { applicationPageAddressPath } from "../../../_lib/address-paths";
 import { readApplicationReleaseAdoption } from "../../../_lib/application-release-adoption";
 import { loadStudioCreateAccess } from "../../../_lib/studio-application-draft";
 import {
@@ -90,6 +91,50 @@ export async function readReleaseAdoptionAction(
       fallback: { state: "temporarily_unavailable" },
     });
   }
+}
+
+/**
+ * Resolves a flow's Navigate target in another application of the same organisation to its final
+ * page address. Only the application and page keys come from the browser; the organisation is the
+ * address the person is on, and the page must be one the signed-in person may open now. Undefined
+ * when it is missing, withdrawn or refused, so the step opens nothing.
+ */
+export async function resolveApplicationPagePathAction(
+  tenantShortName: string,
+  organizationShortName: string,
+  applicationKey: string,
+  pageKey: string,
+): Promise<string | undefined> {
+  if (
+    [tenantShortName, organizationShortName, applicationKey, pageKey].some(
+      (value) => typeof value !== "string" || value.length === 0,
+    )
+  ) {
+    console.error("[application-frame] navigate target refused: malformed address");
+    return undefined;
+  }
+  const resolution = await resolveIdentitySession();
+  if (resolution.kind !== "active") {
+    console.error(`[application-frame] navigate target refused: session ${resolution.kind}`);
+    return undefined;
+  }
+  const addressed = await resolveApplicationAddress(
+    resolution.session,
+    tenantShortName,
+    organizationShortName,
+    applicationKey,
+    pageKey,
+  );
+  if (addressed.kind !== "application_page") {
+    console.error(`[application-frame] navigate target refused: address ${addressed.kind}`);
+    return undefined;
+  }
+  return applicationPageAddressPath(
+    tenantShortName,
+    organizationShortName,
+    addressed.application.key,
+    addressed.pageKey,
+  );
 }
 
 /** Reads the viewer's permitted application links on switcher intent or open. */

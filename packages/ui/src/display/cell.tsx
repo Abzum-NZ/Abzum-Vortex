@@ -1,5 +1,4 @@
 import type { ReactElement } from "react";
-import Link from "next/link";
 import { Badge } from "../components/badge";
 import {
   Table,
@@ -11,6 +10,7 @@ import {
   TableRow,
 } from "../components/table";
 import { DefinitionRenderError } from "../definition-error";
+import { NavigationLink } from "../routing/navigation-link";
 import { formatIsoDate, INVALID_DATE_TEXT, type DateFormatOptions } from "./date-format";
 import { FormattedTime } from "./date-format-context";
 import { optionToneBadgeClass } from "./option-tone";
@@ -142,20 +142,15 @@ export function DisplayCellView({ value }: Readonly<{ value: DisplayDetailCell }
           "A link display value requires a safe web, mail or telephone address",
         );
       return isWebLinkAddress(value.address) ? (
-        <a
-          className="vortex-cell-link"
-          href={value.address}
-          target="_blank"
-          rel="noopener noreferrer"
-        >
+        <NavigationLink className="vortex-cell-link" href={value.address} target="_blank">
           {value.label}
           <span aria-hidden="true"> ↗</span>
           <span className="vortex-sr-only"> (external link, opens in a new page)</span>
-        </a>
+        </NavigationLink>
       ) : (
-        <a className="vortex-cell-link" href={value.address} rel="noopener noreferrer">
+        <NavigationLink className="vortex-cell-link" href={value.address}>
           {value.label}
-        </a>
+        </NavigationLink>
       );
     case "rich_text":
       return (
@@ -173,9 +168,9 @@ export function DisplayCellView({ value }: Readonly<{ value: DisplayDetailCell }
       return value.href === undefined ? (
         <span className="vortex-cell-text">{value.label}</span>
       ) : (
-        <Link className="vortex-cell-link" href={value.href} prefetch={false}>
+        <NavigationLink className="vortex-cell-link" href={value.href}>
           {value.label}
-        </Link>
+        </NavigationLink>
       );
     case "restricted":
       return <span className="vortex-cell-restricted">{RESTRICTED_TEXT}</span>;

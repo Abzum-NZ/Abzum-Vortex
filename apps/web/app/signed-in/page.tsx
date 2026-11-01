@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import Link from "next/link";
+import { NavigationLink } from "@vortex/ui/routing";
 import { redirect } from "next/navigation";
 import type { OrganizationLauncherEntry } from "@vortex/platform/schema";
 import {
@@ -47,9 +47,8 @@ import {
 } from "../auth/_lib/session-server";
 import { JoinOutcomeNotice } from "./_components/join-outcome-notice";
 import { OrganizationChooserPage } from "./_components/organization-chooser-page";
-import { organizationAddressPath } from "../_lib/address-paths";
 import { loadOrganizationLauncher } from "../_lib/organization-context";
-import { resolveSignedInLandingPath } from "../_lib/signed-in-landing";
+import { resolveOrganizationLandingPath } from "../_lib/organization-landing";
 
 export const dynamic = "force-dynamic";
 
@@ -126,7 +125,13 @@ async function openOrganization(event: DisplaySemanticEvent): Promise<void> {
   if (current.kind !== "available") redirect("/signed-in");
   const entry = current.entries.find((candidate) => candidate.organizationId === event.recordId);
   if (entry === undefined) redirect("/signed-in");
-  redirect(organizationAddressPath(entry.tenantShortName, entry.organizationShortName));
+  redirect(
+    await resolveOrganizationLandingPath(
+      identity.session,
+      entry.tenantShortName,
+      entry.organizationShortName,
+    ),
+  );
 }
 
 const DAY_MS = 86_400_000;
@@ -236,7 +241,13 @@ async function joinOrganization(event: DisplaySemanticEvent): Promise<void> {
         )
       : undefined;
   if (entry === undefined) redirect("/signed-in");
-  redirect(organizationAddressPath(entry.tenantShortName, entry.organizationShortName));
+  redirect(
+    await resolveOrganizationLandingPath(
+      identity.session,
+      entry.tenantShortName,
+      entry.organizationShortName,
+    ),
+  );
 }
 
 const organizationsUnavailable = (
@@ -259,7 +270,11 @@ const organizationsUnavailable = (
         </CardDescription>
       </CardHeader>
       <CardFooter className="flex justify-between gap-3">
-        <Button variant="outline" nativeButton={false} render={<Link href="/signed-in" />}>
+        <Button
+          variant="outline"
+          nativeButton={false}
+          render={<NavigationLink href="/signed-in" />}
+        >
           Try again
         </Button>
         <form action={signOut}>
@@ -306,10 +321,12 @@ export default async function SignedInPage({
   ) {
     // The one organisation the person belongs to resolves to the destination page in this
     // response: no organisation-address round trip between sign-in and the page they asked for.
-    const landing = await resolveSignedInLandingPath(result.session);
     redirect(
-      landing ??
-        organizationAddressPath(onlyEntry.tenantShortName, onlyEntry.organizationShortName),
+      await resolveOrganizationLandingPath(
+        result.session,
+        onlyEntry.tenantShortName,
+        onlyEntry.organizationShortName,
+      ),
     );
   }
 

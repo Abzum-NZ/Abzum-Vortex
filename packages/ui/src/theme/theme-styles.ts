@@ -36,15 +36,9 @@ const SHARED_COMPONENT_STYLES_CSS = `
   --vortex-motion-page-swap-out-easing: cubic-bezier(0.4, 0, 1, 1);
   --vortex-motion-page-swap-in: 180ms; /* the entering page's fade and 4px rise */
   --vortex-motion-page-swap-in-easing: cubic-bezier(0.16, 1, 0.3, 1);
-  --vortex-motion-page-hold: 450ms; /* the longest a ready page waits for its primary data */
-  --vortex-motion-page-loader-delay: 1200ms; /* a wait this long shows the loader over the page */
   --vortex-motion-row-settle: 180ms; /* each first-appearing row's fade and 3px rise */
   --vortex-motion-row-settle-easing: cubic-bezier(0.16, 1, 0.3, 1);
   --vortex-motion-row-stagger: 13ms; /* the step between rows; the twentieth row and later share one */
-  --vortex-motion-loader-fade: 200ms; /* the loader's fade in */
-  /* The platform loader's size and one draw-hold-erase cycle. */
-  --vortex-loader-size: 100px;
-  --vortex-loader-cycle: 5s;
   color: var(--foreground);
   background-color: var(--background);
   font-family: var(--vortex-font-family);
@@ -165,38 +159,19 @@ const SHARED_COMPONENT_STYLES_CSS = `
 }
 
 /*
- * The page progress line: a thin bar along the top of the page outlet while the next page is
- * fetched, so the current page can stay in place without the click looking ignored. It appears
- * only after 200ms, so a quick change shows nothing, and it is static under reduced motion.
+ * A link whose page change takes a moment shows it on the link itself (the page stays as it is):
+ * after 200ms the link dims and the pointer shows progress, so a quick change shows nothing.
  */
-[data-vortex-page-progress] {
-  position: absolute;
-  inset-inline: 0;
-  top: 0;
-  z-index: 20;
-  height: 0.125rem;
-  overflow: hidden;
-  pointer-events: none;
-  /* The loader takes over from the line once the wait reaches the loader delay. */
-  animation:
-    vortex-loading-reveal var(--vortex-motion-enter-exit) var(--vortex-motion-enter-exit-easing)
-      200ms both,
-    vortex-loading-conceal var(--vortex-motion-enter-exit) var(--vortex-motion-enter-exit-easing)
-      var(--vortex-motion-page-loader-delay) forwards;
+[data-vortex-link-pending] {
+  cursor: progress;
+  animation: vortex-link-pending var(--vortex-motion-enter-exit)
+    var(--vortex-motion-enter-exit-easing) 200ms both;
 }
 
-@keyframes vortex-loading-conceal {
-  from {
-    opacity: 1;
-  }
+@keyframes vortex-link-pending {
   to {
-    opacity: 0;
+    opacity: 0.55;
   }
-}
-
-/* A page that was held past the page hold shows its skeleton at once: the wait has been seen. */
-[data-vortex-page-held] [data-vortex-display-state="loading"] {
-  animation-delay: 0ms;
 }
 
 /*
@@ -217,34 +192,6 @@ const SHARED_COMPONENT_STYLES_CSS = `
   position: relative;
   z-index: 1;
   background-color: transparent;
-}
-
-[data-vortex-page-progress]::before {
-  content: "";
-  position: absolute;
-  inset-block: 0;
-  left: 0;
-  width: 40%;
-  background-color: var(--primary);
-  animation: vortex-page-progress calc(var(--vortex-motion-page) * 4)
-    var(--vortex-motion-page-easing) infinite;
-}
-
-@keyframes vortex-page-progress {
-  from {
-    transform: translateX(-100%);
-  }
-  to {
-    transform: translateX(250%);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  [data-vortex-page-progress]::before {
-    width: 100%;
-    opacity: 0.6;
-    animation: none;
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {

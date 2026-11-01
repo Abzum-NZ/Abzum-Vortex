@@ -164,6 +164,11 @@ const taskCaption = (
     }
     case "interface.navigate": {
       const page = literalText(task, "page");
+      const application = literalText(task, "application");
+      if (application !== undefined)
+        return page === undefined
+          ? `Opens ${application}`
+          : `Opens ${studioWords(page)} in ${application}`;
       const name = source.body.pages.find((candidate) => candidate.key === page)?.name;
       return name === undefined ? "Opens a page" : `Opens ${name}`;
     }

@@ -1,13 +1,4 @@
-import {
-  use,
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type ReactElement,
-  type ReactNode,
-} from "react";
+import { use, useCallback, useEffect, useMemo, useRef, useState, type ReactElement } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   type FieldInputControlReleaseMap,
@@ -22,9 +13,6 @@ import {
   pageAgentTools,
   runPageAgentTool,
   type PageAgentTool,
-  isClientPageChange,
-  pageHoldFor,
-  primaryStreamedPlacement,
   createFlowRuntimeState,
 } from "@vortex/ui";
 import {
@@ -35,7 +23,7 @@ import {
   walkPageComposition,
   readCompiledItemSettings,
 } from "@vortex/platform/schema";
-import Link from "next/link";
+import { NavigationLink, useRestoredPage } from "@vortex/ui/routing";
 import { Button } from "@vortex/ui/components/button";
 import { Alert, AlertDescription } from "@vortex/ui/components/alert";
 import { FirstRecordTypeEmptyState } from "../../../../../../_components/first-record-type-empty-state";
@@ -47,6 +35,7 @@ import type {
   PageSelection,
 } from "./types";
 import { ownersByPlacement } from "./form-surface";
+import { releaseAdoptionNotices, type ReleaseAdoptionOutcome } from "./notices";
 import { usePageEvents } from "./use-page-events";
 import { placementEventNamesByPage, applicationLauncherPlacementIds } from "./placement-helpers";
 import { useUnsavedWorkPrompt } from "./use-unsaved-work-prompt";
@@ -66,6 +55,7 @@ import { useRowDetail } from "./use-row-detail";
 import { usePivot } from "./use-pivot";
 import { useGroupMembers } from "./use-group-members";
 import { WebMcpAdapter } from "../../../../../../_components/webmcp-adapter";
+import { registerShownPageRefresh } from "../../../_components/shown-page";
 import {
   useApplicationFrame,
   useFramePageState,
@@ -88,7 +78,6 @@ export function ApplicationPageViewContent({
   frame,
   onOpenApplication,
   adoptReleaseAction,
-  pageFeedback,
   platformComponentRegistry,
   fieldInputControlReleases,
   platformThemeTokens,
@@ -99,24 +88,11 @@ export function ApplicationPageViewContent({
   /** The frame projected with this page, handed to the application frame around it. */
   frame: ProjectedApplicationFrame;
   onOpenApplication: (event: DisplaySemanticEvent) => Promise<void>;
-  adoptReleaseAction?: ((formData: FormData) => Promise<void>) | undefined;
-  pageFeedback?: ReactNode;
+  adoptReleaseAction?: ((formData: FormData) => Promise<ReleaseAdoptionOutcome>) | undefined;
   platformComponentRegistry: ReturnType<typeof createPlatformComponentRegistryForReleases>;
   fieldInputControlReleases: FieldInputControlReleaseMap;
   platformThemeTokens: PlatformThemeTokens;
 }>): ReactElement {
-  // Hold then swap: a page that arrives after the document has loaded waits, inside the page
-  // change's transition (so the current page stays on screen), for its primary placement's data or
-  // the page hold, whichever comes first. The data is the same response's streamed read, so the
-  // wait never costs a request. A page released by the hold shows its skeleton at once.
-  const primaryPlacementId =
-    model.streamedData === undefined
-      ? undefined
-      : primaryStreamedPlacement(content, model.streamedData);
-  const primaryRead =
-    primaryPlacementId === undefined ? undefined : model.streamedData?.[primaryPlacementId];
-  const pageHold =
-    primaryRead !== undefined && isClientPageChange() ? use(pageHoldFor(primaryRead)) : "ready";
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -173,7 +149,7 @@ export function ApplicationPageViewContent({
   const submittedFormsRef = useRef(new Map<string, SubmittedForm>());
   /** Set when the person cancels a form a running flow paused at; a board move clears it when it starts. */
   const formCancelledRef = useRef(false);
-  const { unsavedWorkRegistry, unsavedWork, confirmDialog } = useUnsavedWorkPrompt({ router });
+  const { unsavedWorkRegistry, unsavedWork, confirmDialog } = useUnsavedWorkPrompt();
 
   const application = model.invocation;
   const formOwners = useMemo(
@@ -295,7 +271,6 @@ export function ApplicationPageViewContent({
     router,
     resolvePageHref,
     basePath,
-    unsavedWork,
     model,
     platformComponentRegistry,
     runtimeInputsRef,
@@ -621,22 +596,27 @@ export function ApplicationPageViewContent({
             const formData = new FormData();
             formData.set("applicationKey", application.applicationKey);
             formData.set("pageKey", application.pageKey);
-            formData.set("pageParameters", address.search());
             formData.set("targetReleaseRevision", String(offeredReleaseRevision));
             formData.set("expectedActiveReleaseRevision", String(installedReleaseRevision));
-            await adoptReleaseAction(formData);
+            const outcome = await adoptReleaseAction(formData);
+            if (outcome !== "adopted") showPageMessage(releaseAdoptionNotices[outcome]);
           },
-    [adoptReleaseAction, address, application.applicationKey, application.pageKey],
+    [adoptReleaseAction, application.applicationKey, application.pageKey, showPageMessage],
   );
   useFramePageState("adoptRelease", adoptRelease);
+  // A change an earlier page finished after it had gone, and Back or Forward restoring this page,
+  // re-read this page's data placements (a placement read answers `reload` when the installed
+  // release changed).
+  const refreshShown = useCallback(
+    () => void refreshPlacements(Object.keys(model.data), undefined, { content: true }),
+    [model.data, refreshPlacements],
+  );
+  useEffect(() => registerShownPageRefresh(refreshShown), [refreshShown]);
+  useRestoredPage(refreshShown);
 
   return (
     <>
-      <div
-        ref={compositionRootRef}
-        className="contents"
-        {...(pageHold === "held" ? { "data-vortex-page-held": "" } : {})}
-      >
+      <div ref={compositionRootRef} className="contents">
         <WebMcpAdapter
           contextKey={webMcpContextKey}
           tools={agentTools}
@@ -649,12 +629,14 @@ export function ApplicationPageViewContent({
           feedback={
             <>
               {messageBanner}
-              {pageFeedback}
               {model.bodyContentAvailable !== false ? null : model.firstRecordTypeHref !==
                 undefined ? (
                 <FirstRecordTypeEmptyState
                   action={
-                    <Button nativeButton={false} render={<Link href={model.firstRecordTypeHref} />}>
+                    <Button
+                      nativeButton={false}
+                      render={<NavigationLink href={model.firstRecordTypeHref} />}
+                    >
                       Open the Data tab in Studio
                     </Button>
                   }
@@ -678,9 +660,6 @@ export function ApplicationPageViewContent({
           theme={model.theme}
           {...(navigation === undefined ? {} : { projectedNavigation: navigation })}
           resolvePageHref={resolvePageHref}
-          {...(applicationFrame === null
-            ? {}
-            : { onNavigatePage: applicationFrame.navigateToPage })}
           currentPageId={model.pageId}
           {...(model.guidedForm === undefined
             ? {}
