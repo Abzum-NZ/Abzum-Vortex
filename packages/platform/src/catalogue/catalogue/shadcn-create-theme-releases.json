@@ -32,12 +32,6 @@
         "light": "oklch(0.922 0 0)",
         "dark": "oklch(1 0 0 / 10%)"
       },
-      "border": {
-        "kind": "border",
-        "widthRem": 0.0625,
-        "style": "solid",
-        "colorToken": "border_color"
-      },
       "primary": {
         "kind": "color_pair",
         "light": "oklch(0.205 0 0)",
@@ -247,37 +241,9 @@
         "kind": "spacing",
         "rem": 1
       },
-      "space_lg": {
-        "kind": "spacing",
-        "rem": 1.5
-      },
-      "radius_sm": {
-        "kind": "corners",
-        "rem": 0.125
-      },
-      "radius_md": {
-        "kind": "corners",
-        "rem": 0.25
-      },
-      "radius_lg": {
-        "kind": "corners",
-        "rem": 0.5
-      },
       "radius_base": {
         "kind": "corners",
         "rem": 0.625
-      },
-      "elevation_low": {
-        "kind": "elevation",
-        "level": 1
-      },
-      "elevation_high": {
-        "kind": "elevation",
-        "level": 3
-      },
-      "density": {
-        "kind": "density",
-        "value": "comfortable"
       }
     }
   },
@@ -313,12 +279,6 @@
         "kind": "color_pair",
         "light": "oklch(0.923 0.003 48.717)",
         "dark": "oklch(1 0 0 / 10%)"
-      },
-      "border": {
-        "kind": "border",
-        "widthRem": 0.0625,
-        "style": "solid",
-        "colorToken": "border_color"
       },
       "primary": {
         "kind": "color_pair",
@@ -529,37 +489,9 @@
         "kind": "spacing",
         "rem": 1
       },
-      "space_lg": {
-        "kind": "spacing",
-        "rem": 1.5
-      },
-      "radius_sm": {
-        "kind": "corners",
-        "rem": 0.125
-      },
-      "radius_md": {
-        "kind": "corners",
-        "rem": 0.25
-      },
-      "radius_lg": {
-        "kind": "corners",
-        "rem": 0.5
-      },
       "radius_base": {
         "kind": "corners",
         "rem": 0.625
-      },
-      "elevation_low": {
-        "kind": "elevation",
-        "level": 1
-      },
-      "elevation_high": {
-        "kind": "elevation",
-        "level": 3
-      },
-      "density": {
-        "kind": "density",
-        "value": "comfortable"
       }
     }
   },
@@ -595,12 +527,6 @@
         "kind": "color_pair",
         "light": "oklch(0.92 0.004 286.32)",
         "dark": "oklch(1 0 0 / 10%)"
-      },
-      "border": {
-        "kind": "border",
-        "widthRem": 0.0625,
-        "style": "solid",
-        "colorToken": "border_color"
       },
       "primary": {
         "kind": "color_pair",
@@ -811,37 +737,9 @@
         "kind": "spacing",
         "rem": 1
       },
-      "space_lg": {
-        "kind": "spacing",
-        "rem": 1.5
-      },
-      "radius_sm": {
-        "kind": "corners",
-        "rem": 0.125
-      },
-      "radius_md": {
-        "kind": "corners",
-        "rem": 0.25
-      },
-      "radius_lg": {
-        "kind": "corners",
-        "rem": 0.5
-      },
       "radius_base": {
         "kind": "corners",
         "rem": 0.625
-      },
-      "elevation_low": {
-        "kind": "elevation",
-        "level": 1
-      },
-      "elevation_high": {
-        "kind": "elevation",
-        "level": 3
-      },
-      "density": {
-        "kind": "density",
-        "value": "comfortable"
       }
     }
   },
@@ -877,12 +775,6 @@
         "kind": "color_pair",
         "light": "oklch(0.928 0.006 264.531)",
         "dark": "oklch(1 0 0 / 10%)"
-      },
-      "border": {
-        "kind": "border",
-        "widthRem": 0.0625,
-        "style": "solid",
-        "colorToken": "border_color"
       },
       "primary": {
         "kind": "color_pair",
@@ -1093,37 +985,9 @@
         "kind": "spacing",
         "rem": 1
       },
-      "space_lg": {
-        "kind": "spacing",
-        "rem": 1.5
-      },
-      "radius_sm": {
-        "kind": "corners",
-        "rem": 0.125
-      },
-      "radius_md": {
-        "kind": "corners",
-        "rem": 0.25
-      },
-      "radius_lg": {
-        "kind": "corners",
-        "rem": 0.5
-      },
       "radius_base": {
         "kind": "corners",
         "rem": 0.625
-      },
-      "elevation_low": {
-        "kind": "elevation",
-        "level": 1
-      },
-      "elevation_high": {
-        "kind": "elevation",
-        "level": 3
-      },
-      "density": {
-        "kind": "density",
-        "value": "comfortable"
       }
     }
   },
@@ -1159,12 +1023,6 @@
         "kind": "color_pair",
         "light": "oklch(0.922 0.005 325.62)",
         "dark": "oklch(1 0 0 / 10%)"
-      },
-      "border": {
-        "kind": "border",
-        "widthRem": 0.0625,
-        "style": "solid",
-        "colorToken": "border_color"
       },
       "primary": {
         "kind": "color_pair",
@@ -1375,37 +1233,9 @@
         "kind": "spacing",
         "rem": 1
       },
-      "space_lg": {
-        "kind": "spacing",
-        "rem": 1.5
-      },
-      "radius_sm": {
-        "kind": "corners",
-        "rem": 0.125
-      },
-      "radius_md": {
-        "kind": "corners",
-        "rem": 0.25
-      },
-      "radius_lg": {
-        "kind": "corners",
-        "rem": 0.5
-      },
       "radius_base": {
         "kind": "corners",
         "rem": 0.625
-      },
-      "elevation_low": {
-        "kind": "elevation",
-        "level": 1
-      },
-      "elevation_high": {
-        "kind": "elevation",
-        "level": 3
-      },
-      "density": {
-        "kind": "density",
-        "value": "comfortable"
       }
     }
   },
@@ -1441,12 +1271,6 @@
         "kind": "color_pair",
         "light": "oklch(0.93 0.007 106.5)",
         "dark": "oklch(1 0 0 / 10%)"
-      },
-      "border": {
-        "kind": "border",
-        "widthRem": 0.0625,
-        "style": "solid",
-        "colorToken": "border_color"
       },
       "primary": {
         "kind": "color_pair",
@@ -1657,37 +1481,9 @@
         "kind": "spacing",
         "rem": 1
       },
-      "space_lg": {
-        "kind": "spacing",
-        "rem": 1.5
-      },
-      "radius_sm": {
-        "kind": "corners",
-        "rem": 0.125
-      },
-      "radius_md": {
-        "kind": "corners",
-        "rem": 0.25
-      },
-      "radius_lg": {
-        "kind": "corners",
-        "rem": 0.5
-      },
       "radius_base": {
         "kind": "corners",
         "rem": 0.625
-      },
-      "elevation_low": {
-        "kind": "elevation",
-        "level": 1
-      },
-      "elevation_high": {
-        "kind": "elevation",
-        "level": 3
-      },
-      "density": {
-        "kind": "density",
-        "value": "comfortable"
       }
     }
   },
@@ -1723,12 +1519,6 @@
         "kind": "color_pair",
         "light": "oklch(0.925 0.005 214.3)",
         "dark": "oklch(1 0 0 / 10%)"
-      },
-      "border": {
-        "kind": "border",
-        "widthRem": 0.0625,
-        "style": "solid",
-        "colorToken": "border_color"
       },
       "primary": {
         "kind": "color_pair",
@@ -1939,37 +1729,9 @@
         "kind": "spacing",
         "rem": 1
       },
-      "space_lg": {
-        "kind": "spacing",
-        "rem": 1.5
-      },
-      "radius_sm": {
-        "kind": "corners",
-        "rem": 0.125
-      },
-      "radius_md": {
-        "kind": "corners",
-        "rem": 0.25
-      },
-      "radius_lg": {
-        "kind": "corners",
-        "rem": 0.5
-      },
       "radius_base": {
         "kind": "corners",
         "rem": 0.625
-      },
-      "elevation_low": {
-        "kind": "elevation",
-        "level": 1
-      },
-      "elevation_high": {
-        "kind": "elevation",
-        "level": 3
-      },
-      "density": {
-        "kind": "density",
-        "value": "comfortable"
       }
     }
   },
@@ -2005,12 +1767,6 @@
         "kind": "color_pair",
         "light": "oklch(0.922 0.005 34.3)",
         "dark": "oklch(1 0 0 / 10%)"
-      },
-      "border": {
-        "kind": "border",
-        "widthRem": 0.0625,
-        "style": "solid",
-        "colorToken": "border_color"
       },
       "primary": {
         "kind": "color_pair",
@@ -2221,37 +1977,9 @@
         "kind": "spacing",
         "rem": 1
       },
-      "space_lg": {
-        "kind": "spacing",
-        "rem": 1.5
-      },
-      "radius_sm": {
-        "kind": "corners",
-        "rem": 0.125
-      },
-      "radius_md": {
-        "kind": "corners",
-        "rem": 0.25
-      },
-      "radius_lg": {
-        "kind": "corners",
-        "rem": 0.5
-      },
       "radius_base": {
         "kind": "corners",
         "rem": 0.625
-      },
-      "elevation_low": {
-        "kind": "elevation",
-        "level": 1
-      },
-      "elevation_high": {
-        "kind": "elevation",
-        "level": 3
-      },
-      "density": {
-        "kind": "density",
-        "value": "comfortable"
       }
     }
   },
@@ -2287,12 +2015,6 @@
         "kind": "color_pair",
         "light": "oklch(0.922 0 0)",
         "dark": "oklch(1 0 0 / 10%)"
-      },
-      "border": {
-        "kind": "border",
-        "widthRem": 0.0625,
-        "style": "solid",
-        "colorToken": "border_color"
       },
       "primary": {
         "kind": "color_pair",
@@ -2503,37 +2225,9 @@
         "kind": "spacing",
         "rem": 1
       },
-      "space_lg": {
-        "kind": "spacing",
-        "rem": 1.5
-      },
-      "radius_sm": {
-        "kind": "corners",
-        "rem": 0.125
-      },
-      "radius_md": {
-        "kind": "corners",
-        "rem": 0.25
-      },
-      "radius_lg": {
-        "kind": "corners",
-        "rem": 0.5
-      },
       "radius_base": {
         "kind": "corners",
         "rem": 0.625
-      },
-      "elevation_low": {
-        "kind": "elevation",
-        "level": 1
-      },
-      "elevation_high": {
-        "kind": "elevation",
-        "level": 3
-      },
-      "density": {
-        "kind": "density",
-        "value": "comfortable"
       }
     }
   },
@@ -2569,12 +2263,6 @@
         "kind": "color_pair",
         "light": "oklch(0.922 0 0)",
         "dark": "oklch(1 0 0 / 10%)"
-      },
-      "border": {
-        "kind": "border",
-        "widthRem": 0.0625,
-        "style": "solid",
-        "colorToken": "border_color"
       },
       "primary": {
         "kind": "color_pair",
@@ -2785,37 +2473,9 @@
         "kind": "spacing",
         "rem": 1
       },
-      "space_lg": {
-        "kind": "spacing",
-        "rem": 1.5
-      },
-      "radius_sm": {
-        "kind": "corners",
-        "rem": 0.125
-      },
-      "radius_md": {
-        "kind": "corners",
-        "rem": 0.25
-      },
-      "radius_lg": {
-        "kind": "corners",
-        "rem": 0.5
-      },
       "radius_base": {
         "kind": "corners",
         "rem": 0.625
-      },
-      "elevation_low": {
-        "kind": "elevation",
-        "level": 1
-      },
-      "elevation_high": {
-        "kind": "elevation",
-        "level": 3
-      },
-      "density": {
-        "kind": "density",
-        "value": "comfortable"
       }
     }
   },
@@ -2851,12 +2511,6 @@
         "kind": "color_pair",
         "light": "oklch(0.922 0 0)",
         "dark": "oklch(1 0 0 / 10%)"
-      },
-      "border": {
-        "kind": "border",
-        "widthRem": 0.0625,
-        "style": "solid",
-        "colorToken": "border_color"
       },
       "primary": {
         "kind": "color_pair",
@@ -3067,37 +2721,9 @@
         "kind": "spacing",
         "rem": 1
       },
-      "space_lg": {
-        "kind": "spacing",
-        "rem": 1.5
-      },
-      "radius_sm": {
-        "kind": "corners",
-        "rem": 0.125
-      },
-      "radius_md": {
-        "kind": "corners",
-        "rem": 0.25
-      },
-      "radius_lg": {
-        "kind": "corners",
-        "rem": 0.5
-      },
       "radius_base": {
         "kind": "corners",
         "rem": 0.625
-      },
-      "elevation_low": {
-        "kind": "elevation",
-        "level": 1
-      },
-      "elevation_high": {
-        "kind": "elevation",
-        "level": 3
-      },
-      "density": {
-        "kind": "density",
-        "value": "comfortable"
       }
     }
   },
@@ -3133,12 +2759,6 @@
         "kind": "color_pair",
         "light": "oklch(0.922 0 0)",
         "dark": "oklch(1 0 0 / 10%)"
-      },
-      "border": {
-        "kind": "border",
-        "widthRem": 0.0625,
-        "style": "solid",
-        "colorToken": "border_color"
       },
       "primary": {
         "kind": "color_pair",
@@ -3349,37 +2969,9 @@
         "kind": "spacing",
         "rem": 1
       },
-      "space_lg": {
-        "kind": "spacing",
-        "rem": 1.5
-      },
-      "radius_sm": {
-        "kind": "corners",
-        "rem": 0.125
-      },
-      "radius_md": {
-        "kind": "corners",
-        "rem": 0.25
-      },
-      "radius_lg": {
-        "kind": "corners",
-        "rem": 0.5
-      },
       "radius_base": {
         "kind": "corners",
         "rem": 0.625
-      },
-      "elevation_low": {
-        "kind": "elevation",
-        "level": 1
-      },
-      "elevation_high": {
-        "kind": "elevation",
-        "level": 3
-      },
-      "density": {
-        "kind": "density",
-        "value": "comfortable"
       }
     }
   },
@@ -3415,12 +3007,6 @@
         "kind": "color_pair",
         "light": "oklch(0.922 0 0)",
         "dark": "oklch(1 0 0 / 10%)"
-      },
-      "border": {
-        "kind": "border",
-        "widthRem": 0.0625,
-        "style": "solid",
-        "colorToken": "border_color"
       },
       "primary": {
         "kind": "color_pair",
@@ -3631,37 +3217,9 @@
         "kind": "spacing",
         "rem": 1
       },
-      "space_lg": {
-        "kind": "spacing",
-        "rem": 1.5
-      },
-      "radius_sm": {
-        "kind": "corners",
-        "rem": 0.125
-      },
-      "radius_md": {
-        "kind": "corners",
-        "rem": 0.25
-      },
-      "radius_lg": {
-        "kind": "corners",
-        "rem": 0.5
-      },
       "radius_base": {
         "kind": "corners",
         "rem": 0.625
-      },
-      "elevation_low": {
-        "kind": "elevation",
-        "level": 1
-      },
-      "elevation_high": {
-        "kind": "elevation",
-        "level": 3
-      },
-      "density": {
-        "kind": "density",
-        "value": "comfortable"
       }
     }
   },
@@ -3697,12 +3255,6 @@
         "kind": "color_pair",
         "light": "oklch(0.922 0 0)",
         "dark": "oklch(1 0 0 / 10%)"
-      },
-      "border": {
-        "kind": "border",
-        "widthRem": 0.0625,
-        "style": "solid",
-        "colorToken": "border_color"
       },
       "primary": {
         "kind": "color_pair",
@@ -3913,37 +3465,9 @@
         "kind": "spacing",
         "rem": 1
       },
-      "space_lg": {
-        "kind": "spacing",
-        "rem": 1.5
-      },
-      "radius_sm": {
-        "kind": "corners",
-        "rem": 0.125
-      },
-      "radius_md": {
-        "kind": "corners",
-        "rem": 0.25
-      },
-      "radius_lg": {
-        "kind": "corners",
-        "rem": 0.5
-      },
       "radius_base": {
         "kind": "corners",
         "rem": 0.625
-      },
-      "elevation_low": {
-        "kind": "elevation",
-        "level": 1
-      },
-      "elevation_high": {
-        "kind": "elevation",
-        "level": 3
-      },
-      "density": {
-        "kind": "density",
-        "value": "comfortable"
       }
     }
   },
@@ -3979,12 +3503,6 @@
         "kind": "color_pair",
         "light": "oklch(0.922 0 0)",
         "dark": "oklch(1 0 0 / 10%)"
-      },
-      "border": {
-        "kind": "border",
-        "widthRem": 0.0625,
-        "style": "solid",
-        "colorToken": "border_color"
       },
       "primary": {
         "kind": "color_pair",
@@ -4195,37 +3713,9 @@
         "kind": "spacing",
         "rem": 1
       },
-      "space_lg": {
-        "kind": "spacing",
-        "rem": 1.5
-      },
-      "radius_sm": {
-        "kind": "corners",
-        "rem": 0.125
-      },
-      "radius_md": {
-        "kind": "corners",
-        "rem": 0.25
-      },
-      "radius_lg": {
-        "kind": "corners",
-        "rem": 0.5
-      },
       "radius_base": {
         "kind": "corners",
         "rem": 0.625
-      },
-      "elevation_low": {
-        "kind": "elevation",
-        "level": 1
-      },
-      "elevation_high": {
-        "kind": "elevation",
-        "level": 3
-      },
-      "density": {
-        "kind": "density",
-        "value": "comfortable"
       }
     }
   },
@@ -4261,12 +3751,6 @@
         "kind": "color_pair",
         "light": "oklch(0.922 0 0)",
         "dark": "oklch(1 0 0 / 10%)"
-      },
-      "border": {
-        "kind": "border",
-        "widthRem": 0.0625,
-        "style": "solid",
-        "colorToken": "border_color"
       },
       "primary": {
         "kind": "color_pair",
@@ -4477,37 +3961,9 @@
         "kind": "spacing",
         "rem": 1
       },
-      "space_lg": {
-        "kind": "spacing",
-        "rem": 1.5
-      },
-      "radius_sm": {
-        "kind": "corners",
-        "rem": 0.125
-      },
-      "radius_md": {
-        "kind": "corners",
-        "rem": 0.25
-      },
-      "radius_lg": {
-        "kind": "corners",
-        "rem": 0.5
-      },
       "radius_base": {
         "kind": "corners",
         "rem": 0.625
-      },
-      "elevation_low": {
-        "kind": "elevation",
-        "level": 1
-      },
-      "elevation_high": {
-        "kind": "elevation",
-        "level": 3
-      },
-      "density": {
-        "kind": "density",
-        "value": "comfortable"
       }
     }
   },
@@ -4543,12 +3999,6 @@
         "kind": "color_pair",
         "light": "oklch(0.922 0 0)",
         "dark": "oklch(1 0 0 / 10%)"
-      },
-      "border": {
-        "kind": "border",
-        "widthRem": 0.0625,
-        "style": "solid",
-        "colorToken": "border_color"
       },
       "primary": {
         "kind": "color_pair",
@@ -4759,37 +4209,9 @@
         "kind": "spacing",
         "rem": 1
       },
-      "space_lg": {
-        "kind": "spacing",
-        "rem": 1.5
-      },
-      "radius_sm": {
-        "kind": "corners",
-        "rem": 0.125
-      },
-      "radius_md": {
-        "kind": "corners",
-        "rem": 0.25
-      },
-      "radius_lg": {
-        "kind": "corners",
-        "rem": 0.5
-      },
       "radius_base": {
         "kind": "corners",
         "rem": 0.625
-      },
-      "elevation_low": {
-        "kind": "elevation",
-        "level": 1
-      },
-      "elevation_high": {
-        "kind": "elevation",
-        "level": 3
-      },
-      "density": {
-        "kind": "density",
-        "value": "comfortable"
       }
     }
   },
@@ -4825,12 +4247,6 @@
         "kind": "color_pair",
         "light": "oklch(0.922 0 0)",
         "dark": "oklch(1 0 0 / 10%)"
-      },
-      "border": {
-        "kind": "border",
-        "widthRem": 0.0625,
-        "style": "solid",
-        "colorToken": "border_color"
       },
       "primary": {
         "kind": "color_pair",
@@ -5041,37 +4457,9 @@
         "kind": "spacing",
         "rem": 1
       },
-      "space_lg": {
-        "kind": "spacing",
-        "rem": 1.5
-      },
-      "radius_sm": {
-        "kind": "corners",
-        "rem": 0.125
-      },
-      "radius_md": {
-        "kind": "corners",
-        "rem": 0.25
-      },
-      "radius_lg": {
-        "kind": "corners",
-        "rem": 0.5
-      },
       "radius_base": {
         "kind": "corners",
         "rem": 0.625
-      },
-      "elevation_low": {
-        "kind": "elevation",
-        "level": 1
-      },
-      "elevation_high": {
-        "kind": "elevation",
-        "level": 3
-      },
-      "density": {
-        "kind": "density",
-        "value": "comfortable"
       }
     }
   },
@@ -5107,12 +4495,6 @@
         "kind": "color_pair",
         "light": "oklch(0.922 0 0)",
         "dark": "oklch(1 0 0 / 10%)"
-      },
-      "border": {
-        "kind": "border",
-        "widthRem": 0.0625,
-        "style": "solid",
-        "colorToken": "border_color"
       },
       "primary": {
         "kind": "color_pair",
@@ -5323,37 +4705,9 @@
         "kind": "spacing",
         "rem": 1
       },
-      "space_lg": {
-        "kind": "spacing",
-        "rem": 1.5
-      },
-      "radius_sm": {
-        "kind": "corners",
-        "rem": 0.125
-      },
-      "radius_md": {
-        "kind": "corners",
-        "rem": 0.25
-      },
-      "radius_lg": {
-        "kind": "corners",
-        "rem": 0.5
-      },
       "radius_base": {
         "kind": "corners",
         "rem": 0.625
-      },
-      "elevation_low": {
-        "kind": "elevation",
-        "level": 1
-      },
-      "elevation_high": {
-        "kind": "elevation",
-        "level": 3
-      },
-      "density": {
-        "kind": "density",
-        "value": "comfortable"
       }
     }
   },
@@ -5389,12 +4743,6 @@
         "kind": "color_pair",
         "light": "oklch(0.922 0 0)",
         "dark": "oklch(1 0 0 / 10%)"
-      },
-      "border": {
-        "kind": "border",
-        "widthRem": 0.0625,
-        "style": "solid",
-        "colorToken": "border_color"
       },
       "primary": {
         "kind": "color_pair",
@@ -5605,37 +4953,9 @@
         "kind": "spacing",
         "rem": 1
       },
-      "space_lg": {
-        "kind": "spacing",
-        "rem": 1.5
-      },
-      "radius_sm": {
-        "kind": "corners",
-        "rem": 0.125
-      },
-      "radius_md": {
-        "kind": "corners",
-        "rem": 0.25
-      },
-      "radius_lg": {
-        "kind": "corners",
-        "rem": 0.5
-      },
       "radius_base": {
         "kind": "corners",
         "rem": 0.625
-      },
-      "elevation_low": {
-        "kind": "elevation",
-        "level": 1
-      },
-      "elevation_high": {
-        "kind": "elevation",
-        "level": 3
-      },
-      "density": {
-        "kind": "density",
-        "value": "comfortable"
       }
     }
   },
@@ -5671,12 +4991,6 @@
         "kind": "color_pair",
         "light": "oklch(0.922 0 0)",
         "dark": "oklch(1 0 0 / 10%)"
-      },
-      "border": {
-        "kind": "border",
-        "widthRem": 0.0625,
-        "style": "solid",
-        "colorToken": "border_color"
       },
       "primary": {
         "kind": "color_pair",
@@ -5887,37 +5201,9 @@
         "kind": "spacing",
         "rem": 1
       },
-      "space_lg": {
-        "kind": "spacing",
-        "rem": 1.5
-      },
-      "radius_sm": {
-        "kind": "corners",
-        "rem": 0.125
-      },
-      "radius_md": {
-        "kind": "corners",
-        "rem": 0.25
-      },
-      "radius_lg": {
-        "kind": "corners",
-        "rem": 0.5
-      },
       "radius_base": {
         "kind": "corners",
         "rem": 0.625
-      },
-      "elevation_low": {
-        "kind": "elevation",
-        "level": 1
-      },
-      "elevation_high": {
-        "kind": "elevation",
-        "level": 3
-      },
-      "density": {
-        "kind": "density",
-        "value": "comfortable"
       }
     }
   },
@@ -5953,12 +5239,6 @@
         "kind": "color_pair",
         "light": "oklch(0.922 0 0)",
         "dark": "oklch(1 0 0 / 10%)"
-      },
-      "border": {
-        "kind": "border",
-        "widthRem": 0.0625,
-        "style": "solid",
-        "colorToken": "border_color"
       },
       "primary": {
         "kind": "color_pair",
@@ -6169,37 +5449,9 @@
         "kind": "spacing",
         "rem": 1
       },
-      "space_lg": {
-        "kind": "spacing",
-        "rem": 1.5
-      },
-      "radius_sm": {
-        "kind": "corners",
-        "rem": 0.125
-      },
-      "radius_md": {
-        "kind": "corners",
-        "rem": 0.25
-      },
-      "radius_lg": {
-        "kind": "corners",
-        "rem": 0.5
-      },
       "radius_base": {
         "kind": "corners",
         "rem": 0.625
-      },
-      "elevation_low": {
-        "kind": "elevation",
-        "level": 1
-      },
-      "elevation_high": {
-        "kind": "elevation",
-        "level": 3
-      },
-      "density": {
-        "kind": "density",
-        "value": "comfortable"
       }
     }
   },
@@ -6235,12 +5487,6 @@
         "kind": "color_pair",
         "light": "oklch(0.922 0 0)",
         "dark": "oklch(1 0 0 / 10%)"
-      },
-      "border": {
-        "kind": "border",
-        "widthRem": 0.0625,
-        "style": "solid",
-        "colorToken": "border_color"
       },
       "primary": {
         "kind": "color_pair",
@@ -6451,37 +5697,9 @@
         "kind": "spacing",
         "rem": 1
       },
-      "space_lg": {
-        "kind": "spacing",
-        "rem": 1.5
-      },
-      "radius_sm": {
-        "kind": "corners",
-        "rem": 0.125
-      },
-      "radius_md": {
-        "kind": "corners",
-        "rem": 0.25
-      },
-      "radius_lg": {
-        "kind": "corners",
-        "rem": 0.5
-      },
       "radius_base": {
         "kind": "corners",
         "rem": 0.625
-      },
-      "elevation_low": {
-        "kind": "elevation",
-        "level": 1
-      },
-      "elevation_high": {
-        "kind": "elevation",
-        "level": 3
-      },
-      "density": {
-        "kind": "density",
-        "value": "comfortable"
       }
     }
   },
@@ -6517,12 +5735,6 @@
         "kind": "color_pair",
         "light": "oklch(0.922 0 0)",
         "dark": "oklch(1 0 0 / 10%)"
-      },
-      "border": {
-        "kind": "border",
-        "widthRem": 0.0625,
-        "style": "solid",
-        "colorToken": "border_color"
       },
       "primary": {
         "kind": "color_pair",
@@ -6733,37 +5945,9 @@
         "kind": "spacing",
         "rem": 1
       },
-      "space_lg": {
-        "kind": "spacing",
-        "rem": 1.5
-      },
-      "radius_sm": {
-        "kind": "corners",
-        "rem": 0.125
-      },
-      "radius_md": {
-        "kind": "corners",
-        "rem": 0.25
-      },
-      "radius_lg": {
-        "kind": "corners",
-        "rem": 0.5
-      },
       "radius_base": {
         "kind": "corners",
         "rem": 0.625
-      },
-      "elevation_low": {
-        "kind": "elevation",
-        "level": 1
-      },
-      "elevation_high": {
-        "kind": "elevation",
-        "level": 3
-      },
-      "density": {
-        "kind": "density",
-        "value": "comfortable"
       }
     }
   },
@@ -6799,12 +5983,6 @@
         "kind": "color_pair",
         "light": "oklch(0.922 0 0)",
         "dark": "oklch(1 0 0 / 10%)"
-      },
-      "border": {
-        "kind": "border",
-        "widthRem": 0.0625,
-        "style": "solid",
-        "colorToken": "border_color"
       },
       "primary": {
         "kind": "color_pair",
@@ -7015,37 +6193,9 @@
         "kind": "spacing",
         "rem": 1
       },
-      "space_lg": {
-        "kind": "spacing",
-        "rem": 1.5
-      },
-      "radius_sm": {
-        "kind": "corners",
-        "rem": 0.125
-      },
-      "radius_md": {
-        "kind": "corners",
-        "rem": 0.25
-      },
-      "radius_lg": {
-        "kind": "corners",
-        "rem": 0.5
-      },
       "radius_base": {
         "kind": "corners",
         "rem": 0.625
-      },
-      "elevation_low": {
-        "kind": "elevation",
-        "level": 1
-      },
-      "elevation_high": {
-        "kind": "elevation",
-        "level": 3
-      },
-      "density": {
-        "kind": "density",
-        "value": "comfortable"
       }
     }
   },
@@ -7081,12 +6231,6 @@
         "kind": "color_pair",
         "light": "oklch(0.922 0 0)",
         "dark": "oklch(1 0 0 / 10%)"
-      },
-      "border": {
-        "kind": "border",
-        "widthRem": 0.0625,
-        "style": "solid",
-        "colorToken": "border_color"
       },
       "primary": {
         "kind": "color_pair",
@@ -7297,37 +6441,9 @@
         "kind": "spacing",
         "rem": 1
       },
-      "space_lg": {
-        "kind": "spacing",
-        "rem": 1.5
-      },
-      "radius_sm": {
-        "kind": "corners",
-        "rem": 0.125
-      },
-      "radius_md": {
-        "kind": "corners",
-        "rem": 0.25
-      },
-      "radius_lg": {
-        "kind": "corners",
-        "rem": 0.5
-      },
       "radius_base": {
         "kind": "corners",
         "rem": 0.625
-      },
-      "elevation_low": {
-        "kind": "elevation",
-        "level": 1
-      },
-      "elevation_high": {
-        "kind": "elevation",
-        "level": 3
-      },
-      "density": {
-        "kind": "density",
-        "value": "comfortable"
       }
     }
   },
@@ -7363,12 +6479,6 @@
         "kind": "color_pair",
         "light": "oklch(0.922 0 0)",
         "dark": "oklch(1 0 0 / 10%)"
-      },
-      "border": {
-        "kind": "border",
-        "widthRem": 0.0625,
-        "style": "solid",
-        "colorToken": "border_color"
       },
       "primary": {
         "kind": "color_pair",
@@ -7579,37 +6689,9 @@
         "kind": "spacing",
         "rem": 1
       },
-      "space_lg": {
-        "kind": "spacing",
-        "rem": 1.5
-      },
-      "radius_sm": {
-        "kind": "corners",
-        "rem": 0.125
-      },
-      "radius_md": {
-        "kind": "corners",
-        "rem": 0.25
-      },
-      "radius_lg": {
-        "kind": "corners",
-        "rem": 0.5
-      },
       "radius_base": {
         "kind": "corners",
         "rem": 0.625
-      },
-      "elevation_low": {
-        "kind": "elevation",
-        "level": 1
-      },
-      "elevation_high": {
-        "kind": "elevation",
-        "level": 3
-      },
-      "density": {
-        "kind": "density",
-        "value": "comfortable"
       }
     }
   },
@@ -7645,12 +6727,6 @@
         "kind": "color_pair",
         "light": "oklch(0.922 0 0)",
         "dark": "oklch(1 0 0 / 10%)"
-      },
-      "border": {
-        "kind": "border",
-        "widthRem": 0.0625,
-        "style": "solid",
-        "colorToken": "border_color"
       },
       "primary": {
         "kind": "color_pair",
@@ -7861,37 +6937,9 @@
         "kind": "spacing",
         "rem": 1
       },
-      "space_lg": {
-        "kind": "spacing",
-        "rem": 1.5
-      },
-      "radius_sm": {
-        "kind": "corners",
-        "rem": 0.125
-      },
-      "radius_md": {
-        "kind": "corners",
-        "rem": 0.25
-      },
-      "radius_lg": {
-        "kind": "corners",
-        "rem": 0.5
-      },
       "radius_base": {
         "kind": "corners",
         "rem": 0.625
-      },
-      "elevation_low": {
-        "kind": "elevation",
-        "level": 1
-      },
-      "elevation_high": {
-        "kind": "elevation",
-        "level": 3
-      },
-      "density": {
-        "kind": "density",
-        "value": "comfortable"
       }
     }
   },
@@ -7927,12 +6975,6 @@
         "kind": "color_pair",
         "light": "oklch(0.922 0 0)",
         "dark": "oklch(1 0 0 / 10%)"
-      },
-      "border": {
-        "kind": "border",
-        "widthRem": 0.0625,
-        "style": "solid",
-        "colorToken": "border_color"
       },
       "primary": {
         "kind": "color_pair",
@@ -8143,37 +7185,9 @@
         "kind": "spacing",
         "rem": 1
       },
-      "space_lg": {
-        "kind": "spacing",
-        "rem": 1.5
-      },
-      "radius_sm": {
-        "kind": "corners",
-        "rem": 0.125
-      },
-      "radius_md": {
-        "kind": "corners",
-        "rem": 0.25
-      },
-      "radius_lg": {
-        "kind": "corners",
-        "rem": 0.5
-      },
       "radius_base": {
         "kind": "corners",
         "rem": 0.625
-      },
-      "elevation_low": {
-        "kind": "elevation",
-        "level": 1
-      },
-      "elevation_high": {
-        "kind": "elevation",
-        "level": 3
-      },
-      "density": {
-        "kind": "density",
-        "value": "comfortable"
       }
     }
   },
@@ -8209,12 +7223,6 @@
         "kind": "color_pair",
         "light": "oklch(0.922 0 0)",
         "dark": "oklch(1 0 0 / 10%)"
-      },
-      "border": {
-        "kind": "border",
-        "widthRem": 0.0625,
-        "style": "solid",
-        "colorToken": "border_color"
       },
       "primary": {
         "kind": "color_pair",
@@ -8425,37 +7433,9 @@
         "kind": "spacing",
         "rem": 1
       },
-      "space_lg": {
-        "kind": "spacing",
-        "rem": 1.5
-      },
-      "radius_sm": {
-        "kind": "corners",
-        "rem": 0.125
-      },
-      "radius_md": {
-        "kind": "corners",
-        "rem": 0.25
-      },
-      "radius_lg": {
-        "kind": "corners",
-        "rem": 0.5
-      },
       "radius_base": {
         "kind": "corners",
         "rem": 0.625
-      },
-      "elevation_low": {
-        "kind": "elevation",
-        "level": 1
-      },
-      "elevation_high": {
-        "kind": "elevation",
-        "level": 3
-      },
-      "density": {
-        "kind": "density",
-        "value": "comfortable"
       }
     }
   },
@@ -8491,12 +7471,6 @@
         "kind": "color_pair",
         "light": "oklch(0.922 0 0)",
         "dark": "oklch(1 0 0 / 10%)"
-      },
-      "border": {
-        "kind": "border",
-        "widthRem": 0.0625,
-        "style": "solid",
-        "colorToken": "border_color"
       },
       "primary": {
         "kind": "color_pair",
@@ -8707,37 +7681,9 @@
         "kind": "spacing",
         "rem": 1
       },
-      "space_lg": {
-        "kind": "spacing",
-        "rem": 1.5
-      },
-      "radius_sm": {
-        "kind": "corners",
-        "rem": 0.125
-      },
-      "radius_md": {
-        "kind": "corners",
-        "rem": 0.25
-      },
-      "radius_lg": {
-        "kind": "corners",
-        "rem": 0.5
-      },
       "radius_base": {
         "kind": "corners",
         "rem": 0.625
-      },
-      "elevation_low": {
-        "kind": "elevation",
-        "level": 1
-      },
-      "elevation_high": {
-        "kind": "elevation",
-        "level": 3
-      },
-      "density": {
-        "kind": "density",
-        "value": "comfortable"
       }
     }
   },
@@ -8773,12 +7719,6 @@
         "kind": "color_pair",
         "light": "oklch(0.922 0 0)",
         "dark": "oklch(1 0 0 / 10%)"
-      },
-      "border": {
-        "kind": "border",
-        "widthRem": 0.0625,
-        "style": "solid",
-        "colorToken": "border_color"
       },
       "primary": {
         "kind": "color_pair",
@@ -8989,37 +7929,9 @@
         "kind": "spacing",
         "rem": 1
       },
-      "space_lg": {
-        "kind": "spacing",
-        "rem": 1.5
-      },
-      "radius_sm": {
-        "kind": "corners",
-        "rem": 0.125
-      },
-      "radius_md": {
-        "kind": "corners",
-        "rem": 0.25
-      },
-      "radius_lg": {
-        "kind": "corners",
-        "rem": 0.5
-      },
       "radius_base": {
         "kind": "corners",
         "rem": 0.625
-      },
-      "elevation_low": {
-        "kind": "elevation",
-        "level": 1
-      },
-      "elevation_high": {
-        "kind": "elevation",
-        "level": 3
-      },
-      "density": {
-        "kind": "density",
-        "value": "comfortable"
       }
     }
   },
@@ -9055,12 +7967,6 @@
         "kind": "color_pair",
         "light": "oklch(0.922 0 0)",
         "dark": "oklch(1 0 0 / 10%)"
-      },
-      "border": {
-        "kind": "border",
-        "widthRem": 0.0625,
-        "style": "solid",
-        "colorToken": "border_color"
       },
       "primary": {
         "kind": "color_pair",
@@ -9271,37 +8177,9 @@
         "kind": "spacing",
         "rem": 1
       },
-      "space_lg": {
-        "kind": "spacing",
-        "rem": 1.5
-      },
-      "radius_sm": {
-        "kind": "corners",
-        "rem": 0.125
-      },
-      "radius_md": {
-        "kind": "corners",
-        "rem": 0.25
-      },
-      "radius_lg": {
-        "kind": "corners",
-        "rem": 0.5
-      },
       "radius_base": {
         "kind": "corners",
         "rem": 0.625
-      },
-      "elevation_low": {
-        "kind": "elevation",
-        "level": 1
-      },
-      "elevation_high": {
-        "kind": "elevation",
-        "level": 3
-      },
-      "density": {
-        "kind": "density",
-        "value": "comfortable"
       }
     }
   },
@@ -9337,12 +8215,6 @@
         "kind": "color_pair",
         "light": "oklch(0.922 0 0)",
         "dark": "oklch(1 0 0 / 10%)"
-      },
-      "border": {
-        "kind": "border",
-        "widthRem": 0.0625,
-        "style": "solid",
-        "colorToken": "border_color"
       },
       "primary": {
         "kind": "color_pair",
@@ -9553,37 +8425,9 @@
         "kind": "spacing",
         "rem": 1
       },
-      "space_lg": {
-        "kind": "spacing",
-        "rem": 1.5
-      },
-      "radius_sm": {
-        "kind": "corners",
-        "rem": 0.125
-      },
-      "radius_md": {
-        "kind": "corners",
-        "rem": 0.25
-      },
-      "radius_lg": {
-        "kind": "corners",
-        "rem": 0.5
-      },
       "radius_base": {
         "kind": "corners",
         "rem": 0.625
-      },
-      "elevation_low": {
-        "kind": "elevation",
-        "level": 1
-      },
-      "elevation_high": {
-        "kind": "elevation",
-        "level": 3
-      },
-      "density": {
-        "kind": "density",
-        "value": "comfortable"
       }
     }
   },
@@ -9619,12 +8463,6 @@
         "kind": "color_pair",
         "light": "oklch(0.922 0 0)",
         "dark": "oklch(1 0 0 / 10%)"
-      },
-      "border": {
-        "kind": "border",
-        "widthRem": 0.0625,
-        "style": "solid",
-        "colorToken": "border_color"
       },
       "primary": {
         "kind": "color_pair",
@@ -9835,37 +8673,9 @@
         "kind": "spacing",
         "rem": 1
       },
-      "space_lg": {
-        "kind": "spacing",
-        "rem": 1.5
-      },
-      "radius_sm": {
-        "kind": "corners",
-        "rem": 0.125
-      },
-      "radius_md": {
-        "kind": "corners",
-        "rem": 0.25
-      },
-      "radius_lg": {
-        "kind": "corners",
-        "rem": 0.5
-      },
       "radius_base": {
         "kind": "corners",
         "rem": 0.625
-      },
-      "elevation_low": {
-        "kind": "elevation",
-        "level": 1
-      },
-      "elevation_high": {
-        "kind": "elevation",
-        "level": 3
-      },
-      "density": {
-        "kind": "density",
-        "value": "comfortable"
       }
     }
   },
@@ -9901,12 +8711,6 @@
         "kind": "color_pair",
         "light": "oklch(0.922 0 0)",
         "dark": "oklch(1 0 0 / 10%)"
-      },
-      "border": {
-        "kind": "border",
-        "widthRem": 0.0625,
-        "style": "solid",
-        "colorToken": "border_color"
       },
       "primary": {
         "kind": "color_pair",
@@ -10117,37 +8921,9 @@
         "kind": "spacing",
         "rem": 1
       },
-      "space_lg": {
-        "kind": "spacing",
-        "rem": 1.5
-      },
-      "radius_sm": {
-        "kind": "corners",
-        "rem": 0.125
-      },
-      "radius_md": {
-        "kind": "corners",
-        "rem": 0.25
-      },
-      "radius_lg": {
-        "kind": "corners",
-        "rem": 0.5
-      },
       "radius_base": {
         "kind": "corners",
         "rem": 0.625
-      },
-      "elevation_low": {
-        "kind": "elevation",
-        "level": 1
-      },
-      "elevation_high": {
-        "kind": "elevation",
-        "level": 3
-      },
-      "density": {
-        "kind": "density",
-        "value": "comfortable"
       }
     }
   },
@@ -10183,12 +8959,6 @@
         "kind": "color_pair",
         "light": "oklch(0.922 0 0)",
         "dark": "oklch(1 0 0 / 10%)"
-      },
-      "border": {
-        "kind": "border",
-        "widthRem": 0.0625,
-        "style": "solid",
-        "colorToken": "border_color"
       },
       "primary": {
         "kind": "color_pair",
@@ -10399,37 +9169,9 @@
         "kind": "spacing",
         "rem": 1
       },
-      "space_lg": {
-        "kind": "spacing",
-        "rem": 1.5
-      },
-      "radius_sm": {
-        "kind": "corners",
-        "rem": 0.125
-      },
-      "radius_md": {
-        "kind": "corners",
-        "rem": 0.25
-      },
-      "radius_lg": {
-        "kind": "corners",
-        "rem": 0.5
-      },
       "radius_base": {
         "kind": "corners",
         "rem": 0.625
-      },
-      "elevation_low": {
-        "kind": "elevation",
-        "level": 1
-      },
-      "elevation_high": {
-        "kind": "elevation",
-        "level": 3
-      },
-      "density": {
-        "kind": "density",
-        "value": "comfortable"
       }
     }
   },
@@ -10465,12 +9207,6 @@
         "kind": "color_pair",
         "light": "oklch(0.922 0 0)",
         "dark": "oklch(1 0 0 / 10%)"
-      },
-      "border": {
-        "kind": "border",
-        "widthRem": 0.0625,
-        "style": "solid",
-        "colorToken": "border_color"
       },
       "primary": {
         "kind": "color_pair",
@@ -10681,37 +9417,9 @@
         "kind": "spacing",
         "rem": 1
       },
-      "space_lg": {
-        "kind": "spacing",
-        "rem": 1.5
-      },
-      "radius_sm": {
-        "kind": "corners",
-        "rem": 0.125
-      },
-      "radius_md": {
-        "kind": "corners",
-        "rem": 0.25
-      },
-      "radius_lg": {
-        "kind": "corners",
-        "rem": 0.5
-      },
       "radius_base": {
         "kind": "corners",
         "rem": 0.625
-      },
-      "elevation_low": {
-        "kind": "elevation",
-        "level": 1
-      },
-      "elevation_high": {
-        "kind": "elevation",
-        "level": 3
-      },
-      "density": {
-        "kind": "density",
-        "value": "comfortable"
       }
     }
   },
@@ -10747,12 +9455,6 @@
         "kind": "color_pair",
         "light": "oklch(0.922 0 0)",
         "dark": "oklch(1 0 0 / 10%)"
-      },
-      "border": {
-        "kind": "border",
-        "widthRem": 0.0625,
-        "style": "solid",
-        "colorToken": "border_color"
       },
       "primary": {
         "kind": "color_pair",
@@ -10963,37 +9665,9 @@
         "kind": "spacing",
         "rem": 1
       },
-      "space_lg": {
-        "kind": "spacing",
-        "rem": 1.5
-      },
-      "radius_sm": {
-        "kind": "corners",
-        "rem": 0.125
-      },
-      "radius_md": {
-        "kind": "corners",
-        "rem": 0.25
-      },
-      "radius_lg": {
-        "kind": "corners",
-        "rem": 0.5
-      },
       "radius_base": {
         "kind": "corners",
         "rem": 0.625
-      },
-      "elevation_low": {
-        "kind": "elevation",
-        "level": 1
-      },
-      "elevation_high": {
-        "kind": "elevation",
-        "level": 3
-      },
-      "density": {
-        "kind": "density",
-        "value": "comfortable"
       }
     }
   },
@@ -11029,12 +9703,6 @@
         "kind": "color_pair",
         "light": "oklch(0.922 0 0)",
         "dark": "oklch(1 0 0 / 10%)"
-      },
-      "border": {
-        "kind": "border",
-        "widthRem": 0.0625,
-        "style": "solid",
-        "colorToken": "border_color"
       },
       "primary": {
         "kind": "color_pair",
@@ -11245,37 +9913,9 @@
         "kind": "spacing",
         "rem": 1
       },
-      "space_lg": {
-        "kind": "spacing",
-        "rem": 1.5
-      },
-      "radius_sm": {
-        "kind": "corners",
-        "rem": 0.125
-      },
-      "radius_md": {
-        "kind": "corners",
-        "rem": 0.25
-      },
-      "radius_lg": {
-        "kind": "corners",
-        "rem": 0.5
-      },
       "radius_base": {
         "kind": "corners",
         "rem": 0.625
-      },
-      "elevation_low": {
-        "kind": "elevation",
-        "level": 1
-      },
-      "elevation_high": {
-        "kind": "elevation",
-        "level": 3
-      },
-      "density": {
-        "kind": "density",
-        "value": "comfortable"
       }
     }
   },
@@ -11311,12 +9951,6 @@
         "kind": "color_pair",
         "light": "oklch(0.922 0 0)",
         "dark": "oklch(1 0 0 / 10%)"
-      },
-      "border": {
-        "kind": "border",
-        "widthRem": 0.0625,
-        "style": "solid",
-        "colorToken": "border_color"
       },
       "primary": {
         "kind": "color_pair",
@@ -11527,37 +10161,9 @@
         "kind": "spacing",
         "rem": 1
       },
-      "space_lg": {
-        "kind": "spacing",
-        "rem": 1.5
-      },
-      "radius_sm": {
-        "kind": "corners",
-        "rem": 0.125
-      },
-      "radius_md": {
-        "kind": "corners",
-        "rem": 0.25
-      },
-      "radius_lg": {
-        "kind": "corners",
-        "rem": 0.5
-      },
       "radius_base": {
         "kind": "corners",
         "rem": 0.625
-      },
-      "elevation_low": {
-        "kind": "elevation",
-        "level": 1
-      },
-      "elevation_high": {
-        "kind": "elevation",
-        "level": 3
-      },
-      "density": {
-        "kind": "density",
-        "value": "comfortable"
       }
     }
   },
@@ -11593,12 +10199,6 @@
         "kind": "color_pair",
         "light": "oklch(0.922 0 0)",
         "dark": "oklch(1 0 0 / 10%)"
-      },
-      "border": {
-        "kind": "border",
-        "widthRem": 0.0625,
-        "style": "solid",
-        "colorToken": "border_color"
       },
       "primary": {
         "kind": "color_pair",
@@ -11809,37 +10409,9 @@
         "kind": "spacing",
         "rem": 1
       },
-      "space_lg": {
-        "kind": "spacing",
-        "rem": 1.5
-      },
-      "radius_sm": {
-        "kind": "corners",
-        "rem": 0.125
-      },
-      "radius_md": {
-        "kind": "corners",
-        "rem": 0.25
-      },
-      "radius_lg": {
-        "kind": "corners",
-        "rem": 0.5
-      },
       "radius_base": {
         "kind": "corners",
         "rem": 0.625
-      },
-      "elevation_low": {
-        "kind": "elevation",
-        "level": 1
-      },
-      "elevation_high": {
-        "kind": "elevation",
-        "level": 3
-      },
-      "density": {
-        "kind": "density",
-        "value": "comfortable"
       }
     }
   },
@@ -11875,12 +10447,6 @@
         "kind": "color_pair",
         "light": "oklch(0.922 0 0)",
         "dark": "oklch(1 0 0 / 10%)"
-      },
-      "border": {
-        "kind": "border",
-        "widthRem": 0.0625,
-        "style": "solid",
-        "colorToken": "border_color"
       },
       "primary": {
         "kind": "color_pair",
@@ -12091,37 +10657,9 @@
         "kind": "spacing",
         "rem": 1
       },
-      "space_lg": {
-        "kind": "spacing",
-        "rem": 1.5
-      },
-      "radius_sm": {
-        "kind": "corners",
-        "rem": 0.125
-      },
-      "radius_md": {
-        "kind": "corners",
-        "rem": 0.25
-      },
-      "radius_lg": {
-        "kind": "corners",
-        "rem": 0.5
-      },
       "radius_base": {
         "kind": "corners",
         "rem": 0.625
-      },
-      "elevation_low": {
-        "kind": "elevation",
-        "level": 1
-      },
-      "elevation_high": {
-        "kind": "elevation",
-        "level": 3
-      },
-      "density": {
-        "kind": "density",
-        "value": "comfortable"
       }
     }
   },
@@ -12157,12 +10695,6 @@
         "kind": "color_pair",
         "light": "oklch(0.922 0 0)",
         "dark": "oklch(1 0 0 / 10%)"
-      },
-      "border": {
-        "kind": "border",
-        "widthRem": 0.0625,
-        "style": "solid",
-        "colorToken": "border_color"
       },
       "primary": {
         "kind": "color_pair",
@@ -12373,37 +10905,9 @@
         "kind": "spacing",
         "rem": 1
       },
-      "space_lg": {
-        "kind": "spacing",
-        "rem": 1.5
-      },
-      "radius_sm": {
-        "kind": "corners",
-        "rem": 0.125
-      },
-      "radius_md": {
-        "kind": "corners",
-        "rem": 0.25
-      },
-      "radius_lg": {
-        "kind": "corners",
-        "rem": 0.5
-      },
       "radius_base": {
         "kind": "corners",
         "rem": 0.625
-      },
-      "elevation_low": {
-        "kind": "elevation",
-        "level": 1
-      },
-      "elevation_high": {
-        "kind": "elevation",
-        "level": 3
-      },
-      "density": {
-        "kind": "density",
-        "value": "comfortable"
       }
     }
   },
@@ -12439,12 +10943,6 @@
         "kind": "color_pair",
         "light": "oklch(0.922 0 0)",
         "dark": "oklch(1 0 0 / 10%)"
-      },
-      "border": {
-        "kind": "border",
-        "widthRem": 0.0625,
-        "style": "solid",
-        "colorToken": "border_color"
       },
       "primary": {
         "kind": "color_pair",
@@ -12655,37 +11153,9 @@
         "kind": "spacing",
         "rem": 1
       },
-      "space_lg": {
-        "kind": "spacing",
-        "rem": 1.5
-      },
-      "radius_sm": {
-        "kind": "corners",
-        "rem": 0.125
-      },
-      "radius_md": {
-        "kind": "corners",
-        "rem": 0.25
-      },
-      "radius_lg": {
-        "kind": "corners",
-        "rem": 0.5
-      },
       "radius_base": {
         "kind": "corners",
         "rem": 0.625
-      },
-      "elevation_low": {
-        "kind": "elevation",
-        "level": 1
-      },
-      "elevation_high": {
-        "kind": "elevation",
-        "level": 3
-      },
-      "density": {
-        "kind": "density",
-        "value": "comfortable"
       }
     }
   },
@@ -12721,12 +11191,6 @@
         "kind": "color_pair",
         "light": "oklch(0.922 0 0)",
         "dark": "oklch(1 0 0 / 10%)"
-      },
-      "border": {
-        "kind": "border",
-        "widthRem": 0.0625,
-        "style": "solid",
-        "colorToken": "border_color"
       },
       "primary": {
         "kind": "color_pair",
@@ -12937,37 +11401,9 @@
         "kind": "spacing",
         "rem": 1
       },
-      "space_lg": {
-        "kind": "spacing",
-        "rem": 1.5
-      },
-      "radius_sm": {
-        "kind": "corners",
-        "rem": 0.125
-      },
-      "radius_md": {
-        "kind": "corners",
-        "rem": 0.25
-      },
-      "radius_lg": {
-        "kind": "corners",
-        "rem": 0.5
-      },
       "radius_base": {
         "kind": "corners",
         "rem": 0.625
-      },
-      "elevation_low": {
-        "kind": "elevation",
-        "level": 1
-      },
-      "elevation_high": {
-        "kind": "elevation",
-        "level": 3
-      },
-      "density": {
-        "kind": "density",
-        "value": "comfortable"
       }
     }
   },
@@ -13003,12 +11439,6 @@
         "kind": "color_pair",
         "light": "oklch(0.922 0 0)",
         "dark": "oklch(1 0 0 / 10%)"
-      },
-      "border": {
-        "kind": "border",
-        "widthRem": 0.0625,
-        "style": "solid",
-        "colorToken": "border_color"
       },
       "primary": {
         "kind": "color_pair",
@@ -13219,37 +11649,9 @@
         "kind": "spacing",
         "rem": 1
       },
-      "space_lg": {
-        "kind": "spacing",
-        "rem": 1.5
-      },
-      "radius_sm": {
-        "kind": "corners",
-        "rem": 0.125
-      },
-      "radius_md": {
-        "kind": "corners",
-        "rem": 0.25
-      },
-      "radius_lg": {
-        "kind": "corners",
-        "rem": 0.5
-      },
       "radius_base": {
         "kind": "corners",
         "rem": 0.625
-      },
-      "elevation_low": {
-        "kind": "elevation",
-        "level": 1
-      },
-      "elevation_high": {
-        "kind": "elevation",
-        "level": 3
-      },
-      "density": {
-        "kind": "density",
-        "value": "comfortable"
       }
     }
   },
@@ -13285,12 +11687,6 @@
         "kind": "color_pair",
         "light": "oklch(0.922 0 0)",
         "dark": "oklch(1 0 0 / 10%)"
-      },
-      "border": {
-        "kind": "border",
-        "widthRem": 0.0625,
-        "style": "solid",
-        "colorToken": "border_color"
       },
       "primary": {
         "kind": "color_pair",
@@ -13501,37 +11897,9 @@
         "kind": "spacing",
         "rem": 1
       },
-      "space_lg": {
-        "kind": "spacing",
-        "rem": 1.5
-      },
-      "radius_sm": {
-        "kind": "corners",
-        "rem": 0.125
-      },
-      "radius_md": {
-        "kind": "corners",
-        "rem": 0.25
-      },
-      "radius_lg": {
-        "kind": "corners",
-        "rem": 0.5
-      },
       "radius_base": {
         "kind": "corners",
         "rem": 0.625
-      },
-      "elevation_low": {
-        "kind": "elevation",
-        "level": 1
-      },
-      "elevation_high": {
-        "kind": "elevation",
-        "level": 3
-      },
-      "density": {
-        "kind": "density",
-        "value": "comfortable"
       }
     }
   },
@@ -13567,12 +11935,6 @@
         "kind": "color_pair",
         "light": "oklch(0.922 0 0)",
         "dark": "oklch(1 0 0 / 10%)"
-      },
-      "border": {
-        "kind": "border",
-        "widthRem": 0.0625,
-        "style": "solid",
-        "colorToken": "border_color"
       },
       "primary": {
         "kind": "color_pair",
@@ -13783,37 +12145,9 @@
         "kind": "spacing",
         "rem": 1
       },
-      "space_lg": {
-        "kind": "spacing",
-        "rem": 1.5
-      },
-      "radius_sm": {
-        "kind": "corners",
-        "rem": 0.125
-      },
-      "radius_md": {
-        "kind": "corners",
-        "rem": 0.25
-      },
-      "radius_lg": {
-        "kind": "corners",
-        "rem": 0.5
-      },
       "radius_base": {
         "kind": "corners",
         "rem": 0.625
-      },
-      "elevation_low": {
-        "kind": "elevation",
-        "level": 1
-      },
-      "elevation_high": {
-        "kind": "elevation",
-        "level": 3
-      },
-      "density": {
-        "kind": "density",
-        "value": "comfortable"
       }
     }
   },
@@ -13849,12 +12183,6 @@
         "kind": "color_pair",
         "light": "oklch(0.922 0 0)",
         "dark": "oklch(1 0 0 / 10%)"
-      },
-      "border": {
-        "kind": "border",
-        "widthRem": 0.0625,
-        "style": "solid",
-        "colorToken": "border_color"
       },
       "primary": {
         "kind": "color_pair",
@@ -14065,37 +12393,9 @@
         "kind": "spacing",
         "rem": 1
       },
-      "space_lg": {
-        "kind": "spacing",
-        "rem": 1.5
-      },
-      "radius_sm": {
-        "kind": "corners",
-        "rem": 0.125
-      },
-      "radius_md": {
-        "kind": "corners",
-        "rem": 0.25
-      },
-      "radius_lg": {
-        "kind": "corners",
-        "rem": 0.5
-      },
       "radius_base": {
         "kind": "corners",
         "rem": 0.625
-      },
-      "elevation_low": {
-        "kind": "elevation",
-        "level": 1
-      },
-      "elevation_high": {
-        "kind": "elevation",
-        "level": 3
-      },
-      "density": {
-        "kind": "density",
-        "value": "comfortable"
       }
     }
   },
@@ -14131,12 +12431,6 @@
         "kind": "color_pair",
         "light": "oklch(0.922 0 0)",
         "dark": "oklch(1 0 0 / 10%)"
-      },
-      "border": {
-        "kind": "border",
-        "widthRem": 0.0625,
-        "style": "solid",
-        "colorToken": "border_color"
       },
       "primary": {
         "kind": "color_pair",
@@ -14347,37 +12641,9 @@
         "kind": "spacing",
         "rem": 1
       },
-      "space_lg": {
-        "kind": "spacing",
-        "rem": 1.5
-      },
-      "radius_sm": {
-        "kind": "corners",
-        "rem": 0.125
-      },
-      "radius_md": {
-        "kind": "corners",
-        "rem": 0.25
-      },
-      "radius_lg": {
-        "kind": "corners",
-        "rem": 0.5
-      },
       "radius_base": {
         "kind": "corners",
         "rem": 0.625
-      },
-      "elevation_low": {
-        "kind": "elevation",
-        "level": 1
-      },
-      "elevation_high": {
-        "kind": "elevation",
-        "level": 3
-      },
-      "density": {
-        "kind": "density",
-        "value": "comfortable"
       }
     }
   },
@@ -14413,12 +12679,6 @@
         "kind": "color_pair",
         "light": "oklch(0.922 0 0)",
         "dark": "oklch(1 0 0 / 10%)"
-      },
-      "border": {
-        "kind": "border",
-        "widthRem": 0.0625,
-        "style": "solid",
-        "colorToken": "border_color"
       },
       "primary": {
         "kind": "color_pair",
@@ -14629,37 +12889,9 @@
         "kind": "spacing",
         "rem": 1
       },
-      "space_lg": {
-        "kind": "spacing",
-        "rem": 1.5
-      },
-      "radius_sm": {
-        "kind": "corners",
-        "rem": 0.125
-      },
-      "radius_md": {
-        "kind": "corners",
-        "rem": 0.25
-      },
-      "radius_lg": {
-        "kind": "corners",
-        "rem": 0.5
-      },
       "radius_base": {
         "kind": "corners",
         "rem": 0.625
-      },
-      "elevation_low": {
-        "kind": "elevation",
-        "level": 1
-      },
-      "elevation_high": {
-        "kind": "elevation",
-        "level": 3
-      },
-      "density": {
-        "kind": "density",
-        "value": "comfortable"
       }
     }
   },
@@ -14695,12 +12927,6 @@
         "kind": "color_pair",
         "light": "oklch(0.922 0 0)",
         "dark": "oklch(1 0 0 / 10%)"
-      },
-      "border": {
-        "kind": "border",
-        "widthRem": 0.0625,
-        "style": "solid",
-        "colorToken": "border_color"
       },
       "primary": {
         "kind": "color_pair",
@@ -14911,37 +13137,9 @@
         "kind": "spacing",
         "rem": 1
       },
-      "space_lg": {
-        "kind": "spacing",
-        "rem": 1.5
-      },
-      "radius_sm": {
-        "kind": "corners",
-        "rem": 0.125
-      },
-      "radius_md": {
-        "kind": "corners",
-        "rem": 0.25
-      },
-      "radius_lg": {
-        "kind": "corners",
-        "rem": 0.5
-      },
       "radius_base": {
         "kind": "corners",
         "rem": 0.625
-      },
-      "elevation_low": {
-        "kind": "elevation",
-        "level": 1
-      },
-      "elevation_high": {
-        "kind": "elevation",
-        "level": 3
-      },
-      "density": {
-        "kind": "density",
-        "value": "comfortable"
       }
     }
   },
@@ -14977,12 +13175,6 @@
         "kind": "color_pair",
         "light": "oklch(0.922 0 0)",
         "dark": "oklch(1 0 0 / 10%)"
-      },
-      "border": {
-        "kind": "border",
-        "widthRem": 0.0625,
-        "style": "solid",
-        "colorToken": "border_color"
       },
       "primary": {
         "kind": "color_pair",
@@ -15193,37 +13385,9 @@
         "kind": "spacing",
         "rem": 1
       },
-      "space_lg": {
-        "kind": "spacing",
-        "rem": 1.5
-      },
-      "radius_sm": {
-        "kind": "corners",
-        "rem": 0.125
-      },
-      "radius_md": {
-        "kind": "corners",
-        "rem": 0.25
-      },
-      "radius_lg": {
-        "kind": "corners",
-        "rem": 0.5
-      },
       "radius_base": {
         "kind": "corners",
         "rem": 0.625
-      },
-      "elevation_low": {
-        "kind": "elevation",
-        "level": 1
-      },
-      "elevation_high": {
-        "kind": "elevation",
-        "level": 3
-      },
-      "density": {
-        "kind": "density",
-        "value": "comfortable"
       }
     }
   },
@@ -15259,12 +13423,6 @@
         "kind": "color_pair",
         "light": "oklch(0.922 0 0)",
         "dark": "oklch(1 0 0 / 10%)"
-      },
-      "border": {
-        "kind": "border",
-        "widthRem": 0.0625,
-        "style": "solid",
-        "colorToken": "border_color"
       },
       "primary": {
         "kind": "color_pair",
@@ -15475,37 +13633,9 @@
         "kind": "spacing",
         "rem": 1
       },
-      "space_lg": {
-        "kind": "spacing",
-        "rem": 1.5
-      },
-      "radius_sm": {
-        "kind": "corners",
-        "rem": 0.125
-      },
-      "radius_md": {
-        "kind": "corners",
-        "rem": 0.25
-      },
-      "radius_lg": {
-        "kind": "corners",
-        "rem": 0.5
-      },
       "radius_base": {
         "kind": "corners",
         "rem": 0.625
-      },
-      "elevation_low": {
-        "kind": "elevation",
-        "level": 1
-      },
-      "elevation_high": {
-        "kind": "elevation",
-        "level": 3
-      },
-      "density": {
-        "kind": "density",
-        "value": "comfortable"
       }
     }
   },
@@ -15541,12 +13671,6 @@
         "kind": "color_pair",
         "light": "oklch(0.922 0 0)",
         "dark": "oklch(1 0 0 / 10%)"
-      },
-      "border": {
-        "kind": "border",
-        "widthRem": 0.0625,
-        "style": "solid",
-        "colorToken": "border_color"
       },
       "primary": {
         "kind": "color_pair",
@@ -15757,37 +13881,9 @@
         "kind": "spacing",
         "rem": 1
       },
-      "space_lg": {
-        "kind": "spacing",
-        "rem": 1.5
-      },
-      "radius_sm": {
-        "kind": "corners",
-        "rem": 0.125
-      },
-      "radius_md": {
-        "kind": "corners",
-        "rem": 0.25
-      },
-      "radius_lg": {
-        "kind": "corners",
-        "rem": 0.5
-      },
       "radius_base": {
         "kind": "corners",
         "rem": 0.625
-      },
-      "elevation_low": {
-        "kind": "elevation",
-        "level": 1
-      },
-      "elevation_high": {
-        "kind": "elevation",
-        "level": 3
-      },
-      "density": {
-        "kind": "density",
-        "value": "comfortable"
       }
     }
   },
@@ -15823,12 +13919,6 @@
         "kind": "color_pair",
         "light": "oklch(0.922 0 0)",
         "dark": "oklch(1 0 0 / 10%)"
-      },
-      "border": {
-        "kind": "border",
-        "widthRem": 0.0625,
-        "style": "solid",
-        "colorToken": "border_color"
       },
       "primary": {
         "kind": "color_pair",
@@ -16039,37 +14129,9 @@
         "kind": "spacing",
         "rem": 1
       },
-      "space_lg": {
-        "kind": "spacing",
-        "rem": 1.5
-      },
-      "radius_sm": {
-        "kind": "corners",
-        "rem": 0.125
-      },
-      "radius_md": {
-        "kind": "corners",
-        "rem": 0.25
-      },
-      "radius_lg": {
-        "kind": "corners",
-        "rem": 0.5
-      },
       "radius_base": {
         "kind": "corners",
         "rem": 0.625
-      },
-      "elevation_low": {
-        "kind": "elevation",
-        "level": 1
-      },
-      "elevation_high": {
-        "kind": "elevation",
-        "level": 3
-      },
-      "density": {
-        "kind": "density",
-        "value": "comfortable"
       }
     }
   },
@@ -16105,12 +14167,6 @@
         "kind": "color_pair",
         "light": "oklch(0.922 0 0)",
         "dark": "oklch(1 0 0 / 10%)"
-      },
-      "border": {
-        "kind": "border",
-        "widthRem": 0.0625,
-        "style": "solid",
-        "colorToken": "border_color"
       },
       "primary": {
         "kind": "color_pair",
@@ -16321,37 +14377,9 @@
         "kind": "spacing",
         "rem": 1
       },
-      "space_lg": {
-        "kind": "spacing",
-        "rem": 1.5
-      },
-      "radius_sm": {
-        "kind": "corners",
-        "rem": 0.125
-      },
-      "radius_md": {
-        "kind": "corners",
-        "rem": 0.25
-      },
-      "radius_lg": {
-        "kind": "corners",
-        "rem": 0.5
-      },
       "radius_base": {
         "kind": "corners",
         "rem": 0.625
-      },
-      "elevation_low": {
-        "kind": "elevation",
-        "level": 1
-      },
-      "elevation_high": {
-        "kind": "elevation",
-        "level": 3
-      },
-      "density": {
-        "kind": "density",
-        "value": "comfortable"
       }
     }
   },
@@ -16388,12 +14416,6 @@
         "light": "oklch(0.922 0 0)",
         "dark": "oklch(1 0 0 / 10%)"
       },
-      "border": {
-        "kind": "border",
-        "widthRem": 0.0625,
-        "style": "solid",
-        "colorToken": "border_color"
-      },
       "primary": {
         "kind": "color_pair",
         "light": "oklch(0.205 0 0)",
@@ -16603,37 +14625,9 @@
         "kind": "spacing",
         "rem": 1
       },
-      "space_lg": {
-        "kind": "spacing",
-        "rem": 1.5
-      },
-      "radius_sm": {
-        "kind": "corners",
-        "rem": 0.125
-      },
-      "radius_md": {
-        "kind": "corners",
-        "rem": 0.25
-      },
-      "radius_lg": {
-        "kind": "corners",
-        "rem": 0.5
-      },
       "radius_base": {
         "kind": "corners",
         "rem": 0.625
-      },
-      "elevation_low": {
-        "kind": "elevation",
-        "level": 1
-      },
-      "elevation_high": {
-        "kind": "elevation",
-        "level": 3
-      },
-      "density": {
-        "kind": "density",
-        "value": "comfortable"
       }
     }
   },
@@ -16670,12 +14664,6 @@
         "light": "oklch(0.922 0 0)",
         "dark": "oklch(1 0 0 / 10%)"
       },
-      "border": {
-        "kind": "border",
-        "widthRem": 0.0625,
-        "style": "solid",
-        "colorToken": "border_color"
-      },
       "primary": {
         "kind": "color_pair",
         "light": "oklch(0.205 0 0)",
@@ -16885,37 +14873,9 @@
         "kind": "spacing",
         "rem": 1
       },
-      "space_lg": {
-        "kind": "spacing",
-        "rem": 1.5
-      },
-      "radius_sm": {
-        "kind": "corners",
-        "rem": 0.125
-      },
-      "radius_md": {
-        "kind": "corners",
-        "rem": 0.25
-      },
-      "radius_lg": {
-        "kind": "corners",
-        "rem": 0.5
-      },
       "radius_base": {
         "kind": "corners",
         "rem": 0
-      },
-      "elevation_low": {
-        "kind": "elevation",
-        "level": 1
-      },
-      "elevation_high": {
-        "kind": "elevation",
-        "level": 3
-      },
-      "density": {
-        "kind": "density",
-        "value": "comfortable"
       }
     }
   },
@@ -16952,12 +14912,6 @@
         "light": "oklch(0.922 0 0)",
         "dark": "oklch(1 0 0 / 10%)"
       },
-      "border": {
-        "kind": "border",
-        "widthRem": 0.0625,
-        "style": "solid",
-        "colorToken": "border_color"
-      },
       "primary": {
         "kind": "color_pair",
         "light": "oklch(0.205 0 0)",
@@ -17167,37 +15121,9 @@
         "kind": "spacing",
         "rem": 1
       },
-      "space_lg": {
-        "kind": "spacing",
-        "rem": 1.5
-      },
-      "radius_sm": {
-        "kind": "corners",
-        "rem": 0.125
-      },
-      "radius_md": {
-        "kind": "corners",
-        "rem": 0.25
-      },
-      "radius_lg": {
-        "kind": "corners",
-        "rem": 0.5
-      },
       "radius_base": {
         "kind": "corners",
         "rem": 0.45
-      },
-      "elevation_low": {
-        "kind": "elevation",
-        "level": 1
-      },
-      "elevation_high": {
-        "kind": "elevation",
-        "level": 3
-      },
-      "density": {
-        "kind": "density",
-        "value": "comfortable"
       }
     }
   },
@@ -17234,12 +15160,6 @@
         "light": "oklch(0.922 0 0)",
         "dark": "oklch(1 0 0 / 10%)"
       },
-      "border": {
-        "kind": "border",
-        "widthRem": 0.0625,
-        "style": "solid",
-        "colorToken": "border_color"
-      },
       "primary": {
         "kind": "color_pair",
         "light": "oklch(0.205 0 0)",
@@ -17449,37 +15369,9 @@
         "kind": "spacing",
         "rem": 1
       },
-      "space_lg": {
-        "kind": "spacing",
-        "rem": 1.5
-      },
-      "radius_sm": {
-        "kind": "corners",
-        "rem": 0.125
-      },
-      "radius_md": {
-        "kind": "corners",
-        "rem": 0.25
-      },
-      "radius_lg": {
-        "kind": "corners",
-        "rem": 0.5
-      },
       "radius_base": {
         "kind": "corners",
         "rem": 0.625
-      },
-      "elevation_low": {
-        "kind": "elevation",
-        "level": 1
-      },
-      "elevation_high": {
-        "kind": "elevation",
-        "level": 3
-      },
-      "density": {
-        "kind": "density",
-        "value": "comfortable"
       }
     }
   },
@@ -17516,12 +15408,6 @@
         "light": "oklch(0.922 0 0)",
         "dark": "oklch(1 0 0 / 10%)"
       },
-      "border": {
-        "kind": "border",
-        "widthRem": 0.0625,
-        "style": "solid",
-        "colorToken": "border_color"
-      },
       "primary": {
         "kind": "color_pair",
         "light": "oklch(0.205 0 0)",
@@ -17731,37 +15617,9 @@
         "kind": "spacing",
         "rem": 1
       },
-      "space_lg": {
-        "kind": "spacing",
-        "rem": 1.5
-      },
-      "radius_sm": {
-        "kind": "corners",
-        "rem": 0.125
-      },
-      "radius_md": {
-        "kind": "corners",
-        "rem": 0.25
-      },
-      "radius_lg": {
-        "kind": "corners",
-        "rem": 0.5
-      },
       "radius_base": {
         "kind": "corners",
         "rem": 0.875
-      },
-      "elevation_low": {
-        "kind": "elevation",
-        "level": 1
-      },
-      "elevation_high": {
-        "kind": "elevation",
-        "level": 3
-      },
-      "density": {
-        "kind": "density",
-        "value": "comfortable"
       }
     }
   }

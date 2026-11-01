@@ -107,7 +107,7 @@ const canonicalThemeDependency = (base: ApplicationSourceDocument["body"]["theme
 
 const validateThemeTokenReferences = (tokens: CanonicalTheme["tokens"]): void => {
   for (const token of Object.values(tokens)) {
-    if (token.kind !== "border" && token.kind !== "focus") continue;
+    if (token.kind !== "focus") continue;
     const colour = tokens[token.colorToken];
     if (colour === undefined || colour.kind !== "color_pair")
       reject("vortex.definition.application_block_settings", "broken_reference");
@@ -165,15 +165,6 @@ export const materialiseApplicationTheme = (
     },
     selection: selection.resolved.selection,
     tokens: selection.resolved.tokens,
-    loaderMark:
-      authored.loader_mark === undefined
-        ? release.loaderMark
-        : {
-            segments: authored.loader_mark.segments,
-            ...(authored.loader_mark.cycle_seconds === undefined
-              ? {}
-              : { cycleSeconds: authored.loader_mark.cycle_seconds }),
-          },
   });
   const assetIds = new Set<PlatformId>();
   for (const token of Object.values(release.tokens))
@@ -187,10 +178,7 @@ export const materialiseApplicationTheme = (
     if (!(error instanceof DefinitionCompilationError)) throw error;
     const failures: ThemeValidationFailure[] = [];
     for (const [key, token] of Object.entries(theme.tokens))
-      if (
-        (token.kind === "border" || token.kind === "focus") &&
-        theme.tokens[token.colorToken]?.kind !== "color_pair"
-      )
+      if (token.kind === "focus" && theme.tokens[token.colorToken]?.kind !== "color_pair")
         failures.push({
           code: "BROKEN_TOKEN_REFERENCE",
           ruleCode: error.ruleCode,

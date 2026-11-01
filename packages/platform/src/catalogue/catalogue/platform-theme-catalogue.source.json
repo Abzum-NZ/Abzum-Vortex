@@ -2,17 +2,6 @@
   "PLATFORM_THEME_RELEASE_3_1_0": {
     "catalogueThemeId": "3f0a2b14-9c6d-4e58-8a71-6d2e5f4b1c09",
     "releaseVersion": "3.1.0",
-    "loaderMark": {
-      "segments": [
-        [12, 101.569, 60, 18.431],
-        [60, 18.431, 108, 101.569],
-        [108, 101.569, 12, 101.569],
-        [12, 101.569, 84, 60],
-        [84, 60, 36, 60],
-        [36, 60, 48, 80.784]
-      ],
-      "cycleSeconds": 5
-    },
     "tokens": {
       "background": {
         "kind": "color_pair",
@@ -42,12 +31,6 @@
         "kind": "color_pair",
         "light": "oklch(0.925 0.005 214.3)",
         "dark": "oklch(1 0 0 / 10%)"
-      },
-      "border": {
-        "kind": "border",
-        "widthRem": 0.0625,
-        "style": "solid",
-        "colorToken": "border_color"
       },
       "primary": {
         "kind": "color_pair",
@@ -258,54 +241,15 @@
         "kind": "spacing",
         "rem": 1
       },
-      "space_lg": {
-        "kind": "spacing",
-        "rem": 1.5
-      },
-      "radius_sm": {
-        "kind": "corners",
-        "rem": 0.125
-      },
-      "radius_md": {
-        "kind": "corners",
-        "rem": 0.25
-      },
-      "radius_lg": {
-        "kind": "corners",
-        "rem": 0.5
-      },
       "radius_base": {
         "kind": "corners",
         "rem": 0
-      },
-      "elevation_low": {
-        "kind": "elevation",
-        "level": 1
-      },
-      "elevation_high": {
-        "kind": "elevation",
-        "level": 3
-      },
-      "density": {
-        "kind": "density",
-        "value": "comfortable"
       }
     }
   },
   "PLATFORM_THEME_MIRA_SLATE": {
     "catalogueThemeId": "73710ee4-9c1c-4405-b878-076f694a8748",
     "releaseVersion": "1.0.0",
-    "loaderMark": {
-      "segments": [
-        [12, 101.569, 60, 18.431],
-        [60, 18.431, 108, 101.569],
-        [108, 101.569, 12, 101.569],
-        [12, 101.569, 84, 60],
-        [84, 60, 36, 60],
-        [36, 60, 48, 80.784]
-      ],
-      "cycleSeconds": 5
-    },
     "tokens": {
       "background": {
         "kind": "color_pair",
@@ -335,12 +279,6 @@
         "kind": "color_pair",
         "light": "oklch(0.923 0.003 48.717)",
         "dark": "oklch(1 0 0 / 10%)"
-      },
-      "border": {
-        "kind": "border",
-        "widthRem": 0.0625,
-        "style": "solid",
-        "colorToken": "border_color"
       },
       "primary": {
         "kind": "color_pair",
@@ -551,54 +489,15 @@
         "kind": "spacing",
         "rem": 1
       },
-      "space_lg": {
-        "kind": "spacing",
-        "rem": 1.5
-      },
-      "radius_sm": {
-        "kind": "corners",
-        "rem": 0.09
-      },
-      "radius_md": {
-        "kind": "corners",
-        "rem": 0.18
-      },
-      "radius_lg": {
-        "kind": "corners",
-        "rem": 0.36
-      },
       "radius_base": {
         "kind": "corners",
         "rem": 0.45
-      },
-      "elevation_low": {
-        "kind": "elevation",
-        "level": 1
-      },
-      "elevation_high": {
-        "kind": "elevation",
-        "level": 3
-      },
-      "density": {
-        "kind": "density",
-        "value": "compact"
       }
     }
   },
   "PLATFORM_THEME_LYRA_SAND": {
     "catalogueThemeId": "37c40d16-d616-4ce3-a6ff-5d797c1a803d",
     "releaseVersion": "1.0.0",
-    "loaderMark": {
-      "segments": [
-        [12, 101.569, 60, 18.431],
-        [60, 18.431, 108, 101.569],
-        [108, 101.569, 12, 101.569],
-        [12, 101.569, 84, 60],
-        [84, 60, 36, 60],
-        [36, 60, 48, 80.784]
-      ],
-      "cycleSeconds": 5
-    },
     "tokens": {
       "background": {
         "kind": "color_pair",
@@ -628,12 +527,6 @@
         "kind": "color_pair",
         "light": "oklch(0.922 0.005 34.3)",
         "dark": "oklch(1 0 0 / 10%)"
-      },
-      "border": {
-        "kind": "border",
-        "widthRem": 0.0625,
-        "style": "solid",
-        "colorToken": "border_color"
       },
       "primary": {
         "kind": "color_pair",
@@ -844,54 +737,15 @@
         "kind": "spacing",
         "rem": 1
       },
-      "space_lg": {
-        "kind": "spacing",
-        "rem": 1.5
-      },
-      "radius_sm": {
-        "kind": "corners",
-        "rem": 0.175
-      },
-      "radius_md": {
-        "kind": "corners",
-        "rem": 0.35
-      },
-      "radius_lg": {
-        "kind": "corners",
-        "rem": 0.7
-      },
       "radius_base": {
         "kind": "corners",
         "rem": 0.875
-      },
-      "elevation_low": {
-        "kind": "elevation",
-        "level": 0
-      },
-      "elevation_high": {
-        "kind": "elevation",
-        "level": 2
-      },
-      "density": {
-        "kind": "density",
-        "value": "comfortable"
       }
     }
   },
   "PLATFORM_THEME_VEGA_INK": {
     "catalogueThemeId": "0d975618-c40b-4910-9e43-12e88466a5f9",
     "releaseVersion": "1.0.0",
-    "loaderMark": {
-      "segments": [
-        [12, 101.569, 60, 18.431],
-        [60, 18.431, 108, 101.569],
-        [108, 101.569, 12, 101.569],
-        [12, 101.569, 84, 60],
-        [84, 60, 36, 60],
-        [36, 60, 48, 80.784]
-      ],
-      "cycleSeconds": 5
-    },
     "tokens": {
       "background": {
         "kind": "color_pair",
@@ -921,12 +775,6 @@
         "kind": "color_pair",
         "light": "oklch(0.928 0.006 264.531)",
         "dark": "oklch(1 0 0 / 10%)"
-      },
-      "border": {
-        "kind": "border",
-        "widthRem": 0.0625,
-        "style": "solid",
-        "colorToken": "border_color"
       },
       "primary": {
         "kind": "color_pair",
@@ -1137,54 +985,15 @@
         "kind": "spacing",
         "rem": 1
       },
-      "space_lg": {
-        "kind": "spacing",
-        "rem": 1.5
-      },
-      "radius_sm": {
-        "kind": "corners",
-        "rem": 0.125
-      },
-      "radius_md": {
-        "kind": "corners",
-        "rem": 0.25
-      },
-      "radius_lg": {
-        "kind": "corners",
-        "rem": 0.5
-      },
       "radius_base": {
         "kind": "corners",
         "rem": 0.625
-      },
-      "elevation_low": {
-        "kind": "elevation",
-        "level": 2
-      },
-      "elevation_high": {
-        "kind": "elevation",
-        "level": 4
-      },
-      "density": {
-        "kind": "density",
-        "value": "compact"
       }
     }
   },
   "PLATFORM_THEME_MAIA_CLAY": {
     "catalogueThemeId": "5dc2d49a-4fd2-426d-b98d-5eaf3d3f7e37",
     "releaseVersion": "1.0.0",
-    "loaderMark": {
-      "segments": [
-        [12, 101.569, 60, 18.431],
-        [60, 18.431, 108, 101.569],
-        [108, 101.569, 12, 101.569],
-        [12, 101.569, 84, 60],
-        [84, 60, 36, 60],
-        [36, 60, 48, 80.784]
-      ],
-      "cycleSeconds": 5
-    },
     "tokens": {
       "background": {
         "kind": "color_pair",
@@ -1214,12 +1023,6 @@
         "kind": "color_pair",
         "light": "oklch(0.93 0.007 106.5)",
         "dark": "oklch(1 0 0 / 10%)"
-      },
-      "border": {
-        "kind": "border",
-        "widthRem": 0.0625,
-        "style": "solid",
-        "colorToken": "border_color"
       },
       "primary": {
         "kind": "color_pair",
@@ -1430,37 +1233,9 @@
         "kind": "spacing",
         "rem": 1
       },
-      "space_lg": {
-        "kind": "spacing",
-        "rem": 1.5
-      },
-      "radius_sm": {
-        "kind": "corners",
-        "rem": 0.125
-      },
-      "radius_md": {
-        "kind": "corners",
-        "rem": 0.25
-      },
-      "radius_lg": {
-        "kind": "corners",
-        "rem": 0.5
-      },
       "radius_base": {
         "kind": "corners",
         "rem": 0.625
-      },
-      "elevation_low": {
-        "kind": "elevation",
-        "level": 1
-      },
-      "elevation_high": {
-        "kind": "elevation",
-        "level": 2
-      },
-      "density": {
-        "kind": "density",
-        "value": "comfortable"
       }
     }
   }

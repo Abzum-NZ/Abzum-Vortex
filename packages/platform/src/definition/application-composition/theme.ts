@@ -14,11 +14,8 @@ const themeTokenKindSchema = z.enum([
   "typography",
   "spacing",
   "corners",
-  "border",
-  "elevation",
   "focus",
   "asset",
-  "density",
 ]);
 
 const colorComponentPattern = "(?:\\d+(?:\\.\\d+)?|\\.\\d+)";
@@ -74,20 +71,6 @@ export const themeTokenValueSchema = z.discriminatedUnion("kind", [
     .strict(),
   z
     .object({
-      kind: sourceProvenanceUnchanged(z.literal("border")),
-      widthRem: sourceProvenanceUnchanged(nonNegativeFiniteSchema),
-      style: sourceProvenanceUnchanged(z.enum(["solid", "dashed"])),
-      colorToken: sourceProvenanceUnchanged(builderKeySchema),
-    })
-    .strict(),
-  z
-    .object({
-      kind: sourceProvenanceUnchanged(z.literal("elevation")),
-      level: sourceProvenanceUnchanged(z.number().int().nonnegative()),
-    })
-    .strict(),
-  z
-    .object({
       kind: sourceProvenanceUnchanged(z.literal("focus")),
       colorToken: sourceProvenanceUnchanged(builderKeySchema),
       widthRem: sourceProvenanceUnchanged(positiveFiniteSchema),
@@ -97,12 +80,6 @@ export const themeTokenValueSchema = z.discriminatedUnion("kind", [
     .object({
       kind: sourceProvenanceUnchanged(z.literal("asset")),
       assetId: sourceProvenanceUnchanged(platformIdSchema),
-    })
-    .strict(),
-  z
-    .object({
-      kind: sourceProvenanceUnchanged(z.literal("density")),
-      value: sourceProvenanceUnchanged(z.enum(["compact", "comfortable"])),
     })
     .strict(),
 ]);
@@ -239,64 +216,16 @@ export const canonicalApplicationThemeSelection = (
   headingFont: source.heading_font,
 });
 
-/** The box a loader mark is drawn in: every coordinate lies between 0 and this size. */
-const LOADER_MARK_BOX_SIZE = 120;
-const LOADER_MARK_MAXIMUM_SEGMENTS = 12;
-const LOADER_MARK_MINIMUM_CYCLE_SECONDS = 1;
-const LOADER_MARK_MAXIMUM_CYCLE_SECONDS = 10;
-
-/**
- * The loader mark of a stored application theme: stroke segments `[x1, y1, x2, y2]` in a 120 x 120
- * box and an optional cycle. It carries no limits of its own: the limits are publication rules
- * (`sourceApplicationThemeLoaderMarkSchema`), so every release that was publishable when it was
- * made still reads.
- */
-const applicationThemeLoaderMarkSchema = z
-  .object({
-    segments: z.array(z.tuple([z.number(), z.number(), z.number(), z.number()])),
-    cycleSeconds: z.number().optional(),
-  })
-  .strict();
-
-const loaderMarkCoordinateSchema = z.number().finite().min(0).max(LOADER_MARK_BOX_SIZE);
-
-/**
- * The authored loader mark. A publication with more than 12 segments, a coordinate outside the
- * box or a cycle outside 1 to 10 seconds is refused.
- */
-const sourceApplicationThemeLoaderMarkSchema = z
-  .object({
-    segments: z
-      .array(
-        z.tuple([
-          loaderMarkCoordinateSchema,
-          loaderMarkCoordinateSchema,
-          loaderMarkCoordinateSchema,
-          loaderMarkCoordinateSchema,
-        ]),
-      )
-      .min(1)
-      .max(LOADER_MARK_MAXIMUM_SEGMENTS),
-    cycle_seconds: z
-      .number()
-      .finite()
-      .min(LOADER_MARK_MINIMUM_CYCLE_SECONDS)
-      .max(LOADER_MARK_MAXIMUM_CYCLE_SECONDS)
-      .optional(),
-  })
-  .strict();
-
 /**
  * Canonical  themes contain the complete resolved application token set plus the catalogue
  * selection they were materialised from. Every theme records its selection, including the icon
- * library, and the loader mark resolved from its platform theme release.
+ * library.
  */
 export const applicationThemeSchema = z
   .object({
     base: sourceProvenanceUnchanged(exactPlatformThemeDependencySchema),
     selection: sourceProvenanceUnchanged(applicationThemeSelectionSchema),
     tokens: sourceProvenanceUnchanged(z.record(builderKeySchema, themeTokenValueSchema)),
-    loaderMark: sourceProvenanceUnchanged(applicationThemeLoaderMarkSchema, true),
   })
   .strict();
 
@@ -309,7 +238,6 @@ export const sourceApplicationThemeSchema = z
   .object({
     base: sourceProvenanceUnchanged(sourceExactPlatformThemeDependencySchema),
     selection: sourceProvenanceUnchanged(sourceApplicationThemeSelectionSchema),
-    loader_mark: sourceProvenanceUnchanged(sourceApplicationThemeLoaderMarkSchema.optional(), true),
   })
   .strict();
 
@@ -320,7 +248,6 @@ export const platformThemeReleaseSchema = z
     releaseVersion: sourceProvenanceUnchanged(semanticVersionSchema),
     contentFingerprint: sourceProvenanceUnchanged(fingerprintSchema),
     tokens: sourceProvenanceUnchanged(z.record(builderKeySchema, themeTokenValueSchema)),
-    loaderMark: sourceProvenanceUnchanged(applicationThemeLoaderMarkSchema),
   })
   .strict();
 
@@ -349,7 +276,6 @@ export const platformThemeTokenRoles = [
   { key: "text", kind: "color_pair", colorRole: "foreground" },
   { key: "muted_text", kind: "color_pair", colorRole: "foreground" },
   { key: "border_color", kind: "color_pair" },
-  { key: "border", kind: "border" },
   { key: "primary", kind: "color_pair" },
   { key: "primary_foreground", kind: "color_pair", colorRole: "foreground" },
   { key: "secondary", kind: "color_pair" },
@@ -390,14 +316,7 @@ export const platformThemeTokenRoles = [
   { key: "space_xs", kind: "spacing" },
   { key: "space_sm", kind: "spacing" },
   { key: "space_md", kind: "spacing" },
-  { key: "space_lg", kind: "spacing" },
-  { key: "radius_sm", kind: "corners" },
-  { key: "radius_md", kind: "corners" },
-  { key: "radius_lg", kind: "corners" },
   { key: "radius_base", kind: "corners" },
-  { key: "elevation_low", kind: "elevation" },
-  { key: "elevation_high", kind: "elevation" },
-  { key: "density", kind: "density" },
 ] as const satisfies readonly PlatformThemeTokenRole[];
 
 /** Every token-role key a complete platform theme release must map. */
