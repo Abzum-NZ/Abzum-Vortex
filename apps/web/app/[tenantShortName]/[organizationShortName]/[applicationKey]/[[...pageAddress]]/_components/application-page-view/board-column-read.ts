@@ -1,4 +1,4 @@
-import type { DisplaySemanticEvent } from "@vortex/ui";
+import type { BoardPayload, DisplaySemanticEvent } from "@vortex/ui";
 import {
   boardColumnReadRequestSchema,
   containedComponentIdSchema,
@@ -24,15 +24,16 @@ type BoardReadInput = Pick<
 >;
 
 /**
- * The Board-only browser request path is loaded on the first visible-column read. It answers
- * "deferred" when another read of this board is in
- * flight): the board keeps the column and reads it again when idle. `false` is a real failure.
+ * The Board-only browser request path is loaded on a board's first column read. A continuation
+ * answers the column's next page, which the board keeps in its own state; a refresh of columns
+ * replaces the placement's data and answers `true`. `"deferred"` means another read of this board
+ * is in flight; the board shows its Show more retry. `false` is a real failure.
  */
 export async function readBoardColumns(
   input: BoardReadInput,
   placementId: string,
   event: DisplaySemanticEvent,
-): Promise<boolean | "deferred"> {
+): Promise<boolean | "deferred" | { page: NonNullable<BoardPayload["unassigned"]["page"]> }> {
   const {
     placementRequestsRef,
     navigationKey,
@@ -141,11 +142,23 @@ export async function readBoardColumns(
       ([candidate]) => candidate.toLowerCase() === parsedId.data.toLowerCase(),
     )?.[1];
     const freshBoard = boardPayloadFor(returnedData);
+    // The board owns later pages and their cursors; the parent still holds its first pages.
+    // The protected read validates the cursor, and this merge validates the returned board shape.
     const mergedBoard =
       freshBoard === undefined
         ? undefined
-        : mergeBoardColumnRead(currentBoard, freshBoard, columnRead.data);
+        : mergeBoardColumnRead(currentBoard, freshBoard, { columns: columnRead.data.columns });
     if (mergedBoard === undefined) return clearAndReload("payload_not_mergeable");
+
+    if (columnRead.data.continuationToken !== undefined) {
+      const selector = columnRead.data.columns[0]!;
+      const bucket =
+        selector.kind === "unassigned"
+          ? freshBoard!.unassigned
+          : freshBoard!.columns.find((column) => column.value === selector.value);
+      if (bucket?.page == null) return clearAndReload("page_missing");
+      return { page: bucket.page };
+    }
 
     setRefreshedPlacementData((current) => {
       const liveScope = placementRequestsRef.current;

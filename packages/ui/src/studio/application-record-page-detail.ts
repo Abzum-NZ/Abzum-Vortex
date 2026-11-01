@@ -224,19 +224,21 @@ export const ensureRelatedAdds = (plan: Plan, childResolved: Resolved): void => 
       PLATFORM_BLOCK_RELEASE_IDENTITIES.RECORD_DETAIL_BLOCK_RELEASE,
     );
     if (detail === undefined) return refuse("The block catalogue has no Record detail block.");
-    // Key facts beside the heading: the first three money, choice or date fields people can read.
+    const stage = studioBoardPipelines(source).find(
+      (candidate) =>
+        candidate.selectable && candidate.reference.startsWith(`${resolved.qualified}.`),
+    );
+    // Key facts beside the heading: the first three readable money, choice or date fields other
+    // than the stage, which already has its own strip.
     const keyFacts = record.fields
       .filter(
         (entry) =>
           ["money", "choice", "date", "date_time"].includes(entry.type) &&
           resolved.readable.has(entry.key) &&
-          entry.key !== resolved.title.key,
+          entry.key !== resolved.title.key &&
+          field(resolved, entry) !== stage?.reference,
       )
       .slice(0, 3);
-    const stage = studioBoardPipelines(source).find(
-      (candidate) =>
-        candidate.selectable && candidate.reference.startsWith(`${resolved.qualified}.`),
-    );
     return blockItem(
       detail,
       alias,

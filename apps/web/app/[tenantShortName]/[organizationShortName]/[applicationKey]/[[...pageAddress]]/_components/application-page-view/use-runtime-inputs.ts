@@ -3,6 +3,7 @@ import type { useRouter } from "next/navigation";
 import { useNavigator } from "@vortex/ui/routing";
 import type {
   createFormBlockRuntime,
+  BoardPayload,
   DisplayTablePayload,
   useUnsavedWorkGuard,
   useUnsavedWorkRegistry,
@@ -156,7 +157,7 @@ export function useRuntimeInputs({
   readBoardColumns: (
     placementId: string,
     event: DisplaySemanticEvent,
-  ) => Promise<boolean | "deferred">;
+  ) => Promise<boolean | "deferred" | { page: NonNullable<BoardPayload["unassigned"]["page"]> }>;
   continueTablePage: (
     placementId: string,
     event: DisplaySemanticEvent,

@@ -262,7 +262,7 @@ const inlineQueryProblems = (record: RecordType, query: InlineQuery): string[] =
   missing("Sorting", sortKeys);
   repeated("Sorting", sortKeys);
   for (const key of sortKeys)
-    if (byKey.get(key)?.sortable === false)
+    if (!query.group_by.includes(key) && byKey.get(key)?.sortable === false)
       problems.push(
         `Sorting: ${named(key)} is not sortable. Turn on "People can sort by it" on the field first.`,
       );
