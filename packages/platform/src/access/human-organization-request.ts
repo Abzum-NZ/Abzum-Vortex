@@ -39,7 +39,7 @@ import {
 } from "../db/request-transaction";
 
 import { databaseClockOf } from "./live-context";
-import { DefinitionError } from "../definition/definition-error";
+import { classifyDatabaseError, DefinitionError } from "../definition/definition-error";
 
 type ResolvedRequestTransactionRunner = <Scope, Result>(
   resolve: (transaction: RequestDatabaseTransaction) => Promise<ResolvedRequestContext<Scope>>,
@@ -452,6 +452,8 @@ export const createHumanOrganizationRequestService = (
       if (alreadyLogged) {
         // Publication storage logged the schema failure at its source.
       } else if (abandoned) console.info(`[access] human organisation request stopped: ${cause}`);
+      else if (classifyDatabaseError(error) === "conflict")
+        console.info(`[access] human organisation request temporarily unavailable: ${cause}`);
       else if (
         refused ||
         code === "DEFINITION_DRAFT_STALE_OR_MISSING" ||
