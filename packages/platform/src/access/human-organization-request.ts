@@ -434,7 +434,8 @@ export const createHumanOrganizationRequestService = (
         (code === "42501" && !missingPrivilege) ||
         recentAuthenticationRequired ||
         multiFactorRequired ||
-        roleSettingsChangeRequired;
+        roleSettingsChangeRequired ||
+        (error instanceof Error && error.name === "FirstInstallUnavailable");
       const cause = describeFailure(error);
       // A request its caller abandoned (the browser left the page) is stopped on purpose, and a
       // refusal the access model raises is it answering: neither is a failure of the platform, so
