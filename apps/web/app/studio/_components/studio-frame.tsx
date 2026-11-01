@@ -216,6 +216,26 @@ function StudioRail<Key extends string>({
       onKeyDown={move}
       className="flex w-18 shrink-0 flex-col items-center gap-1 overflow-y-auto border-r border-sidebar-border bg-sidebar px-1 py-2 text-sidebar-foreground"
     >
+      {onToggleCollapsed !== undefined && (
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <button
+                type="button"
+                aria-label={collapsed ? "Expand panel" : "Collapse panel"}
+                aria-pressed={collapsed}
+                onClick={onToggleCollapsed}
+                className="mb-1 flex size-9 shrink-0 items-center justify-center rounded-lg text-muted-foreground outline-none hover:bg-sidebar-accent/60 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+              />
+            }
+          >
+            <Icon name="panel-left" className="size-5" />
+          </TooltipTrigger>
+          <TooltipContent>
+            {collapsed ? "Expand panel" : "Collapse panel"} <Kbd>Ctrl B</Kbd>
+          </TooltipContent>
+        </Tooltip>
+      )}
       {tabs.map((tab, index) => {
         const selected = tab.key === active;
         const divided = index > 0 && tabs[index - 1]?.group !== tab.group;
@@ -252,26 +272,6 @@ function StudioRail<Key extends string>({
           </div>
         );
       })}
-      {onToggleCollapsed !== undefined && (
-        <Tooltip>
-          <TooltipTrigger
-            render={
-              <button
-                type="button"
-                aria-label={collapsed ? "Expand panel" : "Collapse panel"}
-                aria-pressed={collapsed}
-                onClick={onToggleCollapsed}
-                className="mt-2 flex size-9 shrink-0 items-center justify-center rounded-lg text-muted-foreground outline-none hover:bg-sidebar-accent/60 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
-              />
-            }
-          >
-            <Icon name="panel-left" className="size-5" />
-          </TooltipTrigger>
-          <TooltipContent>
-            {collapsed ? "Expand panel" : "Collapse panel"} <Kbd>Ctrl B</Kbd>
-          </TooltipContent>
-        </Tooltip>
-      )}
     </div>
   );
 }

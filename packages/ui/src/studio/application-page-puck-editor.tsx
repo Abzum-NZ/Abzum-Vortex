@@ -74,7 +74,7 @@ import {
   StudioCanvasBridge,
   type StudioCanvasFrame,
 } from "./studio-canvas-bridge";
-import type { StudioCanvasMetadata } from "./studio-canvas-root";
+import { StudioCanvasFrameProvider } from "./studio-canvas-root";
 import { StudioCanvasActions, studioCanvasOverrides } from "./studio-canvas-actions";
 import {
   StudioCanvasGridContext,
@@ -457,19 +457,20 @@ function ApplicationPageSlotPuckEditor({
     [registry, fieldInputControlReleases],
   );
   const metadata = useMemo(
-    (): StudioCanvasMetadata => ({
+    () => ({ breakpoint, readSettings: compiledItemSettings }),
+    [breakpoint],
+  );
+  // What the canvas's iframe draws the page in.
+  const frameContext = useMemo(
+    () => ({
+      frame,
+      appearance,
+      platformThemeTokens,
+      registry,
+      fieldInputControlReleases,
       breakpoint,
-      readSettings: compiledItemSettings,
-      studio: {
-        frame,
-        appearance,
-        platformThemeTokens,
-        registry,
-        fieldInputControlReleases,
-        breakpoint,
-      },
     }),
-    [breakpoint, frame, appearance, platformThemeTokens, registry, fieldInputControlReleases],
+    [frame, appearance, platformThemeTokens, registry, fieldInputControlReleases, breakpoint],
   );
   const compiledSlot = compiledSlots?.[at.key];
   const [message, setMessage] = useState("");
@@ -853,62 +854,64 @@ function ApplicationPageSlotPuckEditor({
                 <StudioCanvasControlsProvider onValue={chooseControlValue}>
                   <StudioCanvasViewerProvider viewer={viewer ?? null}>
                     <StudioCanvasGridContext.Provider value={gridContext}>
-                      <Puck
-                        config={config}
-                        data={shown}
-                        onChange={change}
-                        onAction={dropped}
-                        iframe={{ enabled: true, waitForStyles: true, syncHostStyles: true }}
-                        height="100%"
-                        overrides={studioCanvasOverrides}
-                        metadata={metadata}
-                        permissions={{
-                          drag: editable,
-                          duplicate: editable,
-                          delete: editable,
-                          edit: false,
-                          insert: false,
-                        }}
-                      >
-                        {arrangeGrid === true ? (
-                          <StudioArrangeBar
-                            host={actionsHost}
-                            arrangeable={arrangeable}
-                            onDone={() => onArrangeGrid?.(false)}
-                          />
-                        ) : (
-                          <StudioCanvasActions host={actionsHost} />
-                        )}
-                        {palette?.targets.kind !== "available"
-                          ? paletteNote(
-                              palette?.targets.kind === "unsupported"
-                                ? "Blocks can't be added to this kind of page in Studio yet."
-                                : "This page is not in the current draft.",
-                            )
-                          : inPalette(
-                              palette,
-                              <StudioBlockPalette
-                                targets={placesHere}
-                                editable={editable}
-                                owner={palette.owner}
-                                message={palette.message}
-                                onAdd={(request) => {
-                                  palette.onAdd(request);
-                                }}
-                              />,
-                            )}
-                        <StudioCanvasBridge
-                          arrangeGrid={arrangeGrid === true}
-                          onArrangeGrid={(arrange) => onArrangeGrid?.(arrange)}
+                      <StudioCanvasFrameProvider value={frameContext}>
+                        <Puck
+                          config={config}
                           data={shown}
-                          resync={resync}
-                          synchronizing={synchronizing}
-                          selectedAlias={selectedPlacementAlias}
-                          onSelect={onSelectPlacement}
-                          onDragging={onDragging}
-                        />
-                        <Puck.Preview id="vortex-studio-canvas" />
-                      </Puck>
+                          onChange={change}
+                          onAction={dropped}
+                          iframe={{ enabled: true, waitForStyles: true, syncHostStyles: true }}
+                          height="100%"
+                          overrides={studioCanvasOverrides}
+                          metadata={metadata}
+                          permissions={{
+                            drag: editable,
+                            duplicate: editable,
+                            delete: editable,
+                            edit: false,
+                            insert: false,
+                          }}
+                        >
+                          {arrangeGrid === true ? (
+                            <StudioArrangeBar
+                              host={actionsHost}
+                              arrangeable={arrangeable}
+                              onDone={() => onArrangeGrid?.(false)}
+                            />
+                          ) : (
+                            <StudioCanvasActions host={actionsHost} />
+                          )}
+                          {palette?.targets.kind !== "available"
+                            ? paletteNote(
+                                palette?.targets.kind === "unsupported"
+                                  ? "Blocks can't be added to this kind of page in Studio yet."
+                                  : "This page is not in the current draft.",
+                              )
+                            : inPalette(
+                                palette,
+                                <StudioBlockPalette
+                                  targets={placesHere}
+                                  editable={editable}
+                                  owner={palette.owner}
+                                  message={palette.message}
+                                  onAdd={(request) => {
+                                    palette.onAdd(request);
+                                  }}
+                                />,
+                              )}
+                          <StudioCanvasBridge
+                            arrangeGrid={arrangeGrid === true}
+                            onArrangeGrid={(arrange) => onArrangeGrid?.(arrange)}
+                            data={shown}
+                            resync={resync}
+                            synchronizing={synchronizing}
+                            selectedAlias={selectedPlacementAlias}
+                            onSelect={onSelectPlacement}
+                            onDragging={onDragging}
+                          />
+                          <Puck.Preview id="vortex-studio-canvas" />
+                        </Puck>
+                      </StudioCanvasFrameProvider>
                     </StudioCanvasGridContext.Provider>
                   </StudioCanvasViewerProvider>
                 </StudioCanvasControlsProvider>

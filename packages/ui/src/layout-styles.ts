@@ -308,7 +308,16 @@ export const LAYOUT_ONLY_STYLES_CSS = `
   gap: 0.5rem;
   width: auto;
   flex: 1 1 auto;
+  min-width: 4rem;
   min-height: 2.25rem;
+}
+/* The canvas draws a placement with its declared geometry inline (an explicit screen size), which
+   only !important can reset for an action in a row. */
+[data-vortex-studio-canvas]
+  :is([data-vortex-record-actions], [data-vortex-heading-actions])
+  > .vortex-puck-slot
+  > [data-vortex-layout-wrapper] {
+  width: auto !important;
 }
 [data-vortex-studio-canvas] .vortex-puck-slot:empty {
   min-height: var(--vortex-studio-empty-slot, 4rem);

@@ -145,8 +145,10 @@ export function useGridFullScreen(
       }
     };
     // Capture keeps the order the table's own listener had: before the grid's React handlers.
-    document.addEventListener("keydown", onKeyDown, true);
-    return () => document.removeEventListener("keydown", onKeyDown, true);
+    // The table's own document: the Studio canvas draws it inside an iframe.
+    const own = container.current?.ownerDocument ?? document;
+    own.addEventListener("keydown", onKeyDown, true);
+    return () => own.removeEventListener("keydown", onKeyDown, true);
   }, [container, allowed, toggle, leave]);
 
   // A table that stops allowing full screen, or unmounts, leaves it.

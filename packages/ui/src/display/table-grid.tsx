@@ -1032,9 +1032,10 @@ export function RecordsGrid({
   const dragged = useRef<string | undefined>(undefined);
   // A resize drag released inside its own heading ends in a click on that heading; it must not sort.
   const resizing = useRef(false);
-  const startResize = (release: "mouseup" | "touchend"): void => {
+  // The document is the heading's own: the canvas draws the grid inside an iframe.
+  const startResize = (release: "mouseup" | "touchend", ownerDocument: Document): void => {
     resizing.current = true;
-    document.addEventListener(
+    ownerDocument.addEventListener(
       release,
       () => {
         layout.commit();
@@ -1183,12 +1184,14 @@ export function RecordsGrid({
                 // The width changes on screen while the pointer moves; it is stored once, when
                 // the pointer is released.
                 onMouseDown={(event) => {
-                  header.getResizeHandler()(event);
-                  startResize("mouseup");
+                  const ownerDocument = event.currentTarget.ownerDocument;
+                  header.getResizeHandler(ownerDocument)(event);
+                  startResize("mouseup", ownerDocument);
                 }}
                 onTouchStart={(event) => {
-                  header.getResizeHandler()(event);
-                  startResize("touchend");
+                  const ownerDocument = event.currentTarget.ownerDocument;
+                  header.getResizeHandler(ownerDocument)(event);
+                  startResize("touchend", ownerDocument);
                 }}
                 onDoubleClick={() => {
                   header.column.resetSize();

@@ -43,8 +43,8 @@ export const studioPuckStyle = {
 
 /**
  * The same variables for the canvas's iframe: Puck draws its overlay, selection and drop line in
- * the iframe's body, which the host's frame styles do not reach. The overlay's own outline is
- * drawn inside the box it outlines, so an edge-to-edge block's outline is not cut off.
+ * the iframe's body, which the host's frame styles do not reach. Puck draws an outline inside the
+ * box it outlines, so an edge-to-edge block's outline is not cut off at the iframe's edge.
  */
 export const studioPuckIframeCss = `body{${Object.entries(studioPuckStyle)
   .map(([key, value]) => `${key}:${String(value)}`)

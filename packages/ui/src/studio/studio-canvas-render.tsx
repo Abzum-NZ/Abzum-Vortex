@@ -197,14 +197,6 @@ const catalogueDefaults = (release: PlatformBlockRelease): Record<string, unknow
     ),
   );
 
-/**
- * The slot fields only, exactly as the one config declares them, with their `allow` lists: Puck
- * offers a drop only in a slot that accepts the block. Studio's stored composition check still
- * refuses what a category list cannot express (form integrity, flow references, limits).
- */
-const slotFields = (fields: Record<string, Field> | undefined): Record<string, Field> =>
-  Object.fromEntries(Object.entries(fields ?? {}).filter(([, field]) => field.type === "slot"));
-
 const releaseOf = (
   registry: PlatformComponentRegistry,
   props: Readonly<Record<string, unknown>>,
@@ -504,7 +496,8 @@ const formFieldRendererKeys = (registry: PlatformComponentRegistry): ReadonlySet
 
 /**
  * The canvas config: the one config's components and root, each component drawing its stored
- * item as above. Only slot fields remain, because Puck finds slots through them and Studio edits
+ * item as above. The fields stay exactly as the one config declares them (each slot with its
+ * `allow` list, every other prop an opaque object), because Puck finds slots through them and Studio edits
  * settings in its inspector. No defaults are merged: a block dropped from the palette is added by
  * Studio's add command, never by Puck.
  */
@@ -521,7 +514,7 @@ export const studioCanvasConfig = (config: Config, registry: PlatformComponentRe
         label: component.label,
         // Every canvas component is measured and dragged by its own root element.
         inline: true,
-        fields: slotFields(component.fields as Record<string, Field> | undefined),
+        fields: (component.fields ?? {}) as Record<string, Field>,
         ...(component.resolveFields === undefined
           ? {}
           : {
@@ -531,7 +524,7 @@ export const studioCanvasConfig = (config: Config, registry: PlatformComponentRe
                   data: { props: Record<string, unknown> },
                   params: unknown,
                 ) => Record<string, Field>;
-                return slotFields(resolve({ ...data, props }, params));
+                return resolve({ ...data, props }, params);
               },
             }),
         render: (props: Record<string, unknown>) => (

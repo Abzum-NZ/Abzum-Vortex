@@ -282,13 +282,15 @@ function RangeSelection({ context, surface }: GridFeatureInteractionProps): Reac
       attributes: true,
       attributeFilter: ["data-row", "data-col"],
     });
+    // The window of the grid's own document: the canvas draws the grid inside an iframe.
+    const view = root.ownerDocument.defaultView ?? window;
     root.addEventListener("keydown", keydown, true);
     root.addEventListener("pointerdown", pointerdown, true);
-    window.addEventListener("pointermove", pointermove);
+    view.addEventListener("pointermove", pointermove);
     root.addEventListener("click", click, true);
     root.addEventListener("copy", copy);
-    window.addEventListener("pointerup", pointerup);
-    window.addEventListener("pointercancel", pointercancel);
+    view.addEventListener("pointerup", pointerup);
+    view.addEventListener("pointercancel", pointercancel);
     paint();
     return () => {
       observer.disconnect();
@@ -296,11 +298,11 @@ function RangeSelection({ context, surface }: GridFeatureInteractionProps): Reac
       else root.setAttribute("aria-multiselectable", previousMulti);
       root.removeEventListener("keydown", keydown, true);
       root.removeEventListener("pointerdown", pointerdown, true);
-      window.removeEventListener("pointermove", pointermove);
+      view.removeEventListener("pointermove", pointermove);
       root.removeEventListener("click", click, true);
       root.removeEventListener("copy", copy);
-      window.removeEventListener("pointerup", pointerup);
-      window.removeEventListener("pointercancel", pointercancel);
+      view.removeEventListener("pointerup", pointerup);
+      view.removeEventListener("pointercancel", pointercancel);
       range.current = undefined;
       for (const cell of root.querySelectorAll<HTMLElement>("[data-grid-cell][aria-selected]")) {
         if (cell.closest(GRID_ROOT) !== root) continue;

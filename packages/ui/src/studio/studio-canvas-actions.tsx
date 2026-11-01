@@ -1,8 +1,7 @@
 "use client";
 
 import { createUsePuck, useGetPuck, type Overrides } from "@puckeditor/core";
-import { useEffect, type ReactNode } from "react";
-import { studioPuckIframeCss } from "./studio-puck-style";
+import { StudioCanvasIframe } from "./studio-canvas-root";
 import { createPortal } from "react-dom";
 import { Copy, Trash2 } from "lucide-react";
 import { Button } from "../components/button";
@@ -103,23 +102,7 @@ export function StudioCanvasActions({ host }: Readonly<{ host: HTMLElement | nul
   );
 }
 
-/** Puck's colours for its overlay inside the iframe, which is its own document. */
-function StudioCanvasIframe({
-  children,
-  document,
-}: Readonly<{ children: ReactNode; document?: Document | undefined }>) {
-  useEffect(() => {
-    if (document === undefined) return;
-    const style = document.createElement("style");
-    style.dataset.vortexStudioPuck = "";
-    style.textContent = studioPuckIframeCss;
-    document.head.append(style);
-    return () => style.remove();
-  }, [document]);
-  return <>{children}</>;
-}
-
-/** Replaces Puck's floating action bar with StudioCanvasActions, and styles the iframe. */
+/** Replaces Puck's floating action bar with StudioCanvasActions, and draws the frame in the iframe. */
 export const studioCanvasOverrides: Partial<Overrides> = {
   actionBar: () => <></>,
   iframe: StudioCanvasIframe,
