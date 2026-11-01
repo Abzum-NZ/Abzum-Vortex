@@ -160,13 +160,9 @@ export const readApplicationReleaseStanding = async (
   );
   if (review === "conflict" || review === "uncertain" || review.kind !== "available") {
     const message = `[release-standing] review ${typeof review === "string" ? review : review.kind}`;
-    if (
-      review === "conflict" ||
-      (review !== "uncertain" &&
-        (review.kind === "unavailable" || review.kind === "confirmed_failure"))
-    )
-      console.info(message);
-    else console.error(message);
+    // Every outcome but an uncertain one was classified, and logged with its cause where it arose.
+    if (review === "uncertain") console.error(message);
+    else console.info(message);
     return appStoreHref === undefined ? { kind: "unknown" } : { kind: "unknown", appStoreHref };
   }
   const value = review.value as Readonly<Record<string, unknown>>;
