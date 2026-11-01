@@ -9,6 +9,8 @@ import {
   assignOrganizationAdministrationRoleAssignmentCommandSchema,
   organizationRoleChangePreparationSchema,
   organizationSelectionCandidateSchema,
+  readOrganizationAdministrationRoleCommandSchema,
+  sameId,
   type IdentityAuthorityId,
 } from "@vortex/platform/schema";
 import { nominatedOwnerSession } from "./development-authority";
@@ -99,6 +101,65 @@ const createAndAssignPlatformRole = async (
       evidence: preparedAuthorization,
     }),
   );
+  if (created.kind === "unavailable" && created.code === "role_key_in_use") {
+    const session = nominatedOwnerSession(facts.stewardIdentityId);
+    const existing = await administration.readRole(
+      session,
+      selection,
+      readOrganizationAdministrationRoleCommandSchema.parse({ roleId: role.roleId }),
+    );
+    if (existing.kind !== "available" || existing.value.outcome !== "available")
+      throw new Error(`The existing ${role.roleKey} role does not have the expected role ID`);
+    const current = existing.value.role;
+    if (current.key !== role.roleKey)
+      throw new Error(
+        `The existing role ${role.roleId} has key ${current.key}, expected ${role.roleKey}`,
+      );
+    if (current.roleKind !== "custom" || current.lifecycle !== "active")
+      throw new Error(`The existing ${role.roleKey} role is not an active custom role`);
+    if (
+      current.acceptedPermissions.length !== permissions.length ||
+      !permissions.every((expected, index) =>
+        current.acceptedPermissions.some(
+          (actual) =>
+            actual.key === permissionKeys[index] &&
+            actual.reference.ownerKind === expected.ownerKind &&
+            sameId(actual.reference.ownerId, expected.ownerId) &&
+            sameId(actual.reference.permissionId, expected.permissionId) &&
+            actual.reference.applicationRootId === undefined,
+        ),
+      )
+    )
+      throw new Error(`The existing ${role.roleKey} role has different permissions`);
+    let afterRoleAssignmentId: string | undefined;
+    for (;;) {
+      const page = await administration.listRoleAssignments(
+        session,
+        selection,
+        afterRoleAssignmentId,
+      );
+      if (page.kind !== "available")
+        throw new Error(
+          `Assignments for the existing ${role.roleKey} role could not be read (${page.kind})`,
+        );
+      if (
+        page.value.some(
+          (assignment) =>
+            sameId(assignment.roleId, role.roleId) &&
+            assignment.organizationAccountId !== null &&
+            sameId(assignment.organizationAccountId, facts.stewardOrganizationAccountId) &&
+            assignment.state === "live" &&
+            assignment.temporalState === "active",
+        )
+      )
+        return;
+      if (page.value.length === 0)
+        throw new Error(
+          `The existing ${role.roleKey} role is not actively assigned to the first owner`,
+        );
+      afterRoleAssignmentId = page.value.at(-1)!.roleAssignmentId;
+    }
+  }
   if (created.kind !== "available")
     throw new Error(`The ${role.roleKey} role could not be created (${created.kind})`);
   const assigned = await administration.assignRoleAssignment(
