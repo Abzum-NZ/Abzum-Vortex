@@ -111,7 +111,7 @@ export function RecordsCards({
       ref={listRef}
       aria-label={accessibleName}
       className={cn(
-        "m-0 flex list-none flex-col gap-[var(--vortex-space-sm)]",
+        "m-0 flex list-none flex-col gap-[var(--vortex-space-sm)] p-0",
         fill
           ? "min-h-0 flex-1 overflow-auto"
           : bounded && cn("overflow-auto", BOUNDED_VIEWPORT_CLASS),
