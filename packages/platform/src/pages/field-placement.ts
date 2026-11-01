@@ -103,8 +103,10 @@ export const applyOrganizationCurrency = (
   currency: string,
 ): void => {
   walkPageComposition(page.composition, ({ props, vortex }) => {
-    if (moneyFieldCurrencyMode({ vortex, settings: placementSettings(props) }, modules) !==
-      "organization_default")
+    if (
+      moneyFieldCurrencyMode({ vortex, settings: placementSettings(props) }, modules) !==
+      "organization_default"
+    )
       return;
     props.currency = { kind: "text", value: currency };
   });

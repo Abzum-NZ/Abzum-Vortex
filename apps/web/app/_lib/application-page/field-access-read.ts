@@ -54,10 +54,8 @@ export const readFieldAccess = (
         const organizationSettings =
           await readCurrentOrganizationRuntimeSettingsAfterAuthorization(transaction);
         if (organizationSettings !== undefined) {
-          if (input.needsDateTimeZones)
-            zones.organizationTimeZone = organizationSettings.timeZone;
-          if (input.needsOrganizationCurrency)
-            organizationCurrency = organizationSettings.currency;
+          if (input.needsDateTimeZones) zones.organizationTimeZone = organizationSettings.timeZone;
+          if (input.needsOrganizationCurrency) organizationCurrency = organizationSettings.currency;
         }
       }
       const allowed = await decideChoiceOptionGates(
