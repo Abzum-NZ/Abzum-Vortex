@@ -10,7 +10,7 @@ as $function$
 declare
   checked_context jsonb;
   publication jsonb;
-  invalid_field_key boolean;
+  invalid_field boolean;
 begin
   checked_context := vortex_definition.validated_builder_read_context_internal();
   if p_application_root_id is null or not exists (
@@ -55,8 +55,9 @@ begin
     raise exception using errcode = '23514', message = 'Owned Module publication record is inconsistent';
   end if;
 
-  -- Storage remains published even when a later release removes it. Preview plans
-  -- live on preview_installations, so only real publications contribute here.
+  -- Storage remains published even when a later release removes it. A capability
+  -- released in any version stays protected. Preview plans live on preview_installations,
+  -- so only real publications contribute here.
   with records as materialized (
     select root.key as module_key, record.value as record, record.ordinality
     from vortex_definition.roots as root
@@ -78,16 +79,25 @@ begin
     'recordTypes', coalesce((select pg_catalog.jsonb_agg(qualified_key order by qualified_key collate "C")
       from (select distinct module_key || ':' || (record ->> 'key') as qualified_key from records) as names
     ), '[]'::jsonb),
-    'fields', coalesce((select pg_catalog.jsonb_agg(qualified_key order by qualified_key collate "C")
-      from (select distinct module_key || ':' || record_key || '.' || (value ->> 'key') as qualified_key from fields) as names
+    'fields', coalesce((select pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
+        'key', qualified_key, 'filterable', filterable, 'sortable', sortable
+      ) order by qualified_key collate "C")
+      from (
+        select module_key || ':' || record_key || '.' || (value ->> 'key') as qualified_key,
+          pg_catalog.bool_or((value ->> 'filterable')::boolean) as filterable,
+          pg_catalog.bool_or((value ->> 'sortable')::boolean) as sortable
+        from fields group by module_key, record_key, value ->> 'key'
+      ) as published_fields
     ), '[]'::jsonb)
   ), exists (
     select 1 from fields
     where pg_catalog.jsonb_typeof(value -> 'key') is distinct from 'string'
       or pg_catalog.length(value ->> 'key') not between 1 and 40
       or (value ->> 'key') !~ '^[a-z][a-z0-9]*(_[a-z0-9]+)*$'
-  ) into publication, invalid_field_key;
-  if invalid_field_key then
+      or pg_catalog.jsonb_typeof(value -> 'filterable') is distinct from 'boolean'
+      or pg_catalog.jsonb_typeof(value -> 'sortable') is distinct from 'boolean'
+  ) into publication, invalid_field;
+  if invalid_field then
     raise exception using errcode = '23514', message = 'Owned Module publication field is inconsistent';
   end if;
 

@@ -69,7 +69,8 @@ export async function reviewStudioApplicationSource(
         request.error,
       );
     const loaded = await loadStudioApplicationDraft(organizationId, request.data.rootId);
-    if (loaded.kind !== "available") return loaded;
+    if (loaded.kind !== "available")
+      return loaded.kind === "validation_failed" ? { kind: "refused" } : loaded;
     const draft = loaded.draft;
     if (
       !sameId(draft.rootId, request.data.rootId) ||
@@ -318,7 +319,8 @@ export async function resolveStudioApplicationTheme(
       request.error,
     );
   const loaded = await loadStudioApplicationDraft(organizationId, request.data.rootId);
-  if (loaded.kind !== "available") return { kind: loaded.kind };
+  if (loaded.kind !== "available")
+    return { kind: loaded.kind === "validation_failed" ? "refused" : loaded.kind };
   const draft = loaded.draft;
   if (draft.rootId !== request.data.rootId)
     return refuse("resolve-theme", "STUDIO_THEME_ROOT_MISMATCH", {

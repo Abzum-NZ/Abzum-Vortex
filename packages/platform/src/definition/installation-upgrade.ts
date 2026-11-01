@@ -285,12 +285,35 @@ const assertStateEligible = (
     if (!allowEqual) installationProblem("selected_release_not_newer", "refused", "not_newer");
     return;
   }
-  // A newer Application version releases its changed Modules with it, so an upgrade moves to the
-  // new pinned Module releases; only the set of Modules the Application binds must stay the same.
-  const moduleRoots = (releaseSet: UpgradeState["activeReleaseSet"]) =>
-    releaseSet.modules.map((module) => module.rootId.toLowerCase()).sort();
-  if (!same(moduleRoots(state.activeReleaseSet), moduleRoots(state.selectedReleaseSet)))
-    installationProblem("module_set_changed", "refused", "module_set_changed");
+  // The existing atomic switch detaches the prior set and provisions every selected Module.
+  // A newly added dependency follows that same path; removed Modules retain their stored data.
+};
+
+/** Names the module membership changes the installer confirms before the atomic switch. */
+export const upgradeModuleChanges = (state: UpgradeState): string => {
+  const prior = state.activeReleaseSet.modules;
+  const selected = state.selectedReleaseSet.modules;
+  const names = (modules: typeof prior) =>
+    modules
+      .map((module) => `${module.content.name} (${module.definitionKey})`)
+      .sort()
+      .join(", ");
+  const added = selected.filter(
+    (module) => !prior.some((old) => sameId(old.rootId, module.rootId)),
+  );
+  const removed = prior.filter(
+    (module) => !selected.some((next) => sameId(next.rootId, module.rootId)),
+  );
+  return [
+    added.length === 0
+      ? ""
+      : `Modules added: ${names(added)}. They will be installed with this upgrade.`,
+    removed.length === 0
+      ? ""
+      : `Modules removed: ${names(removed)}. This upgrade removes them from this application and keeps their stored records. To use them here again, add the modules back in Studio, publish, and upgrade.`,
+  ]
+    .filter(Boolean)
+    .join("\n\n");
 };
 
 /** Whether two snapshots describe the same organisation, application, releases and bindings. */

@@ -208,14 +208,6 @@ export const saveInlinePipeline = (
     issues.push(
       `Field: ${field.label} already has a pipeline. A choice field follows one pipeline.`,
     );
-  if (
-    existing === undefined &&
-    !field.filterable &&
-    publication.fields.has(`${module.key}:${record.key}.${field.key}`)
-  )
-    issues.push(
-      `Field: ${field.label} is published without filtering, so it can't be used for a new pipeline. Add a choice field for its stages.`,
-    );
   const labelOf = (value: string) =>
     options.find((option) => option.value === value)?.label ?? value;
 

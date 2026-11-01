@@ -1416,6 +1416,45 @@
                                             "source": "task_output",
                                             "task": "review",
                                             "key": "result",
+                                            "path": ["module_changes"]
+                                          }
+                                        }
+                                      },
+                                      "then": {
+                                        "op": "join",
+                                        "parts": [
+                                          {
+                                            "op": "literal",
+                                            "type": "text",
+                                            "value": "\n\n"
+                                          },
+                                          {
+                                            "op": "reference",
+                                            "reference": {
+                                              "source": "task_output",
+                                              "task": "review",
+                                              "key": "result",
+                                              "path": ["module_changes"]
+                                            }
+                                          }
+                                        ]
+                                      },
+                                      "else": {
+                                        "op": "literal",
+                                        "type": "text",
+                                        "value": ""
+                                      }
+                                    },
+                                    {
+                                      "op": "if",
+                                      "condition": {
+                                        "op": "is_not_empty",
+                                        "arg": {
+                                          "op": "reference",
+                                          "reference": {
+                                            "source": "task_output",
+                                            "task": "review",
+                                            "key": "result",
                                             "path": ["role_template_ids"]
                                           }
                                         }
@@ -2509,50 +2548,6 @@
                                         "literal": {
                                           "type": "text",
                                           "value": "This application has no published version yet. Publish it in Studio first."
-                                        }
-                                      },
-                                      "title": {
-                                        "kind": "literal",
-                                        "literal": {
-                                          "type": "text",
-                                          "value": "Install or upgrade"
-                                        }
-                                      },
-                                      "target": {
-                                        "kind": "literal",
-                                        "literal": {
-                                          "type": "text",
-                                          "value": "dialog"
-                                        }
-                                      },
-                                      "severity": {
-                                        "kind": "literal",
-                                        "literal": {
-                                          "type": "text",
-                                          "value": "info"
-                                        }
-                                      }
-                                    }
-                                  }
-                                ]
-                              },
-                              {
-                                "key": "module_set_changed",
-                                "when": {
-                                  "type": "text",
-                                  "value": "module_set_changed"
-                                },
-                                "tasks": [
-                                  {
-                                    "id": "unavailable_module_set_changed",
-                                    "type": "interface.show_message",
-                                    "version": "1.0.0",
-                                    "properties": {
-                                      "message": {
-                                        "kind": "literal",
-                                        "literal": {
-                                          "type": "text",
-                                          "value": "The latest version adds or removes modules, so it cannot be upgraded to here."
                                         }
                                       },
                                       "title": {
