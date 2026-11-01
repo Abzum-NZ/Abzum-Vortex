@@ -929,8 +929,10 @@ export function ModuleFieldsEditor({
   const shapeHint = shapeLocked
     ? form.type === "calculation"
       ? "Published storage settings are fixed. The formula and rounding can change."
-      : "Published shape is fixed. Labels, help, defaults, privacy and link-back names can change."
+      : "Published shape is fixed. Labels, help, defaults, privacy and link-back names can change, and filtering and sorting can be turned on."
     : undefined;
+  // Required and unique are stored constraints, fixed once published. Filtering and sorting can be
+  // turned on after publication; the field rules say why one cannot be turned off.
   const flag = (
     key: "required" | "unique" | "filterable" | "sortable",
     text: string,
@@ -940,7 +942,11 @@ export function ModuleFieldsEditor({
       <Switch
         id={`module-field-${key}`}
         checked={form[key]}
-        disabled={disabled || shapeLocked || extraDisabled}
+        disabled={
+          disabled ||
+          (shapeLocked && (key === "required" || key === "unique")) ||
+          extraDisabled
+        }
         onCheckedChange={(checked) => change({ [key]: checked })}
       />
       <Label htmlFor={`module-field-${key}`}>{text}</Label>

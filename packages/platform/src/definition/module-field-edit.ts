@@ -451,7 +451,36 @@ export const changeInlineModuleField = (
         ],
       };
     wasPersonLink = isPersonLink(field);
-    if (publication.fields.has(`${qualifiedRecord}.${field.key}`)) {
+    // A pipeline's board groups records by its choice field, which needs filtering.
+    if (
+      field.filterable &&
+      !change.filterable &&
+      record.pipelines.some((pipeline) => pipeline.stage_field === field.key)
+    )
+      return {
+        kind: "invalid",
+        issues: [
+          `A pipeline follows ${field.label}, so its filtering can't be turned off: its board groups ${record.plural_name} by it. Delete the pipeline first.`,
+        ],
+      };
+    const published = publication.fields.has(`${qualifiedRecord}.${field.key}`);
+    // Turning filtering or sorting on is additive: an installation adopting the release builds the
+    // field's index. Turning it off is refused once published: installed apps may filter or sort by it.
+    const turnedOff = (
+      [
+        ["filterable", "filtering", "filter"],
+        ["sortable", "sorting", "sort"],
+      ] as const
+    ).filter(([key]) => field[key] && !change[key]);
+    if (published && turnedOff.length > 0)
+      return {
+        kind: "invalid",
+        issues: [
+          `${field.label} is in a published version, so its ${turnedOff.map(([, noun]) => noun).join(" and ")} can't be turned off: ` +
+            `installed apps may already ${turnedOff.map(([, , verb]) => verb).join(" or ")} ${record.plural_name} by it.`,
+        ],
+      };
+    if (published) {
       // The display name and the source of the offered options are editable even after publication
       // (which values are offered is behaviour); stored relationship settings are fixed.
       // An option's colour is presentation (a patch), so it is not part of the stored shape.
@@ -481,7 +510,7 @@ export const changeInlineModuleField = (
           canonicalJson(storedSettings(settings)) || field.type !== change.type
           ? []
           : ["settings"]),
-        ...(["required", "unique", "filterable", "sortable"] as const).filter(
+        ...(["required", "unique"] as const).filter(
           (key) => field[key] !== change[key],
         ),
         ...(field.type === change.type &&
@@ -503,7 +532,7 @@ export const changeInlineModuleField = (
                   ? ""
                   : `To hold ${moduleFieldTypeLabels[change.type as ModuleFieldType].toLowerCase()} values, add a new field. `
               }` +
-              "Its label, help text and default can still change.",
+              "Its label, help text and default can still change, and filtering and sorting can be turned on.",
           ],
         };
     }
