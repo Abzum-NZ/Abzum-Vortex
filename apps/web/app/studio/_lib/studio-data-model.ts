@@ -4,6 +4,7 @@ import {
   type ApplicationSourceDocument,
   type ModuleField,
   type ModuleFieldType,
+  type PublishedModuleField,
   type ModuleQueryExposure,
   type RecordOwnershipMode,
 } from "@vortex/platform/schema";
@@ -58,7 +59,7 @@ export const studioEditProblem = (result: Readonly<{ kind: string }>): string | 
  */
 export type StudioPublishedData = Readonly<{
   recordTypes: readonly string[];
-  fields: readonly string[];
+  fields: readonly PublishedModuleField[];
   extensionPointUses: readonly ModuleExtensionPointUse[];
 }>;
 

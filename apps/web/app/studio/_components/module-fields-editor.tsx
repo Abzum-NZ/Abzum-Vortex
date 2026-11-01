@@ -78,6 +78,7 @@ import {
   studioEditProblem,
   type StudioCompiledFields,
   type StudioDataEdit,
+  type StudioPublishedData,
 } from "../_lib/studio-data-model";
 import { StudioCalculationEditor } from "./studio-calculation-editor";
 import { StudioTotalEditor } from "./studio-total-editor";
@@ -439,7 +440,11 @@ export function ModuleFieldsEditor({
       ? []
       : read(existing.type as ModuleFieldType, existing.settings as Plain, storedDefault).reading
           .failures;
-  const [placements, setPlacements] = useState<ReadonlySet<string>>(new Set());
+  /**
+   * The builder's ticks of "Also show it on", by place. A new field starts on every place of its
+   * record type that can take it; an existing field is shown on more places only when ticked.
+   */
+  const [placementChoices, setPlacementChoices] = useState<ReadonlyMap<string, boolean>>(new Map());
   const [issues, setIssues] = useState<readonly string[]>([]);
   const [references, setReferences] = useState<readonly ApplicationUsePlace[]>([]);
   const [titleRefusal, setTitleRefusal] = useState<string | null>(null);
@@ -645,6 +650,16 @@ export function ModuleFieldsEditor({
     recordKey,
     form.type,
     existing?.key,
+  );
+  const placements = new Set(
+    offered
+      .filter(
+        (place) =>
+          place.shown !== true &&
+          place.unavailable === undefined &&
+          (placementChoices.get(place.id) ?? adding),
+      )
+      .map((place) => place.id),
   );
   const nextKey =
     adding && record !== undefined && form.label.trim() !== ""
@@ -865,7 +880,7 @@ export function ModuleFieldsEditor({
     });
     const problem = studioEditProblem(result);
     setIssues(problem === undefined ? [] : [problem]);
-    if (problem === undefined) setPlacements(new Set());
+    if (problem === undefined) setPlacementChoices(new Map());
   };
   const remove = async () => {
     if (existing === undefined) return;
@@ -913,8 +928,10 @@ export function ModuleFieldsEditor({
   const shapeHint = shapeLocked
     ? form.type === "calculation"
       ? "Published storage settings are fixed. The formula and rounding can change."
-      : "Published shape is fixed. Labels, help, defaults, privacy and link-back names can change."
+      : "Published shape is fixed. Labels, help, defaults, privacy and link-back names can change, and filtering and sorting can be turned on."
     : undefined;
+  // Required and unique are stored constraints, fixed once published. Filtering and sorting can be
+  // turned on after publication; the field rules say why one cannot be turned off.
   const flag = (
     key: "required" | "unique" | "filterable" | "sortable",
     text: string,
@@ -924,7 +941,9 @@ export function ModuleFieldsEditor({
       <Switch
         id={`module-field-${key}`}
         checked={form[key]}
-        disabled={disabled || shapeLocked || extraDisabled}
+        disabled={
+          disabled || (shapeLocked && (key === "required" || key === "unique")) || extraDisabled
+        }
         onCheckedChange={(checked) => change({ [key]: checked })}
       />
       <Label htmlFor={`module-field-${key}`}>{text}</Label>
@@ -1326,10 +1345,7 @@ export function ModuleFieldsEditor({
                   checked={place.shown === true || placements.has(place.id)}
                   disabled={disabled || place.shown === true || place.unavailable !== undefined}
                   onCheckedChange={(checked) => {
-                    const next = new Set(placements);
-                    if (checked === true) next.add(place.id);
-                    else next.delete(place.id);
-                    setPlacements(next);
+                    setPlacementChoices(new Map(placementChoices).set(place.id, checked === true));
                     setIssues([]);
                   }}
                 />
@@ -1439,25 +1455,14 @@ export function ModuleFieldsEditor({
 }
 
 /**
- * The published record types and fields, loaded with Data or record-page creation, even when
- * compilation fails. Other views carry no publication facts and conservatively count saved fields
- * as published; consumers that change storage settings must first load their authorized view.
+ * The published record types and field capabilities, loaded with Data or record-page creation,
+ * even when compilation fails. Consumers that change storage first load their authorized view.
  */
 export const studioFieldPublication = (
-  published: Readonly<{ recordTypes: readonly string[]; fields: readonly string[] }> | null,
-  saved: Source,
+  published: StudioPublishedData | null,
 ): ModuleFieldPublication => {
-  if (published !== null)
-    return { recordTypes: new Set(published.recordTypes), fields: new Set(published.fields) };
-  const records = saved.body.modules.flatMap((module) =>
-    module.record_types.map((record) => ({ module, record })),
-  );
   return {
-    recordTypes: new Set(records.map(({ module, record }) => `${module.key}:${record.key}`)),
-    fields: new Set(
-      records.flatMap(({ module, record }) =>
-        record.fields.map((field: SourceField) => `${module.key}:${record.key}.${field.key}`),
-      ),
-    ),
+    recordTypes: new Set(published?.recordTypes),
+    fields: new Map(published?.fields.map((field) => [field.key, field])),
   };
 };

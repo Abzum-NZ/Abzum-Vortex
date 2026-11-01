@@ -1,4 +1,5 @@
 import "server-only";
+import type { PublishedModuleField } from "./module-field-edit";
 import type { ModuleExtensionPointUse } from "./module-extension-point-shape";
 
 import { planApplicationPreview } from "./preview-release-plan";
@@ -104,7 +105,7 @@ export type ApplicationDraftCompilation = Readonly<{
 /** The record types (`module:record`) and fields (`module:record.field`) the draft's own Modules have published. */
 type ApplicationDraftPublication = Readonly<{
   recordTypes: readonly string[];
-  fields: readonly string[];
+  fields: readonly PublishedModuleField[];
   extensionPointUses: readonly ModuleExtensionPointUse[];
 }>;
 
