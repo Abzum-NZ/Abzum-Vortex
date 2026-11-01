@@ -6,6 +6,7 @@ import { useCallback, useMemo, useState, type ReactNode } from "react";
 import {
   describeFailure,
   checkFlowFormula,
+  validateFlow,
   sourcePageItems,
   type ApplicationSourceDocument,
   type ApplicationUsePlace,
@@ -38,6 +39,8 @@ import {
   studioFlowLabel,
   studioFlowOfSelection,
   studioFlowOutline,
+  studioFlowValidationOptions,
+  describeStudioFlowLocation,
   studioSemanticSelectionKey,
   type StudioBehaviourResult,
   type StudioBehaviourTarget,
@@ -182,6 +185,20 @@ export function useStudioFlowsTab({
     stepId === null || outline === null
       ? null
       : (outline.entries.find((entry) => entry.task.id === stepId)?.path ?? null);
+  const flowProblems = useMemo(
+    () =>
+      outline === null
+        ? []
+        : validateFlow(
+            outline.flow,
+            studioFlowValidationOptions(source, outline.flow, outline.siblings),
+          ),
+    [source, outline],
+  );
+  const planRefusal =
+    flowSelection === null || outline === null || draft.updatingCanvas
+      ? null
+      : draft.view.flowPlacements?.[flowSelection.moduleKey ?? ""]?.[outline.flow.key]?.refusal;
   // Choosing a step on the canvas or after an edit is a selection change like any other.
   const selectStep = useCallback(
     (path: StudioFlowPath | null) => {
@@ -508,6 +525,19 @@ export function useStudioFlowsTab({
       </Alert>
     ) : (
       <div className="flex h-full min-h-96 flex-col">
+        {flowProblems.length > 0 || planRefusal != null ? (
+          <Alert variant="destructive">
+            <AlertDescription>
+              <p>{`Fix ${labels.get(selectionKey) ?? "this flow"} before publishing or running it.`}</p>
+              {flowProblems.map((issue, index) => (
+                <p
+                  key={index}
+                >{`${describeStudioFlowLocation(outline.flow, issue.path)}: ${issue.message}`}</p>
+              ))}
+              {planRefusal == null ? null : <p>{planRefusal.reason}</p>}
+            </AlertDescription>
+          </Alert>
+        ) : null}
         <StudioFlowCanvas
           lists={outline.lists}
           starts={starts}
