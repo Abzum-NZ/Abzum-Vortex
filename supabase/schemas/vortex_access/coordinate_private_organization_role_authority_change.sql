@@ -206,7 +206,7 @@ begin
   if operation_name in ('create_custom', 'create_custom_from_template') and exists (
     select 1 from vortex_access.organization_roles as stored
     where stored.organization_id = context_organization_id
-      and stored.role_key = candidate ->> 'key'
+      and (stored.role_key = candidate ->> 'key' or stored.role_id = target_role_id)
   ) then
     raise exception using errcode = 'V3153',
       message = 'A role with this key already exists';

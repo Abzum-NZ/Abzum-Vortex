@@ -1,3 +1,5 @@
+set role vortex_owner;
+
 create or replace function vortex_access.coordinate_private_organization_role_authority_change(
   p_prepared_evidence jsonb,
   p_activity_id uuid
@@ -206,7 +208,7 @@ begin
   if operation_name in ('create_custom', 'create_custom_from_template') and exists (
     select 1 from vortex_access.organization_roles as stored
     where stored.organization_id = context_organization_id
-      and stored.role_key = candidate ->> 'key'
+      and (stored.role_key = candidate ->> 'key' or stored.role_id = target_role_id)
   ) then
     raise exception using errcode = 'V3153',
       message = 'A role with this key already exists';
@@ -258,3 +260,5 @@ comment on function vortex_access.coordinate_private_organization_role_authority
 alter function vortex_access.coordinate_private_organization_role_authority_change(p_prepared_evidence jsonb, p_activity_id uuid) owner to vortex_owner;
 
 grant execute on function vortex_access.coordinate_private_organization_role_authority_change(p_prepared_evidence jsonb, p_activity_id uuid) to postgres;
+
+reset role;
