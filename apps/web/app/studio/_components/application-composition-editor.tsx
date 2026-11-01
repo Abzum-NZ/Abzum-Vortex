@@ -421,8 +421,8 @@ export function ApplicationCompositionEditor(props: Props) {
   };
 
   return (
-    <section className="space-y-6" aria-labelledby={titleId}>
-      <header className="flex items-start justify-between gap-2">
+    <section aria-labelledby={titleId}>
+      <header className="flex items-start justify-between gap-2 pb-3">
         <div className="min-w-0">
           <h2 id={titleId} className="flex min-w-0 items-center gap-2 text-base font-semibold">
             <Icon name="blocks" className="size-4 shrink-0" />

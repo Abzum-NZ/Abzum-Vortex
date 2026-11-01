@@ -35,7 +35,7 @@ import {
   studioBorrowedGroup,
   type StudioReferencePickerOption,
 } from "./studio-reference-picker";
-import { StudioField } from "./studio-field";
+import { StudioField, StudioHelp } from "./studio-field";
 import { StudioEntryList, useStudioEntryKeys } from "./studio-entry-list";
 import { useConfirm } from "../components/confirm-dialog";
 import { StudioInspectorGroup } from "./studio-inspector-group";
@@ -1182,9 +1182,21 @@ export function StudioQueryPicker({
   return (
     <div className="space-y-2" data-vortex-setting="query">
       <div className="flex items-center justify-between gap-2">
-        <Label htmlFor={id}>Data</Label>
+        <span className="flex items-center gap-1">
+          <Label htmlFor={id} className="normal-case tracking-normal">
+            Data
+          </Label>
+          <StudioHelp hint="Choose a record type to show all its records, or use an existing query." />
+        </span>
         {onNewQuery === undefined ? null : (
-          <Button type="button" size="xs" variant="ghost" disabled={disabled} onClick={onNewQuery}>
+          <Button
+            type="button"
+            size="xs"
+            variant="ghost"
+            className="normal-case tracking-normal"
+            disabled={disabled}
+            onClick={onNewQuery}
+          >
             <Plus />
             New query
           </Button>
@@ -1216,9 +1228,6 @@ export function StudioQueryPicker({
             : "Add a query with New query."}
         </p>
       )}
-      <p className="text-sm text-muted-foreground">
-        Choose a record type to show all its records, or use an existing query.
-      </p>
     </div>
   );
 }

@@ -827,9 +827,7 @@ export function StudioDataInspectorView({ model }: Readonly<{ model: StudioDataM
         }
       />
     );
-  const hasOwnUsedIn =
-    isOwned &&
-    (current?.kind === "field" || (current?.kind === "record_type" && adding?.scope !== scope));
+  const hasOwnUsedIn = isOwned && (current?.kind === "field" || current?.kind === "record_type");
   const usedIn = hasOwnUsedIn ? null : studioUseTargetOf(current);
   const problemHere =
     compileProblem?.selection != null &&

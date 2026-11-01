@@ -435,7 +435,7 @@ export const describeSourcePlace = (source: Source, path: Path): ApplicationUseP
       : describeSourcePlace(source, block);
   }
   if (section === "home_page") {
-    const home = body.pages.find((entry) => entry.id === body.home_page);
+    const home = body.pages.find((entry) => entry.key === body.home_page);
     return {
       label: "The application's home page",
       trail: [app, home?.name ?? "Home page"],

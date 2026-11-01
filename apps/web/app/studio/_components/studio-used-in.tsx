@@ -175,6 +175,7 @@ export function StudioReferencesAlert({
           type="button"
           size="xs"
           variant="outline"
+          className="normal-case tracking-normal"
           aria-expanded={showing}
           onClick={() => setShowing(!showing)}
         >

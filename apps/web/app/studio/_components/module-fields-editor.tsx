@@ -1150,11 +1150,22 @@ export function ModuleFieldsEditor({
       {adding && (
         <StudioInspectorFooter>
           {onCancel !== undefined && (
-            <Button type="button" size="sm" variant="outline" onClick={onCancel}>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="normal-case tracking-normal"
+              onClick={onCancel}
+            >
               Cancel
             </Button>
           )}
-          <Button type="submit" size="sm" disabled={disabled || form.label.trim() === ""}>
+          <Button
+            type="submit"
+            size="sm"
+            className="normal-case tracking-normal"
+            disabled={disabled || form.label.trim() === ""}
+          >
             Add field
           </Button>
         </StudioInspectorFooter>

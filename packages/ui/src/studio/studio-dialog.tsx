@@ -47,11 +47,13 @@ export function StudioDialog({
   };
   const footer = (
     <DialogFooter>
-      <DialogClose render={<Button type="button" variant="outline" />}>
+      <DialogClose
+        render={<Button type="button" variant="outline" className="normal-case tracking-normal" />}
+      >
         {submitLabel === undefined ? closeLabel : "Cancel"}
       </DialogClose>
       {submitLabel !== undefined && (
-        <Button type="submit" disabled={submitDisabled}>
+        <Button type="submit" className="normal-case tracking-normal" disabled={submitDisabled}>
           {submitLabel}
         </Button>
       )}
