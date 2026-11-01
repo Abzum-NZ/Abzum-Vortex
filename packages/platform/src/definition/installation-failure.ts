@@ -9,8 +9,7 @@ import { DefinitionError, classifyDatabaseError } from "./definition-error";
  * code, never the message); an unrecognised failure is classified by its database meaning and is
  * never turned into a "you need permission" refusal unless the database refused.
  */
-export const classifyInstallationFailure = (error: unknown): InstallationProblemShape => {
-  console.error(`[studio] application installation failed: ${describeFailure(error)}`);
+const installationFailureOf = (error: unknown): InstallationProblemShape => {
   if (error instanceof InstallationProblem) return error.problem;
   if (error instanceof DefinitionError) {
     switch (error.code) {
@@ -38,4 +37,18 @@ export const classifyInstallationFailure = (error: unknown): InstallationProblem
   if (kind === "conflict" || kind === "constraint_failed" || kind === "wrong_state")
     return { kind: "conflict" };
   return { kind: "temporarily_unavailable" };
+};
+
+export const classifyInstallationFailure = (error: unknown): InstallationProblemShape => {
+  const problem = installationFailureOf(error);
+  const handled =
+    problem.kind !== "failed" &&
+    (error instanceof InstallationProblem ||
+      error instanceof DefinitionError ||
+      problem.kind === "refused" ||
+      problem.kind === "conflict");
+  const message = `[studio] application installation ${handled ? "refused" : "failed"}: ${describeFailure(error)}`;
+  if (handled) console.info(message);
+  else console.error(message);
+  return problem;
 };

@@ -285,7 +285,7 @@ export const applyStudioFlowCommand = (
       }
     }
   } catch (cause) {
-    return { kind: "invalid", cause, reason: "The draft could not be read to make this change." };
+    return { kind: "failed", cause, reason: "The draft could not be read to make this change." };
   }
 };
 

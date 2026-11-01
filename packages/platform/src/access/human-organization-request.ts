@@ -437,7 +437,8 @@ export const createHumanOrganizationRequestService = (
         recentAuthenticationRequired ||
         multiFactorRequired ||
         roleSettingsChangeRequired ||
-        roleKeyInUse;
+        roleKeyInUse ||
+        (error instanceof Error && error.name === "FirstInstallUnavailable");
       const cause = describeFailure(error);
       // A request its caller abandoned (the browser left the page) is stopped on purpose, and a
       // refusal the access model raises is it answering: neither is a failure of the platform, so
@@ -447,7 +448,12 @@ export const createHumanOrganizationRequestService = (
         error.name === "VortexDatabaseError" &&
         error.message === "DATABASE_REQUEST_STOPPED";
       if (abandoned) console.info(`[access] human organisation request stopped: ${cause}`);
-      else if (refused) console.info(`[access] human organisation request refused: ${cause}`);
+      else if (
+        refused ||
+        code === "DEFINITION_DRAFT_STALE_OR_MISSING" ||
+        code === "RECORD_STORAGE_INCOMPATIBLE"
+      )
+        console.info(`[access] human organisation request refused: ${cause}`);
       else console.error(`[access] human organisation request failed: ${cause}`);
       appendTelemetry(correlationId, refused ? "refused" : "temporarily_unavailable", startedAtMs);
       return multiFactorRequired
