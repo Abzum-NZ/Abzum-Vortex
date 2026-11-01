@@ -333,7 +333,7 @@
         "protected_view": "application_store_entries",
         "organization_field": "organization_id",
         "revision_field": "revision",
-        "filterable_fields": ["name"],
+        "filterable_fields": ["name", "status"],
         "sortable_fields": ["name"]
       },
       "fields": [
@@ -443,7 +443,7 @@
         {
           "required": false,
           "unique": false,
-          "filterable": false,
+          "filterable": true,
           "sortable": false,
           "personal_data": "none",
           "public_display": "refused",
@@ -1921,9 +1921,18 @@
         "is_system_application"
       ],
       "filter": {
-        "field": "name",
-        "operator": "contains",
-        "parameter": "search"
+        "all": [
+          {
+            "field": "name",
+            "operator": "contains",
+            "parameter": "search"
+          },
+          {
+            "field": "status",
+            "operator": "not_in",
+            "value": ["available"]
+          }
+        ]
       },
       "group_by": [],
       "aggregates": [],

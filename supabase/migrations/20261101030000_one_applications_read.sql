@@ -79,7 +79,8 @@ begin
       "key": {"sql": "root.key", "database": "text", "filter": true, "search": true},
       "name": {"sql": "(latest.application_address ->> 'name')", "database": "text", "filter": true, "search": true},
       "release_revision": {"sql": "installed.release_revision", "database": "integer", "filter": true},
-      "is_default": {"sql": "(root.root_id is not distinct from (select default_settings.default_application_root_id from vortex_identity.organization_runtime_settings as default_settings where default_settings.organization_id = root.organization_id))", "database": "boolean", "filter": true}
+      "is_default": {"sql": "(root.root_id is not distinct from (select default_settings.default_application_root_id from vortex_identity.organization_runtime_settings as default_settings where default_settings.organization_id = root.organization_id))", "database": "boolean", "filter": true},
+      "status": {"sql": "(case when installed.release_revision is null then 'available' when installed.release_revision < root.current_release_revision then 'update_available' else 'installed' end)", "database": "text", "filter": true}
     }$declared$::jsonb,
     6
   );
