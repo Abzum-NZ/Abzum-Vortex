@@ -419,6 +419,7 @@ export const studioCompileFailure = (error: unknown): StudioCompileFailure => {
         recordTypeKey: keyOf("record_type"),
         fieldKey: keyOf("field"),
         queryKey: keyOf("query"),
+        pageKey: keyOf("page"),
         flowKey: keyOf("flow"),
         taskId: keyOf("flow_node"),
       };

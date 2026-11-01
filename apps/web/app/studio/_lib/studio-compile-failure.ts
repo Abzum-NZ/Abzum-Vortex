@@ -118,6 +118,15 @@ export const describeStudioCompileFailure = (
 ): StudioCompileProblem => {
   if (failure.flowKey !== undefined)
     return { message: describeFlowFailure(failure, source), selection: null };
+  if (failure.pageKey !== undefined) {
+    const page = source.body.pages.find(
+      (candidate) => candidate.id === failure.pageKey || candidate.key === failure.pageKey,
+    );
+    return {
+      message: `Page ${page?.name ?? ruleWords(failure.pageKey)}: ${failure.sentence ?? "This page cannot be used as it is set up."}`,
+      selection: null,
+    };
+  }
   // A rule with its own business sentence says it as it is, exactly as Studio showed it beforehand.
   if (failure.sentence !== undefined) return { message: failure.sentence, selection: null };
   if (failure.reasonCode === "vortex.definition.application_query_exposure") {
