@@ -19,7 +19,10 @@ catalog:
   motion: 14.9.0
   "@base-ui/react": 1.9.0
   "@types/node": 26.6.6
-  typescript: 6.0.3
+  # TypeScript 7 ships no compiler API yet. typescript (the API that typescript-eslint, Next.js and knip
+  # import) is the 6.0 compatibility package; @typescript/native is TypeScript 7 and provides tsc.
+  typescript: npm:@typescript/typescript6@6.0.2
+  "@typescript/native": npm:typescript@7.0.2
   "@js-temporal/polyfill": 0.5.1
   "@puckeditor/core": 0.23.0
   "@supabase/ssr": 0.12.7
