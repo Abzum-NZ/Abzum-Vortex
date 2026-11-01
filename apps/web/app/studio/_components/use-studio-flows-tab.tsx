@@ -304,10 +304,16 @@ export function useStudioFlowsTab({
         const current = live();
         const result = apply(current);
         if (result.kind !== "applied") {
-          console.info(
-            `[studio] ${what} refused (${result.kind}): ${result.reason}`,
-            result.cause === undefined ? "" : describeFailure(result.cause),
-          );
+          if (result.kind === "failed")
+            console.error(
+              `[studio] ${what} failed: ${result.reason}`,
+              describeFailure(result.cause),
+            );
+          else
+            console.info(
+              `[studio] ${what} refused (${result.kind}): ${result.reason}`,
+              result.cause === undefined ? "" : describeFailure(result.cause),
+            );
           return { kind: "keep", result };
         }
         return { kind: "edit", source: result.source, result };
