@@ -1,5 +1,5 @@
 "use client";
-import type { FormEvent, ReactNode } from "react";
+import type { FormEvent, KeyboardEvent, ReactNode } from "react";
 import { Button } from "../components/button";
 import {
   Dialog,
@@ -10,6 +10,26 @@ import {
   DialogHeader,
   DialogTitle,
 } from "../components/dialog";
+
+/**
+ * A closed choice list keeps Escape for itself (it would clear its choice and never let the dialog
+ * or sheet around it close). This handler, set on the dialog's content in the capture phase, closes
+ * the dialog instead and leaves the choice alone.
+ */
+export const escapeFromChoiceList =
+  (close: () => void) =>
+  (event: KeyboardEvent<HTMLElement>): void => {
+    const target = event.target;
+    if (
+      event.key === "Escape" &&
+      target instanceof HTMLElement &&
+      target.getAttribute("role") === "combobox" &&
+      target.getAttribute("aria-expanded") !== "true"
+    ) {
+      event.stopPropagation();
+      close();
+    }
+  };
 
 /**
  * The one dialog for Studio's inspector editors. The title stays in sentence case (the application
@@ -59,7 +79,10 @@ export function StudioDialog({
   );
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent
+        className="sm:max-w-md"
+        onKeyDownCapture={escapeFromChoiceList(() => onOpenChange(false))}
+      >
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
           {description !== undefined && <DialogDescription>{description}</DialogDescription>}

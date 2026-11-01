@@ -1,6 +1,6 @@
 "use client";
 import { useMemo, useState } from "react";
-import { StudioReferencePicker } from "@vortex/ui/studio";
+import { StudioReferencePicker, escapeFromChoiceList } from "@vortex/ui/studio";
 import { Button } from "@vortex/ui/components/button";
 import { Label } from "@vortex/ui/components/label";
 import {
@@ -91,7 +91,10 @@ export function StudioQuerySheet({
         if (!next) onClose();
       }}
     >
-      <SheetContent className="w-full overflow-y-auto sm:max-w-xl">
+      <SheetContent
+        className="w-full overflow-y-auto sm:max-w-xl"
+        onKeyDownCapture={escapeFromChoiceList(onClose)}
+      >
         <SheetHeader>
           <SheetTitle>New query</SheetTitle>
           <SheetDescription>
