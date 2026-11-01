@@ -6,6 +6,7 @@ import {
   type ProjectedLinkTiles,
 } from "@vortex/platform/schema";
 import type { useUnsavedWorkGuard } from "@vortex/ui";
+import type { Navigator } from "@vortex/ui/routing";
 import type { ApplicationPageModel } from "../../../../../../_lib/application-page";
 import { rereadApplicationPlacements } from "../../placement-refresh-action";
 import type { publishedControlData } from "./published-control-data";
@@ -27,6 +28,7 @@ export async function openTile({
   application,
   currentSearch,
   router,
+  navigator,
 }: Readonly<{
   sourceRecordId: string;
   sourceRevision: number;
@@ -47,6 +49,7 @@ export async function openTile({
   application: ApplicationPageModel["invocation"];
   currentSearch: string;
   router: ReturnType<typeof useRouter>;
+  navigator: Navigator;
 }>): Promise<void> {
   if (
     pinActivationInFlightRef.current ||
@@ -148,7 +151,7 @@ export async function openTile({
       return;
     if (target.openBehaviour === "new_page")
       window.open(address.href, "_blank", "noopener,noreferrer");
-    else if (internal) router.push(`${address.pathname}${address.search}`);
+    else if (internal) navigator.navigate(`${address.pathname}${address.search}`);
     else window.location.assign(address.href);
   } catch {
     // No navigation or target metadata on a failed current protected reread.

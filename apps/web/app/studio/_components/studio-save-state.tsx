@@ -24,6 +24,7 @@ import {
   AlertDialogFooter,
 } from "@vortex/ui/components/alert-dialog";
 import { toast } from "@vortex/ui/components/sonner";
+import { NavigationLink } from "@vortex/ui/routing";
 import { cn } from "@vortex/ui/lib/utils";
 import type { StudioDraft } from "./use-studio-draft";
 import { isStudioSessionRefusal } from "./use-studio-session";
@@ -43,16 +44,14 @@ export function studioNotice(
     closeButton?: boolean;
   }>,
 ) {
+  // A link action is a link: it changes page in place (asking about unsaved work in a frame).
   const action =
     details?.action ??
-    (link === undefined
-      ? undefined
-      : {
-          label: link.label,
-          onClick: () => {
-            window.location.assign(link.href);
-          },
-        });
+    (link === undefined ? undefined : (
+      <NavigationLink className="underline" href={link.href}>
+        {link.label}
+      </NavigationLink>
+    ));
   const options = {
     ...(details?.id === undefined ? {} : { id: details.id }),
     ...(details?.description === undefined ? {} : { description: details.description }),

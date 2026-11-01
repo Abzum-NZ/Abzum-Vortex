@@ -3,7 +3,8 @@
 import { readCompiledItemSettings } from "@vortex/platform/schema";
 import type { ReactElement } from "react";
 import { useEffect, useMemo, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
+import { useNavigator, type Navigator } from "@vortex/ui/routing";
 import type {
   ApplicationShell,
   PageDefinition,
@@ -21,6 +22,7 @@ import {
   type PagePuckRendererProps,
 } from "@vortex/ui";
 import type { permittedApplicationsToListValues } from "@vortex/ui";
+import { RestoredPageReread } from "../../../_components/restored-page-reread";
 import { signOut } from "../../../auth/actions";
 import { searchLauncherAction } from "../[applicationKey]/frame-actions";
 
@@ -56,45 +58,46 @@ function OrganizationShellPage({
   runtimeInputs,
 }: OrganizationShellPageProps &
   Readonly<{
-    runtimeInputs: (router: ReturnType<typeof useRouter>) => Readonly<Record<string, unknown>>;
+    runtimeInputs: (navigator: Navigator) => Readonly<Record<string, unknown>>;
   }>): ReactElement {
-  const router = useRouter();
+  const navigator = useNavigator();
   const registry = useMemo(
     () => createPlatformComponentRegistryForReleases(platformBlockReleases),
     [platformBlockReleases],
   );
   const rendered = useMemo(() => renderedPageOf(page, [shell]), [page, shell]);
   return (
-    <ApplicationAccountActionsProvider
-      actions={{
-        account,
-        organizationName,
-        organizationShortName,
-        chooseOrganization: () => router.push("/signed-in"),
-        signOut,
-        openApplication: (href) => router.push(href),
-      }}
-    >
-      <PagePuckRenderer
-        readSettings={readCompiledItemSettings}
-        composition={rendered.page}
-        {...(rendered.shell === undefined ? {} : { shell: rendered.shell })}
-        registry={registry}
-        fieldInputControlReleases={fieldInputControlReleases}
-        platformThemeTokens={platformThemeTokens}
-        pageId={page.pageId}
-        applicationSurface
-        applicationShellRuntime={{
-          applicationName: shell.name,
-          applicationHref: launcherHref,
+    <>
+      <RestoredPageReread />
+      <ApplicationAccountActionsProvider
+        actions={{
+          account,
           organizationName,
           organizationShortName,
-          pageName: page.name,
+          signOut,
         }}
-        runtimeInputs={runtimeInputs(router)}
-        {...(applicationSearch === undefined ? {} : { applicationSearch })}
-      />
-    </ApplicationAccountActionsProvider>
+      >
+        <PagePuckRenderer
+          readSettings={readCompiledItemSettings}
+          composition={rendered.page}
+          {...(rendered.shell === undefined ? {} : { shell: rendered.shell })}
+          registry={registry}
+          fieldInputControlReleases={fieldInputControlReleases}
+          platformThemeTokens={platformThemeTokens}
+          pageId={page.pageId}
+          applicationSurface
+          applicationShellRuntime={{
+            applicationName: shell.name,
+            applicationHref: launcherHref,
+            organizationName,
+            organizationShortName,
+            pageName: page.name,
+          }}
+          runtimeInputs={runtimeInputs(navigator)}
+          {...(applicationSearch === undefined ? {} : { applicationSearch })}
+        />
+      </ApplicationAccountActionsProvider>
+    </>
   );
 }
 
@@ -228,8 +231,8 @@ export function OrganizationAddressStatePage({
     <div className="contents" data-vortex-address-state={addressState}>
       <OrganizationShellPage
         {...shellPage}
-        runtimeInputs={(router) => ({
-          [actionPlacementId]: { events: { action: () => router.push(actionHref) } },
+        runtimeInputs={(navigator) => ({
+          [actionPlacementId]: { events: { action: () => navigator.navigate(actionHref) } },
         })}
       />
     </div>

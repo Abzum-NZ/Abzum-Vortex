@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, type RefObject } from "react";
 import type { useRouter } from "next/navigation";
-import type { useUnsavedWorkGuard, useUnsavedWorkRegistry } from "@vortex/ui";
+import type { useUnsavedWorkRegistry } from "@vortex/ui";
 import {
   createFlowInvokeClient,
   createFlowRuntime,
@@ -32,7 +32,10 @@ import {
 } from "@vortex/platform/schema";
 import { Button } from "@vortex/ui/components/button";
 import { DialogFooter } from "@vortex/ui/components/dialog";
+import { noteCommittedWrite, useNavigator } from "@vortex/ui/routing";
+import { resolveApplicationPagePathAction } from "../../../frame-actions";
 import { useApplicationFrame } from "../../../_components/application-frame-state";
+import { refreshShownPage } from "../../../_components/shown-page";
 import type { ApplicationPageModel } from "../../../../../../_lib/application-page";
 import type { SubmittedForm, PageMessageDraft } from "./types";
 import type { ControlDrafts } from "../../../_components/application-frame-state";
@@ -48,7 +51,6 @@ export function useFlowRuntime({
   submittedFormsRef,
   router,
   resolvePageHref,
-  unsavedWork,
   model,
   platformComponentRegistry,
   runtimeInputsRef,
@@ -72,7 +74,6 @@ export function useFlowRuntime({
   router: ReturnType<typeof useRouter>;
   resolvePageHref: (pageId: string) => string;
   basePath: string;
-  unsavedWork: ReturnType<typeof useUnsavedWorkGuard>["guard"];
   model: ApplicationPageModel;
   platformComponentRegistry: ReturnType<typeof createPlatformComponentRegistryForReleases>;
   runtimeInputsRef: RefObject<Readonly<Record<string, unknown>>>;
@@ -174,40 +175,50 @@ export function useFlowRuntime({
     unsavedWorkRegistry,
   ]);
   const applicationFrame = useApplicationFrame();
-  const startPageChange = applicationFrame?.startPageChange;
+  const navigator = useNavigator();
   const navigation = model.navigation ?? applicationFrame?.navigation;
   const navigationEnvironment = useMemo<LinkNavigationEnvironment>(
     () => ({
-      unsavedWork,
-      recheckInternalTarget: async (target) => {
-        if (model.pages.some((page) => sameId(page.pageId, target.pageId))) return true;
-        // The projected page list is a rendering hint; the destination still authorises its read.
-        // A page it does not offer must not resolve to the application's home address.
-        showPageMessage(unavailableNotice);
-        return false;
-      },
-      navigateInternal: (target) => {
+      resolveTarget: async (target) => {
         const parameters = new URLSearchParams();
         for (const [name, value] of Object.entries(target.parameters ?? {}))
           if (typeof value === "string" || typeof value === "number" || typeof value === "boolean")
             parameters.set(name, String(value));
         const query = parameters.toString();
-        const address = `${resolvePageHref(target.pageId)}${query === "" ? "" : `?${query}`}`;
+        // This application's page is one of the pages projected for the person (a rendering hint;
+        // the destination still authorises its own read). Another application's page is resolved
+        // against the person's current access in the same organisation. A page that is not offered
+        // never falls back to an application's home address.
+        const path =
+          target.applicationKey === undefined
+            ? model.pages.some((page) => sameId(page.pageId, target.page))
+              ? resolvePageHref(target.page)
+              : undefined
+            : await resolveApplicationPagePathAction(
+                application.tenantShortName,
+                application.organizationShortName,
+                target.applicationKey,
+                target.page,
+              ).catch((error: unknown) => {
+                console.error("[flow] navigate target could not be resolved", error);
+                return undefined;
+              });
+        if (path === undefined) {
+          showPageMessage(unavailableNotice);
+          return undefined;
+        }
+        return `${path}${query === "" ? "" : `?${query}`}`;
+      },
+      navigate: (path) => {
+        // A flow's Navigate follows its own writes: no prefetched page opens with older data.
+        noteCommittedWrite();
         runtimeState.messages.carryToasts();
-        // Inside the frame the change runs in its page transition (dimmed page, progress line).
-        if (startPageChange === undefined) router.push(address);
-        else startPageChange(() => router.push(address));
+        // The navigator in force asks before discarding unsaved work and, inside the frame, runs
+        // the change in its page transition (the current page stays, dimmed, until the next is ready).
+        navigator.navigate(path);
       },
     }),
-    [
-      model.pages,
-      resolvePageHref,
-      router,
-      runtimeState,
-      showPageMessage,
-      startPageChange,
-      unsavedWork,
-    ],
+    [application, model.pages, navigator, resolvePageHref, runtimeState, showPageMessage],
   );
   // A dialog's form registers in its own scope: the form's placement and the dialog's run.
   const dialogStatesRef = useRef(new Map<string, FlowRuntimeState>());
@@ -484,9 +495,9 @@ export function useFlowRuntime({
     );
     applyMessageActionRef.current(dispatched, action.bindingId);
     // An action carried to the next page (Undo after a delete that opened the list) finishes after
-    // this page has gone: the page now showing re-reads what the action changed.
+    // this page has gone: the page now showing re-reads the data it shows.
     void dispatched.then(() => {
-      if (!mountedRef.current) router.refresh();
+      if (!mountedRef.current) refreshShownPage();
     });
   };
   useEffect(() => {

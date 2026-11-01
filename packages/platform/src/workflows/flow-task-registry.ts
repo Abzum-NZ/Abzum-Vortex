@@ -64,6 +64,7 @@ const flowTaskPropertyTypeSchema = z.enum([
   "record_change_list",
   "query_id",
   "page_id",
+  "application_key",
   "form_id",
   "placement_id",
   "relationship_id",

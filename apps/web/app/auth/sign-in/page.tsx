@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { NavigationLink } from "@vortex/ui/routing";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { Field } from "@vortex/ui/components/field";
@@ -96,18 +96,18 @@ export default async function SignInPage({ searchParams }: SignInPageProps) {
       description="Enter the email address and password connected to your Vortex identity."
       footer={
         <div className="flex w-full flex-wrap justify-between gap-3 text-sm">
-          <Link
+          <NavigationLink
             className="font-medium text-foreground underline underline-offset-4 hover:text-primary transition-colors"
             href="/auth/register"
           >
             Create account
-          </Link>
-          <Link
+          </NavigationLink>
+          <NavigationLink
             className="font-medium text-foreground underline underline-offset-4 hover:text-primary transition-colors"
             href="/auth/recover"
           >
             Forgot password?
-          </Link>
+          </NavigationLink>
         </div>
       }
     >

@@ -3,14 +3,11 @@ import {
   useEffect,
   useMemo,
   useRef,
-  useState,
-  useSyncExternalStore,
   type Dispatch,
   type SetStateAction,
   type RefObject,
 } from "react";
 import type { useRouter } from "next/navigation";
-import { observeSettled, settledValue } from "@vortex/ui";
 import {
   mountedRecordPinFrameSchema,
   isCurrentComponentRequestGeneration,
@@ -53,10 +50,6 @@ type AcceptedPlacement = Readonly<{
   data: PageDataState;
   editFormBaseline: EditFormBaseline | null;
 }>;
-
-const subscribeToNothing = (): (() => void) => () => undefined;
-const afterHydration = (): boolean => true;
-const duringServerRenderAndHydration = (): boolean => false;
 
 export function usePlacementRefresh({
   currentPageKey,
@@ -386,11 +379,23 @@ export function usePlacementRefresh({
         apply: (candidate: unknown) => {
           const result = flowRefreshResultSchema.parse(candidate);
           if (placementRequestsRef.current.key !== scope.key) return;
-          if (result.kind === "reload") {
+          // Another installed release, or the page itself is no longer available to the person (the
+          // record it shows was deleted, or the write removed their access): the page is read again
+          // in full, so it shows its own not-found or refused state.
+          if (result.kind === "reload" || result.kind === "unavailable") {
             router.refresh();
             return;
           }
-          if (result.kind !== "available") throw new Error("FLOW_PLACEMENT_REFRESH_UNAVAILABLE");
+          // The write committed but its rows could not be read with the reply right now: they are
+          // read again on their own, so the page never keeps showing what the write changed.
+          if (result.kind === "temporarily_unavailable") {
+            void refreshPlacements(
+              [...requests.values()].map((entry) => entry.componentId),
+              undefined,
+              { content: true },
+            );
+            return;
+          }
           const accepted = [...requests.entries()].flatMap(([key, request]) => {
             const current = scope.generations.get(key);
             const previous = order.applied.get(key);
@@ -444,6 +449,7 @@ export function usePlacementRefresh({
       model.data,
       model.editFormBaselines,
       navigationKey,
+      refreshPlacements,
       refreshedPlacementData,
       router,
     ],
@@ -457,60 +463,11 @@ export function usePlacementRefresh({
     },
     [model.refreshPlacementsByBinding],
   );
-  // Placements the server sent before they had read: each settles on the response that carried
-  // the page, so it never costs a second request. A newer page drops the earlier page's results.
-  const [streamed, setStreamed] = useState<
-    Readonly<{ owner: ApplicationPageModel["data"]; data: Readonly<Record<string, PageDataState>> }>
-  >({ owner: model.data, data: {} });
-  // The reads that had settled before the page's first render (the page was held for its primary
-  // data), so that render already shows them instead of a loading state for one frame. Later
-  // settlements arrive through `streamed`, so this runs once per model. While the server HTML is
-  // hydrated no read counts as settled: the server rendered every streamed placement as loading,
-  // and a read the stream delivered before hydration must not change that first client render
-  // (React #418). The render right after hydration shows it.
-  const hydrated = useSyncExternalStore(
-    subscribeToNothing,
-    afterHydration,
-    duringServerRenderAndHydration,
-  );
-  const settledStreams = useMemo(() => {
-    const settled: Record<string, PageDataState> = {};
-    if (!hydrated) return settled;
-    for (const [placementId, read] of Object.entries(model.streamedData ?? {})) {
-      observeSettled(read);
-      const state = settledValue(read);
-      if (state !== undefined) settled[placementId] = state;
-    }
-    return settled;
-  }, [hydrated, model.streamedData]);
-  useEffect(() => {
-    if (model.streamedData === undefined) return;
-    let current = true;
-    for (const [placementId, settled] of Object.entries(model.streamedData)) {
-      // A read that had already settled when the page was shown is in the first render's data.
-      if (Object.hasOwn(settledStreams, placementId)) continue;
-      void settled.then((state) => {
-        if (!current) return;
-        setStreamed((prior) => ({
-          owner: model.data,
-          data: { ...(prior.owner === model.data ? prior.data : {}), [placementId]: state },
-        }));
-      });
-    }
-    return () => {
-      current = false;
-    };
-  }, [model.data, model.streamedData, settledStreams]);
   const currentData = useMemo(() => {
-    const served = {
-      ...model.data,
-      ...settledStreams,
-      ...(streamed.owner === model.data ? streamed.data : {}),
-    };
     return refreshedPlacementData?.navigationKey === navigationKey
-      ? { ...served, ...refreshedPlacementData.data }
-      : served;
-  }, [model.data, navigationKey, refreshedPlacementData, settledStreams, streamed]);
+      ? { ...model.data, ...refreshedPlacementData.data }
+      : model.data;
+  }, [model.data, navigationKey, refreshedPlacementData]);
   const currentTileDataRef = useRef(currentData);
   currentTileDataRef.current = currentData;
   const compositionRootRef = useRef<HTMLDivElement>(null);

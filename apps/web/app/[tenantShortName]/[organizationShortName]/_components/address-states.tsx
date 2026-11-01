@@ -1,6 +1,6 @@
 import "server-only";
 
-import Link from "next/link";
+import { NavigationLink } from "@vortex/ui/routing";
 import type { ReactElement } from "react";
 import type { IdentitySession } from "@vortex/platform/schema";
 import {
@@ -22,7 +22,7 @@ import {
 } from "@vortex/ui/components/empty";
 import { AuthShell } from "../../../auth/_components/auth-shell";
 import { loadOrganizationLauncher } from "../../../_lib/organization-context";
-import { organizationAddressPath } from "../../../_lib/address-paths";
+import { resolveOrganizationLandingPath } from "../../../_lib/organization-landing";
 import { platformBlockReleasesFor } from "../../../_lib/platform-block-releases";
 import { OrganizationAddressStatePage } from "./organization-launcher-page";
 
@@ -140,7 +140,12 @@ export async function OrganizationAddressState({
       : { email, displayName: entry.accountDisplayName };
   // An organisation the person does not belong to is never named back to them.
   const organizationName = entry?.organizationDisplayName ?? "your organisations";
-  const organizationHref = organizationAddressPath(tenantShortName, organizationShortName);
+  // The way back names the organisation's final page, never its address that would redirect.
+  const organizationHref = await resolveOrganizationLandingPath(
+    session,
+    tenantShortName,
+    organizationShortName,
+  );
   const content = stateContent(state, organizationName, organizationHref);
   const page = organizationAddressStatePage(content.page);
   return (
@@ -172,7 +177,7 @@ export function SignInTemporarilyUnavailable({
       title="This address is temporarily unavailable"
       description="Your sign-in could not be checked just now. Try loading this address again."
     >
-      <Button variant="outline" nativeButton={false} render={<Link href={retryHref} />}>
+      <Button variant="outline" nativeButton={false} render={<NavigationLink href={retryHref} />}>
         Try again
       </Button>
     </AuthShell>
@@ -197,7 +202,7 @@ export function PageSubjectNotFound({
         </EmptyDescription>
       </EmptyHeader>
       <EmptyContent>
-        <Button variant="outline" nativeButton={false} render={<Link href={homeHref} />}>
+        <Button variant="outline" nativeButton={false} render={<NavigationLink href={homeHref} />}>
           {`Back to ${applicationName}`}
         </Button>
       </EmptyContent>

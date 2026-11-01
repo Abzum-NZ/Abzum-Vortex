@@ -341,7 +341,10 @@ const resolveProperty = (
     case "query_id":
       return identity((alias) => ctx.resolver.query(alias));
     case "page_id":
-      return identity((alias) => ctx.resolver.page(alias));
+      // A page of another application is named by its key there and resolved when the step runs.
+      return properties.application === undefined
+        ? identity((alias) => ctx.resolver.page(alias))
+        : value;
     case "connection_binding_id":
       return identity((alias) => ctx.resolver.connectionBinding(alias));
     case "flow_id":

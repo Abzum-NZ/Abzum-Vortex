@@ -1,5 +1,6 @@
 "use client";
 
+import { useNavigator } from "../routing/navigator";
 import type { ReactElement } from "react";
 import {
   addressParameter,
@@ -12,7 +13,7 @@ import {
   calendarShiftMonth,
   calendarStartOfDay,
 } from "@vortex/platform/schema";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { Button } from "../components/button";
 import { Card, CardContent, CardDescription, CardHeader } from "../components/card";
 import { DisplayHeader, RecordsEmptyState } from "./controls";
@@ -95,7 +96,7 @@ export function CalendarDisplay(props: DisplayRenderProps<CalendarPayload>): Rea
     events,
   } = resolveDisplayContext<CalendarPayload>(props, () => false, "No items in this period");
   const rowActionEventId = events?.row_action === undefined ? undefined : rowActionEventIdOf(props);
-  const router = useRouter();
+  const navigator = useNavigator();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const days = values === undefined ? [] : periodDays(values);
@@ -133,7 +134,10 @@ export function CalendarDisplay(props: DisplayRenderProps<CalendarPayload>): Rea
     const parameters = new URLSearchParams(searchParams.toString());
     change(parameters);
     const query = parameters.toString();
-    router.replace(query === "" ? pathname : `${pathname}?${query}`);
+    navigator.navigate(query === "" ? pathname : `${pathname}?${query}`, {
+      replace: true,
+      withinPage: true,
+    });
   };
 
   // No placeholder renders while the calendar reads: the page stays as it is.

@@ -1,4 +1,5 @@
 import { useCallback, type Dispatch, type SetStateAction, type RefObject } from "react";
+import { noteCommittedWrite } from "@vortex/ui/routing";
 import type { useRouter } from "next/navigation";
 import type {
   createPlatformComponentRegistryForReleases,
@@ -130,7 +131,19 @@ export function useApplyDispatch({
           return outcome;
         }
         if (server.kind === "reload") {
-          router.refresh();
+          // Another installed release: the page itself is out of date and is read again in full.
+          if (server.installationRevision !== model.invocation.installationRevision)
+            router.refresh();
+          // The same release: only rows changed under the person (a row shown at an older
+          // revision), so the placements this run reads are re-read as they now are.
+          else
+            void refreshPlacements(
+              sourceBindingId === undefined
+                ? Object.keys(model.data)
+                : refreshTargetsForBinding(sourceBindingId),
+              undefined,
+              { content: true },
+            );
           return outcome;
         }
         if (server.kind === "cells_refused") {
@@ -142,6 +155,9 @@ export function useApplyDispatch({
           return { ...outcome, cellProblems: server.problems };
         }
         if (server.kind === "finished") {
+          // A committed write: no prefetched page may open with data from before it.
+          if (server.descriptor.commit === "confirmed" || server.descriptor.commit === "partial")
+            noteCommittedWrite();
           // A later run of the same binding that went through settles the earlier unknown outcome.
           const sourceControlId = Object.values(model.bindings)
             .flat()
@@ -368,7 +384,9 @@ export function useApplyDispatch({
       }
     },
     [
+      model.data,
       model.guidedForm,
+      model.invocation.installationRevision,
       model.page,
       model.pageId,
       navigationKey,

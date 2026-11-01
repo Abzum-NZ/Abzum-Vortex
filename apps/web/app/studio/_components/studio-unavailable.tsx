@@ -1,4 +1,5 @@
 import { Alert, AlertDescription, AlertTitle } from "@vortex/ui/components/alert";
+import { NavigationLink } from "@vortex/ui/routing";
 import { unavailableMessage, type StudioUnavailableKind } from "./studio-refusal-messages";
 
 const titles: Readonly<Record<StudioUnavailableKind, string>> = {
@@ -32,9 +33,9 @@ export function StudioUnavailable({
         </AlertDescription>
       </Alert>
       {reloadHref === undefined ? null : (
-        <a className="underline" href={reloadHref}>
+        <NavigationLink className="underline" href={reloadHref}>
           Reload
-        </a>
+        </NavigationLink>
       )}
     </main>
   );

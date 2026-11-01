@@ -1,7 +1,6 @@
 "use client";
 
 import type { ReactElement } from "react";
-import { useRouter } from "next/navigation";
 import {
   ApplicationAccountActionsBlock,
   ApplicationAccountActionsProvider,
@@ -14,15 +13,12 @@ export function StudioAccount({
   account,
   organizationName,
 }: Readonly<{ account: ApplicationAccount; organizationName: string }>): ReactElement {
-  const router = useRouter();
   return (
     <ApplicationAccountActionsProvider
       actions={{
         account,
         organizationName,
-        chooseOrganization: () => router.push("/signed-in"),
         signOut,
-        openApplication: (href) => router.push(href),
       }}
     >
       <ApplicationAccountActionsBlock />

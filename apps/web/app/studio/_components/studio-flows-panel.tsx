@@ -1,5 +1,5 @@
 "use client";
-import Link from "next/link";
+import { NavigationLink } from "@vortex/ui/routing";
 import { useMemo, useState } from "react";
 import { Button } from "@vortex/ui/components/button";
 import type { ApplicationSourceDocument } from "@vortex/platform/schema";
@@ -151,12 +151,12 @@ export function StudioFlowsPanel({
                   {owner === undefined ? null : (
                     <>
                       {" "}
-                      <Link
+                      <NavigationLink
                         className="underline underline-offset-4"
                         href={`/studio/${encodeURIComponent(organizationId)}/${encodeURIComponent(owner.rootId)}?tab=flows`}
                       >
                         Open {owner.name} in Studio
-                      </Link>
+                      </NavigationLink>
                     </>
                   )}
                 </li>
