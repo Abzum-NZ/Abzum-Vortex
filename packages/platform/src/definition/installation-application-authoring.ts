@@ -280,4 +280,3 @@ export const createApplicationAuthoringService = (environment: ApplicationAuthor
     },
   };
 };
-

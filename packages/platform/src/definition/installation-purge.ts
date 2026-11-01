@@ -28,6 +28,7 @@ const purgeImpactSchema = z
     releases: count,
     records: count,
     record_tables: count,
+    external_links: count,
   })
   .strict();
 
@@ -59,24 +60,32 @@ const callPurge = async (
   rootId: string,
   apply: boolean,
   deleteOnly: boolean,
+  confirmedName: string | null,
 ): Promise<unknown> => {
   try {
     const rows = await transaction.query<PurgeRow>`
       select vortex_definition.purge_application(
-        ${rootId}::uuid, ${apply}::boolean, ${deleteOnly}::boolean
+        ${rootId}::uuid, ${apply}::boolean, ${deleteOnly}::boolean, ${confirmedName}::text
       ) as purge_result
     `;
     if (rows.length !== 1 || rows[0] === undefined)
       installationProblem("purge_result_missing", "failed");
     return rows[0].purge_result;
   } catch (error) {
+    // The purge's own refusals have their own states; any other database error, a history
+    // protection included, is a failure whose cause stays in the log.
     switch (databaseErrorCode(error)) {
-      case "23514":
+      case "VX001":
         throw new ApplicationPurgeRefused("application_is_default", { cause: error });
-      case "23503":
+      case "VX002":
         throw new ApplicationPurgeRefused("application_has_dependents", { cause: error });
-      case "55006":
+      case "VX003":
         throw new ApplicationPurgeRefused("application_is_installed", { cause: error });
+      case "VX004":
+        throw new ApplicationPurgeRefused("application_name_mismatch", { cause: error });
+      case "23514":
+      case "23503":
+        throw new ApplicationPurgeRefused("application_purge_blocked", { cause: error });
       default:
         throw error;
     }
@@ -88,7 +97,7 @@ const readImpact = async (
   rootId: string,
   deleteOnly: boolean,
 ): Promise<ApplicationPurgeImpact> =>
-  purgeImpactSchema.parse(await callPurge(transaction, rootId, false, deleteOnly));
+  purgeImpactSchema.parse(await callPurge(transaction, rootId, false, deleteOnly, null));
 
 /**
  * Reads what removing the application's data (or deleting the application) would take, under the
@@ -165,10 +174,8 @@ export const purgeApplication = async (
           purgeOperation(rootId),
         );
         const impact = await readImpact(transaction, rootId, deleteOnly);
-        if (confirmedName.trim() !== impact.application_name)
-          throw new ApplicationPurgeRefused("application_name_mismatch");
         // The purge is the target: its receipt completes before the purge changes the access
-        // version the completion checks.
+        // version the completion checks. The typed name is checked inside the purge itself.
         if (receipt !== undefined)
           await receipt(transaction, {
             application_name: impact.application_name,
@@ -176,7 +183,7 @@ export const purgeApplication = async (
             records: impact.records,
             record_tables: impact.record_tables,
           });
-        await callPurge(transaction, rootId, true, deleteOnly);
+        await callPurge(transaction, rootId, true, deleteOnly, confirmedName);
         return impact;
       } catch (error) {
         failure = error;

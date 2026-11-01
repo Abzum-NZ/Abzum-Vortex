@@ -1877,6 +1877,10 @@
           "type": "whole_number",
           "required": true
         },
+        "external_links": {
+          "type": "whole_number",
+          "required": true
+        },
         "impact_lines": {
           "type": "json",
           "required": true

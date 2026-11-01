@@ -601,8 +601,8 @@
                         "event_id": "event_publish_application",
                         "application_capability": "publish_application",
                         "label": "Publish",
-                        "icon": "arrow-up",
-                        "placement": "inline"
+                        "icon": "check",
+                        "placement": "menu"
                       },
                       {
                         "event_id": "event_install_or_upgrade",
@@ -753,7 +753,7 @@
                           "label": "Publish",
                           "action_kind": "action",
                           "application_capability": "publish_application",
-                          "icon": "arrow-up",
+                          "icon": "check",
                           "variant": "ghost",
                           "vortex": {
                             "block": {
@@ -3930,6 +3930,50 @@
                                         }
                                       }
                                     ]
+                                  },
+                                  {
+                                    "key": "refused",
+                                    "when": {
+                                      "type": "choice",
+                                      "value": "refused"
+                                    },
+                                    "tasks": [
+                                      {
+                                        "id": "purge_refused",
+                                        "type": "interface.show_message",
+                                        "version": "1.0.0",
+                                        "properties": {
+                                          "message": {
+                                            "kind": "literal",
+                                            "literal": {
+                                              "type": "text",
+                                              "value": "The application was not removed: you may not delete its data, or its state changed. Nothing was deleted; check it in the list."
+                                            }
+                                          },
+                                          "title": {
+                                            "kind": "literal",
+                                            "literal": {
+                                              "type": "text",
+                                              "value": "Remove application"
+                                            }
+                                          },
+                                          "target": {
+                                            "kind": "literal",
+                                            "literal": {
+                                              "type": "text",
+                                              "value": "dialog"
+                                            }
+                                          },
+                                          "severity": {
+                                            "kind": "literal",
+                                            "literal": {
+                                              "type": "text",
+                                              "value": "info"
+                                            }
+                                          }
+                                        }
+                                      }
+                                    ]
                                   }
                                 ],
                                 "default": [
@@ -4940,6 +4984,50 @@
                                 "literal": {
                                   "type": "text",
                                   "value": "store_applications_region"
+                                }
+                              }
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "key": "refused",
+                        "when": {
+                          "type": "choice",
+                          "value": "refused"
+                        },
+                        "tasks": [
+                          {
+                            "id": "delete_refused",
+                            "type": "interface.show_message",
+                            "version": "1.0.0",
+                            "properties": {
+                              "message": {
+                                "kind": "literal",
+                                "literal": {
+                                  "type": "text",
+                                  "value": "The application was not deleted: you may not delete it, or its state changed. Nothing was deleted; check it in the list."
+                                }
+                              },
+                              "title": {
+                                "kind": "literal",
+                                "literal": {
+                                  "type": "text",
+                                  "value": "Delete application"
+                                }
+                              },
+                              "target": {
+                                "kind": "literal",
+                                "literal": {
+                                  "type": "text",
+                                  "value": "dialog"
+                                }
+                              },
+                              "severity": {
+                                "kind": "literal",
+                                "literal": {
+                                  "type": "text",
+                                  "value": "info"
                                 }
                               }
                             }

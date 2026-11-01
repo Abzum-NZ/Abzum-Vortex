@@ -44,7 +44,6 @@ const iconLabels: Readonly<Record<(typeof recordsTableRowActionIcons)[number], s
   undo: "Restore",
   pencil: "Edit",
   trash: "Delete",
-  "arrow-up": "Publish",
 };
 
 const placementOf = (source: ApplicationSourceDocument, alias: string) =>

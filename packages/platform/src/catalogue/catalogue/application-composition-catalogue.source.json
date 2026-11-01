@@ -1463,7 +1463,7 @@
           { "key": "trash", "label": "Delete" },
           { "key": "plus", "label": "Install" },
           { "key": "minus", "label": "Remove" },
-          { "key": "arrow-up", "label": "Publish" },
+          { "key": "check", "label": "Publish" },
           { "key": "workflow", "label": "Run" }
         ]
       },
@@ -3782,10 +3782,6 @@
                 {
                   "key": "trash",
                   "label": "Delete"
-                },
-                {
-                  "key": "arrow-up",
-                  "label": "Publish"
                 }
               ]
             },

@@ -414,7 +414,6 @@ const review = async (
   if (!rootId.success) return { kind: "unavailable" };
   const organizationId = organizationOf(selection);
   try {
-    await requireApplicationChangeStepUp(environment, session, organizationId, rootId.data);
     const latest = await readCurrentApplicationLatestRelease(
       environment,
       session,
@@ -516,6 +515,11 @@ const purgeReview = (impact: ApplicationPurgeImpact): Outputs => {
     plural(impact.permission_entries, "permission entry", "permission entries"),
     `${plural(impact.records, "record", "records")} in ${plural(impact.record_tables, "record table", "record tables")}`,
     plural(impact.releases, "published version", "published versions"),
+    ...(impact.external_links === 0
+      ? []
+      : [
+          `${plural(impact.external_links, "link", "links")} from records of other applications into it`,
+        ]),
   ];
   return { ...impact, impact_lines: lines };
 };
@@ -759,11 +763,16 @@ const upgrade = async (
 /** The application catalogue's journeys, bound to the application's installation environment. */
 export const createApplicationStoreService = (environment: ApplicationStoreEnvironment) => ({
   ...createApplicationAuthoringService(environment),
-  reviewRemoval: async (
+  /**
+   * The sign-in an install, upgrade or removal needs, asked for before its review is shown: the
+   * person signs in again in the dialog, not after filling it. Undefined when the sign-in is
+   * recent enough.
+   */
+  requireStepUp: async (
     session: IdentitySession,
     selection: OrganizationSelectionCandidate,
     inputs: Readonly<Record<string, unknown>>,
-  ): Promise<ApplicationStoreResult> => {
+  ): Promise<ApplicationStoreResult | undefined> => {
     const rootId = applicationRootInput(inputs.application_root_id);
     if (!rootId.success) return { kind: "unavailable" };
     try {
@@ -773,6 +782,19 @@ export const createApplicationStoreService = (environment: ApplicationStoreEnvir
         organizationOf(selection),
         rootId.data,
       );
+      return undefined;
+    } catch (error) {
+      return reviewFailure(error);
+    }
+  },
+  reviewRemoval: async (
+    session: IdentitySession,
+    selection: OrganizationSelectionCandidate,
+    inputs: Readonly<Record<string, unknown>>,
+  ): Promise<ApplicationStoreResult> => {
+    const rootId = applicationRootInput(inputs.application_root_id);
+    if (!rootId.success) return { kind: "unavailable" };
+    try {
       const current = await readApplicationRemoval(
         environment,
         session,

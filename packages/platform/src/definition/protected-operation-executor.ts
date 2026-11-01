@@ -367,6 +367,11 @@ const applicationStoreReview = (
     execute: async (services, caller, inputs) => {
       const store = services.applicationStore;
       if (store === undefined) return { kind: "unavailable" };
+      // An install or removal review asks for a recent sign-in first; a read of the standing does not.
+      if (journey === "review" || journey === "reviewRemoval") {
+        const stepUp = await store.requireStepUp(caller.session, caller.selection, inputs);
+        if (stepUp !== undefined) return stepUp;
+      }
       return store[journey](caller.session, caller.selection, inputs);
     },
   });
