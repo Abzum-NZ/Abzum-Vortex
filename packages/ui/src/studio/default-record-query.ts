@@ -1,4 +1,4 @@
-import type { ApplicationSourceDocument } from "@vortex/platform/schema";
+import { defaultQueryPageSize, type ApplicationSourceDocument } from "@vortex/platform/schema";
 import { sourceNames } from "./composition-references";
 import { uniqueKey } from "./application-structure-common";
 
@@ -6,8 +6,9 @@ type SourceModule = ApplicationSourceDocument["body"]["modules"][number];
 type SourceQuery = SourceModule["queries"][number];
 
 /**
- * A record type's default list query: the existing unfiltered one, otherwise the "All <records>"
- * query it would get, or undefined when its Module has no room for another query.
+ * A record type's default list query: the existing unfiltered one that holds a full list page (so a
+ * small query such as the home page's five most recent is never reused), otherwise the
+ * "All <records>" query it would get, or undefined when its Module has no room for another query.
  */
 export const studioDefaultRecordQuery = (
   source: ApplicationSourceDocument,
@@ -22,6 +23,7 @@ export const studioDefaultRecordQuery = (
       query.filter === null &&
       query.group_by.length === 0 &&
       query.aggregates.length === 0 &&
+      query.page_size >= defaultQueryPageSize &&
       (query.select.length === 0 || query.select.includes(record.title_field)),
   );
   if (existing !== undefined) return existing;
@@ -40,7 +42,7 @@ export const studioDefaultRecordQuery = (
     group_by: [],
     aggregates: [],
     sort: [{ field: record.title_field, direction: "ascending" }],
-    page_size: 40,
+    page_size: defaultQueryPageSize,
     relationship_hops: 0,
   } as SourceQuery;
 };
