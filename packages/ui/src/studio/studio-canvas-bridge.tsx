@@ -182,6 +182,14 @@ export function StudioCanvasBridge({
     if (selectedAlias === agreed.current) return;
     agreed.current = selectedAlias;
     showSelection(selectedAlias);
+    // Chosen outside the canvas (the outline, the inspector): bring the block into the frame's view.
+    if (selectedAlias !== null)
+      requestAnimationFrame(() =>
+        document
+          .querySelector<HTMLIFrameElement>("iframe#preview-frame")
+          ?.contentDocument?.querySelector(`[data-puck-component="${CSS.escape(selectedAlias)}"]`)
+          ?.scrollIntoView({ block: "nearest" }),
+      );
   }, [selectedAlias]);
 
   // A click on the canvas selects the block in the outline and the inspector.

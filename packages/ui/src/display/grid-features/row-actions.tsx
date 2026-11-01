@@ -1,5 +1,6 @@
 "use client";
 
+import { isElement } from "../../lib/dom";
 import { useEffect, useRef, useState, type ReactElement } from "react";
 import { isRecord, type RecordsTableBulkRefusalReason } from "@vortex/platform/schema";
 import { Button } from "../../components/button";
@@ -213,7 +214,7 @@ function GridInteraction({ surface }: GridFeatureInteractionProps): null {
         !(event.key === "ContextMenu" || (event.shiftKey && event.key === "F10"))
       )
         return;
-      if (!(event.target instanceof Element)) return;
+      if (!isElement(event.target)) return;
       const row = event.target.closest("[data-vortex-record-id]");
       const trigger = row?.querySelector<HTMLButtonElement>("[data-row-action-menu]");
       if (trigger === null || trigger === undefined || trigger.disabled) return;

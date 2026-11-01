@@ -1,5 +1,6 @@
 "use client";
 
+import { isElement } from "../lib/dom";
 import { useState, type MouseEvent, type ReactElement, type ReactNode } from "react";
 import type { RecordsTableColumnContract, RecordsTableDensity } from "@vortex/platform/schema";
 import { Card } from "../components/card";
@@ -147,7 +148,7 @@ export function RecordsCards({
               if (
                 event.key === "Escape" &&
                 !event.defaultPrevented &&
-                event.target instanceof Element &&
+                isElement(event.target) &&
                 event.target.closest("[data-vortex-related-panel]") !== null
               ) {
                 event.preventDefault();
@@ -174,7 +175,7 @@ export function RecordsCards({
               const target = event.target;
               if (!isOwnClick(event)) return;
               if (
-                target instanceof Element &&
+                isElement(target) &&
                 (target.closest(INTERACTIVE_IN_CARD) !== null ||
                   target.closest("[data-vortex-related-panel]") !== null)
               )

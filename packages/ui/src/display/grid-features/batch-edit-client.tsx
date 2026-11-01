@@ -1,5 +1,6 @@
 "use client";
 
+import { isElement, isHtmlElement } from "../../lib/dom";
 import {
   useCallback,
   useContext,
@@ -88,7 +89,7 @@ export const focusedCell = (
   context: GridFeatureContext,
 ): Readonly<{ line: number; column: number }> | undefined => {
   const active = root.ownerDocument.activeElement;
-  if (!(active instanceof HTMLElement)) return undefined;
+  if (!isHtmlElement(active)) return undefined;
   const cell = active.closest<HTMLElement>("[data-grid-cell]");
   if (cell === null || cell.closest(GRID_ROOT) !== root) return undefined;
   const line = Number(cell.dataset.row);
@@ -99,7 +100,7 @@ export const focusedCell = (
 /** Whether a key or clipboard event belongs to the grid itself, not to a control inside a cell. */
 export const gridOwnsEvent = (event: Event, root: HTMLElement): boolean => {
   const target = event.target;
-  if (!(target instanceof Element)) return false;
+  if (!isElement(target)) return false;
   return (
     target.closest("[data-grid-cell]") === target &&
     target.closest(GRID_ROOT) === root &&

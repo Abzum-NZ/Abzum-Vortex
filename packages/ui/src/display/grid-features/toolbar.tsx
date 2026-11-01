@@ -1,5 +1,6 @@
 "use client";
 
+import { isElement, isNode } from "../../lib/dom";
 import {
   createContext,
   useContext,
@@ -47,7 +48,7 @@ export const FULL_SCREEN_CLASS =
 
 /** Keys inside a cell's own control or a text box keep their meaning; Escape there is not "leave". */
 const ownsEscape = (target: EventTarget | null): boolean => {
-  if (!(target instanceof Element)) return false;
+  if (!isElement(target)) return false;
   if (target.closest("input,textarea,select,[contenteditable='true']") !== null) return true;
   const cell = target.closest("[data-grid-cell]");
   return cell !== null && cell !== target;
@@ -81,10 +82,13 @@ export function useGridFullScreen(
 
   // The table's own document: the Studio canvas draws the table inside an iframe, which has its own
   // full screen state and, without permission, refuses the browser's full screen (the layer stays).
-  const own = useCallback(
-    (): Document => container.current?.ownerDocument ?? document,
-    [container],
-  );
+  // The element may mount after this hook first runs, so the document is read again every render.
+  const [tableDocument, setTableDocument] = useState<Document | null>(null);
+  useEffect(() => {
+    const current = container.current?.ownerDocument ?? null;
+    if (current !== tableDocument) setTableDocument(current);
+  });
+  const own = useCallback((): Document => tableDocument ?? document, [tableDocument]);
   const leave = useCallback(() => {
     if (!activeRef.current) return;
     setActive(false);
@@ -135,8 +139,7 @@ export function useGridFullScreen(
     if (!allowed) return;
     const onKeyDown = (event: KeyboardEvent): void => {
       const element = container.current;
-      if (element === null || !(event.target instanceof Node) || !element.contains(event.target))
-        return;
+      if (element === null || !isNode(event.target) || !element.contains(event.target)) return;
       if (
         (event.ctrlKey || event.metaKey) &&
         event.shiftKey &&

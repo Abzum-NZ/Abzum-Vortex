@@ -4,6 +4,7 @@ import type { PuckContext } from "@puckeditor/core";
 import { compiledItemSettings } from "@vortex/platform/schema";
 import { createContext, useContext, useEffect, type ReactNode, type SyntheticEvent } from "react";
 import type { Breakpoint } from "../definition-error";
+import { isElement, isHtmlElement } from "../lib/dom";
 import { PagePuckRenderer } from "../page-puck-renderer";
 import { RootSlotGapProvider } from "../puck-config";
 import type { FieldInputControlReleaseMap, PlatformComponentRegistry } from "../registry";
@@ -77,7 +78,7 @@ export function StudioCanvasIframe({
     const forward = (event: KeyboardEvent) => {
       const target = event.target;
       if (
-        target instanceof (frameDocument.defaultView?.HTMLElement ?? HTMLElement) &&
+        isHtmlElement(target) &&
         (target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName))
       )
         return;
@@ -105,8 +106,7 @@ export function StudioCanvasIframe({
   // The canvas is a design surface: no link in it (menu pages, external addresses, links inside
   // blocks) leaves Studio, so unsaved edits are never lost to a click.
   const inert = (event: SyntheticEvent) => {
-    if (event.target instanceof Element && event.target.closest("a[href]") !== null)
-      event.preventDefault();
+    if (isElement(event.target) && event.target.closest("a[href]") !== null) event.preventDefault();
   };
   const frame = studio.frame;
   const shellId = frame?.frame.shellId;

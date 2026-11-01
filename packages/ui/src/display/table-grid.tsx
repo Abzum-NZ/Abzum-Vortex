@@ -1,5 +1,6 @@
 "use client";
 
+import { isNode } from "../lib/dom";
 import {
   lazy,
   memo,
@@ -827,7 +828,7 @@ export function RecordsGrid({
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>): void => {
     if (event.defaultPrevented) return;
     // Keys from a portalled menu or from outside the grid are not grid navigation.
-    if (!(event.target instanceof Node) || !gridRef.current?.contains(event.target)) return;
+    if (!isNode(event.target) || !gridRef.current?.contains(event.target)) return;
     // Inside a row's related records the panel's own controls take every key but Escape, which
     // returns to the row's expand toggle.
     const panel = (event.target as Element).closest<HTMLElement>(PANEL);
@@ -1025,7 +1026,7 @@ export function RecordsGrid({
   };
   const onBlur = (event: FocusEvent<HTMLDivElement>): void => {
     const next = event.relatedTarget;
-    if (next instanceof Node && gridRef.current?.contains(next)) return;
+    if (isNode(next) && gridRef.current?.contains(next)) return;
     if (next !== null) gridHasFocus.current = false;
     setControlMode(false);
   };

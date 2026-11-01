@@ -1,5 +1,6 @@
 "use client";
 
+import { isElement } from "../../lib/dom";
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type ReactElement } from "react";
 import { Button } from "../../components/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../../components/dialog";
@@ -68,7 +69,7 @@ export default function Find({ context, surface }: GridFeatureInteractionProps):
         event.key.toLowerCase() !== "f"
       )
         return;
-      if (!(event.target instanceof Element) || event.target.closest(GRID_ROOT) !== root) return;
+      if (!isElement(event.target) || event.target.closest(GRID_ROOT) !== root) return;
       event.preventDefault();
       event.stopPropagation();
       const cell = event.target.closest<HTMLElement>("[data-grid-cell]");

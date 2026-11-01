@@ -1,5 +1,6 @@
 "use client";
 
+import { isHtmlElement } from "../../lib/dom";
 import type { ReactElement } from "react";
 import {
   RECORDS_TABLE_COLUMN_MAXIMUM_WIDTH,
@@ -39,7 +40,7 @@ const contentWidth = (element: Element, style: CSSStyleDeclaration): number => {
  * margins are not counted: an auto margin resolves to the free space the column has now.
  */
 const naturalWidth = (element: Element): number => {
-  if (!(element instanceof HTMLElement)) return element.getBoundingClientRect().width;
+  if (!isHtmlElement(element)) return element.getBoundingClientRect().width;
   const style = getComputedStyle(element);
   if (pixels(style.flexGrow) === 0 || element.children.length === 0) return element.scrollWidth;
   return contentWidth(element, style) + pixels(style.marginLeft) + pixels(style.marginRight);
