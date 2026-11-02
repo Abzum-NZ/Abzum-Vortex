@@ -17,6 +17,7 @@ import { Button } from "@vortex/ui/components/button";
 import { Separator } from "@vortex/ui/components/separator";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@vortex/ui/components/tooltip";
 import { Kbd } from "@vortex/ui/components/kbd";
+import type { StudioInstallControl } from "./use-studio-releases-tab";
 import { signOut } from "../../auth/actions";
 import {
   readApplicationSwitcherAction,
@@ -123,14 +124,16 @@ export function StudioHeader({
   undoDisabled,
   onUndo,
   onRedo,
-  backToAppHref,
-  appStoreHref,
-  installed,
+  applicationHref,
+  install,
+  onInstall,
+  installPending,
   onPreview,
   previewDisabled,
   previewPending,
   onPublish,
   publishDisabled,
+  publishPending,
 }: Readonly<{
   frame: StudioFrameDefinition;
   applicationName: string;
@@ -141,16 +144,21 @@ export function StudioHeader({
   undoDisabled: boolean;
   onUndo: () => void;
   onRedo: () => void;
-  backToAppHref: string | undefined;
-  /** Studio's App Store section, for installing this application when it is not installed yet. */
-  appStoreHref: string | undefined;
-  /** Whether the organisation has the application installed; undefined when that cannot be read. */
-  installed: boolean | undefined;
+  /** The running application, opened from here when it is live in the organisation; absent when the builder may not open it. */
+  applicationHref: string | undefined;
+  /** What the organisation can do with the published version: install it, upgrade to it, open it, or nothing. */
+  install: StudioInstallControl;
+  /** Starts the App Store's Install or upgrade flow over the editor. */
+  onInstall: () => void;
+  /** The flow's page is being read before its first dialog opens. */
+  installPending: boolean;
   onPreview: () => void;
   previewDisabled: boolean;
   previewPending: boolean;
   onPublish: () => void;
   publishDisabled: boolean;
+  /** The flow's page is being read before its first dialog opens. */
+  publishPending: boolean;
 }>) {
   const actions = (
     <>
@@ -201,27 +209,37 @@ export function StudioHeader({
       >
         <Icon name="redo" />
       </IconAction>
-      {installed === true && backToAppHref !== undefined ? (
+      {install === "open" && applicationHref !== undefined ? (
         <IconAction
           tip="Open the application"
           variant="ghost"
           size="icon-sm"
           nativeButton={false}
           aria-label="Open the application"
-          render={<NavigationLink href={backToAppHref} />}
+          render={<NavigationLink href={applicationHref} />}
         >
-          <Icon name="chevron-left" />
+          <Icon name="app-window" />
         </IconAction>
-      ) : installed === false && appStoreHref !== undefined ? (
+      ) : install === "install" || install === "upgrade" ? (
         <IconAction
-          tip="Install in this organisation"
+          tip={
+            publishDisabled
+              ? "Resolve the blocked draft before installing"
+              : install === "install"
+                ? "Install the published version in this organisation"
+                : "Upgrade this organisation to the published version"
+          }
+          type="button"
           variant="ghost"
           size="icon-sm"
-          nativeButton={false}
-          aria-label="Install in this organisation"
-          render={<NavigationLink href={appStoreHref} />}
+          aria-label={
+            install === "install" ? "Install in this organisation" : "Upgrade this organisation"
+          }
+          aria-busy={installPending}
+          disabled={publishDisabled || installPending}
+          onClick={onInstall}
         >
-          <Icon name="plus" />
+          {installPending ? <Spinner /> : <Icon name="arrow-down" />}
         </IconAction>
       ) : null}
       <IconAction
@@ -244,16 +262,17 @@ export function StudioHeader({
         tip={
           publishDisabled
             ? "Resolve the blocked draft before publishing"
-            : "Publish a version of this application"
+            : "Publish the saved draft as a new version"
         }
         id="studio-publish"
         type="button"
-        size="sm"
+        size="icon-sm"
         aria-label="Publish"
-        disabled={publishDisabled}
+        aria-busy={publishPending}
+        disabled={publishDisabled || publishPending}
         onClick={onPublish}
       >
-        Publish
+        {publishPending ? <Spinner /> : <Icon name="upload" />}
       </IconAction>
       <Separator orientation="vertical" className="mx-1 h-6" />
     </>

@@ -6,8 +6,6 @@ import {
 } from "../../../_lib/organization-context";
 import { resolveIdentitySessionWithEmail } from "../../../auth/_lib/session-server";
 import { studioFrameOf } from "../../_lib/studio-frame";
-import { appStoreActionHref } from "../../../_lib/application-release-adoption";
-import { appStoreActionTokens } from "../../../_lib/page-run-parameter";
 import { resolveApplicationAddress } from "../../../_lib/application-address";
 import { continueStudioSession } from "../../_lib/studio-session";
 import { StudioUnavailable } from "../../_components/studio-unavailable";
@@ -146,8 +144,8 @@ const loadWorkspacePlace = async (
     homePageKey: studioApplicationEntry.homePageKey,
     context: studioResolved.installedContext,
   };
-  // Whether the builder may open this application, and whether the organisation has it installed:
-  // the two facts the toolbar needs to offer Back to app, Install in this organisation or neither.
+  // Whether the builder may open this application, and where it stands in the organisation: the
+  // facts the toolbar needs to offer Open the application, Install, Upgrade or none of them.
   const openable =
     applications.kind === "available" &&
     applications.applications.some((candidate) => candidate.key === applicationKey);
@@ -158,13 +156,6 @@ const loadWorkspacePlace = async (
     applicationRootId,
   });
   // The same read the Releases tab shows, so Studio never calls an installed application installable.
-  // An unknown standing is neither installed nor absent, so the toolbar offers neither button.
-  const installed =
-    standing.kind === "live" || standing.kind === "waiting" || standing.kind === "system"
-      ? true
-      : standing.kind === "not_installed" || standing.kind === "not_published"
-        ? false
-        : undefined;
   // The other applications the builder may open, with the pages they may open there, for a
   // Navigate step that opens one of them.
   const navigationTargets =
@@ -199,24 +190,8 @@ const loadWorkspacePlace = async (
     place: {
       organizationName: entry.organizationDisplayName,
       frame: studioFrameOf(entry, email, studioInstalled),
-      actionHrefs:
-        settings.value === null || settings.value === "invalid"
-          ? undefined
-          : Object.fromEntries(
-              appStoreActionTokens.map((action) => [
-                action,
-                appStoreActionHref(
-                  entry.tenantShortName,
-                  entry.organizationShortName,
-                  settings.value as string,
-                  applicationRootId,
-                  action,
-                ),
-              ]),
-            ),
       applicationHref: openable ? pathOf(applicationKey) : undefined,
-      appStoreHref: pathOf(settings.value),
-      installed,
+      standing: standing.kind,
       navigationTargets,
     },
   };

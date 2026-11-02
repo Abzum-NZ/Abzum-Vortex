@@ -41,7 +41,6 @@ import { useUnsavedWorkPrompt } from "./use-unsaved-work-prompt";
 import { useNavigationScope } from "./use-navigation-scope";
 import { usePlacementRefresh } from "./use-placement-refresh";
 import { useFlowRuntime } from "./use-flow-runtime";
-import { usePageRunRequest } from "./use-page-run-request";
 import { useFieldFlowEvents } from "./use-field-flow-events";
 import { useApplyDispatch } from "./use-apply-dispatch";
 import { useGuidedFormSteps } from "./use-guided-form-steps";
@@ -421,7 +420,6 @@ export function ApplicationPageViewContent({
   });
 
   usePageEvents(model, navigationKey, runBinding);
-  usePageRunRequest(model, navigationKey, runBinding, flowRuntime.prefetch);
 
   const { commitLayout, runViewCommand } = useGridLayout({
     model,

@@ -24,7 +24,8 @@ import { Button } from "@vortex/ui/components/button";
 import { useStudioTabVisited } from "./studio-frame";
 import { deferredStudioPart } from "./studio-deferred-part";
 import { useIntentPreload } from "../_lib/use-intent-preload";
-import type { AppStoreActionToken } from "../../_lib/page-run-parameter";
+import type { StudioActionToken } from "../../_lib/studio-action-tokens";
+import { useStudioActionFlows } from "./use-studio-action-flows";
 
 // What Publish and the Releases tab show loads when they are first wanted: the top bar's Publish
 // needs only this hook's state at first paint.
@@ -49,6 +50,9 @@ const StudioHistoryTab = dynamic(
   () => import("./studio-history-tab").then((module) => module.StudioHistoryTab),
   { loading: () => <p role="status">Loading the published versions…</p> },
 );
+
+/** The one Preview toast: starting, then opened, ready to open or failed, replacing each other. */
+const previewNoticeId = "studio-preview";
 
 /** The one wording of how a system application advances, shown in the standing and the history. */
 const systemRefreshMessage = "System applications move forward through the platform refresh.";
@@ -97,19 +101,36 @@ const standingWords = (
 };
 
 /**
- * The Releases tab and what acts on the saved draft as a whole: Publish (the App Store's flow), Preview, the published versions with restore, page adoption and import. Each
- * of them first lets the latest edits finish saving, because only the saved draft is published,
- * previewed or restored over.
+ * What the editor offers about installing the application, from where it stands in the
+ * organisation: install it, upgrade it, open it, or nothing (nothing is published yet, or the
+ * standing cannot be read).
+ */
+export type StudioInstallControl = "install" | "upgrade" | "open" | undefined;
+
+const installControlOf = (kind: ApplicationReleaseStanding["kind"]): StudioInstallControl =>
+  kind === "not_installed"
+    ? "install"
+    : kind === "waiting"
+      ? "upgrade"
+      : kind === "live" || kind === "system"
+        ? "open"
+        : undefined;
+
+/**
+ * The Releases tab and what acts on the saved draft as a whole: Publish and Install or upgrade
+ * (the App Store's flows, run over the editor), Preview, the published versions with restore, page
+ * adoption and import. Each of them first lets the latest edits finish saving, because only the
+ * saved draft is published, previewed or restored over.
  */
 export function useStudioReleasesTab({
   draft,
   hidden,
   initialSection,
-  onAction,
+  initialStanding,
 }: Readonly<{
   draft: StudioDraft;
-  /** Opens the App Store page of this application with one of its action flows started. */
-  onAction: (action: AppStoreActionToken) => void;
+  /** Where the application stood in the organisation when the editor opened. */
+  initialStanding: ApplicationReleaseStanding["kind"];
   hidden: boolean;
   initialSection: StudioReleasesSection;
 }>) {
@@ -121,7 +142,7 @@ export function useStudioReleasesTab({
   const importVisited = useStudioTabVisited(!hidden && section === "import");
   const panelVisited = useStudioTabVisited(!hidden);
   // A new version reloads the history.
-  const [historyGeneration] = useState(0);
+  const [historyGeneration, setHistoryGeneration] = useState(0);
   const [previewPending, setPreviewPending] = useState(false);
   // Where the application stands in the organisation: read when the Releases tab opens and after
   // each Publish; null until read.
@@ -160,27 +181,39 @@ export function useStudioReleasesTab({
     };
   }, [history]);
 
-  // Publishing is the App Store's flow, which publishes the saved draft: the latest edits finish
-  // saving, then the person is taken to the application's page there.
-  const openPublish = () => {
-    void latest.current.flush().then((saved) => {
-      if (!saved) {
-        studioNotice("Your latest change is not saved. Resolve it, then publish.", "error");
-        return;
-      }
-      onAction("publish");
-    });
+  // Publishing and installing are the App Store's flows, run over the editor: the latest edits
+  // finish saving, then the flow's first dialog opens here. What a flow commits changes where the
+  // application stands and what the history lists.
+  const actions = useStudioActionFlows({
+    organizationId,
+    rootId,
+    hold: (on) => draft.hold("publication", on),
+    onCommitted: (action) => {
+      void readStanding();
+      if (action === "publish") setHistoryGeneration((generation) => generation + 1);
+    },
+  });
+  const startAction = async (action: StudioActionToken): Promise<boolean> => {
+    if (!(await latest.current.flush())) {
+      studioNotice(
+        `Your latest change is not saved. Resolve it, then ${action === "publish" ? "publish" : "install"}.`,
+        "error",
+      );
+      return false;
+    }
+    return actions.start(action);
   };
-  // The agent starts the same flows: the latest edits finish saving, then the App Store page opens
-  // on that action's confirmation, which only the person completes.
-  const startAction = async (action: AppStoreActionToken): Promise<boolean> => {
-    if (!(await latest.current.flush())) return false;
-    onAction(action);
-    return true;
+  const openPublish = () => {
+    void startAction("publish");
+  };
+  const openInstall = () => {
+    void startAction("install");
   };
 
   // Preview runs the saved draft as its own Application in a new tab. The tab is opened at once,
-  // while the press still counts as the person's, and is closed if nothing runs.
+  // while the press still counts as the person's, and is closed if nothing runs. A browser that
+  // does not open it (a pop-up blocker, an embedded browser) gets the same result as a link that
+  // stays until it is used, so Preview always ends in something the person can open.
   const openPreview = () => {
     if (previewPending) return;
     const previewTab = window.open("", "_blank");
@@ -202,8 +235,9 @@ export function useStudioReleasesTab({
           problem = previewProblem(result);
           throw new Error(problem);
         }
-        if (previewTab !== null && !previewTab.closed) previewTab.location.href = result.href;
-        return result.href;
+        const opened = previewTab !== null && !previewTab.closed;
+        if (opened) previewTab.location.href = result.href;
+        return { href: result.href, opened };
       } catch (error) {
         console.error("[studio] the preview could not be started", describeFailure(error));
         previewTab?.close();
@@ -212,17 +246,19 @@ export function useStudioReleasesTab({
         if (latest.current.isActive()) setPreviewPending(false);
       }
     })();
-    studioNotice("Preview is starting…");
+    studioNotice("Preview is starting…", "info", undefined, { id: previewNoticeId });
     void starting
-      .then((href) =>
-        studioNotice("Preview ready", "success", undefined, {
-          action: {
-            label: "Open",
-            onClick: () => {
-              window.open(href, "_blank", "noopener");
-            },
-          },
-        }),
+      .then(({ href, opened }) =>
+        opened
+          ? studioNotice("Preview opened in a new tab", "success", undefined, {
+              id: previewNoticeId,
+            })
+          : studioNotice(
+              "Preview is ready, but your browser did not open a new tab",
+              "success",
+              { label: "Open preview", href, newTab: true },
+              { id: previewNoticeId, duration: Infinity, closeButton: true },
+            ),
       )
       .catch((error: unknown) =>
         studioNotice(
@@ -230,6 +266,8 @@ export function useStudioReleasesTab({
             ? error.message
             : "Preview could not start. Your changes are kept. Try Preview again.",
           "error",
+          undefined,
+          { id: previewNoticeId },
         ),
       );
   };
@@ -420,6 +458,12 @@ export function useStudioReleasesTab({
     centre,
     title,
     openPublish,
+    openInstall,
+    install: installControlOf(standing?.kind ?? initialStanding),
+    /** The action whose App Store page is being read before its first dialog opens. */
+    actionPending: actions.pending,
+    /** The dialogs, toasts and banner the flows show over the editor. */
+    flowHost: { element: actions.element, banner: actions.banner },
     openPreview: () => {
       void openPreview();
     },

@@ -33,7 +33,7 @@ import { isStudioSessionRefusal } from "./use-studio-session";
 export function studioNotice(
   message: string,
   kind: "success" | "error" | "info" = "info",
-  link?: Readonly<{ label: string; href: string }>,
+  link?: Readonly<{ label: string; href: string; newTab?: true }>,
   details?: Readonly<{
     /** A second line, or the controls a refusal needs. */
     description?: ReactNode;
@@ -44,10 +44,15 @@ export function studioNotice(
     closeButton?: boolean;
   }>,
 ) {
-  // A link action is a link: it changes page in place (asking about unsaved work in a frame).
+  // A link action is a link: it changes page in place (asking about unsaved work in a frame), or
+  // opens a new tab when it says so.
   const action =
     details?.action ??
-    (link === undefined ? undefined : (
+    (link === undefined ? undefined : link.newTab === true ? (
+      <a className="underline" href={link.href} target="_blank" rel="noopener noreferrer">
+        {link.label}
+      </a>
+    ) : (
       <NavigationLink className="underline" href={link.href}>
         {link.label}
       </NavigationLink>

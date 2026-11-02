@@ -16,14 +16,7 @@ import type {
   PageMessageDraft,
   TableContinuationTarget,
 } from "./types";
-import {
-  unavailableNotice,
-  finishedNotice,
-  multiFactorPath,
-  reauthenticationPath,
-  refusalNotices,
-  outcomeNotices,
-} from "./notices";
+import { unavailableNotice, finishedRunNotice, ruleMessagesOf, outcomeNotices } from "./notices";
 import { formSurfaceComposition, visibleOwningFormFieldLabel } from "./form-surface";
 
 export function useApplyDispatch({
@@ -168,11 +161,24 @@ export function useApplyDispatch({
             ["completed", "committed"].includes(server.descriptor.outcome)
           )
             runtimeState.messages.clear("inline", `retry:${sourceControlId}`);
-          let resultNotice = finishedNotice(
-            server.descriptor.outcome,
-            server.failure?.code,
-            server.descriptor.commit,
-          );
+          // Signing in again, or verifying, comes back to this page and record, where the person can retry.
+          let resultNotice = finishedRunNotice(server, {
+            destinationHref: (applicationKey, pageKey) =>
+              applicationPageAddressPath(
+                model.invocation.tenantShortName,
+                model.invocation.organizationShortName,
+                applicationKey,
+                pageKey,
+              ),
+            continuation: JSON.stringify({
+              kind: "application_page",
+              tenantShortName: model.invocation.tenantShortName,
+              organizationShortName: model.invocation.organizationShortName,
+              applicationKey: model.invocation.applicationKey,
+              pageKey: model.invocation.pageKey,
+              ...(model.subject === undefined ? {} : { recordId: model.subject.recordId }),
+            }),
+          });
           const diagnostic = server.failure?.diagnostic;
           const fieldLabel =
             diagnostic?.submittedField === undefined || formPlacementId === undefined
@@ -189,16 +195,7 @@ export function useApplyDispatch({
               ? server.descriptor.outcome
               : undefined;
           // Use the same authored reason for the form feedback and the page notice.
-          const correctionMessages = (diagnostic?.corrections ?? []).flatMap((correction) =>
-            correction.message === undefined ? [] : [correction.message],
-          );
-          const authoredMessages = [
-            ...new Set([
-              ...(diagnostic?.ruleRefusal === undefined ? [] : [diagnostic.ruleRefusal.message]),
-              ...correctionMessages,
-            ]),
-          ];
-          const ruleMessages = authoredMessages.length > 0 ? authoredMessages : undefined;
+          const ruleMessages = ruleMessagesOf(diagnostic);
           const corrections =
             diagnostic?.corrections ??
             (fieldLabel !== undefined &&
@@ -223,57 +220,6 @@ export function useApplyDispatch({
                   ...(ruleMessages === undefined ? {} : { ruleMessages }),
                   ...(recovery === undefined ? {} : { recovery }),
                 };
-          if (diagnostic !== undefined) {
-            const reason: PageMessageDraft =
-              ruleMessages === undefined
-                ? refusalNotices[diagnostic.code]
-                : { target: "banner", severity: "error", text: ruleMessages.join(" ") };
-            const presentation = diagnostic.presentation;
-            resultNotice = {
-              ...reason,
-              ...(presentation?.link_label === undefined || presentation.destination === undefined
-                ? {}
-                : {
-                    action: {
-                      kind: "link" as const,
-                      label: presentation.link_label,
-                      href: applicationPageAddressPath(
-                        model.invocation.tenantShortName,
-                        model.invocation.organizationShortName,
-                        presentation.destination.application_key,
-                        presentation.destination.page_key,
-                      ),
-                    },
-                  }),
-              text:
-                recovery === undefined
-                  ? (presentation?.message ?? reason.text)
-                  : `${presentation?.message ?? reason.text} ${resultNotice.text}`,
-            };
-          }
-          // Signing in again, or verifying, comes back to this page and record, where the person can retry.
-          const recoveryAction =
-            resultNotice.action?.kind === "link" ? resultNotice.action : undefined;
-          if (
-            recoveryAction?.href === reauthenticationPath ||
-            recoveryAction?.href === multiFactorPath
-          )
-            resultNotice = {
-              ...resultNotice,
-              action: {
-                ...recoveryAction,
-                href: `${recoveryAction.href}&${new URLSearchParams({
-                  continuation: JSON.stringify({
-                    kind: "application_page",
-                    tenantShortName: model.invocation.tenantShortName,
-                    organizationShortName: model.invocation.organizationShortName,
-                    applicationKey: model.invocation.applicationKey,
-                    pageKey: model.invocation.pageKey,
-                    ...(model.subject === undefined ? {} : { recordId: model.subject.recordId }),
-                  }),
-                })}`,
-              },
-            };
           if (
             afterAccepted !== undefined &&
             ["completed", "committed", "background_pending"].includes(server.descriptor.outcome)
