@@ -44,7 +44,8 @@ import {
 import { Button } from "@vortex/ui/components/button";
 import { Badge } from "@vortex/ui/components/badge";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@vortex/ui/components/tooltip";
-import { StudioCanvasPalette, StudioCanvasView } from "@vortex/ui/studio/canvas-view";
+import { StudioCanvasView } from "@vortex/ui/studio/canvas-view";
+import { StudioBlocksPanel } from "@vortex/ui/studio/puck-drawer";
 import type {
   StudioCanvasAddRequest,
   StudioCanvasBreakpoint,
@@ -849,7 +850,7 @@ export function useStudioCanvasTab({
         hidden={tab !== "blocks"}
       >
         {/* Drawn inside the workspace's Puck editor, so its blocks drag with the canvas's own drag and drop. */}
-        <StudioCanvasPalette />
+        <StudioBlocksPanel />
         {canvasPage === undefined && (
           <Empty>
             <EmptyHeader>

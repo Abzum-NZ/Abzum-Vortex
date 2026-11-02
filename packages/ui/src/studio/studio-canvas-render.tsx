@@ -12,9 +12,11 @@ import {
   plainSettingValue,
   releaseSettingDeclarations,
   typedSettingValue,
+  type ImmutablePlatformBlockCatalogue,
   type PlatformBlockRelease,
   type ResponsivePlacement,
 } from "@vortex/platform/schema";
+import { studioPaletteChoices } from "./contextual-palette";
 import type { FieldInputControlReleaseMap, PlatformComponentRegistry } from "../registry";
 import { useStudioCanvasGridEvents } from "./studio-canvas-grid";
 import { studioCanvasMetadata, type StudioCanvasRecords } from "./studio-canvas-metadata";
@@ -220,17 +222,6 @@ function CanvasBlock({
     current ? compiled[id] : undefined,
     release,
   );
-  // A block just dropped from the palette is shown as a placeholder until Studio adds it.
-  if (props.vortex === undefined)
-    return (
-      <CanvasPlaceholder dragRef={dragRef} props={props}>
-        <Item variant="outline" size="sm" className="border-dashed">
-          <ItemContent>
-            <ItemDescription>Adding the block…</ItemDescription>
-          </ItemContent>
-        </Item>
-      </CanvasPlaceholder>
-    );
   const viewKey = (props.vortex as { view_permission?: unknown }).view_permission;
   if (
     viewer !== null &&
@@ -397,17 +388,25 @@ const formFieldRendererKeys = (registry: PlatformComponentRegistry): ReadonlySet
  * The canvas config: the one config's components and root, each component drawing its stored
  * item as above. The fields stay exactly as the one config declares them (each slot with its
  * `allow` list, every other prop an opaque object), because Puck finds slots through them and Studio edits
- * settings in its inspector. No defaults are merged: a block dropped from the palette is added by
- * Studio's add command, never by Puck.
+ * settings in its inspector. A block dropped from the palette is added by Studio's add command,
+ * never kept from Puck's insert: the one config's `defaultProps` (the release defaults) only make
+ * the interim item Puck holds until then draw as the block will. A block Studio cannot create yet
+ * (its palette choice names why) is not insertable, so Puck does not let it be dragged.
  */
 export const studioCanvasConfig = (
   config: Config,
   registry: PlatformComponentRegistry,
   fieldInputControlReleases: FieldInputControlReleaseMap,
+  catalogue: ImmutablePlatformBlockCatalogue,
 ): Config => {
   let canvas = canvasConfigs.get(config);
   if (canvas !== undefined) return canvas;
   const fieldInputs = formFieldRendererKeys(registry);
+  const notCreatable = new Set(
+    studioPaletteChoices(catalogue, catalogue.releases)
+      .filter((choice) => choice.unavailable !== undefined)
+      .map((choice) => choice.rendererKey),
+  );
   const components = Object.fromEntries(
     Object.entries(
       config.components as Record<string, ComponentConfig<Record<string, unknown>>>,
@@ -415,6 +414,7 @@ export const studioCanvasConfig = (
       type,
       {
         label: component.label,
+        defaultProps: component.defaultProps,
         // Every canvas component is measured and dragged by its own root element.
         inline: true,
         fields: (component.fields ?? {}) as Record<string, Field>,
@@ -437,7 +437,10 @@ export const studioCanvasConfig = (
         ),
         // A second input for a field the form already shows would be refused when the form
         // draws, so a field input is never duplicated; add another field from the palette.
-        ...(fieldInputs.has(type) ? { permissions: { duplicate: false } } : {}),
+        permissions: {
+          ...(fieldInputs.has(type) ? { duplicate: false } : {}),
+          ...(notCreatable.has(type) ? { insert: false } : {}),
+        },
       },
     ]),
   );

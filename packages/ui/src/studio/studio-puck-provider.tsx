@@ -31,14 +31,15 @@ import type { PlatformThemeTokens } from "../theme";
 import type { StudioCompileFailure } from "./compile-failure";
 import type {
   StudioCompositionAddTargetsModel,
+  StudioCompositionDestination,
   StudioCompositionOwner,
 } from "./application-composition-commands";
 import type { StudioCanvasFrame } from "./studio-canvas-projection";
 import { applyStudioCanvasChange } from "./studio-canvas-change";
 import {
   destinationOfZone,
-  holdsDroppedBlock,
   itemsHold,
+  puckItemsHold,
   puckSelectedAlias,
   withoutEmptyPuckZones,
   type StudioCanvasCompiledSlot,
@@ -48,18 +49,28 @@ import { studioCanvasOverrides } from "./studio-canvas-actions";
 import type { StudioCanvasGridChange, StudioCanvasGridRead } from "./studio-canvas-grid";
 import { useStudioCanvasModel, type StudioCanvasModel } from "./studio-canvas-model";
 import type { StudioCanvasMetadata, StudioCanvasViewer } from "./studio-canvas-metadata";
-import type { StudioCanvasAddRequest } from "./studio-block-palette";
+import { StudioDrawerItem } from "./studio-puck-drawer";
+import { studioPuckWords } from "./studio-puck-words";
 import type { StudioCanvasRecordsReader } from "./use-studio-canvas-records";
 import { useStudioCanvasMetadata } from "./use-studio-canvas-metadata";
 
 export type { Breakpoint as StudioCanvasBreakpoint } from "../definition-error";
 export type { StudioCanvasFrame } from "./studio-canvas-projection";
 export type { StudioCanvasViewer } from "./studio-canvas-metadata";
-export type { StudioCanvasAddRequest } from "./studio-block-palette";
 export type {
   StudioCanvasRecordsRead,
   StudioCanvasRecordsReader,
 } from "./use-studio-canvas-records";
+
+/** A new block for one place on the page, from a drop on the canvas or the drawer's Add button. */
+export type StudioCanvasAddRequest = Readonly<{
+  area: string;
+  destination: StudioCompositionDestination;
+  /** The position in the slot; a position past its end adds the block last. */
+  index: number;
+  /** The Puck component the person dragged or chose: the block's renderer key. */
+  rendererKey: string;
+}>;
 
 /** Studio's block palette: where a new block can go and how Studio adds it. */
 export type StudioCanvasPalette = Readonly<{
@@ -158,6 +169,9 @@ const usePuckSelector = createUsePuck();
 export const useStudioCanvasDragging = (): boolean =>
   usePuckSelector((state) => state.appState.ui.isDragging);
 
+/** Puck compares overrides by identity: one object, with the drawer's block row and the canvas's. */
+const OVERRIDES = { ...studioCanvasOverrides, drawerItem: StudioDrawerItem } as const;
+
 /** The Puck iframe the canvas draws the page in; its styles come from the host. */
 const IFRAME = { enabled: true, waitForStyles: true, syncHostStyles: true } as const;
 
@@ -201,6 +215,8 @@ export function StudioPuckProvider({
   const synchronizing = useRef(false);
   const deriving = useRef(false);
   const showSelection = useRef<((alias: string | null) => void) | null>(null);
+  // The name of the interim block Puck holds between an insert from the drawer and Studio's add.
+  const inserted = useRef<string | null>(null);
   const permitted = model.editable && input.canvasShown;
   const latest = useRef({ input, model, permitted });
   latest.current = { input, model, permitted };
@@ -217,8 +233,8 @@ export function StudioPuckProvider({
       return;
     }
     if (now.pageAlias === undefined || shown.at === undefined) return;
-    // A block dropped from the palette is added by Studio's add command, not by this edit.
-    if (holdsDroppedBlock(candidate.content as unknown[])) return;
+    // A block inserted from the drawer is added by Studio's add command, not by this edit.
+    if (inserted.current !== null && puckItemsHold(candidate.content, inserted.current)) return;
     const result = applyStudioCanvasChange(
       shown.catalogue,
       now.source,
@@ -240,9 +256,11 @@ export function StudioPuckProvider({
   const onAction = useCallback((action: PuckAction, state: AppState, previous: AppState) => {
     if (synchronizing.current || deriving.current) return;
     const { input: now, model: shown } = latest.current;
-    // A drop from the palette: Puck has put a bare block in its own data; Studio adds the real one.
+    // A drop or an Add from the drawer: Puck has put an interim block (the release defaults) in its
+    // own data; Studio adds the real one.
     if (action.type === "insert") {
       if (shown.at === undefined) return;
+      inserted.current = action.id ?? null;
       const request: StudioCanvasAddRequest = {
         area: shown.at.key,
         destination: destinationOfZone(action.destinationZone),
@@ -253,6 +271,7 @@ export function StudioPuckProvider({
       setTimeout(() => {
         if (!latest.current.permitted || latest.current.input.palette?.onAdd(request) !== true)
           setResync((generation) => generation + 1);
+        inserted.current = null;
       }, 0);
       return;
     }
@@ -287,9 +306,10 @@ export function StudioPuckProvider({
       duplicate: permitted,
       delete: permitted,
       edit: false,
-      insert: false,
+      // The drawer's blocks drag onto the canvas; a layout's blocks are added with Add.
+      insert: permitted && input.palette?.owner !== "layout",
     }),
-    [permitted],
+    [permitted, input.palette?.owner],
   );
   const empty = useMemo(
     (): Data => ({ root: { props: model.rootProps }, content: [] }),
@@ -313,9 +333,10 @@ export function StudioPuckProvider({
         iframe={IFRAME}
         // Puck's own wrapper fills the workspace, so the canvas has the height of its well.
         height="100%"
-        overrides={studioCanvasOverrides}
+        overrides={OVERRIDES}
         metadata={metadata}
         permissions={permissions}
+        dictionary={studioPuckWords}
       >
         <StudioPuckSync
           data={shown}

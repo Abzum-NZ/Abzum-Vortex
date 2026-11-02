@@ -113,8 +113,9 @@ export const useStudioCanvasModel = ({
             getVortexPuckConfig(registry, fieldInputControlReleases),
             registry,
             fieldInputControlReleases,
+            catalogue,
           ),
-    [registry, fieldInputControlReleases],
+    [registry, fieldInputControlReleases, catalogue],
   );
   const page = source.body.pages.find((candidate) => candidate.id === pageAlias);
   const addresses = useMemo(

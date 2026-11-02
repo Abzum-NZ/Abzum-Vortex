@@ -320,7 +320,7 @@ Already present and to be used: `Item`, `Empty`, `Badge`, `Button`, `Collapsible
 - A tree of the open page's blocks (D3) with block-type icons. Drag handles appear on hover (`grip-vertical`, Puck's drag).
 - An empty state appears when no page is open.
 
-**E4. Blocks** (navigator, `studio-block-palette.tsx`):
+**E4. Blocks** (navigator, `studio-puck-drawer.tsx`):
 - The "Add to" target `NativeSelect` sits at the top.
 - Then the groups (D2 sections). Each block is a 2-column grid tile (`rounded-lg border bg-card p-3`, icon `size-5`, name `text-sm font-medium`, one-line purpose `text-xs muted line-clamp-2`), draggable, with an "Add" on click and Enter.
 - Search filters the tiles.

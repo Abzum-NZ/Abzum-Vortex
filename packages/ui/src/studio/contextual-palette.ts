@@ -5,7 +5,6 @@ import {
   type BlockPropertySchemaContract,
   type ImmutablePlatformBlockCatalogue,
   type PlatformBlockRelease,
-  type PlatformBlockReleaseSummary,
   type ModuleQueryExposure,
   queryTotalLabel,
   type RecordsTableBoardFacts,
@@ -44,12 +43,6 @@ export type StudioPaletteChoice = Readonly<{
   unavailable?: string;
   /** Why the block cannot be created even around a block that fills its required area, when it cannot. */
   unavailableWhenFilled?: string;
-}>;
-
-type StudioPaletteGroup = Readonly<{
-  group: BlockPaletteGroup;
-  label: string;
-  choices: readonly StudioPaletteChoice[];
 }>;
 
 /**
@@ -170,7 +163,7 @@ const releaseIndex = (
  */
 export function studioPaletteChoices(
   catalogue: ImmutablePlatformBlockCatalogue,
-  admitted: readonly PlatformBlockReleaseSummary[],
+  admitted: readonly Readonly<{ blockId: string; releaseVersion: string }>[],
 ): readonly StudioPaletteChoice[] {
   const index = releaseIndex(catalogue);
   const releases = new Map<string, PlatformBlockRelease>();
@@ -189,35 +182,31 @@ const matches = (choice: StudioPaletteChoice, words: readonly string[]): boolean
 };
 
 /**
- * The choices that match the search, in palette groups in catalogue group order; in each group the
- * blocks that can be added come first.
+ * The blocks the drawer lists for a place and a search, as the Puck components of each palette
+ * group (a Puck `ui.componentList` category): the blocks that match every word, in each group the
+ * ones that can be added first. Every group is present; a group with no match holds none.
  */
-export function groupStudioPaletteChoices(
+export function studioPaletteComponentLists(
   choices: readonly StudioPaletteChoice[],
   searchText: string,
-): readonly StudioPaletteGroup[] {
+): Readonly<Record<string, readonly string[]>> {
   const words = searchText
     .trim()
     .toLowerCase()
     .split(/\s+/u)
     .filter((word) => word.length > 0);
-  const groups = new Map<BlockPaletteGroup, StudioPaletteChoice[]>();
-  for (const group of Object.keys(PALETTE_GROUP_TITLES) as BlockPaletteGroup[])
-    groups.set(group, []);
-  for (const choice of choices) if (matches(choice, words)) groups.get(choice.group)?.push(choice);
-  return Object.freeze(
-    [...groups]
-      .filter(([, list]) => list.length > 0)
-      .map(([group, list]) =>
-        Object.freeze({
-          group,
-          label: PALETTE_GROUP_TITLES[group],
-          choices: Object.freeze([
-            ...list.filter((choice) => choice.unavailable === undefined),
-            ...list.filter((choice) => choice.unavailable !== undefined),
-          ]),
-        }),
-      ),
+  const found = choices.filter((choice) => matches(choice, words));
+  return Object.fromEntries(
+    (Object.keys(PALETTE_GROUP_TITLES) as BlockPaletteGroup[]).map((group) => {
+      const list = found.filter((choice) => choice.group === group);
+      return [
+        group,
+        [
+          ...list.filter((choice) => choice.unavailable === undefined),
+          ...list.filter((choice) => choice.unavailable !== undefined),
+        ].map((choice) => choice.rendererKey),
+      ];
+    }),
   );
 }
 
