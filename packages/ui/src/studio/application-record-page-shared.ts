@@ -250,7 +250,9 @@ export const keyColumns = (
       (key): key is string => typeof key === "string",
     ),
   );
-  const shown = record.fields.filter((entry) => readable.has(entry.key) && !technical.has(entry.key));
+  const shown = record.fields.filter(
+    (entry) => readable.has(entry.key) && !technical.has(entry.key),
+  );
   const numbers = shown.filter((entry) => entry.type === "reference_number");
   const state = shown.find((entry) => entry !== title && entry.type === "choice");
   const links = shown.filter(

@@ -143,7 +143,7 @@ export function StudioCanvasView({
     return (
       <div className="flex min-h-0 flex-1 flex-col gap-3 px-4">
         {picker}
-        <section className="space-y-3" aria-label="Page canvas">
+        <section className="flex min-h-0 flex-1 flex-col gap-3" aria-label="Page canvas">
           <CanvasEmpty
             title="Waiting for the canvas"
             description="Your page appears here after its latest saved changes compile."
