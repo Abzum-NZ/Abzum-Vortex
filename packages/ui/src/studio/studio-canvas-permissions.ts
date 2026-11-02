@@ -77,6 +77,8 @@ export const studioCanvasReferences = (
           reasons.drag = reasons.delete;
         }
         for (const child of descendants) {
+          const flow = studioPlacementRemovalReference(source, child.props.id, aliases);
+          if (flow !== undefined) reasons.delete ??= studioPlacementReferenceSentence(flow);
           const users = [
             ...applicationUses(source, { kind: "placement", placementAlias: child.props.id }),
             ...applicationUses(source, { kind: "message_target", placementAlias: child.props.id }),
@@ -85,8 +87,6 @@ export const studioCanvasReferences = (
           );
           if (users.length > 0)
             reasons.delete ??= `This block is used by ${describeApplicationUsers(users)}. Change that reference first.`;
-          const flow = studioPlacementRemovalReference(source, child.props.id, aliases);
-          if (flow !== undefined) reasons.delete ??= studioPlacementReferenceSentence(flow);
         }
         if (required && items.length === 1) reasons.delete ??= "This block fills a required slot.";
         const broken = studioFormChangeRefusal(

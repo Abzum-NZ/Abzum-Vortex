@@ -1337,8 +1337,16 @@ const messageTargetUses = (source: Source, index: UseIndex, placementAlias: stri
 
 /** Query bindings name the control whose value supplies an input. */
 const placementUses = (source: Source, index: UseIndex, alias: string): Use[] =>
-  occurrences(index, alias)
+  [...occurrences(index, alias), ...occurrences(index, `${source.key}:${alias}`)]
     .filter(({ path, key }) => {
+      if (
+        key === "value" &&
+        path.slice(-4, -1).join(".") === "properties.form.literal" &&
+        (path[1] === "flows" || (path[1] === "modules" && path[3] === "flows"))
+      ) {
+        const step = at(source, path.slice(0, -4));
+        return isObject(step) && step.type === "interface.show_form";
+      }
       if (key !== "control_placement" || path.at(-3) !== "query_parameters") return false;
       const binding = at(source, path.slice(0, -1));
       return isObject(binding) && binding.source === "control";
