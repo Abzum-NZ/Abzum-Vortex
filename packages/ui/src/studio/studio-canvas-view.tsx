@@ -2,7 +2,6 @@
 
 import { Puck } from "@puckeditor/core";
 import { useEffect, useState, type ReactNode } from "react";
-import type { Breakpoint } from "../definition-error";
 import { Alert, AlertDescription, AlertTitle } from "../components/alert";
 import { Badge } from "../components/badge";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../components/tooltip";
@@ -15,14 +14,9 @@ import { studioPageAreaLabel } from "./application-page-layout";
 import type { StudioCompileFailure } from "./compile-failure";
 import { StudioBlockPalette } from "./studio-block-palette";
 import { StudioCanvasActions } from "./studio-canvas-actions";
+import { useStudioScreen } from "./studio-canvas-screen";
 import { StudioReferencePicker } from "./studio-reference-picker";
 import { useStudioCanvas } from "./studio-puck-provider";
-
-const deviceWidths: Readonly<Record<Breakpoint, number>> = {
-  desktop: 1280,
-  tablet: 820,
-  phone: 390,
-};
 
 function CanvasEmpty({ title, description }: Readonly<{ title: string; description: string }>) {
   return (
@@ -100,9 +94,9 @@ export function StudioCanvasView({
   onFitZoom: (percent: number) => void;
 }>) {
   const { input, model, refusal } = useStudioCanvas();
+  const { breakpoint, label, width } = useStudioScreen();
   const {
     source,
-    breakpoint,
     disabled,
     compileFailure,
     platformThemeTokens,
@@ -115,23 +109,20 @@ export function StudioCanvasView({
   // The canvas is a device screen: the iframe is as wide as the chosen screen and as tall as the
   // well, in the iframe's own pixels. The zoom only scales the iframe as a whole.
   const [available, setAvailable] = useState({ width: 0, height: 0 });
-  const width = deviceWidths[breakpoint];
   const scale = zoom === "fit" ? Math.min(1, available.width / width) : zoom / 100;
   useEffect(() => {
     if (well === null) return;
-    const measure = () => {
-      const style = getComputedStyle(well);
-      const measured = {
-        width: well.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight),
-        height: well.clientHeight - parseFloat(style.paddingTop) - parseFloat(style.paddingBottom),
-      };
+    // The well's own content box, fractional and without its padding or scrollbar gutter: Fit
+    // scales to exactly this, so the screen can never be wider than the well.
+    const observer = new ResizeObserver((entries) => {
+      const box = entries[entries.length - 1]?.contentBoxSize[0];
+      if (box === undefined) return;
+      const measured = { width: box.inlineSize, height: box.blockSize };
       setAvailable((current) =>
         current.width === measured.width && current.height === measured.height ? current : measured,
       );
       onFitZoom(Math.min(1, measured.width / width) * 100);
-    };
-    measure();
-    const observer = new ResizeObserver(measure);
+    });
     observer.observe(well);
     return () => observer.disconnect();
   }, [well, width, onFitZoom]);
@@ -195,14 +186,12 @@ export function StudioCanvasView({
           {model.readOnlyCause !== undefined || breakpoint !== "desktop" ? (
             <Tooltip>
               <TooltipTrigger render={<Badge variant="secondary" className="shrink-0" />}>
-                {model.readOnlyCause !== undefined
-                  ? "Read-only"
-                  : `${breakpoint === "tablet" ? "Tablet" : "Phone"} view`}
+                {model.readOnlyCause !== undefined ? "Read-only" : `${label} view`}
               </TooltipTrigger>
               <TooltipContent>
                 {model.readOnlyCause !== undefined
                   ? "Shown read-only to keep it exactly as it is. Its blocks can still be changed in the inspector."
-                  : `This is the ${breakpoint} layout and order. Rearrange blocks on Desktop.`}
+                  : `This is the ${label.toLowerCase()} layout and order. Rearrange blocks on Desktop.`}
               </TooltipContent>
             </Tooltip>
           ) : (
@@ -244,7 +233,8 @@ export function StudioCanvasView({
         <div
           ref={setWell}
           data-vortex-studio-canvas-well=""
-          className="min-h-0 flex-1 overflow-auto bg-muted/40 p-4 [scrollbar-gutter:stable]"
+          // Fit shows the whole screen, so it never has anything to scroll to.
+          className={`min-h-0 flex-1 bg-muted/40 p-4 [scrollbar-gutter:stable_both-edges] ${zoom === "fit" ? "overflow-hidden" : "overflow-auto"}`}
         >
           <div className="mx-auto" style={{ width: width * scale, height: available.height }}>
             <div
