@@ -226,7 +226,8 @@ export function formatIsoRelative(
   let formatter: Intl.RelativeTimeFormat;
   try {
     formatter = new Intl.RelativeTimeFormat(options.locale ?? DEFAULT_LOCALE, { numeric: "auto" });
-  } catch {
+  } catch (error) {
+    console.error("[display] relative time locale unsupported, using the default", error);
     formatter = new Intl.RelativeTimeFormat(DEFAULT_LOCALE, { numeric: "auto" });
   }
   return formatter.format(Math.trunc(seconds / size), unit);
