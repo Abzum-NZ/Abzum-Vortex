@@ -20,6 +20,13 @@ const cliPath = path.join(workspaceRoot, "node_modules", "supabase", "dist", "su
 const lanesRoot = path.resolve(process.env.VORTEX_LANES_ROOT ?? "A:/Apps/vortex-lanes");
 // Lane 6 is skipped: its ports (5932x) fall in a TCP range Windows reserves for Hyper-V on this host.
 const laneNumbers = new Set([3, 4, 5, 7, 8]);
+const appPorts = new Map([
+  [3, 3630],
+  [4, 3650],
+  [5, 3661],
+  [7, 3653],
+  [8, 3654],
+]);
 
 // The app needs the database, Auth, the Data API, Kong, Storage and Realtime. Auth sends sign-up
 // confirmation and recovery email, so the Mailpit inbox stays on. Studio, logs, the edge runtime
@@ -40,10 +47,10 @@ Lanes live under VORTEX_LANES_ROOT (${lanesRoot}).`;
 const usage = `Usage:
   node tooling/supabase/lane.mjs init <n>
   node tooling/supabase/lane.mjs sync <n> <worktreePath>
-  node tooling/supabase/lane.mjs start <n>
-  node tooling/supabase/lane.mjs stop <n>
+  node tooling/supabase/lane.mjs start <n> [worktreePath]
+  node tooling/supabase/lane.mjs stop <n> [worktreePath]
   node tooling/supabase/lane.mjs reset <n> <worktreePath>
-  node tooling/supabase/lane.mjs status <n>
+  node tooling/supabase/lane.mjs status
   node tooling/supabase/lane.mjs free
   node tooling/supabase/lane.mjs check <n> <worktreePath>
   node tooling/supabase/lane.mjs env <n>
@@ -116,6 +123,7 @@ const requireLeaseHolder = async (lane, worktree, required = false) => {
     fail(`Lane ${lane} is held by ${lease.worktree}.`);
   if (required && !lease)
     fail(`Lane ${lane} has no active lease; start it from ${worktree} first.`);
+  return lease;
 };
 
 const requireInitialized = (lane) => {
@@ -133,11 +141,23 @@ const runCli = (lane, arguments_, capture = false) => {
     },
   );
   if (result.error !== undefined) throw result.error;
-  if (result.status !== 0)
+  if (result.status !== 0) {
+    if (capture && result.stderr) process.stderr.write(result.stderr);
     fail(
       `supabase ${arguments_.join(" ")} failed for lane ${lane} (${result.status ?? "terminated"}).`,
     );
+  }
   return result.stdout;
+};
+
+const laneAuthConfig = (source, lane) => {
+  const site = `http://localhost:${appPorts.get(lane)}`;
+  return source
+    .replace(/^(site_url\s*=).*$/m, `$1 "${site}"`)
+    .replace(
+      /^(additional_redirect_urls\s*=).*$/m,
+      `$1 ["${site}", "${site}/auth/confirm", "${site}/auth/update-password"]`,
+    );
 };
 
 /**
@@ -148,7 +168,7 @@ const runCli = (lane, arguments_, capture = false) => {
 const laneConfig = (source, lane) => {
   const offset = 1000 * (lane - 1);
   let section = "";
-  return source
+  return laneAuthConfig(source, lane)
     .split(/\r?\n/)
     .map((line) => {
       const header = /^\s*\[([^\]]+)\]/.exec(line);
@@ -173,12 +193,15 @@ const init = async (lane) => {
   await sync(lane, workspaceRoot);
 };
 
-/** Mirrors the worktree's database sources into the lane; the lane's config.toml is left alone. */
+/** Mirrors the worktree's database sources and refreshes the lane's auth redirect origin. */
 const sync = async (lane, worktreePath) => {
   requireInitialized(lane);
   const sourceDirectory = path.join(path.resolve(worktreePath), "supabase");
   if (!existsSync(path.join(sourceDirectory, "migrations")))
     fail(`${sourceDirectory} has no migrations directory.`);
+  const configPath = path.join(laneSupabaseDirectory(lane), "config.toml");
+  const current = await readFile(configPath, "utf8");
+  await writeFile(configPath, laneAuthConfig(current, lane));
   const target = laneSupabaseDirectory(lane);
   for (const name of copiedDirectories) {
     await rm(path.join(target, name), { recursive: true, force: true });
@@ -221,10 +244,13 @@ if (command === "status" || command === "free") {
   for (const number of laneNumbers) {
     const lease = await readLease(number);
     const running = databaseRunning(number);
-    entries.push({ number, lease, running });
+    const initialized = existsSync(path.join(laneSupabaseDirectory(number), "config.toml"));
+    entries.push({ number, lease, running, initialized });
   }
   if (command === "free") {
-    const free = entries.find((entry) => entry.number !== 3 && !entry.running && !entry.lease);
+    const free = entries.find(
+      (entry) => entry.number !== 3 && entry.initialized && !entry.running && !entry.lease,
+    );
     process.stdout.write(`${free?.number ?? "none"}\n`);
   } else {
     for (const { number, lease, running } of entries)
@@ -295,9 +321,9 @@ try {
       if (worktreeArgument === undefined) fail(usage);
       await sync(lane, worktreeArgument);
       break;
-    case "start":
+    case "start": {
       requireInitialized(lane);
-      await requireLeaseHolder(lane, worktree);
+      const lease = await requireLeaseHolder(lane, worktree);
       await ensureLocalSigningKey(
         path.join(laneSupabaseDirectory(lane), ".temp", "signing-keys.json"),
       );
@@ -305,9 +331,10 @@ try {
       log(`Lane ${lane} started.`);
       await writeFile(
         leasePath(lane),
-        `${JSON.stringify({ worktree, startedAt: new Date().toISOString(), port: 54322 + 1000 * (lane - 1) }, null, 2)}\n`,
+        `${JSON.stringify({ worktree, startedAt: lease?.startedAt ?? new Date().toISOString(), port: 54322 + 1000 * (lane - 1) }, null, 2)}\n`,
       );
       break;
+    }
     case "stop":
       requireInitialized(lane);
       await requireLeaseHolder(lane, worktree, true);

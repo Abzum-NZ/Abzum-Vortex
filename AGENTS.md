@@ -55,7 +55,7 @@ reset, run `pnpm demo:owner` and then `pnpm setup:local --
 node tooling/supabase/lane.mjs init <n>     # once: generate the lane config
 node tooling/supabase/lane.mjs start <n> .  # claim and start; stop <n> . releases it
 node tooling/supabase/lane.mjs env <n>      # lines for apps/web/.env.development.local
-node tooling/supabase/lane.mjs sync <n> .   # mirror this worktree's migrations and seed, no reset
+node tooling/supabase/lane.mjs sync <n> .   # mirror migrations and seed and update the lane's auth origin, no reset
 node node_modules/supabase/dist/supabase.js migration up --include-all --local --workdir <lane directory>  # forward migrate
 node tooling/supabase/lane.mjs reset <n> .  # destructive: mirror migrations and seed, then reset (your lane only)
 VORTEX_SUPABASE_WORKDIR=<lane directory> pnpm demo:setup  # provision without resetting

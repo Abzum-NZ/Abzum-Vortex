@@ -121,6 +121,8 @@ environment or database that is not the local one.
 For a database lane, `node tooling/supabase/lane.mjs env <n>` emits the lane's connection values and
 its persistent, randomly generated Query continuation key. Copy the output into the worktree's
 ignored `apps/web/.env.development.local`; it contains secrets and must not be committed or logged.
+Each environment must set `VORTEX_SESSION_COOKIE_NAME`; Testing and Production use a secure
+host-only name beginning with `__Host-`. A local lane receives its own name from `lane.mjs env`.
 
 The custom-component and file pages read additional variables and report a configuration error until
 they are set: `VORTEX_COMPONENT_BUNDLE_ORIGIN`, `VORTEX_FILE_STORAGE_SIGNING_KEY` and

@@ -43,7 +43,7 @@ export const identitySessionCookieProfile = (siteUrl: string): SessionCookieProf
 
   const name = requiredEnvironmentValue("VORTEX_SESSION_COOKIE_NAME");
   if (!/^[A-Za-z0-9_-]+$/u.test(name) || (!localHttp && !name.startsWith("__Host-")))
-    throw new Error("Invalid identity-session cookie name");
+    throw new Error("VORTEX_SESSION_COOKIE_NAME is invalid for the configured site URL");
 
   return Object.freeze({
     name,
