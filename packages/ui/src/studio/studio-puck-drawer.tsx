@@ -43,6 +43,7 @@ import { StudioLimitNote, StudioReasoned } from "./studio-limit";
 import type { StudioCompositionAddTarget } from "./application-composition-commands";
 import { studioPaletteComponentLists, type StudioPaletteChoice } from "./contextual-palette";
 import { zoneOfDestination } from "./studio-canvas-data";
+import { studioScreens, useStudioScreen } from "./studio-canvas-screen";
 import { useStudioCanvas, type StudioCanvasAddRequest } from "./studio-puck-provider";
 import { studioPuckStyle } from "./studio-puck-style";
 
@@ -224,15 +225,19 @@ function BlocksEmpty({
 const placeLabel = (target: StudioCompositionAddTarget, top: number): string =>
   target.depth === top ? target.label : `${target.label} (level ${target.depth - top + 1})`;
 
+/** The screen blocks are added on. */
+const desktop = studioScreens[0]!;
+
 /** Why the canvas takes no new block now, in the words the Add button says it with. */
 const blockedReason = (
   editable: boolean,
   readOnlyCause: string | undefined,
-  breakpoint: "desktop" | "tablet" | "phone",
+  screen: Readonly<{ breakpoint: string }>,
   disabledReason: string | undefined,
 ): string | undefined => {
   if (editable) return undefined;
-  if (breakpoint !== "desktop") return "Blocks are added on the Desktop screen size.";
+  if (screen.breakpoint !== desktop.breakpoint)
+    return `Blocks are added on the ${desktop.label} screen size.`;
   if (readOnlyCause !== undefined) return "This page is shown read-only, so blocks can't be added.";
   return disabledReason ?? "Studio is busy; try again in a moment.";
 };
@@ -257,6 +262,7 @@ const sameLists = (
  */
 export function StudioBlocksPanel() {
   const { input, model } = useStudioCanvas();
+  const screen = useStudioScreen();
   const palette = input.palette;
   // No page is open: the panel says so itself.
   if (palette === undefined || model.at === undefined || model.slot === undefined) return null;
@@ -284,12 +290,7 @@ export function StudioBlocksPanel() {
       targets={palette.targets.targets.filter(
         (target) => palette.owner === "layout" || target.area === at.key,
       )}
-      blocked={blockedReason(
-        model.editable,
-        model.readOnlyCause,
-        input.breakpoint,
-        input.disabledReason,
-      )}
+      blocked={blockedReason(model.editable, model.readOnlyCause, screen, input.disabledReason)}
       owner={palette.owner}
       message={palette.message}
       onAdd={palette.onAdd}
