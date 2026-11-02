@@ -459,6 +459,10 @@ export const createHumanOrganizationRequestService = (
         console.info(`[access] human organisation request temporarily unavailable: ${cause}`);
       else if (
         refused ||
+        // Nothing to publish, or a person the builder authority does not allow: the answers the
+        // platform is there to give, not failures.
+        (error instanceof DefinitionError &&
+          (error.code === "DEFINITION_NO_CHANGE" || error.code === "DEFINITION_CONTEXT_REFUSED")) ||
         code === "installation_authority_refused" ||
         code === "DEFINITION_DRAFT_STALE_OR_MISSING" ||
         code === "RECORD_STORAGE_INCOMPATIBLE"
