@@ -123,10 +123,22 @@ export function StudioCanvasBridge({
   // Ctrl+Z / Ctrl+Y with its older states, which Studio would then take as new edits, so Puck's
   // history is kept at the current state alone and its Undo and Redo have nothing to go back to.
   useEffect(() => {
-    const { history } = getPuck();
-    // The newest entry is the current state; it carries Puck's indexes, so setting it is cheap.
-    const current = history.histories[history.histories.length - 1];
-    if (history.histories.length > 1 && current !== undefined) history.setHistories([current]);
+    const { history, appState, dispatch } = getPuck();
+    // The newest entry carries Puck's indexes, so setting it is cheap and warns of nothing.
+    const kept = history.histories[history.histories.length - 1];
+    if (history.histories.length <= 1 || kept === undefined) return;
+    // Puck records 250 ms after an action, so the entry can be older than the screen: what Studio
+    // pushed since (the real block after a palette drop, a refused change shown again, an Undo, a
+    // selection) is put back, and Studio's own `change` is held while it is.
+    synchronizing.current = true;
+    try {
+      history.setHistories([kept]);
+      if (kept.state.data !== appState.data)
+        dispatch({ type: "setData", data: () => appState.data, recordHistory: false });
+      if (kept.state.ui !== appState.ui) dispatch({ type: "setUi", ui: appState.ui });
+    } finally {
+      synchronizing.current = false;
+    }
   }, [recorded]);
   useEffect(() => {
     onDragging?.(dragging);

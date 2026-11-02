@@ -92,11 +92,11 @@ const readCollapsed = (): boolean => {
   }
 };
 const storeCollapsed = (collapsed: boolean): void => {
-  heldCollapsed = collapsed;
   try {
     window.localStorage.setItem(collapsedStorageKey, String(collapsed));
   } catch {
-    // The choice is a convenience; the held value covers this visit.
+    // The choice is a convenience; without storage the held value covers this visit.
+    heldCollapsed = collapsed;
   }
   for (const notify of collapsedListeners) notify();
 };
@@ -234,7 +234,7 @@ function StudioRail<Key extends string>({
               <button
                 type="button"
                 id="studio-panel-toggle"
-                aria-label="Collapse panel"
+                aria-label="Side panel"
                 aria-expanded={!collapsed}
                 aria-controls="studio-rail-panel"
                 onClick={onToggleCollapsed}
@@ -296,6 +296,13 @@ function StudioRail<Key extends string>({
     </div>
   );
 }
+
+/**
+ * A select, menu or combobox opened from the panel portals its popup to the style root, outside the
+ * rail: while it is open (its trigger says `aria-expanded`) the panel still owns the focus.
+ */
+const panelPopupOpen = (): boolean =>
+  document.querySelector('#studio-rail-panel [aria-expanded="true"]') !== null;
 
 /** Whether an event target is in the rail or in its panel (a portal whose host sits inside the rail). */
 const inRailOrPanel = (rail: HTMLElement | null, target: EventTarget | null): boolean =>
@@ -549,6 +556,12 @@ export function StudioFrame<Key extends string>({
       onKeyDown={(event) => {
         if (event.key !== "Escape" || event.defaultPrevented || !collapsed || !overlayPanel) return;
         if (!inRailOrPanel(rail.current, event.target)) return;
+        // An open combobox or menu answers its own Escape.
+        if (
+          event.target instanceof Element &&
+          event.target.getAttribute("aria-expanded") === "true"
+        )
+          return;
         event.stopPropagation();
         clearTimeout(peekTimer.current);
         setPeeking(false);
@@ -560,7 +573,8 @@ export function StudioFrame<Key extends string>({
           !collapsed ||
           pointerInside.current ||
           !inRailOrPanel(rail.current, event.target) ||
-          inRailOrPanel(rail.current, event.relatedTarget)
+          inRailOrPanel(rail.current, event.relatedTarget) ||
+          panelPopupOpen()
         )
           return;
         peek(false);
