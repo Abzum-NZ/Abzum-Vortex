@@ -32,21 +32,16 @@ declare
 begin
   organization_id_value := (p_preview_installation ->> 'organizationId')::uuid;
   application_root_id_value := (p_preview_installation ->> 'applicationRootId')::uuid;
-  -- No active installation of the previewed Application that binds the Module: nothing installed
-  -- to read, so the preview is refused cleanly.
-  if not exists (
-    select 1
-    from vortex_definition.installation_bindings as binding
-    where binding.organization_id = organization_id_value
-      and binding.application_root_id = application_root_id_value
-      and binding.module_root_id = p_module_root_id
-      and binding.state = 'active'
-  ) then
-    return null;
-  end if;
-  active_installation := vortex_definition.read_active_installation_for_scope_internal(
-    organization_id_value, application_root_id_value
-  );
+  -- No active installation of the previewed Application (or none that binds the Module): nothing
+  -- installed to read, so the preview is refused cleanly.
+  begin
+    active_installation := vortex_definition.read_active_installation_for_scope_internal(
+      organization_id_value, application_root_id_value
+    );
+  exception
+    when sqlstate 'P0002' then
+      return null;
+  end;
   select (item.value ->> 'moduleReleaseRevision')::bigint
   into installed_module_revision
   from pg_catalog.jsonb_array_elements(active_installation -> 'moduleBindings') as item(value)
@@ -128,4 +123,4 @@ grant execute on function vortex_record.read_installed_projection_internal(jsonb
   to vortex_record_adapter;
 
 comment on function vortex_record.read_installed_projection_internal(jsonb, uuid, uuid) is
-  'Private: for a system projection read from a preview, the installed Module release''s record type and record content when the preview''s record type and the permissions that apply to it (the Module''s and the Application''s) equal the installed ones, else null; null too when the previewed Application has no active installation binding the Module.';
+  'Private: for a system projection read from a preview, the installed Module release''s record type and record content when the preview''s record type and the permissions that apply to it (the Module''s and the Application''s) equal the installed ones, else null; null too when the previewed Application has no active installation that binds the Module.';
