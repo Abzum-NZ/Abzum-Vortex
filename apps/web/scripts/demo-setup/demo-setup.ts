@@ -1,12 +1,10 @@
 import { spawnSync } from "node:child_process";
-import { join } from "node:path";
 import { findRepositoryRoot } from "../development-setup/state";
 import { isLoopbackHostname } from "@vortex/platform/schema";
 import {
   isLocalSupabaseApiUrl,
   requireLocalDevelopmentEnvironment,
   requireLocalSupabaseBinding,
-  supabaseWorkdirArguments,
 } from "../development-setup/guards";
 import { ensureLocalDemoOwner, validateDemoOwnerConfiguration } from "./local-demo-owner";
 import { loadLocalWebEnvironment } from "./local-environment";
@@ -70,24 +68,9 @@ const validateDemoEnvironment = (): void => {
 const main = async (): Promise<void> => {
   loadLocalWebEnvironment();
   validateDemoEnvironment();
-  const root = findRepositoryRoot();
-  const supabaseCli = join(root, "node_modules", "supabase", "dist", "supabase.js");
-  const workdir = supabaseWorkdirArguments();
+  if (/[\\/]db3[\\/]?$/.test(process.env.VORTEX_SUPABASE_WORKDIR ?? ""))
+    throw new Error("Demo setup cannot run on the shared lane 3.");
   requireLocalSupabaseBinding();
-
-  if (workdir.length === 0) {
-    log("resetting the local database");
-    runPnpm(["db:reset"]);
-  } else {
-    log(`resetting the database lane at ${workdir[1]}`);
-    const reset = spawnSync(process.execPath, [supabaseCli, "db", "reset", ...workdir], {
-      cwd: root,
-      stdio: "inherit",
-    });
-    if (reset.error !== undefined) throw reset.error;
-    if (reset.status !== 0)
-      throw new Error(`supabase db reset failed (${reset.status ?? "terminated"}).`);
-  }
   const identityId = await ensureLocalDemoOwner();
   runPnpm([
     "--filter",

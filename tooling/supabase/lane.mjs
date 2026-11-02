@@ -43,14 +43,15 @@ const usage = `Usage:
   node tooling/supabase/lane.mjs stop <n>
   node tooling/supabase/lane.mjs reset <n> <worktreePath>
   node tooling/supabase/lane.mjs status <n>
+  node tooling/supabase/lane.mjs free
+  node tooling/supabase/lane.mjs check <n> <worktreePath>
   node tooling/supabase/lane.mjs env <n>
 where <n> is one of these lanes (API and database ports):
 ${laneList}
 Lanes live under VORTEX_LANES_ROOT (${lanesRoot}).`;
 
 const fail = (message) => {
-  process.stderr.write(`[lane] ${message}\n`);
-  process.exit(1);
+  throw new Error(message);
 };
 
 const log = (message) => process.stdout.write(`[lane] ${message}\n`);
@@ -63,6 +64,58 @@ const parseLane = (value) => {
 
 const laneDirectory = (lane) => path.join(lanesRoot, `db${lane}`);
 const laneSupabaseDirectory = (lane) => path.join(laneDirectory(lane), "supabase");
+const leasePath = (lane) => path.join(laneDirectory(lane), "lease.json");
+const databaseRunning = (lane) => {
+  const result = spawnSync(
+    "docker",
+    ["container", "inspect", "--format", "{{.State.Running}}", `supabase_db_vortex-db${lane}`],
+    { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] },
+  );
+  if (result.error) throw result.error;
+  if (result.status !== 0 && !result.stderr.includes("No such container"))
+    fail(`Cannot inspect lane ${lane} database: ${result.stderr.trim()}`);
+  return result.status === 0 && result.stdout.trim() === "true";
+};
+const readLease = async (lane) => {
+  if (lane === 3 && databaseRunning(lane)) {
+    const git = spawnSync("git", ["worktree", "list", "--porcelain"], {
+      cwd: workspaceRoot,
+      encoding: "utf8",
+    });
+    const first = git.stdout?.split(/\r?\n/).find((line) => line.startsWith("worktree "));
+    if (git.status !== 0 || !first) fail("Cannot determine the primary worktree for lane 3.");
+    return { worktree: path.resolve(first.slice(9)), startedAt: "shared", port: 56322 };
+  }
+  let lease;
+  try {
+    lease = JSON.parse(await readFile(leasePath(lane), "utf8"));
+  } catch (error) {
+    if (error.code === "ENOENT") return undefined;
+    throw error;
+  }
+  if (
+    typeof lease.worktree !== "string" ||
+    !path.isAbsolute(lease.worktree) ||
+    typeof lease.startedAt !== "string" ||
+    lease.port !== 54322 + 1000 * (lane - 1)
+  )
+    fail(`Lane ${lane} has an invalid lease.`);
+  if (!existsSync(lease.worktree) || !databaseRunning(lane)) {
+    await rm(leasePath(lane));
+    log(`Cleared stale lease for lane ${lane}.`);
+    return undefined;
+  }
+  return lease;
+};
+const sameWorktree = (left, right) =>
+  process.platform === "win32" ? left.toLowerCase() === right.toLowerCase() : left === right;
+const requireLeaseHolder = async (lane, worktree, required = false) => {
+  const lease = await readLease(lane);
+  if (lease && !sameWorktree(lease.worktree, worktree))
+    fail(`Lane ${lane} is held by ${lease.worktree}.`);
+  if (required && !lease)
+    fail(`Lane ${lane} has no active lease; start it from ${worktree} first.`);
+};
 
 const requireInitialized = (lane) => {
   if (!existsSync(path.join(laneSupabaseDirectory(lane), "config.toml")))
@@ -162,80 +215,155 @@ if (command === undefined) {
   process.stdout.write(`${laneDescription}\n`);
   process.exit(0);
 }
+if (command === "status" || command === "free") {
+  const entries = [];
+  for (const number of laneNumbers) {
+    const lease = await readLease(number);
+    const running = databaseRunning(number);
+    entries.push({ number, lease, running });
+  }
+  if (command === "free") {
+    const free = entries.find((entry) => entry.number !== 3 && !entry.running && !entry.lease);
+    process.stdout.write(`${free?.number ?? "none"}\n`);
+  } else {
+    for (const { number, lease, running } of entries)
+      process.stdout.write(
+        `${number}: port ${54322 + 1000 * (number - 1)}, database ${running ? "running" : "stopped"}, holder ${lease?.worktree ?? "none"}\n`,
+      );
+  }
+  process.exit(0);
+}
 if (laneArgument === undefined) fail(usage);
 const lane = parseLane(laneArgument);
+const worktree = path.resolve(worktreeArgument ?? process.cwd());
 
-switch (command) {
-  case "init":
-    await init(lane);
-    break;
-  case "sync":
-    if (worktreeArgument === undefined) fail(usage);
-    await sync(lane, worktreeArgument);
-    break;
-  case "start":
-    requireInitialized(lane);
-    await ensureLocalSigningKey(
-      path.join(laneSupabaseDirectory(lane), ".temp", "signing-keys.json"),
-    );
-    runCli(lane, ["start", "--exclude", excludedContainers]);
-    break;
-  case "stop":
-    requireInitialized(lane);
-    runCli(lane, ["stop"]);
-    break;
-  case "reset":
-    if (lane === 3) fail("Lane 3 is the shared demo lane and cannot be reset.");
-    if (worktreeArgument === undefined) fail(usage);
-    await sync(lane, worktreeArgument);
-    runCli(lane, ["db", "reset"]);
-    break;
-  case "status": {
-    const status = readStatus(lane);
-    process.stdout.write(
-      [
-        `API URL:         ${status.API_URL}`,
-        `DB URL:          ${status.DB_URL}`,
-        `Runtime DB URL:  ${runtimeDatabaseUrl(status)}`,
-        `Publishable key: ${status.PUBLISHABLE_KEY ?? "(unavailable)"}`,
-        `Secret key:      ${status.SECRET_KEY ?? "(unavailable)"}`,
-        `Inbox:           ${status.INBUCKET_URL ?? status.MAILPIT_URL ?? "(off)"}`,
-        "",
-      ].join("\n"),
-    );
-    break;
+const lockPath = path.join(laneDirectory(lane), "operation.lock");
+let locked = false;
+try {
+  if (command === "reset" && lane === 3)
+    fail("Lane 3 is the shared demo lane and cannot be reset.");
+  if (lane === 3 && ["start", "stop"].includes(command)) {
+    const git = spawnSync("git", ["worktree", "list", "--porcelain"], {
+      cwd: workspaceRoot,
+      encoding: "utf8",
+    });
+    const first = git.stdout?.split(/\r?\n/).find((line) => line.startsWith("worktree "));
+    if (git.status !== 0 || !first || !sameWorktree(path.resolve(first.slice(9)), worktree))
+      fail("Lane 3 belongs to the primary worktree.");
   }
-  case "env": {
-    const status = readStatus(lane);
-    if (typeof status.PUBLISHABLE_KEY !== "string" || typeof status.SECRET_KEY !== "string")
-      fail(`Lane ${lane} status has no publishable or secret key.`);
-    const keyPath = path.join(laneSupabaseDirectory(lane), ".temp", "query-continuation-key");
-    await mkdir(path.dirname(keyPath), { recursive: true });
-    try {
-      await writeFile(keyPath, randomBytes(32).toString("base64"), { flag: "wx", mode: 0o600 });
-    } catch (error) {
-      if (error.code !== "EEXIST") throw error;
+  if (["start", "stop", "reset"].includes(command)) {
+    requireInitialized(lane);
+    const deadline = Date.now() + 60_000;
+    for (;;) {
+      try {
+        await writeFile(lockPath, JSON.stringify({ pid: process.pid, worktree }), { flag: "wx" });
+        locked = true;
+        break;
+      } catch (error) {
+        if (error.code !== "EEXIST") throw error;
+        let holder;
+        try {
+          holder = JSON.parse(await readFile(lockPath, "utf8"));
+        } catch {
+          holder = undefined;
+        }
+        if (Number.isInteger(holder?.pid) && holder.pid > 0) {
+          let alive = true;
+          try {
+            process.kill(holder.pid, 0);
+          } catch (cause) {
+            if (cause.code === "ESRCH") alive = false;
+          }
+          if (!alive) {
+            await rm(lockPath, { force: true });
+            log(`Cleared stale operation lock for lane ${lane}.`);
+            continue;
+          }
+        }
+        if (Date.now() >= deadline)
+          fail(`Lane ${lane} operation is held by ${holder?.worktree ?? "an unknown worktree"}.`);
+        await new Promise((resolve) => setTimeout(resolve, 500));
+      }
     }
-    const continuationKey = (await readFile(keyPath, "utf8")).trim();
-    if (
-      !/^[A-Za-z0-9+/]{43}=$/.test(continuationKey) ||
-      Buffer.from(continuationKey, "base64").length !== 32
-    )
-      fail(`Lane ${lane} has an invalid query continuation key.`);
-    process.stdout.write(
-      [
-        `VORTEX_SESSION_COOKIE_NAME=vortex-lane-${lane}-session`,
-        `VORTEX_SUPABASE_URL=${status.API_URL}`,
-        `VORTEX_SUPABASE_PUBLISHABLE_KEY=${status.PUBLISHABLE_KEY}`,
-        `VORTEX_RUNTIME_DATABASE_URL=${runtimeDatabaseUrl(status)}`,
-        `VORTEX_DEV_SERVICE_ROLE_KEY=${status.SECRET_KEY}`,
-        `VORTEX_QUERY_CONTINUATION_KEY=${continuationKey}`,
-        `VORTEX_SUPABASE_WORKDIR=${laneDirectory(lane).replaceAll("\\", "/")}`,
-        "",
-      ].join("\n"),
-    );
-    break;
   }
-  default:
-    fail(usage);
+  switch (command) {
+    case "init":
+      await init(lane);
+      break;
+    case "sync":
+      if (worktreeArgument === undefined) fail(usage);
+      await sync(lane, worktreeArgument);
+      break;
+    case "start":
+      requireInitialized(lane);
+      await requireLeaseHolder(lane, worktree);
+      await ensureLocalSigningKey(
+        path.join(laneSupabaseDirectory(lane), ".temp", "signing-keys.json"),
+      );
+      runCli(lane, ["start", "--exclude", excludedContainers], true);
+      log(`Lane ${lane} started.`);
+      await writeFile(
+        leasePath(lane),
+        `${JSON.stringify({ worktree, startedAt: new Date().toISOString(), port: 54322 + 1000 * (lane - 1) }, null, 2)}\n`,
+      );
+      break;
+    case "stop":
+      requireInitialized(lane);
+      await requireLeaseHolder(lane, worktree, true);
+      runCli(lane, ["stop"]);
+      await rm(leasePath(lane), { force: true });
+      break;
+    case "reset":
+      if (worktreeArgument === undefined) fail(usage);
+      await requireLeaseHolder(lane, worktree, true);
+      await sync(lane, worktreeArgument);
+      runCli(lane, ["db", "reset"]);
+      await rm(path.join(laneSupabaseDirectory(lane), ".temp", "development-setup-state.json"), {
+        force: true,
+      });
+      break;
+    case "check": {
+      if (worktreeArgument === undefined) fail(usage);
+      await requireLeaseHolder(lane, worktree, true);
+      break;
+    }
+    case "env": {
+      const status = readStatus(lane);
+      if (typeof status.PUBLISHABLE_KEY !== "string" || typeof status.SECRET_KEY !== "string")
+        fail(`Lane ${lane} status has no publishable or secret key.`);
+      const keyPath = path.join(laneSupabaseDirectory(lane), ".temp", "query-continuation-key");
+      await mkdir(path.dirname(keyPath), { recursive: true });
+      try {
+        await writeFile(keyPath, randomBytes(32).toString("base64"), { flag: "wx", mode: 0o600 });
+      } catch (error) {
+        if (error.code !== "EEXIST") throw error;
+      }
+      const continuationKey = (await readFile(keyPath, "utf8")).trim();
+      if (
+        !/^[A-Za-z0-9+/]{43}=$/.test(continuationKey) ||
+        Buffer.from(continuationKey, "base64").length !== 32
+      )
+        fail(`Lane ${lane} has an invalid query continuation key.`);
+      process.stdout.write(
+        [
+          `VORTEX_SESSION_COOKIE_NAME=vortex-lane-${lane}-session`,
+          `VORTEX_SUPABASE_URL=${status.API_URL}`,
+          `VORTEX_SUPABASE_PUBLISHABLE_KEY=${status.PUBLISHABLE_KEY}`,
+          `VORTEX_RUNTIME_DATABASE_URL=${runtimeDatabaseUrl(status)}`,
+          `VORTEX_DEV_SERVICE_ROLE_KEY=${status.SECRET_KEY}`,
+          `VORTEX_QUERY_CONTINUATION_KEY=${continuationKey}`,
+          `VORTEX_SUPABASE_WORKDIR=${laneDirectory(lane).replaceAll("\\", "/")}`,
+          "",
+        ].join("\n"),
+      );
+      break;
+    }
+    default:
+      fail(usage);
+  }
+} catch (error) {
+  process.stderr.write(`[lane] ${error instanceof Error ? error.message : String(error)}\n`);
+  process.exitCode = 1;
+} finally {
+  if (locked) await rm(lockPath, { force: true });
 }
