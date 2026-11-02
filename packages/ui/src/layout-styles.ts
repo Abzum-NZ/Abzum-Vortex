@@ -332,6 +332,14 @@ export const LAYOUT_ONLY_STYLES_CSS = `
   > .vortex-puck-slot:empty {
   min-height: 2.25rem;
 }
+/* An empty action row is a place to drop into, not content: Puck draws its box while a block is being
+   dragged (and for the area under the pointer), so every heading does not carry a dashed box. */
+[data-puck-entry]:not([data-puck-dragging])
+  :is([data-vortex-record-actions], [data-vortex-heading-actions])
+  > .vortex-puck-slot:empty:not(:hover) {
+  background: none;
+  outline: none;
+}
 [data-vortex-record-actions] > button {
   order: 1;
 }
