@@ -35,7 +35,7 @@ import {
   type ApplicationAuthoringToolName,
 } from "../_lib/application-authoring-tools";
 import { previewProblem } from "./studio-refusal-messages";
-import { appStoreActionTokens, type AppStoreActionToken } from "../../_lib/page-run-parameter";
+import { studioActionTokens, type StudioActionToken } from "../../_lib/studio-action-tokens";
 import type { StudioDraft } from "./use-studio-draft";
 
 /** The saved draft a preview runs; null while edits or requests are pending. */
@@ -243,10 +243,10 @@ const applicationTools: readonly StudioApplicationTool[] = [
   ),
   tool(
     "start_application_action",
-    "Start one of this application's App Store actions, the same flow its button runs: publish the saved draft, install or upgrade it, remove it, or delete it. It first waits for the latest edits to be saved, then opens the application's App Store page on that action's first dialog (the review, then the confirmation or form). The person completes or cancels it there; nothing is published, installed, removed or deleted until they do.",
+    "Start one of this application's App Store actions, the same flow its button runs: publish the saved draft, or install or upgrade it. It first waits for the latest edits to be saved, then opens that action's first dialog over the editor (the review, then the confirmation or form). The person completes or cancels it there; nothing is published or installed until they do.",
     z
       .object({
-        action: z.enum(appStoreActionTokens).describe("Which action's flow to start."),
+        action: z.enum(studioActionTokens).describe("Which action's flow to start."),
       })
       .strict(),
     false,
@@ -294,8 +294,8 @@ export function ApplicationDraftAgentTools({
   readQueries: (borrowed: StudioBorrowedChoices | null) => readonly StudioQueryChoice[];
   /** The saved draft the preview runs; null while edits or requests are pending. */
   readSavedDraft: () => SavedDraftContext | null;
-  /** Saves the latest edits, then opens the application's App Store page on one action flow. */
-  startAction: (action: AppStoreActionToken) => Promise<boolean>;
+  /** Saves the latest edits, then opens one App Store action flow over the editor. */
+  startAction: (action: StudioActionToken) => Promise<boolean>;
 }) {
   const [runtime, setRuntime] = useState<ApplicationWebMcpRuntime>();
   const running = useRef(false);
@@ -560,17 +560,17 @@ export function ApplicationDraftAgentTools({
           };
         }
         if (found.name === "start_application_action") {
-          const input = parsed.data as { action: AppStoreActionToken };
+          const input = parsed.data as { action: StudioActionToken };
           const started = await actions.current.startAction(input.action);
           return started
             ? {
                 outcome: "started",
-                message: `The App Store page of this application is open on the ${input.action} action. The person confirms or cancels it there; nothing has changed yet.`,
+                message: `The ${input.action} action is open over the editor. The person confirms or cancels it there; nothing has changed yet.`,
               }
             : {
                 outcome: "blocked",
                 message:
-                  "The latest edits are not saved, so the action was not started. Call read_application_draft.",
+                  "The action was not started: the latest edits are not saved, or the App Store could not be read. Call read_application_draft.",
               };
         }
         if (found.name === "preview_saved_application") {

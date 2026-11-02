@@ -515,10 +515,11 @@ const registeredDefinitions: Record<FlowRegisteredTaskTypeKey, DefinitionInput> 
       severity: required("builder_key"),
       /** A dialog's heading: what the person was doing ("Install or upgrade"). */
       title: optional("message_text"),
-      /** One action the message offers, bound to a flow ("Undo"). */
-      action_label: optional("message_text"),
-      action_flow: optional("flow_id"),
-      action_inputs: optional("input_map"),
+      /**
+       * The actions the message offers, each bound to a flow ("Undo", "View in App Store"): an array
+       * of {label, flow, inputs}. A dialog offers up to three; any other target offers one.
+       */
+      actions: optional("message_actions"),
       /** A short-lived informational toast or banner, in milliseconds. */
       dismiss_after_ms: optional("whole_number"),
     },

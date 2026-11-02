@@ -75,9 +75,19 @@ const showMessage = (
       ...(options.action === undefined
         ? {}
         : {
-            action_label: textLiteral(options.action.label),
-            action_flow: textLiteral(options.action.flow),
-            action_inputs: { kind: "map", entries: options.action.inputs },
+            actions: {
+              kind: "array",
+              items: [
+                {
+                  kind: "map",
+                  entries: {
+                    label: textLiteral(options.action.label),
+                    flow: textLiteral(options.action.flow),
+                    inputs: { kind: "map", entries: options.action.inputs },
+                  },
+                },
+              ],
+            },
           }),
     },
   }) as unknown as Task;

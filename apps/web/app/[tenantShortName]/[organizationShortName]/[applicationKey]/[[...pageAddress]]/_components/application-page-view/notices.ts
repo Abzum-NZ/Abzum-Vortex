@@ -1,4 +1,4 @@
-import { flowRefusalFeedbackSentences } from "@vortex/platform/schema";
+import { flowRefusalFeedbackSentences, type FlowRefusalFeedback } from "@vortex/platform/schema";
 import type { FormFlowFeedback } from "@vortex/ui";
 import type { PageMessageDraft } from "./types";
 
@@ -85,10 +85,10 @@ export const finishedNotice = (
       : (outcomeNotices[outcome ?? "failed"] ?? unavailableNotice);
 
 /** Signing in again for a recent sign-in; the dispatcher adds where to come back to. */
-export const reauthenticationPath = "/auth/session-ended?status=reauthenticate";
+const reauthenticationPath = "/auth/session-ended?status=reauthenticate";
 
 /** Verifying with, or setting up, an authenticator for the two-step verification a change needs. */
-export const multiFactorPath = "/auth/sign-in?mfa=1";
+const multiFactorPath = "/auth/sign-in?mfa=1";
 
 export const refusalNotices: Readonly<
   Record<Extract<FormFlowFeedback, { kind: "refusal" }>["code"], PageMessageDraft>
@@ -112,3 +112,80 @@ export const refusalNotices: Readonly<
         : { target: "banner", severity: "error", text },
   ]),
 ) as Readonly<Record<Extract<FormFlowFeedback, { kind: "refusal" }>["code"], PageMessageDraft>>;
+
+/** The rule messages a refusal carries: the rule's own words and each field correction's, once each. */
+export const ruleMessagesOf = (
+  diagnostic: Pick<FlowRefusalFeedback, "ruleRefusal" | "corrections"> | undefined,
+): readonly string[] | undefined => {
+  const corrections = (diagnostic?.corrections ?? []).flatMap((correction) =>
+    correction.message === undefined ? [] : [correction.message],
+  );
+  const messages = [
+    ...new Set([
+      ...(diagnostic?.ruleRefusal === undefined ? [] : [diagnostic.ruleRefusal.message]),
+      ...corrections,
+    ]),
+  ];
+  return messages.length > 0 ? messages : undefined;
+};
+
+/**
+ * The one sentence a finished run's outcome is told in, wherever the run was started: the page
+ * runtime and Studio's editor both use it. A refusal carries its own wording and, when the flow
+ * names one, a link to where the person can put it right; signing in again or verifying comes back
+ * to `continuation`, the place the person was working in, where they can retry.
+ */
+export const finishedRunNotice = (
+  run: Readonly<{
+    descriptor: Readonly<{ outcome: string; commit: string }>;
+    failure?: Readonly<{ code: string; diagnostic?: FlowRefusalFeedback }> | undefined;
+  }>,
+  where: Readonly<{
+    destinationHref: (applicationKey: string, pageKey: string) => string;
+    continuation: string;
+  }>,
+): PageMessageDraft => {
+  let notice = finishedNotice(run.descriptor.outcome, run.failure?.code, run.descriptor.commit);
+  const diagnostic = run.failure?.diagnostic;
+  if (diagnostic !== undefined) {
+    const recovery =
+      run.descriptor.outcome === "partial" || run.descriptor.outcome === "uncertain"
+        ? run.descriptor.outcome
+        : undefined;
+    const ruleMessages = ruleMessagesOf(diagnostic);
+    const reason: PageMessageDraft =
+      ruleMessages === undefined
+        ? refusalNotices[diagnostic.code]
+        : { target: "banner", severity: "error", text: ruleMessages.join(" ") };
+    const presentation = diagnostic.presentation;
+    notice = {
+      ...reason,
+      ...(presentation?.link_label === undefined || presentation.destination === undefined
+        ? {}
+        : {
+            action: {
+              kind: "link" as const,
+              label: presentation.link_label,
+              href: where.destinationHref(
+                presentation.destination.application_key,
+                presentation.destination.page_key,
+              ),
+            },
+          }),
+      text:
+        recovery === undefined
+          ? (presentation?.message ?? reason.text)
+          : `${presentation?.message ?? reason.text} ${notice.text}`,
+    };
+  }
+  const recoveryAction = notice.action?.kind === "link" ? notice.action : undefined;
+  if (recoveryAction?.href === reauthenticationPath || recoveryAction?.href === multiFactorPath)
+    notice = {
+      ...notice,
+      action: {
+        ...recoveryAction,
+        href: `${recoveryAction.href}&${new URLSearchParams({ continuation: where.continuation })}`,
+      },
+    };
+  return notice;
+};

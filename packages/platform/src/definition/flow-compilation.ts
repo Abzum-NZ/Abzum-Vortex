@@ -20,6 +20,7 @@ import type { FlowValue } from "../workflows/flow-values";
 import { compileFlowPlans, FlowPlanError } from "../workflows/flow-plan";
 import type { FlowFormTypes } from "../workflows/flow-form-types";
 import type { DefinitionProvenanceEntry } from "./definition-provenance";
+import { readFlowMessageActions } from "../workflows/flow-message-actions";
 import { canonicalJson, compareCanonicalStrings } from "./canonical-json-definition";
 import {
   DefinitionCompilationError,
@@ -349,6 +350,36 @@ const resolveProperty = (
       return identity((alias) => ctx.resolver.connectionBinding(alias));
     case "flow_id":
       return identity((alias) => ctx.resolver.flow(alias));
+    case "message_actions": {
+      // Each action names its flow by its source name; the compiled step names it by identity.
+      const actions = readFlowMessageActions(value);
+      if (actions === undefined || value.kind !== "array")
+        throw refusal(ctx, "vortex.definition.workflow_node_values", "invalid_value");
+      return {
+        kind: "array",
+        items: value.items.map((item, index) => {
+          const flow = actions[index]!.flow;
+          if (item.kind !== "map") return item;
+          return {
+            kind: "map",
+            entries: {
+              ...item.entries,
+              flow: identityLiteral(
+                resolveAt(ctx, ctx.resolver.flow(aliasOf(ctx, flow)), [
+                  ...path,
+                  "items",
+                  index,
+                  "entries",
+                  "flow",
+                  "literal",
+                  "value",
+                ]),
+              ),
+            },
+          };
+        }),
+      };
+    }
     case "field_id":
       if (ctx.transaction && ctx.triggerRecordType !== undefined) {
         const { record } = splitMemberReference(ctx, aliasOf(ctx, value));

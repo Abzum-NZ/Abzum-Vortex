@@ -30,7 +30,7 @@ import {
   type DefinitionCompilerRefusalCode,
 } from "../compilation-error";
 import { flowBindingSettingsSchema } from "../application-flow-bindings";
-import { flowAsksBeforeChanging } from "../flow-address-start";
+import { flowAsksBeforeChanging } from "../flow-asks-first";
 import {
   compileFlowPlans,
   flowBindingPlanIssue,
@@ -657,9 +657,9 @@ function compileApplicationFlowBindings(
     const settings = flowBindingSettingsSchema.safeParse(binding.settings);
     if (!settings.success)
       fail("vortex.definition.application_flow_binding_inputs", "invalid_value", location);
-    // A link may start a flow only when it is an action that asks before it changes anything.
+    // Another surface may start a flow only when it is an action that asks before it changes anything.
     if (
-      settings.data.startFromAddress !== undefined &&
+      settings.data.startableAs !== undefined &&
       (binding.event !== "action" || !flowAsksBeforeChanging(flow))
     )
       fail("vortex.definition.application_flow_binding_inputs", "invalid_value", location);

@@ -5788,7 +5788,7 @@
                                         {
                                           "op": "literal",
                                           "type": "text",
-                                          "value": " was published. Install or upgrade it from the list to use it."
+                                          "value": " was published. Install or upgrade it to use it in this organisation."
                                         }
                                       ]
                                     }
@@ -5813,6 +5813,73 @@
                                       "type": "text",
                                       "value": "success"
                                     }
+                                  },
+                                  "actions": {
+                                    "kind": "array",
+                                    "items": [
+                                      {
+                                        "kind": "map",
+                                        "entries": {
+                                          "label": {
+                                            "kind": "literal",
+                                            "literal": {
+                                              "type": "text",
+                                              "value": "Install or upgrade"
+                                            }
+                                          },
+                                          "flow": {
+                                            "kind": "literal",
+                                            "literal": {
+                                              "type": "text",
+                                              "value": "flow_install_or_upgrade_application"
+                                            }
+                                          },
+                                          "inputs": {
+                                            "kind": "map",
+                                            "entries": {
+                                              "application_root_id": {
+                                                "kind": "reference",
+                                                "reference": {
+                                                  "source": "input",
+                                                  "name": "application_root_id"
+                                                }
+                                              }
+                                            }
+                                          }
+                                        }
+                                      },
+                                      {
+                                        "kind": "map",
+                                        "entries": {
+                                          "label": {
+                                            "kind": "literal",
+                                            "literal": {
+                                              "type": "text",
+                                              "value": "View in App Store"
+                                            }
+                                          },
+                                          "flow": {
+                                            "kind": "literal",
+                                            "literal": {
+                                              "type": "text",
+                                              "value": "flow_open_store_application"
+                                            }
+                                          },
+                                          "inputs": {
+                                            "kind": "map",
+                                            "entries": {
+                                              "record_id": {
+                                                "kind": "reference",
+                                                "reference": {
+                                                  "source": "input",
+                                                  "name": "application_root_id"
+                                                }
+                                              }
+                                            }
+                                          }
+                                        }
+                                      }
+                                    ]
                                   }
                                 }
                               },
@@ -6166,7 +6233,7 @@
           "concurrency": "ignore_while_running",
           "exclusive": "none",
           "timeoutMs": null,
-          "startFromAddress": {
+          "startableAs": {
             "token": "install"
           }
         }
@@ -6188,10 +6255,7 @@
           "debounceMs": 0,
           "concurrency": "ignore_while_running",
           "exclusive": "none",
-          "timeoutMs": null,
-          "startFromAddress": {
-            "token": "remove"
-          }
+          "timeoutMs": null
         }
       },
       {
@@ -6212,7 +6276,7 @@
           "concurrency": "ignore_while_running",
           "exclusive": "none",
           "timeoutMs": null,
-          "startFromAddress": {
+          "startableAs": {
             "token": "publish"
           }
         }
@@ -6249,10 +6313,7 @@
           "debounceMs": 0,
           "concurrency": "ignore_while_running",
           "exclusive": "none",
-          "timeoutMs": null,
-          "startFromAddress": {
-            "token": "delete"
-          }
+          "timeoutMs": null
         }
       }
     ]

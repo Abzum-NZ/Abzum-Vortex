@@ -16,6 +16,7 @@ import {
   type FlowFormAnswer,
   type FlowFormIntent,
   type FlowIntentHost,
+  type FlowMessageAction,
   type FlowMessageIntent,
   type FlowRuntimeState,
   type FlowInvokeClient,
@@ -367,7 +368,9 @@ export function useFlowRuntime({
     },
     [currentData, dialogState, formCancelledRef, model, navigation, resolvePageHref, router],
   );
-  const messageActionRef = useRef<(message: FlowMessageIntent) => void>(() => undefined);
+  const messageActionRef = useRef<(message: FlowMessageIntent, offered: FlowMessageAction) => void>(
+    () => undefined,
+  );
   const {
     host,
     element: intentHostElement,
@@ -376,7 +379,7 @@ export function useFlowRuntime({
     renderForm,
     navigation: navigationEnvironment,
     state: runtimeState,
-    onMessageAction: (message) => messageActionRef.current(message),
+    onMessageAction: (message, action) => messageActionRef.current(message, action),
     setPanel: (panel, state) => setPanelRef.current?.(panel, state),
   });
   const bindingSettings = useMemo(() => {
@@ -468,7 +471,7 @@ export function useFlowRuntime({
       mountedRef.current = false;
     };
   }, []);
-  messageActionRef.current = (message) => {
+  messageActionRef.current = (message, offered) => {
     const all = Object.values(model.bindings).flat();
     const source = all.find((binding) => binding.bindingId === message.originBindingId);
     const authoredId = source?.messageAction?.authoredBindingId ?? source?.bindingId;
@@ -479,7 +482,7 @@ export function useFlowRuntime({
         binding.messageAction.authoredBindingId === authoredId &&
         binding.messageAction.sourceFlowId === message.sourceFlowId &&
         binding.messageAction.taskId === message.taskId &&
-        binding.flowId === message.actionFlow,
+        binding.flowId === offered.flow,
     );
     if (action === undefined) {
       console.error("[flow] message action binding unavailable");
@@ -488,7 +491,7 @@ export function useFlowRuntime({
     }
     const dispatched = flowRuntime.dispatch(
       action,
-      message.actionInputs,
+      offered.inputs,
       crypto.randomUUID(),
       message.subject,
       message.sourceTablePlacementId,

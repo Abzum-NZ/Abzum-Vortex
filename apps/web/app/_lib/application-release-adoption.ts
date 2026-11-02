@@ -11,7 +11,6 @@ import type { ApplicationRootId, IdentitySession, OrganizationId } from "@vortex
 import { describeFailure } from "@vortex/platform/schema";
 import { applicationPageAddressPath } from "./address-paths";
 import { pageSubjectParameter } from "./application-page/placement-helpers";
-import { pageRunParameter, type AppStoreActionToken } from "./page-run-parameter";
 import { applicationStoreService } from "./application-store-service";
 import { humanOrganizationRequests } from "./server-composition";
 import { platformPermissionSource } from "./platform-permission-source";
@@ -26,7 +25,7 @@ import { loadInstalledContext, requestDependencies } from "./application-page/in
  */
 
 /** The App Store page that shows one application and offers its Install or upgrade dialog. */
-const appStoreApplicationPageKey = "app_store_application";
+export const appStoreApplicationPageKey = "app_store_application";
 
 /** The App Store's page for one application: the store's record identity is the application root. */
 export const appStoreApplicationHref = (
@@ -36,19 +35,6 @@ export const appStoreApplicationHref = (
   applicationRootId: string,
 ): string =>
   `${applicationPageAddressPath(tenantShortName, organizationShortName, appStoreKey, appStoreApplicationPageKey)}?${pageSubjectParameter}=${encodeURIComponent(applicationRootId)}`;
-
-/**
- * The App Store's page for one application with one of its action flows started: that flow's
- * first dialog opens when the page does, so each action is the page's one flow wherever it starts.
- */
-export const appStoreActionHref = (
-  tenantShortName: string,
-  organizationShortName: string,
-  appStoreKey: string,
-  applicationRootId: string,
-  action: AppStoreActionToken,
-): string =>
-  `${appStoreApplicationHref(tenantShortName, organizationShortName, appStoreKey, applicationRootId)}&${pageRunParameter}=${action}`;
 
 /** A newer published release waiting for this organisation, offered to a person who may install. */
 export type ApplicationReleaseOffer = Readonly<{

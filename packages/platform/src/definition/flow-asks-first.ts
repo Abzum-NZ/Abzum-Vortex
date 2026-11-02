@@ -1,10 +1,11 @@
 import { protectedOperationMetadata } from "./protected-operation-metadata";
 
 /**
- * A binding may say its flow can be started by a link to the page (`startFromAddress`). A link is
- * followed with the person's own session, so a flow started that way must ask before it changes
- * anything: its first change is always preceded by a confirmation or a form the person answers.
- * A read, a message or a refresh may come first. This is the one place that rule is judged.
+ * A binding may say another surface can start its flow in place (`startableAs`): Studio's editor
+ * and the Studio agent do. They start it on the person's own session without a press on the
+ * page's control, so a flow started that way must ask before it changes anything: its first
+ * change is always preceded by a confirmation or a form the person answers. A read, a message or
+ * a refresh may come first. This is the one place that rule is judged.
  */
 
 type Node = Readonly<Record<string, unknown>>;

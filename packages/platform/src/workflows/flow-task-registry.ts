@@ -75,6 +75,7 @@ const flowTaskPropertyTypeSchema = z.enum([
   "namespaced_key",
   "message_text",
   "input_map",
+  "message_actions",
 ]);
 export type FlowTaskPropertyType = z.infer<typeof flowTaskPropertyTypeSchema>;
 

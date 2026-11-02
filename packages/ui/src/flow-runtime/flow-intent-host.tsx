@@ -32,6 +32,7 @@ import type {
   FlowFormIntent,
   FlowInlineFormIntent,
   FlowIntentHost,
+  FlowMessageAction,
   FlowMessageIntent,
 } from "./intents";
 import { surfaceCancellationError } from "./intents";
@@ -69,7 +70,7 @@ export type FlowIntentHostOptions = Readonly<{
   ) => Readonly<{ title: string; body: ReactNode }>;
   navigation: LinkNavigationEnvironment;
   state: FlowRuntimeState;
-  onMessageAction: (message: FlowMessageIntent) => void;
+  onMessageAction: (message: FlowMessageIntent, action: FlowMessageAction) => void;
   refresh?: FlowIntentHost["refresh"];
   setPanel?: FlowIntentHost["setPanel"];
   setFilter?: FlowIntentHost["setFilter"];
@@ -319,18 +320,19 @@ function FlowSurfaceHost({
         onDismiss={() => settle()}
         actions={
           <>
-            {message.actionLabel === undefined ? null : (
+            {(message.actions ?? []).map((action) => (
               <Button
+                key={`${action.flow}:${action.label}`}
                 type="button"
                 variant="secondary"
                 onClick={() => {
                   settle();
-                  optionsRef.current.onMessageAction(message);
+                  optionsRef.current.onMessageAction(message, action);
                 }}
               >
-                {message.actionLabel}
+                {action.label}
               </Button>
-            )}
+            ))}
             <Button type="button" onClick={() => settle()}>
               OK
             </Button>
@@ -438,13 +440,14 @@ export function useFlowIntentHost(
           ...(message.dismissAfterMs === undefined
             ? {}
             : { dismissAfterMs: message.dismissAfterMs }),
-          ...(message.actionLabel === undefined
+          // Outside a dialog a message offers one action.
+          ...(message.actions?.[0] === undefined
             ? {}
             : {
                 action: {
                   kind: "flow" as const,
-                  label: message.actionLabel,
-                  run: () => optionsRef.current.onMessageAction(message),
+                  label: message.actions[0].label,
+                  run: () => optionsRef.current.onMessageAction(message, message.actions![0]!),
                 },
               }),
         });

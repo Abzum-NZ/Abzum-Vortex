@@ -3,6 +3,10 @@ import { defaultFlowBindingSettings } from "./component-semantic-events";
 import { derivedDefinitionId } from "./derived-definition-id";
 import type { FlowDefinition, FlowTask } from "../workflows/flow-contracts";
 import { flowTaskChildLists } from "../workflows/flow-task-tree";
+import {
+  flowMessageActionFlowName,
+  readFlowMessageActions,
+} from "../workflows/flow-message-actions";
 import { reachablePageFlows } from "../workflows/flow-reachability";
 
 type MessageActionBinding = Readonly<{
@@ -25,14 +29,11 @@ export function messageActionBindings(
     const visit = (tasks: readonly FlowTask[]): void => {
       for (const task of tasks) {
         if (task.type === "interface.show_message") {
-          const action = task.properties.action_flow;
-          const target =
-            action?.kind === "literal" && typeof action.literal.value === "string"
-              ? byId.get(action.literal.value)
-              : undefined;
-          if (target !== undefined) {
-            const mapped = task.properties.action_inputs;
-            const names = mapped?.kind === "map" ? Object.keys(mapped.entries) : [];
+          for (const action of readFlowMessageActions(task.properties.actions) ?? []) {
+            const name = flowMessageActionFlowName(action);
+            const target = name === undefined ? undefined : byId.get(name);
+            if (target === undefined) continue;
+            const names = Object.keys(action.inputs);
             result.push({
               authoredBindingId: String(origin.bindingId),
               sourceFlowId: String(source.id),
@@ -43,6 +44,7 @@ export function messageActionBindings(
                   String(origin.bindingId).toLowerCase(),
                   String(source.id).toLowerCase(),
                   task.id,
+                  String(target.id).toLowerCase(),
                 ]) as ComponentFlowBinding["bindingId"],
                 controlId: origin.controlId,
                 eventId: origin.eventId,

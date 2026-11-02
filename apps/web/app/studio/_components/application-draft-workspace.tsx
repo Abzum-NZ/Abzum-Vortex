@@ -1,6 +1,5 @@
 "use client";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
 import type { SourceIdentityReservation } from "@vortex/platform/schema";
 import {
   StudioFieldProblemsProvider,
@@ -27,6 +26,7 @@ import {
 } from "./studio-rail-tabs";
 import { StudioSaveState } from "./studio-save-state";
 import { StudioHeader, type StudioFrameDefinition } from "./studio-header";
+import type { ApplicationReleaseStanding } from "../../_lib/application-release-adoption";
 import { StudioPlaceOpenerProvider, type StudioPlaceOpener } from "./studio-used-in";
 import { useStudioCanvasTab } from "./use-studio-canvas-tab";
 import { useStudioDraft } from "./use-studio-draft";
@@ -50,15 +50,10 @@ export type StudioWorkspacePlace = Readonly<{
   organizationName: string;
   /** Studio's shared application frame: its top bar, the signed-in person and the addresses. */
   frame: StudioFrameDefinition;
-  /** The running application, for Back to app; absent when the builder may not open it or the organisation's address is unknown. */
+  /** The running application, opened from the top bar when it is live; absent when the builder may not open it. */
   applicationHref: string | undefined;
-  /** The App Store, where a published version is installed or upgraded to; absent like the above. */
-  appStoreHref: string | undefined;
-  /** This application's page in the App Store, whose Publish flow publishes its saved draft. */
-  /** The application's App Store page with each action flow started, by action. */
-  actionHrefs: Readonly<Record<string, string>> | undefined;
-  /** Whether the organisation has this application installed; undefined when that cannot be read. */
-  installed: boolean | undefined;
+  /** Where the application stood in the organisation when the editor opened. */
+  standing: ApplicationReleaseStanding["kind"];
   /** The other applications a Navigate step can open, with their pages. */
   navigationTargets: readonly StudioNavigationApplication[];
 }>;
@@ -264,13 +259,9 @@ function ExistingApplicationWorkspace(props: ExistingProps) {
     readRecords: canvas.readRecordChoices,
     structure: structureCommand,
   });
-  const router = useRouter();
   const releases = useStudioReleasesTab({
     draft,
-    onAction: (action) => {
-      const href = place.actionHrefs?.[action];
-      if (href !== undefined) router.push(href);
-    },
+    initialStanding: place.standing,
     hidden: tab !== "releases",
     initialSection: isStudioReleasesSection(props.initialSection)
       ? props.initialSection
@@ -335,14 +326,16 @@ function ExistingApplicationWorkspace(props: ExistingProps) {
                 undoDisabled={draft.locked}
                 onUndo={draft.undo}
                 onRedo={draft.redo}
-                backToAppHref={place.applicationHref}
-                appStoreHref={place.appStoreHref}
-                installed={place.installed}
+                applicationHref={place.applicationHref}
+                install={releases.install}
+                onInstall={releases.openInstall}
+                installPending={releases.actionPending === "install"}
                 onPreview={releases.openPreview}
                 previewPending={releases.previewPending}
                 previewDisabled={draft.locked}
                 onPublish={releases.openPublish}
                 publishDisabled={draft.locked}
+                publishPending={releases.actionPending === "publish"}
               />
             }
             panel={
@@ -374,6 +367,7 @@ function ExistingApplicationWorkspace(props: ExistingProps) {
                   focused,
                   focusCanvas,
                 )}
+                {releases.flowHost.banner}
                 {draft.viewProblem !== null ? (
                   <div role="alert" className="px-4 py-2 text-sm">
                     {draft.viewProblem.message}{" "}
@@ -417,6 +411,7 @@ function ExistingApplicationWorkspace(props: ExistingProps) {
           />
           {canvas.dialog}
           {data.dialog}
+          {releases.flowHost.element}
         </div>
       </StudioPlaceOpenerProvider>
     </StudioFieldProblemsProvider>
