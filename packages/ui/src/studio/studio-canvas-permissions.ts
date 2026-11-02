@@ -60,10 +60,17 @@ export const studioCanvasReferences = (
         if (holdsForm(catalogue, [item]))
           reasons.duplicate = "A form cannot be duplicated because its field inputs cannot be.";
         if (
-          release?.paletteGroup === "input" &&
-          release.properties.some((property) => property.key === "name" || property.key === "field")
+          descendants.some((child) => {
+            const childRelease = releaseFor(catalogue, child);
+            return (
+              childRelease?.paletteGroup === "input" &&
+              childRelease.properties.some(
+                (property) => property.key === "name" || property.key === "field",
+              )
+            );
+          })
         )
-          reasons.duplicate = "A field input cannot be duplicated. Add another field instead.";
+          reasons.duplicate ??= "A field input cannot be duplicated. Add another field instead.";
         const outlets = studioLayoutOutletPlacementUses(source, id);
         if (outlets.length > 0) {
           reasons.delete = `This block holds ${describeApplicationUsers(outlets)}. Retarget the outlet first.`;
