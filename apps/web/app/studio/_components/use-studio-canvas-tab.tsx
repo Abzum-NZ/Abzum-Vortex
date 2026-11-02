@@ -49,7 +49,6 @@ import { StudioCanvasView } from "@vortex/ui/studio/canvas-view";
 import { StudioBlocksPanel } from "@vortex/ui/studio/puck-drawer";
 import type {
   StudioCanvasAddRequest,
-  StudioCanvasBreakpoint,
   StudioCanvasFrame,
   StudioPuckInput,
 } from "@vortex/ui/studio/puck-provider";
@@ -183,7 +182,6 @@ export function useStudioCanvasTab({
     use: (reference: string) => void;
   }> | null>(null);
   const [canvasZoom, setCanvasZoom] = useState<StudioCanvasZoom>("fit");
-  const [breakpoint, setBreakpoint] = useState<StudioCanvasBreakpoint>("desktop");
   // The canvas previews the application in light or dark; the running application keeps its own toggle.
   const [appearance, setAppearance] = useState<"light" | "dark">("light");
   // "Who can see this": the role the canvas and its menu are previewed as; null is the builder's view.
@@ -1047,7 +1045,7 @@ export function useStudioCanvasTab({
       className={
         canvasPage !== undefined
           ? "flex min-h-0 flex-1 flex-col gap-3"
-          : "space-y-3 rounded-xl border border-border bg-card p-4 text-card-foreground"
+          : "flex min-h-0 flex-1 flex-col gap-3 overflow-auto p-4"
       }
       aria-label="Selected item"
     >
@@ -1061,7 +1059,7 @@ export function useStudioCanvasTab({
         <p>This block is part of a layout. Change it in the inspector.</p>
       )}
       {canvasPage === undefined && selected?.kind !== "flow" && selected?.kind !== "placement" && (
-        <Empty className="min-h-64">
+        <Empty className="min-h-64 flex-1">
           <EmptyHeader>
             <EmptyMedia variant="icon">
               <Icon name="blocks" />
@@ -1122,8 +1120,6 @@ export function useStudioCanvasTab({
   ) => (
     <StudioCanvasToolbar
       title={centreTitle}
-      breakpoint={breakpoint}
-      onBreakpoint={setBreakpoint}
       zoom={canvasZoom}
       fitZoom={fitZoom}
       onZoom={setCanvasZoom}
@@ -1224,7 +1220,6 @@ export function useStudioCanvasTab({
       selectedPlacementAlias,
       onSelectPlacement,
       canvasShown,
-      breakpoint,
       appearance,
       disabled: draft.locked,
       disabledReason: draft.locked ? draft.blockedReason() : undefined,
@@ -1252,7 +1247,6 @@ export function useStudioCanvasTab({
       selectedPlacementAlias,
       onSelectPlacement,
       canvasShown,
-      breakpoint,
       appearance,
       draft.locked,
       view.failure,

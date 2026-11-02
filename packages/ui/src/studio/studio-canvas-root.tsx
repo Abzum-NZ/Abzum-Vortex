@@ -10,6 +10,7 @@ import type { SlotGapName } from "../layout-styles";
 import type { FieldInputControlReleaseMap, PlatformComponentRegistry } from "../registry";
 import { createAppearanceRootProps, createThemeRootProps, VortexStyleRoot } from "../theme";
 import { studioCanvasMetadata } from "./studio-canvas-metadata";
+import { useStudioScreen } from "./studio-canvas-screen";
 import { studioPuckIframeCss } from "./studio-puck-style";
 
 const resolvePageHref = () => "#";
@@ -45,6 +46,7 @@ export function StudioCanvasRoot({
       data-vortex-studio-canvas=""
       data-vortex-shell-outlet=""
       data-vortex-editing=""
+      {...(breakpoint === "desktop" ? {} : { "data-vortex-view-only": "" })}
       aria-label={empty ? "Empty content area" : undefined}
       className={empty ? "relative min-h-48" : "min-h-24"}
     >
@@ -157,6 +159,16 @@ export function StudioCanvasIframe({
       frameDocument.removeEventListener("keydown", forward);
     };
   }, [frameDocument]);
+  // A tablet or phone has overlay scrollbars: the classic bar of a tall page must not narrow the
+  // preview below the device's width. Scrolling by wheel and touch is unchanged.
+  const { breakpoint } = useStudioScreen();
+  useEffect(() => {
+    if (frameDocument === undefined || breakpoint === "desktop") return;
+    const style = frameDocument.createElement("style");
+    style.textContent = "html{scrollbar-width:none}";
+    frameDocument.head.append(style);
+    return () => style.remove();
+  }, [frameDocument, breakpoint]);
   // The canvas is a design surface: no link in it (menu pages, external addresses, links inside
   // blocks) leaves Studio, so unsaved edits are never lost to a click.
   const inert = (event: SyntheticEvent) => {

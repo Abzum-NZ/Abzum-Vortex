@@ -131,9 +131,9 @@ function CanvasPlaceholder({
 }> &
   Readonly<Record<`data-${string}`, string>>): ReactElement {
   const vortex = props.vortex as StoredVortex | undefined;
-  const breakpoint =
-    (props.puck as { metadata?: { breakpoint?: "desktop" | "tablet" | "phone" } } | undefined)
-      ?.metadata?.breakpoint ?? "desktop";
+  const { breakpoint } = studioCanvasMetadata(props.puck as PuckContext);
+  if (breakpoint === undefined)
+    throw new Error("STUDIO_CANVAS_BREAKPOINT_MISSING: the canvas metadata has no breakpoint");
   const responsive =
     vortex?.responsive === undefined
       ? undefined
