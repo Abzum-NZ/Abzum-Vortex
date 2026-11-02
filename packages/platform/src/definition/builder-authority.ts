@@ -44,7 +44,13 @@ export type BuilderConferredPermission = Readonly<{
  */
 export type BuilderOperation =
   | Readonly<{ kind: "draft_change"; rootId?: string }>
-  | Readonly<{ kind: "publication"; rootId: string }>
+  | Readonly<{
+      kind: "publication";
+      /** Absent when only asking whether the person may publish an ordinary application at all. */
+      rootId?: string;
+      /** True when a recent sign-in is asked for up front, as publishing will need it. */
+      stepUp?: boolean;
+    }>
   | Readonly<{
       /** Whether the person may install and upgrade applications in this organisation. */
       kind: "application_management";
@@ -52,7 +58,7 @@ export type BuilderOperation =
   | Readonly<{
       kind: "installation";
       applicationRootId: string;
-      change: "install_or_upgrade" | "uninstall";
+      change: "install_or_upgrade" | "uninstall" | "purge";
       /** True when the exact package contains custom components or scripts. */
       containsCustomComponents: boolean;
       /**
@@ -60,6 +66,8 @@ export type BuilderOperation =
        * template is being accepted.
        */
       acceptedPermissions: readonly BuilderConferredPermission[];
+      /** True when a recent sign-in is asked for up front, as the change will need it. */
+      stepUp?: boolean;
     }>;
 
 /** The recent-authentication requirement, when the operation has one. */
@@ -99,7 +107,9 @@ const unique = <Value>(values: readonly Value[]): readonly Value[] => [...new Se
  *   `system_applications.manage`. Installing or upgrading a system application needs only the
  *   installation permissions: the platform installs it when an organisation is created, by a
  *   steward who holds no builder permission by default.
- * - Uninstalling a system application is always refused.
+ * - Uninstalling a system application is always refused. Purging an application's data, or deleting
+ *   the application, needs `applications.manage` and a recent authentication, and is refused for a
+ *   system application as well.
  * - Installing or upgrading custom components, or accepting role templates, needs recent
  *   authentication, and accepted role templates must lie inside the actor's delegated scope.
  */
@@ -121,7 +131,9 @@ export const deriveBuilderRequirements = (
     case "publication":
       return {
         permissionKeys: unique([builderPermissionKeys.definitionReleasesManage, ...system]),
-        recentAuthentication: false,
+        // A person publishing a version every organisation can install is asked, up front, for a
+        // recent sign-in; asking only whether they may publish is not.
+        recentAuthentication: operation.stepUp === true,
         delegatedPermissions: [],
         refused: false,
       };
@@ -134,14 +146,17 @@ export const deriveBuilderRequirements = (
       };
     case "installation": {
       const installs = operation.change === "install_or_upgrade";
+      const purges = operation.change === "purge";
       return {
         permissionKeys: unique([
           builderPermissionKeys.applicationsManage,
           ...(operation.containsCustomComponents ? [builderPermissionKeys.customCodeManage] : []),
         ]),
         recentAuthentication:
-          installs &&
-          (operation.containsCustomComponents || operation.acceptedPermissions.length > 0),
+          purges ||
+          operation.stepUp === true ||
+          (installs &&
+            (operation.containsCustomComponents || operation.acceptedPermissions.length > 0)),
         delegatedPermissions: installs ? operation.acceptedPermissions : [],
         refused: !installs && facts.isSystemApplication,
       };

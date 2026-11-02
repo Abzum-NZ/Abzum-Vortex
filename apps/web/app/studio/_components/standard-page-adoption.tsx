@@ -178,9 +178,9 @@ export function StandardPageAdoption({
             <Table aria-label="Page replacement comparisons">
               <TableHeader className="bg-muted/50 text-xs">
                 <TableRow>
-                  <TableHead className="text-foreground normal-case">Your page</TableHead>
-                  <TableHead className="text-foreground normal-case">Standard page</TableHead>
-                  <TableHead className="text-foreground normal-case">Choice</TableHead>
+                  <TableHead className="text-foreground">Your page</TableHead>
+                  <TableHead className="text-foreground">Standard page</TableHead>
+                  <TableHead className="text-foreground">Choice</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>

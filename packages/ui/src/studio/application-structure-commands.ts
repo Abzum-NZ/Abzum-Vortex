@@ -5,14 +5,9 @@ import {
   sourceItemTree,
   sourcePageItems,
   sourcePageShell,
-  type ImmutablePlatformBlockCatalogue,
   type SourceItem,
 } from "@vortex/platform/schema";
-import {
-  StoredCompositionRefusal,
-  removeFlowBindingsOf,
-  validateStoredShell,
-} from "./stored-composition";
+import { removeFlowBindingsOf } from "@vortex/platform/schema";
 import {
   studioPlacementRemovalReference,
   type StudioCompositionRemovalReason,
@@ -33,8 +28,6 @@ import {
   StructureRefusal,
   uniqueKey,
   type Navigation,
-  type Page,
-  type Shell,
   type Source,
   type StudioStructureContext,
   type StudioStructureResult,
@@ -51,7 +44,7 @@ import { ensureHomeDashboard } from "./application-home-dashboard";
 import type { Plan } from "./application-record-plan";
 import { movePage, type StudioPageLayoutCommand } from "./application-page-layout";
 import { editLayoutOutlet, type StudioLayoutOutletCommand } from "./application-layout-outlets";
-import { applyStudioMenuCommand } from "./application-menu-commands";
+import { placeMenuShell, placementsOf } from "@vortex/platform/schema";
 export {
   studioLayoutOutletTargets,
   studioLayoutOutletPlacementUses,
@@ -102,26 +95,6 @@ const withoutPageEntries = (items: Navigation, pageKey: string): Navigation =>
     const children = withoutPageEntries(item.children, pageKey);
     return children.length === 0 ? [] : [{ ...item, children }];
   });
-
-/** Every block the draft places, with where it is, so a refusal can name it. */
-const placementsOf = (source: Source) => [
-  ...source.body.pages.flatMap((page) =>
-    sourcePageItems(page.composition).map((item) => ({
-      item,
-      where: `page ${quoted(page.name)}`,
-      page: page.id as string | undefined,
-      shell: undefined as string | undefined,
-    })),
-  ),
-  ...source.body.shells.flatMap((shell) =>
-    sourceItemTree(shell.layout.content).map((item) => ({
-      item,
-      where: `layout ${quoted(shell.name)}`,
-      page: undefined as string | undefined,
-      shell: shell.id as string | undefined,
-    })),
-  ),
-];
 
 const flowReferenceWords: Readonly<Record<StudioCompositionRemovalReason, string>> = {
   flow_input: "supplies an input a flow reads",
@@ -269,95 +242,6 @@ const addPage = (
   };
 };
 
-/**
- * A layout: a frame with the application menu beside one optional content area, so any page, a new
- * empty one included, can use it. It is added to the candidate.
- */
-const placeMenuShell = (
-  catalogue: ImmutablePlatformBlockCatalogue,
-  candidate: Source,
-  name: string,
-): Shell => {
-  const body = candidate.body;
-  if (body.shells.length >= 100) refuse("An application can have at most 100 layouts.");
-  const container = blockRelease(
-    catalogue,
-    PLATFORM_BLOCK_RELEASE_IDENTITIES.CONTAINER_BLOCK_RELEASE,
-  );
-  const menu = blockRelease(
-    catalogue,
-    PLATFORM_BLOCK_RELEASE_IDENTITIES.APPLICATION_NAVIGATION_BLOCK_RELEASE,
-  );
-  if (
-    container === undefined ||
-    !container.slots.some((slot) => slot.key === "content") ||
-    !container.slots.some((slot) => slot.key === "menu") ||
-    menu === undefined
-  )
-    refuse("The block catalogue has no frame block for a new layout, so none was added.");
-  const key = uniqueKey(name, "", new Set(body.shells.map((shell) => shell.key)), 40);
-  const id = uniqueKey(key, "shell_", new Set(body.shells.map((shell) => shell.id)), 160);
-  const taken = new Set(placementsOf(candidate).map(({ item }) => item.props.id));
-  const frameId = uniqueKey(key, "layout_", taken, 140);
-  const menuId = uniqueKey(`${frameId}_menu`, "", taken, 160);
-  const slotIds = new Set(
-    body.shells.flatMap((shell) => shell.content_slots.map((slot) => slot.id)),
-  );
-  const content = container!.slots.find((slot) => slot.key === "content")!;
-  const title = body.name.slice(0, 60);
-  const shell = {
-    id,
-    key,
-    name,
-    presentation: {
-      sidebar: { collapsible: "icon", default_collapsed: false },
-      top_bar: {
-        breadcrumbs: true,
-        organization_switcher: true,
-        application_switcher: true,
-        account_menu: true,
-        appearance_toggle: true,
-      },
-    },
-    layout: {
-      root: { props: { vortex: { slot_orders: {} } } },
-      content: [
-        blockItem(
-          container!,
-          frameId,
-          {
-            direction: "row",
-            gap: "medium",
-            padding: "medium",
-            phone_direction: "column",
-          },
-          { menu: [blockItem(menu!, menuId, { title }, {})] },
-        ),
-      ],
-    },
-    content_slots: [
-      {
-        id: uniqueKey(`${key}_content`, "slot_", slotIds, 160),
-        key: "content",
-        label: "Content",
-        required: false,
-        allowed_child_categories: [...content.allowedChildCategories],
-        parent_placement: frameId,
-        parent_slot: "content",
-      },
-    ],
-  } as unknown as Shell;
-  try {
-    validateStoredShell(catalogue, shell);
-  } catch (error) {
-    if (!(error instanceof StoredCompositionRefusal)) throw error;
-    console.error("[studio] new layout refused", error.message);
-    refuse("The new layout could not be built from the block catalogue, so none was added.");
-  }
-  body.shells.push(shell);
-  return shell;
-};
-
 const addShell = (
   context: StudioStructureContext,
   candidate: Source,
@@ -372,40 +256,6 @@ const addShell = (
     details: [],
     message: `Layout ${quoted(name)} added.`,
   };
-};
-
-/**
- * A new application's starting frame, written into its definition: one layout with the
- * application menu (list pages added later go in it, and leave it when removed), and the home page
- * in that layout and in its menu. Authoring guidance belongs to the canvas, not the page source.
- * New pages start in the home page's layout.
- */
-export const studioStarterFrame = (
-  catalogue: ImmutablePlatformBlockCatalogue,
-  source: Source,
-):
-  | Readonly<{ kind: "applied"; source: Source }>
-  | Readonly<{ kind: "refused"; message: string }> => {
-  try {
-    const candidate = applicationSourceDocumentSchema.parse(structuredClone(source));
-    candidate.body.icon = "blocks";
-    const shell = placeMenuShell(catalogue, candidate, "Main layout");
-    const home = candidate.body.pages.find((page) => page.key === candidate.body.home_page);
-    if (home === undefined)
-      return refuse("The application's home page is missing, so it has no frame to start in.");
-    const composition = emptyPageData(candidate, shell.id);
-    home.composition = composition as unknown as Page["composition"];
-    const menu = applyStudioMenuCommand(judged(candidate), {
-      kind: "add_entry",
-      pageKey: home.key,
-      headingAlias: null,
-    });
-    if (menu.kind === "refused") return menu;
-    return { kind: "applied", source: menu.source };
-  } catch (error) {
-    if (error instanceof StructureRefusal) return { kind: "refused", message: error.message };
-    throw error;
-  }
 };
 
 const removePage = (

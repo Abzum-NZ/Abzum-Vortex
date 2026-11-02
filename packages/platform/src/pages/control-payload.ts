@@ -323,6 +323,8 @@ export const buttonPayloadSchema = z
     kind: z.literal("button"),
     /** The internal address this button opens, when it is a link button. */
     href: z.string().min(1).max(2048).exactOptional(),
+    /** Set when the viewer may not use the button's action on this record: it is not drawn. */
+    hidden: z.boolean().exactOptional(),
   })
   .strict()
   .readonly();

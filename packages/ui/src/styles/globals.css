@@ -19,6 +19,8 @@
 /* Shared component rules use the theme variables resolved on each application root. */
 @import "./shared-components.css" layer(vortex-components);
 @import "./style-variants.css" layer(vortex-components);
+/* Studio's chrome keeps sentence case under the sera style; after the style rules so it wins ties. */
+@import "./studio-chrome.css" layer(vortex-components);
 
 /*
  * A form control's boundary keeps at least 3:1 against the surface it sits on in every theme and

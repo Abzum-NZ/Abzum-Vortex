@@ -3,6 +3,8 @@ import {
   type RecordsSelectionInput,
   type RecordsTableExportRefusal,
   type RecordsTableExportFormat,
+  type RecordsTableExportValues,
+  formatCount,
 } from "@vortex/platform/schema";
 import type {
   DisplayTableExportRun,
@@ -10,7 +12,6 @@ import type {
   DisplayTablePayload,
 } from "@vortex/ui";
 import type { ApplicationPageModel } from "../../../../../../_lib/application-page";
-import { formatCount } from "@vortex/ui/display/date-format";
 import { postJson } from "../../../../../../_lib/post-json";
 import { recordsTableAddress } from "./records-table-address";
 
@@ -50,6 +51,7 @@ export async function streamRecordsExport({
   model,
   placementId,
   format,
+  values,
   selection,
   token,
   table,
@@ -61,6 +63,7 @@ export async function streamRecordsExport({
   model: ApplicationPageModel;
   placementId: string;
   format: RecordsTableExportFormat;
+  values: RecordsTableExportValues;
   selection: RecordsSelectionInput;
   token: string | undefined;
   table: DisplayTablePayload;
@@ -76,6 +79,7 @@ export async function streamRecordsExport({
       ...recordsTableAddress(model),
       placementId,
       format,
+      values,
       selection,
       ...(token === undefined ? {} : { token }),
       // The saved view the grid showed is a candidate; the server decides the columns.

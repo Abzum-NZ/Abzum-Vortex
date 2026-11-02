@@ -1,6 +1,9 @@
 import { z } from "zod";
 import { platformIdSchema } from "../catalogue/identifiers";
-import { recordsTableExportFormats } from "../definition/application-composition/records-table-features/export";
+import {
+  recordsTableExportFormats,
+  recordsTableExportValues,
+} from "../definition/application-composition/records-table-features/export";
 import { recordsSelectionSchema } from "./records-selection";
 
 const readTokenSchema = z
@@ -15,13 +18,15 @@ const readTokenSchema = z
  * carries the resolved query inputs, so a selection of shown rows (`ids`) needs it; a `matching`
  * selection carries its own and must not name another. The columns, their order and the viewer's
  * saved view are never sent: the server decides them from the installed placement and the
- * person's current layout. `viewId` names the saved view the grid showed, a candidate only.
+ * person's current layout. `values` is how a column holds its value: as the table shows it, or
+ * the stored value (columns the builder marked raw are raw either way). `viewId` names the saved view the grid showed, a candidate only.
  */
 export const recordsTableExportRequestSchema = z
   .object({
     pageKey: z.string().min(1).max(200),
     placementId: z.string().min(1).max(200),
     format: z.enum(recordsTableExportFormats),
+    values: z.enum(recordsTableExportValues),
     selection: recordsSelectionSchema,
     token: readTokenSchema.optional(),
     viewId: platformIdSchema.optional(),

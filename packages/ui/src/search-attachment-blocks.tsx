@@ -4,6 +4,7 @@ import {
   attachmentListPayloadSchema,
   componentSettingShapeFailures,
   type AttachmentListPayload,
+  formatBytes,
 } from "@vortex/platform/schema";
 import { Card, CardContent, CardHeader } from "./components/card";
 import { Separator } from "./components/separator";
@@ -11,7 +12,6 @@ import { DefinitionRenderError, type DefinitionRenderErrorLocation } from "./def
 import { DisplayStateContainer } from "./display/display-state-container";
 import { DisplayHeader } from "./display/controls";
 import { resolveDisplayContext, type DisplayRenderProps } from "./display/context";
-import { formatBytes } from "./display/date-format";
 import { parseDisplayEventHandlers, readDisplayData } from "./display/projected-data";
 import { createPayloadParser, type PlatformComponentRegistration } from "./registry";
 

@@ -1266,7 +1266,9 @@ export const rowActionFormTargets = (
       } else if (task.type === "interface.show_form") {
         const target = (task as Extract<FlowTask, { properties: Record<string, FlowValue> }>)
           .properties.form;
-        if (target?.kind !== "literal" || typeof target.literal.value !== "string")
+        // A form the step declares itself is not on the page, so there is nothing to place.
+        if (target === undefined) continue;
+        if (target.kind !== "literal" || typeof target.literal.value !== "string")
           throw new FlowPlanError(id, task.id, "row-action form target must be a literal");
         forms.add(target.literal.value);
       }

@@ -1,5 +1,11 @@
 "use client";
-import { formatBytes } from "@vortex/ui/display/date-format";
+import {
+  formatBytes,
+  canonicalJson,
+  sameId,
+  type ApplicationSourceDocument,
+  type DefinitionValidationResult,
+} from "@vortex/platform/schema";
 import { Button } from "@vortex/ui/components/button";
 import { StudioInspectorGroup, StudioSourceView } from "@vortex/ui/studio";
 import { Icon } from "@vortex/ui";
@@ -12,6 +18,7 @@ import {
 import { Spinner } from "@vortex/ui/components/spinner";
 import { studioNotice } from "./studio-save-state";
 import { Textarea } from "@vortex/ui/components/textarea";
+import { StudioInspectorFooter } from "./studio-inspector";
 import { StudioField } from "./studio-field";
 import { summarizeSourceChange } from "../_lib/source-change-summary";
 import {
@@ -25,12 +32,6 @@ import {
 import { useConfirm } from "@vortex/ui/components/confirm-dialog";
 
 import { useEffect, useRef, useState } from "react";
-import {
-  canonicalJson,
-  sameId,
-  type ApplicationSourceDocument,
-  type DefinitionValidationResult,
-} from "@vortex/platform/schema";
 import { reviewStudioApplicationSource } from "../actions";
 import {
   maximumApplicationSourceImportBytes,
@@ -87,9 +88,9 @@ function SourceChangeTable({
       <Table containerClassName="border-0">
         <TableHeader className="bg-muted/50 text-xs">
           <TableRow>
-            <TableHead className="text-foreground normal-case">Area</TableHead>
-            <TableHead className="text-foreground normal-case">Item</TableHead>
-            <TableHead className="text-foreground normal-case">Change</TableHead>
+            <TableHead className="text-foreground">Area</TableHead>
+            <TableHead className="text-foreground">Item</TableHead>
+            <TableHead className="text-foreground">Change</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -536,21 +537,6 @@ export function ApplicationSourceImport({ disabled, readSnapshot, onApply }: Pro
           </StudioField>
         </CollapsibleContent>
       </Collapsible>
-      <Button
-        type="button"
-        variant="outline"
-        disabled={disabled || operation !== null || text.length === 0}
-        onClick={() => {
-          void review();
-        }}
-      >
-        {operation !== null && <Spinner />}
-        {operation === "reading"
-          ? "Reading file…"
-          : operation === "reviewing"
-            ? "Checking file…"
-            : "Check the file"}
-      </Button>
       {reviewedCurrent && reviewed !== null && (
         <div className="space-y-2">
           <p>
@@ -587,27 +573,6 @@ export function ApplicationSourceImport({ disabled, readSnapshot, onApply }: Pro
           </ul>
         </div>
       )}
-      <div className="flex flex-wrap gap-2">
-        <Button
-          type="button"
-          disabled={disabled || operation !== null || !reviewedCurrent}
-          onClick={apply}
-        >
-          Replace the draft
-        </Button>
-        <Button
-          type="button"
-          variant="ghost"
-          disabled={text.length === 0 && operation === null}
-          onClick={() => {
-            replaceText("");
-            if (fileInput.current !== null) fileInput.current.value = "";
-            studioNotice("Cleared. Your draft is unchanged.");
-          }}
-        >
-          Clear
-        </Button>
-      </div>
       <p role="status" aria-live="polite" className="sr-only">
         {operation === "reading"
           ? "Reading file"
@@ -625,6 +590,42 @@ export function ApplicationSourceImport({ disabled, readSnapshot, onApply }: Pro
         </StudioInspectorGroup>
       )}
       {confirmDialog}
+      <StudioInspectorFooter className="-bottom-6 -mx-8 -mb-6 px-8">
+        <Button
+          type="button"
+          variant="ghost"
+          disabled={text.length === 0 && operation === null}
+          onClick={() => {
+            replaceText("");
+            if (fileInput.current !== null) fileInput.current.value = "";
+            studioNotice("Cleared. Your draft is unchanged.");
+          }}
+        >
+          Clear
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          disabled={disabled || operation !== null || text.length === 0}
+          onClick={() => {
+            void review();
+          }}
+        >
+          {operation !== null && <Spinner />}
+          {operation === "reading"
+            ? "Reading file…"
+            : operation === "reviewing"
+              ? "Checking file…"
+              : "Check the file"}
+        </Button>
+        <Button
+          type="button"
+          disabled={disabled || operation !== null || !reviewedCurrent}
+          onClick={apply}
+        >
+          Replace the draft
+        </Button>
+      </StudioInspectorFooter>
     </section>
   );
 }

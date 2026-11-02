@@ -1,4 +1,5 @@
 "use client";
+import { StudioHelp } from "@vortex/ui/studio";
 import { Alert, AlertDescription } from "@vortex/ui/components/alert";
 import { useState } from "react";
 import { Button } from "@vortex/ui/components/button";
@@ -156,10 +157,7 @@ export function StudioOptionsSourceEditor({
           >
             New options flow
           </Button>
-          <p className="text-xs text-muted-foreground">
-            Creates an interactive flow over the inputs this field declares, with an{" "}
-            <code>options</code> output, and opens it in the flow editor.
-          </p>
+          <StudioHelp hint="Creates an interactive flow over the inputs this field declares, with an options output, and opens it in the flow editor." />
         </>
       )}
       {needed.map((input) => (

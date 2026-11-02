@@ -35,7 +35,7 @@ import {
 /** One row of the catalogue: a query and the module that holds it. */
 type Row = Readonly<{ module: StudioDataModule; query: StudioDataQuery }>;
 
-const headClass = "normal-case text-xs text-foreground";
+const headClass = "text-xs text-foreground";
 
 /** The inputs a query asks for: name, type and whether it needs a value. */
 function Inputs({ inputs }: Readonly<{ inputs: readonly StudioQueryInput[] }>) {
@@ -137,15 +137,17 @@ function QueryTable({
                 data-state={current ? "selected" : undefined}
               >
                 <TableCell className="font-medium">
-                  <button
+                  <Button
                     type="button"
+                    variant="link"
+                    size="xs"
                     onClick={() => onSelect(selection)}
                     aria-current={current ? "true" : undefined}
                     aria-label={`Open ${query.label}`}
-                    className="min-h-6 rounded-md text-left focus-visible:outline-2 focus-visible:outline-ring"
+                    className="h-auto min-h-6 p-0 text-left font-medium text-foreground"
                   >
                     {query.label}
-                  </button>
+                  </Button>
                   {query.summary ? (
                     <Badge variant="outline" className="ml-2">
                       Summary

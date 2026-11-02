@@ -4,12 +4,16 @@ import { ToggleGroup, ToggleGroupItem } from "../components/toggle-group";
 
 /** A choice among two to four modes, all in view: one pressed segment, optionally with an icon. */
 export function StudioSegmentedControl<T extends string>({
+  id,
+  "aria-describedby": describedBy,
   label,
   value,
   options,
   disabled = false,
   onChange,
 }: Readonly<{
+  id?: string | undefined;
+  "aria-describedby"?: string | undefined;
   label: string;
   value: T;
   options: readonly Readonly<{ value: T; label: string; icon?: ReactNode; disabled?: boolean }>[];
@@ -18,10 +22,12 @@ export function StudioSegmentedControl<T extends string>({
 }>): ReactElement {
   return (
     <ToggleGroup
+      id={id}
       aria-label={label}
+      aria-describedby={describedBy}
       variant="outline"
       size="sm"
-      className="w-full flex-wrap"
+      className="w-full"
       value={[value]}
       disabled={disabled}
       onValueChange={(next) => {
@@ -34,8 +40,8 @@ export function StudioSegmentedControl<T extends string>({
           key={option.value}
           value={option.value}
           disabled={option.disabled}
-          // A segment's label reads in full: it wraps and grows taller rather than clipping.
-          className="h-auto min-w-0 flex-1 whitespace-normal px-2 py-1 leading-tight"
+          // Equal segments on one line: the labels are short, and the longer explanation is the field's hint.
+          className="min-w-0 flex-1 truncate"
         >
           {option.icon}
           {option.label}

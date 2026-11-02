@@ -8,6 +8,8 @@ import {
 const exportProjectionSchema = z
   .object({
     maxRows: z.number().int().min(1).max(RECORDS_TABLE_EXPORT_MAXIMUM_ROWS),
+    /** Some columns always download their stored value, whatever the viewer chooses. */
+    rawColumns: z.boolean(),
     formats: z
       .array(z.enum(recordsTableExportFormats))
       .min(1)

@@ -30,6 +30,7 @@ import {
   type DefinitionCompilerRefusalCode,
 } from "../compilation-error";
 import { flowBindingSettingsSchema } from "../application-flow-bindings";
+import { flowAsksBeforeChanging } from "../flow-address-start";
 import {
   compileFlowPlans,
   flowBindingPlanIssue,
@@ -655,6 +656,12 @@ function compileApplicationFlowBindings(
         fail("vortex.definition.application_flow_binding_inputs", "required_value", location);
     const settings = flowBindingSettingsSchema.safeParse(binding.settings);
     if (!settings.success)
+      fail("vortex.definition.application_flow_binding_inputs", "invalid_value", location);
+    // A link may start a flow only when it is an action that asks before it changes anything.
+    if (
+      settings.data.startFromAddress !== undefined &&
+      (binding.event !== "action" || !flowAsksBeforeChanging(flow))
+    )
       fail("vortex.definition.application_flow_binding_inputs", "invalid_value", location);
     const resolveForm = (form: string) => resolution.id(definitionKey, "block_placement", form);
     const canonicalSettings = resolveFlowFormReferences(settings.data, resolveForm);

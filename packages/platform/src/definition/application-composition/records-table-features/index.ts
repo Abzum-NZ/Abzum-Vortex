@@ -93,9 +93,14 @@ export {
 export {
   RECORDS_TABLE_EXPORT_MAXIMUM_ROWS,
   recordsTableExportFormatLabels,
+  recordsTableExportableTypes,
   recordsTableExportFormats,
+  recordsTableExportRawTypes,
+  recordsTableExportValues,
+  recordsTableExportValuesLabels,
   spreadsheetText,
   type RecordsTableExportFormat,
+  type RecordsTableExportValues,
 } from "./export";
 export { RECORDS_TABLE_TREE_MAXIMUM_PAGE_SIZE } from "./tree";
 export {

@@ -1,5 +1,6 @@
 "use client";
 
+import { cellValueToText } from "@vortex/platform/schema";
 import { NavigationLink } from "../../routing/navigation-link";
 import { useCallback, useEffect, useRef, useState, type ReactElement } from "react";
 import { Alert, AlertDescription } from "../../components/alert";
@@ -12,7 +13,7 @@ import {
   TableHeader,
   TableRow,
 } from "../../components/table";
-import { cellValueToText, DisplayCellView } from "../cell";
+import { DisplayCellView } from "../cell";
 import type { RowDetailReply } from "@vortex/platform/schema";
 import { fail } from "../payload-parse";
 import {

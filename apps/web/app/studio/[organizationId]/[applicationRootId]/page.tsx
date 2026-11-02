@@ -4,7 +4,10 @@ import {
   loadOrganizationLauncher,
   loadPermittedApplicationsAtAddress,
 } from "../../../_lib/organization-context";
-import { resolveIdentitySession } from "../../../auth/_lib/session-server";
+import { resolveIdentitySessionWithEmail } from "../../../auth/_lib/session-server";
+import { studioFrameOf } from "../../_lib/studio-frame";
+import { appStoreActionHref } from "../../../_lib/application-release-adoption";
+import { appStoreActionTokens } from "../../../_lib/page-run-parameter";
 import { resolveApplicationAddress } from "../../../_lib/application-address";
 import { continueStudioSession } from "../../_lib/studio-session";
 import { StudioUnavailable } from "../../_components/studio-unavailable";
@@ -36,8 +39,9 @@ const loadWorkspacePlace = async (
   | { kind: "available"; place: StudioWorkspacePlace }
   | { kind: "refused" | "temporarily_unavailable"; reason: string }
 > => {
-  const resolved = await resolveIdentitySession();
-  if (resolved.kind !== "active") return { kind: "refused", reason: "Sign in to open Studio." };
+  const { resolution: resolved, email } = await resolveIdentitySessionWithEmail();
+  if (resolved.kind !== "active" || email === undefined)
+    return { kind: "refused", reason: "Sign in to open Studio." };
   const launcher = await loadOrganizationLauncher(resolved.session);
   const entry =
     launcher?.kind === "available"
@@ -113,6 +117,35 @@ const loadWorkspacePlace = async (
           application.homePageKey,
         );
   };
+  // The installed Studio release shapes the frame the editor shows.
+  const studioApplicationEntry =
+    applications.kind === "available"
+      ? applications.applications.find((candidate) => candidate.key === settings.value)
+      : undefined;
+  const studioResolved =
+    studioApplicationEntry === undefined
+      ? undefined
+      : await resolveApplicationAddress(
+          resolved.session,
+          entry.tenantShortName,
+          entry.organizationShortName,
+          studioApplicationEntry.key,
+          studioApplicationEntry.homePageKey,
+        );
+  if (
+    studioApplicationEntry === undefined ||
+    studioResolved?.kind !== "application_page" ||
+    studioResolved.installedContext === undefined
+  )
+    return {
+      kind: "refused",
+      reason: "Studio is not installed for your account in this organisation.",
+    };
+  const studioInstalled = {
+    name: studioApplicationEntry.name,
+    homePageKey: studioApplicationEntry.homePageKey,
+    context: studioResolved.installedContext,
+  };
   // Whether the builder may open this application, and whether the organisation has it installed:
   // the two facts the toolbar needs to offer Back to app, Install in this organisation or neither.
   const openable =
@@ -165,6 +198,22 @@ const loadWorkspacePlace = async (
     kind: "available",
     place: {
       organizationName: entry.organizationDisplayName,
+      frame: studioFrameOf(entry, email, studioInstalled),
+      actionHrefs:
+        settings.value === null || settings.value === "invalid"
+          ? undefined
+          : Object.fromEntries(
+              appStoreActionTokens.map((action) => [
+                action,
+                appStoreActionHref(
+                  entry.tenantShortName,
+                  entry.organizationShortName,
+                  settings.value as string,
+                  applicationRootId,
+                  action,
+                ),
+              ]),
+            ),
       applicationHref: openable ? pathOf(applicationKey) : undefined,
       appStoreHref: pathOf(settings.value),
       installed,

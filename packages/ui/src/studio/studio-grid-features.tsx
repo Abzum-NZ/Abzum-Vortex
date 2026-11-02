@@ -59,12 +59,12 @@ import { StudioSavedViewsEditor } from "./grid-features/saved-views";
 import { StudioExportEditor } from "./grid-features/export";
 import { StudioInspectorGroup } from "./studio-inspector-group";
 import { StudioQueryBindings } from "./studio-query-bindings";
+import { StudioSettingFields } from "./studio-setting-controls";
 import {
-  StudioSettingFields,
   type StudioSettingChoices,
   type StudioSettingValues,
   studioSettingProblems,
-} from "./studio-setting-controls";
+} from "./studio-setting-model";
 
 type GroupValue = Extract<SourceBlockPropertyValueContract, { kind: "group" }>;
 
@@ -324,8 +324,17 @@ export function StudioGridFeatures({
           features,
           tablePageSize,
         );
+  const featuresOn = recordsTableFeatureKeys.filter((key) =>
+    incomplete.has(key)
+      ? authoredEnabled(key)
+      : features !== undefined && recordsTableFeatureState(features, key).enabled,
+  ).length;
   return (
-    <StudioInspectorGroup title="Features">
+    <StudioInspectorGroup
+      title="Grid features"
+      defaultOpen={false}
+      summary={featuresOn === 0 ? "None on" : `${featuresOn} on`}
+    >
       {viewportCheck?.kind === "not_possible" ? (
         <Alert variant="destructive">
           <AlertDescription>{viewportCheck.reason}</AlertDescription>
@@ -524,6 +533,8 @@ export function StudioGridFeatures({
               {enabled && key === recordsTableExportFeature.key ? (
                 <StudioExportEditor
                   value={current}
+                  facts={facts}
+                  columns={tableColumnFields(tableSettings)}
                   disabled={disabled}
                   onChange={(next) => write(key, next)}
                 />

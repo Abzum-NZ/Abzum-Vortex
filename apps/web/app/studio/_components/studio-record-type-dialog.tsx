@@ -17,6 +17,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@vortex/ui/components/dialog";
+import { FieldGroup, FieldLegend, FieldSet } from "@vortex/ui/components/field";
 import { Input } from "@vortex/ui/components/input";
 import {
   StudioInspectorGroup,
@@ -151,120 +152,115 @@ export function StudioRecordTypeDialog({
           <DialogTitle>New record type</DialogTitle>
           <DialogDescription>Name this kind of record, then add its fields.</DialogDescription>
         </DialogHeader>
-        <form id="studio-record-type-form" className="grid gap-4" onSubmit={submit} noValidate>
-          <StudioField label="Name of one record" hint="For example Asset.">
-            {(control) => (
-              <Input
-                {...control}
-                required
-                maxLength={60}
-                value={name}
-                autoFocus
-                onChange={(event) => {
-                  setName(event.target.value);
-                  setIssues([]);
-                }}
-              />
-            )}
-          </StudioField>
-          <StudioField label="Name of several records" hint="For example Assets.">
-            {(control) => (
-              <Input
-                {...control}
-                required
-                maxLength={60}
-                value={effectivePlural}
-                onChange={(event) => {
-                  setPlural(event.target.value);
-                  setIssues([]);
-                }}
-              />
-            )}
-          </StudioField>
-          <StudioInspectorGroup title="Details" defaultOpen={false}>
-            <StudioField label="Key" hint="Made from the name. It does not change later.">
-              {(control) => (
-                <Input
-                  {...control}
-                  required
-                  maxLength={40}
-                  value={effectiveKey}
-                  onChange={(event) => {
-                    setKey(event.target.value);
-                    setIssues([]);
-                  }}
-                />
-              )}
-            </StudioField>
-          </StudioInspectorGroup>
-          <StudioField
-            label="Title field"
-            hint="The label of the field that names each record, for example Name."
-          >
-            {(control) => (
-              <Input
-                {...control}
-                required
-                maxLength={60}
-                value={titleLabel}
-                onChange={(event) => {
-                  setTitleLabel(event.target.value);
-                  setIssues([]);
-                }}
-              />
-            )}
-          </StudioField>
-          <StudioField label="Records are kept" hint="Fixed once the record type is published.">
-            {() => (
-              <StudioSegmentedControl
-                label="Records are kept"
-                value={storageScope}
-                options={storageScopes.map((value) => ({
-                  value,
-                  label: recordStorageLabels[value],
-                }))}
-                onChange={setStorageScope}
-              />
-            )}
-          </StudioField>
-          <StudioField
-            label="Owner"
-            hint="To take the owner from a linked record, add the link first, then choose it."
-          >
-            {(control) => (
-              <StudioOptionControl
-                {...control}
-                value={ownershipMode}
-                disabled={false}
-                options={createdOwnerships.map((value) => ({
-                  value,
-                  label: recordOwnershipLabels[value],
-                }))}
-                onChange={(value) => setOwnershipMode(value as CreatedOwnership)}
-              />
-            )}
-          </StudioField>
-          {firstModule ? (
-            <fieldset className="grid gap-3 border-t border-border pt-3">
-              <legend className="text-sm font-medium">Module</legend>
-              <p className="text-sm text-muted-foreground">
-                This is the application&apos;s first record type, so its module is created with it.
-              </p>
-              <StudioField label="Module name">
+        <form id="studio-record-type-form" onSubmit={submit} noValidate>
+          <FieldGroup>
+            <div className="grid grid-cols-2 gap-4">
+              <StudioField label="Name of one record">
                 {(control) => (
                   <Input
                     {...control}
                     required
-                    maxLength={120}
-                    value={effectiveModuleName}
+                    maxLength={60}
+                    placeholder="Asset"
+                    value={name}
+                    autoFocus
                     onChange={(event) => {
-                      setNewModuleName(event.target.value);
+                      setName(event.target.value);
                       setIssues([]);
                     }}
                   />
                 )}
               </StudioField>
-              <StudioInspectorGroup title="Details" defaultOpen={false}>
+              <StudioField label="Name of several records">
+                {(control) => (
+                  <Input
+                    {...control}
+                    required
+                    maxLength={60}
+                    placeholder="Assets"
+                    value={effectivePlural}
+                    onChange={(event) => {
+                      setPlural(event.target.value);
+                      setIssues([]);
+                    }}
+                  />
+                )}
+              </StudioField>
+            </div>
+            <StudioInspectorGroup
+              title="Advanced"
+              defaultOpen={false}
+              persist={false}
+              summary={`Key ${effectiveKey || "…"}${firstModule ? ` · Module key ${effectiveModuleKey || "…"}` : ""} · Title field ${titleLabel || "…"} · ${recordStorageLabels[storageScope]} · ${recordOwnershipLabels[ownershipMode]}`}
+            >
+              <StudioField label="Key" hint="Made from the name. It does not change later.">
+                {(control) => (
+                  <Input
+                    {...control}
+                    required
+                    maxLength={40}
+                    value={effectiveKey}
+                    onChange={(event) => {
+                      setKey(event.target.value);
+                      setIssues([]);
+                    }}
+                  />
+                )}
+              </StudioField>
+              <StudioField
+                label="Title field"
+                hint="The label of the field that names each record, such as Name."
+              >
+                {(control) => (
+                  <Input
+                    {...control}
+                    required
+                    maxLength={60}
+                    placeholder="Name"
+                    value={titleLabel}
+                    onChange={(event) => {
+                      setTitleLabel(event.target.value);
+                      setIssues([]);
+                    }}
+                  />
+                )}
+              </StudioField>
+              <StudioField
+                label="Records are kept"
+                hint="Organisation: every application of the organisation may use them. This application: only this application reads them. Fixed once the record type is published."
+              >
+                {(control) => (
+                  <StudioSegmentedControl
+                    id={control.id}
+                    aria-describedby={control["aria-describedby"]}
+                    label="Records are kept"
+                    value={storageScope}
+                    options={storageScopes.map((value) => ({
+                      value,
+                      label: recordStorageLabels[value],
+                    }))}
+                    onChange={setStorageScope}
+                  />
+                )}
+              </StudioField>
+              <StudioField
+                label="Owner"
+                hint="To take the owner from a linked record, add the link first, then choose it."
+              >
+                {(control) => (
+                  <StudioOptionControl
+                    {...control}
+                    value={ownershipMode}
+                    disabled={false}
+                    options={createdOwnerships.map((value) => ({
+                      value,
+                      label: recordOwnershipLabels[value],
+                    }))}
+                    onChange={(value) => setOwnershipMode(value as CreatedOwnership)}
+                  />
+                )}
+              </StudioField>
+              {firstModule && (
                 <StudioField
                   label="Module key"
                   hint="Made from the name. It is permanent after creation."
@@ -282,36 +278,60 @@ export function StudioRecordTypeDialog({
                     />
                   )}
                 </StudioField>
-              </StudioInspectorGroup>
-            </fieldset>
-          ) : (
-            modules.length > 1 && (
-              <StudioField label="Module">
-                {(control) => (
-                  <StudioReferencePicker
-                    {...control}
-                    value={target?.key ?? ""}
-                    options={modules.map((module) => ({ value: module.key, label: module.name }))}
-                    onChange={(value) => {
-                      setModuleKey(value);
-                      setKey(null);
-                    }}
-                  />
-                )}
-              </StudioField>
-            )
-          )}
-          {issues.length === 0 ? null : (
-            <ul
-              role="alert"
-              className="space-y-1 text-sm text-destructive"
-              aria-label="Why the record type was not added"
-            >
-              {issues.map((issue, index) => (
-                <li key={index}>{issue}</li>
-              ))}
-            </ul>
-          )}
+              )}
+            </StudioInspectorGroup>
+            {firstModule ? (
+              <FieldSet>
+                <FieldLegend variant="label">Module</FieldLegend>
+                <FieldGroup>
+                  <StudioField
+                    label="Module name"
+                    hint="This is the application's first record type, so its module is created with it."
+                  >
+                    {(control) => (
+                      <Input
+                        {...control}
+                        required
+                        maxLength={120}
+                        value={effectiveModuleName}
+                        onChange={(event) => {
+                          setNewModuleName(event.target.value);
+                          setIssues([]);
+                        }}
+                      />
+                    )}
+                  </StudioField>
+                </FieldGroup>
+              </FieldSet>
+            ) : (
+              modules.length > 1 && (
+                <StudioField label="Module">
+                  {(control) => (
+                    <StudioReferencePicker
+                      {...control}
+                      value={target?.key ?? ""}
+                      options={modules.map((module) => ({ value: module.key, label: module.name }))}
+                      onChange={(value) => {
+                        setModuleKey(value);
+                        setKey(null);
+                      }}
+                    />
+                  )}
+                </StudioField>
+              )
+            )}
+            {issues.length === 0 ? null : (
+              <ul
+                role="alert"
+                className="space-y-1 text-sm text-destructive"
+                aria-label="Why the record type was not added"
+              >
+                {issues.map((issue, index) => (
+                  <li key={index}>{issue}</li>
+                ))}
+              </ul>
+            )}
+          </FieldGroup>
         </form>
         <DialogFooter>
           <Button

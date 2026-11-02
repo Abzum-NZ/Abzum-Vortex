@@ -7,6 +7,7 @@ import { Checkbox } from "../components/checkbox";
 import { Empty, EmptyContent, EmptyHeader, EmptyTitle } from "../components/empty";
 import { Pagination, PaginationContent, PaginationItem } from "../components/pagination";
 import { Spinner } from "../components/spinner";
+import { Tooltip, TooltipContent, TooltipTrigger } from "../components/tooltip";
 import { usePendingGesture } from "../controls/pending-gesture";
 import { Icon } from "../icons/icon";
 import type { DisplayEventHandlers, DisplayRow, DisplaySemanticEvent } from "./projected-data";
@@ -20,14 +21,21 @@ export function DisplayRefreshButton({
   refresh: NonNullable<DisplayEventHandlers["refresh"]>;
 }>): ReactElement {
   return (
-    <Button
-      variant="outline"
-      size="sm"
-      aria-label={`Refresh ${accessibleName}`}
-      onClick={() => refresh({ event: "refresh" })}
-    >
-      Refresh
-    </Button>
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label={`Refresh ${accessibleName}`}
+            onClick={() => refresh({ event: "refresh" })}
+          />
+        }
+      >
+        <Icon name="redo" aria-hidden="true" />
+      </TooltipTrigger>
+      <TooltipContent>Refresh</TooltipContent>
+    </Tooltip>
   );
 }
 

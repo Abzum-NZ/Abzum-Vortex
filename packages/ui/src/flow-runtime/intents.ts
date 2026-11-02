@@ -90,6 +90,23 @@ export type FlowFormIntent = Readonly<{
   formId: string;
   inputs: Readonly<Record<string, JsonValue>>;
 }>;
+/** A text field a Show form step declares itself. */
+type FlowInlineField = Readonly<{
+  name: string;
+  label: string;
+  required: boolean;
+  multiline: boolean;
+}>;
+/** A form the step declares itself: its fields, the starting answers and the texts a field must equal. */
+export type FlowInlineFormIntent = Readonly<{
+  taskId: string;
+  title: string | undefined;
+  message: string | undefined;
+  submitLabel: string | undefined;
+  fields: readonly FlowInlineField[];
+  inputs: Readonly<Record<string, string>>;
+  expect: Readonly<Record<string, string>>;
+}>;
 
 const maximumTextLength = 2_000;
 
@@ -218,11 +235,50 @@ export const confirmAnswer = (
     : { choice: answer.confirmed && answer.choice === true }),
 });
 
-export const readFormIntent = (intent: FlowIntent): FlowFormIntent | undefined => {
+const textRecord = (candidate: JsonValue | undefined): Readonly<Record<string, string>> =>
+  Object.fromEntries(
+    Object.entries(record(candidate)).flatMap(([name, value]) =>
+      typeof value === "string" ? [[name, value]] : [],
+    ),
+  );
+
+const inlineFields = (candidate: JsonValue | undefined): readonly FlowInlineField[] | undefined => {
+  if (!Array.isArray(candidate) || candidate.length === 0 || candidate.length > 20)
+    return undefined;
+  const fields: FlowInlineField[] = [];
+  for (const entry of candidate) {
+    const field = record(entry);
+    const name = text(field.name);
+    const label = text(field.label);
+    if (name === undefined || label === undefined) return undefined;
+    fields.push({
+      name,
+      label,
+      required: field.required === true,
+      multiline: field.multiline === true,
+    });
+  }
+  return fields;
+};
+
+export const readFormIntent = (
+  intent: FlowIntent,
+): FlowFormIntent | FlowInlineFormIntent | undefined => {
   const formId = text(intent.properties.form);
-  return formId === undefined
+  if (formId !== undefined)
+    return { taskId: intent.taskId, formId, inputs: record(intent.properties.inputs) };
+  const fields = inlineFields(intent.properties.fields);
+  return fields === undefined
     ? undefined
-    : { taskId: intent.taskId, formId, inputs: record(intent.properties.inputs) };
+    : {
+        taskId: intent.taskId,
+        title: text(intent.properties.title),
+        message: text(intent.properties.message),
+        submitLabel: text(intent.properties.submit_label),
+        fields,
+        inputs: textRecord(intent.properties.inputs),
+        expect: textRecord(intent.properties.expect),
+      };
 };
 
 /**
@@ -233,7 +289,10 @@ export type FlowIntentHost = Readonly<{
   showMessage: (message: FlowMessageIntent, signal?: AbortSignal) => void | Promise<void>;
   clearMessage?: (target: PageMessageTarget, component?: string) => void;
   /** Resolves with the person's answer; a surface that went away (`isSurfaceCancellation`) abandons the run unanswered. */
-  showForm: (form: FlowFormIntent, signal?: AbortSignal) => Promise<FlowFormAnswer>;
+  showForm: (
+    form: FlowFormIntent | FlowInlineFormIntent,
+    signal?: AbortSignal,
+  ) => Promise<FlowFormAnswer>;
   confirm: (confirmation: FlowConfirmIntent, signal?: AbortSignal) => Promise<FlowConfirmAnswer>;
   navigate: (intent: FlowIntent) => boolean | Promise<boolean>;
   refresh?: (component: string | undefined) => void | Promise<void>;

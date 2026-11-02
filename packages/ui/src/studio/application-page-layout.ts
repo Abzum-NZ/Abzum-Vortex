@@ -9,7 +9,7 @@ import {
   type SourceSlotOrders,
   type PageSlotAddress,
 } from "@vortex/platform/schema";
-import { storedItemRelease } from "./stored-composition";
+import { storedItemRelease } from "@vortex/platform/schema";
 import {
   judged,
   quoted,

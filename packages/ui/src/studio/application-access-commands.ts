@@ -11,7 +11,7 @@ import {
   type ApplicationUsePlace,
   type SourceIdentityReservation,
 } from "@vortex/platform/schema";
-import { tokenName } from "./studio-words";
+import { tokenName } from "@vortex/platform/schema";
 
 /**
  * The Access tab's model and edits of the application draft: its roles (access groups), what each
@@ -962,6 +962,7 @@ const grant = (
       [
         {
           label: `The start page of ${quoted(role.name)}`,
+          trail: [candidate.body.name, "Access", role.name],
           open: { kind: "role", roleKey: role.key },
         },
       ],
@@ -1008,6 +1009,7 @@ const removeRole = (candidate: Source, roleKey: string): StudioAccessResult => {
       [
         {
           label: `${quoted(role.name)} is offered to whoever installs the application`,
+          trail: [candidate.body.name, "Access", role.name],
           open: { kind: "role", roleKey: role.key },
         },
       ],

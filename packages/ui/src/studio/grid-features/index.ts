@@ -210,6 +210,7 @@ const studioGridFeatures: readonly StudioGridFeature[] = [
     // Export starts as CSV with the authored default row limit.
     start: {
       formats: { kind: "list", items: [{ kind: "choice", value: "csv" }] },
+      raw_columns: { kind: "list", items: [] },
       max_rows: { kind: "number", value: 10000 },
     },
   },
@@ -411,4 +412,37 @@ export const restoreStudioGridFeatureBindings = (
     }
     settings.features = { ...features, properties };
   }
+};
+
+/**
+ * A table's Export setting names raw-value columns only among the columns the table shows. Every
+ * settings edit passes through here, so removing a column removes its Raw entry in the same write.
+ */
+export const pruneStudioGridFeatureColumns = (
+  settings: Record<string, SourceBlockPropertyValueContract>,
+): void => {
+  const features = settings.features;
+  const columns = settings.columns;
+  if (features?.kind !== "group" || columns?.kind !== "list") return;
+  const exported = features.properties["export"];
+  const raw = exported?.kind === "group" ? exported.properties["raw_columns"] : undefined;
+  if (exported?.kind !== "group" || raw?.kind !== "list") return;
+  const shown = columns.items.flatMap((item) => {
+    const field = item.kind === "group" ? item.properties["field"] : undefined;
+    return field?.kind === "field_reference" ? [field.field.toLowerCase()] : [];
+  });
+  const kept = raw.items.filter(
+    (item) => item.kind === "field_reference" && shown.includes(item.field.toLowerCase()),
+  );
+  if (kept.length === raw.items.length) return;
+  settings.features = {
+    ...features,
+    properties: {
+      ...features.properties,
+      export: {
+        ...exported,
+        properties: { ...exported.properties, raw_columns: { kind: "list", items: kept } },
+      },
+    },
+  };
 };

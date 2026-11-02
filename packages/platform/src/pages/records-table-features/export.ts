@@ -3,9 +3,12 @@ import "server-only";
 import { randomUUID } from "node:crypto";
 import type { IdentitySession } from "../../access/identity-access";
 import type { JsonValue } from "../../catalogue/common";
-import { isRecord, sameId } from "../../catalogue/runtime-primitives";
+import { sameId } from "../../catalogue/runtime-primitives";
 import { recordsTableColumnWidth } from "../../definition/application-composition/records-display";
-import { recordsTableExportFeature } from "../../definition/application-composition/records-table-features";
+import {
+  recordsTableExportableTypes,
+  recordsTableExportFeature,
+} from "../../definition/application-composition/records-table-features";
 import { authoredGridLayout, resolveGridLayout } from "../grid-layout-resolution";
 import type { GridLayout } from "../grid-view-state";
 import type {
@@ -18,21 +21,18 @@ import {
   createHumanOrganizationRequestService,
   type HumanOrganizationRequestDependencies,
 } from "../../access/human-organization-request";
-import { readCurrentOrganizationRuntimeSettingsAfterAuthorization } from "../../access/organization-runtime-settings-administration";
+import { readViewerPresentationAfterAuthorization } from "../../access/organization-runtime-settings-administration";
 import type { QueryContinuationKey } from "../../queries/continuation-token";
 import {
   prepareRecordsExport,
   recordsCsvFormat,
   recordsXlsxFormat,
-  type RecordsExportCell,
   type RecordsExportFormat,
   type RecordsExportOutcome,
   type RecordsExportPage,
-  type RecordsXlsxColumn,
 } from "../../queries/export-records";
 import { createProtectedQueryService } from "../../queries/protected-query-service";
 import type { ProtectedQueryRow } from "../../queries/protected-query-contracts";
-import { recordLinkLabelKey } from "../../definition/viewer-safe-record-link";
 import {
   addressedDefaultGridViews,
   gridLayoutVisibleFieldIds,
@@ -48,8 +48,8 @@ import {
   fieldFilterTargetsOf,
   fieldLabelsOf,
   fieldLinkTypesOf,
-  type PlacementField,
 } from "../placement-read/shared";
+import { exportCellOf, valueTypeOf, type ExportColumn } from "./export-cells";
 import { buildRecordsTableQueryCommand } from "../records-table-query";
 import { openRecordsSelection, type RecordsSelectionDescriptor } from "../records-selection-seal";
 import { createRecordsTableBulkService, enumerationScanLimitedCeiling } from "./bulk-run";
@@ -103,143 +103,6 @@ const failureReason = (cause: unknown): string =>
   typeof cause.reason === "string"
     ? cause.reason
     : "preparation_failed";
-
-type ExportColumn = Readonly<{
-  fieldId: string;
-  label: string;
-  field: PlacementField;
-  width: number;
-}>;
-
-/** Totals inherit their source precision; ordinary money has no declared decimal scale. */
-const columnScale = (
-  field: PlacementField,
-  fields: readonly PlacementField[],
-  visited: ReadonlySet<string> = new Set(),
-): number | "value" => {
-  if (visited.has(String(field.fieldId))) throw exportFailure("column_precision_cycle");
-  if ("decimalPlaces" in field.settings && field.settings.decimalPlaces !== undefined)
-    return field.settings.decimalPlaces;
-  if (field.type === "total" && field.settings.fieldId !== undefined) {
-    const source = fields.find((candidate) => sameId(candidate.fieldId, field.settings.fieldId!));
-    if (source === undefined) throw exportFailure("column_precision_unavailable");
-    return columnScale(source, fields, new Set([...visited, String(field.fieldId)]));
-  }
-  return "value";
-};
-
-const xlsxColumns = (
-  columns: readonly ExportColumn[],
-  fields: readonly PlacementField[],
-): readonly RecordsXlsxColumn[] =>
-  columns.map(({ field, width }) => {
-    const type = valueTypeOf(field);
-    switch (type) {
-      case "decimal_number":
-      case "money":
-        return { type, width, scale: columnScale(field, fields) };
-      case "whole_number":
-      case "date":
-      case "date_time":
-      case "yes_no":
-        return { type, width };
-      default:
-        return { type: "text", width };
-    }
-  });
-
-/** The value type a column's cells carry: a calculation's or total's result type, else its own. */
-const valueTypeOf = (field: PlacementField): string =>
-  field.type === "calculation" || field.type === "total" ? field.settings.resultType : field.type;
-
-const exportableTypes: ReadonlySet<string> = new Set([
-  "text",
-  "long_text",
-  "reference_number",
-  "email_address",
-  "phone_number",
-  "web_address",
-  "choice",
-  "several_choices",
-  "whole_number",
-  "decimal_number",
-  "money",
-  "yes_no",
-  "date",
-  "date_time",
-  "link",
-  "link_to_one_of_several",
-]);
-
-/**
- * One stored value as an export cell. A value the field's type does not allow stops the export
- * rather than being written as something else.
- */
-const cellOf = (
-  column: ExportColumn,
-  value: JsonValue | undefined,
-  choiceLabels: ReadonlyMap<string, string>,
-  titles: ReadonlyMap<string, ProjectedRecordLink>,
-): RecordsExportCell => {
-  // A withheld value is absent from the row; an empty value is null.
-  if (value === undefined || value === null) return null;
-  const type = valueTypeOf(column.field);
-  const invalid = (): never => {
-    throw exportFailure(`cell_unreadable:${type}`);
-  };
-  switch (type) {
-    case "text":
-    case "long_text":
-    case "reference_number":
-    case "email_address":
-    case "phone_number":
-    case "web_address":
-      return typeof value === "string" ? { type: "text", value } : invalid();
-    case "choice":
-      return typeof value === "string"
-        ? { type: "text", value: choiceLabels.get(value) ?? value }
-        : invalid();
-    case "several_choices":
-      return Array.isArray(value) && value.every((item) => typeof item === "string")
-        ? {
-            type: "text",
-            value: value.map((item) => choiceLabels.get(item as string) ?? item).join("; "),
-          }
-        : invalid();
-    case "whole_number":
-      return typeof value === "number" ? { type: "whole_number", value } : invalid();
-    case "decimal_number":
-      return typeof value === "string" ? { type: "decimal_number", value } : invalid();
-    case "yes_no":
-      return typeof value === "boolean" ? { type: "yes_no", value } : invalid();
-    case "date":
-      return typeof value === "string" ? { type: "date", value } : invalid();
-    case "date_time":
-      return typeof value === "string" ? { type: "date_time", value } : invalid();
-    case "money":
-      return isRecord(value) &&
-        typeof value.amount === "string" &&
-        typeof value.currency === "string"
-        ? { type: "money", value: { amount: value.amount, currency: value.currency } }
-        : invalid();
-    case "link":
-    case "link_to_one_of_several": {
-      if (
-        !isRecord(value) ||
-        typeof value.recordTypeId !== "string" ||
-        typeof value.recordId !== "string"
-      )
-        return invalid();
-      const title = titles.get(
-        recordLinkLabelKey({ recordTypeId: value.recordTypeId, recordId: value.recordId }),
-      );
-      // A restricted or missing title carries nothing of the record: the cell is empty.
-      return title?.kind === "record_link" ? { type: "text", value: title.label } : null;
-    }
-    default:
-      return invalid();
-  }
-};
 
 const sameField = (left: string, right: string): boolean =>
   left.toLowerCase() === right.toLowerCase();
@@ -475,8 +338,9 @@ export const createRecordsTableExportService = (dependencies: RecordsTableExport
         if (permission.kind === "refused") return permission;
         return {
           kind: "permitted" as const,
-          accessVersion: scope.accessVersion,
           exportFieldIds: permission.fieldIds,
+          // The locale and time zone the grid shows this viewer's dates in.
+          presentation: await readViewerPresentationAfterAuthorization(transaction),
           layout: await effectiveLayout(
             transaction,
             placement,
@@ -497,7 +361,7 @@ export const createRecordsTableExportService = (dependencies: RecordsTableExport
         await audit(session, address, recordTypeId, [], "refused");
         return notAvailable;
       }
-      const { exportFieldIds, layout } = decided.value;
+      const { exportFieldIds, layout, presentation } = decided.value;
       if (layout === undefined) {
         refuse("layout_unavailable");
         return notAvailable;
@@ -520,14 +384,25 @@ export const createRecordsTableExportService = (dependencies: RecordsTableExport
           field === undefined ||
           declared === undefined ||
           label === undefined ||
-          !exportableTypes.has(valueTypeOf(field)) ||
+          !recordsTableExportableTypes.has(valueTypeOf(field)) ||
           (exportFieldIds !== undefined && !exportFieldIds.has(fieldId.toLowerCase()))
         )
           return [];
         const width =
           layout.columns.find((column) => sameField(column.fieldId, fieldId))?.width ??
           recordsTableColumnWidth(declared);
-        return [{ fieldId: fieldId.toLowerCase(), label, field, width }];
+        return [
+          {
+            fieldId: fieldId.toLowerCase(),
+            label,
+            field,
+            width,
+            format: declared.format,
+            raw:
+              request.values === "raw" ||
+              feature.rawColumns.some((rawColumn) => sameField(rawColumn, fieldId)),
+          },
+        ];
       });
       if (columns.length === 0) {
         refuse("no_exportable_columns");
@@ -542,27 +417,6 @@ export const createRecordsTableExportService = (dependencies: RecordsTableExport
       if (descriptor === undefined) {
         await audit(session, address, recordTypeId, columnIds, "refused");
         return { kind: "refused", reason: "changed" };
-      }
-      let timeZone = descriptor.timeZone;
-      if (request.format === "xlsx" && timeZone === undefined) {
-        const settings = await requests.run(
-          session,
-          address.selection,
-          async (transaction, scope) => ({
-            settings: await readCurrentOrganizationRuntimeSettingsAfterAuthorization(transaction),
-            accessVersion: scope.accessVersion,
-          }),
-        );
-        if (
-          settings.kind !== "available" ||
-          settings.value.accessVersion !== decided.value.accessVersion ||
-          settings.value.settings === undefined
-        ) {
-          refuse("time_zone_unavailable", settings.kind);
-          await audit(session, address, recordTypeId, columnIds, "refused");
-          return unavailable;
-        }
-        timeZone = settings.value.settings.timeZone;
       }
       const matching = request.selection.kind === "matching";
       const built = buildRecordsTableQueryCommand({
@@ -667,16 +521,9 @@ export const createRecordsTableExportService = (dependencies: RecordsTableExport
       if (!(await audit(session, address, recordTypeId, columnIds, "started"))) return unavailable;
 
       const resolveLinks = resolveRecordLinks(installed);
-      const choiceLabels = new Map(
-        columns.map((column) => [
-          column.fieldId,
-          new Map(
-            (fieldChoiceLabelsOf(placement.module)[column.fieldId] ?? []).map(
-              (option) => [option.value, option.label] as const,
-            ),
-          ),
-        ]),
-      );
+      const choiceOptions = fieldChoiceLabelsOf(placement.module);
+      const dateTypes = fieldDateTypesOf(placement.module);
+      const linkTypes = fieldLinkTypesOf(placement.module);
       const linkColumns = columns.filter((column) =>
         ["link", "link_to_one_of_several"].includes(valueTypeOf(column.field)),
       );
@@ -699,7 +546,13 @@ export const createRecordsTableExportService = (dependencies: RecordsTableExport
         }
         return rows.map((row) =>
           columns.map((column) =>
-            cellOf(column, valueOf(row, column.fieldId), choiceLabels.get(column.fieldId)!, titles),
+            exportCellOf(column, valueOf(row, column.fieldId), {
+              presentation,
+              choices: choiceOptions[column.fieldId],
+              dateType: dateTypes[column.fieldId],
+              linkType: linkTypes[column.fieldId],
+              titles,
+            }),
           ),
         );
       };
@@ -856,13 +709,8 @@ export const createRecordsTableExportService = (dependencies: RecordsTableExport
         const format: RecordsExportFormat =
           request.format === "xlsx"
             ? await recordsXlsxFormat({
-                columns: xlsxColumns(
-                  columns,
-                  installed.releaseSet.modules.flatMap((module) =>
-                    module.content.recordTypes.flatMap((record) => record.fields),
-                  ),
-                ),
-                timeZone: timeZone!,
+                widths: columns.map((column) => column.width),
+                timeZone: presentation.timeZone,
               })
             : recordsCsvFormat();
         prepared = await prepareRecordsExport({

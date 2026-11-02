@@ -1,20 +1,22 @@
 import {
   isSourceItemShape,
   readSourceItem,
-  reservedItemPropKeys,
   sourceApplicationShellSchema,
   sourceItemSchema,
   sourceItemTree,
   sourcePageDataOf,
   sourcePageRootSlots,
   sourceSlotBreakpointOrders,
-  type ApplicationSourceDocument,
-  type ImmutablePlatformBlockCatalogue,
-  type PlatformBlockRelease,
   type SourceApplicationShell,
   type SourceItem,
   type SourceSlotOrder,
-} from "@vortex/platform/schema";
+} from "../application-composition/source-composition";
+import {
+  reservedItemPropKeys,
+  type ImmutablePlatformBlockCatalogue,
+  type PlatformBlockRelease,
+} from "../application-composition/platform-block-release";
+import type { ApplicationSourceDocument } from "../application-source-contracts";
 
 /**
  * The stored composition Studio edits: Puck data is the stored page data itself. Every edit, from

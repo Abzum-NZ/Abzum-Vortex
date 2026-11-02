@@ -31,12 +31,13 @@ export const moduleExtensionPointName = (key: string): string => {
   return words.charAt(0).toUpperCase() + words.slice(1);
 };
 
-const referenced = (uses: readonly ModuleExtensionPointUse[]): Result => ({
+const referenced = (uses: readonly ModuleExtensionPointUse[], application: string): Result => ({
   kind: "referenced",
   issue:
     "This extension is used by a contribution. Remove its uses before changing its target, accepted kinds or deleting it.",
   references: uses.map((use) => ({
     label: `${use.contributorName} (${use.kind === "field" ? "field" : "action"} contribution)`,
+    trail: [application, "Data", use.contributorName],
     open: { kind: "none" },
   })),
 });
@@ -93,7 +94,7 @@ export const changeInlineModuleExtensionPoint = (
     (use) => use.moduleKey === module.key && use.extensionPointKey === existing?.key,
   );
   if (change.operation === "remove") {
-    if (references.length > 0) return referenced(references);
+    if (references.length > 0) return referenced(references, current.body.name);
     module.extension_points = module.extension_points.filter((point) => point !== existing);
   } else {
     const key = change.key.trim();
@@ -139,7 +140,7 @@ export const changeInlineModuleExtensionPoint = (
       (existing.record_type !== change.recordKey ||
         references.some((use) => !accepts.includes(use.kind)))
     )
-      if (references.length > 0) return referenced(references);
+      if (references.length > 0) return referenced(references, current.body.name);
     // Aliases share the source identity namespace. Derive a distinct alias once, never on edit.
     const aliases = new Set<string>();
     const collect = (value: unknown): void => {

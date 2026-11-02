@@ -126,7 +126,7 @@ export function Notice({
   const urgent = severity === "error" || severity === "warning";
 
   return (
-    <div data-slot="notice" data-vortex-severity={severity}>
+    <div data-slot="notice" data-vortex-severity={severity} className="cn-notice">
       <Alert
         role={urgent ? "alert" : "status"}
         aria-live={urgent ? "assertive" : "polite"}
