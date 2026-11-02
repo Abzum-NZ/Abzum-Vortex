@@ -14,7 +14,6 @@ import { StudioLimitRow } from "./studio-limit";
 
 type Choose = (node: StudioSemanticOutlineNode) => void;
 
-
 const sectionOf = (
   outline: StudioSemanticOutline,
   section: string,

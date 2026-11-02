@@ -1,7 +1,4 @@
-import {
-  type ApplicationSourceDocument,
-  type VortexIconName,
-} from "@vortex/platform/schema";
+import { type ApplicationSourceDocument, type VortexIconName } from "@vortex/platform/schema";
 import type {
   StudioApplicationSelectionDraft,
   StudioSemanticSelection,
