@@ -123,8 +123,10 @@ export function StudioCanvasBridge({
   // Ctrl+Z / Ctrl+Y with its older states, which Studio would then take as new edits, so Puck's
   // history is kept at the current state alone and its Undo and Redo have nothing to go back to.
   useEffect(() => {
-    const { history, appState } = getPuck();
-    if (history.histories.length > 1) history.setHistories([{ id: "studio", state: appState }]);
+    const { history } = getPuck();
+    // The newest entry is the current state; it carries Puck's indexes, so setting it is cheap.
+    const current = history.histories[history.histories.length - 1];
+    if (history.histories.length > 1 && current !== undefined) history.setHistories([current]);
   }, [recorded]);
   useEffect(() => {
     onDragging?.(dragging);
