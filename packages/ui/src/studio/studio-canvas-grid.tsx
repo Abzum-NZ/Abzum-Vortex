@@ -296,6 +296,19 @@ export const StudioCanvasGridContext = createContext<
   Readonly<{ report: ((change: StudioCanvasGridChange) => void) | undefined; interactive: boolean }>
 >({ report: undefined, interactive: false });
 
+/**
+ * The setup of a table the canvas can arrange, or `undefined` for a placement that is not one: the
+ * one check the grid's events use and the toolbar's Arrange grid columns is decided by.
+ */
+export const studioCanvasGridSetup = (
+  props: Readonly<Record<string, unknown>>,
+  compiled: Readonly<Record<string, unknown>>,
+  release: PlatformBlockRelease | undefined,
+) =>
+  release?.blockId === PLATFORM_BLOCK_RELEASE_IDENTITIES.TABLE_BLOCK_RELEASE.blockId
+    ? gridSetup(props, compiled, release)
+    : undefined;
+
 /** The canvas uses the grid's normal events; no personal preference is written. */
 export function useStudioCanvasGridEvents(
   props: Readonly<Record<string, unknown>>,
@@ -309,9 +322,9 @@ export function useStudioCanvasGridEvents(
       ? release
       : undefined;
   const setup =
-    report === undefined || compiled === undefined || tableRelease === undefined
+    report === undefined || compiled === undefined
       ? undefined
-      : gridSetup(props, compiled, tableRelease);
+      : studioCanvasGridSetup(props, compiled, release);
   // Source settings invalidate held reads before the next compilation/row response arrives; a
   // draft whose settings do not read (the inspector names why) holds no canvas state at all.
   const key =

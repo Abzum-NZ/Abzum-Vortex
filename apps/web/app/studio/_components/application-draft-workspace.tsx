@@ -318,6 +318,7 @@ function ExistingApplicationWorkspace(props: ExistingProps) {
             {...releases.agent}
           />
           <StudioFrame
+            dragging={canvas.dragging}
             tabs={studioRailTabs}
             activeTab={tab}
             onTabChange={setTab}
@@ -402,7 +403,7 @@ function ExistingApplicationWorkspace(props: ExistingProps) {
                 <div
                   className={
                     canvasShown
-                      ? "min-h-0 flex-1 overflow-auto"
+                      ? "flex min-h-0 flex-1 flex-col overflow-auto"
                       : "min-h-0 flex-1 overflow-auto p-4"
                   }
                 >

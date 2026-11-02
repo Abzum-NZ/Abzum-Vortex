@@ -380,6 +380,34 @@ const isSlotComponent = (value: unknown): value is SlotComponent => typeof value
 const cssAttributeValue = (value: string): string =>
   value.replace(/[^A-Za-z0-9_-]/gu, (c) => `\\${(c.codePointAt(0) ?? 0xfffd).toString(16)} `);
 
+/**
+ * The geometry of a placement's wrapper: whether it is a grid item, its class name and its inline
+ * style. A live page adapts through scoped media rules, so only an explicit preview breakpoint
+ * (Studio's canvas) carries inline geometry. The wrapper and every placeholder drawn in its place
+ * use this one function, so they can never differ.
+ */
+export const placementWrapperGeometry = (
+  responsive: ResponsivePlacementLayouts | undefined,
+  breakpoint: Breakpoint | undefined,
+): Readonly<{ gridChild: boolean; className: string; style: CSSProperties }> => {
+  if (responsive === undefined)
+    return {
+      gridChild: false,
+      className: computePlacementClassName(undefined),
+      style: computePlacementStyle(undefined),
+    };
+  return {
+    gridChild: RESPONSIVE_BREAKPOINT_ORDER.some(
+      (candidate) => responsive[candidate].width.kind === "grid",
+    ),
+    className:
+      breakpoint === undefined
+        ? LAYOUT_CLASS_NAMES.placementWrapper
+        : computePlacementClassName(responsive[breakpoint]),
+    style: breakpoint === undefined ? {} : computePlacementStyle(responsive[breakpoint]),
+  };
+};
+
 function PlacementBlock(props: {
   registry: PlatformComponentRegistry;
   componentProps: VortexPuckComponentProps;
@@ -475,15 +503,12 @@ function PlacementBlock(props: {
     ? RESPONSIVE_BREAKPOINT_ORDER.some((candidate) => vortex.responsive[candidate].visible)
     : layout.visible;
   const wrapperScope = cssAttributeValue(placementId);
-  const gridChild = RESPONSIVE_BREAKPOINT_ORDER.some(
-    (candidate) => vortex.responsive[candidate].width.kind === "grid",
-  );
-  const wrapperClassName = responsive
-    ? LAYOUT_CLASS_NAMES.placementWrapper
-    : computePlacementClassName(layout);
+  const geometry = placementWrapperGeometry(vortex.responsive, breakpoint);
+  const gridChild = geometry.gridChild;
+  const wrapperClassName = geometry.className;
   const wrapperStyle: CSSProperties = {
     ...wrapper?.style,
-    ...(responsive ? {} : computePlacementStyle(layout)),
+    ...geometry.style,
     ...(reactions.visible === false ? { display: "none" } : {}),
   };
   const ownCss =
@@ -497,6 +522,7 @@ function PlacementBlock(props: {
 
   return (
     <div
+      ref={puck.dragRef ?? undefined}
       data-vortex-layout-wrapper=""
       data-vortex-placement-id={placementId}
       data-vortex-block-id={release.blockId}

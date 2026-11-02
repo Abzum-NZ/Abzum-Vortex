@@ -1,5 +1,6 @@
 "use client";
 
+import { isHtmlElement, isInputElement, isTextAreaElement } from "../../lib/dom";
 import {
   useCallback,
   useEffect,
@@ -188,10 +189,7 @@ function EditableCell({
   useEffect(() => {
     if (phase === "editing") {
       editing.current?.focus();
-      if (
-        editing.current instanceof HTMLInputElement ||
-        editing.current instanceof HTMLTextAreaElement
-      )
+      if (isInputElement(editing.current) || isTextAreaElement(editing.current))
         editing.current.select();
     } else if (phase === "idle" && restoreFocus.current) {
       restoreFocus.current = false;
@@ -459,7 +457,7 @@ function EditableCell({
             phaseNow.current === "editing" &&
             !committing.current &&
             message === undefined &&
-            !linkEditor.current?.contains(document.activeElement)
+            !linkEditor.current?.contains(linkEditor.current.ownerDocument.activeElement)
           ) {
             restoreFocus.current = false;
             cancelRef.current();
@@ -582,8 +580,7 @@ function InlineEditInteraction({ surface }: GridFeatureInteractionProps): null {
         (event.key !== "F2" && event.key !== "Enter")
       )
         return;
-      if (!(event.target instanceof HTMLElement) || !event.target.matches("[data-grid-cell]"))
-        return;
+      if (!isHtmlElement(event.target) || !event.target.matches("[data-grid-cell]")) return;
       const trigger = event.target.querySelector<HTMLButtonElement>("button[data-inline-edit]");
       if (trigger === null) return;
       event.preventDefault();

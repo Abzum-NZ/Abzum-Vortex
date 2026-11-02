@@ -1,4 +1,5 @@
 import {
+  Columns3Icon,
   FileTextIcon,
   InfoIcon,
   GripVerticalIcon,
@@ -110,6 +111,7 @@ export const icons: VortexIconAdapter = {
   "contact-round": ContactRoundIcon,
   users: UsersIcon,
   "sliders-horizontal": SlidersHorizontalIcon,
+  "table-columns": Columns3Icon,
   filter: FunnelIcon,
   pencil: PencilIcon,
   trash: Trash2Icon,

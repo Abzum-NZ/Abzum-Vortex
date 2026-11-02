@@ -294,6 +294,39 @@ export const LAYOUT_ONLY_STYLES_CSS = `
   width: auto;
   flex: none;
 }
+/* In the Studio canvas a slot needs a box of its own, so Puck can draw its zone and the drop line in
+   it. The action row's slot becomes the row itself; the only difference from the running page is
+   that a record's Refresh shows after its danger action instead of between the two. The marker
+   is rendered by the canvas root in every editor mode, so both lay out alike. */
+[data-vortex-studio-canvas]
+  :is([data-vortex-record-actions], [data-vortex-heading-actions])
+  > .vortex-puck-slot {
+  display: flex;
+  flex-flow: row wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  width: auto;
+  flex: 1 1 auto;
+  min-width: 4rem;
+  min-height: 2.25rem;
+}
+/* The canvas draws a placement with its declared geometry inline (an explicit screen size), which
+   only !important can reset for an action in a row. */
+[data-vortex-studio-canvas]
+  :is([data-vortex-record-actions], [data-vortex-heading-actions])
+  > .vortex-puck-slot
+  > [data-vortex-layout-wrapper] {
+  width: auto !important;
+}
+[data-vortex-studio-canvas] .vortex-puck-slot:empty {
+  min-height: 4rem;
+}
+[data-vortex-studio-canvas]
+  :is([data-vortex-record-actions], [data-vortex-heading-actions])
+  > .vortex-puck-slot:empty {
+  min-height: 2.25rem;
+}
 [data-vortex-record-actions] > button {
   order: 1;
 }

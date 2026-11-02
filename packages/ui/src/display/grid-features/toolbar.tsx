@@ -1,5 +1,6 @@
 "use client";
 
+import { isElement, isNode } from "../../lib/dom";
 import {
   createContext,
   useContext,
@@ -47,7 +48,7 @@ export const FULL_SCREEN_CLASS =
 
 /** Keys inside a cell's own control or a text box keep their meaning; Escape there is not "leave". */
 const ownsEscape = (target: EventTarget | null): boolean => {
-  if (!(target instanceof Element)) return false;
+  if (!isElement(target)) return false;
   if (target.closest("input,textarea,select,[contenteditable='true']") !== null) return true;
   const cell = target.closest("[data-grid-cell]");
   return cell !== null && cell !== target;
@@ -79,6 +80,15 @@ export function useGridFullScreen(
   const activeRef = useRef(active);
   activeRef.current = active;
 
+  // The table's own document: the Studio canvas draws the table inside an iframe, which has its own
+  // full screen state and, without permission, refuses the browser's full screen (the layer stays).
+  // The element may mount after this hook first runs, so the document is read again every render.
+  const [tableDocument, setTableDocument] = useState<Document | null>(null);
+  useEffect(() => {
+    const current = container.current?.ownerDocument ?? null;
+    if (current !== tableDocument) setTableDocument(current);
+  });
+  const own = useCallback((): Document => tableDocument ?? document, [tableDocument]);
   const leave = useCallback(() => {
     if (!activeRef.current) return;
     setActive(false);
@@ -86,38 +96,40 @@ export function useGridFullScreen(
     announce("Left full screen");
     if (browser.current) {
       browser.current = false;
-      if (document.fullscreenElement === document.documentElement)
-        document.exitFullscreen().catch((error: unknown) => {
+      const ownerDocument = own();
+      if (ownerDocument.fullscreenElement === ownerDocument.documentElement)
+        ownerDocument.exitFullscreen().catch((error: unknown) => {
           console.error("[display] the browser did not leave full screen", error);
         });
     }
-  }, [announce]);
+  }, [announce, own]);
   const enter = useCallback(() => {
     if (activeRef.current) return;
     setActive(true);
     announce("Full screen. Press Escape to leave");
-    const root = document.documentElement;
-    if (document.fullscreenEnabled && document.fullscreenElement === null) {
+    const ownerDocument = own();
+    if (ownerDocument.fullscreenEnabled && ownerDocument.fullscreenElement === null) {
       browser.current = true;
       // A refusal (a policy or a frame without permission) keeps the in-app layer.
-      root.requestFullscreen().catch(() => {
+      ownerDocument.documentElement.requestFullscreen().catch(() => {
         browser.current = false;
       });
     }
-  }, [announce]);
+  }, [announce, own]);
   const toggle = useCallback(() => (activeRef.current ? leave() : enter()), [enter, leave]);
 
   // The browser's own Escape ends its full screen; the layer follows.
   useEffect(() => {
+    const ownerDocument = own();
     const onChange = (): void => {
-      if (browser.current && document.fullscreenElement === null) {
+      if (browser.current && ownerDocument.fullscreenElement === null) {
         browser.current = false;
         leave();
       }
     };
-    document.addEventListener("fullscreenchange", onChange);
-    return () => document.removeEventListener("fullscreenchange", onChange);
-  }, [leave]);
+    ownerDocument.addEventListener("fullscreenchange", onChange);
+    return () => ownerDocument.removeEventListener("fullscreenchange", onChange);
+  }, [leave, own]);
 
   // The shortcut toggles from anywhere inside the table; Escape leaves the in-app layer. Menus are
   // portalled outside the table, so their own Escape never reaches this listener. It listens on the
@@ -127,8 +139,7 @@ export function useGridFullScreen(
     if (!allowed) return;
     const onKeyDown = (event: KeyboardEvent): void => {
       const element = container.current;
-      if (element === null || !(event.target instanceof Node) || !element.contains(event.target))
-        return;
+      if (element === null || !isNode(event.target) || !element.contains(event.target)) return;
       if (
         (event.ctrlKey || event.metaKey) &&
         event.shiftKey &&
@@ -145,21 +156,23 @@ export function useGridFullScreen(
       }
     };
     // Capture keeps the order the table's own listener had: before the grid's React handlers.
-    document.addEventListener("keydown", onKeyDown, true);
-    return () => document.removeEventListener("keydown", onKeyDown, true);
-  }, [container, allowed, toggle, leave]);
+    // The table's own document: the Studio canvas draws it inside an iframe.
+    const ownerDocument = own();
+    ownerDocument.addEventListener("keydown", onKeyDown, true);
+    return () => ownerDocument.removeEventListener("keydown", onKeyDown, true);
+  }, [container, allowed, toggle, leave, own]);
 
   // A table that stops allowing full screen, or unmounts, leaves it.
   useEffect(() => {
     if (!allowed) leave();
   }, [allowed, leave]);
-  useEffect(
-    () => () => {
-      if (browser.current && document.fullscreenElement === document.documentElement)
-        void document.exitFullscreen().catch(() => undefined);
-    },
-    [],
-  );
+  useEffect(() => {
+    const ownerDocument = own();
+    return () => {
+      if (browser.current && ownerDocument.fullscreenElement === ownerDocument.documentElement)
+        void ownerDocument.exitFullscreen().catch(() => undefined);
+    };
+  }, [own]);
 
   useEffect(() => {
     if (active || !restoreFocus.current) return;

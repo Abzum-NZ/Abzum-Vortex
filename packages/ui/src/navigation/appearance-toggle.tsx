@@ -9,6 +9,7 @@ import {
   DropdownMenuTrigger,
 } from "../components/dropdown-menu";
 import { Button } from "../components/button";
+import { Tooltip, TooltipContent, TooltipTrigger } from "../components/tooltip";
 import { Icon } from "../icons/icon";
 import type { VortexIconName } from "../icons/icon-names";
 import { parseThemeMode, type ThemeMode } from "../theme/appearance";
@@ -27,19 +28,19 @@ export function AppearanceToggle(): ReactElement | null {
   const current = CHOICES.find((choice) => choice.mode === appearance.mode);
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger
-        aria-label={`Appearance: ${current?.label ?? "System"}`}
-        render={<Button variant="ghost" size="sm" className="max-sm:min-h-11 max-sm:min-w-11" />}
-      >
-        <Icon name={current?.icon ?? "monitor"} aria-hidden="true" className="sm:hidden" />
-        <span className="max-sm:sr-only">{current?.label}</span>
-        <Icon
-          name="chevron-down"
-          aria-hidden="true"
-          data-icon="inline-end"
-          className="text-muted-foreground max-sm:hidden"
-        />
-      </DropdownMenuTrigger>
+      <Tooltip>
+        <TooltipTrigger
+          render={
+            <DropdownMenuTrigger
+              aria-label={`Appearance: ${current?.label ?? "System"}`}
+              render={<Button variant="ghost" size="icon-sm" className="max-sm:size-11" />}
+            />
+          }
+        >
+          <Icon name={current?.icon ?? "monitor"} aria-hidden="true" />
+        </TooltipTrigger>
+        <TooltipContent>{`Appearance: ${current?.label ?? "System"}`}</TooltipContent>
+      </Tooltip>
       <DropdownMenuContent align="end" className="min-w-36">
         <DropdownMenuRadioGroup
           value={appearance.mode}
@@ -47,6 +48,7 @@ export function AppearanceToggle(): ReactElement | null {
         >
           {CHOICES.map((choice) => (
             <DropdownMenuRadioItem key={choice.mode} value={choice.mode} closeOnClick>
+              <Icon name={choice.icon} aria-hidden="true" />
               {choice.label}
             </DropdownMenuRadioItem>
           ))}
