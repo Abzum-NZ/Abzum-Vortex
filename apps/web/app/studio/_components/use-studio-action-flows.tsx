@@ -7,6 +7,7 @@ import {
   createFlowRuntimeState,
   useFlowIntentHost,
   type FlowDispatchResult,
+  type FlowMessageAction,
   type FlowMessageIntent,
   type LinkNavigationEnvironment,
   type PlacementFlowBinding,
@@ -204,7 +205,9 @@ export function useStudioActionFlows({
     [navigator],
   );
 
-  const messageActionRef = useRef<(message: FlowMessageIntent) => void>(() => undefined);
+  const messageActionRef = useRef<(message: FlowMessageIntent, offered: FlowMessageAction) => void>(
+    () => undefined,
+  );
   const { host, element, banner } = useFlowIntentHost({
     // Every form a flow shows here declares its own fields; none is a form placed on a page.
     renderForm: (form, controls) => ({
@@ -226,12 +229,12 @@ export function useStudioActionFlows({
     }),
     navigation,
     state: runtimeState,
-    onMessageAction: (message) => messageActionRef.current(message),
+    onMessageAction: (message, action) => messageActionRef.current(message, action),
   });
 
   // A message's action (Install or upgrade, after a publish) runs the flow it names through the
   // binding the page derived for it.
-  messageActionRef.current = (message) => {
+  messageActionRef.current = (message, offered) => {
     const current = active.current;
     if (current === undefined) return;
     const all = Object.values(current.flows.bindings).flat();
@@ -244,7 +247,7 @@ export function useStudioActionFlows({
         binding.messageAction.authoredBindingId === authoredId &&
         binding.messageAction.sourceFlowId === message.sourceFlowId &&
         binding.messageAction.taskId === message.taskId &&
-        binding.flowId === message.actionFlow,
+        binding.flowId === offered.flow,
     );
     if (action === undefined) {
       console.error("[studio] message action binding unavailable");
@@ -255,7 +258,7 @@ export function useStudioActionFlows({
     void current.runtime
       .dispatch(
         action,
-        message.actionInputs,
+        offered.inputs,
         crypto.randomUUID(),
         message.subject ?? current.flows.subject,
         message.sourceTablePlacementId,

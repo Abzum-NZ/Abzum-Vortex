@@ -5814,31 +5814,72 @@
                                       "value": "success"
                                     }
                                   },
-                                  "action_label": {
-                                    "kind": "literal",
-                                    "literal": {
-                                      "type": "text",
-                                      "value": "Install or upgrade"
-                                    }
-                                  },
-                                  "action_flow": {
-                                    "kind": "literal",
-                                    "literal": {
-                                      "type": "text",
-                                      "value": "flow_install_or_upgrade_application"
-                                    }
-                                  },
-                                  "action_inputs": {
-                                    "kind": "map",
-                                    "entries": {
-                                      "application_root_id": {
-                                        "kind": "reference",
-                                        "reference": {
-                                          "source": "input",
-                                          "name": "application_root_id"
+                                  "actions": {
+                                    "kind": "array",
+                                    "items": [
+                                      {
+                                        "kind": "map",
+                                        "entries": {
+                                          "label": {
+                                            "kind": "literal",
+                                            "literal": {
+                                              "type": "text",
+                                              "value": "Install or upgrade"
+                                            }
+                                          },
+                                          "flow": {
+                                            "kind": "literal",
+                                            "literal": {
+                                              "type": "text",
+                                              "value": "flow_install_or_upgrade_application"
+                                            }
+                                          },
+                                          "inputs": {
+                                            "kind": "map",
+                                            "entries": {
+                                              "application_root_id": {
+                                                "kind": "reference",
+                                                "reference": {
+                                                  "source": "input",
+                                                  "name": "application_root_id"
+                                                }
+                                              }
+                                            }
+                                          }
+                                        }
+                                      },
+                                      {
+                                        "kind": "map",
+                                        "entries": {
+                                          "label": {
+                                            "kind": "literal",
+                                            "literal": {
+                                              "type": "text",
+                                              "value": "View in App Store"
+                                            }
+                                          },
+                                          "flow": {
+                                            "kind": "literal",
+                                            "literal": {
+                                              "type": "text",
+                                              "value": "flow_open_store_application"
+                                            }
+                                          },
+                                          "inputs": {
+                                            "kind": "map",
+                                            "entries": {
+                                              "record_id": {
+                                                "kind": "reference",
+                                                "reference": {
+                                                  "source": "input",
+                                                  "name": "application_root_id"
+                                                }
+                                              }
+                                            }
+                                          }
                                         }
                                       }
-                                    }
+                                    ]
                                   }
                                 }
                               },
