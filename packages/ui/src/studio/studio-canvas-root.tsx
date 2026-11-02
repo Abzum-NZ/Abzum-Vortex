@@ -1,6 +1,6 @@
 "use client";
 
-import type { PuckContext } from "@puckeditor/core";
+import { createUsePuck, type PuckContext } from "@puckeditor/core";
 import { compiledItemSettings } from "@vortex/platform/schema";
 import { useEffect, useMemo, type ReactNode, type SyntheticEvent } from "react";
 import { isElement, isHtmlElement } from "../lib/dom";
@@ -13,6 +13,7 @@ import { studioCanvasMetadata } from "./studio-canvas-metadata";
 import { studioPuckIframeCss } from "./studio-puck-style";
 
 const resolvePageHref = () => "#";
+const usePuckSelector = createUsePuck();
 
 /**
  * The canvas root's render, inside Puck's preview, in every Puck mode. It draws the application's
@@ -37,6 +38,8 @@ export function StudioCanvasRoot({
   const { frame: studio, breakpoint } = studioCanvasMetadata(puck);
   if (studio === null) throw new Error("The Studio canvas has no frame");
   const { empty } = studio;
+  // A layout's blocks are added with Add; only a page's blocks drop onto the canvas.
+  const canDrop = usePuckSelector((state) => state.getPermissions().insert);
   const content = (
     <div
       data-vortex-studio-canvas=""
@@ -48,7 +51,7 @@ export function StudioCanvasRoot({
       <RootSlotGapProvider gap={gap}>{children}</RootSlotGapProvider>
       {empty && (
         <p className="pointer-events-none absolute inset-0 flex items-center justify-center px-6 text-center text-sm text-muted-foreground">
-          Drop a block here, or add one from Blocks.
+          {canDrop ? "Drop a block here, or add one from Blocks." : "Add a block from Blocks."}
         </p>
       )}
     </div>

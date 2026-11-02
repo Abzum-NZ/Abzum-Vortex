@@ -81,7 +81,8 @@ export type StudioCanvasPalette = Readonly<{
   owner: StudioCompositionOwner["kind"];
   message: string;
   /** Adds a block through Studio's one add command; `false` when nothing was added yet. */
-  onAdd: (request: StudioCanvasAddRequest) => boolean;
+  /** `true` when the block was added, `false` when nothing was added yet (its setup is asked), or why it was refused. */
+  onAdd: (request: StudioCanvasAddRequest) => true | false | string;
 }>;
 
 export type StudioPuckInput = Readonly<{
@@ -96,6 +97,8 @@ export type StudioPuckInput = Readonly<{
   /** The compiled items of each content area of this page, keyed by page slot address key. */
   compiledSlots?: Readonly<Record<string, StudioCanvasCompiledSlot>> | undefined;
   disabled: boolean;
+  /** Why the draft takes no change now (a conflict, a publication), when `disabled` says it does not. */
+  disabledReason?: string | undefined;
   /** Why the saved draft would not compile; the page stays open so the cause can be corrected. */
   compileFailure?: StudioCompileFailure | null | undefined;
   onChange: (expectedSource: ApplicationSourceDocument, source: ApplicationSourceDocument) => void;
@@ -217,7 +220,7 @@ export function StudioPuckProvider({
   const deriving = useRef(false);
   const showSelection = useRef<((alias: string | null) => void) | null>(null);
   // The name of the interim block Puck holds between an insert from the drawer and Studio's add.
-  const inserted = useRef<string | null>(null);
+  const inserted = useRef<Set<string>>(new Set());
   const permitted = model.editable && input.canvasShown;
   const latest = useRef({ input, model, permitted });
   latest.current = { input, model, permitted };
@@ -235,7 +238,7 @@ export function StudioPuckProvider({
     }
     if (now.pageAlias === undefined || shown.at === undefined) return;
     // A block inserted from the drawer is added by Studio's add command, not by this edit.
-    if (inserted.current !== null && puckItemsHold(candidate.content, inserted.current)) return;
+    for (const id of inserted.current) if (puckItemsHold(candidate.content, id)) return;
     const result = applyStudioCanvasChange(
       shown.catalogue,
       now.source,
@@ -261,7 +264,8 @@ export function StudioPuckProvider({
     // own data; Studio adds the real one.
     if (action.type === "insert") {
       if (shown.at === undefined) return;
-      inserted.current = action.id ?? null;
+      const id = action.id;
+      if (id !== undefined) inserted.current.add(id);
       const request: StudioCanvasAddRequest = {
         area: shown.at.key,
         destination: destinationOfZone(action.destinationZone),
@@ -270,9 +274,13 @@ export function StudioPuckProvider({
       };
       // After Puck finishes its own insert: show the stored draft again unless the add went through.
       setTimeout(() => {
-        if (!latest.current.permitted || latest.current.input.palette?.onAdd(request) !== true)
-          setResync((generation) => generation + 1);
-        inserted.current = null;
+        const { input: current, model: open, permitted: allowed } = latest.current;
+        const outcome = allowed ? current.palette?.onAdd(request) : undefined;
+        if (outcome !== true) setResync((generation) => generation + 1);
+        // A refused add is said where a refused canvas change is: in the canvas strip.
+        if (typeof outcome === "string") setRefused({ area: open.area, message: outcome });
+        else if (outcome === true) setRefused(null);
+        if (id !== undefined) inserted.current.delete(id);
       }, 0);
       return;
     }

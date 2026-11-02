@@ -5,7 +5,7 @@ import type { Dictionary } from "@puckeditor/core";
  * workspace and compares it by identity, so it is one constant.
  */
 export const studioPuckWords: Dictionary = {
-  "drawer-category-collapse": "Hide {title} blocks",
-  "drawer-category-expand": "Show {title} blocks",
+  "drawer-category-collapse": "",
+  "drawer-category-expand": "",
   "loader-loading": "Loading the canvas",
 };

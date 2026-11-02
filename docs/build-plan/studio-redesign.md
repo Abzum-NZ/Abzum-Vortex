@@ -321,9 +321,9 @@ Already present and to be used: `Item`, `Empty`, `Badge`, `Button`, `Collapsible
 - An empty state appears when no page is open.
 
 **E4. Blocks** (navigator, `studio-puck-drawer.tsx`):
-- The "Add to" target `NativeSelect` sits at the top.
-- Then the groups (D2 sections). Each block is a 2-column grid tile (`rounded-lg border bg-card p-3`, icon `size-5`, name `text-sm font-medium`, one-line purpose `text-xs muted line-clamp-2`), draggable, with an "Add" on click and Enter.
-- Search filters the tiles.
+- The "Add to" place `Select` and a search `InputGroup` sit at the top, above Puck's own component list (`Puck.Components`). The popup is as wide as the longest place name.
+- Under them, a limit note or Alert when the application or the place is near or at a limit.
+- Then one Puck category per palette group (D2), set through `ui.componentList` from the place and the search. Each block is a shadcn `Item` row (icon, name, description) that drags with Puck's drag and drop and has an Add icon button (tooltip, one tab stop). A block that cannot be added keeps the button focusable and says why in a tooltip.
 
 **E5. Canvas** (page tabs):
 - Header: page title (`text-sm font-semibold`), then on the right:

@@ -465,7 +465,7 @@ export function useStudioCanvasTab({
     [compositionContext, canvasPage?.id, addOwnerKey],
   );
   // A block for one place: added at once, or after its setup when it needs settings or data.
-  const addBlock = (request: StudioCanvasAddRequest): boolean => {
+  const addBlock = (request: StudioCanvasAddRequest): true | false | string => {
     const owner = addOwnerRef.current;
     if (owner === undefined || addTargets?.kind !== "available") return false;
     const target = addTargets.targets.find(
@@ -518,7 +518,7 @@ export function useStudioCanvasTab({
     }
     const outcome = runAdd({ ...command, settings: {}, query: null });
     setPaletteMessage(outcome === true ? `${release.name} added.` : outcome);
-    return outcome === true;
+    return outcome;
   };
 
   // A drag on the canvas: the canvas edits the draft it was drawn from, so any change in between makes it stale.
@@ -1227,6 +1227,7 @@ export function useStudioCanvasTab({
       breakpoint,
       appearance,
       disabled: draft.locked,
+      disabledReason: draft.locked ? draft.blockedReason() : undefined,
       compileFailure: view.failure,
       onChange: onPageEdit,
       readRecords: readCanvasRecords,

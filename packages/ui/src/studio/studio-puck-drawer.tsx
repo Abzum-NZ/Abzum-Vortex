@@ -1,13 +1,16 @@
 "use client";
 
 import { Puck, createUsePuck, useGetPuck } from "@puckeditor/core";
+import "./studio-puck-drawer.css";
 import {
   createContext,
   useCallback,
   useContext,
+  useDeferredValue,
   useEffect,
   useId,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -32,8 +35,9 @@ import {
   SelectValue,
 } from "../components/select";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../components/tooltip";
-import { Icon, resolveVortexIconName } from "../icons";
+import { Icon, resolveVortexIconName, type VortexIconName } from "../icons";
 import { cn } from "../lib/utils";
+import { toast } from "../components/sonner";
 import { definitionLimitMessage, definitionLimitReached } from "@vortex/platform/schema";
 import { StudioLimitNote, StudioReasoned } from "./studio-limit";
 import type { StudioCompositionAddTarget } from "./application-composition-commands";
@@ -61,21 +65,75 @@ type DrawerContextValue = Readonly<{
 const DrawerContext = createContext<DrawerContextValue | null>(null);
 
 /**
- * Whether a drawer row is the copy Puck keeps under the draggable one (it draws every item twice
- * and gives only the top copy a drag reference and a test id). The copy is hidden from keyboard
- * and assistive technology so each block is offered once.
+ * Puck 0.24 draws every drawer item twice (`DrawerItemDraggable`: a visual copy under the
+ * draggable one, in two sibling wrappers) and puts dnd-kit's Accessibility plugin on the draggable
+ * copy: `tabindex=0`, `role=button`, "draggable" and instructions for a keyboard drag Puck does not
+ * support (it registers the pointer sensor only). Studio's keyboard route is the Add button, so the
+ * row is one list item with no tab stop of its own, and the visual copy is hidden from keyboard and
+ * assistive technology. Puck gives the override no way to tell the copies apart, so the copy is the
+ * item whose wrapper has a following sibling. Re-check this after a Puck upgrade.
  */
-function useUnderlayRow(): Readonly<{
+const ROW_ATTRIBUTES: Readonly<Record<string, string | null>> = {
+  tabindex: "-1",
+  role: "listitem",
+  "aria-roledescription": null,
+  "aria-describedby": null,
+  "aria-disabled": null,
+};
+
+function useDrawerRow(): Readonly<{
   underlay: boolean;
   mark: (element: HTMLElement | null) => void;
 }> {
   const [underlay, setUnderlay] = useState(false);
+  const observer = useRef<MutationObserver | null>(null);
   const mark = useCallback((element: HTMLElement | null) => {
-    if (element === null) return;
-    setUnderlay(element.closest("[data-puck-drawer-item]")?.getAttribute("data-testid") === "");
+    observer.current?.disconnect();
+    observer.current = null;
+    const host = element?.closest<HTMLElement>("[data-puck-drawer-item]");
+    if (host === null || host === undefined) return;
+    const copy = host.parentElement?.nextElementSibling != null;
+    setUnderlay(copy);
+    if (copy) return;
+    const apply = () => {
+      for (const [name, value] of Object.entries(ROW_ATTRIBUTES)) {
+        if (value === null) host.toggleAttribute(name, false);
+        else if (host.getAttribute(name) !== value) host.setAttribute(name, value);
+      }
+    };
+    apply();
+    // dnd-kit sets its attributes from an effect, after this ref: they are put back as they change.
+    observer.current = new MutationObserver(apply);
+    observer.current.observe(host, {
+      attributes: true,
+      attributeFilter: Object.keys(ROW_ATTRIBUTES),
+    });
   }, []);
   return { underlay, mark };
 }
+
+/** The Vortex icon of a release's icon name: the catalogue's own, or the nearest the icon set has. */
+const RELEASE_ICONS: Readonly<Record<string, VortexIconName>> = {
+  type: "pencil",
+  "edit-3": "pencil",
+  file: "file-text",
+  hash: "filter",
+  list: "list-tree",
+  "alert-circle": "triangle-alert",
+  folder: "archive",
+  "message-square": "info",
+  sidebar: "panel-left",
+  user: "user-round",
+  link: "app-window",
+  zap: "activity",
+  table: "table-columns",
+  layout: "layout-dashboard",
+  "chart-bar": "activity",
+  heading: "file-text",
+  paperclip: "package-plus",
+};
+const releaseIcon = (name: string): VortexIconName =>
+  resolveVortexIconName(name) ?? RELEASE_ICONS[name] ?? "blocks";
 
 /**
  * Puck's `drawerItem` override: one block of the drawer as a shadcn `Item` with its icon, name and
@@ -87,7 +145,7 @@ export function StudioDrawerItem({
   name,
 }: Readonly<{ children: ReactNode; name: string }>) {
   const drawer = useContext(DrawerContext);
-  const { underlay, mark } = useUnderlayRow();
+  const { underlay, mark } = useDrawerRow();
   const draggable = usePuckSelector((state) => state.getPermissions({ type: name }).insert);
   const choice = drawer?.choices.get(name);
   if (drawer === null || choice === undefined) return <>{children}</>;
@@ -108,16 +166,23 @@ export function StudioDrawerItem({
       ref={mark}
       size="sm"
       variant="outline"
-      className={cn("flex-nowrap", draggable ? "cursor-grab active:cursor-grabbing" : "opacity-70")}
+      className={cn(
+        "flex-nowrap",
+        reason !== undefined && "opacity-70",
+        draggable && "cursor-grab active:cursor-grabbing",
+      )}
       {...(underlay ? { inert: true, "aria-hidden": true } : {})}
     >
       <ItemMedia variant="icon">
-        <Icon name={resolveVortexIconName(choice.icon) ?? "blocks"} />
+        <Icon name={releaseIcon(choice.icon)} />
       </ItemMedia>
-      <ItemContent className="min-w-0">
-        <ItemTitle>{choice.name}</ItemTitle>
-        <ItemDescription className="line-clamp-1">{choice.description}</ItemDescription>
-      </ItemContent>
+      <Tooltip>
+        <TooltipTrigger render={<ItemContent className="min-w-0" />}>
+          <ItemTitle>{choice.name}</ItemTitle>
+          <ItemDescription className="line-clamp-2">{choice.description}</ItemDescription>
+        </TooltipTrigger>
+        <TooltipContent>{reason ?? choice.description}</TooltipContent>
+      </Tooltip>
       <ItemActions>
         {reason === undefined ? (
           <Tooltip>
@@ -156,19 +221,20 @@ function BlocksEmpty({
 }
 
 /** A place as the list names it: deeper places say their level. */
-const placeLabel = (target: StudioCompositionAddTarget): string =>
-  target.depth === 0 ? target.label : `${target.label} (level ${target.depth + 1})`;
+const placeLabel = (target: StudioCompositionAddTarget, top: number): string =>
+  target.depth === top ? target.label : `${target.label} (level ${target.depth - top + 1})`;
 
 /** Why the canvas takes no new block now, in the words the Add button says it with. */
 const blockedReason = (
   editable: boolean,
   readOnlyCause: string | undefined,
   breakpoint: "desktop" | "tablet" | "phone",
+  disabledReason: string | undefined,
 ): string | undefined => {
   if (editable) return undefined;
   if (breakpoint !== "desktop") return "Blocks are added on the Desktop screen size.";
   if (readOnlyCause !== undefined) return "This page is shown read-only, so blocks can't be added.";
-  return "Studio is busy; try again in a moment.";
+  return disabledReason ?? "Studio is busy; try again in a moment.";
 };
 
 /** Whether Puck's category lists already hold exactly these blocks. */
@@ -218,7 +284,12 @@ export function StudioBlocksPanel() {
       targets={palette.targets.targets.filter(
         (target) => palette.owner === "layout" || target.area === at.key,
       )}
-      blocked={blockedReason(model.editable, model.readOnlyCause, input.breakpoint)}
+      blocked={blockedReason(
+        model.editable,
+        model.readOnlyCause,
+        input.breakpoint,
+        input.disabledReason,
+      )}
       owner={palette.owner}
       message={palette.message}
       onAdd={palette.onAdd}
@@ -239,17 +310,24 @@ function StudioBlocksDrawer({
   /** A page's blocks also drag onto the canvas; a layout's blocks are added with Add. */
   owner: "page" | "layout";
   message: string;
-  onAdd: (request: StudioCanvasAddRequest) => boolean;
+  onAdd: (request: StudioCanvasAddRequest) => true | false | string;
 }>) {
   const [search, setSearch] = useState("");
   const [targetId, setTargetId] = useState("");
   const targetSelectId = useId();
+  // An insert only needs an id that is unique while it is in flight.
+  const instance = useId();
+  const inserts = useRef(0);
   const getPuck = useGetPuck();
   const listed = usePuckSelector((state) => state.appState.ui.componentList);
   const target = targets.find((candidate) => candidate.id === targetId) ?? targets[0];
+  // The page's own top level is level 1: the levels the layout around it holds are not the page's.
+  const top = Math.min(...targets.map((candidate) => candidate.depth));
+  // Typing stays responsive on a big page: the list follows the search one render behind.
+  const searched = useDeferredValue(search);
   const lists = useMemo(
-    () => studioPaletteComponentLists(target?.choices ?? [], search),
-    [target, search],
+    () => studioPaletteComponentLists(target?.choices ?? [], searched),
+    [target, searched],
   );
   const choices = useMemo(
     () => new Map((target?.choices ?? []).map((choice) => [choice.rendererKey, choice])),
@@ -257,6 +335,12 @@ function StudioBlocksDrawer({
   );
   const shown = Object.values(lists).reduce((total, names) => total + names.length, 0);
   const applied = sameLists(listed, lists);
+  // Puck's list is drawn once its categories have been set the first time, and stays mounted
+  // after, so a search or a place only changes what it lists (no remount, no lost scroll).
+  const [listReady, setListReady] = useState(false);
+  useEffect(() => {
+    if (applied) setListReady(true);
+  }, [applied]);
   // The place and the search choose the blocks Puck lists, one category per palette group; a
   // group with none is hidden, and no block is left over for Puck's own "Other" category.
   useEffect(() => {
@@ -290,7 +374,8 @@ function StudioBlocksDrawer({
       };
       // A layout's blocks are not on the canvas, so Studio's add command takes the request itself.
       if (owner === "layout") {
-        onAdd(request);
+        const outcome = onAdd(request);
+        if (typeof outcome === "string") toast.error(outcome);
         return;
       }
       // A page's block is inserted at the end of the place like a drop is, so both reach the add
@@ -300,10 +385,10 @@ function StudioBlocksDrawer({
         componentType: choice.rendererKey,
         destinationZone: zoneOfDestination(target.destination),
         destinationIndex: request.index,
-        id: `${choice.rendererKey}-${crypto.randomUUID()}`,
+        id: `${choice.rendererKey}-${instance}-${(inserts.current += 1)}`,
       });
     },
-    [target, owner, onAdd, getPuck],
+    [target, owner, onAdd, getPuck, instance],
   );
   const limitId = useId();
   // The place is full when the application holds every block it may, or the place nests as deep as
@@ -339,7 +424,7 @@ function StudioBlocksDrawer({
         <Select
           items={targets.map((candidate) => ({
             value: candidate.id,
-            label: placeLabel(candidate),
+            label: placeLabel(candidate, top),
           }))}
           value={target.id}
           onValueChange={(next) => {
@@ -353,18 +438,17 @@ function StudioBlocksDrawer({
           <SelectContent className="w-auto min-w-(--anchor-width) max-w-(--available-width)">
             {targets.map((candidate) => (
               <SelectItem key={candidate.id} value={candidate.id}>
-                {placeLabel(candidate)}
+                {placeLabel(candidate, top)}
               </SelectItem>
             ))}
           </SelectContent>
         </Select>
       </div>
-      <InputGroup data-vortex-focus-group="">
+      <InputGroup>
         <InputGroupAddon>
           <Icon name="search" />
         </InputGroupAddon>
         <InputGroupInput
-          data-vortex-focus-primary=""
           type="search"
           value={search}
           aria-label="Search blocks"
@@ -402,7 +486,11 @@ function StudioBlocksDrawer({
         />
       ) : (
         <DrawerContext.Provider value={context}>
-          {applied ? <Puck.Components /> : null}
+          {listReady ? (
+            <div role="list" aria-label="Blocks">
+              <Puck.Components />
+            </div>
+          ) : null}
         </DrawerContext.Provider>
       )}
     </div>

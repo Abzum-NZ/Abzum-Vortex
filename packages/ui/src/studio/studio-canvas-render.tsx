@@ -222,6 +222,17 @@ function CanvasBlock({
     current ? compiled[id] : undefined,
     release,
   );
+  // The interim item of a block that is being set up: its settings are asked in the dialog first.
+  if ((props.vortex as { interim?: unknown }).interim === true)
+    return (
+      <CanvasPlaceholder dragRef={dragRef} props={props}>
+        <Item variant="outline" size="sm" className="border-dashed">
+          <ItemContent>
+            <ItemDescription>Setting up the block…</ItemDescription>
+          </ItemContent>
+        </Item>
+      </CanvasPlaceholder>
+    );
   const viewKey = (props.vortex as { view_permission?: unknown }).view_permission;
   if (
     viewer !== null &&
@@ -367,7 +378,7 @@ function CanvasBlock({
   );
 }
 
-const canvasConfigs = new WeakMap<Config, Config>();
+const canvasConfigs = new WeakMap<Config, WeakMap<ImmutablePlatformBlockCatalogue, Config>>();
 
 /** The input blocks that each register one form field: an input naming its field. */
 const formFieldRendererKeys = (registry: PlatformComponentRegistry): ReadonlySet<string> =>
@@ -389,8 +400,10 @@ const formFieldRendererKeys = (registry: PlatformComponentRegistry): ReadonlySet
  * item as above. The fields stay exactly as the one config declares them (each slot with its
  * `allow` list, every other prop an opaque object), because Puck finds slots through them and Studio edits
  * settings in its inspector. A block dropped from the palette is added by Studio's add command,
- * never kept from Puck's insert: the one config's `defaultProps` (the release defaults) only make
- * the interim item Puck holds until then draw as the block will. A block Studio cannot create yet
+ * never kept from Puck's insert. The interim item Puck holds until then carries only the block's
+ * identity and plain placement, in the stored spelling a stored block has, so it draws as the block with its release
+ * defaults (Puck merges `defaultProps` under every block it draws, so they hold nothing else: a
+ * stored block's own `vortex` replaces them). A block Studio cannot create yet
  * (its palette choice names why) is not insertable, so Puck does not let it be dragged.
  */
 export const studioCanvasConfig = (
@@ -399,12 +412,22 @@ export const studioCanvasConfig = (
   fieldInputControlReleases: FieldInputControlReleaseMap,
   catalogue: ImmutablePlatformBlockCatalogue,
 ): Config => {
-  let canvas = canvasConfigs.get(config);
+  let canvas = canvasConfigs.get(config)?.get(catalogue);
   if (canvas !== undefined) return canvas;
   const fieldInputs = formFieldRendererKeys(registry);
+  const releaseByKey = new Map(
+    registry.list().map(({ metadata }) => [metadata.rendererKey, metadata]),
+  );
+  const choices = studioPaletteChoices(catalogue, catalogue.releases);
   const notCreatable = new Set(
-    studioPaletteChoices(catalogue, catalogue.releases)
+    choices
       .filter((choice) => choice.unavailable !== undefined)
+      .map((choice) => choice.rendererKey),
+  );
+  // A block that asks for settings or a query when it is added cannot be drawn from defaults alone.
+  const needsSetup = new Set(
+    choices
+      .filter((choice) => choice.setup.length > 0 || choice.needsQuery)
       .map((choice) => choice.rendererKey),
   );
   const components = Object.fromEntries(
@@ -414,7 +437,19 @@ export const studioCanvasConfig = (
       type,
       {
         label: component.label,
-        defaultProps: component.defaultProps,
+        defaultProps: {
+          vortex: {
+            block: {
+              block_id: releaseByKey.get(type)?.blockId,
+              release_version: releaseByKey.get(type)?.releaseVersion,
+            },
+            responsive: {
+              desktop: { visible: true, width: { kind: "fill" }, height: { kind: "content" } },
+            },
+            // Only the interim item carries this (a stored block's own `vortex` replaces it).
+            ...(needsSetup.has(type) ? { interim: true } : {}),
+          },
+        },
         // Every canvas component is measured and dragged by its own root element.
         inline: true,
         fields: (component.fields ?? {}) as Record<string, Field>,
@@ -459,6 +494,8 @@ export const studioCanvasConfig = (
       ),
     },
   } as unknown as Config;
-  canvasConfigs.set(config, canvas);
+  const byCatalogue = canvasConfigs.get(config) ?? new WeakMap();
+  byCatalogue.set(catalogue, canvas);
+  canvasConfigs.set(config, byCatalogue);
   return canvas;
 };
