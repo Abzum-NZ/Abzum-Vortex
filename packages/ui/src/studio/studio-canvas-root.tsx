@@ -10,11 +10,13 @@ import type { SlotGapName } from "../layout-styles";
 import type { FieldInputControlReleaseMap, PlatformComponentRegistry } from "../registry";
 import { createAppearanceRootProps, createThemeRootProps, VortexStyleRoot } from "../theme";
 import { studioCanvasMetadata } from "./studio-canvas-metadata";
+import { useStudioScreen } from "./studio-canvas-screen";
 import { studioPuckIframeCss } from "./studio-puck-style";
 
 const usePuckSelector = createUsePuck();
 
 const resolvePageHref = () => "#";
+const usePuckSelector = createUsePuck();
 
 /**
  * The canvas root's render, inside Puck's preview, in every Puck mode. It draws the application's
@@ -39,18 +41,21 @@ export function StudioCanvasRoot({
   const { frame: studio, breakpoint } = studioCanvasMetadata(puck);
   if (studio === null) throw new Error("The Studio canvas has no frame");
   const { empty } = studio;
+  // A layout's blocks are added with Add; only a page's blocks drop onto the canvas.
+  const canDrop = usePuckSelector((state) => state.getPermissions().insert);
   const content = (
     <div
       data-vortex-studio-canvas=""
       data-vortex-shell-outlet=""
       data-vortex-editing=""
+      {...(breakpoint === "desktop" ? {} : { "data-vortex-view-only": "" })}
       aria-label={empty ? "Empty content area" : undefined}
       className={empty ? "relative min-h-48" : "min-h-24"}
     >
       <RootSlotGapProvider gap={gap}>{children}</RootSlotGapProvider>
       {empty && (
         <p className="pointer-events-none absolute inset-0 flex items-center justify-center px-6 text-center text-sm text-muted-foreground">
-          Drop a block here, or add one from Blocks.
+          {canDrop ? "Drop a block here, or add one from Blocks." : "Add a block from Blocks."}
         </p>
       )}
     </div>
@@ -163,6 +168,16 @@ export function StudioCanvasIframe({
       frameDocument.removeEventListener("keydown", forward);
     };
   }, [frameDocument]);
+  // A tablet or phone has overlay scrollbars: the classic bar of a tall page must not narrow the
+  // preview below the device's width. Scrolling by wheel and touch is unchanged.
+  const { breakpoint } = useStudioScreen();
+  useEffect(() => {
+    if (frameDocument === undefined || breakpoint === "desktop") return;
+    const style = frameDocument.createElement("style");
+    style.textContent = "html{scrollbar-width:none}";
+    frameDocument.head.append(style);
+    return () => style.remove();
+  }, [frameDocument, breakpoint]);
   // The canvas is a design surface: no link in it (menu pages, external addresses, links inside
   // blocks) leaves Studio, so unsaved edits are never lost to a click.
   const inert = (event: SyntheticEvent) => {

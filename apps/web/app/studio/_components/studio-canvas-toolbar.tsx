@@ -1,6 +1,6 @@
 "use client";
 import { StudioOptionControl } from "@vortex/ui/studio";
-import { Icon, type VortexIconName } from "@vortex/ui";
+import { Icon } from "@vortex/ui";
 import { Button } from "@vortex/ui/components/button";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@vortex/ui/components/tooltip";
 import { ToggleGroup, ToggleGroupItem } from "@vortex/ui/components/toggle-group";
@@ -15,17 +15,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@vortex/ui/components/dropdown-menu";
-import type { StudioCanvasBreakpoint } from "@vortex/ui/studio/puck-provider";
-
-const devices: readonly Readonly<{
-  value: StudioCanvasBreakpoint;
-  label: string;
-  icon: VortexIconName;
-}>[] = [
-  { value: "desktop", label: "Desktop", icon: "monitor" },
-  { value: "tablet", label: "Tablet", icon: "tablet" },
-  { value: "phone", label: "Phone", icon: "smartphone" },
-];
+import { studioScreens, useStudioScreen } from "@vortex/ui/studio/puck-provider";
 
 /** The canvas zoom steps, in percent. */
 const studioCanvasZooms = [50, 75, 100, 125] as const;
@@ -37,8 +27,6 @@ export type StudioCanvasZoom = (typeof studioCanvasZooms)[number] | "fit";
  */
 export function StudioCanvasToolbar({
   title,
-  breakpoint,
-  onBreakpoint,
   zoom,
   fitZoom,
   onZoom,
@@ -72,8 +60,6 @@ export function StudioCanvasToolbar({
   /** The appearance the canvas previews the application in; the running application keeps its own toggle. */
   appearance: "light" | "dark";
   onAppearance: (appearance: "light" | "dark") => void;
-  breakpoint: StudioCanvasBreakpoint;
-  onBreakpoint: (breakpoint: StudioCanvasBreakpoint) => void;
   zoom: StudioCanvasZoom;
   fitZoom: number;
   onZoom: (zoom: StudioCanvasZoom) => void;
@@ -86,6 +72,7 @@ export function StudioCanvasToolbar({
   /** The editor is loading its view of the draft. */
   loading: boolean;
 }>) {
+  const screen = useStudioScreen();
   const effectiveZoom = zoom === "fit" ? fitZoom : zoom;
   const zoomOut = [...studioCanvasZooms].reverse().find((step) => step < effectiveZoom);
   const zoomIn = studioCanvasZooms.find((step) => step > effectiveZoom);
@@ -140,26 +127,38 @@ export function StudioCanvasToolbar({
               <ToggleGroup
                 aria-label="Screen size"
                 size="sm"
-                value={[breakpoint]}
+                value={[screen.breakpoint]}
+                // Tabbing into the group lands on the chosen screen, not on the first one.
+                onFocus={(event) => {
+                  const chosen =
+                    event.currentTarget.querySelector<HTMLElement>('[aria-pressed="true"]');
+                  const from = event.relatedTarget;
+                  if (
+                    chosen !== null &&
+                    chosen !== event.target &&
+                    !(from instanceof Node && event.currentTarget.contains(from))
+                  )
+                    chosen.focus();
+                }}
                 onValueChange={(values) => {
-                  const device = devices.find((entry) => entry.value === values[0]);
-                  if (device) onBreakpoint(device.value);
+                  const chosen = studioScreens.find((entry) => entry.breakpoint === values[0]);
+                  if (chosen) screen.choose(chosen.breakpoint);
                 }}
               >
-                {devices.map((device) => (
-                  <Tooltip key={device.value}>
+                {studioScreens.map((entry) => (
+                  <Tooltip key={entry.breakpoint}>
                     <TooltipTrigger
                       render={
                         <ToggleGroupItem
-                          value={device.value}
-                          aria-label={device.label}
+                          value={entry.breakpoint}
+                          aria-label={entry.label}
                           className="size-8"
                         />
                       }
                     >
-                      <Icon name={device.icon} />
+                      <Icon name={entry.icon} />
                     </TooltipTrigger>
-                    <TooltipContent>{device.label}</TooltipContent>
+                    <TooltipContent>{entry.label}</TooltipContent>
                   </Tooltip>
                 ))}
               </ToggleGroup>

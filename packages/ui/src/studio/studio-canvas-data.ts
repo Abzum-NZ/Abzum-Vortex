@@ -109,28 +109,17 @@ export const itemsHold = (items: readonly SourceItem[], alias: string): boolean 
       Object.values(item.props).some((value) => isItemList(value) && itemsHold(value, alias)),
   );
 
-/** Whether Puck holds a block just dropped from the palette: one without its stored metadata yet. */
-export const holdsDroppedBlock = (items: readonly unknown[]): boolean =>
-  items.some((entry) => {
-    if (entry === null || typeof entry !== "object") return false;
-    const props = (entry as { props?: Record<string, unknown> }).props;
-    if (props === undefined || props.vortex === undefined) return true;
-    return Object.values(props).some(
-      (value) =>
-        Array.isArray(value) &&
-        value.length > 0 &&
-        value.every((child) => child !== null && typeof child === "object" && "props" in child) &&
-        holdsDroppedBlock(value),
-    );
-  });
-
 /** Where Puck says a block sits: its zone and its index in it. */
 export type StudioPuckSelector = NonNullable<UiState["itemSelector"]>;
 
 /** Puck's name of the root zone, which holds a page's top-level blocks. */
 const ROOT_ZONE = "root:default-zone";
 
-/** Puck's name of a slot, `<block name>:<slot key>`, or its root zone, as a place for a new block. */
+/** Puck's name of the zone a place for a new block is: its root zone, or `<block name>:<slot key>`. */
+export const zoneOfDestination = (destination: StudioCompositionDestination): string =>
+  destination.kind === "root" ? ROOT_ZONE : `${destination.parentAlias}:${destination.slotKey}`;
+
+/** The place for a new block that a Puck zone is: the inverse of `zoneOfDestination`. */
 export const destinationOfZone = (zone: string): StudioCompositionDestination => {
   if (zone === ROOT_ZONE) return { kind: "root" };
   const separator = zone.lastIndexOf(":");
@@ -140,6 +129,10 @@ export const destinationOfZone = (zone: string): StudioCompositionDestination =>
     slotKey: zone.slice(separator + 1),
   };
 };
+
+/** Whether Puck items hold the block named `alias`, at any depth. */
+export const puckItemsHold = (items: readonly unknown[], alias: string): boolean =>
+  findPuckItem(items, alias) !== undefined;
 
 /** The block named `alias` among Puck items, at any depth. */
 const findPuckItem = (
