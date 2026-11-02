@@ -526,6 +526,23 @@ export function StudioMenuPanel({
 }
 
 /** The selected entry's settings, anchored to its row. */
+/** The icon grid has this many columns; the grid class below must say the same number. */
+const iconColumns = 7;
+
+/** Base UI's toggle group moves focus along one row only; Up and Down move it a whole row, so the grid is navigable in both directions. */
+function moveIconRow(event: KeyboardEvent<HTMLElement>) {
+  if (event.key !== "ArrowUp" && event.key !== "ArrowDown") return;
+  const icons = [...event.currentTarget.querySelectorAll<HTMLElement>("button")];
+  const target =
+    icons[
+      icons.findIndex((icon) => icon === document.activeElement) +
+        (event.key === "ArrowDown" ? iconColumns : -iconColumns)
+    ];
+  if (target === undefined) return;
+  event.preventDefault();
+  target.focus();
+}
+
 function StudioMenuEntryEditor({
   source,
   item,
@@ -599,6 +616,7 @@ function StudioMenuEntryEditor({
             if (chosen !== undefined && chosen !== item.icon)
               change({ kind: "change", alias: item.id, changes: { icon: chosen } });
           }}
+          onKeyDown={moveIconRow}
           className="grid w-full grid-cols-7"
         >
           {VORTEX_ICON_NAMES.map((name: VortexIconName) => (

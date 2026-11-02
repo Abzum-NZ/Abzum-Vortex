@@ -146,13 +146,18 @@ export function StudioSaveState({ draft }: Readonly<{ draft: StudioDraft }>) {
 
   return (
     <>
-      <span role="status" aria-live="polite" className="inline-flex shrink-0">
+      <span
+        role="status"
+        aria-live="polite"
+        data-studio-save-state
+        className="inline-flex shrink-0"
+      >
         {notSaved ? (
           <Popover>
             <PopoverTrigger aria-label={`${label}: show save details`} render={badgeTrigger}>
               {badge}
             </PopoverTrigger>
-            <PopoverContent className="space-y-3">
+            <PopoverContent data-studio-save-state className="space-y-3">
               <PopoverTitle>Your latest change is not saved</PopoverTitle>
               <PopoverDescription>
                 {sessionEnded
