@@ -48,7 +48,12 @@ import {
 import { studioCanvasOverrides } from "./studio-canvas-actions";
 import type { StudioCanvasGridChange, StudioCanvasGridRead } from "./studio-canvas-grid";
 import { useStudioCanvasModel, type StudioCanvasModel } from "./studio-canvas-model";
-import { studioInitialUi, studioViewports, useStudioScreen } from "./studio-canvas-screen";
+import {
+  studioInitialBreakpoint,
+  studioInitialUi,
+  studioScreenOfWidth,
+  studioViewports,
+} from "./studio-canvas-screen";
 import type { StudioCanvasMetadata, StudioCanvasViewer } from "./studio-canvas-metadata";
 import type { StudioCanvasAddRequest } from "./studio-block-palette";
 import type { StudioCanvasRecordsReader } from "./use-studio-canvas-records";
@@ -194,9 +199,9 @@ export function StudioPuckProvider({
   dragGate: RefObject<StudioDragGate>;
   children: ReactNode;
 }>) {
-  // The screen is kept by Puck (`ui.viewports.current`); `StudioScreenSync` reports its breakpoint
+  // The screen is kept by Puck (`ui.viewports.current`); `onAction` reports its breakpoint
   // here, because the model and the metadata that depend on it are made outside the editor.
-  const [breakpoint, setBreakpoint] = useState<Breakpoint>("desktop");
+  const [breakpoint, setBreakpoint] = useState<Breakpoint>(studioInitialBreakpoint);
   const model = useStudioCanvasModel(input, breakpoint);
   const [refused, setRefused] = useState<Readonly<{ area: string; message: string }> | null>(null);
   const [resync, setResync] = useState(0);
@@ -241,6 +246,12 @@ export function StudioPuckProvider({
   }, []);
 
   const onAction = useCallback((action: PuckAction, state: AppState, previous: AppState) => {
+    // The screen changed: the model and metadata follow in the same render as Puck's own state.
+    if (
+      action.type === "setUi" &&
+      state.ui.viewports.current.width !== previous.ui.viewports.current.width
+    )
+      setBreakpoint(studioScreenOfWidth(state.ui.viewports.current.width).breakpoint);
     if (synchronizing.current || deriving.current) return;
     const { input: now, model: shown } = latest.current;
     // A drop from the palette: Puck has put a bare block in its own data; Studio adds the real one.
@@ -343,22 +354,10 @@ export function StudioPuckProvider({
           deriving={deriving}
           showSelection={showSelection}
         />
-        <StudioScreenSync onBreakpoint={setBreakpoint} />
         <div className="flex h-full min-h-0 flex-col">{children}</div>
       </Puck>
     </StudioCanvasContext.Provider>
   );
-}
-
-/** Reports the breakpoint of Puck's current viewport to the provider; draws nothing. */
-function StudioScreenSync({
-  onBreakpoint,
-}: Readonly<{ onBreakpoint: (breakpoint: Breakpoint) => void }>) {
-  const { breakpoint } = useStudioScreen();
-  useEffect(() => {
-    onBreakpoint(breakpoint);
-  }, [breakpoint, onBreakpoint]);
-  return null;
 }
 
 /**

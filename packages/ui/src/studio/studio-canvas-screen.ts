@@ -17,7 +17,10 @@ export const studioScreens: readonly Readonly<{
   { breakpoint: "phone", label: "Phone", width: 390, icon: "smartphone" },
 ];
 
-/** Puck's `viewports` prop. */
+/**
+ * Puck's `viewports` prop. In this setup it only declares the viewport list: Puck draws nothing
+ * from it in composition mode (`Puck.Preview`), and Studio's canvas sizes the frame itself.
+ */
 export const studioViewports: Viewports = studioScreens.map((screen) => ({
   width: screen.width,
   height: "auto",
@@ -33,12 +36,16 @@ export const studioInitialUi: Partial<UiState> = {
   },
 };
 
-const screenOfWidth = (width: number | "100%") => {
+/** The declared screen of a viewport width; a width Studio does not declare is a defect. */
+export const studioScreenOfWidth = (width: number | "100%") => {
   const screen = studioScreens.find((entry) => entry.width === width);
   if (screen === undefined)
     throw new Error(`STUDIO_CANVAS_SCREEN_UNKNOWN: no declared screen is ${String(width)} wide`);
   return screen;
 };
+
+/** The breakpoint of the screen Puck starts on. */
+export const studioInitialBreakpoint: Breakpoint = studioScreens[0]!.breakpoint;
 
 const usePuckSelector = createUsePuck();
 
@@ -49,6 +56,7 @@ const usePuckSelector = createUsePuck();
  */
 export function useStudioScreen(): Readonly<{
   breakpoint: Breakpoint;
+  label: string;
   width: number;
   choose: (breakpoint: Breakpoint) => void;
 }> {
@@ -68,6 +76,6 @@ export function useStudioScreen(): Readonly<{
     },
     [dispatch],
   );
-  const screen = screenOfWidth(current);
-  return { breakpoint: screen.breakpoint, width: screen.width, choose };
+  const screen = studioScreenOfWidth(current);
+  return { breakpoint: screen.breakpoint, label: screen.label, width: screen.width, choose };
 }

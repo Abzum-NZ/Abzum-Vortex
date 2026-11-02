@@ -128,6 +128,18 @@ export function StudioCanvasToolbar({
                 aria-label="Screen size"
                 size="sm"
                 value={[screen.breakpoint]}
+                // Tabbing into the group lands on the chosen screen, not on the first one.
+                onFocus={(event) => {
+                  const chosen =
+                    event.currentTarget.querySelector<HTMLElement>('[aria-pressed="true"]');
+                  const from = event.relatedTarget;
+                  if (
+                    chosen !== null &&
+                    chosen !== event.target &&
+                    !(from instanceof Node && event.currentTarget.contains(from))
+                  )
+                    chosen.focus();
+                }}
                 onValueChange={(values) => {
                   const chosen = studioScreens.find((entry) => entry.breakpoint === values[0]);
                   if (chosen) screen.choose(chosen.breakpoint);

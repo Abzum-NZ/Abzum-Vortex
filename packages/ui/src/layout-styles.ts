@@ -322,6 +322,11 @@ export const LAYOUT_ONLY_STYLES_CSS = `
 [data-vortex-studio-canvas] .vortex-puck-slot:empty {
   min-height: 4rem;
 }
+/* A screen the canvas shows view-only takes no drop, so an empty slot (a heading's or a link
+   tiles block's actions) draws no empty drop box. */
+[data-vortex-studio-canvas][data-vortex-view-only] .vortex-puck-slot:empty {
+  display: none;
+}
 [data-vortex-studio-canvas]
   :is([data-vortex-record-actions], [data-vortex-heading-actions])
   > .vortex-puck-slot:empty {
