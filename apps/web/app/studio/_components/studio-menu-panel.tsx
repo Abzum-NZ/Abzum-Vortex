@@ -23,14 +23,14 @@ import { useConfirm } from "@vortex/ui/components/confirm-dialog";
 import { Input } from "@vortex/ui/components/input";
 import { cn } from "@vortex/ui/lib/utils";
 import {
-  StudioOptionControl,
   studioMenuPageChoices,
   studioMenuPosition,
   type StudioMenuCommand,
   type StudioMenuItem,
   type StudioMenuResult,
-} from "@vortex/ui/studio";
-import { StudioHelp, studioAccessGateChoices } from "@vortex/ui/studio";
+} from "@vortex/platform/schema";
+import { StudioHelp, StudioOptionControl } from "@vortex/ui/studio";
+import { studioAccessGateChoices } from "@vortex/ui/studio";
 import { StudioNavTree, type StudioNavNode } from "./studio-nav-tree";
 import { StudioPanelShell, StudioSection } from "./studio-frame";
 import { StudioField } from "./studio-field";

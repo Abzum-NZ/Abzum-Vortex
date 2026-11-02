@@ -1,8 +1,12 @@
-CREATE FUNCTION vortex_access.protect_application_role_template_continuity() RETURNS trigger
+CREATE OR REPLACE FUNCTION vortex_access.protect_application_role_template_continuity() RETURNS trigger
     LANGUAGE plpgsql
     SET search_path TO ''
     AS $$
 begin
+  -- Only the history purge role may delete these rows; it owns one function and nothing else.
+  if tg_op = 'DELETE' and current_user = 'vortex_history_purger' then
+    return old;
+  end if;
   if tg_op = 'DELETE' then
     raise exception using errcode = '23514',
       message = 'Application role template continuity cannot be deleted';

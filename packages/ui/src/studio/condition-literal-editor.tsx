@@ -4,7 +4,7 @@ import { useId } from "react";
 import { FieldError, FieldLegend } from "../components/field";
 import { Input } from "@vortex/ui/components/input";
 import { Textarea } from "@vortex/ui/components/textarea";
-import { StudioOptionControl } from "./studio-setting-controls";
+import { StudioOptionControl } from "./studio-setting-basic-controls";
 import { useDateFormatOptions } from "../display/date-format-context";
 import {
   currentIso4217Alpha3CodeSetV2026_01_01,

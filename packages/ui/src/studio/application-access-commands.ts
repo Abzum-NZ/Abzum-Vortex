@@ -11,7 +11,7 @@ import {
   type ApplicationUsePlace,
   type SourceIdentityReservation,
 } from "@vortex/platform/schema";
-import { tokenName } from "./studio-words";
+import { tokenName } from "@vortex/platform/schema";
 
 /**
  * The Access tab's model and edits of the application draft: its roles (access groups), what each

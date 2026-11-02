@@ -59,12 +59,12 @@ import { StudioSavedViewsEditor } from "./grid-features/saved-views";
 import { StudioExportEditor } from "./grid-features/export";
 import { StudioInspectorGroup } from "./studio-inspector-group";
 import { StudioQueryBindings } from "./studio-query-bindings";
+import { StudioSettingFields } from "./studio-setting-controls";
 import {
-  StudioSettingFields,
   type StudioSettingChoices,
   type StudioSettingValues,
   studioSettingProblems,
-} from "./studio-setting-controls";
+} from "./studio-setting-model";
 
 type GroupValue = Extract<SourceBlockPropertyValueContract, { kind: "group" }>;
 

@@ -7,7 +7,7 @@ import {
   StoredCompositionRefusal,
   syncStoredBlockDependencies,
   validateStoredApplicationOutlets,
-} from "./stored-composition";
+} from "@vortex/platform/schema";
 import type { StudioSemanticSelection } from "./semantic-selection";
 import type { StudioPaletteChoice } from "./contextual-palette";
 import type {

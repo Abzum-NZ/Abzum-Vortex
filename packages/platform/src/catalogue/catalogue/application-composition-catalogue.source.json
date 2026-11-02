@@ -1433,13 +1433,39 @@
             "label": "Edit in Studio"
           },
           {
-            "key": "studio_new_application",
-            "label": "New application in Studio"
-          },
-          {
             "key": "app_store_upgrade",
             "label": "Upgrade in the App Store"
           }
+        ]
+      },
+      {
+        "kind": "choice",
+        "key": "application_capability",
+        "label": "Needs of the application",
+        "help": "What the viewer must be able to do with the application the page shows for this button to appear",
+        "required": false,
+        "options": [
+          { "key": "install_application", "label": "Install or upgrade it" },
+          { "key": "remove_application", "label": "Remove it" },
+          { "key": "delete_application", "label": "Delete it" },
+          { "key": "publish_application", "label": "Publish it" },
+          { "key": "create_application", "label": "Create one" }
+        ]
+      },
+      {
+        "kind": "choice",
+        "key": "icon",
+        "label": "Icon",
+        "help": "Shows the button as this symbol alone, its label as the tooltip",
+        "required": false,
+        "options": [
+          { "key": "eye", "label": "Open" },
+          { "key": "pencil", "label": "Edit" },
+          { "key": "trash", "label": "Delete" },
+          { "key": "plus", "label": "Install" },
+          { "key": "archive", "label": "Remove" },
+          { "key": "upload", "label": "Publish" },
+          { "key": "workflow", "label": "Run" }
         ]
       },
       {
@@ -3104,6 +3130,17 @@
       },
       {
         "kind": "boolean",
+        "key": "show_record_count",
+        "label": "Show how many",
+        "help": "Shows how many records the list holds, above the rows",
+        "required": false,
+        "defaultValue": {
+          "kind": "boolean",
+          "value": true
+        }
+      },
+      {
+        "kind": "boolean",
         "key": "inline_create",
         "label": "Add records from this list",
         "help": "Shows a create button in the list header and in its empty state",
@@ -3646,10 +3683,6 @@
                   "label": "Edit in Studio"
                 },
                 {
-                  "key": "studio_new_application",
-                  "label": "New application in Studio"
-                },
-                {
                   "key": "app_store_upgrade",
                   "label": "Upgrade in the App Store"
                 }
@@ -3669,6 +3702,14 @@
                 {
                   "key": "remove_application",
                   "label": "Remove it"
+                },
+                {
+                  "key": "delete_application",
+                  "label": "Delete it"
+                },
+                {
+                  "key": "publish_application",
+                  "label": "Publish it"
                 }
               ]
             },
@@ -3735,6 +3776,14 @@
                   "label": "Remove"
                 },
                 {
+                  "key": "archive",
+                  "label": "Remove"
+                },
+                {
+                  "key": "upload",
+                  "label": "Publish"
+                },
+                {
                   "key": "eye",
                   "label": "Open"
                 },
@@ -3745,6 +3794,14 @@
                 {
                   "key": "undo",
                   "label": "Restore"
+                },
+                {
+                  "key": "pencil",
+                  "label": "Edit"
+                },
+                {
+                  "key": "trash",
+                  "label": "Delete"
                 }
               ]
             },

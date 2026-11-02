@@ -2,13 +2,13 @@
   "id": "mod_app_store",
   "key": "vortex.app_store",
   "name": "App Store",
-  "description": "The organisation's application catalogue: a read-only system projection of the Applications it owns with a published version. Installing and upgrading are registered platform operations, never record writes.",
+  "description": "Studio's App Store section: the organisation's application catalogue, a read-only system projection of every application it has. Installing, upgrading, removing and deleting are registered platform operations a flow calls, never record writes.",
   "record_types": [
     {
       "id": "rt_store_application",
       "key": "store_application",
-      "name": "Store application",
-      "plural_name": "Store applications",
+      "name": "Application",
+      "plural_name": "Applications",
       "title_field": "name",
       "storage_contract_id": "srt_app_store_store_application",
       "storage_scope": "organization_shared",
@@ -19,8 +19,8 @@
         "protected_view": "application_store_entries",
         "organization_field": "organization_id",
         "revision_field": "revision",
-        "filterable_fields": ["name"],
-        "sortable_fields": ["key"],
+        "filterable_fields": ["name", "status", "is_system_application"],
+        "sortable_fields": ["key", "name", "status", "listing_order"],
         "refresh_while": {
           "field": "record_update_status",
           "values": ["pending", "updating", "retrying"],
@@ -79,7 +79,7 @@
           "required": false,
           "unique": false,
           "filterable": true,
-          "sortable": false,
+          "sortable": true,
           "search_priority": "first",
           "personal_data": "none",
           "public_display": "refused",
@@ -169,24 +169,32 @@
           "label": "Status",
           "required": false,
           "unique": false,
-          "filterable": false,
-          "sortable": false,
+          "filterable": true,
+          "sortable": true,
           "personal_data": "none",
           "public_display": "refused",
           "type": "choice",
           "settings": {
             "options": [
               {
-                "value": "available",
-                "label": "Not installed"
-              },
-              {
                 "value": "installed",
-                "label": "Installed"
+                "label": "Installed",
+                "tone": "success"
               },
               {
                 "value": "update_available",
-                "label": "Update available"
+                "label": "Upgrade available",
+                "tone": "warning"
+              },
+              {
+                "value": "available",
+                "label": "Not installed",
+                "tone": "neutral"
+              },
+              {
+                "value": "draft_only",
+                "label": "Draft only",
+                "tone": "info"
               }
             ],
             "options_source": {
@@ -240,7 +248,7 @@
         {
           "required": false,
           "unique": false,
-          "filterable": false,
+          "filterable": true,
           "sortable": false,
           "personal_data": "none",
           "public_display": "refused",
@@ -264,6 +272,130 @@
           "settings": {
             "minimum": 0
           }
+        },
+        {
+          "id": "fld_store_application_listing_order",
+          "key": "listing_order",
+          "label": "Listing order",
+          "required": false,
+          "unique": false,
+          "filterable": false,
+          "sortable": true,
+          "personal_data": "none",
+          "public_display": "refused",
+          "type": "text",
+          "settings": {
+            "max_length": 200
+          }
+        },
+        {
+          "id": "fld_store_application_owner_type",
+          "key": "owner_type",
+          "label": "Owner",
+          "required": false,
+          "unique": false,
+          "filterable": false,
+          "sortable": false,
+          "personal_data": "none",
+          "public_display": "refused",
+          "type": "choice",
+          "settings": {
+            "options": [
+              {
+                "value": "system",
+                "label": "System"
+              },
+              {
+                "value": "organisation",
+                "label": "Organisation"
+              }
+            ],
+            "options_source": {
+              "kind": "fixed"
+            }
+          }
+        },
+        {
+          "id": "fld_store_application_published_by_name",
+          "key": "published_by_name",
+          "label": "Published by",
+          "required": false,
+          "unique": false,
+          "filterable": false,
+          "sortable": false,
+          "personal_data": "none",
+          "public_display": "refused",
+          "type": "text",
+          "settings": {
+            "max_length": 200
+          }
+        },
+        {
+          "id": "fld_store_application_release_history",
+          "key": "release_history",
+          "label": "Release notes",
+          "required": false,
+          "unique": false,
+          "filterable": false,
+          "sortable": false,
+          "personal_data": "none",
+          "public_display": "refused",
+          "type": "text",
+          "settings": {
+            "max_length": 4000
+          }
+        },
+        {
+          "id": "fld_store_application_role_count",
+          "key": "role_count",
+          "label": "Roles",
+          "required": false,
+          "unique": false,
+          "filterable": false,
+          "sortable": false,
+          "personal_data": "none",
+          "public_display": "refused",
+          "type": "whole_number",
+          "settings": {}
+        },
+        {
+          "id": "fld_store_application_record_type_count",
+          "key": "record_type_count",
+          "label": "Record types",
+          "required": false,
+          "unique": false,
+          "filterable": false,
+          "sortable": false,
+          "personal_data": "none",
+          "public_display": "refused",
+          "type": "whole_number",
+          "settings": {}
+        },
+        {
+          "id": "fld_store_application_records_held",
+          "key": "records_held",
+          "label": "Records",
+          "required": false,
+          "unique": false,
+          "filterable": false,
+          "sortable": false,
+          "personal_data": "none",
+          "public_display": "refused",
+          "type": "whole_number",
+          "settings": {}
+        },
+        {
+          "id": "fld_store_application_data_kept",
+          "key": "data_kept",
+          "label": "Data kept",
+          "required": false,
+          "unique": false,
+          "filterable": false,
+          "sortable": false,
+          "personal_data": "none",
+          "public_display": "refused",
+          "type": "yes_no",
+          "settings": {}
         }
       ],
       "pipelines": [],
@@ -293,15 +425,23 @@
           "revision",
           "key",
           "name",
+          "listing_order",
           "description",
           "latest_version",
           "latest_release_note",
           "published_at",
+          "published_by_name",
+          "release_history",
           "installed_version",
           "status",
+          "owner_type",
+          "role_count",
+          "record_type_count",
           "record_update_status",
           "records_processed",
-          "is_system_application"
+          "is_system_application",
+          "records_held",
+          "data_kept"
         ],
         "changeable_fields": []
       }
@@ -323,22 +463,30 @@
         "revision",
         "key",
         "name",
+        "listing_order",
         "description",
         "latest_version",
         "latest_release_note",
         "published_at",
+        "published_by_name",
+        "release_history",
         "installed_version",
         "status",
+        "owner_type",
+        "role_count",
+        "record_type_count",
         "record_update_status",
         "records_processed",
-        "is_system_application"
+        "is_system_application",
+        "records_held",
+        "data_kept"
       ],
       "filter": null,
       "group_by": [],
       "aggregates": [],
       "sort": [
         {
-          "field": "key",
+          "field": "listing_order",
           "direction": "ascending"
         }
       ],

@@ -98,6 +98,10 @@ export {
   type RecordsTableBulkDependencies,
 } from "./records-table-features/bulk-run";
 export { createRecordsTableRunService } from "./records-table-features/run-chain";
+export {
+  applicationCapabilityAllowed,
+  applicationLinkRowOf,
+} from "./records-table-features/row-actions";
 export { createRecordsRangeSummaryService } from "./records-table-features/range-summary";
 export { createRecordsTableExportService } from "./records-table-features/export";
 export { decideRecordTypeCreatableFieldIds } from "./records-table-features/record-type-access";

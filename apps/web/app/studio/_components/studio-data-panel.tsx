@@ -5,11 +5,11 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@vortex/ui/components/dropdown-menu";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@vortex/ui/components/tooltip";
 import { useMemo, useState } from "react";
 import { Icon } from "@vortex/ui";
 import { Badge } from "@vortex/ui/components/badge";
 import { Button } from "@vortex/ui/components/button";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@vortex/ui/components/tooltip";
 import { StudioPanelShell, StudioSearchBox, StudioSection } from "./studio-frame";
 import {
   StudioNavEmpty,

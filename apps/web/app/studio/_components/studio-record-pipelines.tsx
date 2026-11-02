@@ -86,6 +86,9 @@ const toneClasses: Readonly<Record<PipelineStageTone, string>> = {
   chart_3: "bg-chart-3",
   chart_4: "bg-chart-4",
   chart_5: "bg-chart-5",
+  success: "bg-success",
+  warning: "bg-warning",
+  info: "bg-info",
 };
 const createAction = "__create_action__";
 

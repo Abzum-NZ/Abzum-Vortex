@@ -16,7 +16,7 @@ import { Badge } from "../components/badge";
 import { Button } from "../components/button";
 import { Input } from "../components/input";
 import { Label } from "../components/label";
-import { StudioOptionControl } from "./studio-setting-controls";
+import { StudioOptionControl } from "./studio-setting-basic-controls";
 import { Switch } from "../components/switch";
 import { ToggleGroup, ToggleGroupItem } from "../components/toggle-group";
 import { Icon } from "../icons/icon";

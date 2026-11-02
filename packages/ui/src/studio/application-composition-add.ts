@@ -35,7 +35,7 @@ import {
   StoredCompositionRefusal,
   syncStoredBlockDependencies,
   validateStoredApplicationOutlets,
-} from "./stored-composition";
+} from "@vortex/platform/schema";
 import type {
   StudioCompositionContext,
   StudioCompositionAddTarget,

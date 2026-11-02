@@ -478,11 +478,7 @@ export const bindDelete = (
 };
 
 /** Every records table on a page that reads a query of the record type, including related records. */
-export const recordTables = (
-  source: Source,
-  page: Page,
-  resolved: Pick<Resolved, "module" | "record">,
-) =>
+const recordTables = (source: Source, page: Page, resolved: Pick<Resolved, "module" | "record">) =>
   sourcePageItems(page.composition).filter((item) => {
     const query = item.props.vortex.query;
     if (String(item.type) !== "platform.renderer.table" || query === undefined) return false;
@@ -610,11 +606,7 @@ export const ensureDetailDelete = (
 };
 
 /** Whether a control's binding already opens one of the given pages. */
-export const controlOpens = (
-  source: Source,
-  controlAlias: string,
-  targets: readonly string[],
-): boolean =>
+const controlOpens = (source: Source, controlAlias: string, targets: readonly string[]): boolean =>
   source.body.flow_bindings.some(
     (binding) =>
       binding.control === controlAlias &&
@@ -685,7 +677,7 @@ export const isFormContainer = (item: SourceItem): boolean =>
   String(item.type) === "platform.renderer.form_container";
 
 /** Whether a records table shows its rows as a board; a board opens a card through its row click. */
-export const isBoardTable = (table: SourceItem): boolean =>
+const isBoardTable = (table: SourceItem): boolean =>
   (table.props.features as { board?: { enabled?: boolean } } | undefined)?.board?.enabled === true;
 
 /** Edit in each list's row menu, once, wherever an edit page exists. */

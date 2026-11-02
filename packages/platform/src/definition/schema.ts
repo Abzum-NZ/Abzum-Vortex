@@ -59,3 +59,7 @@ export * from "./version-impact";
 export * from "./platform-compatibility";
 export * from "./application-page-slots";
 export * from "./application-launcher-read";
+export * from "./application-authoring/stored-composition";
+export * from "./application-authoring/application-menu-commands";
+export * from "./application-authoring/application-structure";
+export * from "./application-authoring/studio-words";

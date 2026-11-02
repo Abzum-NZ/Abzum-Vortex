@@ -50,7 +50,7 @@ import {
   validateStoredApplicationOutlets,
   validateStoredZone,
   removeFlowBindingsOf,
-} from "./stored-composition";
+} from "@vortex/platform/schema";
 import { studioFormChangeRefusal, studioFormShapeRefusal } from "./application-composition-forms";
 import { restoreStudioGridFeatureBindings, studioGridDataSettings } from "./grid-features";
 import type { StudioSemanticSelection } from "./semantic-selection";

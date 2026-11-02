@@ -81,10 +81,16 @@ export {
   ApplicationAccountActionsProvider,
 } from "./navigation/account-actions";
 export type { ApplicationAccount, ApplicationAccountActions } from "./navigation/account-actions";
-export { WebMcpStatus } from "./navigation/application-shell";
+export {
+  ApplicationFrameHeader,
+  ApplicationSwitcherContext,
+  WebMcpStatus,
+} from "./navigation/application-shell";
 export type {
+  ApplicationFrameTopBar,
   ApplicationShellRuntime,
   ApplicationSwitcherData,
+  ApplicationSwitcherSource,
   ApplicationWebMcpRuntime,
 } from "./navigation/application-shell";
 export { ContentTransition, usePagePresence } from "./navigation/content-transition";

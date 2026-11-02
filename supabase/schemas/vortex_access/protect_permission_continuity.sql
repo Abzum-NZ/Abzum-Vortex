@@ -6,6 +6,10 @@ declare
   meaning_changed boolean := false;
   must_advance boolean;
 begin
+  -- Only the history purge role may delete these rows; it owns one function and nothing else.
+  if tg_op = 'DELETE' and current_user = 'vortex_history_purger' then
+    return old;
+  end if;
   if tg_op = 'DELETE' then
     raise exception using errcode = '23514', message = 'Permission continuity cannot be deleted';
   end if;

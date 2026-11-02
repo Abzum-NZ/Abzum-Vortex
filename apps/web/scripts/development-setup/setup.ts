@@ -235,7 +235,7 @@ const initializeLandingZoneDefault = async (
 const initializeAppStoreAddress = async (facts: InstallFacts): Promise<void> => {
   const { identityAuthorityId, stewardIdentityId } = facts;
   const { organizationId } = facts.system;
-  const appStoreAddress = "vortex.app.app_store";
+  const appStoreAddress = "vortex.app.studio";
   const session = nominatedOwnerSession(stewardIdentityId);
   const selection = organizationSelectionCandidateSchema.parse({ organizationId });
   const requests = createHumanOrganizationRequestService({ identityAuthorityId });
