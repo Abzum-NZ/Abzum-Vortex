@@ -51,7 +51,7 @@ import {
   type PeopleDirectoryOwner,
   type TotalSettings,
 } from "@vortex/platform/schema";
-import { StudioInspectorFooter } from "./studio-inspector";
+import { StudioInspectorFooter, StudioInspectorHeader } from "./studio-inspector";
 import {
   FieldDefaultSection,
   FieldFormatSection,
@@ -888,37 +888,37 @@ export function ModuleFieldsEditor({
       aria-label={adding ? `New field of ${record.name}` : `Field ${existing!.label}`}
     >
       {existing === undefined ? null : (
-        <div className="sticky top-0 z-10 -mx-4 -mt-3 bg-background px-4 pb-2 pt-3 flex items-start justify-between gap-2">
-          <div>
-            <h3 className="text-base font-semibold">{existing.label}</h3>
-            <p className="text-xs text-muted-foreground">Field</p>
-          </div>
-          <StudioInspectorActions
-            actions={[
-              {
-                label: "Move earlier",
-                disabled: disabled || record.fields[0]?.key === existing.key,
-                onSelect: () => move(-1),
-              },
-              {
-                label: "Move later",
-                disabled: disabled || record.fields.at(-1)?.key === existing.key,
-                onSelect: () => move(1),
-              },
-              {
-                // A published field keeps its stored values, so it is not offered for deletion.
-                label: published
-                  ? "Remove field (published: take it off the pages instead)"
-                  : "Remove field",
-                destructive: true,
-                disabled: disabled || published,
-                onSelect: () => {
-                  void remove();
+        <StudioInspectorHeader
+          title={existing.label}
+          kind="Field"
+          actions={
+            <StudioInspectorActions
+              actions={[
+                {
+                  label: "Move earlier",
+                  disabled: disabled || record.fields[0]?.key === existing.key,
+                  onSelect: () => move(-1),
                 },
-              },
-            ]}
-          />
-        </div>
+                {
+                  label: "Move later",
+                  disabled: disabled || record.fields.at(-1)?.key === existing.key,
+                  onSelect: () => move(1),
+                },
+                {
+                  // A published field keeps its stored values, so it is not offered for deletion.
+                  label: published
+                    ? "Remove field (published: take it off the pages instead)"
+                    : "Remove field",
+                  destructive: true,
+                  disabled: disabled || published,
+                  onSelect: () => {
+                    void remove();
+                  },
+                },
+              ]}
+            />
+          }
+        />
       )}
       {issues.length === 0 ? null : (
         <ul

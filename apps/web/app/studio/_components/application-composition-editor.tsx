@@ -894,7 +894,7 @@ export function ApplicationCompositionEditor(props: Props) {
           )}
         </fieldset>
       </StudioInspectorGroup>
-      <p role="status" aria-live="polite">
+      <p role="status" aria-live="polite" className={message === "" ? "sr-only" : "py-2 text-sm"}>
         {message}
       </p>
       <StudioDialog

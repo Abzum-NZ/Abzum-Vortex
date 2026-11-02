@@ -4,12 +4,16 @@ import { ToggleGroup, ToggleGroupItem } from "../components/toggle-group";
 
 /** A choice among two to four modes, all in view: one pressed segment, optionally with an icon. */
 export function StudioSegmentedControl<T extends string>({
+  id,
+  "aria-describedby": describedBy,
   label,
   value,
   options,
   disabled = false,
   onChange,
 }: Readonly<{
+  id?: string | undefined;
+  "aria-describedby"?: string | undefined;
   label: string;
   value: T;
   options: readonly Readonly<{ value: T; label: string; icon?: ReactNode; disabled?: boolean }>[];
@@ -18,7 +22,9 @@ export function StudioSegmentedControl<T extends string>({
 }>): ReactElement {
   return (
     <ToggleGroup
+      id={id}
       aria-label={label}
+      aria-describedby={describedBy}
       variant="outline"
       size="sm"
       className="w-full"

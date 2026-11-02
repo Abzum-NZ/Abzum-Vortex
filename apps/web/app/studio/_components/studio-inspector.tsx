@@ -1,5 +1,6 @@
 "use client";
-import type { ReactNode } from "react";
+import { createContext, useContext, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { cn } from "@vortex/ui/lib/utils";
 import { Input } from "@vortex/ui/components/input";
 import { Textarea } from "@vortex/ui/components/textarea";
@@ -71,6 +72,42 @@ function LabelsForm({ labels }: Readonly<{ labels: StudioLabelsForm }>) {
       )}
     </div>
   );
+}
+
+const HeaderSlotContext = createContext<HTMLElement | null>(null);
+
+/**
+ * Where an inspector's header goes: above the scrolling body, as in the canvas inspector. Items
+ * whose editors live inside the body (a field, a record type) draw their header with
+ * `StudioInspectorHeader`, which lands here.
+ */
+export function StudioInspectorHeaderSlot({ children }: Readonly<{ children: ReactNode }>) {
+  const [slot, setSlot] = useState<HTMLElement | null>(null);
+  return (
+    <HeaderSlotContext.Provider value={slot}>
+      <div ref={setSlot} className="shrink-0" />
+      {children}
+    </HeaderSlotContext.Provider>
+  );
+}
+
+/** The name and kind of the selected item, with its ⋯ menu, in the inspector's fixed header. */
+export function StudioInspectorHeader({
+  title,
+  kind,
+  actions,
+}: Readonly<{ title: string; kind: string; actions?: ReactNode }>) {
+  const slot = useContext(HeaderSlotContext);
+  const header = (
+    <header className="flex items-start justify-between gap-2 px-4 py-3">
+      <div className="min-w-0">
+        <h2 className="truncate text-base font-semibold">{title}</h2>
+        <p className="text-xs text-muted-foreground">{kind}</p>
+      </div>
+      {actions}
+    </header>
+  );
+  return slot === null ? header : createPortal(header, slot);
 }
 
 /**

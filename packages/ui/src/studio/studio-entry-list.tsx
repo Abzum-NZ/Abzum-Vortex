@@ -207,7 +207,7 @@ export function StudioEntryList({
                     {item.summary !== undefined && item.summary !== "" && (
                       <span
                         className={cn(
-                          "block truncate text-xs",
+                          "block truncate text-xs font-normal",
                           expanded
                             ? "text-foreground"
                             : "text-muted-foreground group-hover/entry:text-foreground group-focus-within/entry:text-foreground",

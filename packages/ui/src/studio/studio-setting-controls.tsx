@@ -17,7 +17,7 @@ import { studioTotalMeasureProperty } from "./grid-features/totals";
 import { Button } from "../components/button";
 import { Checkbox } from "../components/checkbox";
 import { Switch } from "../components/switch";
-import { ToggleGroup, ToggleGroupItem } from "../components/toggle-group";
+import { StudioSegmentedControl } from "./studio-segmented-control";
 import { Input } from "../components/input";
 import {
   InputGroup,
@@ -162,29 +162,15 @@ function SettingControl(props: ControlProps): ReactElement {
       // segmented control; it shows the default as selected until the person picks another.
       if (defaultKey !== undefined && property.options.length <= 4)
         return (
-          <ToggleGroup
+          <StudioSegmentedControl
             id={id}
-            aria-label={property.label}
+            label={property.label}
             aria-describedby={descriptionId}
-            variant="outline"
-            size="sm"
-            className="w-full"
             disabled={disabled}
-            value={[value?.kind === "choice" ? value.value : defaultKey]}
-            onValueChange={(next) => {
-              if (next[0] !== undefined) onChange({ kind: "choice", value: next[0] });
-            }}
-          >
-            {property.options.map((option) => (
-              <ToggleGroupItem
-                key={option.key}
-                value={option.key}
-                className="h-auto min-w-0 flex-1 whitespace-normal px-2 py-1.5 text-center"
-              >
-                {option.label}
-              </ToggleGroupItem>
-            ))}
-          </ToggleGroup>
+            value={value?.kind === "choice" ? value.value : defaultKey}
+            options={property.options.map((option) => ({ value: option.key, label: option.label }))}
+            onChange={(next) => onChange({ kind: "choice", value: next })}
+          />
         );
       return (
         <StudioOptionControl

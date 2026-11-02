@@ -22,7 +22,8 @@ import {
 import { Button } from "@vortex/ui/components/button";
 import { Input } from "@vortex/ui/components/input";
 import { useConfirm } from "@vortex/ui/components/confirm-dialog";
-import { STUDIO_RAIL_BODY_CLASS } from "./studio-frame";
+import { STUDIO_RAIL_BODY_CLASS, StudioPanelShell } from "./studio-frame";
+import { StudioInspectorHeader, StudioInspectorHeaderSlot } from "./studio-inspector";
 import { StudioField } from "./studio-field";
 import { StudioDataPanel } from "./studio-data-panel";
 import { StudioDataCentre, StudioDataEmpty } from "./studio-data-centre";
@@ -145,10 +146,7 @@ function ModuleInspector({
   );
   return (
     <div className="space-y-3">
-      <div className="sticky top-0 z-10 -mx-4 -mt-3 bg-background px-4 pb-2 pt-3">
-        <h3 className="text-base font-semibold">{module.name}</h3>
-        <p className="text-xs text-muted-foreground">Module</p>
-      </div>
+      <StudioInspectorHeader title={module.name} kind="Module" />
       <StudioField
         label="Module name"
         error={name.problem === "" ? undefined : name.problem}
@@ -271,24 +269,24 @@ function RecordTypeInspector({
       ) ?? [];
   return (
     <div className="space-y-4">
-      <div className="sticky top-0 z-10 -mx-4 -mt-3 bg-background px-4 pb-2 pt-3 flex items-start justify-between gap-2">
-        <div className="min-w-0">
-          <h3 className="truncate text-base font-semibold">{record.name}</h3>
-          <p className="text-xs text-muted-foreground">Record type</p>
-        </div>
-        <StudioInspectorActions
-          actions={[
-            {
-              label: "Delete record type",
-              destructive: true,
-              disabled,
-              onSelect: () => {
-                void remove();
+      <StudioInspectorHeader
+        title={record.name}
+        kind="Record type"
+        actions={
+          <StudioInspectorActions
+            actions={[
+              {
+                label: "Delete record type",
+                destructive: true,
+                disabled,
+                onSelect: () => {
+                  void remove();
+                },
               },
-            },
-          ]}
-        />
-      </div>
+            ]}
+          />
+        }
+      />
       {(references.length > 0 || issues.length > 0) && (
         <section className="space-y-2" aria-label="Delete">
           <StudioReferencesAlert
@@ -732,13 +730,10 @@ export function StudioDataInspectorView({ model }: Readonly<{ model: StudioDataM
   const { source, organizationId, view } = draft;
   const inspectorBody =
     current === null || module === undefined ? (
-      <>
-        <h2 className="text-base font-semibold">Inspector</h2>
-        <StudioDataEmpty
-          title="Nothing selected"
-          description="Select a field or record type to change it."
-        />
-      </>
+      <StudioDataEmpty
+        title="Nothing selected"
+        description="Select a field or record type to change it."
+      />
     ) : !isOwned ? (
       <ReadOnlyInspector
         key={JSON.stringify(current)}
@@ -778,9 +773,7 @@ export function StudioDataInspectorView({ model }: Readonly<{ model: StudioDataM
     ) : current.kind === "record_type" ? (
       adding?.scope === scope ? (
         <div className="space-y-4">
-          <h3 className="sticky top-0 z-10 -mx-4 -mt-3 bg-background px-4 pb-2 pt-3 text-base font-semibold">
-            New field
-          </h3>
+          <StudioInspectorHeader title="New field" kind="Record type" />
           <ModuleFieldsEditor
             key={`${scope}:${adding.type}`}
             source={source}
@@ -844,41 +837,43 @@ export function StudioDataInspectorView({ model }: Readonly<{ model: StudioDataM
     compileProblem?.selection != null &&
     current !== null &&
     JSON.stringify(compileProblem.selection) === JSON.stringify(current);
+  const body = (
+    <>
+      {compileProblem === null ? null : (
+        <div role="alert" className="space-y-2 rounded-md border border-destructive/50 p-3 text-sm">
+          <p className="font-semibold text-destructive">
+            {problemHere
+              ? "This stops the draft from compiling"
+              : "The draft does not compile, so it can't be previewed or published yet"}
+          </p>
+          <p className="break-words">{compileProblem.message}</p>
+          {compileProblem.selection === null || problemHere ? null : (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => select(compileProblem.selection)}
+            >
+              Show me
+            </Button>
+          )}
+        </div>
+      )}
+      {inspectorBody}
+      {usedIn === null ? null : (
+        <StudioUsedIn source={source} target={usedIn} name={describeSelection(modules, current)} />
+      )}
+    </>
+  );
+  if (current === null || module === undefined)
+    return <StudioPanelShell title="Inspector">{body}</StudioPanelShell>;
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className={STUDIO_RAIL_BODY_CLASS} data-studio-rail-body="">
-        {compileProblem === null ? null : (
-          <div
-            role="alert"
-            className="space-y-2 rounded-md border border-destructive/50 p-3 text-sm"
-          >
-            <p className="font-semibold text-destructive">
-              {problemHere
-                ? "This stops the draft from compiling"
-                : "The draft does not compile, so it can't be previewed or published yet"}
-            </p>
-            <p className="break-words">{compileProblem.message}</p>
-            {compileProblem.selection === null || problemHere ? null : (
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                onClick={() => select(compileProblem.selection)}
-              >
-                Show me
-              </Button>
-            )}
-          </div>
-        )}
-        {inspectorBody}
-        {usedIn === null ? null : (
-          <StudioUsedIn
-            source={source}
-            target={usedIn}
-            name={describeSelection(modules, current)}
-          />
-        )}
-      </div>
+      <StudioInspectorHeaderSlot>
+        <div className={STUDIO_RAIL_BODY_CLASS} data-studio-rail-body="">
+          {body}
+        </div>
+      </StudioInspectorHeaderSlot>
     </div>
   );
 }
@@ -932,6 +927,7 @@ export function StudioDataDialogs({ model }: Readonly<{ model: StudioDataModel }
   const { source } = draft;
   const moduleOpenings = useOpenings(creatingModule);
   const recordTypeOpenings = useOpenings(creating);
+  const queryOpenings = useOpenings(newQuery);
   return (
     <>
       <StudioModuleDialog
@@ -956,7 +952,7 @@ export function StudioDataDialogs({ model }: Readonly<{ model: StudioDataModel }
         }}
       />
       <StudioQuerySheet
-        key={newQuery ? "query-open" : "query-closed"}
+        key={`query-${queryOpenings}`}
         open={newQuery}
         draft={draft}
         doneLabel="Done"

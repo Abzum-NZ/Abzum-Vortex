@@ -122,8 +122,10 @@ export function StudioRecordStorageOwnership({
   return (
     <StudioInspectorGroup title="Storage and ownership" defaultOpen={false} summary={summary}>
       <StudioField label="Records are kept" hint="Fixed once the record type is published.">
-        {() => (
+        {(control) => (
           <StudioSegmentedControl
+            id={control.id}
+            aria-describedby={control["aria-describedby"]}
             label="Records are kept"
             value={record.storage_scope}
             disabled={disabled}

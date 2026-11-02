@@ -191,7 +191,7 @@ export function StudioRecordTypeDialog({
               title="Advanced"
               defaultOpen={false}
               persist={false}
-              summary={`Key ${effectiveKey || "…"} · Title field ${titleLabel || "…"} · ${recordStorageLabels[storageScope]} · ${recordOwnershipLabels[ownershipMode]}`}
+              summary={`Key ${effectiveKey || "…"}${firstModule ? ` · Module key ${effectiveModuleKey || "…"}` : ""} · Title field ${titleLabel || "…"} · ${recordStorageLabels[storageScope]} · ${recordOwnershipLabels[ownershipMode]}`}
             >
               <StudioField label="Key" hint="Made from the name. It does not change later.">
                 {(control) => (
@@ -229,8 +229,10 @@ export function StudioRecordTypeDialog({
                 label="Records are kept"
                 hint="Organisation: every application of the organisation may use them. This application: only this application reads them. Fixed once the record type is published."
               >
-                {() => (
+                {(control) => (
                   <StudioSegmentedControl
+                    id={control.id}
+                    aria-describedby={control["aria-describedby"]}
                     label="Records are kept"
                     value={storageScope}
                     options={storageScopes.map((value) => ({
@@ -258,6 +260,25 @@ export function StudioRecordTypeDialog({
                   />
                 )}
               </StudioField>
+              {firstModule && (
+                <StudioField
+                  label="Module key"
+                  hint="Made from the name. It is permanent after creation."
+                >
+                  {(control) => (
+                    <Input
+                      {...control}
+                      required
+                      maxLength={120}
+                      value={effectiveModuleKey}
+                      onChange={(event) => {
+                        setNewModuleKey(event.target.value);
+                        setIssues([]);
+                      }}
+                    />
+                  )}
+                </StudioField>
+              )}
             </StudioInspectorGroup>
             {firstModule ? (
               <FieldSet>
@@ -280,30 +301,6 @@ export function StudioRecordTypeDialog({
                       />
                     )}
                   </StudioField>
-                  <StudioInspectorGroup
-                    title="Advanced"
-                    defaultOpen={false}
-                    persist={false}
-                    summary={`Key ${effectiveModuleKey || "…"}`}
-                  >
-                    <StudioField
-                      label="Module key"
-                      hint="Made from the name. It is permanent after creation."
-                    >
-                      {(control) => (
-                        <Input
-                          {...control}
-                          required
-                          maxLength={120}
-                          value={effectiveModuleKey}
-                          onChange={(event) => {
-                            setNewModuleKey(event.target.value);
-                            setIssues([]);
-                          }}
-                        />
-                      )}
-                    </StudioField>
-                  </StudioInspectorGroup>
                 </FieldGroup>
               </FieldSet>
             ) : (
