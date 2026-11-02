@@ -22,6 +22,7 @@ import {
   SheetTitle,
 } from "@vortex/ui/components/sheet";
 import { Skeleton } from "@vortex/ui/components/skeleton";
+import { Spinner } from "@vortex/ui/components/spinner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@vortex/ui/components/tabs";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@vortex/ui/components/tooltip";
 import { previewStudioApplication } from "../preview-actions";
@@ -53,7 +54,14 @@ import { useStudioActionFlows } from "./use-studio-action-flows";
 const preloadReleasesHistory = () => import("./studio-history-tab");
 const ApplicationSourceImport = dynamic(
   () => import("./application-source-import").then((module) => module.ApplicationSourceImport),
-  { loading: () => <p role="status">Loading source import…</p> },
+  {
+    loading: () => (
+      <div role="status" className="flex items-center gap-2 text-sm text-muted-foreground">
+        <Spinner aria-hidden="true" />
+        Loading source import…
+      </div>
+    ),
+  },
 );
 const StandardPageAdoption = dynamic(
   () => import("./standard-page-adoption").then((module) => module.StandardPageAdoption),
