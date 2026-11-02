@@ -449,9 +449,6 @@
   --tw-font-weight: var(--vs-9e72eea5, var(--font-weight-medium, 500));
   font-weight: var(--vs-9e72eea5, var(--font-weight-medium, 500));
   &:focus-visible {
-    border-color: var(--ring);
-  }
-  &:focus-visible {
     --tw-ring-shadow: var(--tw-ring-inset,) 0 0 0
       calc(var(--vs-a68dd685, 3px) + var(--tw-ring-offset-width)) var(--tw-ring-color, currentcolor);
     box-shadow:
@@ -1218,9 +1215,6 @@
     }
   }
   &:focus-visible {
-    border-color: var(--ring);
-  }
-  &:focus-visible {
     --tw-ring-shadow: var(--tw-ring-inset,) 0 0 0
       calc(var(--vs-a68dd685, 3px) + var(--tw-ring-offset-width)) var(--tw-ring-color, currentcolor);
     box-shadow:
@@ -1638,7 +1632,6 @@
     padding-inline: var(--vs-c0b1c005, var(--spacing, 0.25rem));
   }
   &:focus-within {
-    border-color: var(--ring);
     --tw-ring-shadow: var(--tw-ring-inset,) 0 0 0
       calc(var(--vs-c0b1c00a, 3px) + var(--tw-ring-offset-width)) var(--tw-ring-color, currentcolor);
     --tw-ring-color: var(--ring);
@@ -2663,9 +2656,6 @@
     font-weight: var(--font-weight-medium, 500);
   }
   &:focus-visible {
-    border-color: var(--ring);
-  }
-  &:focus-visible {
     --tw-ring-shadow: var(--tw-ring-inset,) 0 0 0
       calc(var(--vs-73639784, 3px) + var(--tw-ring-offset-width)) var(--tw-ring-color, currentcolor);
     box-shadow:
@@ -3174,9 +3164,6 @@
     color: var(--muted-foreground);
   }
   &:focus-visible {
-    border-color: var(--ring);
-  }
-  &:focus-visible {
     --tw-ring-shadow: var(--tw-ring-inset,) 0 0 0
       calc(var(--vs-73639784, 3px) + var(--tw-ring-offset-width)) var(--tw-ring-color, currentcolor);
     box-shadow:
@@ -3554,9 +3541,6 @@
     }
   }
   &:focus-visible {
-    border-color: var(--ring);
-  }
-  &:focus-visible {
     --tw-ring-shadow: var(--tw-ring-inset,) 0 0 0
       calc(var(--vs-47674242, 3px) + var(--tw-ring-offset-width)) var(--tw-ring-color, currentcolor);
     box-shadow:
@@ -3770,7 +3754,6 @@
   }
 }
 .cn-radio-group-item-aria[data-focus-visible] {
-  border-color: var(--ring);
   --tw-ring-shadow: var(--tw-ring-inset,) 0 0 0
     calc(var(--vs-47674242, 3px) + var(--tw-ring-offset-width)) var(--tw-ring-color, currentcolor);
   box-shadow:
@@ -3964,9 +3947,6 @@
   transition-duration: var(--tw-duration, var(--default-transition-duration, 150ms));
   -webkit-user-select: none;
   user-select: none;
-  &:focus-visible {
-    border-color: var(--ring);
-  }
   &:focus-visible {
     --tw-ring-shadow: var(--tw-ring-inset,) 0 0 0
       calc(var(--vs-73639784, 3px) + var(--tw-ring-offset-width)) var(--tw-ring-color, currentcolor);
@@ -4916,9 +4896,6 @@
       var(--tw-ring-shadow), var(--tw-shadow);
   }
   &:focus-visible {
-    border-color: var(--ring);
-  }
-  &:focus-visible {
     --tw-ring-shadow: var(--tw-ring-inset,) 0 0 0
       calc(var(--vs-a68dd685, 3px) + var(--tw-ring-offset-width)) var(--tw-ring-color, currentcolor);
     box-shadow:
@@ -5418,9 +5395,6 @@
   );
   transition-duration: var(--tw-duration, var(--default-transition-duration, 150ms));
   &:focus-visible {
-    border-color: var(--ring);
-  }
-  &:focus-visible {
     --tw-ring-shadow: var(--tw-ring-inset,) 0 0 0
       calc(var(--vs-73639784, 3px) + var(--tw-ring-offset-width)) var(--tw-ring-color, currentcolor);
     box-shadow:
@@ -5647,9 +5621,6 @@
     @media (hover: hover) {
       color: var(--foreground);
     }
-  }
-  &:focus-visible {
-    border-color: var(--ring);
   }
   &:focus-visible {
     --tw-ring-color: var(--ring);
@@ -5999,9 +5970,6 @@
   }
   &:has(*:disabled) {
     opacity: 50%;
-  }
-  &:has(*:is([data-slot="input-group-control"]:focus-visible)) {
-    border-color: var(--ring);
   }
   &:has(*:is([data-slot="input-group-control"]:focus-visible)) {
     --tw-ring-shadow: var(--tw-ring-inset,) 0 0 0

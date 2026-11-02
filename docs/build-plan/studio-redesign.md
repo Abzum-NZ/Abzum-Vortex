@@ -63,7 +63,7 @@ The ratios below are WCAG 2.x, computed from the catalogue's resolved oklch valu
 
 Tinted status fills use `bg-warning/10`, `bg-destructive/10` and `bg-success/10` with text in the same role. Each stays at 4.5:1 or above because the tint is no more than 10% over the background. Chart colours are never used for status.
 
-**Focus ring (platform-wide, at the root):** the platform's solid outline is the only focus indicator, and the style's own translucent ring and border recolour are switched off. Its colour (`--vortex-focus-color`) is computed in CSS from the stored `--ring` and `--foreground` (`color-mix` at 85% ring), which measures 3:1 or more on the background, card, popover, muted, accent and sidebar surfaces of every shipped theme in light and dark. No stored theme changes and `--ring` stays the token a theme overrides. Studio code adds no ring override.
+**Focus ring (platform-wide, at the root):** the platform's solid outline is the only focus indicator, and the style's own translucent ring and border recolour are switched off. Its colour (`--vortex-focus-color`) is computed in CSS from the stored `--ring` and `--foreground` (`color-mix` at 85% ring), which measures 3:1 or more on the background, card, popover, muted, accent and sidebar surfaces of every shipped theme in light and dark. No stored theme changes and `--ring` stays the token a theme overrides. Studio code adds no ring override. Inset outlines (rows, cells, disclosure triggers) sit on the row's own fill, so a current row under a bold menu accent relies on the fill change plus the outline.
 
 ### B3. Typography (Geist via `bodyFont: "geist"`; Tailwind scale only)
 

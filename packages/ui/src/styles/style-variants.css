@@ -3867,9 +3867,6 @@
 @scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
   :scope .cn-input {
     border-bottom-color: var(--input);
-    &:focus-visible {
-      border-bottom-color: var(--ring);
-    }
     &[aria-invalid="true"] {
       border-bottom-color: var(--destructive);
     }
@@ -4410,9 +4407,6 @@
 @scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
   :scope .cn-native-select {
     border-bottom-color: var(--input);
-    &:focus-visible {
-      border-bottom-color: var(--ring);
-    }
     &[aria-invalid="true"] {
       border-bottom-color: var(--destructive);
     }
@@ -4919,9 +4913,6 @@
   :scope .cn-select-trigger {
     border-bottom-color: var(--input);
     padding-inline: 0px;
-    &:focus-visible {
-      border-bottom-color: var(--ring);
-    }
     &[aria-invalid="true"] {
       border-bottom-color: var(--destructive);
     }
@@ -5572,9 +5563,6 @@
   :scope .cn-textarea {
     resize: none;
     border-bottom-color: var(--input);
-    &:focus-visible {
-      border-bottom-color: var(--ring);
-    }
     &[aria-invalid="true"] {
       border-bottom-color: var(--destructive);
     }
@@ -6149,9 +6137,6 @@
     }
     &:has(*[data-align="block-start"]) {
       border-radius: 0;
-    }
-    &:has(*:is([data-slot="input-group-control"]:focus-visible)) {
-      border-bottom-color: var(--ring);
     }
     &:has(*:is([data-slot][aria-invalid="true"])) {
       border-bottom-color: var(--destructive);
@@ -6841,10 +6826,6 @@
   :scope .cn-combobox-chips {
     border-color: transparent;
     border-bottom-color: var(--input);
-    &:focus-within {
-      border-color: transparent;
-      border-bottom-color: var(--ring);
-    }
     &:has([aria-invalid="true"]) {
       border-color: transparent;
       border-bottom-color: var(--destructive);
