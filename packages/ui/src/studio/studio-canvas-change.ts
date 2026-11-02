@@ -16,7 +16,6 @@ import {
   type ApplicationSourceDocument,
   type ImmutablePlatformBlockCatalogue,
   type PageSlotAddress,
-  type SourceItem,
 } from "@vortex/platform/schema";
 import { regions } from "./application-composition-regions";
 import { regionLevels } from "./studio-composition-depth";

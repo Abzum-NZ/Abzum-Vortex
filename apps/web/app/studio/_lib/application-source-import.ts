@@ -125,7 +125,7 @@ function ambiguousMembers(text: string): string | undefined {
           return `An object in the JSON source has more than ${definitionLimits.sourceContainerMembers} members, the most one may have. Remove some.`;
       }
     }
-    // The existing body bound is 32; the envelope adds the root and body containers.
+    // The body bound is `definitionLimits.sourceNestingDepth`; the envelope adds the root and body containers.
     if (containers.length > definitionLimits.sourceNestingDepth + 2)
       return `The JSON source nests objects and lists more than ${definitionLimits.sourceNestingDepth} levels deep, the most it may. Flatten the deepest part.`;
   }

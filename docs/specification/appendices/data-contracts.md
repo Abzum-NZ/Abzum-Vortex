@@ -758,7 +758,7 @@ Every numeric limit of a definition that a builder can reach is declared once, i
 | Query columns                    | 200          | query                          |                                                                  |
 | Query grouping fields            | 10           | query                          |                                                                  |
 | Query totals                     | 20           | query                          |                                                                  |
-| Query sort fields                | 20           | query                          | `module_query_open_internal` (a query sorts only by sortable fields, so the editor reaches 8) |
+| Query sort fields                | 20           | query                          | `module_query_open_internal` (a query sorts only by sortable fields or its own grouping fields, so the editor reaches 8; the rule is enforced when a draft is saved, imported or published and when a field's sorting is turned off, never when a stored draft or release is read, so a draft saved before it opens and shows the problem) |
 | Query page size                  | 200          | query                          | the list paging rule                                             |
 | Pages                            | 100          | application                    |                                                                  |
 | Layouts                          | 100          | application                    |                                                                  |
@@ -768,6 +768,7 @@ Every numeric limit of a definition that a builder can reach is declared once, i
 | Search fields; search record types | 100; 20    | application search             |                                                                  |
 | Blocks                           | 512          | application (pages and layouts together) |                                                        |
 | Block nesting depth              | 32 levels    | any content area, counting the layout blocks that host a page |                                                                  |
+| Provenance path length           | 128 segments | compiled definition            | derived from the source JSON nesting plus 16                    |
 | Source JSON nesting              | 112 levels   | source file                    | derived from the block depth: 3 per block level plus 16         |
 | Source members per object        | 1,000        | source file                    |                                                                  |
 | Source import size               | 2 MiB        | source file                    |                                                                  |

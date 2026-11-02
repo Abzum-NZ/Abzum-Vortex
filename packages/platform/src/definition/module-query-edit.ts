@@ -266,14 +266,14 @@ const inlineQueryProblems = (record: RecordType, query: InlineQuery): string[] =
   for (const key of sortKeys)
     if (!query.group_by.includes(key) && byKey.get(key)?.sortable === false)
       problems.push(
-        `Sorting: ${named(key)} is not sortable. Turn on "People can sort by it" on the field first.`,
+        `Sorting: ${named(key)} is not sortable. Turn on "Allow sorting" on the field first.`,
       );
   const filterKeys = filterFields(query.filter);
   missing("Filter", filterKeys);
   for (const key of new Set(filterKeys))
     if (byKey.get(key)?.filterable === false)
       problems.push(
-        `Filter: ${named(key)} can't be filtered by. Turn on "People can filter by it" on the field first.`,
+        `Filter: ${named(key)} can't be filtered by. Turn on "Allow filtering" on the field first.`,
       );
   const inputKeys = new Set(query.inputs.map((input) => input.key));
   for (const key of new Set(filterParameters(query.filter)))
@@ -310,7 +310,7 @@ const inlineQueryProblems = (record: RecordType, query: InlineQuery): string[] =
         problems.push(`${where}: ${total.field} is not a field of ${record.name} any more.`);
       else if (total.operation === "distinct_count" && !field.filterable)
         problems.push(
-          `${where}: ${field.label} can't be counted by different values. Turn on "People can filter by it" on the field first.`,
+          `${where}: ${field.label} can't be counted by different values. Turn on "Allow filtering" on the field first.`,
         );
       else if (
         total.operation === "distinct_count"

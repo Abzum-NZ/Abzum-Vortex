@@ -6,7 +6,7 @@ import type {
 import { itemSlots, regionHostLevels, regions } from "./application-composition-regions";
 
 /** How deep a list of blocks nests: a block of the list is level one. */
-export const nestingOf = (
+const nestingOf = (
   catalogue: ImmutablePlatformBlockCatalogue,
   items: readonly SourceItem[],
 ): number =>
