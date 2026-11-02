@@ -18,6 +18,7 @@ import {
   type VortexIconName,
 } from "@vortex/platform/schema";
 import { Icon, IconLibraryProvider } from "@vortex/ui";
+import { resolveVortexIconName } from "@vortex/ui/icons";
 import { Button } from "@vortex/ui/components/button";
 import { useConfirm } from "@vortex/ui/components/confirm-dialog";
 import { Input } from "@vortex/ui/components/input";
@@ -590,15 +591,15 @@ function StudioMenuEntryEditor({
           <StudioHelp hint="Drawn from the application's icon library, chosen in Theme." />
         </FieldLegend>
         <ToggleGroup
-          aria-label="Icon"
           value={[item.icon]}
+          spacing={1}
           disabled={disabled}
           onValueChange={(next) => {
-            const chosen = VORTEX_ICON_NAMES.find((name) => name === next[0]);
+            const chosen = next[0] === undefined ? undefined : resolveVortexIconName(next[0]);
             if (chosen !== undefined && chosen !== item.icon)
               change({ kind: "change", alias: item.id, changes: { icon: chosen } });
           }}
-          className="grid w-full grid-cols-7 gap-1"
+          className="grid w-full grid-cols-7"
         >
           {VORTEX_ICON_NAMES.map((name: VortexIconName) => (
             <Tooltip key={name}>
@@ -607,7 +608,7 @@ function StudioMenuEntryEditor({
                   <ToggleGroupItem
                     value={name}
                     aria-label={name.replaceAll("-", " ")}
-                    className="aspect-square h-auto w-full min-w-0"
+                    className="aspect-square h-auto w-full min-w-0 aria-pressed:ring-2 aria-pressed:ring-primary"
                   />
                 }
               >

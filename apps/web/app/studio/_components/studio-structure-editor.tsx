@@ -274,7 +274,7 @@ export function StudioStructureEditor({
                   />
                 )}
               </StudioField>
-              <Label className="gap-2 text-sm">
+              <Label>
                 <Checkbox
                   checked={addToMenu}
                   disabled={disabled}

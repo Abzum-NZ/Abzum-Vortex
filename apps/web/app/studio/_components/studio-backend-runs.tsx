@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { FormattedTime } from "@vortex/ui";
 import { Badge } from "@vortex/ui/components/badge";
+import { Button } from "@vortex/ui/components/button";
 import {
   Table,
   TableBody,
@@ -66,13 +67,9 @@ export function StudioBackendRuns({
     <section aria-label="Back-end runs" className="space-y-3">
       <div className="flex items-center justify-between">
         <h2 className="m-0 text-lg font-semibold">Back-end runs</h2>
-        <button
-          type="button"
-          className="text-sm underline"
-          onClick={() => setGeneration((n) => n + 1)}
-        >
+        <Button type="button" variant="link" size="xs" onClick={() => setGeneration((n) => n + 1)}>
           Reload
-        </button>
+        </Button>
       </div>
       {load.runs.length === 0 ? (
         <p role="status">Nothing has run on the back end yet.</p>

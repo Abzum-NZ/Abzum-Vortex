@@ -136,21 +136,20 @@ export function StudioSaveState({ draft }: Readonly<{ draft: StudioDraft }>) {
     </Badge>
   );
 
+  const badgeTrigger = (
+    <Button
+      type="button"
+      variant="ghost"
+      className="h-auto rounded-full border-0 p-0 hover:bg-transparent aria-expanded:bg-transparent active:translate-y-0"
+    />
+  );
+
   return (
     <>
       <span role="status" aria-live="polite" className="inline-flex shrink-0">
         {notSaved ? (
           <Popover>
-            <PopoverTrigger
-              aria-label={`${label}: show save details`}
-              render={
-                <Button
-                  type="button"
-                  variant="ghost"
-                  className="h-auto rounded-full p-0 hover:bg-transparent"
-                />
-              }
-            >
+            <PopoverTrigger aria-label={`${label}: show save details`} render={badgeTrigger}>
               {badge}
             </PopoverTrigger>
             <PopoverContent className="space-y-3">
@@ -190,17 +189,7 @@ export function StudioSaveState({ draft }: Readonly<{ draft: StudioDraft }>) {
           </Popover>
         ) : (
           <Tooltip>
-            <TooltipTrigger
-              render={
-                <Button
-                  type="button"
-                  variant="ghost"
-                  className="h-auto rounded-full p-0 hover:bg-transparent"
-                />
-              }
-            >
-              {badge}
-            </TooltipTrigger>
+            <TooltipTrigger render={badgeTrigger}>{badge}</TooltipTrigger>
             <TooltipContent>
               {busy ? (
                 label

@@ -480,6 +480,7 @@ export function ApplicationSourceImport({ disabled, readSnapshot, onApply }: Pro
         }}
       >
         <CardContent>
+          {/* shadcn-exempt: hidden file input; the Button below opens it */}
           <input
             ref={fileInput}
             type="file"
@@ -493,16 +494,19 @@ export function ApplicationSourceImport({ disabled, readSnapshot, onApply }: Pro
               void readFile(file);
             }}
           />
-          <button
+          <Button
             type="button"
+            variant="ghost"
             disabled={disabled}
             onClick={() => fileInput.current?.click()}
-            className="flex w-full flex-col items-center gap-3 rounded-lg p-8 text-center outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+            className="h-auto w-full flex-col gap-3 p-8 text-center whitespace-normal"
           >
             <Icon name="arrow-up" className="size-8 text-muted-foreground" />
             <span className="font-medium">Drop an application file or browse</span>
-            <span className="text-xs text-muted-foreground">Up to 2 MiB, same application</span>
-          </button>
+            <span className="text-xs font-normal text-muted-foreground">
+              Up to 2 MiB, same application
+            </span>
+          </Button>
         </CardContent>
       </Card>
       {text !== "" && (
