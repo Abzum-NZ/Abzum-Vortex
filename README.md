@@ -104,7 +104,7 @@ assigned through the protected Access operations.
 
 An interrupted `pnpm setup:local` run resumes from identifiers recorded in the local Supabase
 workdir's `supabase/.temp/development-setup-state.json`; worktrees using the same lane share this
-state. A database reset makes setup start afresh; provisioning and record saves replay by their stable
+state. An explicit lane reset clears that lane's state so setup starts afresh; provisioning and record saves replay by their stable
 idempotency keys. Re-running setup for the same organisation reuses its published releases,
 installations and role assignments. A different nominated account is refused. `pnpm demo:setup` never resets the local database.
 
