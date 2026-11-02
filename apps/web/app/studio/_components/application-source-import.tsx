@@ -42,23 +42,28 @@ import {
 import { useConfirm } from "@vortex/ui/components/confirm-dialog";
 
 import { useEffect, useRef, useState } from "react";
+import { definitionLimitImportSize, definitionLimits } from "@vortex/platform/schema";
 import { reviewStudioApplicationSource } from "../actions";
 import {
-  maximumApplicationSourceImportBytes,
   readStudioApplicationSourceImport,
   sameStudioApplicationSourceImportSnapshot,
   studioApplicationSourceReviewResultSchema,
   type StudioApplicationSourceImportSnapshot,
+  type StudioSourceImportShowMe,
 } from "../_lib/application-source-import";
 
 // The import's notices replace one another: a refusal does not stay on screen through a later
 // successful check or the replace.
 let lastImportNotice: string | undefined;
-const importNotice = (message: string, kind?: "success" | "error" | "info"): void => {
+const importNotice = (
+  message: string,
+  kind?: "success" | "error" | "info",
+  action?: Readonly<{ label: string; onClick: () => void }>,
+): void => {
   if (lastImportNotice !== undefined) toast.dismiss(lastImportNotice);
   const id = `studio-source-import-${crypto.randomUUID()}`;
   lastImportNotice = id;
-  studioNotice(message, kind, undefined, { id });
+  studioNotice(message, kind, undefined, { id, action });
 };
 
 type ReviewedSource = Readonly<{
@@ -81,6 +86,11 @@ type Props = Readonly<{
   onOpenChange: (open: boolean) => void;
   disabled: boolean;
   readSnapshot: () => StudioApplicationSourceImportSnapshot | null;
+  /** Opens the place a refusal names in the draft: absent when the draft has no such place. */
+  onShowPlace: (
+    source: ApplicationSourceDocument,
+    place: StudioSourceImportShowMe,
+  ) => (() => boolean) | undefined;
   onApply: (
     expected: StudioApplicationSourceImportSnapshot,
     source: ApplicationSourceDocument,
@@ -134,6 +144,7 @@ export function ApplicationSourceImport({
   onOpenChange,
   disabled,
   readSnapshot,
+  onShowPlace,
   onApply,
 }: Props) {
   const [confirm, confirmDialog] = useConfirm();
@@ -195,9 +206,9 @@ export function ApplicationSourceImport({
     setDiagnostics(null);
     busy.current = null;
     setOperation(null);
-    if (file.size > maximumApplicationSourceImportBytes) {
+    if (file.size > definitionLimits.sourceImportBytes) {
       importNotice(
-        "The JSON source must be at most 2 MiB. Your existing input is preserved.",
+        `The JSON source must be at most ${definitionLimitImportSize}. Your existing input is preserved.`,
         "error",
       );
       return;
@@ -215,11 +226,11 @@ export function ApplicationSourceImport({
         return;
       }
       if (
-        value.length > maximumApplicationSourceImportBytes ||
-        new TextEncoder().encode(value).byteLength > maximumApplicationSourceImportBytes
+        value.length > definitionLimits.sourceImportBytes ||
+        new TextEncoder().encode(value).byteLength > definitionLimits.sourceImportBytes
       ) {
         importNotice(
-          "The JSON source must be at most 2 MiB. Your previous input is preserved.",
+          `The JSON source must be at most ${definitionLimitImportSize}. Your previous input is preserved.`,
           "error",
         );
         return;
@@ -256,7 +267,21 @@ export function ApplicationSourceImport({
       snapshot.rootAlias,
     );
     if (candidate.kind !== "valid") {
-      importNotice(candidate.message, "error");
+      importNotice(
+        candidate.message,
+        "error",
+        // The problem is in the file; the link opens the same place in the draft, when it has one.
+        candidate.showMe !== undefined &&
+          onShowPlace(snapshot.source, candidate.showMe) !== undefined
+          ? {
+              label: "Show me",
+              onClick: () => {
+                if (onShowPlace(snapshot.source, candidate.showMe!)?.() === true)
+                  onOpenChange(false);
+              },
+            }
+          : undefined,
+      );
       return;
     }
     busy.current = "reviewing";
@@ -514,7 +539,7 @@ export function ApplicationSourceImport({
                 <Icon name="upload" className="size-8 text-muted-foreground" />
                 <span className="font-medium">Drop an application file or browse</span>
                 <span className="text-xs font-normal text-muted-foreground">
-                  Up to 2 MiB, same application
+                  Up to {definitionLimitImportSize}, same application
                 </span>
               </Button>
             </CardContent>

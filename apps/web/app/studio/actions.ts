@@ -27,13 +27,12 @@ import { resolveIdentitySession } from "../auth/_lib/session-server";
 import { readSavedStudioApplicationConditionContext } from "../_lib/studio-application-condition-context";
 import type { StudioApplicationConditionContextResult } from "@vortex/ui/studio";
 import {
-  maximumApplicationSourceImportBytes,
   studioApplicationSourceReviewRequestSchema,
   studioApplicationSourceReviewResultSchema,
   type StudioApplicationSourceReviewResult,
 } from "./_lib/application-source-import";
 import { platformPermissionSource } from "../_lib/platform-permission-source";
-import { tokenName } from "@vortex/platform/schema";
+import { definitionLimits, tokenName } from "@vortex/platform/schema";
 import type { StudioThemeResolution } from "./_lib/studio-theme-options";
 import type { StudioStoredApplicationDraft } from "@vortex/ui/studio";
 import { readStudioPersonLabel } from "../_lib/studio-person-labels";
@@ -82,7 +81,7 @@ export async function reviewStudioApplicationSource(
       source.key !== draft.key ||
       source.root_alias !== draft.source.root_alias ||
       new TextEncoder().encode(canonicalJson(source)).byteLength >
-        maximumApplicationSourceImportBytes
+        definitionLimits.sourceImportBytes
     )
       return refuse("review-application-source", "STUDIO_SOURCE_REVIEW_SOURCE_REJECTED", {
         kind: "invalid",

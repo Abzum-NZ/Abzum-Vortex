@@ -44,7 +44,5 @@ export * from "./definition/module-links";
 
 export * from "./definition/application-composition/records-table-features/query-facts";
 
-export {
-  MODULE_QUERY_MAXIMUM_TOTALS,
-  MODULE_MAXIMUM_QUERIES,
-} from "./definition/module-source-contracts";
+export * from "./definition/definition-limits";
+export * from "./definition/module-query-order";

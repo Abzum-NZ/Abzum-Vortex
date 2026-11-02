@@ -178,12 +178,10 @@ export default async function StudioApplicationPage({
   searchParams,
 }: {
   params: Promise<{ organizationId: string; applicationRootId: string }>;
-  searchParams: Promise<{ tab?: string; section?: string; module?: string }>;
+  searchParams: Promise<{ tab?: string; section?: string; module?: string; record?: string }>;
 }) {
-  const [{ organizationId, applicationRootId }, { tab, section, module }] = await Promise.all([
-    params,
-    searchParams,
-  ]);
+  const [{ organizationId, applicationRootId }, { tab, section, module, record }] =
+    await Promise.all([params, searchParams]);
   const session = await continueStudioSession();
   if (session.kind === "temporarily_unavailable")
     return <StudioUnavailable subject="Application draft" result={session} />;
@@ -231,6 +229,7 @@ export default async function StudioApplicationPage({
       initialTab={tab}
       initialSection={section}
       initialModule={module}
+      initialRecordType={record}
       applications={applications}
       initialView={{
         identityReservations: view.identityReservations,

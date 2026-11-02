@@ -2,6 +2,7 @@
 
 import { Alert, AlertDescription } from "../components/alert";
 import { FieldGroup } from "../components/field";
+import { StudioLimitNote, StudioReasoned, studioLimitReason } from "./studio-limit";
 import { useEffect, useRef, useState, type ReactElement } from "react";
 import {
   canonicalJson,
@@ -554,7 +555,10 @@ function ListControl({
           },
         };
   const itemName = property.item.label.toLowerCase();
+  // The choice options are the list that states its limit; the other lists only stop at theirs.
+  const optionsLimited = property.key === "options";
   const full = items.length >= property.maximumItems;
+  const fullReason = optionsLimited ? studioLimitReason("choiceOptions", items.length) : undefined;
   const add = () => {
     if (fresh === undefined) return;
     write([...items, fresh], [...keys.current, newKey()]);
@@ -640,14 +644,18 @@ function ListControl({
               }}
             />
             <InputGroupAddon align="inline-end">
-              <InputGroupButton
-                aria-label={`Add ${itemName}`}
-                size="icon-xs"
-                disabled={disabled || full || newLabel.trim() === ""}
-                onClick={add}
-              >
-                <Plus />
-              </InputGroupButton>
+              <StudioReasoned reason={fullReason}>
+                <InputGroupButton
+                  aria-label={`Add ${itemName}`}
+                  size="icon-xs"
+                  disabled={
+                    disabled || (full && fullReason === undefined) || newLabel.trim() === ""
+                  }
+                  onClick={add}
+                >
+                  <Plus />
+                </InputGroupButton>
+              </StudioReasoned>
             </InputGroupAddon>
           </InputGroup>
         ) : (
@@ -663,6 +671,7 @@ function ListControl({
           </Button>
         )}
       </StudioEntryList>
+      {optionsLimited && <StudioLimitNote limit="choiceOptions" used={items.length} />}
       {confirmDialog}
     </>
   );

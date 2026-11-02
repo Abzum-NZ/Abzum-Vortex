@@ -1,6 +1,7 @@
 import type { Config, Data } from "@puckeditor/core";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
+  definitionLimits,
   immutablePlatformBlockCatalogueSchema,
   sourceItemTree,
   sourcePageSlotAddresses,
@@ -97,7 +98,10 @@ export const useStudioCanvasModel = (
   const catalogue = useMemo(
     () =>
       immutablePlatformBlockCatalogueSchema.parse({
-        compositionPolicy: { maximumDepth: 32, maximumPlacements: 512 },
+        compositionPolicy: {
+          maximumDepth: definitionLimits.compositionDepth,
+          maximumPlacements: definitionLimits.compositionPlacements,
+        },
         releases: [...registry.getReleases()].sort(
           (first, second) =>
             first.blockId.localeCompare(second.blockId) ||

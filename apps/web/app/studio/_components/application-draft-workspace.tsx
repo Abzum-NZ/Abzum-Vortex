@@ -69,6 +69,7 @@ type WorkspaceProps = Readonly<{
   initialTab?: string | undefined;
   initialSection?: string | undefined;
   initialModule?: string | undefined;
+  initialRecordType?: string | undefined;
   applications: readonly StudioModuleOwnerApplication[];
   initialView: Parameters<typeof useStudioDraft>[0]["initialView"];
 }>;
@@ -267,6 +268,7 @@ function ExistingApplicationWorkspace(props: ExistingProps) {
     draft,
     applications,
     initialModule: props.initialModule ?? null,
+    initialRecordType: props.initialRecordType ?? null,
     hidden: tab !== "data",
     compositionContext: canvas.compositionContext,
     readRecords: canvas.readRecordChoices,
@@ -274,6 +276,17 @@ function ExistingApplicationWorkspace(props: ExistingProps) {
   });
   const releases = useStudioReleasesTab({
     draft,
+    showPlace: (moduleKey, recordKey) => {
+      const module = draft.source.body.modules.find((entry) => entry.key === moduleKey);
+      if (module === undefined) return false;
+      draft.select(
+        recordKey === undefined
+          ? { kind: "module", moduleKey }
+          : { kind: "record_type", moduleKey, recordKey },
+      );
+      setTab("data");
+      return true;
+    },
     initialStanding: place.standing,
     hidden: tab !== "releases",
     initialSection: isStudioReleasesSection(props.initialSection)

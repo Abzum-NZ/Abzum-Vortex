@@ -1,3 +1,4 @@
+import { definitionLimits } from "../definition/definition-limits";
 import { z } from "zod";
 import { workflowValueTypeSchema } from "../catalogue/catalogues";
 import { descriptionSchema, jsonValueSchema } from "../catalogue/common";
@@ -422,7 +423,7 @@ const sourceFlowSchema = z
     /** The input that names the record an interactive flow runs for; see `flowSchema`. */
     recordInput: builderKeySchema.optional(),
     variables: boundedRecord(sourceVariableDeclarationSchema, 100).default({}),
-    triggers: z.array(sourceFlowTriggerSchema).max(10).default([]),
+    triggers: z.array(sourceFlowTriggerSchema).max(definitionLimits.flowTriggers).default([]),
     tasks: z.array(sourceFlowTaskSchema).min(1).max(flowMaximumTaskCount),
     outputs: boundedRecord(sourceOutputDeclarationSchema, 50).default({}),
     errors: z.array(sourceFlowTaskSchema).max(flowMaximumTaskCount).default([]),
@@ -443,7 +444,7 @@ export type SourceFlow = z.infer<typeof sourceFlowSchema>;
 /** The flows one module or application owns. Every flow has exactly one owner. */
 export const sourceFlowCollectionSchema = z
   .array(sourceFlowSchema)
-  .max(100)
+  .max(definitionLimits.flowsPerOwner)
   .superRefine((flows, context) => {
     const ids = new Set<string>();
     const keys = new Set<string>();
@@ -487,7 +488,7 @@ const flowDependencyManifestContributionSchema = z
 export const compiledFlowSetSchema = z
   .object({
     /** BeforeSave flows keep source order; other flows use permanent identity order. */
-    flows: z.array(flowSchema).max(100),
+    flows: z.array(flowSchema).max(definitionLimits.flowsPerOwner),
     dependencyManifest: flowDependencyManifestContributionSchema,
     /** Paths begin with the flow's index in `flows` and, for the source path, in the source set. */
     provenance: z.array(definitionProvenanceEntrySchema),
