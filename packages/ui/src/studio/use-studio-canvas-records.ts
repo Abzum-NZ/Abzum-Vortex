@@ -7,7 +7,7 @@ import {
 import type { StudioCompileFailure } from "./compile-failure";
 import { itemsHold, recordKeys, type StudioCanvasSourceSlot } from "./studio-canvas-data";
 import type { StudioCanvasGridChange, StudioCanvasGridRead } from "./studio-canvas-grid";
-import type { StudioCanvasRecords, StudioCanvasSample } from "./studio-canvas-render";
+import type { StudioCanvasRecords, StudioCanvasSample } from "./studio-canvas-metadata";
 
 /**
  * The records of the canvas's data blocks for one saved revision, as the workspace read them.
@@ -41,6 +41,7 @@ type HeldRead = StudioCanvasRecordsRead & {
 
 const LOADING: StudioCanvasRecords["state"] = "loading";
 const NO_VALUES: Readonly<Record<string, string>> = Object.freeze({});
+const NO_VALUES_READ: StudioCanvasRecords["records"] = Object.freeze({});
 
 /**
  * The records the open content area's data blocks show, the value chosen in each control on the
@@ -116,7 +117,7 @@ export const useStudioCanvasRecords = ({
   const sent = useRef({ chosen: areaChosen, tables: areaTables });
   sent.current = { chosen: areaChosen, tables: areaTables };
   const lastRead = useRef({ area, stateKey });
-  const gridContext = useMemo(
+  const grid = useMemo(
     () => ({ report: onGridChange, interactive: arrangeGrid }),
     [onGridChange, arrangeGrid],
   );
@@ -169,15 +170,21 @@ export const useStudioCanvasRecords = ({
     read.state === "ready" &&
     read.keys !== undefined &&
     [...savedKeys].every(([id, key]) => read.keys?.get(id) === key);
-  const records = useMemo(
-    (): StudioCanvasRecords => ({
-      ...(read.source === compiledSource || carried ? read : { state: LOADING, records: {} }),
-      saved: savedKeys,
-      current: recordKeys(catalogue, slot?.items ?? []),
+  // Plain data only: Puck copies every object in a block's props, so a Map or the saved source
+  // would arrive broken or copied once per block.
+  const records = useMemo((): StudioCanvasRecords => {
+    const shown = read.source === compiledSource || carried ? read : undefined;
+    const refusal = compileFailure ?? shown?.refusal;
+    return {
+      state: shown?.state ?? LOADING,
+      records: shown?.records ?? NO_VALUES_READ,
+      saved: Object.fromEntries(savedKeys),
+      current: Object.fromEntries(recordKeys(catalogue, slot?.items ?? [])),
       updating,
-      ...(compileFailure == null ? {} : { refusal: compileFailure }),
-    }),
-    [read, compiledSource, carried, catalogue, savedKeys, slot, updating, compileFailure],
-  );
-  return { records, chooseControlValue, gridContext };
+      ...(shown?.sentence === undefined ? {} : { sentence: shown.sentence }),
+      ...(refusal === undefined ? {} : { refusal }),
+      ...(shown?.sample === undefined ? {} : { sample: shown.sample }),
+    };
+  }, [read, compiledSource, carried, catalogue, savedKeys, slot, updating, compileFailure]);
+  return { records, controls: chooseControlValue, grid };
 };

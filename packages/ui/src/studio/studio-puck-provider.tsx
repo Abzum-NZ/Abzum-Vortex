@@ -47,13 +47,14 @@ import {
 import { studioCanvasOverrides } from "./studio-canvas-actions";
 import type { StudioCanvasGridChange, StudioCanvasGridRead } from "./studio-canvas-grid";
 import { useStudioCanvasModel, type StudioCanvasModel } from "./studio-canvas-model";
-import type { StudioCanvasViewer } from "./studio-canvas-render";
+import type { StudioCanvasViewer } from "./studio-canvas-metadata";
 import type { StudioCanvasAddRequest } from "./studio-block-palette";
 import type { StudioCanvasRecordsReader } from "./use-studio-canvas-records";
+import { useStudioCanvasMetadata } from "./use-studio-canvas-metadata";
 
 export type { Breakpoint as StudioCanvasBreakpoint } from "../definition-error";
 export type { StudioCanvasFrame } from "./studio-canvas-projection";
-export type { StudioCanvasViewer } from "./studio-canvas-render";
+export type { StudioCanvasViewer } from "./studio-canvas-metadata";
 export type { StudioCanvasAddRequest } from "./studio-block-palette";
 export type {
   StudioCanvasRecordsRead,
@@ -271,9 +272,10 @@ export function StudioPuckProvider({
     });
   }, []);
 
+  const canvasMetadata = useStudioCanvasMetadata(input, model);
   const metadata = useMemo(
-    () => ({ breakpoint: input.breakpoint, readSettings: compiledItemSettings }),
-    [input.breakpoint],
+    () => ({ breakpoint: input.breakpoint, readSettings: compiledItemSettings, ...canvasMetadata }),
+    [input.breakpoint, canvasMetadata],
   );
   const permissions = useMemo(
     () => ({

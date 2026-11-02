@@ -2,7 +2,7 @@
 
 import { recordsTableSavedViewsFeature } from "@vortex/platform/schema";
 
-import { createContext, useContext, useEffect } from "react";
+import { useEffect } from "react";
 import {
   canonicalJson,
   compiledItemSettings,
@@ -292,9 +292,11 @@ export const studioCanvasGridReads = (
     ),
   );
 
-export const StudioCanvasGridContext = createContext<
-  Readonly<{ report: ((change: StudioCanvasGridChange) => void) | undefined; interactive: boolean }>
->({ report: undefined, interactive: false });
+/** The grid's channel in the canvas metadata: where its events are reported and whether they are live. */
+export type StudioCanvasGridChannel = Readonly<{
+  report: ((change: StudioCanvasGridChange) => void) | undefined;
+  interactive: boolean;
+}>;
 
 /**
  * The setup of a table the canvas can arrange, or `undefined` for a placement that is not one: the
@@ -311,11 +313,11 @@ export const studioCanvasGridSetup = (
 
 /** The canvas uses the grid's normal events; no personal preference is written. */
 export function useStudioCanvasGridEvents(
+  { report, interactive }: StudioCanvasGridChannel,
   props: Readonly<Record<string, unknown>>,
   compiled: Readonly<Record<string, unknown>> | undefined,
   release: PlatformBlockRelease | undefined,
 ): DisplayEventHandlers | undefined {
-  const { report, interactive } = useContext(StudioCanvasGridContext);
   // Every canvas block calls this hook; only a table owns grid settings and held state.
   const tableRelease =
     release?.blockId === PLATFORM_BLOCK_RELEASE_IDENTITIES.TABLE_BLOCK_RELEASE.blockId

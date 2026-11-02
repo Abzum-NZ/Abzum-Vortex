@@ -1,7 +1,7 @@
 "use client";
 
 import { Puck } from "@puckeditor/core";
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import type { Breakpoint } from "../definition-error";
 import { Alert, AlertDescription, AlertTitle } from "../components/alert";
 import { Badge } from "../components/badge";
@@ -15,17 +15,8 @@ import { studioPageAreaLabel } from "./application-page-layout";
 import type { StudioCompileFailure } from "./compile-failure";
 import { StudioBlockPalette } from "./studio-block-palette";
 import { StudioCanvasActions } from "./studio-canvas-actions";
-import { StudioCanvasGridContext } from "./studio-canvas-grid";
-import {
-  StudioCanvasCompiledSettings,
-  StudioCanvasControlsProvider,
-  StudioCanvasRecordsProvider,
-  StudioCanvasViewerProvider,
-} from "./studio-canvas-render";
-import { StudioCanvasFrameProvider } from "./studio-canvas-root";
 import { StudioReferencePicker } from "./studio-reference-picker";
 import { useStudioCanvas } from "./studio-puck-provider";
-import { useStudioCanvasRecords } from "./use-studio-canvas-records";
 
 const deviceWidths: Readonly<Record<Breakpoint, number>> = {
   desktop: 1280,
@@ -111,77 +102,21 @@ export function StudioCanvasView({
   const { input, model, refusal } = useStudioCanvas();
   const {
     source,
-    compiledSource,
     breakpoint,
-    appearance,
-    frame,
-    viewer,
     disabled,
     compileFailure,
     platformThemeTokens,
     fieldInputControlReleases,
-    readRecords,
-    gridReads,
-    onGridChange,
     arrangeGrid,
     onArrangeGrid,
-    updating,
   } = input;
   const { at, page, slot, shown } = model;
   const [well, setWell] = useState<HTMLDivElement | null>(null);
-  const [visible, setVisible] = useState(false);
   // The canvas is a device screen: the iframe is as wide as the chosen screen and as tall as the
   // well, in the iframe's own pixels. The zoom only scales the iframe as a whole.
   const [available, setAvailable] = useState({ width: 0, height: 0 });
   const width = deviceWidths[breakpoint];
   const scale = zoom === "fit" ? Math.min(1, available.width / width) : zoom / 100;
-  const { records, chooseControlValue, gridContext } = useStudioCanvasRecords({
-    area: model.area,
-    areaKey: at?.key ?? "",
-    readRecords,
-    catalogue: model.catalogue,
-    compiledSource,
-    originalSlot: model.originalSlot,
-    slot,
-    visible,
-    gridReads,
-    onGridChange,
-    arrangeGrid: arrangeGrid === true,
-    updating: updating === true,
-    compileFailure,
-  });
-  const frameContext = useMemo(
-    () =>
-      platformThemeTokens === null || fieldInputControlReleases === null
-        ? null
-        : {
-            frame,
-            appearance,
-            platformThemeTokens,
-            registry: model.registry,
-            fieldInputControlReleases,
-            breakpoint,
-            empty: slot?.items.length === 0,
-          },
-    [
-      frame,
-      appearance,
-      platformThemeTokens,
-      model.registry,
-      fieldInputControlReleases,
-      breakpoint,
-      slot?.items.length,
-    ],
-  );
-  useEffect(() => {
-    if (well === null) return;
-    // An area reads once it has been on screen; scrolling it away later does not read it again.
-    const observer = new IntersectionObserver(([entry]) => {
-      if (entry?.isIntersecting === true) setVisible(true);
-    });
-    observer.observe(well);
-    return () => observer.disconnect();
-  }, [well]);
   useEffect(() => {
     if (well === null) return;
     const measure = () => {
@@ -232,7 +167,7 @@ export function StudioCanvasView({
         />
       </div>
     );
-  if (shown === undefined || frameContext === null)
+  if (shown === undefined || platformThemeTokens === null || fieldInputControlReleases === null)
     return (
       <div className="flex min-h-0 flex-1 flex-col gap-3 px-4">
         {picker}
@@ -323,19 +258,7 @@ export function StudioCanvasView({
                 visibility: available.width === 0 ? "hidden" : "visible",
               }}
             >
-              <StudioCanvasCompiledSettings settings={model.compiledSettings ?? {}}>
-                <StudioCanvasRecordsProvider records={records}>
-                  <StudioCanvasControlsProvider onValue={chooseControlValue}>
-                    <StudioCanvasViewerProvider viewer={viewer ?? null}>
-                      <StudioCanvasGridContext.Provider value={gridContext}>
-                        <StudioCanvasFrameProvider value={frameContext}>
-                          <Puck.Preview id="vortex-studio-canvas" />
-                        </StudioCanvasFrameProvider>
-                      </StudioCanvasGridContext.Provider>
-                    </StudioCanvasViewerProvider>
-                  </StudioCanvasControlsProvider>
-                </StudioCanvasRecordsProvider>
-              </StudioCanvasCompiledSettings>
+              <Puck.Preview id="vortex-studio-canvas" />
             </div>
           </div>
         </div>
