@@ -47,12 +47,13 @@ import {
 import { studioCanvasOverrides } from "./studio-canvas-actions";
 import type { StudioCanvasGridChange, StudioCanvasGridRead } from "./studio-canvas-grid";
 import { useStudioCanvasModel, type StudioCanvasModel } from "./studio-canvas-model";
+import { studioInitialUi, studioViewports, useStudioScreen } from "./studio-canvas-screen";
 import type { StudioCanvasMetadata, StudioCanvasViewer } from "./studio-canvas-metadata";
 import type { StudioCanvasAddRequest } from "./studio-block-palette";
 import type { StudioCanvasRecordsReader } from "./use-studio-canvas-records";
 import { useStudioCanvasMetadata } from "./use-studio-canvas-metadata";
 
-export type { Breakpoint as StudioCanvasBreakpoint } from "../definition-error";
+export { studioScreens, useStudioScreen } from "./studio-canvas-screen";
 export type { StudioCanvasFrame } from "./studio-canvas-projection";
 export type { StudioCanvasViewer } from "./studio-canvas-metadata";
 export type { StudioCanvasAddRequest } from "./studio-block-palette";
@@ -93,8 +94,6 @@ export type StudioPuckInput = Readonly<{
   onSelectPlacement: (alias: string | null) => Promise<boolean>;
   /** Whether the open rail tab shows the canvas. Elsewhere nothing is selected and nothing can change. */
   canvasShown: boolean;
-  /** The screen size the canvas shows; Studio's canvas toolbar chooses it and keeps it while pages change. */
-  breakpoint: Breakpoint;
   appearance: "light" | "dark";
   /** The application frame the page is drawn inside, when the draft compiled. */
   frame?: StudioCanvasFrame | undefined;
@@ -194,7 +193,10 @@ export function StudioPuckProvider({
   dragGate: RefObject<StudioDragGate>;
   children: ReactNode;
 }>) {
-  const model = useStudioCanvasModel(input);
+  // The screen is kept by Puck (`ui.viewports.current`); `StudioScreenSync` reports its breakpoint
+  // here, because the model and the metadata that depend on it are made outside the editor.
+  const [breakpoint, setBreakpoint] = useState<Breakpoint>("desktop");
+  const model = useStudioCanvasModel(input, breakpoint);
   const [refused, setRefused] = useState<Readonly<{ area: string; message: string }> | null>(null);
   const [resync, setResync] = useState(0);
   // Puck's callbacks run while Studio shows its own data or selection: they must not echo back.
@@ -275,11 +277,11 @@ export function StudioPuckProvider({
   const canvasMetadata = useStudioCanvasMetadata(input, model);
   const metadata = useMemo(
     (): StudioCanvasMetadata => ({
-      breakpoint: input.breakpoint,
+      breakpoint,
       readSettings: compiledItemSettings,
       ...canvasMetadata,
     }),
-    [input.breakpoint, canvasMetadata],
+    [breakpoint, canvasMetadata],
   );
   const permissions = useMemo(
     () => ({
@@ -311,6 +313,8 @@ export function StudioPuckProvider({
         onChange={change}
         onAction={onAction}
         iframe={IFRAME}
+        viewports={studioViewports}
+        ui={studioInitialUi}
         // Puck's own wrapper fills the workspace, so the canvas has the height of its well.
         height="100%"
         overrides={studioCanvasOverrides}
@@ -332,10 +336,22 @@ export function StudioPuckProvider({
           deriving={deriving}
           showSelection={showSelection}
         />
+        <StudioScreenSync onBreakpoint={setBreakpoint} />
         <div className="flex h-full min-h-0 flex-col">{children}</div>
       </Puck>
     </StudioCanvasContext.Provider>
   );
+}
+
+/** Reports the breakpoint of Puck's current viewport to the provider; draws nothing. */
+function StudioScreenSync({
+  onBreakpoint,
+}: Readonly<{ onBreakpoint: (breakpoint: Breakpoint) => void }>) {
+  const { breakpoint } = useStudioScreen();
+  useEffect(() => {
+    onBreakpoint(breakpoint);
+  }, [breakpoint, onBreakpoint]);
+  return null;
 }
 
 /**

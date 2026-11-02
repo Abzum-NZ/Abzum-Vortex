@@ -66,27 +66,29 @@ export type StudioCanvasModel = Readonly<{
   arrangeable: boolean;
 }>;
 
-export const useStudioCanvasModel = ({
-  source,
-  compiledSource,
-  platformBlockCatalogue,
-  fieldInputControlReleases,
-  pageAlias,
-  compiledSlots,
-  disabled,
-  selectedPlacementAlias,
-  breakpoint,
-}: Readonly<{
-  source: ApplicationSourceDocument;
-  compiledSource: ApplicationSourceDocument;
-  platformBlockCatalogue: ImmutablePlatformBlockCatalogue;
-  fieldInputControlReleases: FieldInputControlReleaseMap | null;
-  pageAlias: string | undefined;
-  compiledSlots?: Readonly<Record<string, StudioCanvasCompiledSlot>> | undefined;
-  disabled: boolean;
-  selectedPlacementAlias: string | null;
-  breakpoint: Breakpoint;
-}>): StudioCanvasModel => {
+export const useStudioCanvasModel = (
+  {
+    source,
+    compiledSource,
+    platformBlockCatalogue,
+    fieldInputControlReleases,
+    pageAlias,
+    compiledSlots,
+    disabled,
+    selectedPlacementAlias,
+  }: Readonly<{
+    source: ApplicationSourceDocument;
+    compiledSource: ApplicationSourceDocument;
+    platformBlockCatalogue: ImmutablePlatformBlockCatalogue;
+    fieldInputControlReleases: FieldInputControlReleaseMap | null;
+    pageAlias: string | undefined;
+    compiledSlots?: Readonly<Record<string, StudioCanvasCompiledSlot>> | undefined;
+    disabled: boolean;
+    selectedPlacementAlias: string | null;
+  }>,
+  /** The screen the canvas previews. */
+  breakpoint: Breakpoint,
+): StudioCanvasModel => {
   const registry = useMemo(
     () => createPlatformComponentRegistryForReleases(platformBlockCatalogue.releases),
     [platformBlockCatalogue],

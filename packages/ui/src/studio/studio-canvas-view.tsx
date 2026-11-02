@@ -2,7 +2,6 @@
 
 import { Puck } from "@puckeditor/core";
 import { useEffect, useState, type ReactNode } from "react";
-import type { Breakpoint } from "../definition-error";
 import { Alert, AlertDescription, AlertTitle } from "../components/alert";
 import { Badge } from "../components/badge";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../components/tooltip";
@@ -15,14 +14,9 @@ import { studioPageAreaLabel } from "./application-page-layout";
 import type { StudioCompileFailure } from "./compile-failure";
 import { StudioBlockPalette } from "./studio-block-palette";
 import { StudioCanvasActions } from "./studio-canvas-actions";
+import { useStudioScreen } from "./studio-canvas-screen";
 import { StudioReferencePicker } from "./studio-reference-picker";
 import { useStudioCanvas } from "./studio-puck-provider";
-
-const deviceWidths: Readonly<Record<Breakpoint, number>> = {
-  desktop: 1280,
-  tablet: 820,
-  phone: 390,
-};
 
 function CanvasEmpty({ title, description }: Readonly<{ title: string; description: string }>) {
   return (
@@ -100,9 +94,9 @@ export function StudioCanvasView({
   onFitZoom: (percent: number) => void;
 }>) {
   const { input, model, refusal } = useStudioCanvas();
+  const { breakpoint, width } = useStudioScreen();
   const {
     source,
-    breakpoint,
     disabled,
     compileFailure,
     platformThemeTokens,
@@ -115,8 +109,9 @@ export function StudioCanvasView({
   // The canvas is a device screen: the iframe is as wide as the chosen screen and as tall as the
   // well, in the iframe's own pixels. The zoom only scales the iframe as a whole.
   const [available, setAvailable] = useState({ width: 0, height: 0 });
-  const width = deviceWidths[breakpoint];
-  const scale = zoom === "fit" ? Math.min(1, available.width / width) : zoom / 100;
+  // Fit rounds down, so the scaled screen can never be a fraction of a pixel wider than the well.
+  const scale =
+    zoom === "fit" ? Math.floor(Math.min(1, available.width / width) * 1000) / 1000 : zoom / 100;
   useEffect(() => {
     if (well === null) return;
     const measure = () => {
@@ -244,7 +239,8 @@ export function StudioCanvasView({
         <div
           ref={setWell}
           data-vortex-studio-canvas-well=""
-          className="min-h-0 flex-1 overflow-auto bg-muted/40 p-4 [scrollbar-gutter:stable]"
+          // Fit shows the whole screen, so it never has anything to scroll to.
+          className={`min-h-0 flex-1 bg-muted/40 p-4 [scrollbar-gutter:stable] ${zoom === "fit" ? "overflow-hidden" : "overflow-auto"}`}
         >
           <div className="mx-auto" style={{ width: width * scale, height: available.height }}>
             <div
