@@ -183,5 +183,20 @@
   "--vs-3e5813bf": "calc(var(--radius) * 0.6)",
   "--vs-8b892a0c": "0.5625rem",
   "--vs-4fceaaa4": "calc(var(--spacing, 0.25rem) * 1.5)",
-  "--vs-ddd5d7f6": "calc(var(--spacing, 0.25rem) * 2)"
+  "--vs-ddd5d7f6": "calc(var(--spacing, 0.25rem) * 2)",
+  "--vs-0cc84def": "var(--text-xs, 0.75rem)",
+  "--vs-77640fc4": "var(--leading-relaxed, 1.625)",
+  "--vs-8920dd15": "calc(var(--spacing, 0.25rem) * 3.5)",
+  "--vs-15d66a9d": "calc(var(--spacing, 0.25rem) * 2.5)",
+  "--vs-03e41499": "calc(var(--spacing, 0.25rem) * 1)",
+  "--vs-c01744dc": "color-mix(in oklab, var(--border) 50%, transparent)",
+  "--vs-202e8209": "var(--radius-md)",
+  "--vs-c2606a71": "var(--radius-md)",
+  "--vs-7c5fb50a": "calc(var(--spacing, 0.25rem) * 2.5)",
+  "--vs-97c9cb90": "calc(var(--spacing, 0.25rem) * 7)",
+  "--vs-51e3d374": "calc(var(--spacing, 0.25rem) * 3.5)",
+  "--vs-2302d7cb": "0.625rem",
+  "--vs-7e709d9b": "inherit",
+  "--vs-987304d0": "color-mix(in oklab, var(--input) 20%, transparent)",
+  "--vs-077f2520": "color-mix(in oklab, var(--input) 30%, transparent)"
 }

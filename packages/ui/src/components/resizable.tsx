@@ -2,7 +2,6 @@
 
 import * as ResizablePrimitive from "react-resizable-panels";
 import { cn } from "../lib/utils";
-import { Icon } from "../icons/icon";
 
 function ResizablePanelGroup({ className, ...props }: ResizablePrimitive.GroupProps) {
   return (
@@ -37,11 +36,7 @@ function ResizableHandle({
       )}
       {...props}
     >
-      {withHandle && (
-        <div className="cn-resizable-handle-grip z-10 flex shrink-0 items-center justify-center">
-          <Icon name="grip-vertical" className="size-2.5" />
-        </div>
-      )}
+      {withHandle && <div className="cn-resizable-handle-grip z-10 flex shrink-0" />}
     </ResizablePrimitive.Separator>
   );
 }

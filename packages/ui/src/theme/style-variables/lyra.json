@@ -123,5 +123,20 @@
   "--vs-7d806f75": "calc(var(--spacing, 0.25rem) * 4)",
   "--vs-3e5813bf": "0",
   "--vs-4fceaaa4": "calc(var(--spacing, 0.25rem) * 1.5)",
-  "--vs-ddd5d7f6": "calc(var(--spacing, 0.25rem) * 2)"
+  "--vs-ddd5d7f6": "calc(var(--spacing, 0.25rem) * 2)",
+  "--vs-e5ca406c": "0",
+  "--vs-87094479": "0",
+  "--vs-61d3a854": "0",
+  "--vs-8a405698": "0",
+  "--vs-0906e100": "0",
+  "--vs-fb0d59da": "0",
+  "--vs-ad0e0efa": "1px",
+  "--vs-0cc84def": "var(--text-xs, 0.75rem)",
+  "--vs-77640fc4": "var(--tw-leading, var(--text-xs--line-height, calc(1 / 0.75)))",
+  "--vs-ab5fce0a": "0",
+  "--vs-add5d5b1": "0",
+  "--vs-a2cbb7fa": "var(--font-weight-normal, 400)",
+  "--vs-202e8209": "0",
+  "--vs-c2606a71": "0",
+  "--vs-b2092e6d": "calc(var(--spacing, 0.25rem) * 2)"
 }

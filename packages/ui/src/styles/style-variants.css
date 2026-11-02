@@ -6825,3 +6825,26 @@
 
 @scope ([data-vortex-style="luma"], [data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
 }
+
+@scope ([data-vortex-style="nova"], [data-vortex-style="vega"], [data-vortex-style="lyra"]) to (:scope [data-vortex-style]) {
+  :scope .cn-command-input-group:not(:focus-within) {
+    border-color: color-mix(in oklab, var(--input) 30%, transparent);
+    box-shadow: none;
+  }
+  :scope .cn-command-input-group > [data-slot="input-group-addon"] {
+    padding-left: calc(var(--spacing, 0.25rem) * 2) !important;
+  }
+}
+
+@scope ([data-vortex-style="lyra"]) to (:scope [data-vortex-style]) {
+  :scope .cn-command-input-group {
+    border-style: none;
+  }
+}
+
+@scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
+  :scope .cn-command-input-group {
+    border-color: transparent;
+    border-bottom-color: var(--input);
+  }
+}

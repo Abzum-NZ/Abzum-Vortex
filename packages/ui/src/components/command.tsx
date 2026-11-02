@@ -33,14 +33,14 @@ function CommandDialog({
 }) {
   return (
     <Dialog {...props}>
-      <DialogHeader className="sr-only">
-        <DialogTitle>{title}</DialogTitle>
-        <DialogDescription>{description}</DialogDescription>
-      </DialogHeader>
       <DialogContent
         className={cn("cn-command-dialog top-1/3 translate-y-0 overflow-hidden p-0", className)}
         showCloseButton={showCloseButton}
       >
+        <DialogHeader className="sr-only">
+          <DialogTitle>{title}</DialogTitle>
+          <DialogDescription>{description}</DialogDescription>
+        </DialogHeader>
         {children}
       </DialogContent>
     </Dialog>
@@ -63,7 +63,7 @@ function CommandInput({
           {...props}
         />
         <InputGroupAddon>
-          <Icon name="search" className="cn-command-input-icon size-4 shrink-0" />
+          <Icon name="search" className="cn-command-input-icon shrink-0" />
         </InputGroupAddon>
       </InputGroup>
     </div>

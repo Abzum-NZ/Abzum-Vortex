@@ -125,7 +125,8 @@ export function useConfirm(): readonly [(prompt: ConfirmPrompt) => Promise<boole
           </AlertDialogDescription>
         </AlertDialogHeader>
         {prompt?.details !== undefined && (
-          <ScrollArea className="cn-confirm-dialog-details flex max-h-80 flex-col text-sm">
+          /* flex-col lets the viewport shrink to max-h-80 so it scrolls */
+          <ScrollArea className="flex max-h-80 min-h-0 flex-col text-sm">
             <div className="space-y-2">{prompt.details}</div>
           </ScrollArea>
         )}

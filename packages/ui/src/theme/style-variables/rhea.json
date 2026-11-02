@@ -179,5 +179,14 @@
   "--vs-738c28d2": "5px",
   "--vs-3e5813bf": "calc(infinity * 1px)",
   "--vs-f50da6d7": "var(--primary)",
-  "--vs-f6f51c7c": "calc(var(--spacing, 0.25rem) * 8)"
+  "--vs-f6f51c7c": "calc(var(--spacing, 0.25rem) * 8)",
+  "--vs-e5ca406c": "var(--radius-2xl)",
+  "--vs-8a405698": "var(--radius-3xl)",
+  "--vs-251f77f7": "0",
+  "--vs-03e41499": "calc(var(--spacing, 0.25rem) * 1)",
+  "--vs-c01744dc": "color-mix(in oklab, var(--border) 50%, transparent)",
+  "--vs-202e8209": "var(--radius-xl)",
+  "--vs-c2606a71": "var(--radius-2xl)",
+  "--vs-97c9cb90": "calc(var(--spacing, 0.25rem) * 7)",
+  "--vs-987304d0": "color-mix(in oklab, var(--input) 50%, transparent)"
 }
