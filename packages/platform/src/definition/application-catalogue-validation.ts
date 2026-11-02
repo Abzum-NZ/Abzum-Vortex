@@ -37,6 +37,7 @@ import { canonicalJson } from "./canonical-json";
 import type { ApplicationSourceDocument } from "./definition-source";
 import { applicationModuleKeys } from "./application-module-sources";
 import { sourceAliasSchema } from "./definition-source-common";
+import { querySortProblems, querySortProblemSentence } from "./module-query-order";
 import { IMMUTABLE_PLATFORM_BLOCK_CATALOGUE } from "./application-composition-catalogue";
 
 /**
@@ -60,6 +61,7 @@ export const applicationCatalogueRuleCodes = [
   "vortex.definition.application_block_settings",
   "vortex.definition.application_public_surface",
   "vortex.definition.application_layout_complete",
+  "vortex.definition.application_query_sort",
 ] as const;
 
 type CatalogueRuleCode = (typeof applicationCatalogueRuleCodes)[number];
@@ -583,13 +585,24 @@ export function validateApplicationSourceCatalogue(
       const placement = item.props.vortex;
       const location = [...options.scope, ...keySegment("block", alias)];
       placementCount += 1;
-      if (
-        !limitReported &&
-        (placementCount > catalogue.compositionPolicy.maximumPlacements ||
-          options.depth > catalogue.compositionPolicy.maximumDepth)
-      ) {
-        limitReported = true;
-        report("vortex.definition.application_layout_complete", "too_many_items", location);
+      if (!limitReported) {
+        const limit =
+          placementCount > catalogue.compositionPolicy.maximumPlacements
+            ? "compositionPlacements"
+            : options.depth > catalogue.compositionPolicy.maximumDepth
+              ? "compositionDepth"
+              : undefined;
+        if (limit !== undefined) {
+          limitReported = true;
+          report(
+            "vortex.definition.application_layout_complete",
+            "too_many_items",
+            location,
+            limit === "compositionPlacements"
+              ? "definition_composition_placement_limit"
+              : "definition_composition_depth_limit",
+          );
+        }
       }
 
       const blockId = String(placement.block.block_id);
@@ -810,6 +823,17 @@ export function validateApplicationSourceCatalogue(
       else validateShellContent(shellAlias, data, publicSurface, scope);
     }
   }
+
+  // A query sorts only by fields its record type allows sorting by. Reading never refuses a stored
+  // draft that breaks this; saving, importing and publishing do.
+  for (const problem of querySortProblems(source))
+    report(
+      "vortex.definition.application_query_sort",
+      "invalid_value",
+      [...keySegment("query", problem.queryKey), ...keySegment("field", problem.fieldKey)],
+      "definition_query_sort",
+      querySortProblemSentence(problem),
+    );
 
   return failures;
 }

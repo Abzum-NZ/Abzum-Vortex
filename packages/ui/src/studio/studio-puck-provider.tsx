@@ -11,6 +11,7 @@ import {
 import "@puckeditor/core/no-external.css";
 import {
   compiledItemSettings,
+  definitionLimitReached,
   type ApplicationSourceDocument,
   type ImmutablePlatformBlockCatalogue,
 } from "@vortex/platform/schema";
@@ -300,16 +301,22 @@ export function StudioPuckProvider({
     }),
     [input.breakpoint, canvasMetadata],
   );
+  // The application holds every block it may: Duplicate and every other insert are off.
+  const placed =
+    input.palette?.targets.kind === "available"
+      ? (input.palette.targets.targets[0]?.placed ?? 0)
+      : 0;
+  const full = definitionLimitReached("compositionPlacements", placed);
   const permissions = useMemo(
     () => ({
       drag: permitted,
-      duplicate: permitted,
+      duplicate: permitted && !full,
       delete: permitted,
       edit: false,
       // The drawer's blocks drag onto the canvas; a layout's blocks are added with Add.
-      insert: permitted && input.palette?.owner !== "layout",
+      insert: permitted && !full && input.palette?.owner !== "layout",
     }),
-    [permitted, input.palette?.owner],
+    [permitted, full, input.palette?.owner],
   );
   const empty = useMemo(
     (): Data => ({ root: { props: model.rootProps }, content: [] }),

@@ -148,7 +148,7 @@ begin
     end if;
     if (select pg_catalog.count(*) from pg_catalog.jsonb_array_elements(record_type -> 'fields') as field(value)
       where field.value -> 'sortable' = 'true'::jsonb) > 8 then
-      raise exception using errcode = '23514', message = 'A record type may declare at most eight sortable fields';
+      raise exception using errcode = '23514', message = 'A record type can have up to 8 sortable fields. Turn sorting off on another field first.';
     end if;
     -- The record-type loop is ordered by storage identity, so overlapping
     -- provisions acquire absent and existing lineage locks deterministically.

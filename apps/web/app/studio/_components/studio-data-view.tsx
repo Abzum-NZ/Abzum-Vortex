@@ -45,6 +45,7 @@ import { StudioRecordRules } from "./studio-record-rules";
 import { StudioRecordSubscribers } from "./studio-record-subscribers";
 import { StudioRecordStorageOwnership } from "./studio-record-storage-ownership";
 import { StudioRecordStandardActions } from "./studio-record-standard-actions";
+import { StudioRecordLimits, StudioModuleLimits } from "./studio-limits-group";
 import { useStudioDraftText } from "./use-studio-draft-text";
 import type { StudioDraft } from "./use-studio-draft";
 import {
@@ -86,6 +87,9 @@ export type StudioDataModel = Readonly<{
   showQueries: () => void;
   section: string;
   setSection: (section: string) => void;
+  /** The field list shows only the sortable fields of the open record type. */
+  sortableOnly: boolean;
+  setSortableOnly: (on: boolean) => void;
   unsaved: boolean;
   isOwned: boolean;
   module: StudioDataModule | undefined;
@@ -167,6 +171,7 @@ function ModuleInspector({
           />
         )}
       </StudioField>
+      <StudioModuleLimits source={source} moduleKey={moduleKey} />
       <StudioModuleExtensionPoints
         source={source}
         moduleKey={moduleKey}
@@ -193,6 +198,7 @@ function RecordTypeInspector({
   name: recordName,
   onAddLink,
   onNewQuery,
+  onShowSortable,
 }: Readonly<{
   source: Source;
   moduleKey: string;
@@ -205,6 +211,8 @@ function RecordTypeInspector({
   onAddLink: () => void;
   /** Opens the new query sheet on this record type. */
   onNewQuery: () => void;
+  /** Lists this record type's sortable fields. */
+  onShowSortable: () => void;
 }>) {
   const [confirm, confirmDialog] = useConfirm();
   const record = recordIn(source, moduleKey, recordKey)!;
@@ -364,6 +372,12 @@ function RecordTypeInspector({
             )}
           </StudioField>
         </StudioInspectorGroup>
+        <StudioRecordLimits
+          source={source}
+          moduleKey={moduleKey}
+          recordKey={recordKey}
+          onShowSortable={onShowSortable}
+        />
         <StudioRecordStandardActions
           source={source}
           moduleKey={moduleKey}
@@ -584,6 +598,8 @@ export function StudioDataCentreView({ model }: Readonly<{ model: StudioDataMode
     showingQueries,
     section,
     setSection,
+    sortableOnly,
+    setSortableOnly,
     unsaved,
     isOwned,
     module,
@@ -627,6 +643,8 @@ export function StudioDataCentreView({ model }: Readonly<{ model: StudioDataMode
     <StudioDataCentre
       section={section}
       onSectionChange={setSection}
+      sortableOnly={sortableOnly}
+      onSortableOnlyChange={setSortableOnly}
       organizationId={organizationId}
       rootId={draft.state.rootId}
       modules={modules}
@@ -731,8 +749,14 @@ export function StudioDataInspectorView({ model }: Readonly<{ model: StudioDataM
     addField,
     compileProblem,
     setNewQuery,
+    setSection,
+    setSortableOnly,
   } = model;
   const { source, organizationId, view } = draft;
+  const showSortable = () => {
+    setSection("fields");
+    setSortableOnly(true);
+  };
   const inspectorBody =
     current === null || module === undefined ? (
       <StudioDataEmpty
@@ -791,6 +815,7 @@ export function StudioDataInspectorView({ model }: Readonly<{ model: StudioDataM
             edit={edit}
             onSelect={select}
             onCancel={() => setAdding(null)}
+            onShowSortable={showSortable}
             onAdded={(fieldKey) =>
               select({
                 kind: "field",
@@ -814,6 +839,7 @@ export function StudioDataInspectorView({ model }: Readonly<{ model: StudioDataM
           name={targetLabel}
           onAddLink={() => addField("link")}
           onNewQuery={() => setNewQuery(true)}
+          onShowSortable={showSortable}
         />
       )
     ) : (
@@ -827,6 +853,7 @@ export function StudioDataInspectorView({ model }: Readonly<{ model: StudioDataM
         context={fieldContext}
         edit={edit}
         onSelect={select}
+        onShowSortable={showSortable}
         onRemoved={() =>
           select({
             kind: "record_type",

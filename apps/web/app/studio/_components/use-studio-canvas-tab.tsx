@@ -32,6 +32,7 @@ import {
   type StudioCanvasGridChange,
   type StudioCanvasGridRead,
   type StudioCanvasGridState,
+  studioPageNestingLevels,
 } from "@vortex/ui/studio";
 import { Icon, type FieldInputControlReleaseMap, type PlatformThemeTokens } from "@vortex/ui";
 import {
@@ -839,6 +840,11 @@ export function useStudioCanvasTab({
         {...outlinePanelProps}
         hidden={tab !== "outline"}
         ownerKey={outlineOwnerKey}
+        levels={
+          canvasPage === undefined
+            ? undefined
+            : studioPageNestingLevels(catalogue, state.source, canvasPage.id)
+        }
       />
       <StudioPanelShell
         title="Blocks"

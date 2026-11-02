@@ -12,6 +12,7 @@ import {
   type ReactNode,
 } from "react";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "../components/empty";
+import { Alert, AlertDescription } from "../components/alert";
 import { Button } from "../components/button";
 import { InputGroup, InputGroupAddon, InputGroupInput } from "../components/input-group";
 import {
@@ -33,6 +34,8 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from "../components/tooltip";
 import { Icon, resolveVortexIconName } from "../icons";
 import { cn } from "../lib/utils";
+import { definitionLimitMessage, definitionLimitReached } from "@vortex/platform/schema";
+import { StudioLimitNote, StudioReasoned } from "./studio-limit";
 import type { StudioCompositionAddTarget } from "./application-composition-commands";
 import { studioPaletteComponentLists, type StudioPaletteChoice } from "./contextual-palette";
 import { zoneOfDestination } from "./studio-canvas-data";
@@ -49,6 +52,9 @@ type DrawerContextValue = Readonly<{
   choices: ReadonlyMap<string, StudioPaletteChoice>;
   /** Why no block can be added now; absent while the canvas takes edits. */
   blocked: string | undefined;
+  /** Why the place takes no block at all (full application, deepest level), said once by the Alert. */
+  limitReason: string | undefined;
+  limitId: string;
   add: (choice: StudioPaletteChoice) => void;
 }>;
 
@@ -81,13 +87,22 @@ export function StudioDrawerItem({
   name,
 }: Readonly<{ children: ReactNode; name: string }>) {
   const drawer = useContext(DrawerContext);
-  const reasonId = useId();
   const { underlay, mark } = useUnderlayRow();
   const draggable = usePuckSelector((state) => state.getPermissions({ type: name }).insert);
   const choice = drawer?.choices.get(name);
   if (drawer === null || choice === undefined) return <>{children}</>;
   const reason = drawer.blocked ?? choice.unavailable;
-  const label = `Add ${choice.name} to ${drawer.target.label}`;
+  const addButton = (
+    <Button
+      type="button"
+      variant="ghost"
+      size="icon-sm"
+      aria-label={`Add ${choice.name} to ${drawer.target.label}`}
+      onClick={() => drawer.add(choice)}
+    >
+      <Icon name="plus" />
+    </Button>
+  );
   return (
     <Item
       ref={mark}
@@ -104,34 +119,18 @@ export function StudioDrawerItem({
         <ItemDescription className="line-clamp-1">{choice.description}</ItemDescription>
       </ItemContent>
       <ItemActions>
-        <Tooltip>
-          <TooltipTrigger
-            render={
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon-sm"
-                aria-label={label}
-                aria-disabled={reason === undefined ? undefined : true}
-                aria-describedby={reason === undefined ? undefined : reasonId}
-                onClick={(event) => {
-                  if (reason !== undefined) {
-                    event.preventDefault();
-                    return;
-                  }
-                  drawer.add(choice);
-                }}
-              />
-            }
+        {reason === undefined ? (
+          <Tooltip>
+            <TooltipTrigger render={addButton} />
+            <TooltipContent>Add {choice.name}</TooltipContent>
+          </Tooltip>
+        ) : (
+          <StudioReasoned
+            reason={reason}
+            describedBy={reason === drawer.limitReason ? drawer.limitId : undefined}
           >
-            <Icon name="plus" />
-          </TooltipTrigger>
-          <TooltipContent>{reason ?? `Add ${choice.name}`}</TooltipContent>
-        </Tooltip>
-        {reason === undefined ? null : (
-          <span id={reasonId} className="sr-only">
-            {reason}
-          </span>
+            {addButton}
+          </StudioReasoned>
         )}
       </ItemActions>
     </Item>
@@ -155,6 +154,10 @@ function BlocksEmpty({
     </Empty>
   );
 }
+
+/** A place as the list names it: deeper places say their level. */
+const placeLabel = (target: StudioCompositionAddTarget): string =>
+  target.depth === 0 ? target.label : `${target.label} (level ${target.depth + 1})`;
 
 /** Why the canvas takes no new block now, in the words the Add button says it with. */
 const blockedReason = (
@@ -302,10 +305,21 @@ function StudioBlocksDrawer({
     },
     [target, owner, onAdd, getPuck],
   );
+  const limitId = useId();
+  // The place is full when the application holds every block it may, or the place nests as deep as
+  // a block may: said once by the Alert, not on every row.
+  const limitReason =
+    target === undefined
+      ? undefined
+      : definitionLimitReached("compositionPlacements", target.placed)
+        ? definitionLimitMessage("compositionPlacements")
+        : definitionLimitReached("compositionDepth", target.depth)
+          ? definitionLimitMessage("compositionDepth")
+          : undefined;
   const context = useMemo(
     (): DrawerContextValue | null =>
-      target === undefined ? null : { target, choices, blocked, add },
-    [target, choices, blocked, add],
+      target === undefined ? null : { target, choices, blocked, limitReason, limitId, add },
+    [target, choices, blocked, limitReason, limitId, add],
   );
   if (target === undefined || context === null)
     return (
@@ -323,7 +337,10 @@ function StudioBlocksDrawer({
       <div className="flex flex-col gap-2">
         <Label htmlFor={targetSelectId}>Add to</Label>
         <Select
-          items={targets.map((candidate) => ({ value: candidate.id, label: candidate.label }))}
+          items={targets.map((candidate) => ({
+            value: candidate.id,
+            label: placeLabel(candidate),
+          }))}
           value={target.id}
           onValueChange={(next) => {
             if (typeof next === "string") setTargetId(next);
@@ -336,9 +353,7 @@ function StudioBlocksDrawer({
           <SelectContent className="w-auto min-w-(--anchor-width) max-w-(--available-width)">
             {targets.map((candidate) => (
               <SelectItem key={candidate.id} value={candidate.id}>
-                <span style={{ paddingInlineStart: `${candidate.depth * 0.75}rem` }}>
-                  {candidate.label}
-                </span>
+                {placeLabel(candidate)}
               </SelectItem>
             ))}
           </SelectContent>
@@ -357,6 +372,20 @@ function StudioBlocksDrawer({
           onChange={(event) => setSearch(event.target.value)}
         />
       </InputGroup>
+      {limitReason === undefined ? (
+        <>
+          <StudioLimitNote
+            limit="compositionPlacements"
+            used={target.placed}
+            label="Blocks in the application"
+          />
+          <StudioLimitNote limit="compositionDepth" used={target.depth} label="Levels above here" />
+        </>
+      ) : (
+        <Alert role="status" id={limitId}>
+          <AlertDescription>{limitReason}</AlertDescription>
+        </Alert>
+      )}
       {/* The answer to an Add is announced, not drawn: a line that comes and goes would move the list. */}
       <p role="status" aria-live="polite" className="sr-only">
         {message}

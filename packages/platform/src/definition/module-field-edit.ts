@@ -13,6 +13,7 @@ import {
 import { applicationUses, describeSourcePlace, type ApplicationUsePlace } from "./application-uses";
 import { moduleFieldTypeLabels, type ModuleFieldType } from "./module-field-settings";
 import { recordTitleFieldEligible } from "./record-title-field";
+import { queriesSortingBy, sortingOffRefusal } from "./module-query-order";
 import {
   enablePeopleDirectoryLinks,
   linkCardinalities,
@@ -470,6 +471,11 @@ export const changeInlineModuleField = (
           `A pipeline follows ${field.label}, so its filtering can't be turned off: its board groups ${record.plural_name} by it. Delete the pipeline first.`,
         ],
       };
+    if (field.sortable && !change.sortable) {
+      const sorting = queriesSortingBy(module, record.key, field.key);
+      if (sorting.length > 0)
+        return { kind: "invalid", issues: [sortingOffRefusal(sorting, field.label)] };
+    }
     const published = publication.fields.get(`${qualifiedRecord}.${field.key}`);
     // Turning filtering or sorting on is additive: an installation adopting the release builds the
     // field's index. Turning it off is refused once published: installed apps may filter or sort by it.
