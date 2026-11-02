@@ -1,7 +1,5 @@
 "use client";
 import { useEffect, useState } from "react";
-import { Alert, AlertDescription } from "@vortex/ui/components/alert";
-import { Spinner } from "@vortex/ui/components/spinner";
 import type { StudioApplicationHistoryPage } from "../../_lib/studio-application-history";
 import { listApplicationReleaseHistory } from "../releases-actions";
 import { unavailableMessage, type StudioUnavailableKind } from "./studio-refusal-messages";
@@ -56,19 +54,9 @@ export function StudioHistoryTab({
       current = false;
     };
   }, [organizationId, rootId, savedRevision]);
-  if (load.kind === "loading")
-    return (
-      <div className="flex items-center gap-2 text-sm">
-        <Spinner />
-        Loading the published versions…
-      </div>
-    );
+  if (load.kind === "loading") return <p role="status">Loading the published versions…</p>;
   if (load.kind === "unavailable")
-    return (
-      <Alert variant="destructive">
-        <AlertDescription>{unavailableMessage(load.failure, load.reason)}</AlertDescription>
-      </Alert>
-    );
+    return <p role="status">{unavailableMessage(load.failure, load.reason)}</p>;
   const snapshot = load.page.snapshot;
   return (
     <ApplicationReleaseHistory

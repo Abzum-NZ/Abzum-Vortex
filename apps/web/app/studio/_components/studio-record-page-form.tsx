@@ -1,6 +1,7 @@
 "use client";
+import { Field, FieldLabel } from "@vortex/ui/components/field";
 import { Alert, AlertDescription } from "@vortex/ui/components/alert";
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useId, useMemo, useState, type FormEvent } from "react";
 import type { ApplicationSourceDocument } from "@vortex/platform/schema";
 import { Button } from "@vortex/ui/components/button";
 import { Checkbox } from "@vortex/ui/components/checkbox";
@@ -44,6 +45,7 @@ export function StudioRecordPageForm({
   const [recordType, setRecordType] = useState(recordTypes[0]?.recordType ?? "");
   const [kind, setKind] = useState<StudioRecordPageKind>("list");
   const [shellChoice, setShellChoice] = useState(studioStructureDefaultShell(source) ?? "");
+  const menuId = useId();
   const [addToMenu, setAddToMenu] = useState(true);
   const [listName, setListName] = useState("");
   const chooseKind = (next: StudioRecordPageKind) => {
@@ -193,14 +195,15 @@ export function StudioRecordPageForm({
         )}
       </StudioField>
       {menuAllowed ? (
-        <label className="flex items-center gap-2 text-sm">
+        <Field orientation="horizontal">
           <Checkbox
+            id={`${menuId}-menu`}
             checked={addToMenu}
             disabled={disabled}
             onCheckedChange={(checked) => setAddToMenu(checked === true)}
           />
-          Show it in the menu
-        </label>
+          <FieldLabel htmlFor={`${menuId}-menu`}>Show it in the menu</FieldLabel>
+        </Field>
       ) : (
         <p className="text-sm text-muted-foreground">
           It opens one record, so it is reached from the list, not the menu.

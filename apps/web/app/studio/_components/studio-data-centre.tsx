@@ -251,7 +251,7 @@ function SummaryResults({
   const totalColumns = result.totals.map((total) => ({ alias: total.alias, label: total.label }));
   return (
     <div className="space-y-3">
-      <p aria-live="polite" className="text-sm">
+      <p role="status" className="text-sm">
         {result.totalRowCount} {result.totalRowCount === 1 ? "record" : "records"} in all.
       </p>
       <Totals totals={result.totals} />
@@ -303,7 +303,7 @@ function SummaryResults({
       )}
       {result.groupColumns.length === 0 ? null : (
         <div className="flex items-center justify-between gap-2">
-          <p aria-live="polite" className="text-sm text-muted-foreground">
+          <p role="status" className="text-sm text-muted-foreground">
             {result.groups.length} {result.groups.length === 1 ? "group" : "groups"} on this page
           </p>
           <div className="flex gap-2">
@@ -454,8 +454,8 @@ function PreviewResults({
         </div>
       </div>
       {current === null ? (
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <Spinner />
+        <div role="status" className="flex items-center gap-2 text-sm text-muted-foreground">
+          <Spinner aria-hidden="true" />
           Reading records…
         </div>
       ) : problem !== undefined ? (
@@ -501,7 +501,7 @@ function PreviewResults({
               </Table>
             </div>
             <div className="flex items-center justify-between gap-2">
-              <p aria-live="polite" className="text-sm text-muted-foreground">
+              <p role="status" className="text-sm text-muted-foreground">
                 {current.rows.length} {current.rows.length === 1 ? "record" : "records"} on this
                 page
               </p>
@@ -633,9 +633,11 @@ export function StudioDataCentre({
       <StudioDataEmpty title="Item removed" description="Choose another record type in Data." />
     );
   const results = unsaved ? (
-    <Alert role="status">
-      <AlertDescription>Records will appear when this draft is saved.</AlertDescription>
-    </Alert>
+    <Empty className="border-0">
+      <EmptyHeader>
+        <EmptyDescription>Records will appear when this draft is saved.</EmptyDescription>
+      </EmptyHeader>
+    </Empty>
   ) : (
     <PreviewResults
       organizationId={organizationId}

@@ -357,7 +357,7 @@ export function FieldFormatSection({
           onChange={total.onChange}
         />
       ) : unreadable ? (
-        <Alert variant="destructive" role="alert">
+        <Alert variant="destructive">
           <AlertTitle>These settings can&apos;t be read</AlertTitle>
           <AlertDescription>
             {`${[...new Set(readFailures.map((failure) => failure.path.join(", ")))].join("; ")}: ` +

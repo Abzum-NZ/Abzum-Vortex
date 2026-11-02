@@ -289,69 +289,72 @@ export function StudioConditionalFormattingEditor({
                   onDragEnd={() => setDragged(undefined)}
                   data-vortex-formatting-rule={rule.id}
                   className={cn(
-                    "flex items-start gap-2 rounded-md py-2",
+                    "rounded-md py-2",
                     selected === rule.id && "bg-accent text-accent-foreground",
                     !rule.enabled && "opacity-60",
                   )}
                 >
-                  <Icon
-                    name="grip-vertical"
-                    className="mt-1 size-4 shrink-0 cursor-grab text-muted-foreground"
-                  />
-                  <ConditionalFormatStyleSwatch style={rule.style} />
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    className="h-auto min-w-0 flex-1 flex-col items-start whitespace-normal p-0 text-left text-sm"
-                    aria-expanded={selected === rule.id}
-                    onClick={() => setSelected(selected === rule.id ? undefined : rule.id)}
-                  >
-                    <span className="block truncate">{summary}</span>
-                    <span className="block truncate text-sm">
-                      {target}
-                      {rule.stopIfTrue ? " · stops" : ""}
-                    </span>
-                    {issue === undefined ? null : (
-                      <span role="alert" className="block text-sm text-destructive">
-                        {issue}
+                  <div className="flex items-start gap-2">
+                    <Icon
+                      name="grip-vertical"
+                      className="mt-1 size-4 shrink-0 cursor-grab text-muted-foreground"
+                    />
+                    <ConditionalFormatStyleSwatch style={rule.style} />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      className="h-auto min-w-0 flex-1 flex-col items-start whitespace-normal p-0 text-left text-sm"
+                      aria-expanded={selected === rule.id}
+                      {...(issue === undefined ? {} : { "aria-describedby": `${switchId}-issue` })}
+                      onClick={() => setSelected(selected === rule.id ? undefined : rule.id)}
+                    >
+                      <span className="block truncate">{summary}</span>
+                      <span className="block truncate text-sm">
+                        {target}
+                        {rule.stopIfTrue ? " · stops" : ""}
                       </span>
-                    )}
-                  </Button>
-                  <Label htmlFor={switchId} className="sr-only">
-                    Apply rule {index + 1}
-                  </Label>
-                  <Switch
-                    id={switchId}
-                    checked={rule.enabled}
-                    disabled={disabled}
-                    onCheckedChange={(on: boolean) => writeRule(rule.id, { enabled: flag(on) })}
-                  />
-                  <StudioInspectorActions
-                    actions={[
-                      { label: "Show me where", onSelect: () => setSelected(rule.id) },
-                      {
-                        label: "Move up",
-                        disabled: disabled || index === 0,
-                        onSelect: () => moveRule(index, index - 1),
-                      },
-                      {
-                        label: "Move down",
-                        disabled: disabled || index === rules.length - 1,
-                        onSelect: () => moveRule(index, index + 1),
-                      },
-                      {
-                        label: "Delete rule",
-                        destructive: true,
-                        disabled,
-                        onSelect: () =>
-                          write({
-                            rules: ruleItems.filter(
-                              (_, position) => position !== rawIndex(rule.id),
-                            ),
-                          }),
-                      },
-                    ]}
-                  />
+                    </Button>
+                    <Label htmlFor={switchId} className="sr-only">
+                      Apply rule {index + 1}
+                    </Label>
+                    <Switch
+                      id={switchId}
+                      checked={rule.enabled}
+                      disabled={disabled}
+                      onCheckedChange={(on: boolean) => writeRule(rule.id, { enabled: flag(on) })}
+                    />
+                    <StudioInspectorActions
+                      actions={[
+                        { label: "Show me where", onSelect: () => setSelected(rule.id) },
+                        {
+                          label: "Move up",
+                          disabled: disabled || index === 0,
+                          onSelect: () => moveRule(index, index - 1),
+                        },
+                        {
+                          label: "Move down",
+                          disabled: disabled || index === rules.length - 1,
+                          onSelect: () => moveRule(index, index + 1),
+                        },
+                        {
+                          label: "Delete rule",
+                          destructive: true,
+                          disabled,
+                          onSelect: () =>
+                            write({
+                              rules: ruleItems.filter(
+                                (_, position) => position !== rawIndex(rule.id),
+                              ),
+                            }),
+                        },
+                      ]}
+                    />
+                  </div>
+                  {issue === undefined ? null : (
+                    <Alert variant="destructive" id={`${switchId}-issue`}>
+                      <AlertDescription>{issue}</AlertDescription>
+                    </Alert>
+                  )}
                 </li>
               );
             })}

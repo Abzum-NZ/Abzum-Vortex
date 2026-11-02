@@ -1,4 +1,5 @@
 "use client";
+import { FieldDescription } from "@vortex/ui/components/field";
 import { StudioInspectorFooter } from "./studio-inspector";
 import { Alert, AlertDescription } from "@vortex/ui/components/alert";
 import { useEffect, useMemo, useState } from "react";
@@ -304,11 +305,13 @@ export function StudioFlowInspector({
           <AlertDescription>{problem}</AlertDescription>
         </Alert>
       )}
-      {status === "" ? null : (
-        <Alert role="status">
-          <AlertDescription>{status}</AlertDescription>
-        </Alert>
-      )}
+      <div role="status" aria-live="polite">
+        {status === "" ? null : (
+          <Alert role="none">
+            <AlertDescription>{status}</AlertDescription>
+          </Alert>
+        )}
+      </div>
     </>
   );
 
@@ -344,11 +347,7 @@ export function StudioFlowInspector({
             return result.kind === "applied" ? true : result.reason;
           }}
         />
-        {ownerNote === undefined ? null : (
-          <Alert role="status">
-            <AlertDescription>{ownerNote}</AlertDescription>
-          </Alert>
-        )}
+        {ownerNote === undefined ? null : <FieldDescription>{ownerNote}</FieldDescription>}
         {messages}
         {confirmDialog}
         {main !== undefined && (

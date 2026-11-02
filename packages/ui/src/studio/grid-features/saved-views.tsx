@@ -209,7 +209,7 @@ export function StudioSavedViewsEditor({
         </div>
       ))}
       {canvasStale && (
-        <Alert role="status">
+        <Alert variant="warning" role="status">
           <AlertDescription>
             The table's source, query or columns changed after the canvas was arranged, so that
             arrangement is no longer captured. Arrange the grid again to capture it.

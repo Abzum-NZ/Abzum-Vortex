@@ -44,8 +44,8 @@ export function deferredStudioPart<Props extends object>(
 ): ComponentType<Props> {
   const Part = dynamic<Props>(load, {
     loading: () => (
-      <div className="flex items-center gap-2 text-sm">
-        <Spinner />
+      <div role="status" className="flex items-center gap-2 text-sm text-muted-foreground">
+        <Spinner aria-hidden="true" />
         Loading the {what}…
       </div>
     ),

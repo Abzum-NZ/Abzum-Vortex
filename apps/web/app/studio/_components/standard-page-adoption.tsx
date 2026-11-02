@@ -1,7 +1,7 @@
 "use client";
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { Icon } from "@vortex/ui";
-import { Alert, AlertDescription } from "@vortex/ui/components/alert";
+import { Alert, AlertDescription, AlertAction } from "@vortex/ui/components/alert";
 import { Button } from "@vortex/ui/components/button";
 import { Spinner } from "@vortex/ui/components/spinner";
 import { Badge } from "@vortex/ui/components/badge";
@@ -151,23 +151,23 @@ export function StandardPageAdoption({
         )}
       </header>
       {result === null && (
-        <div className="flex items-center gap-2">
-          <Spinner />
+        <div role="status" className="flex items-center gap-2 text-sm text-muted-foreground">
+          <Spinner aria-hidden="true" />
           Loading the comparison…
         </div>
       )}
       {result?.kind === "temporarily_unavailable" && (
-        <Alert>
-          <AlertDescription>
-            The comparison is temporarily unavailable.{" "}
+        <Alert variant="warning" role="status">
+          <AlertDescription>The comparison is temporarily unavailable.</AlertDescription>
+          <AlertAction>
             <Button variant="outline" onClick={() => void load()}>
               Try again
             </Button>
-          </AlertDescription>
+          </AlertAction>
         </Alert>
       )}
       {result?.kind === "refused" && (
-        <Alert variant="destructive">
+        <Alert variant="warning">
           <AlertDescription>
             The page comparison is unavailable for this application.
           </AlertDescription>

@@ -88,15 +88,17 @@ The [target architecture](docs/build-plan/target-architecture.md) is binding: re
 - Packages use each other's public interfaces only; nothing depends upward.
 - One renderer: pages are Puck data rendered with the one Puck config built on shadcn/ui. No other
   code path draws a block.
-- Studio uses shadcn/ui components only, and they take all colour, radius, font, spacing and state from
-  the theme (Vortex, organisation or application level) through the `cn-` style classes and tokens.
-  Every interactive or structural element in `packages/ui/src/studio`, `apps/web/app/studio` and
-  Studio-used navigation comes from `packages/ui/src/components`: no raw
-  button/input/select/textarea/dialog/details/fieldset/label, no local component duplicating a name in
-  `components/`, no class strings recreating a shadcn variant, no fixed colours, radii or fonts in
-  Studio code, and no direct imports of a primitive library (`@base-ui`, `@radix-ui`, `cmdk`) outside
-  `components/`. A missing shadcn component is added to `components/` with its `cn-` styles first.
-  Exceptions (skip link, hidden or file inputs, the navigation tree) carry a comment naming this rule.
+- **shadcn only:** Studio uses shadcn/ui components only, and they take all colour, radius, font,
+  spacing and state from the theme (Vortex, organisation or application level) through the `cn-`
+  style classes and tokens. Every interactive or structural element in `packages/ui/src/studio`,
+  `apps/web/app/studio` and, where Studio uses it, `packages/ui/src/navigation` comes from
+  `packages/ui/src/components`: no raw button/input/select/textarea/dialog/details/fieldset/label, no
+  local component duplicating a name in `components/`, no class strings recreating a shadcn variant,
+  no fixed colours, radii or fonts in Studio code, and no direct imports of a primitive library
+  (`@base-ui`, `@radix-ui`, `cmdk`) outside `components/`. Empty states use `Empty`, loading uses
+  `Spinner`, and messages use `Alert`. A missing shadcn component is added to `components/` with its
+  `cn-` styles first. Exceptions (skip link, hidden or file inputs, the navigation tree) carry a
+  comment `// shadcn-only: <reason>` on the line or the line above.
 - Reads serve the visible page first. Studio preview may continue an idle background fill after
   visible reader demand is satisfied; never prefetch speculatively before it.
   This follows the owner's paging rule: background fill continues only after the visible page's

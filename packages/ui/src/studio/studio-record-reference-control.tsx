@@ -1,5 +1,6 @@
 "use client";
 
+import { FieldDescription } from "../components/field";
 import { useState, type ReactElement } from "react";
 import { Alert, AlertDescription } from "../components/alert";
 import { Button } from "../components/button";
@@ -99,7 +100,7 @@ export function StudioRecordReferenceControl({
       />
       {recordType !== "" &&
         (read === null ? (
-          <Alert role="status">
+          <Alert variant="warning" role="status">
             <AlertDescription>Records can&apos;t be read here.</AlertDescription>
           </Alert>
         ) : (
@@ -206,11 +207,14 @@ function StudioRecordChoicesPage({
         ]}
         onChange={onPick}
       />
-      {note !== undefined && (
-        <Alert role="status">
-          <AlertDescription>{note}</AlertDescription>
-        </Alert>
-      )}
+      {note !== undefined &&
+        (pager.failed || refusal !== null ? (
+          <Alert variant="warning" role="status">
+            <AlertDescription>{note}</AlertDescription>
+          </Alert>
+        ) : (
+          <FieldDescription>{note}</FieldDescription>
+        ))}
       <div className="flex flex-wrap gap-1">
         {pager.next !== undefined && (
           <Button

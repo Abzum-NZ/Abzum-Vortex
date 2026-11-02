@@ -1,4 +1,5 @@
 "use client";
+import { StudioDataEmpty } from "./studio-data-centre";
 import { Alert, AlertDescription } from "@vortex/ui/components/alert";
 import { useMemo, useState, type FormEvent, type ReactNode } from "react";
 import {
@@ -344,13 +345,7 @@ export function StudioQueryEditor({
   });
 
   if (module === undefined || query === undefined)
-    return (
-      <Alert role="status">
-        <AlertDescription>
-          This query is not in the draft any more. Choose another item in the Data panel.
-        </AlertDescription>
-      </Alert>
-    );
+    return <StudioDataEmpty title="Item removed" description="Choose another item in Data." />;
   if (record === undefined)
     return (
       <p role="note" className="text-sm">
@@ -1016,11 +1011,6 @@ export function StudioQueryEditor({
                 ]}
                 onChange={(recordType) => setNewInput({ ...newInput, recordType })}
               />
-              {newInput.recordType === "" && (
-                <Alert variant="destructive">
-                  <AlertDescription>Choose the record type.</AlertDescription>
-                </Alert>
-              )}
             </div>
           )}
           <Button

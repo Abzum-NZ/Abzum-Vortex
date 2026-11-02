@@ -23,8 +23,8 @@ const StudioThemePanel = dynamic(
   () => import("./studio-theme-panel").then((module) => module.StudioThemePanel),
   {
     loading: () => (
-      <div className="flex items-center gap-2 text-sm">
-        <Spinner />
+      <div role="status" className="flex items-center gap-2 text-sm text-muted-foreground">
+        <Spinner aria-hidden="true" />
         Loading the theme editor…
       </div>
     ),

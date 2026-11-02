@@ -1,4 +1,5 @@
 "use client";
+import { StudioDataEmpty } from "./studio-data-centre";
 import { useMemo, useState, type FormEvent } from "react";
 import { Alert, AlertDescription, AlertTitle } from "@vortex/ui/components/alert";
 import { Button } from "@vortex/ui/components/button";
@@ -581,13 +582,7 @@ export function ModuleFieldsEditor({
     record === undefined ||
     (fieldKey !== undefined && existing === undefined)
   )
-    return (
-      <Alert role="status">
-        <AlertDescription>
-          This field is not in the draft any more. Choose another item in the Data panel.
-        </AlertDescription>
-      </Alert>
-    );
+    return <StudioDataEmpty title="Item removed" description="Choose another item in Data." />;
 
   // A discrete choice applies at once; a refused one is answered with why and the draft keeps its value.
   const change = (patch: Partial<FieldFormState>) => {
@@ -941,7 +936,7 @@ export function ModuleFieldsEditor({
       {existing === undefined ? null : (
         <>
           {titleRefusal === null ? null : (
-            <Alert variant="destructive" role="alert">
+            <Alert variant="destructive">
               <AlertTitle>{existing.label} cannot be removed</AlertTitle>
               <AlertDescription className="space-y-2">
                 <p>{titleRefusal}</p>

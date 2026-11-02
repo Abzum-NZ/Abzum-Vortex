@@ -1,5 +1,12 @@
 "use client";
-import { FieldLegend, FieldSet } from "@vortex/ui/components/field";
+import { Empty, EmptyDescription, EmptyHeader } from "@vortex/ui/components/empty";
+import {
+  FieldLegend,
+  FieldSet,
+  FieldDescription,
+  Field,
+  FieldLabel,
+} from "@vortex/ui/components/field";
 import { Alert, AlertDescription } from "@vortex/ui/components/alert";
 import { useState } from "react";
 import { Button } from "@vortex/ui/components/button";
@@ -327,8 +334,9 @@ function ReadFields({
         <p className="text-sm text-muted-foreground">Choose the record type first.</p>
       ) : (
         options.map((option) => (
-          <label key={option.value} className="flex items-center gap-2 text-sm">
+          <Field key={option.value} orientation="horizontal">
             <Checkbox
+              id={`${id}-${option.value}`}
               checked={selected.includes(option.value)}
               disabled={disabled}
               onCheckedChange={(checked) =>
@@ -340,8 +348,8 @@ function ReadFields({
                 })
               }
             />
-            {option.label}
-          </label>
+            <FieldLabel htmlFor={`${id}-${option.value}`}>{option.label}</FieldLabel>
+          </Field>
         ))
       )}
     </div>
@@ -429,9 +437,11 @@ function FieldValues({
             </Alert>
           )}
           {entries.length === 0 && fields.length > 0 && (
-            <Alert role="status">
-              <AlertDescription>No field is set yet.</AlertDescription>
-            </Alert>
+            <Empty className="border-0 p-2">
+              <EmptyHeader>
+                <EmptyDescription>No field is set yet.</EmptyDescription>
+              </EmptyHeader>
+            </Empty>
           )}
           <StudioEntryList
             label={field.label}
@@ -812,7 +822,7 @@ function ConditionControl({
         Condition
       </FieldLegend>
       {tree === undefined && (
-        <Alert role="status">
+        <Alert variant="warning" role="status">
           <AlertDescription>
             Set a condition. The step keeps its saved condition until this is complete.
           </AlertDescription>
@@ -1014,11 +1024,9 @@ function ControlForm({
       );
     case "none":
       return (
-        <Alert role="status">
-          <AlertDescription>
-            This step only groups the steps of its branches; add steps to them on the canvas.
-          </AlertDescription>
-        </Alert>
+        <FieldDescription>
+          This step only groups the steps of its branches; add steps to them on the canvas.
+        </FieldDescription>
       );
   }
 }

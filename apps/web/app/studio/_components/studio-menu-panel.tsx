@@ -1,4 +1,5 @@
 "use client";
+import { Spinner } from "@vortex/ui/components/spinner";
 import { FieldLegend, FieldSet } from "@vortex/ui/components/field";
 import { Alert, AlertDescription } from "@vortex/ui/components/alert";
 import {
@@ -463,9 +464,10 @@ export function StudioMenuPanel({
         {/* A newly chosen icon library loads before its icons draw; only this list waits for it, not Studio. */}
         <Suspense
           fallback={
-            <Alert role="status">
-              <AlertDescription>Loading the icon library…</AlertDescription>
-            </Alert>
+            <div role="status" className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Spinner aria-hidden="true" />
+              Loading the icon library…
+            </div>
           }
         >
           {source.body.navigation.length === 0 ? (
@@ -507,16 +509,12 @@ export function StudioMenuPanel({
             </div>
           )}
           {feedback !== null && (
-            <p
+            <Alert
+              variant={feedback.kind === "refused" ? "destructive" : "default"}
               role={feedback.kind === "refused" ? "alert" : "status"}
-              className={
-                feedback.kind === "refused"
-                  ? "text-sm text-destructive"
-                  : "text-sm text-muted-foreground"
-              }
             >
-              {feedback.message}
-            </p>
+              <AlertDescription>{feedback.message}</AlertDescription>
+            </Alert>
           )}
           {confirmDialog}
         </Suspense>

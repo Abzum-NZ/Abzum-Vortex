@@ -1,5 +1,6 @@
 "use client";
-import { FieldLegend, FieldSet } from "@vortex/ui/components/field";
+import { Empty, EmptyDescription, EmptyHeader } from "@vortex/ui/components/empty";
+import { FieldLegend, FieldSet, FieldDescription } from "@vortex/ui/components/field";
 import { Alert, AlertDescription } from "@vortex/ui/components/alert";
 import { useEffect, useState } from "react";
 import { Checkbox } from "@vortex/ui/components/checkbox";
@@ -300,9 +301,7 @@ function InputSettings({
             onChange={(next) => onChange({ ...input, type, recordType: next === "" ? null : next })}
           />
           {type !== input.type && (
-            <Alert role="status">
-              <AlertDescription>Choose a record type to apply this kind of value.</AlertDescription>
-            </Alert>
+            <FieldDescription>Choose a record type to apply this kind of value.</FieldDescription>
           )}
         </div>
       )}
@@ -449,9 +448,11 @@ export function StudioFlowStartEditor({
           </FieldSet>
         ))}
         {shown.bindings.length === 0 && shown.triggers.length === 0 && (
-          <Alert role="status">
-            <AlertDescription>Nothing starts this flow yet.</AlertDescription>
-          </Alert>
+          <Empty className="border-0 p-2">
+            <EmptyHeader>
+              <EmptyDescription>Nothing starts this flow yet.</EmptyDescription>
+            </EmptyHeader>
+          </Empty>
         )}
         {shown.bindings.map((binding) => (
           <FieldSet key={binding.id} className="gap-2">
@@ -459,11 +460,9 @@ export function StudioFlowStartEditor({
               {studioBindingSentence(controlLabel(binding.control), binding.event)}
             </FieldLegend>
             {shown.inputs.length === 0 && (
-              <Alert role="status">
-                <AlertDescription>
-                  The flow declares no inputs, so the control passes nothing.
-                </AlertDescription>
-              </Alert>
+              <FieldDescription>
+                The flow declares no inputs, so the control passes nothing.
+              </FieldDescription>
             )}
             {shown.inputs.map((input, inputIndex) => {
               const value = binding.inputs[input.id] ?? { kind: "none" };

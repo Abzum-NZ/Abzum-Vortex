@@ -1,5 +1,5 @@
 "use client";
-import { Alert, AlertDescription } from "@vortex/ui/components/alert";
+import { Spinner } from "@vortex/ui/components/spinner";
 import { useState } from "react";
 import type { SourceApplicationThemeSelection } from "@vortex/platform/schema";
 import { createVortexStyleRootProps, Icon, VORTEX_STYLES } from "@vortex/ui";
@@ -362,9 +362,10 @@ export function StudioThemePanel({
         </div>
       )}
       {pending && (
-        <Alert role="status">
-          <AlertDescription>Checking the theme…</AlertDescription>
-        </Alert>
+        <div role="status" className="flex items-center gap-2 text-sm text-muted-foreground">
+          <Spinner aria-hidden="true" />
+          Checking the theme…
+        </div>
       )}
       <StudioInspectorGroup title="Themes">
         <ToggleGroup
