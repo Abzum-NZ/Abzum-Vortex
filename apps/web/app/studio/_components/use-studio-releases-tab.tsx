@@ -24,6 +24,7 @@ import { Button } from "@vortex/ui/components/button";
 import { useStudioTabVisited } from "./studio-frame";
 import { deferredStudioPart } from "./studio-deferred-part";
 import { useIntentPreload } from "../_lib/use-intent-preload";
+import type { AppStoreActionToken } from "../../_lib/page-run-parameter";
 
 // What Publish and the Releases tab show loads when they are first wanted: the top bar's Publish
 // needs only this hook's state at first paint.
@@ -104,11 +105,11 @@ export function useStudioReleasesTab({
   draft,
   hidden,
   initialSection,
-  onPublish,
+  onAction,
 }: Readonly<{
   draft: StudioDraft;
-  /** Opens the App Store page whose Publish flow publishes the saved draft. */
-  onPublish: () => void;
+  /** Opens the App Store page of this application with one of its action flows started. */
+  onAction: (action: AppStoreActionToken) => void;
   hidden: boolean;
   initialSection: StudioReleasesSection;
 }>) {
@@ -167,8 +168,15 @@ export function useStudioReleasesTab({
         studioNotice("Your latest change is not saved. Resolve it, then publish.", "error");
         return;
       }
-      onPublish();
+      onAction("publish");
     });
+  };
+  // The agent starts the same flows: the latest edits finish saving, then the App Store page opens
+  // on that action's confirmation, which only the person completes.
+  const startAction = async (action: AppStoreActionToken): Promise<boolean> => {
+    if (!(await latest.current.flush())) return false;
+    onAction(action);
+    return true;
   };
 
   // Preview runs the saved draft as its own Application in a new tab. The tab is opened at once,
@@ -416,6 +424,6 @@ export function useStudioReleasesTab({
       void openPreview();
     },
     previewPending,
-    agent: { readSavedDraft },
+    agent: { readSavedDraft, startAction },
   };
 }

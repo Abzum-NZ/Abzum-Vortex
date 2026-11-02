@@ -851,7 +851,13 @@ function RecordsTableView(props: DisplayRenderProps<DisplayTablePayload>): React
               {purpose}
             </p>
           )}
-          {ready && values !== undefined && !pivotOpen ? (
+          {ready &&
+          values !== undefined &&
+          !pivotOpen &&
+          !(
+            settings["show_record_count"]?.kind === "boolean" &&
+            !settings["show_record_count"].value
+          ) ? (
             <div className="mb-3">
               <TableSummary
                 recordCount={rows.length}

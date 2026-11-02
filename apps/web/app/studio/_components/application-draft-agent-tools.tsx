@@ -35,6 +35,7 @@ import {
   type ApplicationAuthoringToolName,
 } from "../_lib/application-authoring-tools";
 import { previewProblem } from "./studio-refusal-messages";
+import { appStoreActionTokens, type AppStoreActionToken } from "../../_lib/page-run-parameter";
 import type { StudioDraft } from "./use-studio-draft";
 
 /** The saved draft a preview runs; null while edits or requests are pending. */
@@ -53,7 +54,8 @@ type ToolName =
   | "add_placement"
   | "change_placement_settings"
   | "remove_placement"
-  | "preview_saved_application";
+  | "preview_saved_application"
+  | "start_application_action";
 type StudioApplicationTool = WebMcpToolDescriptor & Readonly<{ name: ToolName; input: z.ZodType }>;
 
 const alias = (what: string) => applicationSourceDocumentSchema.shape.root_alias.describe(what);
@@ -239,6 +241,16 @@ const applicationTools: readonly StudioApplicationTool[] = [
       .strict(),
     false,
   ),
+  tool(
+    "start_application_action",
+    "Start one of this application's App Store actions, the same flow its button runs: publish the saved draft, install or upgrade it, remove it, or delete it. It first waits for the latest edits to be saved, then opens the application's App Store page on that action's first dialog (the review, then the confirmation or form). The person completes or cancels it there; nothing is published, installed, removed or deleted until they do.",
+    z
+      .object({
+        action: z.enum(appStoreActionTokens).describe("Which action's flow to start."),
+      })
+      .strict(),
+    false,
+  ),
 ];
 const descriptors = applicationTools.map(
   ({ name, description, inputSchema: schema, readOnly }) => ({
@@ -269,6 +281,7 @@ export function ApplicationDraftAgentTools({
   command,
   readQueries,
   readSavedDraft,
+  startAction,
 }: {
   /** The workspace's one draft: the agent edits it through the same envelope as the person. */
   draft: StudioDraft;
@@ -281,6 +294,8 @@ export function ApplicationDraftAgentTools({
   readQueries: (borrowed: StudioBorrowedChoices | null) => readonly StudioQueryChoice[];
   /** The saved draft the preview runs; null while edits or requests are pending. */
   readSavedDraft: () => SavedDraftContext | null;
+  /** Saves the latest edits, then opens the application's App Store page on one action flow. */
+  startAction: (action: AppStoreActionToken) => Promise<boolean>;
 }) {
   const [runtime, setRuntime] = useState<ApplicationWebMcpRuntime>();
   const running = useRef(false);
@@ -292,11 +307,13 @@ export function ApplicationDraftAgentTools({
     command,
     readQueries,
     readSavedDraft,
+    startAction,
   });
   actions.current = {
     command,
     readQueries,
     readSavedDraft,
+    startAction,
   };
   const authoring = useRef<Awaited<ReturnType<StudioDraft["loadAuthoringResources"]>>>(null);
   const readLifetime = useCallback(() => latest.current.lifetime, []);
@@ -541,6 +558,20 @@ export function ApplicationDraftAgentTools({
               : "Applied to the workspace, but saving was not confirmed. Read the draft and resolve its save status before continuing.",
             ...describeNow(),
           };
+        }
+        if (found.name === "start_application_action") {
+          const input = parsed.data as { action: AppStoreActionToken };
+          const started = await actions.current.startAction(input.action);
+          return started
+            ? {
+                outcome: "started",
+                message: `The App Store page of this application is open on the ${input.action} action. The person confirms or cancels it there; nothing has changed yet.`,
+              }
+            : {
+                outcome: "blocked",
+                message:
+                  "The latest edits are not saved, so the action was not started. Call read_application_draft.",
+              };
         }
         if (found.name === "preview_saved_application") {
           const input = parsed.data as { draftRevision: number };

@@ -44,7 +44,13 @@ export type BuilderConferredPermission = Readonly<{
  */
 export type BuilderOperation =
   | Readonly<{ kind: "draft_change"; rootId?: string }>
-  | Readonly<{ kind: "publication"; rootId: string }>
+  | Readonly<{
+      kind: "publication";
+      /** Absent when only asking whether the person may publish an ordinary application at all. */
+      rootId?: string;
+      /** True when a recent sign-in is asked for up front, as publishing will need it. */
+      stepUp?: boolean;
+    }>
   | Readonly<{
       /** Whether the person may install and upgrade applications in this organisation. */
       kind: "application_management";
@@ -125,7 +131,9 @@ export const deriveBuilderRequirements = (
     case "publication":
       return {
         permissionKeys: unique([builderPermissionKeys.definitionReleasesManage, ...system]),
-        recentAuthentication: false,
+        // A person publishing a version every organisation can install is asked, up front, for a
+        // recent sign-in; asking only whether they may publish is not.
+        recentAuthentication: operation.stepUp === true,
         delegatedPermissions: [],
         refused: false,
       };

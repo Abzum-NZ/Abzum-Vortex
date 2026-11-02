@@ -92,10 +92,7 @@ export const readApplicationSurfaceCapabilitiesInTransaction = async (
     mayBuild,
     mayBuildSystemApplications: mayBuild && (await allows(system, { kind: "draft_change" })),
     mayInstall: await allows(ordinary, { kind: "application_management" }),
-    mayPublish: await allows(ordinary, {
-      kind: "publication",
-      rootId: "00000000-0000-0000-0000-000000000000",
-    }),
+    mayPublish: await allows(ordinary, { kind: "publication" }),
   };
 };
 

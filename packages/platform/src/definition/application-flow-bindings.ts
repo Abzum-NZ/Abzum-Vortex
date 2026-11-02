@@ -75,6 +75,14 @@ export const flowBindingSettingsSchema = z
     concurrency: flowBindingConcurrencySchema,
     exclusive: flowBindingExclusiveScopeSchema,
     timeoutMs: z.number().int().min(100).max(flowBindingMaximumTimeoutMs).nullable(),
+    /**
+     * An action binding that a link to its page may start (the page opened with `run=` and this
+     * binding's `startToken`). Only a flow that asks before it first changes anything may say so.
+     */
+    startFromAddress: z
+      .object({ token: z.string().regex(/^[a-z][a-z0-9_]{0,39}$/) })
+      .strict()
+      .optional(),
   })
   .strict()
   .superRefine((settings, context) => {

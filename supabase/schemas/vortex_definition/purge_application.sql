@@ -1,247 +1,9 @@
--- Removing an application and everything it holds, in three steps of one transaction. The history
--- tables (roles, assignments, permission entries, registrations, releases, dependencies, source
--- identities, outbox) refuse every delete; their protection lets exactly one role delete: the
--- NOLOGIN role vortex_history_purger, which owns only purge_application_history_internal and has no
--- member that can switch to it. The first and last steps run as vortex_owner and touch no
--- protected table.
-
--- Step 1: everything that is not protected history: records and their tables, drafts, bindings,
--- runtime bundles, previews, runs, views, files, access plans. It ends with the roots released.
-create or replace function vortex_definition.purge_application_rows_internal(
-  p_organization_id uuid,
-  p_application_root_id uuid
-)
-returns void
-language plpgsql
-volatile
-security definer
-set search_path = ''
-as $function$
-declare
-  all_ids uuid[];
-  storage_row record;
-begin
-  select pg_catalog.array_agg(root.root_id) into all_ids
-  from vortex_definition.roots as root
-  where root.organization_id = p_organization_id
-    and (root.root_id = p_application_root_id
-      or root.owner_application_root_id = p_application_root_id);
-
-  delete from vortex_access.flow_run_evidence as evidence
-  where evidence.organization_id = p_organization_id
-    and evidence.application_root_id = p_application_root_id;
-  delete from vortex_definition.form_drafts as form_draft
-  where form_draft.organization_id = p_organization_id
-    and form_draft.application_root_id = p_application_root_id;
-  delete from vortex_platform.backend_runs as run
-  where run.organization_id = p_organization_id
-    and run.application_root_id = p_application_root_id;
-  delete from vortex_platform.grid_views as view_row
-  where view_row.organization_id = p_organization_id
-    and view_row.application_root_id = p_application_root_id;
-  delete from vortex_platform.file_records as file_row
-  where file_row.organization_id = p_organization_id
-    and file_row.application_root_id = p_application_root_id;
-  delete from vortex_definition.preview_installations as preview
-  where preview.organization_id = p_organization_id
-    and preview.application_root_id = p_application_root_id;
-  -- A preview of another draft that pinned this application, and its storage bindings.
-  delete from vortex_definition.preview_releases as pinned where pinned.root_id = any(all_ids);
-  delete from vortex_record.preview_storage_bindings as binding
-  where binding.module_root_id = any(all_ids)
-    or binding.storage_contract_id in (
-      select catalogue.storage_contract_id from vortex_record.storage_catalogue as catalogue
-      where catalogue.module_root_id = any(all_ids));
-
-  delete from vortex_platform.consumer_occurrence_progress as progress
-  where progress.occurrence_id in (
-    select occurrence.occurrence_id from vortex_platform.event_outbox as occurrence
-    where occurrence.organization_id = p_organization_id
-      and (occurrence.sequence_application_root_id = p_application_root_id
-        or occurrence.storage_contract_id in (
-          select catalogue.storage_contract_id from vortex_record.storage_catalogue as catalogue
-          where catalogue.module_root_id = any(all_ids))));
-
-  delete from vortex_definition.installation_runtime_bundle_parts as part
-  where part.organization_id = p_organization_id
-    and part.application_root_id = p_application_root_id;
-  delete from vortex_definition.installation_runtime_bundles as bundle
-  where bundle.organization_id = p_organization_id
-    and bundle.application_root_id = p_application_root_id;
-  delete from vortex_definition.installation_bindings as binding
-  where binding.organization_id = p_organization_id
-    and binding.application_root_id = p_application_root_id;
-  delete from vortex_record.installation_access_plans as plan
-  where plan.organization_id = p_organization_id
-    and plan.application_root_id = p_application_root_id;
-
-  delete from vortex_record.record_lifecycle_command_effects as effect
-  where effect.organization_id = p_organization_id
-    and effect.application_root_id = p_application_root_id;
-  delete from vortex_record.documents as document
-  where document.organization_id = p_organization_id
-    and document.application_root_id = p_application_root_id;
-  delete from vortex_record.record_type_lifecycle_policies as policy
-  where policy.organization_id = p_organization_id
-    and policy.application_root_id = p_application_root_id;
-  for storage_row in
-    select catalogue.storage_contract_id, catalogue.physical_table_token
-    from vortex_record.storage_catalogue as catalogue
-    where catalogue.module_root_id = any(all_ids)
-    order by catalogue.storage_contract_id
-  loop
-    delete from vortex_record.relationship_edges as edge
-    where edge.from_storage_contract_id = storage_row.storage_contract_id
-      or edge.to_storage_contract_id = storage_row.storage_contract_id;
-    delete from vortex_record.record_reference_counters as counter
-    where counter.storage_contract_id = storage_row.storage_contract_id;
-    delete from vortex_record.index_catalogue as index_row
-    where index_row.storage_contract_id = storage_row.storage_contract_id;
-    -- A lifecycle policy of any application that names this storage goes with it.
-    delete from vortex_record.record_type_lifecycle_policies as policy
-    where policy.storage_contract_id = storage_row.storage_contract_id;
-    execute pg_catalog.format('drop table if exists record_data.%I', storage_row.physical_table_token);
-    delete from vortex_record.field_storage_mappings as mapping
-    where mapping.storage_contract_id = storage_row.storage_contract_id;
-    delete from vortex_record.storage_catalogue as catalogue
-    where catalogue.storage_contract_id = storage_row.storage_contract_id;
-  end loop;
-  delete from vortex_record.relationship_storage_mappings as mapping
-  where mapping.module_root_id = any(all_ids);
-  delete from vortex_record.release_provisions as provision
-  where provision.module_root_id = any(all_ids);
-
-  -- The roots stop naming a release so that the releases can go, and the drafts go first.
-  update vortex_definition.roots as root
-  set current_release_revision = null
-  where root.root_id = any(all_ids);
-  delete from vortex_definition.drafts as draft where draft.root_id = any(all_ids);
-end
-$function$;
-
--- Step 3: the roots themselves, modules first.
-create or replace function vortex_definition.purge_application_roots_internal(
-  p_organization_id uuid,
-  p_application_root_id uuid
-)
-returns void
-language plpgsql
-volatile
-security definer
-set search_path = ''
-as $function$
-begin
-  delete from vortex_definition.roots as module
-  where module.organization_id = p_organization_id
-    and module.owner_application_root_id = p_application_root_id;
-  delete from vortex_definition.roots as root
-  where root.organization_id = p_organization_id and root.root_id = p_application_root_id;
-end
-$function$;
-
--- Step 2 (owned by vortex_history_purger): the protected history. Two functions, both owned by
--- the purger: the unchecked deletion, which only the purger itself can execute (the purge
--- function reaches it through the checked one, and a migration converting an old application
--- runs it as the purger), and the checked one, which proves a permitted human request in this
--- organisation and an ordinary application first and is executable by vortex_owner only.
-create or replace function vortex_definition.purge_application_history_rows_internal(
-  p_organization_id uuid,
-  p_application_root_id uuid
-)
-returns void
-language plpgsql
-volatile
-security definer
-set search_path = ''
-as $function$
-declare
-  all_ids uuid[];
-  role_ids uuid[];
-begin
-  select pg_catalog.array_agg(root.root_id) into all_ids
-  from vortex_definition.roots as root
-  where root.organization_id = p_organization_id
-    and (root.root_id = p_application_root_id
-      or root.owner_application_root_id = p_application_root_id);
-  select coalesce(pg_catalog.array_agg(role_row.role_id), array[]::uuid[]) into role_ids
-  from vortex_access.organization_roles as role_row
-  where role_row.organization_id = p_organization_id
-    and (role_row.application_root_id = p_application_root_id
-      or role_row.derived_application_root_id = p_application_root_id);
-
-  delete from vortex_access.organization_role_assignments as assignment
-  where assignment.organization_id = p_organization_id and assignment.role_id = any(role_ids);
-  delete from vortex_access.organization_role_permission_entries as entry
-  where entry.organization_id = p_organization_id
-    and (entry.role_id = any(role_ids) or entry.application_root_id = p_application_root_id);
-  delete from vortex_access.organization_role_revisions as revision
-  where revision.organization_id = p_organization_id and revision.role_id = any(role_ids);
-  delete from vortex_access.organization_roles as role_row
-  where role_row.organization_id = p_organization_id and role_row.role_id = any(role_ids);
-  delete from vortex_access.permission_continuities as continuity
-  where continuity.organization_id = p_organization_id
-    and (continuity.application_root_id = p_application_root_id
-      or continuity.registration_owner_id = any(all_ids));
-  delete from vortex_access.application_role_template_continuities as continuity
-  where continuity.organization_id = p_organization_id
-    and continuity.application_root_id = p_application_root_id;
-  delete from vortex_access.permission_catalogue_entries as catalogue_entry
-  where catalogue_entry.organization_id = p_organization_id
-    and (catalogue_entry.application_root_id = p_application_root_id
-      or catalogue_entry.registration_owner_id = any(all_ids));
-  delete from vortex_access.permission_registration_revisions as registration
-  where registration.organization_id = p_organization_id
-    and registration.registration_owner_id = any(all_ids);
-  delete from vortex_access.permission_registrations as registration
-  where registration.organization_id = p_organization_id
-    and registration.registration_owner_id = any(all_ids);
-  delete from vortex_platform.event_outbox as occurrence
-  where occurrence.organization_id = p_organization_id
-    and (occurrence.sequence_application_root_id = p_application_root_id
-      or occurrence.storage_contract_id in (
-        select catalogue.storage_contract_id from vortex_record.storage_catalogue as catalogue
-        where catalogue.module_root_id = any(all_ids)));
-  delete from vortex_definition.release_dependencies as dependency
-  where dependency.root_id = any(all_ids);
-  delete from vortex_definition.releases as release where release.root_id = any(all_ids);
-  delete from vortex_definition.source_identity_aliases as alias where alias.root_id = any(all_ids);
-  delete from vortex_definition.source_identities as identity_row
-  where identity_row.root_id = any(all_ids);
-end
-$function$;
-
-create or replace function vortex_definition.purge_application_history_internal(
-  p_organization_id uuid,
-  p_application_root_id uuid
-)
-returns void
-language plpgsql
-volatile
-security definer
-set search_path = ''
-as $function$
-declare
-  authority record;
-begin
-  select locked.* into strict authority
-  from vortex_access.lock_application_installation_authority() as locked;
-  if authority.organization_id is distinct from p_organization_id then
-    raise exception using errcode = '42501', message = 'Application purge organisation mismatch';
-  end if;
-  if not exists (
-    select 1 from vortex_definition.roots as root
-    where root.root_id = p_application_root_id
-      and root.organization_id = p_organization_id
-      and root.kind = 'application'
-      and root.application_origin_kind = 'ordinary'
-  ) then
-    raise exception using errcode = '42501', message = 'Only an ordinary application can be purged';
-  end if;
-  perform vortex_definition.purge_application_history_rows_internal(
-    p_organization_id, p_application_root_id);
-end
-$function$;
-
+-- Counts, or with p_apply removes, everything one ordinary application and the modules it owns
+-- hold in the validated organisation, in one transaction under the application installation
+-- authority. The proof of what may be removed (purge_application_review_internal) and the
+-- deletion of the protected history (purge_application_history_internal, owned by the only role
+-- the history protection lets delete) both prove it again themselves; this function only
+-- sequences them, then removes the roots and records the change.
 create or replace function vortex_definition.purge_application(
   p_application_root_id uuid,
   p_apply boolean,
@@ -256,27 +18,10 @@ set search_path = ''
 as $function$
 declare
   authority record;
-  app_root record;
-  module_ids uuid[];
-  all_ids uuid[];
-  role_ids uuid[];
-  storage_row record;
-  installed boolean;
-  record_total bigint := 0;
-  table_total bigint;
-  table_count bigint := 0;
-  role_count bigint;
-  assignment_count bigint;
-  entry_count bigint;
-  release_count bigint;
+  impact jsonb;
   context_value jsonb;
-  external_links bigint;
-  application_name text;
 begin
-  if p_application_root_id is null
-    or p_application_root_id = '00000000-0000-0000-0000-000000000000'::uuid
-    or p_apply is null
-    or p_delete_only is null then
+  if p_application_root_id is null or p_apply is null or p_delete_only is null then
     raise exception using errcode = '22023',
       message = 'Application purge command is invalid';
   end if;
@@ -284,128 +29,18 @@ begin
   select locked.* into strict authority
   from vortex_access.lock_application_installation_authority() as locked;
 
-  select root.root_id, root.key, root.application_origin_kind into app_root
-  from vortex_definition.roots as root
-  where root.root_id = p_application_root_id
-    and root.organization_id = authority.organization_id
-    and root.kind = 'application'
-  for update;
-  if not found then
-    raise exception using errcode = 'P0002', message = 'Application is unavailable';
-  end if;
-  if app_root.application_origin_kind = 'platform_system_application' then
-    raise exception using errcode = '42501',
-      message = 'A system application can never be removed or deleted';
-  end if;
-  if exists (
-    select 1 from vortex_identity.organization_runtime_settings as settings
-    where settings.organization_id = authority.organization_id
-      and settings.default_application_root_id = p_application_root_id
-  ) then
-    raise exception using errcode = 'VX001',
-      message = 'The organisation default application cannot be removed or deleted';
-  end if;
-
-  select coalesce(pg_catalog.array_agg(module.root_id), array[]::uuid[]) into module_ids
-  from vortex_definition.roots as module
-  where module.organization_id = authority.organization_id
-    and module.owner_application_root_id = p_application_root_id;
-  all_ids := pg_catalog.array_append(module_ids, p_application_root_id);
-
-  -- Another definition that was published against this one would lose what it pins.
-  if exists (
-    select 1 from vortex_definition.release_dependencies as dependency
-    where dependency.target_root_id = any(all_ids) and dependency.root_id <> all(all_ids)
-  ) then
-    raise exception using errcode = 'VX002',
-      message = 'Another application depends on this application';
-  end if;
-
-  select pg_catalog.bool_or(binding.state <> 'detached') into installed
-  from vortex_definition.installation_bindings as binding
-  where binding.organization_id = authority.organization_id
-    and binding.application_root_id = p_application_root_id;
-  installed := coalesce(installed, false);
-  if p_delete_only and installed then
-    raise exception using errcode = 'VX003',
-      message = 'An installed application cannot be deleted';
-  end if;
-
-  select coalesce(pg_catalog.array_agg(role_row.role_id), array[]::uuid[]) into role_ids
-  from vortex_access.organization_roles as role_row
-  where role_row.organization_id = authority.organization_id
-    and (role_row.application_root_id = p_application_root_id
-      or role_row.derived_application_root_id = p_application_root_id);
-  role_count := pg_catalog.cardinality(role_ids);
-  select pg_catalog.count(*) into assignment_count
-  from vortex_access.organization_role_assignments as assignment
-  where assignment.organization_id = authority.organization_id
-    and assignment.role_id = any(role_ids);
-  select pg_catalog.count(*) into entry_count
-  from vortex_access.organization_role_permission_entries as entry
-  where entry.organization_id = authority.organization_id
-    and (entry.role_id = any(role_ids) or entry.application_root_id = p_application_root_id);
-  select pg_catalog.count(*) into release_count
-  from vortex_definition.releases as release where release.root_id = p_application_root_id;
-  application_name := coalesce((
-      select release.application_address ->> 'name'
-      from vortex_definition.roots as root
-      join vortex_definition.releases as release
-        on release.root_id = root.root_id
-        and release.release_revision = root.current_release_revision
-      where root.root_id = p_application_root_id),
-    (select pg_catalog.btrim(draft.draft_source -> 'body' ->> 'name')
-      from vortex_definition.drafts as draft where draft.root_id = p_application_root_id),
-    app_root.key);
-  -- Links other applications keep into this one's records are removed with them, and counted.
-  select pg_catalog.count(*) into external_links
-  from vortex_record.relationship_edges as edge
-  where edge.to_storage_contract_id in (
-      select catalogue.storage_contract_id from vortex_record.storage_catalogue as catalogue
-      where catalogue.module_root_id = any(all_ids))
-    and edge.from_storage_contract_id not in (
-      select catalogue.storage_contract_id from vortex_record.storage_catalogue as catalogue
-      where catalogue.module_root_id = any(all_ids));
-
-  for storage_row in
-    select catalogue.storage_contract_id, catalogue.physical_table_token
-    from vortex_record.storage_catalogue as catalogue
-    where catalogue.module_root_id = any(all_ids)
-      and catalogue.physical_schema_token = 'record_data'
-    order by catalogue.storage_contract_id
-  loop
-    table_count := table_count + 1;
-    if pg_catalog.to_regclass(pg_catalog.format('record_data.%I', storage_row.physical_table_token))
-      is not null then
-      execute pg_catalog.format('select pg_catalog.count(*) from record_data.%I',
-        storage_row.physical_table_token) into table_total;
-      record_total := record_total + table_total;
-    end if;
-  end loop;
-
+  -- Without a typed name this only reads; with p_apply the typed name is required and proved.
+  impact := vortex_definition.purge_application_review_internal(
+    authority.organization_id,
+    p_application_root_id,
+    p_delete_only,
+    case when p_apply then coalesce(p_confirmed_name, '') else null end);
   if not p_apply then
-    return pg_catalog.jsonb_build_object(
-      'application_name', application_name,
-      'installed', installed,
-      'external_links', external_links,
-      'roles', role_count,
-      'role_assignments', assignment_count,
-      'permission_entries', entry_count,
-      'releases', release_count,
-      'records', record_total,
-      'record_tables', table_count
-    );
+    return impact;
   end if;
 
-  -- The typed name is checked here, in the one function that deletes.
-  if p_confirmed_name is null or pg_catalog.btrim(p_confirmed_name) <> application_name then
-    raise exception using errcode = 'VX004',
-      message = 'The typed name does not match the application name';
-  end if;
-  perform vortex_definition.purge_application_rows_internal(
-    authority.organization_id, p_application_root_id);
   perform vortex_definition.purge_application_history_internal(
-    authority.organization_id, p_application_root_id);
+    authority.organization_id, p_application_root_id, p_delete_only, p_confirmed_name);
   perform vortex_definition.purge_application_roots_internal(
     authority.organization_id, p_application_root_id);
 
@@ -431,40 +66,22 @@ begin
   );
 
   return pg_catalog.jsonb_build_object(
-    'roles', role_count,
-    'role_assignments', assignment_count,
-    'permission_entries', entry_count,
-    'releases', release_count,
-    'records', record_total,
-    'record_tables', table_count
+    'roles', impact -> 'roles',
+    'role_assignments', impact -> 'role_assignments',
+    'permission_entries', impact -> 'permission_entries',
+    'releases', impact -> 'releases',
+    'records', impact -> 'records',
+    'record_tables', impact -> 'record_tables'
   );
 end
 $function$;
 
-revoke all on function vortex_definition.purge_application_rows_internal(uuid, uuid)
-  from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_adapter;
-revoke all on function vortex_definition.purge_application_roots_internal(uuid, uuid)
-  from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_adapter;
-revoke all on function vortex_definition.purge_application_history_rows_internal(uuid, uuid)
-  from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_adapter, vortex_owner;
-revoke all on function vortex_definition.purge_application_history_internal(uuid, uuid)
-  from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_adapter;
 revoke all on function vortex_definition.purge_application(uuid, boolean, boolean, text)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_record_adapter;
 grant execute on function vortex_definition.purge_application(uuid, boolean, boolean, text)
   to vortex_request;
-grant execute on function vortex_definition.purge_application_rows_internal(uuid, uuid)
-  to vortex_owner;
-grant execute on function vortex_definition.purge_application_roots_internal(uuid, uuid)
-  to vortex_owner;
-grant execute on function vortex_definition.purge_application_history_internal(uuid, uuid)
-  to vortex_owner;
 
 comment on function vortex_definition.purge_application(uuid, boolean, boolean, text) is
-  'Counts, or with p_apply removes, everything one ordinary Application and the Modules it owns hold in the validated organisation, in one transaction under the application installation authority: records and tables first, then the protected history through the one role allowed to delete it, then the roots. A system application, the default application and an application another one depends on are refused; p_delete_only also refuses an installed application.';
-comment on function vortex_definition.purge_application_history_internal(uuid, uuid) is
-  'Deletes an ordinary application''s protected history rows. Owned by vortex_history_purger, the only role the history protection lets delete; executable by vortex_owner only, and it proves a permitted human request in the organisation first.';
+  'Counts, or with p_apply removes, everything one ordinary Application and the Modules it owns hold in the validated organisation, in one transaction under the application installation authority: the protected history through the one role allowed to delete it, then the roots. A system application, the default application and an application another one depends on are refused; p_delete_only also refuses an installed application; the typed name is required and proved to remove.';
 
-alter function vortex_definition.purge_application_rows_internal(uuid, uuid) owner to vortex_owner;
-alter function vortex_definition.purge_application_roots_internal(uuid, uuid) owner to vortex_owner;
 alter function vortex_definition.purge_application(uuid, boolean, boolean, text) owner to vortex_owner;

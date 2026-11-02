@@ -165,10 +165,14 @@ begin
           where role_row.organization_id = root.organization_id
             and (role_row.application_root_id = root.root_id
               or role_row.derived_application_root_id = root.root_id)),
-        'records_held', vortex_definition.application_record_count_internal(root.root_id),
-        'data_kept', (installed.release_revision is null
-          and root.current_release_revision is not null
-          and vortex_definition.application_record_count_internal(root.root_id) > 0),
+        -- The count scans the application's record tables, so only the read of one application (its
+        -- detail page) makes it; a list of applications does not.
+        'records_held', case when $2 is null then null
+          else vortex_definition.application_record_count_internal(root.root_id) end,
+        'data_kept', case when $2 is null or root.application_origin_kind = 'platform_system_application' then null
+          else (installed.release_revision is null
+            and root.current_release_revision is not null
+            and vortex_definition.application_record_count_internal(root.root_id) > 0) end,
         'record_type_count', (
           select pg_catalog.count(*) from vortex_record.storage_catalogue as storage
           where storage.state = 'active'
@@ -207,7 +211,7 @@ begin
       select pg_catalog.string_agg(
         entry.release_version || ' (' || pg_catalog.to_char(entry.published_at, 'YYYY-MM-DD') || ')'
           || case when entry.release_note = '' then '' else ': ' || entry.release_note end,
-        '; ' order by entry.release_revision desc) as lines
+        E'\n' order by entry.release_revision desc) as lines
       from (
         select release.release_version, release.published_at, release.release_note,
           release.release_revision

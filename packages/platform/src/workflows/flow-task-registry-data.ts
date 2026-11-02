@@ -551,10 +551,19 @@ const registeredDefinitions: Record<FlowRegisteredTaskTypeKey, DefinitionInput> 
   },
   "interface.show_form": {
     title: "Show form",
-    summary: "Shows a form and continues with the person's answers.",
+    summary:
+      "Shows a form and continues with the person's answers: a form placed on the page (`form`), or fields the step declares itself (`fields`, a list of {name, label, required, multiline}) in a dialog with an optional `message`. `inputs` declares each answer and its starting value; `expect` names a text a field must equal before the form can be submitted.",
     runLocations: ["browser"],
     effect: "interface",
-    properties: { form: required("form_id"), inputs: optional("input_map") },
+    properties: {
+      form: optional("form_id"),
+      fields: optional("json"),
+      title: optional("message_text"),
+      message: optional("message_text"),
+      submit_label: optional("message_text"),
+      inputs: optional("input_map"),
+      expect: optional("input_map"),
+    },
     outputs: [output("submitted", "yes_no"), output("values", "json")],
   },
   "interface.confirm": {

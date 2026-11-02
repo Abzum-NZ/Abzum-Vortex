@@ -1463,8 +1463,8 @@
           { "key": "pencil", "label": "Edit" },
           { "key": "trash", "label": "Delete" },
           { "key": "plus", "label": "Install" },
-          { "key": "minus", "label": "Remove" },
-          { "key": "check", "label": "Publish" },
+          { "key": "archive", "label": "Remove" },
+          { "key": "upload", "label": "Publish" },
           { "key": "workflow", "label": "Run" }
         ]
       },
@@ -3130,6 +3130,17 @@
       },
       {
         "kind": "boolean",
+        "key": "show_record_count",
+        "label": "Show how many",
+        "help": "Shows how many records the list holds, above the rows",
+        "required": false,
+        "defaultValue": {
+          "kind": "boolean",
+          "value": true
+        }
+      },
+      {
+        "kind": "boolean",
         "key": "inline_create",
         "label": "Add records from this list",
         "help": "Shows a create button in the list header and in its empty state",
@@ -3763,6 +3774,14 @@
                 {
                   "key": "minus",
                   "label": "Remove"
+                },
+                {
+                  "key": "archive",
+                  "label": "Remove"
+                },
+                {
+                  "key": "upload",
+                  "label": "Publish"
                 },
                 {
                   "key": "eye",

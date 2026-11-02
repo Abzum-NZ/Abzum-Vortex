@@ -6,7 +6,8 @@ import {
 } from "../../../_lib/organization-context";
 import { resolveIdentitySessionWithEmail } from "../../../auth/_lib/session-server";
 import { studioFrameOf } from "../../_lib/studio-frame";
-import { appStorePublishHref } from "../../../_lib/application-release-adoption";
+import { appStoreActionHref } from "../../../_lib/application-release-adoption";
+import { appStoreActionTokens } from "../../../_lib/page-run-parameter";
 import { resolveApplicationAddress } from "../../../_lib/application-address";
 import { continueStudioSession } from "../../_lib/studio-session";
 import { StudioUnavailable } from "../../_components/studio-unavailable";
@@ -198,14 +199,20 @@ const loadWorkspacePlace = async (
     place: {
       organizationName: entry.organizationDisplayName,
       frame: studioFrameOf(entry, email, studioInstalled),
-      publishHref:
+      actionHrefs:
         settings.value === null || settings.value === "invalid"
           ? undefined
-          : appStorePublishHref(
-              entry.tenantShortName,
-              entry.organizationShortName,
-              settings.value,
-              applicationRootId,
+          : Object.fromEntries(
+              appStoreActionTokens.map((action) => [
+                action,
+                appStoreActionHref(
+                  entry.tenantShortName,
+                  entry.organizationShortName,
+                  settings.value as string,
+                  applicationRootId,
+                  action,
+                ),
+              ]),
             ),
       applicationHref: openable ? pathOf(applicationKey) : undefined,
       appStoreHref: pathOf(settings.value),

@@ -146,8 +146,8 @@ const deleteRules = [
   ["soft_delete_dependent", "Delete this record too"],
 ] as const;
 const currencyModes = [
-  ["organization_default", "The organisation's currency"],
-  ["fixed", "One fixed currency"],
+  ["organization_default", "Organisation"],
+  ["fixed", "Fixed"],
 ] as const;
 /** The theme colour roles a choice option may take, as the option form lists them. */
 const optionTones = [
@@ -165,10 +165,17 @@ const optionTones = [
 ] as const;
 /** Fields and table columns author the same money settings, including their stored default. */
 const moneyCurrencyDeclarations = (subject: "field" | "column"): Declaration[] => [
-  choice("currency_mode", "Currency", true, currencyModes, undefined, {
-    kind: "choice",
-    value: "organization_default",
-  }),
+  choice(
+    "currency_mode",
+    "Currency",
+    true,
+    currencyModes,
+    "Organisation uses the organisation's own currency, so changing it changes every amount. Fixed shows one currency you choose here.",
+    {
+      kind: "choice",
+      value: "organization_default",
+    },
+  ),
   {
     ...text(
       "currency",

@@ -55,7 +55,8 @@ export type StudioWorkspacePlace = Readonly<{
   /** The App Store, where a published version is installed or upgraded to; absent like the above. */
   appStoreHref: string | undefined;
   /** This application's page in the App Store, whose Publish flow publishes its saved draft. */
-  publishHref: string | undefined;
+  /** The application's App Store page with each action flow started, by action. */
+  actionHrefs: Readonly<Record<string, string>> | undefined;
   /** Whether the organisation has this application installed; undefined when that cannot be read. */
   installed: boolean | undefined;
   /** The other applications a Navigate step can open, with their pages. */
@@ -258,8 +259,9 @@ function ExistingApplicationWorkspace(props: ExistingProps) {
   const router = useRouter();
   const releases = useStudioReleasesTab({
     draft,
-    onPublish: () => {
-      if (place.publishHref !== undefined) router.push(place.publishHref);
+    onAction: (action) => {
+      const href = place.actionHrefs?.[action];
+      if (href !== undefined) router.push(href);
     },
     hidden: tab !== "releases",
     initialSection: isStudioReleasesSection(props.initialSection)

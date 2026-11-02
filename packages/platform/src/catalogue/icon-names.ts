@@ -30,6 +30,8 @@ export const VORTEX_ICON_NAMES = [
   "filter",
   "pencil",
   "trash",
+  "upload",
+  "archive",
   "chevrons-left",
   "chevrons-right",
   "life-buoy",

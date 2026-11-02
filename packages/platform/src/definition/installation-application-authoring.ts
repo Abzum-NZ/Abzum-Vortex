@@ -20,6 +20,7 @@ import { describeFailure } from "../catalogue/runtime-primitives";
 import type { FlowRefusalFeedback } from "../workflows/flow-refusal-feedback";
 import { minimumApplicationSource } from "./application-authoring/new-application-source";
 import { readApplicationDefinitionDraft } from "./definition-draft-read";
+import { definitionPublicationConfirmationSchema } from "./definition-store-contracts";
 import type { ImmutableDefinitionPublicationCatalogueDefinition } from "./publication/read";
 
 type Outputs = Readonly<Record<string, JsonValue>>;
@@ -199,6 +200,9 @@ export const createApplicationAuthoringService = (environment: ApplicationAuthor
           rootId: parsed.data.application_root_id,
           expectedDraftRevision: draftRevision,
         });
+        // The same up-front step-up the install review asks for: the dialog asks to sign in again.
+        if (prepared.kind === "refused" && prepared.reason === "recent_authentication_required")
+          return { kind: "unavailable", code: "recent_authentication_required" };
         if (prepared.kind !== "available") {
           const { status, problem } = problemOf(prepared);
           return {
@@ -248,6 +252,14 @@ export const createApplicationAuthoringService = (environment: ApplicationAuthor
     ): Promise<ApplicationAuthoringResult> => {
       const parsed = publishInputSchema.safeParse(inputs);
       if (!parsed.success) return refuse("application_input_invalid");
+      // The confirmation the review handed out must be for the application being published.
+      const confirmation = definitionPublicationConfirmationSchema.safeParse(parsed.data.expected);
+      if (
+        !confirmation.success ||
+        String(confirmation.data.rootId).toLowerCase() !==
+          String(parsed.data.application_root_id).toLowerCase()
+      )
+        return refuse("application_input_invalid");
       let published: HumanDefinitionPublicationResult;
       try {
         published = await publisher.publish(session, organizationOf(selection), {
