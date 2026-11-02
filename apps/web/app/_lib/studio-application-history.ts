@@ -81,6 +81,8 @@ export type StudioApplicationHistoryPage = Readonly<{
   entries: readonly StudioApplicationReleaseEntry[];
   /** The names of the people who published the entries, by lowercase account id, as far as the viewer may see them. */
   publishers: Readonly<Record<string, string>>;
+  /** A platform application's versions are published by the platform, not by a person in this directory. */
+  isSystemApplication: boolean;
   hasOlder: boolean;
   hasNewer: boolean;
 }>;
@@ -461,6 +463,9 @@ export const listStudioApplicationReleaseHistory = async (
           hasOlder: page?.hasOlder ?? false,
           hasNewer: page?.hasNewer ?? false,
           publishers: Object.fromEntries(names),
+          isSystemApplication:
+            (await readBuilderApplicationOrigin(transaction, snapshot.rootId)) ===
+            "platform_system_application",
         },
         metadata: entries,
       };

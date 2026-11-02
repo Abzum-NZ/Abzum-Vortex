@@ -235,14 +235,22 @@ export const listQuery = (
 
 /**
  * The fields a table of the record type shows: its numbers, its title, its first choice, its links
- * to other records, then compact fields, each one its read permission lets people read.
+ * to other records, then compact fields, each one its read permission lets people read. A system
+ * projection's organisation and revision fields are what the projection is addressed by, not
+ * information a person reads, so they are never default columns.
  */
 export const keyColumns = (
   record: RecordType,
   title: Field,
   readable: ReadonlySet<string>,
 ): Field[] => {
-  const shown = record.fields.filter((entry) => readable.has(entry.key));
+  const projection = record.system_projection;
+  const technical = new Set(
+    [projection?.organization_field, projection?.revision_field].filter(
+      (key): key is string => typeof key === "string",
+    ),
+  );
+  const shown = record.fields.filter((entry) => readable.has(entry.key) && !technical.has(entry.key));
   const numbers = shown.filter((entry) => entry.type === "reference_number");
   const state = shown.find((entry) => entry !== title && entry.type === "choice");
   const links = shown.filter(

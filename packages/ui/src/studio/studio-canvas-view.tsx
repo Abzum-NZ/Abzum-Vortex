@@ -8,6 +8,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "../components/tooltip";
 import { Button } from "../components/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "../components/collapsible";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "../components/empty";
+import { Skeleton } from "../components/skeleton";
 import { Label } from "../components/label";
 import { Icon } from "../icons";
 import { studioPageAreaLabel } from "./application-page-layout";
@@ -19,7 +20,7 @@ import { useStudioCanvas } from "./studio-puck-provider";
 
 function CanvasEmpty({ title, description }: Readonly<{ title: string; description: string }>) {
   return (
-    <Empty role="status" className="min-h-64">
+    <Empty role="status" className="min-h-64 flex-1">
       <EmptyHeader>
         <EmptyMedia variant="icon">
           <Icon name="blocks" />
@@ -28,6 +29,31 @@ function CanvasEmpty({ title, description }: Readonly<{ title: string; descripti
         <EmptyDescription>{description}</EmptyDescription>
       </EmptyHeader>
     </Empty>
+  );
+}
+
+/**
+ * The canvas's first paint: the page's shape where the canvas will draw, until the saved draft's
+ * first projection arrives. Without it the centre is blank for the seconds a compile and its
+ * records take, which reads as an empty page.
+ */
+export function StudioCanvasSkeleton() {
+  return (
+    <div
+      role="status"
+      aria-label="Loading the canvas"
+      aria-busy="true"
+      data-vortex-canvas-skeleton=""
+      className="flex min-h-0 flex-1 flex-col gap-3 p-4"
+    >
+      <Skeleton className="h-8 w-56 max-w-full" />
+      <Skeleton className="h-4 w-80 max-w-full" />
+      <div className="flex min-h-0 flex-1 flex-col gap-3 pt-2">
+        <Skeleton className="h-10 w-full" />
+        <Skeleton className="h-32 w-full" />
+        <Skeleton className="h-24 w-full" />
+      </div>
+    </div>
   );
 }
 

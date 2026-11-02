@@ -250,7 +250,10 @@ export function StudioPermissionDeclaration({
           />
         )}
       </StudioField>
-      <StudioField label="Description">
+      <StudioField
+        label="Description"
+        description="Required: the permission cannot be added until it describes what it allows."
+      >
         {(control) => (
           <Textarea
             {...control}

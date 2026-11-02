@@ -9,7 +9,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { Field, FieldError, FieldLabel } from "../components/field";
+import { Field, FieldDescription, FieldError, FieldLabel } from "../components/field";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../components/tooltip";
 import { Button } from "../components/button";
 import { Info } from "lucide-react";
@@ -98,6 +98,7 @@ export function useStudioFieldProblem(
 export function StudioField({
   label,
   hint,
+  description,
   error,
   onUndo,
   optional = false,
@@ -105,6 +106,8 @@ export function StudioField({
 }: Readonly<{
   label: ReactNode;
   hint?: string | undefined;
+  /** Always-visible help under the control, for a requirement the person would otherwise miss. */
+  description?: string | undefined;
   error?: string | undefined;
   onUndo?: (() => void) | undefined;
   optional?: boolean;
@@ -114,8 +117,10 @@ export function StudioField({
 }>) {
   const id = useId();
   useStudioFieldProblem(id, error, onUndo);
-  const description = [
+  const descriptionId = useId();
+  const describedBy = [
     hint === undefined ? undefined : id + "-hint",
+    description === undefined ? undefined : descriptionId,
     error === undefined ? undefined : id + "-error",
   ]
     .filter(Boolean)
@@ -132,9 +137,12 @@ export function StudioField({
         {children({
           id,
           ...(error === undefined ? {} : { "aria-invalid": true as const }),
-          ...(description === "" ? {} : { "aria-describedby": description }),
+          ...(describedBy === "" ? {} : { "aria-describedby": describedBy }),
         })}
       </div>
+      {description === undefined ? null : (
+        <FieldDescription id={descriptionId}>{description}</FieldDescription>
+      )}
       {error !== undefined && <FieldError id={id + "-error"}>{error}</FieldError>}
     </Field>
   );

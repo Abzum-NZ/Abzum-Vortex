@@ -50,8 +50,11 @@ export const useRowEntrance = <T extends HTMLElement>(
     void Promise.all(controls).then(() =>
       container.dispatchEvent(new Event("vortex-row-settled", { bubbles: true })),
     );
+    // The hidden start is cleared again when the entrance ends early (a remount, a new page, a
+    // StrictMode replay): an animation that never ran must never leave rows at `opacity: 0`.
     return () => {
-      for (const control of controls) control.complete();
+      for (const control of controls) control.stop();
+      for (const row of rows) row.style.opacity = "";
     };
   }, [rowSelector, signature]);
   return containerRef;

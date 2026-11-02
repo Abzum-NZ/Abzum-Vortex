@@ -45,7 +45,7 @@ import {
 import { Button } from "@vortex/ui/components/button";
 import { Badge } from "@vortex/ui/components/badge";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@vortex/ui/components/tooltip";
-import { StudioCanvasView } from "@vortex/ui/studio/canvas-view";
+import { StudioCanvasSkeleton, StudioCanvasView } from "@vortex/ui/studio/canvas-view";
 import { StudioBlocksPanel } from "@vortex/ui/studio/puck-drawer";
 import type {
   StudioCanvasAddRequest,
@@ -1083,6 +1083,7 @@ export function useStudioCanvasTab({
           <AlertDescription>{theme.problem}</AlertDescription>
         </Alert>
       )}
+      {canvasPage !== undefined && !shown && <StudioCanvasSkeleton />}
       {shown &&
         canvasPage !== undefined &&
         fieldInputControlReleases !== null &&
@@ -1090,8 +1091,8 @@ export function useStudioCanvasTab({
           // The canvas previews the application in light or dark: the appearance is set on the canvas only, never on Studio's frame.
           <div className="flex min-h-0 flex-1 flex-col">
             {/* A newly chosen icon library loads before the canvas draws with it; only the canvas
-                waits, and it draws no placeholder meanwhile. */}
-            <Suspense fallback={null}>
+                waits, and it shows the page's shape meanwhile rather than a blank area. */}
+            <Suspense fallback={<StudioCanvasSkeleton />}>
               <StudioCanvasView
                 zoom={canvasZoom}
                 onFitZoom={setFitZoom}
