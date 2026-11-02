@@ -15,7 +15,7 @@ import {
   VortexStyleRoot,
   type PlatformThemeTokens,
 } from "../theme";
-import type { StudioCanvasFrame } from "./studio-canvas-bridge";
+import type { StudioCanvasFrame } from "./studio-canvas-projection";
 import { studioPuckIframeCss } from "./studio-puck-style";
 
 /**
@@ -29,6 +29,8 @@ type StudioCanvasContext = Readonly<{
   registry: PlatformComponentRegistry;
   fieldInputControlReleases: FieldInputControlReleaseMap;
   breakpoint: Breakpoint;
+  /** The content area holds no block yet: the canvas says how to add one where it is empty. */
+  empty: boolean;
 }>;
 
 const StudioCanvasFrameContext = createContext<StudioCanvasContext | null>(null);
@@ -45,14 +47,21 @@ export function StudioCanvasRoot({
   children,
   gap,
 }: Readonly<{ children: ReactNode; gap: SlotGapName; puck: PuckContext }>) {
+  const empty = useContext(StudioCanvasFrameContext)?.empty === true;
   return (
     <div
       data-vortex-studio-canvas=""
       data-vortex-shell-outlet=""
       data-vortex-editing=""
-      className="min-h-24"
+      aria-label={empty ? "Empty content area" : undefined}
+      className={empty ? "relative min-h-48" : "min-h-24"}
     >
       <RootSlotGapProvider gap={gap}>{children}</RootSlotGapProvider>
+      {empty && (
+        <p className="pointer-events-none absolute inset-0 flex items-center justify-center px-6 text-center text-sm text-muted-foreground">
+          Drop a block here, or add one from Blocks.
+        </p>
+      )}
     </div>
   );
 }

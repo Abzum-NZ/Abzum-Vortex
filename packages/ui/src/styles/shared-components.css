@@ -5946,6 +5946,24 @@
   rotate: 45deg;
   border-radius: var(--vs-8411b380, 2px);
 }
+.cn-tooltip-arrow[data-side="top"] {
+  bottom: calc(var(--spacing, 0.25rem) * -2.5);
+}
+.cn-tooltip-arrow[data-side="bottom"] {
+  top: calc(var(--spacing, 0.25rem) * 1);
+}
+.cn-tooltip-arrow[data-side="left"] {
+  top: calc(1 / 2 * 100%) !important;
+  right: calc(var(--spacing, 0.25rem) * -1);
+  --tw-translate-y: calc(calc(1 / 2 * 100%) * -1);
+  translate: var(--tw-translate-x) var(--tw-translate-y);
+}
+.cn-tooltip-arrow[data-side="right"] {
+  top: calc(1 / 2 * 100%) !important;
+  left: calc(var(--spacing, 0.25rem) * -1);
+  --tw-translate-y: calc(calc(1 / 2 * 100%) * -1);
+  translate: var(--tw-translate-x) var(--tw-translate-y);
+}
 .cn-tooltip-arrow-logical[data-side="inline-end"] {
   top: calc(1 / 2 * 100%) !important;
   left: calc(var(--spacing, 0.25rem) * -1);
