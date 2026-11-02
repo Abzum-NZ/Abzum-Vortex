@@ -4,6 +4,7 @@ import { PassThrough, type Transform } from "node:stream";
 import { Temporal } from "@js-temporal/polyfill";
 import { compareExactDecimals, parseExactDecimal } from "../records/exact-decimal";
 import {
+  csvCellText,
   RECORDS_TABLE_EXPORT_MAXIMUM_ROWS,
   spreadsheetText,
 } from "../definition/application-composition/records-table-features/export";
@@ -16,7 +17,8 @@ import {
 type RecordsExportTyped =
   | Readonly<{ kind: "number"; amount: string; format: string }>
   | Readonly<{ kind: "date"; iso: string; format: string }>
-  | Readonly<{ kind: "yes_no"; value: boolean; words: boolean }>;
+  /** With a format the cell is 1/0 shown by that format (words); without, a real boolean. */
+  | Readonly<{ kind: "yes_no"; value: boolean; format?: string }>;
 
 /**
  * One value already projected by the export authority, as text exactly as the grid shows it (or
@@ -84,8 +86,8 @@ export const recordsCsvFormat = (): RecordsExportFormat => {
         `${cells
           .map((cell) => {
             if (cell === null) return csvQuote("");
-            // Typed numbers, dates and yes/no are never formulas, so a negative amount keeps its sign.
-            return cell.typed === undefined ? csvText(cell.text) : csvQuote(cell.text);
+            // Only a plain number keeps its sign; any other text that starts like a formula is neutralised.
+            return csvQuote(csvCellText(cell.text));
           })
           .join(",")}\r\n`,
       );
@@ -121,7 +123,9 @@ const excelDate = (value: string, timeZone: string): Date => {
       ? Temporal.PlainDate.from(value).toPlainDateTime()
       : Temporal.Instant.from(value).toZonedDateTimeISO(timeZone).toPlainDateTime();
   if (wall.year < 1900 || wall.year > 9999 || wall.microsecond !== 0 || wall.nanosecond !== 0)
-    throw exportError("excel_date_precision");
+    throw Object.assign(exportError("excel_date_precision"), {
+      message: "Excel cannot hold this date. Choose CSV to keep every value.",
+    });
   // Excel has no time zone. Store the authored zone's wall clock as a UTC Date for its serialiser.
   const milliseconds = wall.toZonedDateTime("UTC").epochMilliseconds;
   // The 1900 date system includes the fictitious 29 February; ExcelJS uses the later epoch.
@@ -311,8 +315,8 @@ export const recordsXlsxFormat = async (
               break;
             case "yes_no":
               // Words are shown by the number format, so the cell still sorts and counts.
-              target.value = typed.words ? (typed.value ? 1 : 0) : typed.value;
-              if (typed.words) target.numFmt = '"Yes";"Yes";"No"';
+              target.value = typed.format === undefined ? typed.value : typed.value ? 1 : 0;
+              if (typed.format !== undefined) target.numFmt = typed.format;
               break;
           }
         });

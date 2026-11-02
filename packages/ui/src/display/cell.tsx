@@ -14,6 +14,7 @@ import { FormattedTime } from "./date-format-context";
 import { Badge } from "../components/badge";
 import { optionToneFillClass } from "./option-tone";
 import {
+  cellValueToText,
   isSafeLinkAddress,
   RESTRICTED_TEXT,
   UNAVAILABLE_TEXT,
@@ -80,11 +81,11 @@ export function DisplayCellView({ value }: Readonly<{ value: DisplayDetailCell }
     case "text":
       return <span className="vortex-cell-text">{value.text}</span>;
     case "number":
-      return <span className="vortex-cell-number">{value.formatted ?? String(value.value)}</span>;
+      return <span className="vortex-cell-number">{cellValueToText(value)}</span>;
     case "boolean":
       return (
         <span className="vortex-cell-boolean" data-vortex-boolean={String(value.value)}>
-          {value.value ? "Yes" : "No"}
+          {cellValueToText(value)}
         </span>
       );
     case "date":

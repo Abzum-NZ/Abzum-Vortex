@@ -4,14 +4,18 @@ import type { RecordsDisplayFormat } from "../../definition/application-composit
 import { recordLinkLabelKey } from "../../definition/viewer-safe-record-link";
 import { compareExactDecimals, parseExactDecimal } from "../../records/exact-decimal";
 import type { RecordsExportCell } from "../../queries/export-records";
-import { cellValueToText, RESTRICTED_TEXT } from "../cell-text";
+import { cellValueToText, NO_TEXT, RESTRICTED_TEXT, YES_TEXT } from "../cell-text";
+import {
+  PLAIN_NUMBER_TEXT,
+  recordsTableExportableTypes,
+} from "../../definition/application-composition/records-table-features/export";
 import {
   asRecordLink,
   projectCell,
   type LinkFieldType,
   type ProjectedRecordLink,
 } from "../cell-projection";
-import { isoDateExcelFormat, type DateFormatOptions } from "../date-format";
+import { isoDateExcelFormat, zonedDateTimeParts, type DateFormatOptions } from "../date-format";
 import type { PlacementField } from "../placement-read/shared";
 import { moneyDisplayShape } from "../value-format";
 
@@ -42,26 +46,15 @@ export type ExportCellContext = Readonly<{
 export const valueTypeOf = (field: PlacementField): string =>
   field.type === "calculation" || field.type === "total" ? field.settings.resultType : field.type;
 
-/** The field types a file can hold. */
-export const exportableTypes: ReadonlySet<string> = new Set([
-  "text",
-  "long_text",
-  "formatted_text",
-  "reference_number",
-  "email_address",
-  "phone_number",
-  "web_address",
-  "choice",
-  "several_choices",
-  "whole_number",
-  "decimal_number",
-  "money",
-  "yes_no",
-  "date",
-  "date_time",
-  "link",
-  "link_to_one_of_several",
-]);
+/** Whether Excel's date system holds this value without losing digits: 1900 to 9999, whole milliseconds. */
+const excelCanHoldDate = (iso: string, presentation: DateFormatOptions): boolean => {
+  if (/\.\d{3}\d*[1-9]/.test(iso)) return false;
+  const year =
+    iso.length === 10
+      ? Number(iso.slice(0, 4))
+      : zonedDateTimeParts(new Date(iso), presentation.timeZone).year;
+  return year >= 1900 && year <= 9999;
+};
 
 /** The spreadsheet number format of an exact decimal: its own digits, no grouping. */
 const plainFormat = (amount: string): string => {
@@ -69,15 +62,13 @@ const plainFormat = (amount: string): string => {
   return scale === 0 ? "0" : `0.${"0".repeat(scale)}`;
 };
 
-const NUMBER_TEXT = /^(-?)(\d+|\d{1,3}(?:,\d{3})+)(?:\.(\d+))?$/;
-
 /**
  * The spreadsheet number format that shows an exact decimal as the table shows it (grouped or not,
  * with the same fraction digits); undefined when the shown text is not that number, so the cell
  * stays the text the table shows rather than a number that reads differently.
  */
 const shownNumberFormat = (shown: string, amount: string): string | undefined => {
-  const match = NUMBER_TEXT.exec(shown);
+  const match = PLAIN_NUMBER_TEXT.exec(shown);
   if (match === null) return undefined;
   const [, sign, integer, fraction] = match;
   const exact = parseExactDecimal(amount);
@@ -188,13 +179,16 @@ export const exportCellOf = (
       case "yes_no":
         return {
           text: String(stored),
-          typed: { kind: "yes_no", value: stored as boolean, words: false },
+          typed: { kind: "yes_no", value: stored as boolean },
         };
       case "date":
-        return {
-          text: stored as string,
-          typed: { kind: "date", iso: stored as string, format: "yyyy-mm-dd" },
-        };
+        // Typed only once the strict ISO check of the table's own cell projection has passed.
+        return projected.kind === "date"
+          ? {
+              text: stored as string,
+              typed: { kind: "date", iso: stored as string, format: "yyyy-mm-dd" },
+            }
+          : { text: stored as string };
       case "link":
       case "link_to_one_of_several": {
         // Only a link the viewer may read exports its record's id; a restricted one stays empty.
@@ -232,20 +226,25 @@ export const exportCellOf = (
     }
     case "yes_no":
       return projected.kind === "boolean"
-        ? { text, typed: { kind: "yes_no", value: projected.value, words: true } }
-        : { text };
-    case "date":
-    case "date_time":
-      return projected.kind === "date"
         ? {
             text,
             typed: {
-              kind: "date",
-              iso: projected.iso,
-              format: isoDateExcelFormat(projected.iso, context.presentation),
+              kind: "yes_no",
+              value: projected.value,
+              format: `"${YES_TEXT}";"${YES_TEXT}";"${NO_TEXT}"`,
             },
           }
         : { text };
+    case "date":
+    case "date_time": {
+      // Excel holds only some dates; anything else stays the text the table shows.
+      if (projected.kind !== "date" || !excelCanHoldDate(projected.iso, context.presentation))
+        return { text };
+      const format = isoDateExcelFormat(projected.iso, context.presentation);
+      return format === undefined
+        ? { text }
+        : { text, typed: { kind: "date", iso: projected.iso, format } };
+    }
     default:
       return { text };
   }

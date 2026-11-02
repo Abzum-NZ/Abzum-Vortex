@@ -28,6 +28,8 @@ import {
 } from "../../components/dropdown-menu";
 import { toast } from "../../components/sonner";
 import { Icon } from "../../icons/icon";
+import { Info } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipTrigger } from "../../components/tooltip";
 import type { DisplayTableExportRun, DisplayTableExportScope } from "../projected-data";
 import type {
   GridFeatureContext,
@@ -68,11 +70,21 @@ const request = (
 };
 
 /** The one choice beside the formats: the file holds values as shown (default) or as stored. */
-function ExportValuesChoice(): ReactElement {
+function ExportValuesChoice({ rawColumns }: Readonly<{ rawColumns: boolean }>): ReactElement {
   const { values, choose } = useExportValues();
   return (
     <DropdownMenuGroup>
-      <DropdownMenuLabel>Values</DropdownMenuLabel>
+      <DropdownMenuLabel className="flex items-center gap-1">
+        Values
+        {rawColumns ? (
+          <Tooltip>
+            <TooltipTrigger render={<span tabIndex={0} aria-label="About values" />}>
+              <Info className="size-3.5" />
+            </TooltipTrigger>
+            <TooltipContent>Some columns always download their stored value</TooltipContent>
+          </Tooltip>
+        ) : null}
+      </DropdownMenuLabel>
       <DropdownMenuRadioGroup
         value={values}
         onValueChange={(next) => {
@@ -175,7 +187,7 @@ function ExportToolbarItems({ context }: GridFeaturePointProps): ReactElement | 
     <DropdownMenuSub>
       <DropdownMenuSubTrigger>Export</DropdownMenuSubTrigger>
       <DropdownMenuSubContent>
-        <ExportValuesChoice />
+        <ExportValuesChoice rawColumns={context.features.export?.rawColumns === true} />
         <ExportScopeItem context={context} scope="view" label="Export this view" />
         {selected > 0 ? (
           <ExportScopeItem
@@ -217,7 +229,7 @@ function ExportSelectionBanner({ context }: GridFeaturePointProps): ReactElement
         <Icon name="chevron-down" data-icon="inline-end" aria-hidden="true" />
       </DropdownMenuTrigger>
       <DropdownMenuContent>
-        <ExportValuesChoice />
+        <ExportValuesChoice rawColumns={context.features.export?.rawColumns === true} />
         {context.features.export?.formats.map((format) => (
           <DropdownMenuItem
             key={format}

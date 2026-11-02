@@ -212,13 +212,19 @@ const excelLiteral = (text: string): string =>
  * Intl parts so the file and the grid cannot drift apart. A spreadsheet writes month names in its
  * own language, so a month the grid writes differently (`Sept`, `sept.`) is carried as the text
  * the grid shows; the cell still holds the real date, so it sorts and filters as a date.
+ * Undefined when a number part would read differently in a spreadsheet (another calendar or
+ * digits), so the caller keeps the shown text instead of a date that reads wrong.
  */
-export function isoDateExcelFormat(iso: string, options: DateFormatOptions = {}): string {
+export function isoDateExcelFormat(
+  iso: string,
+  options: DateFormatOptions = {},
+): string | undefined {
   const timestamp = Date.parse(iso);
   if (Number.isNaN(timestamp)) throw new Error("A date value for a spreadsheet must be readable");
   const calendarDate = isCalendarDate(iso);
   const timeZone = calendarDate ? "UTC" : (options.timeZone ?? DEFAULT_TIME_ZONE);
   const instant = new Date(timestamp);
+  const wall = zonedDateTimeParts(instant, timeZone);
   const parts = formatterFor(
     calendarDate ? DATE_PARTS : DATE_TIME_PARTS,
     options.locale ?? DEFAULT_LOCALE,
@@ -227,24 +233,42 @@ export function isoDateExcelFormat(iso: string, options: DateFormatOptions = {})
   const spreadsheetMonth = formatterFor(SHORT_MONTH_PARTS, DEFAULT_LOCALE, timeZone).format(
     instant,
   );
-  return parts
-    .map((part) => {
-      switch (part.type) {
-        case "day":
-          return ASCII_DIGITS.test(part.value) ? "d" : excelLiteral(part.value);
-        case "month":
-          return part.value === spreadsheetMonth ? "mmm" : excelLiteral(part.value);
-        case "year":
-          return ASCII_DIGITS.test(part.value) ? "yyyy" : excelLiteral(part.value);
-        case "hour":
-          return ASCII_DIGITS.test(part.value) ? "hh" : excelLiteral(part.value);
-        case "minute":
-          return ASCII_DIGITS.test(part.value) ? "mm" : excelLiteral(part.value);
-        case "literal":
-          return excelLiteral(part.value);
-        default:
-          throw new Error(`A date part has no spreadsheet code: ${part.type}`);
-      }
-    })
-    .join("");
+  const padded = (value: number): string => String(value).padStart(2, "0");
+  const codes: string[] = [];
+  for (const part of parts) {
+    const text = part.value;
+    switch (part.type) {
+      case "day":
+        if (text === String(wall.day)) codes.push("d");
+        else if (text === padded(wall.day)) codes.push("dd");
+        else return undefined;
+        break;
+      case "month":
+        if (text === spreadsheetMonth) codes.push("mmm");
+        else if (text === String(wall.month)) codes.push("m");
+        else if (text === padded(wall.month)) codes.push("mm");
+        else if (ASCII_DIGITS.test(text)) return undefined;
+        else codes.push(excelLiteral(text));
+        break;
+      case "year":
+        if (text === String(wall.year)) codes.push("yyyy");
+        else return undefined;
+        break;
+      case "hour":
+        if (text === padded(wall.hour)) codes.push("hh");
+        else if (text === String(wall.hour)) codes.push("h");
+        else return undefined;
+        break;
+      case "minute":
+        if (text === padded(wall.minute)) codes.push("mm");
+        else return undefined;
+        break;
+      case "literal":
+        codes.push(excelLiteral(text));
+        break;
+      default:
+        return undefined;
+    }
+  }
+  return codes.join("");
 }

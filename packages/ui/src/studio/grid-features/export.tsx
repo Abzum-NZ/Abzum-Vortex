@@ -7,12 +7,14 @@ import {
   RECORDS_TABLE_EXPORT_MAXIMUM_ROWS,
   recordsTableExportFormatLabels,
   recordsTableExportFormats,
+  recordsTableExportRawTypes,
   type RecordsTableQueryFacts,
   type SourceBlockPropertyValueContract,
 } from "@vortex/platform/schema";
 import { Input } from "../../components/input";
 import { Label } from "../../components/label";
 import { Checkbox } from "../../components/checkbox";
+import { Button } from "../../components/button";
 import { Field, FieldGroup, FieldLabel, FieldLegend, FieldSet } from "../../components/field";
 import { ToggleGroup, ToggleGroupItem } from "../../components/toggle-group";
 
@@ -42,10 +44,26 @@ export function StudioExportEditor({
   const formats = value.properties["formats"];
   const selected = formats?.kind === "list" ? formats.items : [];
   const rawHeld = value.properties["raw_columns"];
-  const rawChosen =
+  const rawItems =
     rawHeld?.kind === "list"
       ? rawHeld.items.flatMap((item) => (item.kind === "field_reference" ? [item.field] : []))
       : [];
+  const isColumn = (field: string): boolean =>
+    columns.some((column) => column.toLowerCase() === field.toLowerCase());
+  const rawChosen = rawItems.filter(isColumn);
+  const stale = rawItems.filter((field) => !isColumn(field));
+  // Every write drops entries that are no longer columns, so nothing stale is kept.
+  const write = (properties: Group["properties"], raw: readonly string[] = rawChosen): void =>
+    onChange({
+      kind: "group",
+      properties: {
+        ...properties,
+        raw_columns: {
+          kind: "list",
+          items: raw.map((field) => ({ kind: "field_reference" as const, field })),
+        },
+      },
+    });
   const heldText = held?.kind === "number" ? String(held.value) : "";
   const [typed, setTyped] = useState(heldText);
   // Undo, redo or a reload that changes the stored limit shows it; typing keeps what was typed.
@@ -59,7 +77,7 @@ export function StudioExportEditor({
       <p className="text-sm text-muted-foreground">
         Download the columns shown, as flat records. Selections above the row limit are refused.
       </p>
-      <fieldset className="space-y-2" disabled={disabled}>
+      <FieldSet disabled={disabled}>
         <FieldLegend variant="label">File formats</FieldLegend>
         {recordsTableExportFormats.map((format) => {
           const checked = selected.some((item) => item.kind === "choice" && item.value === format);
@@ -73,58 +91,60 @@ export function StudioExportEditor({
                   const items = next
                     ? [...selected, { kind: "choice" as const, value: format }]
                     : selected.filter((item) => item.kind !== "choice" || item.value !== format);
-                  onChange({
-                    kind: "group",
-                    properties: { ...value.properties, formats: { kind: "list", items } },
-                  });
+                  write({ ...value.properties, formats: { kind: "list", items } });
                 }}
               />
               <Label htmlFor={`${id}-${format}`}>{recordsTableExportFormatLabels[format]}</Label>
             </div>
           );
         })}
-      </fieldset>
+      </FieldSet>
       <FieldSet disabled={disabled}>
         <div className="flex items-center gap-1">
           <FieldLegend variant="label">Values per column</FieldLegend>
-          <StudioHelp hint="Every column downloads as the table shows it. Choose Raw to download a column's stored value instead: the choice key, the ISO date, the canonical number." />
+          <StudioHelp hint="Every column downloads as the table shows it. Choose Raw to download a column's stored value instead: a choice's key, a date as 2026-09-17, a number without grouping." />
         </div>
         <FieldGroup>
           {facts.fields
-            .filter((field) => columns.includes(field.field))
+            .filter((field) => isColumn(field.field))
+            .filter((field) => recordsTableExportRawTypes.has(field.resultType ?? field.type))
             .map((field) => (
               <Field key={field.field} orientation="horizontal">
                 <FieldLabel>{field.label}</FieldLabel>
                 <ToggleGroup
                   variant="outline"
                   size="sm"
+                  aria-label={`${field.label} values`}
                   disabled={disabled}
                   value={[rawChosen.includes(field.field) ? "raw" : "shown"]}
-                  onValueChange={(next) => {
-                    const raw = next[0] === "raw";
-                    const fields = raw
-                      ? [...rawChosen.filter((key) => key !== field.field), field.field]
-                      : rawChosen.filter((key) => key !== field.field);
-                    onChange({
-                      kind: "group",
-                      properties: {
-                        ...value.properties,
-                        raw_columns: {
-                          kind: "list",
-                          items: fields.map((key) => ({
-                            kind: "field_reference" as const,
-                            field: key,
-                          })),
-                        },
-                      },
-                    });
-                  }}
+                  onValueChange={(next) =>
+                    write(
+                      value.properties,
+                      next[0] === "raw"
+                        ? [...rawChosen.filter((key) => key !== field.field), field.field]
+                        : rawChosen.filter((key) => key !== field.field),
+                    )
+                  }
                 >
                   <ToggleGroupItem value="shown">As shown</ToggleGroupItem>
                   <ToggleGroupItem value="raw">Raw</ToggleGroupItem>
                 </ToggleGroup>
               </Field>
             ))}
+          {stale.map((field) => (
+            <Field key={field} orientation="horizontal">
+              <FieldLabel>No longer a column</FieldLabel>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={disabled}
+                onClick={() => write(value.properties, rawChosen)}
+              >
+                Remove
+              </Button>
+            </Field>
+          ))}
         </FieldGroup>
       </FieldSet>
       <div className="flex items-center gap-1">
@@ -147,13 +167,11 @@ export function StudioExportEditor({
           const others = Object.fromEntries(
             Object.entries(value.properties).filter(([key]) => key !== "max_rows"),
           );
-          onChange({
-            kind: "group",
-            properties:
-              text.trim() === "" || !Number.isFinite(rows)
-                ? others
-                : { ...others, max_rows: { kind: "number", value: rows } },
-          });
+          write(
+            text.trim() === "" || !Number.isFinite(rows)
+              ? others
+              : { ...others, max_rows: { kind: "number", value: rows } },
+          );
         }}
       />
     </div>

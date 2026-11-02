@@ -5,7 +5,10 @@ import type { IdentitySession } from "../../access/identity-access";
 import type { JsonValue } from "../../catalogue/common";
 import { sameId } from "../../catalogue/runtime-primitives";
 import { recordsTableColumnWidth } from "../../definition/application-composition/records-display";
-import { recordsTableExportFeature } from "../../definition/application-composition/records-table-features";
+import {
+  recordsTableExportableTypes,
+  recordsTableExportFeature,
+} from "../../definition/application-composition/records-table-features";
 import { authoredGridLayout, resolveGridLayout } from "../grid-layout-resolution";
 import type { GridLayout } from "../grid-view-state";
 import type {
@@ -46,7 +49,7 @@ import {
   fieldLabelsOf,
   fieldLinkTypesOf,
 } from "../placement-read/shared";
-import { exportableTypes, exportCellOf, valueTypeOf, type ExportColumn } from "./export-cells";
+import { exportCellOf, valueTypeOf, type ExportColumn } from "./export-cells";
 import { buildRecordsTableQueryCommand } from "../records-table-query";
 import { openRecordsSelection, type RecordsSelectionDescriptor } from "../records-selection-seal";
 import { createRecordsTableBulkService, enumerationScanLimitedCeiling } from "./bulk-run";
@@ -381,7 +384,7 @@ export const createRecordsTableExportService = (dependencies: RecordsTableExport
           field === undefined ||
           declared === undefined ||
           label === undefined ||
-          !exportableTypes.has(valueTypeOf(field)) ||
+          !recordsTableExportableTypes.has(valueTypeOf(field)) ||
           (exportFieldIds !== undefined && !exportFieldIds.has(fieldId.toLowerCase()))
         )
           return [];

@@ -5,6 +5,9 @@ import type { DisplayDetailCell } from "./display-payload-parts";
 export const RESTRICTED_TEXT = "Restricted";
 export const UNAVAILABLE_TEXT = "Unavailable";
 export const NO_ROWS_TEXT = "No rows";
+/** What a yes/no value reads as, in the grid, a copied range and an export file. */
+export const YES_TEXT = "Yes";
+export const NO_TEXT = "No";
 
 /** The text of a table field's cell: how many rows it holds. */
 const rowCountText = (count: number): string =>
@@ -50,7 +53,7 @@ export function cellValueToText(value: DisplayDetailCell, options?: DateFormatOp
     case "number":
       return value.formatted ?? String(value.value);
     case "boolean":
-      return value.value ? "Yes" : "No";
+      return value.value ? YES_TEXT : NO_TEXT;
     case "date":
       return formatIsoDate(value.iso, options) ?? INVALID_DATE_TEXT;
     case "choice":

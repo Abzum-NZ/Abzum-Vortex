@@ -93,7 +93,9 @@ export {
 export {
   RECORDS_TABLE_EXPORT_MAXIMUM_ROWS,
   recordsTableExportFormatLabels,
+  recordsTableExportableTypes,
   recordsTableExportFormats,
+  recordsTableExportRawTypes,
   recordsTableExportValues,
   recordsTableExportValuesLabels,
   spreadsheetText,

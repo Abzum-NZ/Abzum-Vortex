@@ -3,6 +3,7 @@ import {
   featureEnabled,
   featureNotPossible,
   factsOf,
+  factsValueType,
   optionalNumber,
   requiredChoice,
   requiredFieldList,
@@ -43,6 +44,51 @@ export const recordsTableExportValuesLabels: Readonly<Record<RecordsTableExportV
  */
 export const spreadsheetText = (value: string): string =>
   /^[=+\-@\t\r\n\uFF1D\uFF0B\uFF0D\uFF20]/.test(value) ? `'${value}` : value;
+
+/** A number as the table shows it: optional sign, digits with optional grouping, optional fraction. */
+export const PLAIN_NUMBER_TEXT = /^(-?)(\d+|\d{1,3}(?:,\d{3})+)(?:\.(\d+))?$/;
+
+/**
+ * The text of one CSV cell. A plain number keeps its sign; every other text goes through the one
+ * formula neutraliser, so a negative amount with a currency symbol (`-NZ$5.00`) stays text.
+ */
+export const csvCellText = (text: string): string =>
+  PLAIN_NUMBER_TEXT.test(text) ? text : spreadsheetText(text);
+
+/** The field value types a file can hold. */
+export const recordsTableExportableTypes: ReadonlySet<string> = new Set([
+  "text",
+  "long_text",
+  "formatted_text",
+  "reference_number",
+  "email_address",
+  "phone_number",
+  "web_address",
+  "choice",
+  "several_choices",
+  "whole_number",
+  "decimal_number",
+  "money",
+  "yes_no",
+  "date",
+  "date_time",
+  "link",
+  "link_to_one_of_several",
+]);
+
+/** The types whose stored value reads differently from what the table shows, so Raw means something. */
+export const recordsTableExportRawTypes: ReadonlySet<string> = new Set([
+  "choice",
+  "several_choices",
+  "whole_number",
+  "decimal_number",
+  "money",
+  "yes_no",
+  "date",
+  "date_time",
+  "link",
+  "link_to_one_of_several",
+]);
 
 /**
  * The capped selection count shares this ceiling. Excel's 1,048,576-row sheet limit exceeds
@@ -142,8 +188,8 @@ const featureSettings = {
       kind: "list",
       key: "raw_columns",
       label: "Raw value columns",
-      help: "Columns whose file holds the stored value (choice key, ISO date, canonical number) instead of what the table shows",
-      required: false,
+      help: "Columns whose file holds the stored value instead of what the table shows: a choice's key, a date as 2026-09-17, a number without grouping",
+      required: true,
       minimumItems: 0,
       maximumItems: 200,
       item: {
@@ -211,7 +257,11 @@ export const recordsTableExportFeature: RecordsTableFeatureDefinition<
     exportAllowed &&
     state.maxRows !== undefined &&
     columns.some((column) => readable(column.field))
-      ? { maxRows: state.maxRows, formats: state.formats }
+      ? {
+          maxRows: state.maxRows,
+          formats: state.formats,
+          rawColumns: state.rawColumns.length > 0,
+        }
       : undefined,
   // Export reads whole records, so the query must return records, and the record type must
   // declare the standard export action the viewer's permission is checked against.
@@ -227,15 +277,14 @@ export const recordsTableExportFeature: RecordsTableFeatureDefinition<
         `Export needs the export action on ${facts.recordTypeLabel || "the record type"}`,
       );
     if (!state.enabled) return featureAvailable;
-    for (const field of state.rawColumns)
-      if (
-        factsOf(facts, field) === undefined ||
-        !facts.columnFieldIds.some((column) => column.toLowerCase() === field.toLowerCase())
-      )
+    for (const field of state.rawColumns) {
+      const held = factsOf(facts, field);
+      if (held === undefined || !recordsTableExportRawTypes.has(factsValueType(held)))
         return featureNotPossible(
           featureRefusal,
-          "Raw value columns need a field the table shows as a column.",
+          "Raw values apply to choices, numbers, money, yes/no, dates and links of the table's query.",
         );
+    }
     if (
       state.formats.length === 0 ||
       state.formats.length > recordsTableExportFormats.length ||
