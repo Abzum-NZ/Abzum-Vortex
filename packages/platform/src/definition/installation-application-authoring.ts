@@ -50,10 +50,13 @@ export type ApplicationAuthoringEnvironment = Readonly<{
   permissions: PlatformPermissionSource;
 }>;
 
-const refuse = (code: FlowRefusalFeedback["code"]): ApplicationAuthoringResult => ({
+const refuse = (
+  code: FlowRefusalFeedback["code"],
+  ruleRefusal?: NonNullable<FlowRefusalFeedback["ruleRefusal"]>,
+): ApplicationAuthoringResult => ({
   kind: "confirmed_failure",
   outcome: "refused",
-  diagnostic: { code },
+  diagnostic: ruleRefusal === undefined ? { code } : { code, ruleRefusal },
 });
 
 const organizationOf = (selection: OrganizationSelectionCandidate) =>
@@ -80,50 +83,67 @@ const draftFailure = (result: HumanApplicationDraftWriteResult): ApplicationAuth
   return { kind: "temporarily_unavailable" };
 };
 
+/**
+ * One mapping from a publication that cannot go ahead to its refusal: the review step shows its
+ * sentence and the publish step returns its code, so one cause reads the same at both. A refusal
+ * the compiler worded carries that sentence. The cause is already in the server log.
+ */
+const publicationProblem = (
+  failure: Exclude<
+    HumanDefinitionPublicationPreparationResult | HumanDefinitionPublicationResult,
+    { kind: "available" }
+  >,
+): Readonly<{
+  status: "no_change" | "blocked";
+  code: FlowRefusalFeedback["code"];
+  sentence: string;
+  authored: boolean;
+}> => {
+  const known = (status: "no_change" | "blocked", code: FlowRefusalFeedback["code"]) => ({
+    status,
+    code,
+    sentence: flowRefusalFeedbackSentences[code],
+    authored: false,
+  });
+  if (failure.kind === "no_change") return known("no_change", "application_publication_no_change");
+  if (failure.kind === "dependency_unavailable")
+    return known("blocked", "application_publication_dependency");
+  if (failure.reason === "application_root_not_ordinary")
+    return known("blocked", "application_publication_platform");
+  if (failure.reason === "release_permission_missing")
+    return known("blocked", "application_publication_permission");
+  if (failure.sentence !== undefined)
+    return {
+      status: "blocked",
+      code: "application_publication_blocked",
+      sentence: failure.sentence,
+      authored: true,
+    };
+  return known("blocked", "application_publication_blocked");
+};
+
 /** The sentence for a publication that cannot go ahead; the cause is already in the server log. */
 const problemOf = (
   failure: Exclude<HumanDefinitionPublicationPreparationResult, { kind: "available" }>,
 ): { status: "no_change" | "blocked"; problem: string } => {
-  if (failure.kind === "no_change")
-    return {
-      status: "no_change",
-      problem: "Nothing has changed since the last version, so there is nothing to publish.",
-    };
-  if (failure.reason === "application_root_not_ordinary")
-    return {
-      status: "blocked",
-      problem: flowRefusalFeedbackSentences.application_publication_platform,
-    };
-  if (failure.reason === "release_permission_missing")
-    return {
-      status: "blocked",
-      problem: "You need permission to publish versions of applications.",
-    };
   if (failure.reason === "recent_authentication_required")
     return {
       status: "blocked",
       problem:
         "To protect your organisation, publishing needs a sign-in within the last 15 minutes.",
     };
-  if (failure.kind === "dependency_unavailable")
-    return {
-      status: "blocked",
-      problem:
-        "A module or platform part this application uses is not available, so it cannot be published yet.",
-    };
-  if (failure.sentence !== undefined) return { status: "blocked", problem: failure.sentence };
   if (failure.kind === "conflict")
     return {
       status: "blocked",
       problem: "The draft changed while it was being checked. Open the application and try again.",
     };
-  return {
-    status: "blocked",
-    problem:
-      failure.kind === "refused"
-        ? "The draft has a problem that blocks publishing. Open it in Studio, check its pages and flows, and try again."
-        : "The draft could not be checked right now. Try again shortly.",
-  };
+  if (failure.kind === "temporarily_unavailable")
+    return {
+      status: "blocked",
+      problem: "The draft could not be checked right now. Try again shortly.",
+    };
+  const { status, sentence } = publicationProblem(failure);
+  return { status, problem: sentence };
 };
 
 /** The one published version `read_application_release_history_page` returns for a page of one at the anchor. */
@@ -323,15 +343,16 @@ export const createApplicationAuthoringService = (environment: ApplicationAuthor
           },
         };
       if (published.kind === "conflict") return "conflict";
-      if (published.kind === "no_change") return refuse("application_publication_no_change");
       if (published.kind === "temporarily_unavailable") return { kind: "temporarily_unavailable" };
       if (published.reason === "recent_authentication_required")
         return { kind: "unavailable", code: "recent_authentication_required" };
-      return refuse(
-        published.reason === "application_root_not_ordinary"
-          ? "application_publication_platform"
-          : "application_publication_blocked",
-      );
+      const problem = publicationProblem(published);
+      return problem.authored
+        ? refuse(problem.code, {
+            code: "publication_refused",
+            message: problem.sentence.slice(0, 300),
+          })
+        : refuse(problem.code);
     },
   };
 };

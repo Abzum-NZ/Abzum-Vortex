@@ -219,10 +219,16 @@ begin
     );
   end loop;
 
-  select release.record_content into strict application_content
-  from vortex_definition.runtime_releases as release
-  where release.root_id = application_root_id_value
-    and release.release_revision = (installation ->> 'applicationReleaseRevision')::bigint;
+  -- A projection read from a preview takes the installed Application's content from the same
+  -- evidence that proved its record type and permissions; every other read takes the release.
+  if projection_evidence is not null then
+    application_content := projection_evidence -> 'applicationRecordContent';
+  else
+    select release.record_content into strict application_content
+    from vortex_definition.runtime_releases as release
+    where release.root_id = application_root_id_value
+      and release.release_revision = (installation ->> 'applicationReleaseRevision')::bigint;
+  end if;
   for permission_item in
     select item.value
     from pg_catalog.jsonb_array_elements(

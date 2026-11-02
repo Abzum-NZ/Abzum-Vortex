@@ -30,6 +30,11 @@ declare
   installed_record_type jsonb;
   preview_record_type jsonb;
 begin
+  -- p_preview_installation must be the object read_current_preview_installation_internal returns
+  -- for the validated human context: its organisation and Application scope the whole read.
+  if p_preview_installation is null or not (p_preview_installation ? 'previewInstallationId') then
+    return null;
+  end if;
   organization_id_value := (p_preview_installation ->> 'organizationId')::uuid;
   application_root_id_value := (p_preview_installation ->> 'applicationRootId')::uuid;
   -- No active installation of the previewed Application (or none that binds the Module): nothing
@@ -62,20 +67,36 @@ begin
   into installed_content, installed_record_content
   from vortex_definition.releases as release
   where release.root_id = p_module_root_id and release.release_revision = installed_module_revision;
+  if not found then
+    raise exception using errcode = '55000',
+      message = 'Installed definition evidence is unavailable';
+  end if;
   select release.compilation_output #> '{canonical,content}', release.record_content
   into preview_content, preview_record_content
   from vortex_definition.runtime_releases as release
   where release.root_id = p_module_root_id and release.release_revision = preview_module_revision;
+  if not found then
+    raise exception using errcode = '55000',
+      message = 'Installed definition evidence is unavailable';
+  end if;
   select release.compilation_output #> '{canonical,content}', release.record_content
   into installed_application_content, installed_application_record_content
   from vortex_definition.releases as release
   where release.root_id = application_root_id_value
     and release.release_revision = installed_application_revision;
+  if not found then
+    raise exception using errcode = '55000',
+      message = 'Installed definition evidence is unavailable';
+  end if;
   select release.compilation_output #> '{canonical,content}', release.record_content
   into preview_application_content, preview_application_record_content
   from vortex_definition.runtime_releases as release
   where release.root_id = application_root_id_value
     and release.release_revision = preview_application_revision;
+  if not found then
+    raise exception using errcode = '55000',
+      message = 'Installed definition evidence is unavailable';
+  end if;
 
   select item.value into installed_type
   from pg_catalog.jsonb_array_elements(installed_content -> 'recordTypes') as item(value)
@@ -109,7 +130,8 @@ begin
     'installation', active_installation,
     'moduleReleaseRevision', installed_module_revision,
     'recordType', installed_type,
-    'recordContent', installed_record_content
+    'recordContent', installed_record_content,
+    'applicationRecordContent', installed_application_record_content
   );
 end
 $function$;
@@ -123,4 +145,4 @@ grant execute on function vortex_record.read_installed_projection_internal(jsonb
   to vortex_record_adapter;
 
 comment on function vortex_record.read_installed_projection_internal(jsonb, uuid, uuid) is
-  'Private: for a system projection read from a preview, the installed Module release''s record type and record content when the preview''s record type and the permissions that apply to it (the Module''s and the Application''s) equal the installed ones, else null; null too when the previewed Application has no active installation that binds the Module.';
+  'Private: for a system projection read from a preview, the installed Module release''s record type and record content when the preview''s record type and the permissions that apply to it (the Module''s and the Application''s) equal the installed ones, else null; null too when the previewed Application has no active installation that binds the Module or the preview object has no previewInstallationId; a missing release row raises 55000. The preview object must come from read_current_preview_installation_internal.';

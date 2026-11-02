@@ -254,7 +254,7 @@ begin
     installed := vortex_record.read_installed_projection_internal(
       installation, record_type_module_root_id, record_type_id
     );
-    if installed is null or installed -> 'recordType' is distinct from record_type_item then
+    if installed is null then
       return null;
     end if;
     return pg_catalog.jsonb_build_object(
