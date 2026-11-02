@@ -3,7 +3,6 @@ import type { PublishedModuleField } from "./module-field-edit";
 import type { ModuleExtensionPointUse } from "./module-extension-point-shape";
 
 import { planApplicationPreview } from "./preview-release-plan";
-import { componentLabelsOf } from "./publication-component-labels";
 
 import type { SessionContext } from "../access/identity-access";
 import { comparableConditionFieldType } from "../rules/condition-types";
@@ -500,15 +499,6 @@ export const createDatabaseDefinitionPublicationService = (
                 return previousFields.has(reference) ? [] : [reference];
               }),
             ),
-          ),
-          componentLabels: await componentLabelsOf(
-            (blockId, releaseVersion) =>
-              catalogue.readPlatformBlockRelease(blockId, releaseVersion),
-            state.compilationOutput.canonical,
-            ...state.moduleOutputs.map((output) => output.canonical),
-            ...usedModules.map((release) => release!.compilationOutput.canonical),
-            candidate.releaseHistory.latestRelease?.content,
-            ...previousModules.map((release) => release!.compilationOutput.canonical),
           ),
         });
       });

@@ -1,6 +1,10 @@
 import "server-only";
 
-import { createBackendRunHistoryReader } from "@vortex/platform/server";
+import {
+  createBackendRunHistoryReader,
+  type BackendRunHistoryCursor,
+  type BackendRunHistoryRequest,
+} from "@vortex/platform/server";
 import {
   applicationRootIdSchema,
   organizationIdSchema,
@@ -21,10 +25,17 @@ export type StudioBackendRun = Readonly<{
   failureCode: string | null;
   createdAt: string;
   finishedAt: string | null;
+  /** Where the page that follows or precedes this run starts. */
+  cursor: BackendRunHistoryCursor;
 }>;
 
 export type StudioBackendRunHistoryResult =
-  | Readonly<{ kind: "available"; runs: readonly StudioBackendRun[] }>
+  | Readonly<{
+      kind: "available";
+      runs: readonly StudioBackendRun[];
+      hasOlder: boolean;
+      hasNewer: boolean;
+    }>
   | Readonly<{ kind: "refused" | "temporarily_unavailable"; reason: string }>;
 
 /** The names of the flows the application's installed release runs, by flow identity. */
@@ -51,13 +62,42 @@ const installedFlowNames = async (
   );
 };
 
+// The installed release is loaded in full to name flows, so the names are kept for five minutes
+// per application: a page whose flows are all known (Older, Newer, Reload) loads nothing.
+const flowNameLifetimeMs = 5 * 60_000;
+const flowNameCache = new Map<
+  string,
+  Readonly<{ at: number; names: ReadonlyMap<string, string> }>
+>();
+const flowNamesFor = async (
+  session: Parameters<typeof loadInstalledContext>[0],
+  organizationId: OrganizationId,
+  applicationRootId: ApplicationRootId,
+  flowIds: readonly string[],
+): Promise<ReadonlyMap<string, string>> => {
+  const key = `${organizationId}:${applicationRootId}`;
+  const cached = flowNameCache.get(key);
+  if (
+    cached !== undefined &&
+    Date.now() - cached.at < flowNameLifetimeMs &&
+    flowIds.every((id) => cached.names.has(id))
+  )
+    return cached.names;
+  const names = await installedFlowNames(session, organizationId, applicationRootId);
+  // A release that could not be read is not remembered, so the next page tries again.
+  if (names.size > 0) flowNameCache.set(key, { at: Date.now(), names });
+  return names;
+};
+
 /**
- * The newest back-end runs of one application for its builders. The database function decides
- * the caller's authority from the request context; the history never carries outputs.
+ * One keyset page of the back-end runs of one application for its builders, newest first. The
+ * database function decides the caller's authority from the request context; the history never
+ * carries outputs.
  */
 export const readStudioBackendRunHistory = async (
   candidateOrganizationId: string,
   candidateRootId: string,
+  request: BackendRunHistoryRequest,
 ): Promise<StudioBackendRunHistoryResult> => {
   const organization = organizationIdSchema.safeParse(candidateOrganizationId);
   const root = applicationRootIdSchema.safeParse(candidateRootId);
@@ -69,11 +109,18 @@ export const readStudioBackendRunHistory = async (
     if (resolved.kind !== "active") return { kind: "refused", reason: "session_ended" };
     const result = await createBackendRunHistoryReader({
       requests: humanOrganizationRequests(),
-    }).read(resolved.session, organization.data, root.data);
+    }).read(resolved.session, organization.data, root.data, request);
     if (result.kind === "available") {
-      const names = await installedFlowNames(resolved.session, organization.data, root.data);
+      const names = await flowNamesFor(
+        resolved.session,
+        organization.data,
+        root.data,
+        result.runs.flatMap((run) => (run.flowId === null ? [] : [run.flowId.toLowerCase()])),
+      );
       return {
         kind: "available",
+        hasOlder: result.hasOlder,
+        hasNewer: result.hasNewer,
         runs: result.runs.map((run) => ({
           backendRunId: run.backendRunId,
           flow:
@@ -85,6 +132,7 @@ export const readStudioBackendRunHistory = async (
           failureCode: run.failureCode,
           createdAt: run.createdAt,
           finishedAt: run.finishedAt,
+          cursor: run.cursor,
         })),
       };
     }

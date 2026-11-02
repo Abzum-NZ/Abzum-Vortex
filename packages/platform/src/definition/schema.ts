@@ -63,3 +63,4 @@ export * from "./application-authoring/stored-composition";
 export * from "./application-authoring/application-menu-commands";
 export * from "./application-authoring/application-structure";
 export * from "./application-authoring/studio-words";
+export * from "./source-change-summary";

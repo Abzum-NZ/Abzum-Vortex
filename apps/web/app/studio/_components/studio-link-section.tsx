@@ -1,5 +1,5 @@
 "use client";
-import { FieldLegend } from "@vortex/ui/components/field";
+import { FieldLegend, FieldSet } from "@vortex/ui/components/field";
 import { Label } from "@vortex/ui/components/label";
 import { RadioGroup, RadioGroupItem } from "@vortex/ui/components/radio-group";
 import { StudioInspectorGroup, type StudioSettingValues } from "@vortex/ui/studio";
@@ -70,7 +70,7 @@ export function StudioLinkSection({
           }
         : {})}
     >
-      <fieldset className="space-y-2">
+      <FieldSet className="gap-2">
         <FieldLegend variant="label">
           How many {recordPlural.toLowerCase()} may link to one {names}?
         </FieldLegend>
@@ -93,7 +93,7 @@ export function StudioLinkSection({
             </Label>
           </div>
         </RadioGroup>
-      </fieldset>
+      </FieldSet>
       <dl className="space-y-1 text-sm">
         <div>
           <dt className="inline font-semibold">Shown as: </dt>

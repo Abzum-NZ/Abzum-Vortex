@@ -16,7 +16,13 @@ import type { IdentitySession, OrganizationSelectionCandidate } from "../access/
 import type { PlatformPermissionSource } from "../access/platform-permissions";
 import type { JsonValue } from "../catalogue/common";
 import { applicationRootIdSchema, organizationIdSchema } from "../catalogue/identifiers";
-import { describeFailure } from "../catalogue/runtime-primitives";
+import { asRecord, describeFailure } from "../catalogue/runtime-primitives";
+import type { ApplicationSourceDocument } from "./application-source-contracts";
+import {
+  countSourceChange,
+  describeSourceChange,
+  summarizeSourceChange,
+} from "./source-change-summary";
 import type { FlowRefusalFeedback } from "../workflows/flow-refusal-feedback";
 import { minimumApplicationSource } from "./application-authoring/new-application-source";
 import { readApplicationDefinitionDraft } from "./definition-draft-read";
@@ -112,6 +118,13 @@ const problemOf = (
   };
 };
 
+/** The one published version `read_application_release_history_page` returns for a page of one at the anchor. */
+const publishedSourcePageSchema = z
+  .object({
+    entries: z.array(z.object({ authoredSource: z.unknown() }).passthrough()).max(1),
+  })
+  .passthrough();
+
 const reviewInputSchema = z.object({ application_root_id: applicationRootIdSchema }).strict();
 
 const publishInputSchema = z
@@ -183,6 +196,9 @@ export const createApplicationAuthoringService = (environment: ApplicationAuthor
       try {
         let draftRevision = 0;
         let applicationName = "";
+        // What the draft changes against the published version, counted as the version history
+        // counts it (undefined for a first release or when nothing changed).
+        let changeSentence: string | undefined;
         const read = await environment.requests.runChange(
           session,
           { organizationId },
@@ -192,6 +208,28 @@ export const createApplicationAuthoringService = (environment: ApplicationAuthor
             });
             draftRevision = draft.draftRevision;
             applicationName = draft.source.kind === "application" ? draft.source.body.name : "";
+            const published = draft.publishedRevision;
+            if (published !== undefined && draft.source.kind === "application") {
+              // The published version is the page of one that ends at the anchor.
+              const rows = await transaction.query`
+                select vortex_definition.read_application_release_history_page(
+                  ${String(draft.rootId)}::uuid, ${published}::bigint, ${published + 1}::bigint,
+                  'older'::text, 1::integer
+                ) as release_page
+              `;
+              const page = publishedSourcePageSchema.safeParse(
+                (rows[0] as { release_page?: unknown } | undefined)?.release_page,
+              );
+              const before = page.success ? page.data.entries[0]?.authoredSource : undefined;
+              if (before === undefined || asRecord(asRecord(before)?.body) === undefined)
+                console.error("[studio] publication review could not read the published source");
+              else
+                changeSentence = describeSourceChange(
+                  countSourceChange(
+                    summarizeSourceChange(before as ApplicationSourceDocument, draft.source),
+                  ),
+                );
+            }
             return true;
           },
         );
@@ -218,12 +256,10 @@ export const createApplicationAuthoringService = (environment: ApplicationAuthor
             },
           };
         }
-        const { confirmation, componentLabels, addedFields } = prepared.preparation;
+        const { confirmation, addedFields } = prepared.preparation;
         const lines = [
           `Publishes version ${confirmation.assignedVersion}.`,
-          ...(componentLabels.length === 0
-            ? []
-            : [`${componentLabels.length} changed parts of the application`]),
+          ...(changeSentence === undefined ? [] : [changeSentence]),
           ...(addedFields.length === 0
             ? []
             : [`${addedFields.length} new fields: ${addedFields.slice(0, 5).join(", ")}`]),

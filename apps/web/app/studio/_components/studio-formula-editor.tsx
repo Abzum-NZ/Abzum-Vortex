@@ -1,5 +1,6 @@
 "use client";
 
+import { FieldDescription, FieldError } from "@vortex/ui/components/field";
 import { useState } from "react";
 import {
   checkFlowFormula,
@@ -407,13 +408,13 @@ export function StudioFormulaEditor({
           ))}
         </div>
       )}
-      <p
-        id={`${id}-feedback`}
-        className="text-sm"
-        role={problem === undefined ? undefined : "alert"}
-      >
-        {problem ?? (resultType === undefined ? "Enter a formula." : `Result: ${resultType}`)}
-      </p>
+      {problem === undefined ? (
+        <FieldDescription id={`${id}-feedback`}>
+          {resultType === undefined ? "Enter a formula." : `Result: ${resultType}`}
+        </FieldDescription>
+      ) : (
+        <FieldError id={`${id}-feedback`}>{problem}</FieldError>
+      )}
     </div>
   );
 }

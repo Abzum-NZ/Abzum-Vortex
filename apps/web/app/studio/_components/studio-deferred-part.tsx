@@ -1,5 +1,6 @@
 "use client";
 import { Alert, AlertDescription } from "@vortex/ui/components/alert";
+import { Spinner } from "@vortex/ui/components/spinner";
 import dynamic from "next/dynamic";
 import { Component, type ComponentType, type ReactNode } from "react";
 
@@ -41,7 +42,14 @@ export function deferredStudioPart<Props extends object>(
   load: () => Promise<ComponentType<Props>>,
   what: string,
 ): ComponentType<Props> {
-  const Part = dynamic<Props>(load, { loading: () => <p role="status">Loading the {what}…</p> });
+  const Part = dynamic<Props>(load, {
+    loading: () => (
+      <div role="status" className="flex items-center gap-2 text-sm text-muted-foreground">
+        <Spinner aria-hidden="true" />
+        Loading the {what}…
+      </div>
+    ),
+  });
   return function DeferredStudioPart(props: Props) {
     return (
       <DeferredPartBoundary what={what}>

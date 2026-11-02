@@ -1,4 +1,5 @@
 "use client";
+import { Alert, AlertDescription } from "@vortex/ui/components/alert";
 import type { ReactNode } from "react";
 import { StudioOptionControl } from "@vortex/ui/studio";
 import { useStudioDraftHeld } from "./use-studio-draft-held";
@@ -44,9 +45,9 @@ export function StudioInputType<Type extends string>({
       {control.value.type === "record_reference" &&
         children(control.value.recordTypes, (records) => change(control.value.type, records))}
       {control.problem !== "" && (
-        <p role="status" className="text-sm text-destructive">
-          {control.problem}
-        </p>
+        <Alert variant="destructive">
+          <AlertDescription>{control.problem}</AlertDescription>
+        </Alert>
       )}
     </div>
   );

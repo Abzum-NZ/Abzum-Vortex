@@ -631,13 +631,17 @@ export function StudioConditionControls({
   const initial = createInitialStudioCondition(context);
   const contextIsInvalid = validation.issues.some((issue) => issue.code === "invalid_context");
   const validationSummary = validation.issues.length > 0 && (
-    <ul aria-live="polite" role="status">
-      {validation.issues.map((issue, index) => (
-        <li key={`${issue.pointer}:${issue.code}:${index}`}>
-          <strong>{issuePlace(issue.path)}:</strong> {issue.message}
-        </li>
-      ))}
-    </ul>
+    <Alert role="status" aria-live="polite">
+      <AlertDescription>
+        <ul>
+          {validation.issues.map((issue, index) => (
+            <li key={`${issue.pointer}:${issue.code}:${index}`}>
+              <strong>{issuePlace(issue.path)}:</strong> {issue.message}
+            </li>
+          ))}
+        </ul>
+      </AlertDescription>
+    </Alert>
   );
 
   return (
