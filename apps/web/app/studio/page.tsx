@@ -1,4 +1,5 @@
 import { notFound, redirect } from "next/navigation";
+import { Alert, AlertDescription } from "@vortex/ui/components/alert";
 import { continueStudioSession } from "./_lib/studio-session";
 import { StudioUnavailable } from "./_components/studio-unavailable";
 import { loadOrganizationLauncher } from "../_lib/organization-context";
@@ -20,7 +21,11 @@ export default async function StudioLandingPage() {
     return (
       <main className="mx-auto max-w-4xl space-y-4 p-6">
         <h1 className="text-2xl font-semibold">Studio</h1>
-        <p role="status">Studio could not load your organisations. Try again shortly.</p>
+        <Alert variant="destructive">
+          <AlertDescription>
+            Studio could not load your organisations. Try again shortly.
+          </AlertDescription>
+        </Alert>
       </main>
     );
   }

@@ -1,14 +1,32 @@
 "use client";
 import dynamic from "next/dynamic";
-import { NavigationLink } from "@vortex/ui/routing";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import {
   applicationSourceDocumentSchema,
   canonicalJson,
   describeFailure,
 } from "@vortex/platform/schema";
+import { Icon } from "@vortex/ui";
+import { Alert, AlertAction, AlertDescription } from "@vortex/ui/components/alert";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@vortex/ui/components/dropdown-menu";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@vortex/ui/components/sheet";
+import { Skeleton } from "@vortex/ui/components/skeleton";
+import { Spinner } from "@vortex/ui/components/spinner";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@vortex/ui/components/tabs";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@vortex/ui/components/tooltip";
 import { previewStudioApplication } from "../preview-actions";
-import { readApplicationReleaseStanding } from "../releases-actions";
+import { readApplicationReleaseStanding, readStandardPageAdoption } from "../releases-actions";
 import type { ApplicationReleaseStanding } from "../../_lib/application-release-adoption";
 import {
   sameStudioApplicationSourceImportSnapshot,
@@ -17,93 +35,103 @@ import {
 import type { SavedDraftContext } from "./application-draft-agent-tools";
 import type { ApplicationSourceImport as ApplicationSourceImportComponent } from "./application-source-import";
 import { previewProblem } from "./studio-refusal-messages";
-import { studioReleasesSections, type StudioReleasesSection } from "./studio-rail-tabs";
+import {
+  isStudioReleasesSection,
+  studioReleasesSections,
+  type StudioReleasesSection,
+} from "./studio-rail-tabs";
 import type { StudioDraft } from "./use-studio-draft";
 import { studioNotice } from "./studio-save-state";
 import { Button } from "@vortex/ui/components/button";
-import { useStudioTabVisited } from "./studio-frame";
-import { deferredStudioPart } from "./studio-deferred-part";
+import { appStoreHrefOf, StudioReleasesStanding } from "./studio-releases-standing";
+import type { StudioStandardPageAdoptionLoadResult } from "../../_lib/studio-standard-page-adoption";
 import { useIntentPreload } from "../_lib/use-intent-preload";
 import type { StudioActionToken } from "../../_lib/studio-action-tokens";
 import { useStudioActionFlows } from "./use-studio-action-flows";
 
 // What Publish and the Releases tab show loads when they are first wanted: the top bar's Publish
 // needs only this hook's state at first paint.
-const StudioReleasesPanel = deferredStudioPart(
-  () => import("./studio-releases-panel").then((module) => module.StudioReleasesPanel),
-  "releases panel",
-);
-const preloadReleasesPanel = () => import("./studio-releases-panel");
+const preloadReleasesHistory = () => import("./studio-history-tab");
 const ApplicationSourceImport = dynamic(
   () => import("./application-source-import").then((module) => module.ApplicationSourceImport),
-  { loading: () => <p role="status">Loading source import…</p> },
+  {
+    loading: () => (
+      <div role="status" className="flex items-center gap-2 text-sm text-muted-foreground">
+        <Spinner aria-hidden="true" />
+        Loading source import…
+      </div>
+    ),
+  },
 );
 const StandardPageAdoption = dynamic(
   () => import("./standard-page-adoption").then((module) => module.StandardPageAdoption),
-  { loading: () => <p role="status">Loading page adoption…</p> },
+  { loading: () => <Skeleton className="h-24 w-full" /> },
 );
 const StudioBackendRuns = dynamic(
   () => import("./studio-backend-runs").then((module) => module.StudioBackendRuns),
-  { loading: () => <p role="status">Loading the back-end runs…</p> },
+  { loading: () => <Skeleton className="h-24 w-full" /> },
 );
 const StudioHistoryTab = dynamic(
   () => import("./studio-history-tab").then((module) => module.StudioHistoryTab),
-  { loading: () => <p role="status">Loading the published versions…</p> },
+  { loading: () => <Skeleton className="h-24 w-full" /> },
 );
+
+/** The saved draft's source as a file the person keeps: the same document Replace draft from a file reads. */
+const downloadApplicationSource = (snapshot: StudioApplicationSourceImportSnapshot): void => {
+  const url = URL.createObjectURL(
+    new Blob([JSON.stringify(snapshot.source, null, 2)], { type: "application/json" }),
+  );
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `${snapshot.key}.json`;
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(url), 0);
+};
+
+/**
+ * Shown above the tabs only when an upgrade left pages with a local replacement to compare with the
+ * standard page, or when that could not be checked (a hidden backlog would be a missed upgrade step).
+ */
+function PageAdoptionNotice({
+  loaded,
+  onReview,
+  onReload,
+}: Readonly<{
+  loaded: StudioStandardPageAdoptionLoadResult | null;
+  onReview: () => void;
+  onReload: () => void;
+}>) {
+  if (loaded?.kind === "temporarily_unavailable")
+    return (
+      <Alert variant="destructive">
+        <AlertDescription>Pages waiting after an upgrade could not be checked.</AlertDescription>
+        <AlertAction>
+          <Button type="button" variant="outline" size="sm" onClick={onReload}>
+            Reload
+          </Button>
+        </AlertAction>
+      </Alert>
+    );
+  if (loaded?.kind !== "available" || loaded.choices.length === 0) return null;
+  const waiting = loaded.choices.length;
+  return (
+    <Alert variant="warning">
+      <AlertDescription>
+        {waiting === 1
+          ? "1 page has your own version next to the standard one."
+          : `${waiting} pages have your own version next to the standard one.`}
+      </AlertDescription>
+      <AlertAction>
+        <Button type="button" variant="outline" size="sm" onClick={onReview}>
+          Review pages
+        </Button>
+      </AlertAction>
+    </Alert>
+  );
+}
 
 /** The one Preview toast: starting, then opened, ready to open or failed, replacing each other. */
 const previewNoticeId = "studio-preview";
-
-/** The one wording of how a system application advances, shown in the standing and the history. */
-const systemRefreshMessage = "System applications move forward through the platform refresh.";
-
-/**
- * Where the application stands in the builder's organisation, in plain words. `install` names the
- * action that moves the organisation to the published version (run here, over the editor) and
- * `link` the App Store page that shows the application.
- */
-const standingWords = (
-  standing: ApplicationReleaseStanding,
-): Readonly<{
-  text: string;
-  install?: string;
-  link?: Readonly<{ label: string; href: string }>;
-}> => {
-  const viewInStore = (href: string) => ({ label: "View in the App Store", href });
-  switch (standing.kind) {
-    case "system":
-      return {
-        text: `Latest published version: ${standing.version}. Installed version: ${standing.installedVersion}. ${systemRefreshMessage}`,
-      };
-    case "live":
-      return {
-        text: `Version ${standing.version} is live in your organisation.${standing.rolesWaiting ? " Role changes are waiting for you to accept them." : ""}`,
-        ...(standing.rolesWaiting ? { install: "Review role changes" } : {}),
-        link: viewInStore(standing.appStoreHref),
-      };
-    case "waiting":
-      return {
-        text: `Your organisation runs version ${standing.installedVersion}; version ${standing.version} is waiting. Upgrade to use it.`,
-        install: "Upgrade",
-        link: viewInStore(standing.appStoreHref),
-      };
-    case "not_installed":
-      return {
-        text: `Version ${standing.version} is not installed in your organisation, so people cannot open it yet.`,
-        install: "Install",
-        link: viewInStore(standing.appStoreHref),
-      };
-    case "not_published":
-      return { text: "No version is published yet." };
-    case "unknown":
-      return {
-        text: "Someone who manages applications installs or upgrades it in the App Store.",
-        ...(standing.appStoreHref === undefined
-          ? {}
-          : { link: viewInStore(standing.appStoreHref) }),
-      };
-  }
-};
 
 /**
  * What the editor offers about installing the application, from where it stands in the
@@ -147,14 +175,17 @@ export function useStudioReleasesTab({
   initialSection: StudioReleasesSection;
 }>) {
   const { organizationId, history } = draft;
-  useIntentPreload(preloadReleasesPanel, "#studio-rail-releases");
+  useIntentPreload(preloadReleasesHistory, "#studio-rail-releases");
   const latest = useRef(draft);
   latest.current = draft;
   const [section, setSection] = useState<StudioReleasesSection>(initialSection);
-  const importVisited = useStudioTabVisited(!hidden && section === "import");
-  const panelVisited = useStudioTabVisited(!hidden);
-  // A new version reloads the history.
+  // The import dialog is built when first opened and then kept, so closing it keeps what was pasted.
+  const [importMounted, setImportMounted] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
+  const [adoptionOpen, setAdoptionOpen] = useState(false);
+  // A new version, or the Reload control, reads the history and the back-end runs again.
   const [historyGeneration, setHistoryGeneration] = useState(0);
+  const [runsGeneration, setRunsGeneration] = useState(0);
   const [previewPending, setPreviewPending] = useState(false);
   // Where the application stands in the organisation: read when the Releases tab opens and after
   // each Publish; null until read.
@@ -173,6 +204,25 @@ export function useStudioReleasesTab({
   useEffect(() => {
     if (!hidden) void readStanding();
   }, [hidden, readStanding]);
+
+  // The pages an upgrade left to adopt: one read, owned here, shared by the notice and the sheet.
+  // It is read when the tab opens and again after an install, publish or restore.
+  const [adoption, setAdoption] = useState<StudioStandardPageAdoptionLoadResult | null>(null);
+  const readAdoption = useCallback(async (): Promise<void> => {
+    const next = await readStandardPageAdoption(organizationId, rootId).catch(
+      (error: unknown): StudioStandardPageAdoptionLoadResult => {
+        console.error(`[studio] page adoption comparison failed: ${describeFailure(error)}`);
+        return { kind: "temporarily_unavailable" };
+      },
+    );
+    if (next.kind !== "available") console.error(`[studio] page adoption comparison ${next.kind}`);
+    if (latest.current.isActive()) setAdoption(next);
+  }, [organizationId, rootId]);
+  // The comparison is of the saved draft, so a saved edit reads it again.
+  const savedRevision = draft.saved.draftRevision;
+  useEffect(() => {
+    if (!hidden) void readAdoption();
+  }, [hidden, readAdoption, savedRevision]);
 
   /** The saved draft, when it is exactly what the workspace shows: nothing waiting to be saved and nothing held. */
   const readSnapshot = useCallback(() => {
@@ -202,7 +252,11 @@ export function useStudioReleasesTab({
     hold: (on) => draft.hold("publication", on),
     onCommitted: (action) => {
       void readStanding();
-      if (action === "publish") setHistoryGeneration((generation) => generation + 1);
+      // A published version changes what the draft is compared with; an install or upgrade does not.
+      if (action === "publish") {
+        void readAdoption();
+        setHistoryGeneration((generation) => generation + 1);
+      }
     },
   });
   const startAction = async (
@@ -324,6 +378,22 @@ export function useStudioReleasesTab({
       localLifetime: current.lifetime,
     };
   };
+  // Export waits for the latest edits to be saved, as Publish does, and says why when it cannot run.
+  const exportSource = async (): Promise<void> => {
+    const flushed = await latest.current.flush();
+    const snapshot = flushed ? readImportSnapshot() : null;
+    if (snapshot !== null) {
+      downloadApplicationSource(snapshot);
+      return;
+    }
+    studioNotice(
+      latest.current.blockedReason() ??
+        (flushed
+          ? "The draft changed while exporting. Try again."
+          : "Your latest change is not saved. Resolve it, then export again."),
+      "error",
+    );
+  };
   const applyImport: Parameters<typeof ApplicationSourceImportComponent>[0]["onApply"] = (
     expected,
     candidate,
@@ -368,122 +438,182 @@ export function useStudioReleasesTab({
     ? "Wait for the workspace to finish loading or publishing."
     : savedWait;
 
-  const standingShown = standingWords(standing ?? { kind: "unknown" });
-  const panel = panelVisited ? (
-    <StudioReleasesPanel hidden={hidden} section={section} onSection={setSection} />
-  ) : null;
+  const shownStanding = standing ?? initialStanding;
+  const appStoreHref = appStoreHrefOf(shownStanding);
   const centre: ReactNode = (
-    <div className="mx-auto max-w-4xl px-8 py-6 text-foreground">
-      {standing === null || standing.kind === "unknown" ? null : (
-        <section
-          aria-label="Installation"
-          className="mb-4 space-y-2 rounded-md border border-border bg-muted/40 p-4"
-        >
-          <p className="font-medium">
-            {standing.kind === "system"
-              ? "System application"
-              : standing.kind === "live"
-                ? "Live in your organisation"
-                : standing.kind === "waiting"
-                  ? "A newer version is waiting"
-                  : standing.kind === "not_installed"
-                    ? "Not installed yet"
-                    : "Not published yet"}
-          </p>
-          <p className="text-sm text-muted-foreground">{standingShown.text}</p>
-          <div className="flex flex-wrap gap-2">
-            {standingShown.install === undefined ? null : (
-              <Button
-                type="button"
-                size="sm"
-                disabled={actions.pending !== undefined}
-                onClick={openInstall}
+    <div className="mx-auto max-w-5xl space-y-4 px-8 py-6 text-foreground">
+      <StudioReleasesStanding
+        standing={shownStanding}
+        actionPending={actions.pending !== undefined}
+        onReviewRoles={openInstall}
+      />
+      {!hidden && (
+        <PageAdoptionNotice
+          loaded={adoption}
+          onReview={() => setAdoptionOpen(true)}
+          onReload={() => void readAdoption()}
+        />
+      )}
+      <Tabs
+        value={section}
+        onValueChange={(value) => {
+          if (isStudioReleasesSection(value)) setSection(value);
+        }}
+      >
+        <div className="flex items-center justify-between gap-2">
+          <TabsList>
+            {studioReleasesSections.map((entry) => (
+              <TabsTrigger key={entry.value} value={entry.value}>
+                {entry.label}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+          <div className="flex items-center gap-1">
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <Button
+                    type="button"
+                    size="icon-sm"
+                    variant="ghost"
+                    aria-label="Reload"
+                    onClick={() => {
+                      if (section === "history")
+                        setHistoryGeneration((generation) => generation + 1);
+                      else setRunsGeneration((generation) => generation + 1);
+                    }}
+                  />
+                }
               >
-                {standingShown.install}
-              </Button>
-            )}
-            {standingShown.link === undefined ? null : (
-              <Button
-                variant="outline"
-                size="sm"
-                nativeButton={false}
-                render={<NavigationLink href={standingShown.link.href} />}
-              >
-                {standingShown.link.label}
-              </Button>
-            )}
+                <Icon name="refresh" />
+              </TooltipTrigger>
+              <TooltipContent>
+                {section === "history" ? "Reload the versions" : "Reload the runs"}
+              </TooltipContent>
+            </Tooltip>
+            <DropdownMenu>
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <DropdownMenuTrigger
+                      render={
+                        <Button
+                          type="button"
+                          size="icon-sm"
+                          variant="ghost"
+                          aria-label="More release actions"
+                        />
+                      }
+                    />
+                  }
+                >
+                  <Icon name="more-horizontal" />
+                </TooltipTrigger>
+                <TooltipContent>More release actions</TooltipContent>
+              </Tooltip>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem
+                  disabled={draft.locked}
+                  onClick={() => {
+                    setImportMounted(true);
+                    setImportOpen(true);
+                  }}
+                >
+                  <Icon name="upload" />
+                  Replace draft from a file…
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  disabled={draft.locked}
+                  onClick={() => {
+                    void exportSource();
+                  }}
+                >
+                  <Icon name="download" />
+                  Export source
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
-        </section>
-      )}
-      {!hidden && section === "history" && (
-        <StudioHistoryTab
-          key={historyGeneration}
-          organizationId={organizationId}
-          rootId={draft.state.rootId}
-          savedRevision={draft.saved.draftRevision}
-          installationMessage={
-            standing?.kind === "system"
-              ? systemRefreshMessage
-              : standing == null || standing.kind === "unknown"
-                ? undefined
-                : "Organisations install or upgrade to a version from Studio or the App Store."
-          }
-          restoreBlocked={restoreBlocked}
-          hold={(on) => draft.hold("restoring", on)}
-          onRestored={(restored) => {
-            void draft
-              .reload()
-              .then((loaded) =>
-                studioNotice(
-                  loaded
-                    ? restored
-                    : "The version was restored, but the restored draft could not be loaded here. Reload Studio to see it.",
-                  loaded ? "success" : "error",
-                ),
-              );
-          }}
+        </div>
+        <TabsContent value="history" className="pt-4">
+          {!hidden && (
+            <StudioHistoryTab
+              key={historyGeneration}
+              organizationId={organizationId}
+              rootId={draft.state.rootId}
+              savedRevision={draft.saved.draftRevision}
+              appStoreHref={appStoreHref}
+              restoreBlocked={restoreBlocked}
+              hold={(on) => draft.hold("restoring", on)}
+              onRestored={(restored) => {
+                void readAdoption();
+                void draft
+                  .reload()
+                  .then((loaded) =>
+                    studioNotice(
+                      loaded
+                        ? restored
+                        : "The version was restored, but the restored draft could not be loaded here. Reload Studio to see it.",
+                      loaded ? "success" : "error",
+                    ),
+                  );
+              }}
+              onPublish={openPublish}
+            />
+          )}
+        </TabsContent>
+        <TabsContent value="backend-runs" className="pt-4">
+          {!hidden && (
+            <StudioBackendRuns
+              key={runsGeneration}
+              organizationId={organizationId}
+              rootId={draft.state.rootId}
+            />
+          )}
+        </TabsContent>
+      </Tabs>
+      <Sheet open={adoptionOpen} onOpenChange={setAdoptionOpen}>
+        <SheetContent className="w-full overflow-y-auto sm:max-w-3xl">
+          <SheetHeader className="sr-only">
+            <SheetTitle>Page adoption</SheetTitle>
+            <SheetDescription>
+              Choose, page by page, whether to keep your own version or use the standard one.
+            </SheetDescription>
+          </SheetHeader>
+          <div className="px-8 pb-6">
+            <StandardPageAdoption
+              loaded={adoption}
+              onReload={readAdoption}
+              disabledReason={restoreBlocked}
+              hold={(on) => draft.hold("restoring", on)}
+              onSaved={() => {
+                void draft.reload().then((loaded) => {
+                  if (!loaded)
+                    studioNotice(
+                      "Your choice was saved, but the draft could not be loaded here. Reload Studio to see it.",
+                      "error",
+                    );
+                });
+              }}
+            />
+          </div>
+        </SheetContent>
+      </Sheet>
+      {/* The import keeps what was pasted while it is closed, another section or another tab is open. */}
+      {importMounted && (
+        <ApplicationSourceImport
+          key={draft.lifetime}
+          open={importOpen && !hidden}
+          onOpenChange={setImportOpen}
+          disabled={draft.locked}
+          readSnapshot={readImportSnapshot}
+          onApply={applyImport}
         />
-      )}
-      {!hidden && section === "backend-runs" && (
-        <StudioBackendRuns
-          organizationId={organizationId}
-          rootId={draft.state.rootId}
-          savedRevision={draft.saved.draftRevision}
-        />
-      )}
-      {!hidden && section === "page-adoption" && (
-        <StandardPageAdoption
-          organizationId={organizationId}
-          rootId={draft.state.rootId}
-          disabledReason={restoreBlocked}
-          hold={(on) => draft.hold("restoring", on)}
-          onSaved={() => {
-            void draft.reload().then((loaded) => {
-              if (!loaded)
-                studioNotice(
-                  "Your choice was saved, but the draft could not be loaded here. Reload Studio to see it.",
-                  "error",
-                );
-            });
-          }}
-        />
-      )}
-      {/* The import keeps what was pasted while another section or tab is open. */}
-      {importVisited && (
-        <section hidden={hidden || section !== "import"} aria-label="Import from source">
-          <ApplicationSourceImport
-            key={draft.lifetime}
-            disabled={draft.locked}
-            readSnapshot={readImportSnapshot}
-            onApply={applyImport}
-          />
-        </section>
       )}
     </div>
   );
-  const title = studioReleasesSections.find((entry) => entry.value === section)!.label;
+  const title = "Releases";
   return {
-    panel,
     centre,
     title,
     openPublish,

@@ -1083,7 +1083,7 @@
 
 .cn-card {
   gap: var(--card-spacing);
-  overflow: hidden;
+  overflow: clip;
   border-radius: var(--vs-b2cd671d, calc(var(--radius) * 1.4));
   background-color: var(--card);
   padding-block: var(--card-spacing);
@@ -1404,7 +1404,7 @@
 .cn-combobox-content {
   max-height: calc(var(--spacing, 0.25rem) * 72);
   min-width: var(--vs-daeb9c42, calc(var(--spacing, 0.25rem) * 36));
-  overflow: hidden;
+  overflow: clip;
   border-radius: var(--vs-43e53721, var(--radius));
   background-color: var(--popover);
   color: var(--popover-foreground);
@@ -2978,7 +2978,7 @@
 .cn-item-media-variant-image {
   width: var(--vs-f1f557d1, calc(var(--spacing, 0.25rem) * 10));
   height: var(--vs-f1f557d1, calc(var(--spacing, 0.25rem) * 10));
-  overflow: hidden;
+  overflow: clip;
   border-radius: var(--vs-97fce514, calc(var(--radius) * 0.6));
   &:is(:where(.group\/item)[data-size="sm"] *) {
     width: calc(var(--spacing, 0.25rem) * 8);
@@ -5946,6 +5946,24 @@
   rotate: 45deg;
   border-radius: var(--vs-8411b380, 2px);
 }
+.cn-tooltip-arrow[data-side="top"] {
+  bottom: calc(var(--spacing, 0.25rem) * -2.5);
+}
+.cn-tooltip-arrow[data-side="bottom"] {
+  top: calc(var(--spacing, 0.25rem) * 1);
+}
+.cn-tooltip-arrow[data-side="left"] {
+  top: calc(1 / 2 * 100%) !important;
+  right: calc(var(--spacing, 0.25rem) * -1);
+  --tw-translate-y: calc(calc(1 / 2 * 100%) * -1);
+  translate: var(--tw-translate-x) var(--tw-translate-y);
+}
+.cn-tooltip-arrow[data-side="right"] {
+  top: calc(1 / 2 * 100%) !important;
+  left: calc(var(--spacing, 0.25rem) * -1);
+  --tw-translate-y: calc(calc(1 / 2 * 100%) * -1);
+  translate: var(--tw-translate-x) var(--tw-translate-y);
+}
 .cn-tooltip-arrow-logical[data-side="inline-end"] {
   top: calc(1 / 2 * 100%) !important;
   left: calc(var(--spacing, 0.25rem) * -1);
@@ -6640,7 +6658,7 @@
 .cn-combobox-content-aria {
   max-height: calc(var(--spacing, 0.25rem) * 72);
   min-width: var(--vs-daeb9c42, calc(var(--spacing, 0.25rem) * 36));
-  overflow: hidden;
+  overflow: clip;
   border-radius: var(--vs-43e53721, var(--radius));
   background-color: var(--popover);
   color: var(--popover-foreground);
@@ -7221,7 +7239,7 @@
 }
 
 .cn-collapsible-content {
-  overflow: hidden;
+  overflow: clip;
 }
 
 .cn-confirm-dialog {

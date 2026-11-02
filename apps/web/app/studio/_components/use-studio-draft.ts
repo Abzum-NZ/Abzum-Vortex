@@ -1,9 +1,12 @@
 "use client";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from "react";
+import { whenNotDragging, type StudioDragGate } from "@vortex/ui/studio/puck-provider";
 import {
   applicationSourceDocumentSchema,
   canonicalJson,
   describeFailure,
+  summarizeSourceChange,
+  type SourceChangeRow,
   type ApplicationSourceDocument,
   type PeopleDirectoryOwner,
   type SourceIdentityReservation,
@@ -34,7 +37,6 @@ import type {
   StudioPublishedData,
 } from "../_lib/studio-data-model";
 import { studioViewRequest, type StudioViewRequest } from "../_lib/studio-view-request";
-import { summarizeSourceChange, type SourceChangeRow } from "../_lib/source-change-summary";
 import { conflictMessage, refusalMessage, unavailableMessage } from "./studio-refusal-messages";
 import { useLeaveWarning } from "./use-leave-warning";
 import { useStudioSession } from "./use-studio-session";
@@ -248,9 +250,12 @@ export function useStudioDraft({
   tab,
   creation,
   initialView,
+  dragGate,
 }: Readonly<{
   organizationId: string;
   draft: StudioStoredApplicationDraft;
+  /** Opening another page waits while a block is being dragged on the canvas. */
+  dragGate: RefObject<StudioDragGate>;
   tab: string;
   creation: StudioViewRequest["creation"];
   initialView: Omit<
@@ -935,7 +940,17 @@ export function useStudioDraft({
       blockedReason,
       parsed,
       run,
-      select: (next) => selection.select(next),
+      select: (next) => {
+        // A block of the open page may be selected during a drag (the drag itself does); anything
+        // else can open another page, which the drag must not lose its canvas to.
+        if (dragGate.current.dragging && next !== null && next.kind !== "placement") {
+          whenNotDragging(dragGate, () => {
+            selection.select(next);
+          });
+          return true;
+        }
+        return selection.select(next);
+      },
       undo: () => {
         if (blockedReason() === undefined) history.undo();
       },
@@ -975,6 +990,7 @@ export function useStudioDraft({
       flush,
       retry,
       reload,
+      dragGate,
     ],
   );
 }

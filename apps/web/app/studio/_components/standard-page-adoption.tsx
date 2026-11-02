@@ -1,7 +1,9 @@
 "use client";
-import { useCallback, useEffect, useRef, useState, useTransition } from "react";
+import { useEffect, useRef, useTransition } from "react";
 import { Icon } from "@vortex/ui";
+import { Alert, AlertDescription, AlertAction } from "@vortex/ui/components/alert";
 import { Button } from "@vortex/ui/components/button";
+import { Spinner } from "@vortex/ui/components/spinner";
 import { Badge } from "@vortex/ui/components/badge";
 import {
   Collapsible,
@@ -28,7 +30,7 @@ import type {
   ComparisonChoice,
   StudioStandardPageAdoptionLoadResult,
 } from "../../_lib/studio-standard-page-adoption";
-import { readStandardPageAdoption, submitStandardPageAdoption } from "../releases-actions";
+import { submitStandardPageAdoption } from "../releases-actions";
 import { studioNotice } from "./studio-save-state";
 
 const statusMessage = (result: string): string => {
@@ -51,47 +53,31 @@ type Decision = "keep_replacement" | "adopt_original";
 
 /** Per-page choices use the comparison's exact draft revision and publication anchor. */
 export function StandardPageAdoption({
-  organizationId,
-  rootId,
+  loaded: result,
+  onReload,
   disabledReason,
   hold,
   onSaved,
 }: Readonly<{
-  organizationId: string;
-  rootId: string;
+  /** The comparison the Releases tab read, or null while it is being read. */
+  loaded: Loaded;
+  /** Reads the comparison again; resolves when it has been read. */
+  onReload: () => Promise<void>;
   disabledReason?: string | undefined;
   hold: (on: boolean) => void;
   onSaved: () => void;
 }>) {
-  const [result, setResult] = useState<Loaded>(null);
   const [pending, startTransition] = useTransition();
   const mounted = useRef(true);
   const submitting = useRef(false);
-  const generation = useRef(0);
   const currentDisabledReason = useRef(disabledReason);
   currentDisabledReason.current = disabledReason;
   useEffect(() => {
     mounted.current = true;
     return () => {
       mounted.current = false;
-      generation.current += 1;
     };
   }, []);
-  const load = useCallback(async () => {
-    const token = ++generation.current;
-    try {
-      const loaded = await readStandardPageAdoption(organizationId, rootId);
-      if (mounted.current && generation.current === token) setResult(loaded);
-    } catch (error) {
-      console.error("[studio] page adoption comparison failed to load", error);
-      if (mounted.current && generation.current === token)
-        setResult({ kind: "temporarily_unavailable" });
-    }
-  }, [organizationId, rootId]);
-  useEffect(() => {
-    setResult(null);
-    void load();
-  }, [load]);
   const submit = (choice: ComparisonChoice, decision: Decision) => {
     if (
       result?.kind !== "available" ||
@@ -130,7 +116,7 @@ export function StandardPageAdoption({
         statusMessage(code),
         code === "saved" ? "success" : code === "no_change" ? "info" : "error",
       );
-      await load();
+      await onReload();
       if (code === "saved") onSaved();
     });
   };
@@ -143,22 +129,33 @@ export function StandardPageAdoption({
           Compare your replacement with the latest standard page. Each choice updates this draft.
         </p>
         {disabledReason !== undefined && (
-          <p role="status" className="text-sm text-muted-foreground">
-            {disabledReason}
-          </p>
+          <Alert role="status">
+            <AlertDescription>{disabledReason}</AlertDescription>
+          </Alert>
         )}
       </header>
-      {result === null && <p role="status">Loading the comparison…</p>}
+      {result === null && (
+        <div role="status" className="flex items-center gap-2 text-sm text-muted-foreground">
+          <Spinner aria-hidden="true" />
+          Loading the comparison…
+        </div>
+      )}
       {result?.kind === "temporarily_unavailable" && (
-        <p role="status">
-          The comparison is temporarily unavailable.{" "}
-          <Button variant="outline" onClick={() => void load()}>
-            Try again
-          </Button>
-        </p>
+        <Alert variant="warning" role="status">
+          <AlertDescription>The comparison is temporarily unavailable.</AlertDescription>
+          <AlertAction>
+            <Button variant="outline" onClick={() => void onReload()}>
+              Try again
+            </Button>
+          </AlertAction>
+        </Alert>
       )}
       {result?.kind === "refused" && (
-        <p role="status">The page comparison is unavailable for this application.</p>
+        <Alert variant="warning">
+          <AlertDescription>
+            The page comparison is unavailable for this application.
+          </AlertDescription>
+        </Alert>
       )}
       {result?.kind === "available" &&
         (result.choices.length === 0 ? (

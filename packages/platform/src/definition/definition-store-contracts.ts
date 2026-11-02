@@ -258,22 +258,6 @@ export const definitionPublicationConfirmationSchema = z.discriminatedUnion("out
 export const prepareDefinitionPublicationResultSchema = z
   .object({
     confirmation: definitionPublicationConfirmationSchema,
-    // Authored names and display facts for explaining each changed component in business words.
-    componentLabels: z
-      .array(
-        z
-          .object({
-            componentId: platformIdSchema,
-            label: z.string().min(1),
-            pageId: platformIdSchema.optional(),
-            addedAccess: z.array(z.string().min(1)).optional(),
-            removedAccess: z.array(z.string().min(1)).optional(),
-            addedCapabilities: z.array(z.string().min(1)).optional(),
-            wordingChanged: z.boolean().optional(),
-          })
-          .strict(),
-      )
-      .max(10_000),
     // Qualified source references of new fields, for reviewing their use on authored pages.
     addedFields: z.array(z.string().min(1)).max(10_000),
   })

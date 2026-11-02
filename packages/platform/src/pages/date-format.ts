@@ -198,6 +198,55 @@ export function formatIsoDateTitle(
   return isCalendarDate(iso) ? undefined : formatIsoDate(iso, options, "full");
 }
 
+const RELATIVE_UNITS: readonly (readonly [Intl.RelativeTimeFormatUnit, number])[] = [
+  ["year", 365 * 86_400],
+  ["month", 30 * 86_400],
+  ["day", 86_400],
+  ["hour", 3_600],
+  ["minute", 60],
+  ["second", 1],
+];
+
+/**
+ * How long ago (or from now) a timestamp is, from the largest whole unit, for example `3 days ago`
+ * or `yesterday`. Undefined when the value cannot be parsed or is a calendar date.
+ */
+export function formatIsoRelative(
+  iso: string,
+  options: DateFormatOptions = {},
+  now: number = Date.now(),
+): string | undefined {
+  const timestamp = Date.parse(iso);
+  if (Number.isNaN(timestamp) || isCalendarDate(iso)) return undefined;
+  // Under a minute either way reads as "now": the viewer's clock and the stored time are never that exact.
+  const gap = Math.round((timestamp - now) / 1000);
+  const seconds = Math.abs(gap) < 60 ? 0 : gap;
+  const [unit, size] =
+    RELATIVE_UNITS.find(([, length]) => Math.abs(seconds) >= length) ?? RELATIVE_UNITS[5]!;
+  return relativeFormatterFor(options.locale ?? DEFAULT_LOCALE).format(
+    Math.trunc(seconds / size),
+    unit,
+  );
+}
+
+const relativeFormatters = new Map<string, Intl.RelativeTimeFormat>();
+
+/** One cached formatter per locale; an unsupported locale is logged once, when its entry is made, and uses the default. */
+const relativeFormatterFor = (locale: string): Intl.RelativeTimeFormat => {
+  const cached = relativeFormatters.get(locale);
+  if (cached !== undefined) return cached;
+  let formatter: Intl.RelativeTimeFormat;
+  try {
+    formatter = new Intl.RelativeTimeFormat(locale, { numeric: "auto" });
+  } catch (error) {
+    console.error("[display] relative time locale unsupported, using the default", error);
+    formatter = new Intl.RelativeTimeFormat(DEFAULT_LOCALE, { numeric: "auto" });
+  }
+  if (relativeFormatters.size >= MAXIMUM_CACHED_FORMATTERS) relativeFormatters.clear();
+  relativeFormatters.set(locale, formatter);
+  return formatter;
+};
+
 /** Spreadsheet number-format characters that need no quoting between date and time codes. */
 const EXCEL_PLAIN_LITERAL = /^[ :/-]+$/;
 const ASCII_DIGITS = /^\d+$/;

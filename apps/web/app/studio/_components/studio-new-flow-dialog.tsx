@@ -1,5 +1,5 @@
 "use client";
-import { FieldLegend } from "@vortex/ui/components/field";
+import { FieldLegend, FieldSet } from "@vortex/ui/components/field";
 import { Alert, AlertDescription } from "@vortex/ui/components/alert";
 import { useState, type FormEvent } from "react";
 import { Button } from "@vortex/ui/components/button";
@@ -242,7 +242,7 @@ export function StudioNewFlowDialog({
             </div>
           )}
           {asksStep && (
-            <fieldset className="space-y-2">
+            <FieldSet className="gap-2">
               <FieldLegend variant="label">What should it do?</FieldLegend>
               <RadioGroup
                 value={what}
@@ -297,7 +297,7 @@ export function StudioNewFlowDialog({
                   onChange={(event) => setMessageText(event.target.value)}
                 />
               )}
-            </fieldset>
+            </FieldSet>
           )}
           {existingFlow !== undefined &&
             Object.entries(existingFlow.inputs).map(([input, declaration]) => (
