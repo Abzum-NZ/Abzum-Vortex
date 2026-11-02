@@ -114,9 +114,7 @@ export function StudioField({
   return (
     <Field data-invalid={error === undefined ? undefined : true}>
       <div className="flex items-center gap-2">
-        <FieldLabel htmlFor={id} className="text-sm font-medium">
-          {label}
-        </FieldLabel>
+        <FieldLabel htmlFor={id}>{label}</FieldLabel>
         {optional && <span className="text-xs text-muted-foreground">Optional</span>}
         {hint !== undefined && <StudioHelp hint={hint} id={id + "-hint"} />}
       </div>

@@ -1,4 +1,5 @@
 "use client";
+import { FieldLegend } from "@vortex/ui/components/field";
 import { Alert, AlertDescription } from "@vortex/ui/components/alert";
 import { plainSourceSettingValue, recordsTableBoardFeature } from "@vortex/platform/schema";
 import type { StudioCompiledFields } from "../_lib/studio-data-model";
@@ -724,7 +725,7 @@ export function ApplicationCompositionEditor(props: Props) {
           disabled={props.disabled || !orderEditable}
           aria-describedby={hintId}
         >
-          <legend className="flex items-center gap-1 text-sm font-medium">
+          <FieldLegend variant="label" className="flex items-center gap-1">
             Order among its neighbours
             <StudioHelp
               id={hintId}
@@ -736,7 +737,7 @@ export function ApplicationCompositionEditor(props: Props) {
                     : "This order is inherited from the larger screen size."
               }
             />
-          </legend>
+          </FieldLegend>
           <ol className="space-y-px">
             {model.order.map((alias, index) => (
               <li
@@ -769,7 +770,7 @@ export function ApplicationCompositionEditor(props: Props) {
           )}
         </fieldset>
         <fieldset className="space-y-4" disabled={props.disabled}>
-          <legend className="flex items-center gap-1 text-sm font-medium">
+          <FieldLegend variant="label" className="flex items-center gap-1">
             Size
             <StudioHelp
               hint={
@@ -778,7 +779,7 @@ export function ApplicationCompositionEditor(props: Props) {
                   : "This size is inherited from the larger screen size."
               }
             />
-          </legend>
+          </FieldLegend>
           <label className="flex items-center justify-between gap-2 text-sm">
             Shown at this screen size
             <Switch

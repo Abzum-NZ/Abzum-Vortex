@@ -98,10 +98,6 @@ export function StudioReferencePicker({
           {...accessibility}
           onFocus={startSearch}
           onPointerDown={startSearch}
-          onKeyDown={(event) => {
-            // A closed list would keep Escape (and clear its choice): leave it to the dialog or sheet around it.
-            if (event.key === "Escape" && !open) event.preventBaseUIHandler();
-          }}
           aria-invalid={accessibility["aria-invalid"] || !known}
         />
         <InputGroupAddon align="inline-end">

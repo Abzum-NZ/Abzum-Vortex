@@ -1,6 +1,7 @@
 "use client";
 
 import { Alert, AlertDescription } from "../components/alert";
+import { FieldGroup } from "../components/field";
 import { useEffect, useRef, useState, type ReactElement } from "react";
 import {
   canonicalJson,
@@ -930,7 +931,7 @@ function GroupControl({
         </Label>
       )}
       {(group !== undefined || !optional) && (
-        <div className="space-y-4">
+        <FieldGroup>
           {named === undefined ? (
             fields(property.properties)
           ) : (
@@ -949,7 +950,7 @@ function GroupControl({
               </StudioInspectorGroup>
             </>
           )}
-        </div>
+        </FieldGroup>
       )}
     </div>
   );
@@ -1343,7 +1344,7 @@ function SettingFields({
     onChange(result);
   };
   return (
-    <div className="space-y-4">
+    <FieldGroup>
       {splitMoreSettings(
         properties.flatMap((property) => {
           if (!componentSettingApplies(property, values)) return [];
@@ -1468,6 +1469,6 @@ function SettingFields({
         }),
         moreKeys,
       )}
-    </div>
+    </FieldGroup>
   );
 }

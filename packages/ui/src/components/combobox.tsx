@@ -10,8 +10,20 @@ import { useVortexStylePortalRoot } from "../theme/vortex-style-root";
 const Combobox = ComboboxPrimitive.Root;
 
 /** The combobox's text input, drawn as the shadcn input group's control. */
-function ComboboxInput(props: ComboboxPrimitive.Input.Props) {
-  return <ComboboxPrimitive.Input render={<InputGroupInput />} {...props} />;
+function ComboboxInput({ onKeyDown, ...props }: ComboboxPrimitive.Input.Props) {
+  return (
+    <ComboboxPrimitive.Input
+      render={<InputGroupInput />}
+      onKeyDown={(event) => {
+        // A closed list would keep Escape (and clear its choice): leave it to the dialog, sheet or
+        // popover around it, so Escape closes that and the choice stays.
+        if (event.key === "Escape" && event.currentTarget.getAttribute("aria-expanded") !== "true")
+          event.preventBaseUIHandler();
+        onKeyDown?.(event);
+      }}
+      {...props}
+    />
+  );
 }
 
 function ComboboxTrigger({ className, ...props }: ComboboxPrimitive.Trigger.Props) {

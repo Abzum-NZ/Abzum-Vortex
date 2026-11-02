@@ -573,7 +573,24 @@ export function ApplicationSourceImport({ disabled, readSnapshot, onApply }: Pro
           </ul>
         </div>
       )}
-      <StudioInspectorFooter>
+      <p role="status" aria-live="polite" className="sr-only">
+        {operation === "reading"
+          ? "Reading file"
+          : operation === "reviewing"
+            ? "Checking file"
+            : ""}
+      </p>
+      {reviewedCurrent && reviewed !== null && (
+        <StudioInspectorGroup title="Details" defaultOpen={false}>
+          <p className="break-all">
+            Fingerprint of the file: <code>{reviewed.fingerprint}</code>
+          </p>
+          <StudioSourceView value={reviewed.snapshot.source} title="Current draft" />
+          <StudioSourceView value={reviewed.source} title="Imported file" />
+        </StudioInspectorGroup>
+      )}
+      {confirmDialog}
+      <StudioInspectorFooter className="-bottom-6 -mx-8 -mb-6 px-8">
         <Button
           type="button"
           variant="ghost"
@@ -609,23 +626,6 @@ export function ApplicationSourceImport({ disabled, readSnapshot, onApply }: Pro
           Replace the draft
         </Button>
       </StudioInspectorFooter>
-      <p role="status" aria-live="polite" className="sr-only">
-        {operation === "reading"
-          ? "Reading file"
-          : operation === "reviewing"
-            ? "Checking file"
-            : ""}
-      </p>
-      {reviewedCurrent && reviewed !== null && (
-        <StudioInspectorGroup title="Details" defaultOpen={false}>
-          <p className="break-all">
-            Fingerprint of the file: <code>{reviewed.fingerprint}</code>
-          </p>
-          <StudioSourceView value={reviewed.snapshot.source} title="Current draft" />
-          <StudioSourceView value={reviewed.source} title="Imported file" />
-        </StudioInspectorGroup>
-      )}
-      {confirmDialog}
     </section>
   );
 }

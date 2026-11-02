@@ -1,4 +1,5 @@
 "use client";
+import { FieldLegend } from "@vortex/ui/components/field";
 import { Label } from "@vortex/ui/components/label";
 import { RadioGroup, RadioGroupItem } from "@vortex/ui/components/radio-group";
 import { StudioInspectorGroup, type StudioSettingValues } from "@vortex/ui/studio";
@@ -70,9 +71,9 @@ export function StudioLinkSection({
         : {})}
     >
       <fieldset className="space-y-2">
-        <legend className="text-sm font-medium">
+        <FieldLegend variant="label">
           How many {recordPlural.toLowerCase()} may link to one {names}?
-        </legend>
+        </FieldLegend>
         <RadioGroup
           value={cardinality}
           disabled={disabled}

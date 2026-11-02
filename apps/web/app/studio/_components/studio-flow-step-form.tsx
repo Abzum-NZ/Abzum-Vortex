@@ -1,4 +1,5 @@
 "use client";
+import { FieldLegend } from "@vortex/ui/components/field";
 import { Alert, AlertDescription } from "@vortex/ui/components/alert";
 import { useState } from "react";
 import { Button } from "@vortex/ui/components/button";
@@ -94,7 +95,7 @@ function EntryRows({
   };
   return (
     <fieldset className="space-y-2">
-      <legend className="text-sm font-medium">{label}</legend>
+      <FieldLegend variant="label">{label}</FieldLegend>
       {named.map((entry) => (
         <StudioFlowValueControl
           key={entry.name}
@@ -204,10 +205,10 @@ function ReadFields({
   const options = field.options ?? [];
   return (
     <div className="space-y-1.5">
-      <Label htmlFor={id}>{label}</Label>
-      <p className="text-xs text-muted-foreground">
-        The step returns these fields as its values output, keyed by field name.
-      </p>
+      <div className="flex items-center gap-1">
+        <Label htmlFor={id}>{label}</Label>
+        <StudioHelp hint="The step returns these fields as its values output, keyed by field name." />
+      </div>
       {options.length === 0 ? (
         <p className="text-sm text-muted-foreground">Choose the record type first.</p>
       ) : (
@@ -256,10 +257,10 @@ function FieldValues({
   );
   return (
     <fieldset className="space-y-2">
-      <legend className="text-sm font-medium">
+      <FieldLegend variant="label">
         {field.label}
         {!field.required && <span className="text-xs text-muted-foreground"> Optional</span>}
-      </legend>
+      </FieldLegend>
       <StudioOptionControl
         id={`${id}-mode`}
         aria-label={`${field.label}: how they are given`}
@@ -682,7 +683,9 @@ function ConditionControl({
   };
   return (
     <fieldset className="space-y-2" id={id} disabled={disabled}>
-      <legend className="flex items-center gap-1 text-sm font-medium">Condition</legend>
+      <FieldLegend variant="label" className="flex items-center gap-1">
+        Condition
+      </FieldLegend>
       {tree === undefined && (
         <p role="status" className="text-sm text-muted-foreground">
           Set a condition. The step keeps its saved condition until this is complete.

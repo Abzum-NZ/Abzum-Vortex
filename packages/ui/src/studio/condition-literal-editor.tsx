@@ -1,7 +1,7 @@
 "use client";
 import { Label } from "../components/label";
 import { useId } from "react";
-import { FieldError } from "../components/field";
+import { FieldError, FieldLegend } from "../components/field";
 import { Input } from "@vortex/ui/components/input";
 import { Textarea } from "@vortex/ui/components/textarea";
 import { StudioOptionControl } from "./studio-setting-controls";
@@ -233,7 +233,7 @@ export function LiteralEditor({
   if (semanticType === "date_time")
     return (
       <fieldset className="space-y-4">
-        <legend>{label}</legend>
+        <FieldLegend variant="label">{label}</FieldLegend>
         <Label className="flex flex-col items-stretch gap-2">
           Local date and time (whole seconds)
           <Input
@@ -277,7 +277,7 @@ export function LiteralEditor({
     const currency = typeof current.currency === "string" ? current.currency : "";
     return (
       <fieldset className="space-y-4">
-        <legend>{label}</legend>
+        <FieldLegend variant="label">{label}</FieldLegend>
         <Label className="flex flex-col items-stretch gap-2">
           Amount
           <Input

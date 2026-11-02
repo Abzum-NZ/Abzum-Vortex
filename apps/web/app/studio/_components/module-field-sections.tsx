@@ -1,4 +1,5 @@
 "use client";
+import { FieldLegend } from "@vortex/ui/components/field";
 
 import { Alert, AlertDescription, AlertTitle } from "@vortex/ui/components/alert";
 import { Button } from "@vortex/ui/components/button";
@@ -545,7 +546,9 @@ export function FieldFormsAndListsSection({
         ))}
       </div>
       <fieldset className="space-y-1.5">
-        <legend className="mb-1.5 text-sm font-medium">Also show it on</legend>
+        <FieldLegend variant="label" className="mb-1.5">
+          Also show it on
+        </FieldLegend>
         {offered.length === 0 ? (
           <p className="text-sm text-muted-foreground">
             {recordName} has no detail, list or form page with a list of fields yet.

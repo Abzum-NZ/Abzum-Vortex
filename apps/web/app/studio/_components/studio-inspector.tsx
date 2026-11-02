@@ -1,5 +1,6 @@
 "use client";
 import type { ReactNode } from "react";
+import { cn } from "@vortex/ui/lib/utils";
 import { Input } from "@vortex/ui/components/input";
 import { Textarea } from "@vortex/ui/components/textarea";
 import {
@@ -76,9 +77,21 @@ function LabelsForm({ labels }: Readonly<{ labels: StudioLabelsForm }>) {
  * The inspector's one footer: the primary action of a create form, pinned to the bottom of the
  * scroll body. It is the last child of the body, so it pins without touching the frame.
  */
-export function StudioInspectorFooter({ children }: Readonly<{ children: ReactNode }>) {
+export function StudioInspectorFooter({
+  children,
+  className,
+}: Readonly<{
+  children: ReactNode;
+  /** Another pane's padding, as negative margins and offset: the rail's is `-mx-4 -mb-3 -bottom-3`. */
+  className?: string;
+}>) {
   return (
-    <div className="sticky bottom-0 z-10 -mx-4 -mb-3 flex justify-end gap-2 border-t bg-background px-4 py-3">
+    <div
+      className={cn(
+        "sticky z-10 flex justify-end gap-2 border-t bg-background px-4 py-3",
+        className ?? "-bottom-3 -mx-4 -mb-3",
+      )}
+    >
       {children}
     </div>
   );

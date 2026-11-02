@@ -7076,13 +7076,16 @@
   }
 }
 
-/* Theme hooks of the shared components that have no style of their own in the generated sheet. */
+/*
+ * Theme hooks of the shared components that have no style of their own in the generated sheet. Each
+ * rule takes only theme tokens and inherited values, so a theme can restyle the component.
+ */
 .cn-spinner {
-  color: var(--muted-foreground, currentColor);
+  color: inherit;
 }
 
-.cn-collapsible-trigger {
-  border-radius: var(--radius-sm, 0.25rem);
+.cn-collapsible-trigger:not(.cn-button) {
+  border-radius: var(--radius-sm);
   cursor: pointer;
   &:focus-visible {
     outline: 2px solid var(--ring);
@@ -7095,5 +7098,5 @@
 }
 
 .cn-confirm-dialog {
-  max-width: min(28rem, calc(100vw - 2rem));
+  text-wrap: pretty;
 }

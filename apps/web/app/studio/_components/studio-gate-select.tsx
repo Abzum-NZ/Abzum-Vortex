@@ -77,9 +77,6 @@ export function StudioGateSelect({
           else if (key !== newChoice) onGate({ kind: "existing", key });
         }}
       />
-      {!allowCreate && (
-        <p className="text-xs text-muted-foreground">Create permissions in Access.</p>
-      )}
       {allowCreate && creating && (
         <form className="flex items-end gap-2" onSubmit={create}>
           <StudioField label="New permission">

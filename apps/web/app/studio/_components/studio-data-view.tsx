@@ -394,7 +394,7 @@ function RecordTypeInspector({
                     type="button"
                     variant="link"
                     size="xs"
-                    className="h-auto p-0 text-left text-sm text-foreground"
+                    className="h-auto whitespace-normal break-words p-0 text-left text-sm text-foreground"
                     onClick={() => onSelect({ kind: "query", moduleKey, queryKey: query.key })}
                   >
                     {query.label ?? query.key}

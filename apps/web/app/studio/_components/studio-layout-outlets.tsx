@@ -1,4 +1,5 @@
 "use client";
+import { FieldLegend } from "@vortex/ui/components/field";
 import { useState } from "react";
 import type {
   ApplicationSourceDocument,
@@ -141,7 +142,9 @@ function OutletSettings({
         )}
       </StudioField>
       <fieldset className="space-y-2" disabled={disabled}>
-        <legend className="mb-2 text-sm font-medium">Allowed child categories</legend>
+        <FieldLegend variant="label" className="mb-2">
+          Allowed child categories
+        </FieldLegend>
         {target?.categories.map(({ value: category, label }) => (
           <label key={category} className="flex items-center gap-2 text-sm">
             <Checkbox
@@ -232,10 +235,10 @@ export function StudioLayoutOutlets({
     return result.message;
   };
   return (
-    <StudioInspectorGroup title="Content outlets">
-      <p className="text-xs text-muted-foreground">
-        Required outlets bind every page. Empty content is valid.
-      </p>
+    <StudioInspectorGroup
+      title="Content outlets"
+      hint="Required outlets bind every page. Empty content is valid."
+    >
       <div className="divide-y">
         {shell.content_slots.map((outlet) => (
           <div key={outlet.id}>

@@ -1,4 +1,5 @@
 "use client";
+import { FieldLegend } from "@vortex/ui/components/field";
 import { Alert, AlertDescription } from "@vortex/ui/components/alert";
 import { useEffect, useState } from "react";
 import { Checkbox } from "@vortex/ui/components/checkbox";
@@ -421,13 +422,13 @@ export function StudioFlowStartEditor({
       >
         {shown.triggers.map((trigger, index) => (
           <fieldset key={index} className="space-y-2">
-            <legend className="text-sm font-medium">
+            <FieldLegend variant="label">
               {trigger.kind === "before_save"
                 ? "Before a record is saved"
                 : trigger.kind === "event"
                   ? "After a record changes"
                   : "After an event"}
-            </legend>
+            </FieldLegend>
             <TriggerEditor
               id={`flow-start-trigger-${index}`}
               trigger={trigger}
@@ -454,9 +455,9 @@ export function StudioFlowStartEditor({
         )}
         {shown.bindings.map((binding) => (
           <fieldset key={binding.id} className="space-y-2">
-            <legend className="text-sm font-medium">
+            <FieldLegend variant="label">
               {studioBindingSentence(controlLabel(binding.control), binding.event)}
-            </legend>
+            </FieldLegend>
             {shown.inputs.length === 0 && (
               <p role="status" className="text-sm text-muted-foreground">
                 The flow declares no inputs, so the control passes nothing.

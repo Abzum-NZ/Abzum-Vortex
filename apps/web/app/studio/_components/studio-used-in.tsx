@@ -80,7 +80,7 @@ export function StudioPlaceList({
                     variant="link"
                     size="xs"
                     aria-label={`Go to ${trail.join(" › ")}`}
-                    className="h-auto p-0 text-left text-sm text-foreground"
+                    className="h-auto whitespace-normal break-words p-0 text-left text-sm text-foreground"
                     onClick={() => {
                       onBeforeOpen?.();
                       opener.open(place.open);

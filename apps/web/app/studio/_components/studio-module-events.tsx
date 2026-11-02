@@ -1,4 +1,5 @@
 "use client";
+import { FieldLegend } from "@vortex/ui/components/field";
 import { Alert, AlertDescription } from "@vortex/ui/components/alert";
 import { useState, type FormEvent } from "react";
 import { saveInlineModuleEvent, type ApplicationSourceDocument } from "@vortex/platform/schema";
@@ -110,7 +111,7 @@ function EventDialog({
                 : undefined
             }
           >
-            <legend className="text-sm font-medium">Carried fields</legend>
+            <FieldLegend variant="label">Carried fields</FieldLegend>
             {record.fields.map((field) => (
               <div key={field.key} className="flex items-center gap-2">
                 <Checkbox

@@ -111,7 +111,7 @@ export function StudioBlockVisibility({
       <div className="space-y-2">
         <p className="flex items-center gap-1 text-sm font-medium">
           Permission gate
-          <StudioHelp hint="Show this block only to people who hold its permission. Page and menu permissions still apply. Clearing this gate adds no block permission requirement." />
+          <StudioHelp hint="Show this block only to people who hold its permission. Page and menu permissions still apply. Clearing this gate adds no block permission requirement. Create permissions in Access." />
         </p>
         {gate.kind === "available" ? (
           <StudioGateSelect

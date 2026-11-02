@@ -1,4 +1,5 @@
 "use client";
+import { StudioHelp } from "./studio-field";
 import { Alert, AlertDescription } from "../components/alert";
 import { useId } from "react";
 import {
@@ -444,7 +445,10 @@ export function StudioQueryBindings({
                 />
               ))}
             {source === "fixed" && input.type?.kind === "date_time" && (
-              <p className="text-xs text-muted-foreground">Date and time in UTC.</p>
+              <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                UTC
+                <StudioHelp hint="Date and time in UTC." />
+              </span>
             )}
             {source === "relative_date" && (
               <>

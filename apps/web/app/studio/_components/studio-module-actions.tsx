@@ -1,4 +1,5 @@
 "use client";
+import { FieldLegend } from "@vortex/ui/components/field";
 import { Alert, AlertDescription } from "@vortex/ui/components/alert";
 import { useMemo, useState, type FormEvent } from "react";
 import {
@@ -198,7 +199,7 @@ export function ActionDialog({
           </div>
           <StudioActionInputs inputs={inputs} source={source} onChange={changeInputs} />
           <fieldset className="space-y-2">
-            <legend className="text-sm font-medium">Runs only when</legend>
+            <FieldLegend variant="label">Runs only when</FieldLegend>
             {projected.kind === "unsupported" && !replacing ? (
               <div className="space-y-2 text-sm">
                 <p>
