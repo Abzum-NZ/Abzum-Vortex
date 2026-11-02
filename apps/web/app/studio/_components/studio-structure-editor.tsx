@@ -16,6 +16,7 @@ import {
 import { Checkbox } from "@vortex/ui/components/checkbox";
 import { useConfirm } from "@vortex/ui/components/confirm-dialog";
 import { Input } from "@vortex/ui/components/input";
+import { Label } from "@vortex/ui/components/label";
 import {
   Dialog,
   DialogContent,
@@ -273,14 +274,14 @@ export function StudioStructureEditor({
                   />
                 )}
               </StudioField>
-              <label className="flex items-center gap-2 text-sm">
+              <Label className="gap-2 text-sm">
                 <Checkbox
                   checked={addToMenu}
                   disabled={disabled}
                   onCheckedChange={(checked) => setAddToMenu(checked === true)}
                 />
                 Show it in the menu
-              </label>
+              </Label>
             </>
           )}
           <div className="flex gap-2">

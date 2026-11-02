@@ -25,6 +25,7 @@ import { ToggleGroup, ToggleGroupItem } from "@vortex/ui/components/toggle-group
 import { Checkbox } from "@vortex/ui/components/checkbox";
 import { useConfirm } from "@vortex/ui/components/confirm-dialog";
 import { Input } from "@vortex/ui/components/input";
+import { Label } from "@vortex/ui/components/label";
 import { Notice } from "@vortex/ui/components/notice";
 import {
   Table,
@@ -582,7 +583,7 @@ export function StudioAccessRoleEditor({
                               <TableCell colSpan={studioAccessColumns.length + 2}>
                                 <div className="flex flex-wrap gap-3 text-sm">
                                   {row.more.map((permission) => (
-                                    <label key={permission.key} className="flex items-center gap-1">
+                                    <Label key={permission.key} className="gap-1">
                                       <Grant
                                         role={role}
                                         permission={permission}
@@ -591,7 +592,7 @@ export function StudioAccessRoleEditor({
                                         run={run}
                                       />
                                       {permission.label}
-                                    </label>
+                                    </Label>
                                   ))}
                                 </div>
                               </TableCell>

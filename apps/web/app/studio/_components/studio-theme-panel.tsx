@@ -3,6 +3,7 @@ import { useState } from "react";
 import type { SourceApplicationThemeSelection } from "@vortex/platform/schema";
 import { createVortexStyleRootProps, Icon, VORTEX_STYLES } from "@vortex/ui";
 import { Button } from "@vortex/ui/components/button";
+import { FieldLabel } from "@vortex/ui/components/field";
 import { Input } from "@vortex/ui/components/input";
 import { InputGroup, InputGroupInput, InputGroupAddon } from "@vortex/ui/components/input-group";
 import { Notice } from "@vortex/ui/components/notice";
@@ -50,16 +51,14 @@ function StylePreview({ style }: Readonly<{ style: string }>) {
   if (props === undefined) throw new Error(`No preview for catalogue style ${style}`);
   return (
     <div {...props} data-vortex-theme="" aria-hidden="true" inert>
-      <div style={{ zoom: 0.65 }}>
-        <div className="space-y-3 bg-background p-3 text-foreground">
-          <p className="text-sm font-semibold">Overview</p>
+      <div className="space-y-3 bg-background p-3 text-foreground">
+        <p className="text-sm font-semibold">Overview</p>
 
-          <div className="flex items-center gap-2">
-            <Input placeholder="Search" tabIndex={-1} />
-            <Button type="button" tabIndex={-1}>
-              Go
-            </Button>
-          </div>
+        <div className="flex flex-col items-start gap-2">
+          <Input placeholder="Search" tabIndex={-1} />
+          <Button type="button" tabIndex={-1}>
+            Go
+          </Button>
         </div>
       </div>
     </div>
@@ -113,13 +112,14 @@ function ThemePresetCard({
   onPick: () => void;
 }>) {
   return (
-    <button
+    <Button
       type="button"
+      variant="outline"
       aria-pressed={selected}
       disabled={disabled}
       onClick={onPick}
       className={cn(
-        "space-y-2 rounded-lg border p-2 text-left transition-colors hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50",
+        "h-auto flex-col items-stretch justify-start gap-2 p-2 text-left whitespace-normal",
         selected && "ring-2 ring-primary",
       )}
     >
@@ -129,7 +129,7 @@ function ThemePresetCard({
         <PresetPreview preset={preset} mode="light" />
         <PresetPreview preset={preset} mode="dark" />
       </div>
-    </button>
+    </Button>
   );
 }
 
@@ -402,10 +402,11 @@ export function StudioThemePanel({
           className="grid grid-cols-2 gap-3"
         >
           {dimension("style").options.map((option) => (
-            <div
+            <FieldLabel
               key={option.id}
+              htmlFor={`studio-theme-style-${option.id}`}
               className={cn(
-                "relative cursor-pointer space-y-2 rounded-lg p-2 hover:bg-accent focus-within:ring-2 focus-within:ring-ring",
+                "w-full cursor-pointer flex-col items-stretch gap-2 rounded-lg p-2 hover:bg-accent focus-within:ring-2 focus-within:ring-ring",
                 selection.style === option.id && "ring-2 ring-primary",
                 locked && "cursor-not-allowed opacity-50",
               )}
@@ -423,13 +424,7 @@ export function StudioThemePanel({
               >
                 {option.label}
               </span>
-              {/* The whole tile selects the radio; sample controls remain inert and outside its label. */}
-              <label
-                htmlFor={`studio-theme-style-${option.id}`}
-                aria-hidden="true"
-                className="absolute inset-0 cursor-inherit"
-              />
-            </div>
+            </FieldLabel>
           ))}
         </RadioGroup>
       </StudioInspectorGroup>

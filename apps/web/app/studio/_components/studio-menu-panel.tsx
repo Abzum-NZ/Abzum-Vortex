@@ -21,6 +21,8 @@ import { Icon, IconLibraryProvider } from "@vortex/ui";
 import { Button } from "@vortex/ui/components/button";
 import { useConfirm } from "@vortex/ui/components/confirm-dialog";
 import { Input } from "@vortex/ui/components/input";
+import { ToggleGroup, ToggleGroupItem } from "@vortex/ui/components/toggle-group";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@vortex/ui/components/tooltip";
 import { cn } from "@vortex/ui/lib/utils";
 import {
   studioMenuPageChoices,
@@ -587,31 +589,34 @@ function StudioMenuEntryEditor({
           Icon
           <StudioHelp hint="Drawn from the application's icon library, chosen in Theme." />
         </FieldLegend>
-        <div role="radiogroup" aria-label="Icon" className="grid grid-cols-7 gap-1">
+        <ToggleGroup
+          aria-label="Icon"
+          value={[item.icon]}
+          disabled={disabled}
+          onValueChange={(next) => {
+            const chosen = VORTEX_ICON_NAMES.find((name) => name === next[0]);
+            if (chosen !== undefined && chosen !== item.icon)
+              change({ kind: "change", alias: item.id, changes: { icon: chosen } });
+          }}
+          className="grid w-full grid-cols-7 gap-1"
+        >
           {VORTEX_ICON_NAMES.map((name: VortexIconName) => (
-            <button
-              key={name}
-              type="button"
-              role="radio"
-              aria-checked={item.icon === name}
-              aria-label={name.replaceAll("-", " ")}
-              title={name.replaceAll("-", " ")}
-              disabled={disabled}
-              onClick={() => {
-                if (item.icon !== name)
-                  change({ kind: "change", alias: item.id, changes: { icon: name } });
-              }}
-              className={cn(
-                "flex aspect-square items-center justify-center rounded-md border outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                item.icon === name
-                  ? "border-primary bg-accent"
-                  : "border-transparent hover:bg-accent",
-              )}
-            >
-              <Icon name={name} className="size-4" />
-            </button>
+            <Tooltip key={name}>
+              <TooltipTrigger
+                render={
+                  <ToggleGroupItem
+                    value={name}
+                    aria-label={name.replaceAll("-", " ")}
+                    className="aspect-square h-auto w-full min-w-0"
+                  />
+                }
+              >
+                <Icon name={name} className="size-4" />
+              </TooltipTrigger>
+              <TooltipContent>{name.replaceAll("-", " ")}</TooltipContent>
+            </Tooltip>
           ))}
-        </div>
+        </ToggleGroup>
       </fieldset>
       {item.type === "page" && (
         <StudioField

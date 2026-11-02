@@ -144,9 +144,10 @@ export function StudioSaveState({ draft }: Readonly<{ draft: StudioDraft }>) {
             <PopoverTrigger
               aria-label={`${label}: show save details`}
               render={
-                <button
+                <Button
                   type="button"
-                  className="rounded-full border-0 bg-transparent p-0 outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  variant="ghost"
+                  className="h-auto rounded-full p-0 hover:bg-transparent"
                 />
               }
             >
@@ -191,9 +192,10 @@ export function StudioSaveState({ draft }: Readonly<{ draft: StudioDraft }>) {
           <Tooltip>
             <TooltipTrigger
               render={
-                <button
+                <Button
                   type="button"
-                  className="rounded-full border-0 bg-transparent p-0 outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  variant="ghost"
+                  className="h-auto rounded-full p-0 hover:bg-transparent"
                 />
               }
             >
