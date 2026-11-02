@@ -14,6 +14,8 @@ declare
   installation jsonb;
   preview_installation jsonb;
   preview_installation_id_value uuid;
+  target_content jsonb;
+  projection_evidence jsonb;
   binding_item jsonb;
   module_content jsonb;
   application_content jsonb;
@@ -104,23 +106,7 @@ begin
           return pg_catalog.jsonb_build_object('outcome', 'refused');
         end if;
       end if;
-      for permission_item in
-        select item.value
-        from pg_catalog.jsonb_array_elements(
-          coalesce(module_content -> 'permissions', '[]'::jsonb)
-        ) as item(value)
-        where (item.value ->> 'recordTypeId')::uuid = p_record_type_id
-          and item.value ->> 'actionKind' = p_action_kind
-          and (item.value ->> 'namedAction') is null
-      loop
-        required_permissions := required_permissions || pg_catalog.jsonb_build_array(
-          pg_catalog.jsonb_build_object(
-            'applicationRootId', application_root_id_value,
-            'ownerKind', 'module', 'ownerId', target_module_root_id,
-            'permissionId', (permission_item ->> 'permissionId')::uuid
-          )
-        );
-      end loop;
+      target_content := module_content;
     end if;
   end loop;
 
@@ -135,8 +121,49 @@ begin
     if preview_installation is not null and p_action_kind <> 'read' then
       return pg_catalog.jsonb_build_object('outcome', 'refused');
     end if;
+    if preview_installation is not null then
+      -- Its record type, fields and permissions are the installed release's, never the draft's: a
+      -- preview whose record type or permissions differ from the installed ones, or whose
+      -- Application has no active installation of the Module, is refused.
+      projection_evidence := vortex_record.read_installed_projection_internal(
+        preview_installation, target_module_root_id, p_record_type_id
+      );
+      if projection_evidence is null then
+        return pg_catalog.jsonb_build_object('outcome', 'refused');
+      end if;
+      installation := projection_evidence -> 'installation';
+      target_content := vortex_record.with_installed_record_contributions_internal(
+        projection_evidence -> 'recordContent',
+        (context_value ->> 'organizationId')::uuid,
+        target_module_root_id
+      );
+      select item.value into strict record_type_value
+      from pg_catalog.jsonb_array_elements(target_content -> 'recordTypes') as item(value)
+      where (item.value ->> 'recordTypeId')::uuid = p_record_type_id;
+      target_release_revision := (projection_evidence ->> 'moduleReleaseRevision')::bigint;
+      release_storage_contract_id := (record_type_value ->> 'storageContractId')::uuid;
+      target_storage_contract_id := release_storage_contract_id;
+    end if;
     preview_installation_id_value := null;
   end if;
+
+  for permission_item in
+    select item.value
+    from pg_catalog.jsonb_array_elements(
+      coalesce(target_content -> 'permissions', '[]'::jsonb)
+    ) as item(value)
+    where (item.value ->> 'recordTypeId')::uuid = p_record_type_id
+      and item.value ->> 'actionKind' = p_action_kind
+      and (item.value ->> 'namedAction') is null
+  loop
+    required_permissions := required_permissions || pg_catalog.jsonb_build_array(
+      pg_catalog.jsonb_build_object(
+        'applicationRootId', application_root_id_value,
+        'ownerKind', 'module', 'ownerId', target_module_root_id,
+        'permissionId', (permission_item ->> 'permissionId')::uuid
+      )
+    );
+  end loop;
 
   select catalogue.* into catalogue_row
   from vortex_record.storage_catalogue as catalogue
@@ -192,10 +219,16 @@ begin
     );
   end loop;
 
-  select release.record_content into strict application_content
-  from vortex_definition.runtime_releases as release
-  where release.root_id = application_root_id_value
-    and release.release_revision = (installation ->> 'applicationReleaseRevision')::bigint;
+  -- A projection read from a preview takes the installed Application's content from the same
+  -- evidence that proved its record type and permissions; every other read takes the release.
+  if projection_evidence is not null then
+    application_content := projection_evidence -> 'applicationRecordContent';
+  else
+    select release.record_content into strict application_content
+    from vortex_definition.runtime_releases as release
+    where release.root_id = application_root_id_value
+      and release.release_revision = (installation ->> 'applicationReleaseRevision')::bigint;
+  end if;
   for permission_item in
     select item.value
     from pg_catalog.jsonb_array_elements(

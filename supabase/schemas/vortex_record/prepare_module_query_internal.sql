@@ -261,13 +261,8 @@ begin
       -- A system projection has no preview copy: it is the platform's live read model, which a
       -- preview reads on the live path, under the reader's own live access and never under the
       -- preview's roles.
-      if resolved is null then
-        resolved := vortex_record.resolve_installed_module_query_internal(p_module_root_id, p_query_id);
-        if resolved -> 'recordType' ? 'systemProjection' then
-          preview_mode := false;
-        else
-          resolved := null;
-        end if;
+      if resolved -> 'recordType' ? 'systemProjection' then
+        preview_mode := false;
       end if;
     exception
       -- A refused access context or a stale preview is the expected refusal; any
@@ -311,11 +306,6 @@ begin
   query_item := resolved -> 'query';
   record_type_item := resolved -> 'recordType';
   record_type_id_value := (resolved ->> 'recordTypeId')::uuid;
-  -- A preview reads its copy of the records with their stored totals and calculations; a system
-  -- projection is read only through its protected reader, never from a preview.
-  if preview_mode and record_type_item ? 'systemProjection' then
-    return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'descriptor_invalid');
-  end if;
   if prepared_plan is null then
     prepared_plan := pg_catalog.jsonb_build_object(
       'outcome', 'prepared',

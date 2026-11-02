@@ -698,7 +698,7 @@ export function StudioFlowCanvas({
             nodeTypes={nodeTypes}
             edgeTypes={edgeTypes}
             colorMode={appearance}
-            className="bg-background!"
+            className="bg-background! [&_.react-flow__attribution]:bg-card/80! [&_.react-flow__attribution_a]:text-muted-foreground!"
             fitView
             fitViewOptions={{ maxZoom: 1 }}
             nodesDraggable={false}
@@ -706,7 +706,6 @@ export function StudioFlowCanvas({
             edgesFocusable={false}
             deleteKeyCode={null}
             elementsSelectable
-            proOptions={{ hideAttribution: true }}
             onNodeClick={(_, clicked) => selectNode(clicked)}
             onKeyDown={(event) => {
               const target = event.target;
