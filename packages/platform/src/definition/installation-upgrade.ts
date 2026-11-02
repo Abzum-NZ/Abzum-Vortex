@@ -33,7 +33,7 @@ import {
   InstallationProblem,
   installationOperation,
   installationProblem,
-  installationUpgradeTargetFacts,
+  installationTargetFacts,
   readInstallationAuthorityDeadlines,
   readInstallationDatabaseTime,
   readInstallationHumanContext,
@@ -638,7 +638,7 @@ const coordinatorFor = (
       createBuilderAuthority({
         transaction,
         scope,
-        targetFacts: installationUpgradeTargetFacts,
+        targetFacts: installationTargetFacts,
         permissions: environment.permissions,
       }),
     containsCustomComponents: environment.containsCustomComponents,

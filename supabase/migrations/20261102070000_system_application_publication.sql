@@ -11,6 +11,8 @@ set role vortex_owner;
 -- actions, or changes a permission or role (the steward's working way to manage access).
 -- (2) restore_release_draft and read_release_for_restore no longer refuse a platform system
 -- Application: the draft guard they already call demands both permissions for it.
+-- (3) read_application_latest_release reads a platform system Application's latest version too, for
+-- the upgrade review.
 -- No earlier migration rewrites any of these functions in place (the regprocedures were
 -- searched): the bodies below are the whole definitions and equal the canonical files in
 -- supabase/schemas.
@@ -2146,5 +2148,85 @@ comment on function vortex_definition.read_release_for_restore(text, uuid, bigin
   'Returns narrow private evidence needed to verify one immutable source before restoring its draft.';
 
 alter function vortex_definition.read_release_for_restore(p_kind text, p_root_id uuid, p_release_revision bigint) owner to vortex_owner;
+
+-- The latest published version of one ordinary Application of the request's organisation, for a
+-- person who may manage the organisation's application installations. Installing and upgrading are
+-- anchored to it; no draft right is needed.
+create or replace function vortex_definition.read_application_latest_release(
+  p_application_root_id uuid
+)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $function$
+declare
+  checked_context jsonb;
+  permission_decision record;
+  latest jsonb;
+begin
+  if p_application_root_id is null
+    or p_application_root_id = '00000000-0000-0000-0000-000000000000'::uuid then
+    raise exception using errcode = '22023',
+      message = 'Application latest release selector is invalid';
+  end if;
+
+  checked_context := vortex_access.validated_human_request_context();
+  if checked_context is null
+    or checked_context ->> 'callerKind' is distinct from 'human' then
+    raise exception using errcode = '42501',
+      message = 'Application latest release authority is unavailable';
+  end if;
+
+  select evaluated.* into strict permission_decision
+  from vortex_access.evaluate_organization_permission_eligibility(
+    pg_catalog.jsonb_build_object(
+      'operationKey', 'platform.organization.applications.manage',
+      'action', pg_catalog.jsonb_build_object('actionKind', 'manage'),
+      'target', pg_catalog.jsonb_build_object('kind', 'organization'),
+      'requiredPermission', pg_catalog.jsonb_build_object(
+        'ownerKind', 'platform',
+        'ownerId', vortex_access.platform_permission_owner_id(),
+        'permissionId', vortex_access.platform_permission_id('platform.organization.applications.manage')
+      ),
+      'recentAuthentication', pg_catalog.jsonb_build_object('kind', 'none'),
+      'authority', pg_catalog.jsonb_build_object('kind', 'permission')
+    )
+  ) as evaluated;
+  if permission_decision.outcome is distinct from 'eligible'
+    or (checked_context ->> 'organizationId')::uuid <> permission_decision.organization_id
+    or (checked_context ->> 'organizationAccountId')::uuid <>
+      permission_decision.organization_account_id
+    or (checked_context ->> 'accessVersion')::bigint <> permission_decision.access_version
+    or (checked_context ->> 'correlationId')::uuid <> permission_decision.correlation_id then
+    raise exception using errcode = '42501',
+      message = 'Application latest release authority is unavailable';
+  end if;
+
+  select pg_catalog.jsonb_build_object(
+    'definitionKey', root.key,
+    'releaseRevision', release.release_revision,
+    'releaseVersion', release.release_version,
+    'releaseNote', release.release_note
+  ) into latest
+  from vortex_definition.roots as root
+  join vortex_definition.releases as release
+    on release.root_id = root.root_id
+    and release.release_revision = root.current_release_revision
+  where root.root_id = p_application_root_id
+    and root.organization_id = (checked_context ->> 'organizationId')::uuid
+    and root.kind = 'application';
+  return latest;
+end
+$function$;
+
+revoke all on function vortex_definition.read_application_latest_release(uuid)
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_record_adapter;
+grant execute on function vortex_definition.read_application_latest_release(uuid)
+  to vortex_request, postgres;
+comment on function vortex_definition.read_application_latest_release(uuid) is
+  'Returns the latest published version of one Application, ordinary or platform system, of the request organisation to a caller holding platform.organization.applications.manage, or null when it has none.';
+alter function vortex_definition.read_application_latest_release(uuid) owner to vortex_owner;
 
 reset role;

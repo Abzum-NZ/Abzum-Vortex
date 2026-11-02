@@ -172,18 +172,11 @@ export const readInstallationUpgradeRoot = async (
   return { isSystemApplication: origin === "platform_system_application" };
 };
 
-/** The target facts of the upgrade flow. */
-export const installationUpgradeTargetFacts = async (
-  transaction: RequestDatabaseTransaction,
-  _scope: SelectedOrganizationScope,
-  rootId: string | undefined,
-) => {
-  if (rootId === undefined)
-    installationProblem("application_root_missing", "refused", "unsupported_root");
-  return readInstallationUpgradeRoot(transaction, rootId);
-};
-
-/** The target facts of the Studio installation flows: only ordinary applications are installable. */
+/**
+ * The target facts of the Studio installation flows: whether the root is a platform system
+ * application, which the builder authority refuses to uninstall or purge and lets a person upgrade.
+ * Installing, removing and purging also prove the root ordinary themselves.
+ */
 export const installationTargetFacts = async (
   transaction: RequestDatabaseTransaction,
   _scope: SelectedOrganizationScope,
@@ -191,7 +184,7 @@ export const installationTargetFacts = async (
 ) => {
   if (rootId === undefined)
     installationProblem("application_root_missing", "refused", "unsupported_root");
-  return readInstallationOrdinaryRoot(transaction, rootId);
+  return readInstallationUpgradeRoot(transaction, rootId);
 };
 
 const installationPermissionDeclaration = (

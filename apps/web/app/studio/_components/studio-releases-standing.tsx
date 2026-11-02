@@ -28,18 +28,6 @@ const standingWords = (
   reviewRoles?: string;
 }> | null => {
   switch (standing.kind) {
-    case "system":
-      return standing.installedVersion === standing.version
-        ? {
-            icon: "shield-check",
-            headline: "System application",
-            text: `Version ${standing.version} is live in your organisation.`,
-          }
-        : {
-            icon: "clock",
-            headline: "A newer version is waiting",
-            text: `Your organisation runs version ${standing.installedVersion}; version ${standing.version} is waiting. Upgrade it in the App Store.`,
-          };
     case "live":
       return {
         icon: "check",

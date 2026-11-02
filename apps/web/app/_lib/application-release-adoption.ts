@@ -134,13 +134,6 @@ const readApplicationOpenHref = async (
 /** Where the application stands in the builder's organisation, as the App Store's review says it. */
 export type ApplicationReleaseStanding =
   | Readonly<{
-      kind: "system";
-      version: string;
-      installedVersion: string;
-      appStoreHref: string;
-      openHref?: string;
-    }>
-  | Readonly<{
       kind: "live";
       version: string;
       rolesWaiting: boolean;
@@ -281,17 +274,26 @@ export const readApplicationReleaseStanding = async (
       );
       return { kind: "unknown" };
     }
+    const systemStoreHref = appStoreApplicationHref(
+      scope.tenantShortName,
+      scope.organizationShortName,
+      appStore.value,
+      scope.applicationRootId,
+    );
+    if (installedVersion !== version)
+      return {
+        kind: "waiting",
+        version,
+        installedVersion,
+        appStoreHref: systemStoreHref,
+        mayInstall: (await mayManageApplications(session, scope.organizationId)) === true,
+      };
     const openHref = await readApplicationOpenHref(session, scope);
     return {
-      kind: "system",
+      kind: "live",
       version,
-      installedVersion,
-      appStoreHref: appStoreApplicationHref(
-        scope.tenantShortName,
-        scope.organizationShortName,
-        appStore.value,
-        scope.applicationRootId,
-      ),
+      rolesWaiting: false,
+      appStoreHref: systemStoreHref,
       ...(openHref === undefined ? {} : { openHref }),
     };
   }
