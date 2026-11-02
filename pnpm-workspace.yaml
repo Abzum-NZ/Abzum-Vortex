@@ -49,6 +49,8 @@ catalog:
   file-type: 22.3.0
   exceljs: 4.4.0
   "@noble/hashes": 2.4.0
+  react-resizable-panels: 4.14.8
+  cmdk: 1.1.1
 
 catalogMode: strict
 

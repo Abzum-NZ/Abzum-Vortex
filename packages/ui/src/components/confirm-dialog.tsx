@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState, type ReactElement, type ReactNode } from "react";
 import { Button } from "./button";
+import { ScrollArea } from "./scroll-area";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -124,7 +125,9 @@ export function useConfirm(): readonly [(prompt: ConfirmPrompt) => Promise<boole
           </AlertDialogDescription>
         </AlertDialogHeader>
         {prompt?.details !== undefined && (
-          <div className="max-h-80 space-y-2 overflow-y-auto text-sm">{prompt.details}</div>
+          <ScrollArea className="cn-confirm-dialog-details flex max-h-80 flex-col text-sm">
+            <div className="space-y-2">{prompt.details}</div>
+          </ScrollArea>
         )}
         <AlertDialogFooter>
           <AlertDialogCancel onClick={() => answerByPress(false)}>

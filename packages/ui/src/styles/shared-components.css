@@ -7097,6 +7097,201 @@
   text-wrap: pretty;
 }
 
+.cn-notice-link {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  border-radius: var(--radius-sm);
+  &:hover {
+    color: var(--foreground);
+  }
+  &:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+}
+
+.cn-notice-actions {
+  margin-top: calc(var(--spacing, 0.25rem) * 2);
+  gap: var(--spacing, 0.25rem);
+}
+
+.cn-collapsible-content {
+  overflow: hidden;
+}
+
 .cn-confirm-dialog {
   text-wrap: pretty;
+}
+
+.cn-confirm-dialog-details {
+  min-height: 0;
+}
+
+.cn-skeleton {
+  border-radius: var(--radius-md);
+  background-color: var(--muted);
+}
+
+.cn-scroll-area-viewport:focus-visible {
+  outline: 1px solid var(--ring);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--ring) 50%, transparent);
+}
+
+.cn-scroll-area-scrollbar {
+  padding: 1px;
+  &[data-orientation="vertical"] {
+    height: 100%;
+    width: calc(var(--spacing, 0.25rem) * 2.5);
+    border-left: 1px solid transparent;
+  }
+  &[data-orientation="horizontal"] {
+    height: calc(var(--spacing, 0.25rem) * 2.5);
+    border-top: 1px solid transparent;
+  }
+}
+
+.cn-scroll-area-thumb {
+  border-radius: calc(infinity * 1px);
+  background-color: var(--border);
+}
+
+.cn-resizable-handle {
+  background-color: var(--border);
+  &[aria-orientation="vertical"] {
+    width: 1px;
+    &::after {
+      content: "";
+      position: absolute;
+      inset-block: 0;
+      left: 50%;
+      width: var(--spacing, 0.25rem);
+      translate: -50% 0;
+    }
+  }
+  &[aria-orientation="horizontal"] {
+    height: 1px;
+    width: 100%;
+    &::after {
+      content: "";
+      position: absolute;
+      inset-inline: 0;
+      top: 50%;
+      height: var(--spacing, 0.25rem);
+      translate: 0 -50%;
+    }
+    & > .cn-resizable-handle-grip {
+      rotate: 90deg;
+    }
+  }
+  &:hover,
+  &[data-separator="active"],
+  &:focus-visible {
+    background-color: var(--ring);
+  }
+  &:focus-visible {
+    outline: 1px solid var(--ring);
+  }
+}
+
+.cn-resizable-handle-grip {
+  height: calc(var(--spacing, 0.25rem) * 6);
+  width: calc(var(--spacing, 0.25rem) * 3);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background-color: var(--background);
+  color: var(--muted-foreground);
+}
+
+.cn-command {
+  border-radius: var(--radius-xl);
+  background-color: var(--popover);
+  padding: var(--spacing, 0.25rem);
+  color: var(--popover-foreground);
+}
+
+.cn-command-dialog {
+  border-radius: var(--radius-xl);
+}
+
+.cn-command-input-wrapper {
+  padding: var(--spacing, 0.25rem);
+  padding-bottom: 0;
+}
+
+.cn-command-input-group {
+  height: calc(var(--spacing, 0.25rem) * 8);
+  border-radius: var(--radius-lg);
+  box-shadow: none;
+}
+
+.cn-command-input {
+  background-color: transparent;
+  font-size: var(--text-sm, 0.875rem);
+  &:disabled {
+    opacity: 0.5;
+  }
+}
+
+.cn-command-input-icon {
+  opacity: 0.5;
+}
+
+.cn-command-list {
+  max-height: calc(var(--spacing, 0.25rem) * 72);
+  scroll-padding-block: var(--spacing, 0.25rem);
+}
+
+.cn-command-empty {
+  padding-block: calc(var(--spacing, 0.25rem) * 6);
+  font-size: var(--text-sm, 0.875rem);
+}
+
+.cn-command-group {
+  padding: var(--spacing, 0.25rem);
+  color: var(--foreground);
+  & [cmdk-group-heading] {
+    padding: calc(var(--spacing, 0.25rem) * 1.5) calc(var(--spacing, 0.25rem) * 2);
+    font-size: var(--text-xs, 0.75rem);
+    font-weight: 500;
+    color: var(--muted-foreground);
+  }
+}
+
+.cn-command-separator {
+  margin-inline: calc(var(--spacing, 0.25rem) * -1);
+  height: 1px;
+  background-color: var(--border);
+}
+
+.cn-command-item {
+  gap: calc(var(--spacing, 0.25rem) * 2);
+  border-radius: var(--radius-sm);
+  padding: calc(var(--spacing, 0.25rem) * 1.5) calc(var(--spacing, 0.25rem) * 2);
+  font-size: var(--text-sm, 0.875rem);
+  outline: none;
+  &[data-disabled="true"] {
+    opacity: 0.5;
+  }
+  &[data-selected="true"] {
+    background-color: var(--muted);
+    color: var(--foreground);
+  }
+  & svg:not([class*="size-"]) {
+    width: calc(var(--spacing, 0.25rem) * 4);
+    height: calc(var(--spacing, 0.25rem) * 4);
+  }
+}
+
+.cn-command-dialog .cn-command-item {
+  border-radius: var(--radius-lg);
+}
+
+.cn-command-shortcut {
+  font-size: var(--text-xs, 0.75rem);
+  letter-spacing: 0.1em;
+  color: var(--muted-foreground);
+}
+
+.cn-command-item[data-selected="true"] .cn-command-shortcut {
+  color: var(--foreground);
 }
