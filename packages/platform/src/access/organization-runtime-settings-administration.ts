@@ -51,6 +51,33 @@ export const readCurrentOrganizationRuntimeSettingsAfterAuthorization = async (
 };
 
 /**
+ * The locale and time zone the viewer reads dates in: those on their own organisation account,
+ * else the organisation's. The page frame and the export read it here, so a file shows dates as
+ * the grid does.
+ */
+export const readViewerPresentationAfterAuthorization = async (
+  transaction: RequestDatabaseTransaction,
+): Promise<Readonly<{ locale: string; timeZone: string }>> => {
+  const rows = await transaction.query<{ language: unknown; time_zone: unknown }>`
+    select language, time_zone from vortex_access.read_own_profile()
+  `;
+  const own = rows[0];
+  if (rows.length !== 1 || own === undefined) throw new Error("FRAME_PROFILE_UNAVAILABLE");
+  const organization = await readCurrentOrganizationRuntimeSettingsAfterAuthorization(transaction);
+  const locale =
+    own.language === null
+      ? organization?.language
+      : organizationRuntimeSettingsSchema.shape.language.parse(own.language);
+  const timeZone =
+    own.time_zone === null
+      ? organization?.timeZone
+      : organizationRuntimeSettingsSchema.shape.timeZone.parse(own.time_zone);
+  if (locale === undefined || timeZone === undefined)
+    throw new Error("FRAME_PRESENTATION_SETTINGS_UNAVAILABLE");
+  return { locale, timeZone };
+};
+
+/**
  * Reads the App Store address an administrator entered in the current organisation's settings:
  * `null` when none is set, `invalid` when the entry is not an application address.
  */

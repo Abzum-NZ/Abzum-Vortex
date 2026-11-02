@@ -5,7 +5,7 @@ import { headers } from "next/headers";
 import {
   DEFAULT_PLATFORM_THEME_RELEASE,
   PREVIEW_SEED_RECORD_BOUND,
-  readCurrentOrganizationRuntimeSettingsAfterAuthorization,
+  readViewerPresentationAfterAuthorization,
   runtimeContextSelection,
   runtimePreviewOf,
   type InstalledRuntimeContext,
@@ -13,7 +13,6 @@ import {
 import {
   type ProjectedNavigation,
   type IdentitySession,
-  organizationRuntimeSettingsSchema,
   sameId,
   compiledPageShellId,
   splitProjectedPage,
@@ -102,26 +101,7 @@ const readViewerPresentation = async (
   const result = await humanOrganizationRequests().run(
     session,
     runtimeContextSelection(context),
-    async (transaction) => {
-      const rows = await transaction.query<{ language: unknown; time_zone: unknown }>`
-        select language, time_zone from vortex_access.read_own_profile()
-      `;
-      const own = rows[0];
-      if (rows.length !== 1 || own === undefined) throw new Error("FRAME_PROFILE_UNAVAILABLE");
-      const organization =
-        await readCurrentOrganizationRuntimeSettingsAfterAuthorization(transaction);
-      const locale =
-        own.language === null
-          ? organization?.language
-          : organizationRuntimeSettingsSchema.shape.language.parse(own.language);
-      const timeZone =
-        own.time_zone === null
-          ? organization?.timeZone
-          : organizationRuntimeSettingsSchema.shape.timeZone.parse(own.time_zone);
-      if (locale === undefined || timeZone === undefined)
-        throw new Error("FRAME_PRESENTATION_SETTINGS_UNAVAILABLE");
-      return { locale, timeZone };
-    },
+    readViewerPresentationAfterAuthorization,
   );
   if (result.kind !== "available")
     throw new Error(`FRAME_PRESENTATION_READ_${result.kind.toUpperCase()}`);

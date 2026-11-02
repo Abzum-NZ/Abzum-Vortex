@@ -4,7 +4,6 @@ export {
   prepareRecordsExport,
   recordsCsvFormat,
   recordsXlsxFormat,
-  type RecordsXlsxColumn,
   type RecordsExportCell,
   type RecordsExportPage,
   type RecordsExportFormat,

@@ -10,7 +10,7 @@ import { Icon } from "../icons/icon";
 import { cn } from "../lib/utils";
 import type { DisplayTableGroup } from "./projected-data";
 import { TableTotals, TotalValues } from "./table-totals";
-import { recordsPhrase } from "./date-format";
+import { recordsPhrase } from "@vortex/platform/schema";
 import type { GridGroupCell } from "./table-grid";
 import { memberKey, type GroupedTable } from "./table-groups-state";
 

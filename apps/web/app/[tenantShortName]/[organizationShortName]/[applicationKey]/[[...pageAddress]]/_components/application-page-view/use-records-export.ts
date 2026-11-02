@@ -1,5 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { RecordsSelectionInput, RecordsTableExportFormat } from "@vortex/platform/schema";
+import type {
+  RecordsSelectionInput,
+  RecordsTableExportFormat,
+  RecordsTableExportValues,
+} from "@vortex/platform/schema";
 import type {
   DisplaySemanticEvent,
   DisplayTableExportRun,
@@ -60,6 +64,7 @@ export function useRecordsExport({
       held: SelectedRecords | undefined,
       scope: DisplayTableExportScope,
       format: RecordsTableExportFormat,
+      values: RecordsTableExportValues,
     ): Promise<void> => {
       if (controllers.current.has(placementId)) return;
       let selection: RecordsSelectionInput;
@@ -87,6 +92,7 @@ export function useRecordsExport({
           model,
           placementId,
           format,
+          values,
           selection,
           token,
           table,
@@ -112,7 +118,7 @@ export function useRecordsExport({
     (placementId: string, table: DisplayTablePayload, held: SelectedRecords | undefined) => ({
       export_requested: (event: DisplaySemanticEvent) => {
         if (event.event !== "export_requested") return;
-        return start(placementId, table, held, event.scope, event.format);
+        return start(placementId, table, held, event.scope, event.format, event.values);
       },
       export_cancelled: (event: DisplaySemanticEvent) => {
         if (event.event !== "export_cancelled") return;

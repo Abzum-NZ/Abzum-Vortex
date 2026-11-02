@@ -1,7 +1,7 @@
 "use client";
 
 import { usePathname } from "next/navigation";
-import { formatCount } from "@vortex/ui/display/date-format";
+import { formatCount } from "@vortex/platform/schema";
 
 /**
  * Says, on a page whose records reached the preview bound, that the preview holds only the

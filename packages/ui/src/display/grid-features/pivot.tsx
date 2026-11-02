@@ -1,7 +1,12 @@
 "use client";
 
 import { useEffect, useRef, useState, type ReactElement } from "react";
-import { recordsTablePivotFeature, type PivotPage, type PivotReply } from "@vortex/platform/schema";
+import {
+  recordsTablePivotFeature,
+  type PivotPage,
+  type PivotReply,
+  cellValueToText,
+} from "@vortex/platform/schema";
 import { Alert, AlertDescription } from "../../components/alert";
 import { Button } from "../../components/button";
 import { Empty, EmptyHeader, EmptyTitle } from "../../components/empty";
@@ -16,7 +21,7 @@ import {
   TableRow,
 } from "../../components/table";
 import { cn } from "../../lib/utils";
-import { cellValueToText, DisplayCellView } from "../cell";
+import { DisplayCellView } from "../cell";
 import { useDateFormatOptions } from "../date-format-context";
 import { REPLY_ENVELOPES, readProjectedResult } from "../projected-data";
 import type { GridFeatureModule, GridFeaturePointProps } from "./registry";

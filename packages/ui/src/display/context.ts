@@ -1,6 +1,6 @@
+import { cellValueToText } from "@vortex/platform/schema";
 import { DefinitionRenderError } from "../definition-error";
 import type { PlatformBlockRenderProps } from "../registry";
-import { cellValueToText } from "./cell";
 import { getAccessibleName } from "./display-state-container";
 import type { DisplayDataState, DisplayEventHandlers, DisplayRow } from "./projected-data";
 

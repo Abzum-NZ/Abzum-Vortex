@@ -1,15 +1,26 @@
 "use client";
 
-import { useEffect, useRef, type ReactElement } from "react";
+import { createContext, useContext, useEffect, useRef, useState, type ReactElement } from "react";
 import {
+  formatBytes,
+  formatCount,
+  recordsPhrase,
   recordsTableExportFormatLabels,
+  recordsTableExportValues,
+  recordsTableExportValuesLabels,
   type RecordsTableExportFormat,
+  type RecordsTableExportValues,
 } from "@vortex/platform/schema";
 import { Button } from "../../components/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuSeparator,
   DropdownMenuSub,
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
@@ -17,8 +28,9 @@ import {
 } from "../../components/dropdown-menu";
 import { toast } from "../../components/sonner";
 import { Icon } from "../../icons/icon";
+import { Info } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipTrigger } from "../../components/tooltip";
 import type { DisplayTableExportRun, DisplayTableExportScope } from "../projected-data";
-import { formatBytes, formatCount, recordsPhrase } from "../date-format";
 import type {
   GridFeatureContext,
   GridFeatureModule,
@@ -36,13 +48,60 @@ const selectionOf = (
     : { matching: undefined, selected: context.selectedRecordIds.length };
 };
 
+/** How the person chose to hold values in the next file; every table starts as shown. */
+const ExportValuesContext = createContext<
+  | Readonly<{ values: RecordsTableExportValues; choose: (next: RecordsTableExportValues) => void }>
+  | undefined
+>(undefined);
+
+const useExportValues = () => {
+  const held = useContext(ExportValuesContext);
+  if (held === undefined) throw new Error("Export menus are drawn inside the Export scope");
+  return held;
+};
+
 const request = (
   context: GridFeatureContext,
   scope: DisplayTableExportScope,
   format: RecordsTableExportFormat,
+  values: RecordsTableExportValues,
 ): void => {
-  void context.events?.export_requested?.({ event: "export_requested", scope, format });
+  void context.events?.export_requested?.({ event: "export_requested", scope, format, values });
 };
+
+/** The one choice beside the formats: the file holds values as shown (default) or as stored. */
+function ExportValuesChoice({ rawColumns }: Readonly<{ rawColumns: boolean }>): ReactElement {
+  const { values, choose } = useExportValues();
+  return (
+    <DropdownMenuGroup>
+      <DropdownMenuLabel className="flex items-center gap-1">
+        Values
+        {rawColumns ? (
+          <Tooltip>
+            <TooltipTrigger render={<span tabIndex={0} aria-label="About values" />}>
+              <Info className="size-3.5" />
+            </TooltipTrigger>
+            <TooltipContent>Some columns always download their stored value</TooltipContent>
+          </Tooltip>
+        ) : null}
+      </DropdownMenuLabel>
+      <DropdownMenuRadioGroup
+        value={values}
+        onValueChange={(next) => {
+          const chosen = recordsTableExportValues.find((candidate) => candidate === next);
+          if (chosen !== undefined) choose(chosen);
+        }}
+      >
+        {recordsTableExportValues.map((choice) => (
+          <DropdownMenuRadioItem key={choice} value={choice} closeOnClick={false}>
+            {recordsTableExportValuesLabels[choice]}
+          </DropdownMenuRadioItem>
+        ))}
+      </DropdownMenuRadioGroup>
+      <DropdownMenuSeparator />
+    </DropdownMenuGroup>
+  );
+}
 
 /** Each scope offers only the file formats the installed table authored for this viewer. */
 function ExportScopeItem({
@@ -54,10 +113,11 @@ function ExportScopeItem({
   scope: DisplayTableExportScope;
   label: string;
 }>): ReactElement {
+  const { values } = useExportValues();
   const formats = context.features.export?.formats ?? [];
   if (formats.length === 1)
     return (
-      <DropdownMenuItem onClick={() => request(context, scope, formats[0]!)}>
+      <DropdownMenuItem onClick={() => request(context, scope, formats[0]!, values)}>
         {label}
       </DropdownMenuItem>
     );
@@ -66,7 +126,7 @@ function ExportScopeItem({
       <DropdownMenuSubTrigger>{label}</DropdownMenuSubTrigger>
       <DropdownMenuSubContent>
         {context.features.export?.formats.map((format) => (
-          <DropdownMenuItem key={format} onClick={() => request(context, scope, format)}>
+          <DropdownMenuItem key={format} onClick={() => request(context, scope, format, values)}>
             {recordsTableExportFormatLabels[format]}
           </DropdownMenuItem>
         ))}
@@ -123,17 +183,11 @@ function ExportToolbarItems({ context }: GridFeaturePointProps): ReactElement | 
       </div>
     );
   const { matching, selected } = selectionOf(context);
-  const formats = context.features.export?.formats ?? [];
-  if (formats.length === 1 && selected === 0 && !(matching !== undefined && matching > 0))
-    return (
-      <DropdownMenuItem onClick={() => request(context, "view", formats[0]!)}>
-        Export
-      </DropdownMenuItem>
-    );
   return (
     <DropdownMenuSub>
       <DropdownMenuSubTrigger>Export</DropdownMenuSubTrigger>
       <DropdownMenuSubContent>
+        <ExportValuesChoice rawColumns={context.features.export?.rawColumns === true} />
         <ExportScopeItem context={context} scope="view" label="Export this view" />
         {selected > 0 ? (
           <ExportScopeItem
@@ -167,17 +221,7 @@ function ExportSelectionBanner({ context }: GridFeaturePointProps): ReactElement
   const label = allMatching
     ? `Export all ${formatCount(matching)} matching`
     : `Export selected (${formatCount(selected)})`;
-  const formats = context.features.export?.formats ?? [];
-  if (formats.length === 1)
-    return (
-      <Button
-        variant="outline"
-        size="sm"
-        onClick={() => request(context, allMatching ? "matching" : "selected", formats[0]!)}
-      >
-        {label}
-      </Button>
-    );
+  const { values } = useExportValues();
   return (
     <DropdownMenu>
       <DropdownMenuTrigger render={<Button variant="outline" size="sm" />}>
@@ -185,10 +229,11 @@ function ExportSelectionBanner({ context }: GridFeaturePointProps): ReactElement
         <Icon name="chevron-down" data-icon="inline-end" aria-hidden="true" />
       </DropdownMenuTrigger>
       <DropdownMenuContent>
+        <ExportValuesChoice rawColumns={context.features.export?.rawColumns === true} />
         {context.features.export?.formats.map((format) => (
           <DropdownMenuItem
             key={format}
-            onClick={() => request(context, allMatching ? "matching" : "selected", format)}
+            onClick={() => request(context, allMatching ? "matching" : "selected", format, values)}
           >
             {recordsTableExportFormatLabels[format]}
           </DropdownMenuItem>
@@ -201,7 +246,12 @@ function ExportSelectionBanner({ context }: GridFeaturePointProps): ReactElement
 export const gridFeature: GridFeatureModule = {
   Scope: function ExportScope({ context, children }: GridFeatureScopeProps): ReactElement {
     useExportToast(context.selection.exportRun);
-    return <>{children}</>;
+    const [values, choose] = useState<RecordsTableExportValues>("shown");
+    return (
+      <ExportValuesContext.Provider value={{ values, choose }}>
+        {children}
+      </ExportValuesContext.Provider>
+    );
   },
   OverflowItems: ExportToolbarItems,
   SelectionBanner: ExportSelectionBanner,

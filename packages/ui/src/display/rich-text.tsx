@@ -113,28 +113,3 @@ export function RichTextDocumentView({
   const blocks = parsed.data.blocks as readonly DisplayRichTextBlock[];
   return <>{blocks.map((block, index) => renderBlock(block, index))}</>;
 }
-
-/** Flattens a validated rich-text document to plain text for accessible labels. */
-export function richTextToPlainText(document: DisplayRichTextDocument): string {
-  const inlineText = (inline: DisplayRichTextInline): string => {
-    switch (inline.kind) {
-      case "text":
-        return inline.text;
-      case "emphasis":
-        return inline.children.map(inlineText).join("");
-      case "link":
-        return inline.children.map(inlineText).join("");
-    }
-  };
-  const blockText = (block: DisplayRichTextBlock): string => {
-    switch (block.kind) {
-      case "paragraph":
-      case "heading":
-        return block.children.map(inlineText).join("");
-      case "bulleted_list":
-      case "numbered_list":
-        return block.items.map((item) => item.map(inlineText).join("")).join(" ");
-    }
-  };
-  return document.blocks.map(blockText).join(" ");
-}

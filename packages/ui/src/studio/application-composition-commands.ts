@@ -52,7 +52,11 @@ import {
   removeFlowBindingsOf,
 } from "@vortex/platform/schema";
 import { studioFormChangeRefusal, studioFormShapeRefusal } from "./application-composition-forms";
-import { restoreStudioGridFeatureBindings, studioGridDataSettings } from "./grid-features";
+import {
+  pruneStudioGridFeatureColumns,
+  restoreStudioGridFeatureBindings,
+  studioGridDataSettings,
+} from "./grid-features";
 import type { StudioSemanticSelection } from "./semantic-selection";
 import type {
   StudioCompositionBreakpoint,
@@ -351,6 +355,7 @@ const applySettings = (
   for (const [key, value] of Object.entries(stored))
     if (studioOwnsSetting(key)) settings[key] = value;
   restoreStudioGridFeatureBindings(settings, release.properties, source.body.flow_bindings, alias);
+  pruneStudioGridFeatureColumns(settings);
   let query = resolveStudioDataQuery(source, input.query as string | null);
   const storedQuery = target.item.props.vortex.query ?? null;
   if (query !== storedQuery) {
