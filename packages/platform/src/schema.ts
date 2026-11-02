@@ -45,3 +45,4 @@ export * from "./definition/module-links";
 export * from "./definition/application-composition/records-table-features/query-facts";
 
 export * from "./definition/definition-limits";
+export * from "./definition/module-query-order";

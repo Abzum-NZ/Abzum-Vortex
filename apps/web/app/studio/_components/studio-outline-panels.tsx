@@ -168,8 +168,11 @@ export function StudioBlockOutlinePanel({
   disabled,
   hidden,
   ownerKey,
+  levels,
 }: PanelProps &
   Readonly<{
+    /** The levels of nested blocks the open page uses, its layout's included. */
+    levels: number | undefined;
     /** The page or layout the canvas shows, whose blocks are listed. */
     ownerKey: string | undefined;
   }>) {
@@ -216,6 +219,9 @@ export function StudioBlockOutlinePanel({
               limit="compositionPlacements"
               used={placed}
             />
+            {levels === undefined ? null : (
+              <StudioLimitRow label="Levels on this page" limit="compositionDepth" used={levels} />
+            )}
           </section>
         </>
       )}

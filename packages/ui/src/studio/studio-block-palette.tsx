@@ -56,6 +56,7 @@ export function StudioBlockPalette({
   const [search, setSearch] = useState("");
   const [targetId, setTargetId] = useState("");
   const searchId = useId();
+  const limitId = useId();
   const targetSelectId = useId();
   const target = targets.find((candidate) => candidate.id === targetId) ?? targets[0];
   // The place is full when the application holds every block it may, or the place nests as deep as
@@ -106,7 +107,10 @@ export function StudioBlockPalette({
           disabled={false}
           options={targets.map((candidate) => ({
             value: candidate.id,
-            label: `${"  ".repeat(candidate.depth)}${candidate.label}`,
+            label:
+              candidate.depth === 0
+                ? candidate.label
+                : `${candidate.label} (level ${candidate.depth + 1})`,
           }))}
           onChange={(value) => setTargetId(value)}
         />
@@ -135,7 +139,7 @@ export function StudioBlockPalette({
           <StudioLimitNote limit="compositionDepth" used={target.depth} label="Levels above here" />
         </>
       ) : (
-        <Alert role="status">
+        <Alert role="status" id={limitId}>
           <AlertDescription>{limitReason}</AlertDescription>
         </Alert>
       )}
@@ -189,7 +193,10 @@ export function StudioBlockPalette({
                             </div>
                           )}
                         </Drawer.Item>
-                        <StudioReasoned reason={choice.unavailable}>
+                        <StudioReasoned
+                          reason={choice.unavailable}
+                          describedBy={choice.unavailable === limitReason ? limitId : undefined}
+                        >
                           <Button
                             type="button"
                             variant="ghost"

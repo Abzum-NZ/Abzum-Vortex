@@ -82,6 +82,7 @@ export * from "./studio-inspector-group";
 export * from "./studio-dialog";
 export * from "./studio-icon-buttons";
 export * from "./studio-limit";
+export { studioPageNestingLevels } from "./studio-composition-depth";
 export * from "./studio-inspector-actions";
 export * from "./studio-field-type-icon";
 export {

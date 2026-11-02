@@ -151,10 +151,14 @@ export function useStudioDataTab({
   useEffect(() => {
     if (opened.current || initialModule === null) return;
     opened.current = true;
+    // A record type the module does not hold falls back to the module.
+    const holds = draft.source.body.modules
+      .find((module) => module.key === initialModule)
+      ?.record_types.some((record) => record.key === initialRecordType);
     draft.select(
-      initialRecordType === null
-        ? { kind: "module", moduleKey: initialModule }
-        : { kind: "record_type", moduleKey: initialModule, recordKey: initialRecordType },
+      initialRecordType !== null && holds === true
+        ? { kind: "record_type", moduleKey: initialModule, recordKey: initialRecordType }
+        : { kind: "module", moduleKey: initialModule },
     );
   }, [initialModule, initialRecordType, draft]);
   /** The Data tab's one edit path: a platform command over the current draft source, as one edit of the draft. */

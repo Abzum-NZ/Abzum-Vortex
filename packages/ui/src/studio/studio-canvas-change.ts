@@ -18,7 +18,8 @@ import {
   type PageSlotAddress,
   type SourceItem,
 } from "@vortex/platform/schema";
-import { itemSlots, regionHostLevels, regions } from "./application-composition-regions";
+import { regions } from "./application-composition-regions";
+import { regionLevels } from "./studio-composition-depth";
 import {
   studioFormChangeRefusal,
   studioFormChangeRefusalSentence,
@@ -37,24 +38,6 @@ export type StudioCanvasChange =
   /** The change breaks a rule of the definition; `message` says which, and the draft stays as it was. */
   | Readonly<{ kind: "refused"; message: string }>;
 
-/** How deep a list of blocks nests: a block of the list is level one. */
-const nestingOf = (
-  catalogue: ImmutablePlatformBlockCatalogue,
-  items: readonly SourceItem[],
-): number =>
-  items.reduce(
-    (deepest, item) =>
-      Math.max(
-        deepest,
-        1 +
-          [...itemSlots(catalogue, item).values()].reduce(
-            (inner, child) => Math.max(inner, nestingOf(catalogue, child.items)),
-            0,
-          ),
-      ),
-    0,
-  );
-
 /** The plain sentence for a change that takes the application past a composition limit. */
 const compositionLimitRefusal = (
   catalogue: ImmutablePlatformBlockCatalogue,
@@ -70,9 +53,7 @@ const compositionLimitRefusal = (
   // A page nests inside the container of its layout, so the platform counts those levels too.
   if (
     each.some(
-      (region) =>
-        regionHostLevels(catalogue, source, region) + nestingOf(catalogue, region.zone.items) >
-        definitionLimits.compositionDepth,
+      (region) => regionLevels(catalogue, source, region) > definitionLimits.compositionDepth,
     )
   )
     return definitionLimitMessage("compositionDepth");

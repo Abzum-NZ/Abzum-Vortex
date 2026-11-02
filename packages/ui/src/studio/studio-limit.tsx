@@ -2,8 +2,8 @@
 import { cloneElement, useId, type ReactElement, type ReactNode } from "react";
 import {
   definitionLimitMessage,
-  definitionLimitNear,
   definitionLimitReached,
+  definitionLimitNear,
   definitionLimitUsage,
   type CountedLimit,
 } from "@vortex/platform/schema";
@@ -30,14 +30,22 @@ type ReasonedProps = Readonly<{
  */
 export function StudioReasoned({
   reason,
+  describedBy,
   children,
-}: Readonly<{ reason: string | undefined; children: ReactElement<ReasonedProps> }>) {
+}: Readonly<{
+  reason: string | undefined;
+  /** The id of an element on the page that already says the reason (one Alert for many controls). */
+  describedBy?: string | undefined;
+  children: ReactElement<ReasonedProps>;
+}>) {
   const id = useId();
   if (reason === undefined) return children;
   const { children: inner } = children.props as { children?: ReactNode };
   const swallowed = cloneElement(children, {
     "aria-disabled": true,
-    "aria-describedby": id,
+    "aria-describedby": [children.props["aria-describedby"], describedBy ?? id]
+      .filter((entry) => entry !== undefined)
+      .join(" "),
     "data-reasoned": "",
     onClick: (event) => {
       event.preventDefault();
@@ -51,9 +59,11 @@ export function StudioReasoned({
         <TooltipTrigger render={swallowed}>{inner}</TooltipTrigger>
         <TooltipContent>{reason}</TooltipContent>
       </Tooltip>
-      <span id={id} className="sr-only">
-        {reason}
-      </span>
+      {describedBy === undefined ? (
+        <span id={id} className="sr-only">
+          {reason}
+        </span>
+      ) : null}
     </>
   );
 }
@@ -72,7 +82,6 @@ export function StudioLimitNote({
     <FieldDescription>
       {label === undefined ? "" : `${label}: `}
       {definitionLimitUsage(limit, used)}
-      {definitionLimitReached(limit, used) ? `. ${definitionLimitMessage(limit)}` : ""}
     </FieldDescription>
   );
 }

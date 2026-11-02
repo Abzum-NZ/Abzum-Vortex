@@ -276,6 +276,17 @@ function ExistingApplicationWorkspace(props: ExistingProps) {
   });
   const releases = useStudioReleasesTab({
     draft,
+    showPlace: (moduleKey, recordKey) => {
+      const module = draft.source.body.modules.find((entry) => entry.key === moduleKey);
+      if (module === undefined) return false;
+      draft.select(
+        recordKey === undefined
+          ? { kind: "module", moduleKey }
+          : { kind: "record_type", moduleKey, recordKey },
+      );
+      setTab("data");
+      return true;
+    },
     initialStanding: place.standing,
     hidden: tab !== "releases",
     initialSection: isStudioReleasesSection(props.initialSection)

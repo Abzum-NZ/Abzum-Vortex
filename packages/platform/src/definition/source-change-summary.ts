@@ -44,7 +44,14 @@ const areaLabel = (key: string): string =>
 
 /** The name a person knows an entry by, from its own name or label; a key is the last resort. */
 const itemName = (entry: unknown, index: number): string => {
+  // A list of plain names (a role's permissions) names each entry by itself.
+  if (typeof entry === "string" && entry.trim() !== "") return entry.trim();
   const fields = asRecord(entry);
+  // An item type used is named by its block and release.
+  if (typeof fields?.block_id === "string")
+    return typeof fields.release_version === "string"
+      ? `${fields.block_id} ${fields.release_version}`
+      : fields.block_id;
   for (const field of ["name", "label", "key", "purpose", "module", "id"]) {
     const value = fields?.[field];
     if (typeof value === "string" && value.trim() !== "") return value.trim();
@@ -52,7 +59,9 @@ const itemName = (entry: unknown, index: number): string => {
   return `Entry ${index + 1}`;
 };
 const identity = (entry: unknown, index: number): string => {
+  if (typeof entry === "string") return entry;
   const fields = asRecord(entry);
+  if (typeof fields?.block_id === "string") return fields.block_id;
   for (const field of ["key", "id", "module", "purpose"]) {
     const value = fields?.[field];
     if (typeof value === "string") return value;

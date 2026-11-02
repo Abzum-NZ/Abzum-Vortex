@@ -62,6 +62,7 @@ const definitionValidationErrorCodes = [
   "definition_records_table_visible_columns",
   "definition_records_table_auto_size",
   "definition_query_binding",
+  "definition_query_sort",
   "definition_runtime_not_supported",
   "definition_query_binding_choice",
   "definition_form_field_dependency",
@@ -149,6 +150,12 @@ const definitionValidationErrorCatalogueSource = {
     message: "A query input of a block has no valid source.",
     guidance:
       "Open the block's Query inputs and choose a source of the input's type for each input.",
+  },
+  // The sentence names the query and the field.
+  definition_query_sort: {
+    order: 39,
+    message: "A query sorts by a field that does not allow sorting.",
+    guidance: "Turn sorting on for the field, or change the sorting of the query.",
   },
   definition_runtime_not_supported: {
     order: 39,

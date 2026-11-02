@@ -167,8 +167,11 @@ export function useStudioReleasesTab({
   hidden,
   initialSection,
   initialStanding,
+  showPlace,
 }: Readonly<{
   draft: StudioDraft;
+  /** Opens a module or record type of the draft in the Data tab. */
+  showPlace: (moduleKey: string, recordKey: string | undefined) => boolean;
   /** Where the application stood in the organisation when the editor opened. */
   initialStanding: ApplicationReleaseStanding;
   hidden: boolean;
@@ -607,6 +610,14 @@ export function useStudioReleasesTab({
           onOpenChange={setImportOpen}
           disabled={draft.locked}
           readSnapshot={readImportSnapshot}
+          onShowPlace={(source, place) => {
+            const module = source.body.modules.find((entry) => entry.key === place.moduleKey);
+            if (module === undefined) return undefined;
+            const recordKey = module.record_types.some((entry) => entry.key === place.recordKey)
+              ? place.recordKey
+              : undefined;
+            return () => showPlace(place.moduleKey, recordKey);
+          }}
           onApply={applyImport}
         />
       )}

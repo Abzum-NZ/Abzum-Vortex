@@ -1096,21 +1096,6 @@ const refineModuleSourceBody = (value: ModuleSourceBodyFields, context: z.Refine
         message: "A system projection record type action targets a registered protected operation",
       });
   }
-  // A query sorts only by fields the record type allows sorting by (or by its own groups), so
-  // import, the agent and the API cannot reach a sort the Studio editor refuses.
-  for (const [queryIndex, query] of value.queries.entries()) {
-    const fields = recordTypes.get(query.record_type)?.fields;
-    if (fields === undefined) continue;
-    for (const [sortIndex, sort] of query.sort.entries()) {
-      const field = fields.find((candidate) => candidate.key === sort.field);
-      if (field !== undefined && !field.sortable && !query.group_by.includes(sort.field))
-        context.addIssue({
-          code: "custom",
-          path: ["queries", queryIndex, "sort", sortIndex, "field"],
-          message: `A query can sort only by a field its record type allows sorting by: turn sorting on for ${field.label} first`,
-        });
-    }
-  }
 };
 
 /**

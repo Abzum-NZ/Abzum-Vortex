@@ -188,7 +188,7 @@ const limitWording: Readonly<Record<CountedLimit, Wording>> = {
     remedy: "Remove a block first.",
   },
   compositionDepth: {
-    owner: "A page",
+    owner: "A page and the layout around it",
     noun: "levels of nested blocks",
     remedy: "Move a block out of its container.",
   },

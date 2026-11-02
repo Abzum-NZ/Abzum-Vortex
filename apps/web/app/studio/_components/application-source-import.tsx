@@ -49,6 +49,7 @@ import {
   sameStudioApplicationSourceImportSnapshot,
   studioApplicationSourceReviewResultSchema,
   type StudioApplicationSourceImportSnapshot,
+  type StudioSourceImportShowMe,
 } from "../_lib/application-source-import";
 
 // The import's notices replace one another: a refusal does not stay on screen through a later
@@ -57,12 +58,12 @@ let lastImportNotice: string | undefined;
 const importNotice = (
   message: string,
   kind?: "success" | "error" | "info",
-  link?: Readonly<{ label: string; href: string }>,
+  action?: Readonly<{ label: string; onClick: () => void }>,
 ): void => {
   if (lastImportNotice !== undefined) toast.dismiss(lastImportNotice);
   const id = `studio-source-import-${crypto.randomUUID()}`;
   lastImportNotice = id;
-  studioNotice(message, kind, link, { id });
+  studioNotice(message, kind, undefined, { id, action });
 };
 
 type ReviewedSource = Readonly<{
@@ -85,6 +86,11 @@ type Props = Readonly<{
   onOpenChange: (open: boolean) => void;
   disabled: boolean;
   readSnapshot: () => StudioApplicationSourceImportSnapshot | null;
+  /** Opens the place a refusal names in the draft: absent when the draft has no such place. */
+  onShowPlace: (
+    source: ApplicationSourceDocument,
+    place: StudioSourceImportShowMe,
+  ) => (() => boolean) | undefined;
   onApply: (
     expected: StudioApplicationSourceImportSnapshot,
     source: ApplicationSourceDocument,
@@ -138,6 +144,7 @@ export function ApplicationSourceImport({
   onOpenChange,
   disabled,
   readSnapshot,
+  onShowPlace,
   onApply,
 }: Props) {
   const [confirm, confirmDialog] = useConfirm();
@@ -263,12 +270,17 @@ export function ApplicationSourceImport({
       importNotice(
         candidate.message,
         "error",
-        candidate.showMe === undefined
-          ? undefined
-          : {
+        // The problem is in the file; the link opens the same place in the draft, when it has one.
+        candidate.showMe !== undefined &&
+          onShowPlace(snapshot.source, candidate.showMe) !== undefined
+          ? {
               label: "Show me",
-              href: `/studio/${encodeURIComponent(snapshot.organizationId)}/${encodeURIComponent(snapshot.rootId)}?tab=data&module=${encodeURIComponent(candidate.showMe.moduleKey)}${candidate.showMe.recordKey === undefined ? "" : `&record=${encodeURIComponent(candidate.showMe.recordKey)}`}`,
-            },
+              onClick: () => {
+                if (onShowPlace(snapshot.source, candidate.showMe!)?.() === true)
+                  onOpenChange(false);
+              },
+            }
+          : undefined,
       );
       return;
     }
