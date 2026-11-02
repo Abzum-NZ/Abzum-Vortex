@@ -299,7 +299,10 @@ function ExistingApplicationWorkspace(props: ExistingProps) {
   return (
     <StudioFieldProblemsProvider>
       <StudioPlaceOpenerProvider opener={placeOpener}>
-        <div aria-busy={draft.isHeld("publication") || draft.isHeld("reopening")}>
+        <div
+          className="h-full"
+          aria-busy={draft.isHeld("publication") || draft.isHeld("reopening")}
+        >
           <ApplicationDraftAgentTools
             draft={draft}
             command={canvas.commandComposition}

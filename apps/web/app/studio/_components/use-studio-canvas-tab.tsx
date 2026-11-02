@@ -171,7 +171,7 @@ export function useStudioCanvasTab({
 }>) {
   useIntentPreload(
     preloadPuckEditor,
-    "#studio-rail-outline, #studio-rail-blocks, #studio-rail-menu, #studio-rail-theme, #studio-rail-panel [data-tree-key^='page:']",
+    "#studio-rail-outline, #studio-rail-blocks, #studio-rail-menu, #studio-rail-theme, [data-studio-rail-panel] [data-tree-key^='page:']",
   );
   const { organizationId, source, selected, state, view } = draft;
   const rootId = state.rootId;
