@@ -85,10 +85,10 @@ export const finishedNotice = (
       : (outcomeNotices[outcome ?? "failed"] ?? unavailableNotice);
 
 /** Signing in again for a recent sign-in; the dispatcher adds where to come back to. */
-export const reauthenticationPath = "/auth/session-ended?status=reauthenticate";
+const reauthenticationPath = "/auth/session-ended?status=reauthenticate";
 
 /** Verifying with, or setting up, an authenticator for the two-step verification a change needs. */
-export const multiFactorPath = "/auth/sign-in?mfa=1";
+const multiFactorPath = "/auth/sign-in?mfa=1";
 
 export const refusalNotices: Readonly<
   Record<Extract<FormFlowFeedback, { kind: "refusal" }>["code"], PageMessageDraft>

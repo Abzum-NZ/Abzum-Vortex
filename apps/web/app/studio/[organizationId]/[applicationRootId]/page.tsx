@@ -26,8 +26,8 @@ import { humanOrganizationRequests } from "../../../_lib/server-composition";
 export const dynamic = "force-dynamic";
 
 /**
- * The organisation's name and addresses: the running application, for the breadcrumb and Back to app,
- * and the App Store, which a publish points to for installing or upgrading.
+ * The organisation's name and frame, the running application the toolbar opens, and where the
+ * application stands in the organisation, which decides whether the toolbar offers Install or Upgrade.
  */
 const loadWorkspacePlace = async (
   organizationId: string,

@@ -58,44 +58,49 @@ const previewNoticeId = "studio-preview";
 const systemRefreshMessage = "System applications move forward through the platform refresh.";
 
 /**
- * Where the application stands in the builder's organisation, in plain words, with the App Store
- * page that installs or upgrades it. `published` names the version a Publish just created.
+ * Where the application stands in the builder's organisation, in plain words. `install` names the
+ * action that moves the organisation to the published version (run here, over the editor) and
+ * `link` the App Store page that shows the application.
  */
 const standingWords = (
   standing: ApplicationReleaseStanding,
-  published?: string,
-): Readonly<{ text: string; link?: Readonly<{ label: string; href: string }> }> => {
-  const lead = published === undefined ? "" : `Published version ${published}. `;
+): Readonly<{
+  text: string;
+  install?: string;
+  link?: Readonly<{ label: string; href: string }>;
+}> => {
+  const viewInStore = (href: string) => ({ label: "View in the App Store", href });
   switch (standing.kind) {
     case "system":
       return {
-        text: `${lead}Latest published version: ${standing.version}. Installed version: ${standing.installedVersion}. ${systemRefreshMessage}`,
+        text: `Latest published version: ${standing.version}. Installed version: ${standing.installedVersion}. ${systemRefreshMessage}`,
       };
     case "live":
       return {
-        text: `${lead}Version ${standing.version} is live in your organisation.${standing.rolesWaiting ? " Role changes are waiting: accept them in the App Store." : ""}`,
-        ...(standing.rolesWaiting
-          ? { link: { label: "Open in the App Store", href: standing.appStoreHref } }
-          : {}),
+        text: `Version ${standing.version} is live in your organisation.${standing.rolesWaiting ? " Role changes are waiting for you to accept them." : ""}`,
+        ...(standing.rolesWaiting ? { install: "Review role changes" } : {}),
+        link: viewInStore(standing.appStoreHref),
       };
     case "waiting":
       return {
-        text: `${lead}Your organisation runs version ${standing.installedVersion}; version ${standing.version} is waiting. Upgrade it in the App Store to use it.`,
-        link: { label: "Upgrade in the App Store", href: standing.appStoreHref },
+        text: `Your organisation runs version ${standing.installedVersion}; version ${standing.version} is waiting. Upgrade to use it.`,
+        install: "Upgrade",
+        link: viewInStore(standing.appStoreHref),
       };
     case "not_installed":
       return {
-        text: `${lead}Version ${standing.version} is not installed in your organisation, so people cannot open it yet. Install it from the App Store.`,
-        link: { label: "Install in the App Store", href: standing.appStoreHref },
+        text: `Version ${standing.version} is not installed in your organisation, so people cannot open it yet.`,
+        install: "Install",
+        link: viewInStore(standing.appStoreHref),
       };
     case "not_published":
-      return { text: `${lead}No version is published yet.` };
+      return { text: "No version is published yet." };
     case "unknown":
       return {
-        text: `${lead}Someone who manages applications installs or upgrades it in the App Store.`,
+        text: "Someone who manages applications installs or upgrades it in the App Store.",
         ...(standing.appStoreHref === undefined
           ? {}
-          : { link: { label: "Open in the App Store", href: standing.appStoreHref } }),
+          : { link: viewInStore(standing.appStoreHref) }),
       };
   }
 };
@@ -374,16 +379,28 @@ export function useStudioReleasesTab({
                     : "Not published yet"}
           </p>
           <p className="text-sm text-muted-foreground">{standingShown.text}</p>
-          {standingShown.link === undefined ? null : (
-            <Button
-              variant="outline"
-              size="sm"
-              nativeButton={false}
-              render={<NavigationLink href={standingShown.link.href} />}
-            >
-              {standingShown.link.label}
-            </Button>
-          )}
+          <div className="flex flex-wrap gap-2">
+            {standingShown.install === undefined ? null : (
+              <Button
+                type="button"
+                size="sm"
+                disabled={draft.locked || actions.pending !== undefined}
+                onClick={openInstall}
+              >
+                {standingShown.install}
+              </Button>
+            )}
+            {standingShown.link === undefined ? null : (
+              <Button
+                variant="outline"
+                size="sm"
+                nativeButton={false}
+                render={<NavigationLink href={standingShown.link.href} />}
+              >
+                {standingShown.link.label}
+              </Button>
+            )}
+          </div>
         </section>
       )}
       {!hidden && section === "history" && (
@@ -397,7 +414,7 @@ export function useStudioReleasesTab({
               ? systemRefreshMessage
               : standing == null || standing.kind === "unknown"
                 ? undefined
-                : "Organisations install and upgrade a version from the App Store."
+                : "Organisations install or upgrade to a version from Studio or the App Store."
           }
           restoreBlocked={restoreBlocked}
           hold={(on) => draft.hold("restoring", on)}
