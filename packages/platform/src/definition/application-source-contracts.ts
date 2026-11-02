@@ -41,96 +41,8 @@ import { sourcePlatformBlockDependenciesSchema } from "./application-composition
 import { sourceComponentFlowBindingSchema } from "./application-flow-bindings";
 import { flowAliasSchema, sourceFlowCollectionSchema } from "../workflows/flow-source-contracts";
 import { vortexIconNameSchema } from "../catalogue/icon-names";
-
-const maximumSourceDocumentNodes = 50_000;
-const maximumSourceNestingDepth = 32;
-const maximumSourceContainerItems = 1_000;
-const maximumSourceStringLength = 1_000_000;
-
-const inspectSourceBounds = (value: unknown, context: z.RefinementCtx) => {
-  const pending: {
-    value: unknown;
-    path: (string | number)[];
-    depth: number;
-    exit?: object;
-  }[] = [{ value, path: [], depth: 0 }];
-  const ancestors = new Set<object>();
-  let visited = 0;
-  while (pending.length > 0) {
-    const entry = pending.pop()!;
-    if (entry.exit !== undefined) {
-      ancestors.delete(entry.exit);
-      continue;
-    }
-    visited += 1;
-    if (visited > maximumSourceDocumentNodes) {
-      context.addIssue({
-        code: "custom",
-        path: entry.path,
-        message: "Source document is too large",
-      });
-      return z.NEVER;
-    }
-    if (entry.depth > maximumSourceNestingDepth) {
-      context.addIssue({
-        code: "custom",
-        path: entry.path,
-        message: "Source nesting is too deep",
-      });
-      return z.NEVER;
-    }
-    if (typeof entry.value === "string" && entry.value.length > maximumSourceStringLength) {
-      context.addIssue({
-        code: "custom",
-        path: entry.path,
-        message: "Source text is too long",
-      });
-      return z.NEVER;
-    }
-    if (typeof entry.value !== "object" || entry.value === null) continue;
-    if (ancestors.has(entry.value)) {
-      context.addIssue({
-        code: "custom",
-        path: entry.path,
-        message: "Source values must be acyclic",
-      });
-      return z.NEVER;
-    }
-    if (Array.isArray(entry.value) && entry.value.length > maximumSourceContainerItems) {
-      context.addIssue({
-        code: "custom",
-        path: entry.path,
-        message: "Source container has too many items",
-      });
-      return z.NEVER;
-    }
-    const keys: string[] | undefined = Array.isArray(entry.value) ? undefined : [];
-    if (keys !== undefined) {
-      for (const key in entry.value) {
-        if (!Object.prototype.hasOwnProperty.call(entry.value, key)) continue;
-        keys.push(key);
-        if (keys.length > maximumSourceContainerItems) break;
-      }
-    }
-    if (keys !== undefined && keys.length > maximumSourceContainerItems) {
-      context.addIssue({
-        code: "custom",
-        path: entry.path,
-        message: "Source container has too many items",
-      });
-      return z.NEVER;
-    }
-    ancestors.add(entry.value);
-    pending.push({ value: undefined, path: [], depth: 0, exit: entry.value });
-    const count = keys?.length ?? (entry.value as unknown[]).length;
-    for (let index = count - 1; index >= 0; index -= 1) {
-      const key = keys?.[index] ?? index;
-      const child = (entry.value as Record<string | number, unknown>)[key];
-      pending.push({ value: child, path: [...entry.path, key], depth: entry.depth + 1 });
-    }
-  }
-  return value;
-};
+import { definitionLimits } from "./definition-limits";
+import { inspectSourceBounds } from "./module-source-contracts";
 
 /**
  * The fixed set of application experience pages an application may declare: the page shown
@@ -197,7 +109,9 @@ const sourceNavigationSchema: z.ZodType<SourceNavigation> = z.lazy(() =>
         type: sourceProvenanceUnchanged(z.literal("heading")),
         label: sourceProvenanceUnchanged(labelSchema),
         icon: sourceProvenanceUnchanged(vortexIconNameSchema),
-        children: sourceProvenanceUnchanged(z.array(sourceNavigationSchema).min(1).max(100)),
+        children: sourceProvenanceUnchanged(
+          z.array(sourceNavigationSchema).min(1).max(definitionLimits.navigationItems),
+        ),
       })
       .strict(),
     z
@@ -284,7 +198,9 @@ const sourcePageDefinitionSchema = z.discriminatedUnion("type", [
       type: sourceProvenanceUnchanged(z.literal("guided_form")),
       record_type: sourceProvenanceTarget(sourceQualifiedRecordTypeSchema, ["recordType/**"]),
       permission: sourceProvenanceTarget(namespacedKeySchema, ["accessPermissionKey"]),
-      steps: sourceProvenanceUnchanged(z.array(sourceGuidedFormStepSchema).min(2).max(20)),
+      steps: sourceProvenanceUnchanged(
+        z.array(sourceGuidedFormStepSchema).min(2).max(definitionLimits.guidedFormSteps),
+      ),
       composition: sourceProvenanceUnchanged(sourceGuidedFormPageCompositionSchema),
     })
     .strict()
@@ -526,7 +442,7 @@ const sourceApplicationSearchSchema = z
                       .strict(),
                   )
                   .min(1)
-                  .max(100),
+                  .max(definitionLimits.searchFieldsPerRecordType),
               ),
               title_field: sourceProvenanceTarget(sourceQualifiedFieldSchema, [
                 "search/recordTypes/#/titleFieldId",
@@ -541,7 +457,7 @@ const sourceApplicationSearchSchema = z
             .strict(),
         )
         .min(1)
-        .max(20),
+        .max(definitionLimits.searchRecordTypes),
     ),
   })
   .strict()
@@ -602,13 +518,13 @@ export const sourceApplicationBodySchema = z
     search: sourceProvenanceUnchanged(sourceApplicationSearchSchema.optional()),
     /** The Modules this Application owns; each Module key has exactly one owning Application. */
     modules: sourceProvenanceTarget(
-      z.array(sourceApplicationModuleSchema).max(100),
+      z.array(sourceApplicationModuleSchema).max(definitionLimits.modulesPerApplication),
       ["moduleBindings/**"],
       true,
     ),
     /** Modules owned by another Application that this Application builds on. */
     uses: sourceProvenanceTarget(
-      z.array(sourceApplicationUseSchema).max(100),
+      z.array(sourceApplicationUseSchema).max(definitionLimits.usedModulesPerApplication),
       ["moduleBindings/**"],
       true,
     ),
@@ -684,7 +600,9 @@ export const sourceApplicationBodySchema = z
           message: "Exactly one role must be the application's default member role",
         }),
     ),
-    navigation: sourceProvenanceUnchanged(z.array(sourceNavigationSchema).max(100)),
+    navigation: sourceProvenanceUnchanged(
+      z.array(sourceNavigationSchema).max(definitionLimits.navigationItems),
+    ),
     connection_bindings: sourceProvenanceUnchanged(
       z
         .array(
@@ -738,7 +656,9 @@ export const sourceApplicationBodySchema = z
                 "recordTypeId",
               ]),
               carries: sourceProvenanceUnchanged(
-                z.array(sourceProvenanceTarget(builderKeySchema, ["carriedFieldIds/#"])).max(30),
+                z
+                  .array(sourceProvenanceTarget(builderKeySchema, ["carriedFieldIds/#"]))
+                  .max(definitionLimits.eventCarriedFields),
               ),
               personal_or_sensitive_values_allowed: sourceProvenanceUnchanged(z.literal(false)),
             })
@@ -766,8 +686,12 @@ export const sourceApplicationBodySchema = z
         .max(100),
     ),
     platform_block_dependencies: sourceProvenanceUnchanged(sourcePlatformBlockDependenciesSchema),
-    shells: sourceProvenanceUnchanged(z.array(sourceApplicationShellSchema).max(100)),
-    pages: sourceProvenanceUnchanged(z.array(sourcePageDefinitionSchema).min(1).max(100)),
+    shells: sourceProvenanceUnchanged(
+      z.array(sourceApplicationShellSchema).max(definitionLimits.layoutsPerApplication),
+    ),
+    pages: sourceProvenanceUnchanged(
+      z.array(sourcePageDefinitionSchema).min(1).max(definitionLimits.pagesPerApplication),
+    ),
     experiences: sourceProvenanceUnchanged(
       z.array(sourceApplicationExperienceSchema).max(3).optional(),
     ),

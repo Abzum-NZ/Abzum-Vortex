@@ -1,4 +1,5 @@
 "use client";
+import { StudioLimitNote, StudioReasoned, studioLimitReason } from "@vortex/ui/studio";
 import { StudioDataEmpty } from "./studio-data-centre";
 import { Alert, AlertDescription } from "@vortex/ui/components/alert";
 import { useMemo, useState, type FormEvent, type ReactNode } from "react";
@@ -10,7 +11,8 @@ import {
   deriveQueryKey,
   deriveQueryTotalAlias,
   inlineQueryRecordType,
-  maximumQueryPageSize,
+  definitionLimitReached,
+  definitionLimits,
   queryGroupFieldTypes,
   queryDistinctFieldAccepts,
   readTimeCalculations,
@@ -339,8 +341,13 @@ export function StudioQueryEditor({
   );
   const pageSize = useStudioDraftText(String(query?.page_size ?? defaultQueryPageSize), (next) => {
     const size = Number(next);
-    if (next.trim() === "" || !Number.isInteger(size) || size < 1 || size > maximumQueryPageSize)
-      return `Page size: enter a whole number from 1 to ${maximumQueryPageSize}.`;
+    if (
+      next.trim() === "" ||
+      !Number.isInteger(size) ||
+      size < 1 ||
+      size > definitionLimits.queryPageSize
+    )
+      return `Page size: enter a whole number from 1 to ${definitionLimits.queryPageSize}.`;
     return commit({ page_size: size }, `query-page-size:${moduleKey}:${queryKey}`) ?? true;
   });
 
@@ -544,11 +551,12 @@ export function StudioQueryEditor({
         ) : (
           <>
             <ScreenReaderLabel id={`query-${queryKey}-add-column`}>Add a column</ScreenReaderLabel>
+            <StudioLimitNote limit="queryColumns" used={query.select.length} label="Columns" />
             <StudioOptionControl
               id={`query-${queryKey}-add-column`}
               value=""
               unset="Add a column…"
-              disabled={disabled}
+              disabled={disabled || definitionLimitReached("queryColumns", query.select.length)}
               options={fieldOptions(unselected)}
               onChange={(key) => {
                 if (key !== "") change({ select: [...query.select, key] });
@@ -688,11 +696,18 @@ export function StudioQueryEditor({
         {groupable.length === 0 ? null : (
           <>
             <ScreenReaderLabel id={`query-${queryKey}-add-group`}>Group by</ScreenReaderLabel>
+            <StudioLimitNote
+              limit="queryGroupFields"
+              used={query.group_by.length}
+              label="Grouping fields"
+            />
             <StudioOptionControl
               id={`query-${queryKey}-add-group`}
               value=""
               unset="Group by…"
-              disabled={disabled}
+              disabled={
+                disabled || definitionLimitReached("queryGroupFields", query.group_by.length)
+              }
               options={fieldOptions(groupable)}
               onChange={(key) => {
                 if (key === "") return;
@@ -801,38 +816,41 @@ export function StudioQueryEditor({
             </Entry>
           ))}
         </ol>
-        <Button
-          type="button"
-          size="sm"
-          variant="outline"
-          disabled={disabled || query.aggregates.length >= 20}
-          onClick={() =>
-            change({
-              aggregates: [
-                ...query.aggregates,
-                {
-                  operation: "count",
-                  alias: deriveQueryTotalAlias("count", undefined, takenColumns()),
-                },
-              ],
-            })
-          }
-        >
-          <Icon name="plus" />
-          Add a total
-        </Button>
+        <StudioReasoned reason={studioLimitReason("queryTotals", query.aggregates.length)}>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            disabled={disabled}
+            onClick={() =>
+              change({
+                aggregates: [
+                  ...query.aggregates,
+                  {
+                    operation: "count",
+                    alias: deriveQueryTotalAlias("count", undefined, takenColumns()),
+                  },
+                ],
+              })
+            }
+          >
+            <Icon name="plus" />
+            Add a total
+          </Button>
+        </StudioReasoned>
+        <StudioLimitNote limit="queryTotals" used={query.aggregates.length} label="Totals" />
       </Section>
 
       <Section
         title="Page size"
-        hint={`Records per page: ${defaultQueryPageSize} unless you choose otherwise, at most ${maximumQueryPageSize}.`}
+        hint={`Records per page: ${defaultQueryPageSize} unless you choose otherwise, at most ${definitionLimits.queryPageSize}.`}
       >
         <Input
           aria-label="Records per page"
           type="number"
           inputMode="numeric"
           min={1}
-          max={maximumQueryPageSize}
+          max={definitionLimits.queryPageSize}
           step={1}
           aria-invalid={pageSize.problem === "" ? undefined : true}
           value={pageSize.text}
@@ -1085,8 +1103,10 @@ export function StudioNewQueryForm({
   const [label, setLabel] = useState("");
   const [issues, setIssues] = useState<readonly string[]>([]);
   const key = deriveQueryKey(label, new Set(module?.queries.map((query) => query.key) ?? []));
+  const queryLimitReason = studioLimitReason("queriesPerModule", module?.queries.length ?? 0);
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (queryLimitReason !== undefined) return;
     const result = edit((current) =>
       createInlineQuery(current, { moduleKey, recordKey, label, key: key ?? "" }),
     );
@@ -1119,9 +1139,16 @@ export function StudioNewQueryForm({
           />
         )}
       </StudioField>
-      <Button type="submit" size="sm" disabled={disabled || label.trim() === ""}>
-        Add query
-      </Button>
+      <StudioReasoned reason={queryLimitReason}>
+        <Button type="submit" size="sm" disabled={disabled || label.trim() === ""}>
+          Add query
+        </Button>
+      </StudioReasoned>
+      <StudioLimitNote
+        limit="queriesPerModule"
+        used={module?.queries.length ?? 0}
+        label={`Queries in ${module?.name ?? "this module"}`}
+      />
       {issues.length === 0 ? null : (
         <Alert variant="destructive">
           <AlertDescription>

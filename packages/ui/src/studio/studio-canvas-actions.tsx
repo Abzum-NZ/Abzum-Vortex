@@ -6,6 +6,8 @@ import { Copy, Trash2 } from "lucide-react";
 import { Button } from "../components/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../components/tooltip";
 import { Icon } from "../icons";
+import { StudioReasoned, studioLimitReason } from "./studio-limit";
+import { useStudioCanvas } from "./studio-puck-provider";
 
 const usePuckSelector = createUsePuck();
 
@@ -13,11 +15,18 @@ const usePuckSelector = createUsePuck();
 export function StudioCanvasActions() {
   const selected = usePuckSelector((state) => state.selectedItem);
   const getPuck = useGetPuck();
+  const { input } = useStudioCanvas();
   if (selected === null) return null;
   const puck = getPuck();
   const permissions = puck.getPermissions({ item: selected });
   const parent = puck.getParentById(selected.props.id);
   const label = puck.config.components[selected.type]?.label ?? selected.type;
+  // A full application cannot take another block: Duplicate says so instead of failing on save.
+  const placed =
+    input.palette?.targets.kind === "available"
+      ? (input.palette.targets.targets[0]?.placed ?? 0)
+      : 0;
+  const duplicateReason = studioLimitReason("compositionPlacements", placed);
   const act = (action: "duplicate" | "remove") => {
     const current = getPuck();
     const item = current.selectedItem;
@@ -62,23 +71,37 @@ export function StudioCanvasActions() {
           <TooltipContent>Select parent block</TooltipContent>
         </Tooltip>
       )}
-      <Tooltip>
-        <TooltipTrigger
-          render={
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-sm"
-              aria-label="Duplicate block"
-              disabled={!permissions.duplicate}
-              onClick={() => act("duplicate")}
-            />
-          }
-        >
-          <Copy aria-hidden="true" />
-        </TooltipTrigger>
-        <TooltipContent>Duplicate block</TooltipContent>
-      </Tooltip>
+      {duplicateReason === undefined ? (
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                aria-label="Duplicate block"
+                disabled={!permissions.duplicate}
+                onClick={() => act("duplicate")}
+              />
+            }
+          >
+            <Copy aria-hidden="true" />
+          </TooltipTrigger>
+          <TooltipContent>Duplicate block</TooltipContent>
+        </Tooltip>
+      ) : (
+        <StudioReasoned reason={duplicateReason}>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            aria-label="Duplicate block"
+            onClick={() => act("duplicate")}
+          >
+            <Copy aria-hidden="true" />
+          </Button>
+        </StudioReasoned>
+      )}
       <Tooltip>
         <TooltipTrigger
           render={

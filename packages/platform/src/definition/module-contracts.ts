@@ -1,3 +1,4 @@
+import { definitionLimitMessage, definitionLimits } from "./definition-limits";
 import {
   flowFormulaSchema,
   flowFormulaUsesNow,
@@ -46,7 +47,7 @@ import {
   moduleDependencySchema,
   relationshipDefinitionSchema,
 } from "./module-foundation-contracts";
-import { isWritableSystemProjection } from "./module-source-contracts";
+import { fieldFlagLimitIssues, isWritableSystemProjection } from "./module-source-contracts";
 export { isWritableSystemProjection };
 import { permissionDeclarationSchema } from "../access/permissions";
 import { protectedOperationReferenceSchema } from "./application-flow-bindings";
@@ -56,7 +57,6 @@ import { flowSchema } from "../workflows/flow-contracts";
 import { choiceOptionsSourceSchema, linkOptionsSourceSchema } from "./field-options-source";
 import { recordOwnershipModeSchema } from "../records/record-ownership-mode";
 import {
-  maximumRecordTypePipelines,
   pipelineShapeProblems,
   recordTypePipelineSchema,
   pipelineStageToneSchema,
@@ -157,12 +157,14 @@ const dateSettingsSchema = z
 const dateTimeSettingsSchema = z
   .object({ displayTimeZone: z.enum(["person", "organization", "utc"]).optional() })
   .strict();
-const choiceSettingsSchema = z.object({ options: z.array(optionSchema).min(1).max(200) }).strict();
+const choiceSettingsSchema = z
+  .object({ options: z.array(optionSchema).min(1).max(definitionLimits.choiceOptions) })
+  .strict();
 
 /** A choice field's settings: its option list and where the options offered come from. */
 const choiceFieldSettingsSchema = z
   .object({
-    options: z.array(optionSchema).min(1).max(200),
+    options: z.array(optionSchema).min(1).max(definitionLimits.choiceOptions),
     optionsSource: choiceOptionsSourceSchema,
   })
   .strict()
@@ -183,8 +185,8 @@ const choiceFieldSettingsSchema = z
   });
 const severalChoicesSettingsSchema = z
   .object({
-    options: z.array(optionSchema).min(1).max(200),
-    maximumSelections: z.number().int().min(1).max(200).optional(),
+    options: z.array(optionSchema).min(1).max(definitionLimits.choiceOptions),
+    maximumSelections: z.number().int().min(1).max(definitionLimits.choiceOptions).optional(),
     optionsSource: choiceOptionsSourceSchema,
   })
   .strict()
@@ -901,13 +903,13 @@ export const moduleQueryDefinitionSchema = z
     description: z.string().min(1).max(1_000).optional(),
     exposure: moduleQueryExposureSchema,
     recordType: recordTypeReferenceSchema,
-    inputs: z.array(actionInputDefinitionSchema).max(50),
+    inputs: z.array(actionInputDefinitionSchema).max(definitionLimits.actionInputs),
     selectedFieldIds: z.array(fieldIdSchema).min(1).max(200),
     filter: conditionNodeSchema.nullable().optional(),
     groupByFieldIds: z.array(fieldIdSchema).max(10),
-    aggregates: z.array(moduleQueryAggregateSchema).max(20),
-    sort: z.array(moduleQuerySortSchema).min(1).max(20),
-    pageSize: z.number().int().min(1).max(200),
+    aggregates: z.array(moduleQueryAggregateSchema).max(definitionLimits.queryTotals),
+    sort: z.array(moduleQuerySortSchema).min(1).max(definitionLimits.querySortKeys),
+    pageSize: z.number().int().min(1).max(definitionLimits.queryPageSize),
     relationshipHops: z.number().int().min(0).max(2),
   })
   .strict();
@@ -974,8 +976,8 @@ const moduleSystemProjectionSchema = z
       })
       .strict()
       .optional(),
-    filterableFieldIds: z.array(fieldIdSchema).max(500),
-    sortableFieldIds: z.array(fieldIdSchema).max(500),
+    filterableFieldIds: z.array(fieldIdSchema).max(definitionLimits.fieldsPerRecordType),
+    sortableFieldIds: z.array(fieldIdSchema).max(definitionLimits.fieldsPerRecordType),
   })
   .strict()
   .superRefine((value, context) => {
@@ -1023,7 +1025,7 @@ export const recordTypeDefinitionSchema = z
     storageScope: z.enum(["organization_shared", "application_contained"]),
     ownershipMode: recordOwnershipModeSchema,
     ownershipRelationshipId: containedComponentIdSchema.optional(),
-    fields: z.array(moduleFieldSchema).min(1).max(500),
+    fields: z.array(moduleFieldSchema).min(1).max(definitionLimits.fieldsPerRecordType),
     relationships: z.array(relationshipDefinitionSchema),
     standardActions: z
       .array(z.enum(["create", "read", "update", "soft_delete", "restore", "export"]))
@@ -1032,7 +1034,7 @@ export const recordTypeDefinitionSchema = z
     /** The record type's BeforeSave flows in the order they run inside its save. */
     beforeSaveFlowIds: z.array(flowIdSchema).max(100),
     systemProjection: moduleSystemProjectionSchema.optional(),
-    pipelines: z.array(recordTypePipelineSchema).max(maximumRecordTypePipelines),
+    pipelines: z.array(recordTypePipelineSchema).max(definitionLimits.pipelinesPerRecordType),
   })
   .strict()
   .superRefine((value, context) => {
@@ -1068,11 +1070,15 @@ export const recordTypeDefinitionSchema = z
     }
   })
   .superRefine((value, context) => {
-    if (value.fields.filter((field) => field.sortable).length > 8)
+    for (const { index, limit } of fieldFlagLimitIssues(value.fields, {
+      sortable: (field) => field.sortable,
+      filterable: (field) => field.filterable,
+      searchable: (field) => field.searchPriority !== undefined,
+    }))
       context.addIssue({
         code: "custom",
-        path: ["fields"],
-        message: "A record type may declare at most eight sortable fields",
+        path: ["fields", index],
+        message: definitionLimitMessage(limit),
       });
     if ((value.ownershipMode === "inherited") !== (value.ownershipRelationshipId !== undefined))
       context.addIssue({
@@ -1268,7 +1274,7 @@ export const actionDefinitionSchema = z
     permissionKey: namespacedKeySchema.optional(),
     permissionKeys: z.array(namespacedKeySchema).min(2).optional(),
     sharing: z.enum(["refused", "allowed"]),
-    inputs: z.array(actionInputDefinitionSchema).max(50),
+    inputs: z.array(actionInputDefinitionSchema).max(definitionLimits.actionInputs),
     precondition: conditionNodeSchema.optional(),
     /** The Module flow (transaction execution) that is this action's behaviour. */
     flowId: flowIdSchema.optional(),
@@ -1352,10 +1358,10 @@ export const moduleContentSchema = z
     /** The one Application that owns this Module; every other Application uses it by name. */
     ownerApplication: namespacedKeySchema,
     dependencies: z.array(moduleDependencySchema),
-    recordTypes: z.array(recordTypeDefinitionSchema).max(100),
+    recordTypes: z.array(recordTypeDefinitionSchema).max(definitionLimits.recordTypesPerModule),
     permissions: z.array(permissionDeclarationSchema),
-    actions: z.array(actionDefinitionSchema),
-    events: z.array(eventDefinitionSchema),
+    actions: z.array(actionDefinitionSchema).max(definitionLimits.actionsPerModule),
+    events: z.array(eventDefinitionSchema).max(definitionLimits.eventsPerModule),
     sharingConditions: z.array(savedSharingConditionSchema),
     extensionPoints: z.array(
       z
@@ -1367,8 +1373,11 @@ export const moduleContentSchema = z
         })
         .strict(),
     ),
-    flows: z.array(flowSchema).max(100),
-    queries: z.array(moduleQueryDefinitionSchema).max(100).default([]),
+    flows: z.array(flowSchema).max(definitionLimits.flowsPerOwner),
+    queries: z
+      .array(moduleQueryDefinitionSchema)
+      .max(definitionLimits.queriesPerModule)
+      .default([]),
     contributions: z.array(moduleContributionSchema).max(100).optional(),
   })
   .strict();

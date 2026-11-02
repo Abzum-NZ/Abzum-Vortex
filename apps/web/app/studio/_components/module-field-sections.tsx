@@ -1,5 +1,14 @@
 "use client";
-import { FieldLegend, FieldSet } from "@vortex/ui/components/field";
+import { StudioReasoned } from "@vortex/ui/studio";
+import {
+  Field,
+  FieldContent,
+  FieldDescription,
+  FieldLabel,
+  FieldLegend,
+  FieldSet,
+} from "@vortex/ui/components/field";
+import { Switch } from "@vortex/ui/components/switch";
 
 import { Alert, AlertDescription, AlertTitle } from "@vortex/ui/components/alert";
 import { Button } from "@vortex/ui/components/button";
@@ -8,7 +17,6 @@ import { Input } from "@vortex/ui/components/input";
 import { Label } from "@vortex/ui/components/label";
 import { Textarea } from "@vortex/ui/components/textarea";
 import {
-  StudioHelp,
   StudioInspectorGroup,
   StudioOptionControl,
   StudioSettingFields,
@@ -20,6 +28,9 @@ import {
   moduleFieldTypeLabels,
   plainSourceSettingValue,
   type ApplicationSourceDocument,
+  definitionLimitNear,
+  definitionLimitUsage,
+  type CountedLimit,
   type ApplicationUsePlace,
   type CalculationSettings,
   type FormulaField,
@@ -42,6 +53,16 @@ import { StudioTotalEditor } from "./studio-total-editor";
 type SourceField =
   ApplicationSourceDocument["body"]["modules"][number]["record_types"][number]["fields"][number];
 export type Plain = Readonly<Record<string, unknown>>;
+
+/** One flag of a field: its value, why it cannot change, and the limit it counts against. */
+export type FieldFlagState = Readonly<{
+  checked: boolean;
+  reason: string | undefined;
+  limit?: CountedLimit;
+  /** How many fields of the record type hold the flag, this one included. */
+  used?: number;
+  showMe?: (() => void) | undefined;
+}>;
 
 export type FieldFormState = Readonly<{
   label: string;
@@ -150,30 +171,47 @@ function FieldFlag({
   checked,
   disabled,
   reason,
+  description,
+  action,
   onChange,
 }: Readonly<{
   name: string;
   text: string;
   checked: boolean;
   disabled: boolean;
-  /** Why the setting cannot be changed, shown behind an info icon. */
+  /** Why the setting cannot be changed, shown on hover and focus. */
   reason?: string | undefined;
+  /** What the setting counts against, such as `5 of 8 used`. */
+  description?: string | undefined;
+  /** A follow-up beside the description, such as listing what uses up the limit. */
+  action?: Readonly<{ label: string; onSelect: () => void }> | undefined;
   onChange: (checked: boolean) => void;
 }>) {
   const id = `module-field-${name}`;
   return (
-    <div className="flex items-center gap-2">
-      <Checkbox
-        id={id}
-        checked={checked}
-        disabled={disabled}
-        onCheckedChange={(next) => onChange(next === true)}
-      />
-      <Label htmlFor={id} className="font-normal">
-        {text}
-      </Label>
-      {reason !== undefined && <StudioHelp hint={reason} />}
-    </div>
+    <Field orientation="horizontal">
+      <FieldContent>
+        <FieldLabel htmlFor={id} className="font-normal">
+          {text}
+        </FieldLabel>
+        {description === undefined ? null : (
+          <FieldDescription>
+            {description}
+            {action === undefined ? null : (
+              <>
+                {" "}
+                <Button type="button" variant="link" size="xs" onClick={action.onSelect}>
+                  {action.label}
+                </Button>
+              </>
+            )}
+          </FieldDescription>
+        )}
+      </FieldContent>
+      <StudioReasoned reason={reason}>
+        <Switch id={id} checked={checked} disabled={disabled} onCheckedChange={onChange} />
+      </StudioReasoned>
+    </Field>
   );
 }
 
@@ -486,9 +524,9 @@ export function FieldFormsAndListsSection({
   onHelpText: (next: string) => void;
   disabled: boolean;
   flags: Readonly<{
-    unique: Readonly<{ checked: boolean; reason: string | undefined }>;
-    filterable: Readonly<{ checked: boolean; reason: string | undefined }>;
-    sortable: Readonly<{ checked: boolean; reason: string | undefined }>;
+    unique: FieldFlagState;
+    filterable: FieldFlagState;
+    sortable: FieldFlagState;
   }>;
   offered: readonly FieldPlacementOffer[];
   checkedPlaces: ReadonlySet<string>;
@@ -539,8 +577,19 @@ export function FieldFormsAndListsSection({
             name={key}
             text={text}
             checked={flags[key].checked}
-            disabled={disabled || flags[key].reason !== undefined}
+            disabled={disabled}
             reason={flags[key].reason}
+            description={
+              flags[key].limit !== undefined &&
+              definitionLimitNear(flags[key].limit, flags[key].used ?? 0)
+                ? definitionLimitUsage(flags[key].limit, flags[key].used ?? 0)
+                : undefined
+            }
+            action={
+              flags[key].showMe === undefined
+                ? undefined
+                : { label: "Show me", onSelect: flags[key].showMe }
+            }
             onChange={(checked) => onFlag(key, checked)}
           />
         ))}
@@ -593,10 +642,13 @@ export function FieldFormsAndListsSection({
 export function FieldSearchSection({
   value,
   disabled,
+  limitReason,
   onChange,
 }: Readonly<{
   value: FieldFormState["searchPriority"];
   disabled: boolean;
+  /** Why the field cannot be indexed: the record type indexes as many fields as it may. */
+  limitReason: string | undefined;
   onChange: (value: FieldFormState["searchPriority"]) => void;
 }>) {
   const labels = { first: "Found first", normal: "Normal", last: "Found last" } as const;
@@ -608,14 +660,17 @@ export function FieldSearchSection({
     >
       <StudioField
         label="Search index priority"
-        hint="Rank this field when it is indexed. Field type and privacy rules still decide which values enter search. Choose application result fields in the record type's Search tab."
+        hint={
+          limitReason ??
+          "Rank this field when it is indexed. Field type and privacy rules still decide which values enter search. Choose application result fields in the record type's Search tab."
+        }
       >
         {(control) => (
           <StudioOptionControl
             {...control}
             value={value ?? ""}
             unset="Not indexed"
-            disabled={disabled}
+            disabled={disabled || limitReason !== undefined}
             options={Object.entries(labels).map(([key, label]) => ({ value: key, label }))}
             onChange={(next) => onChange(next === "" ? null : (next as typeof value))}
           />

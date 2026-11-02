@@ -1,4 +1,5 @@
 "use client";
+import { StudioLimitNote, StudioReasoned, studioLimitReason } from "@vortex/ui/studio";
 import { useState, type FormEvent } from "react";
 import {
   createInlineRecordType,
@@ -98,6 +99,10 @@ export function StudioRecordTypeDialog({
   const effectiveKey = key ?? derivedKey;
   const effectivePlural = plural ?? pluralOf(name);
   const firstModule = modules.length === 0;
+  const recordTypeLimitReason = studioLimitReason(
+    "recordTypesPerModule",
+    target?.record_types.length ?? 0,
+  );
 
   const reset = () => {
     setName("");
@@ -112,6 +117,7 @@ export function StudioRecordTypeDialog({
   };
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (recordTypeLimitReason !== undefined) return;
     const result = edit((current) =>
       createInlineRecordType(
         current,
@@ -321,6 +327,13 @@ export function StudioRecordTypeDialog({
                 </StudioField>
               )
             )}
+            {target === undefined ? null : (
+              <StudioLimitNote
+                limit="recordTypesPerModule"
+                used={target.record_types.length}
+                label={`Record types in ${target.name}`}
+              />
+            )}
             {issues.length === 0 ? null : (
               <Alert variant="destructive" aria-label="Why the record type was not added">
                 <AlertDescription>
@@ -345,9 +358,11 @@ export function StudioRecordTypeDialog({
           >
             Cancel
           </Button>
-          <Button type="submit" form="studio-record-type-form">
-            Add record type
-          </Button>
+          <StudioReasoned reason={recordTypeLimitReason}>
+            <Button type="submit" form="studio-record-type-form">
+              Add record type
+            </Button>
+          </StudioReasoned>
         </DialogFooter>
       </DialogContent>
     </Dialog>

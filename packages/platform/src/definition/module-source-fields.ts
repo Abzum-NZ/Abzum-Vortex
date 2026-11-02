@@ -1,3 +1,4 @@
+import { definitionLimits } from "./definition-limits";
 import {
   flowFormulaSchema,
   flowFormulaUsesNow,
@@ -206,11 +207,17 @@ const sourceDateTimeSettingsSchema = z
   })
   .strict();
 const sourceChoiceSettingsSchema = z
-  .object({ options: sourceProvenanceUnchanged(z.array(sourceOptionSchema).min(1).max(200)) })
+  .object({
+    options: sourceProvenanceUnchanged(
+      z.array(sourceOptionSchema).min(1).max(definitionLimits.choiceOptions),
+    ),
+  })
   .strict();
 const sourceChoiceFieldSettingsSchema = z
   .object({
-    options: sourceProvenanceUnchanged(z.array(sourceOptionSchema).min(1).max(200)),
+    options: sourceProvenanceUnchanged(
+      z.array(sourceOptionSchema).min(1).max(definitionLimits.choiceOptions),
+    ),
     options_source: sourceChoiceOptionsSourceSchema,
   })
   .strict()
@@ -235,8 +242,12 @@ const sourceChoiceFieldSettingsSchema = z
   });
 const sourceSeveralChoicesSettingsSchema = z
   .object({
-    options: sourceProvenanceUnchanged(z.array(sourceOptionSchema).min(1).max(200)),
-    maximum_selections: sourceProvenanceUnchanged(z.number().int().min(1).max(200).optional()),
+    options: sourceProvenanceUnchanged(
+      z.array(sourceOptionSchema).min(1).max(definitionLimits.choiceOptions),
+    ),
+    maximum_selections: sourceProvenanceUnchanged(
+      z.number().int().min(1).max(definitionLimits.choiceOptions).optional(),
+    ),
     options_source: sourceChoiceOptionsSourceSchema,
   })
   .strict();

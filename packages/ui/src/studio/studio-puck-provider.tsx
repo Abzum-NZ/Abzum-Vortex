@@ -11,6 +11,7 @@ import {
 import "@puckeditor/core/no-external.css";
 import {
   compiledItemSettings,
+  definitionLimitReached,
   type ApplicationSourceDocument,
   type ImmutablePlatformBlockCatalogue,
 } from "@vortex/platform/schema";
@@ -47,13 +48,14 @@ import {
 import { studioCanvasOverrides } from "./studio-canvas-actions";
 import type { StudioCanvasGridChange, StudioCanvasGridRead } from "./studio-canvas-grid";
 import { useStudioCanvasModel, type StudioCanvasModel } from "./studio-canvas-model";
-import type { StudioCanvasViewer } from "./studio-canvas-render";
+import type { StudioCanvasMetadata, StudioCanvasViewer } from "./studio-canvas-metadata";
 import type { StudioCanvasAddRequest } from "./studio-block-palette";
 import type { StudioCanvasRecordsReader } from "./use-studio-canvas-records";
+import { useStudioCanvasMetadata } from "./use-studio-canvas-metadata";
 
 export type { Breakpoint as StudioCanvasBreakpoint } from "../definition-error";
 export type { StudioCanvasFrame } from "./studio-canvas-projection";
-export type { StudioCanvasViewer } from "./studio-canvas-render";
+export type { StudioCanvasViewer } from "./studio-canvas-metadata";
 export type { StudioCanvasAddRequest } from "./studio-block-palette";
 export type {
   StudioCanvasRecordsRead,
@@ -271,19 +273,30 @@ export function StudioPuckProvider({
     });
   }, []);
 
+  const canvasMetadata = useStudioCanvasMetadata(input, model);
   const metadata = useMemo(
-    () => ({ breakpoint: input.breakpoint, readSettings: compiledItemSettings }),
-    [input.breakpoint],
+    (): StudioCanvasMetadata => ({
+      breakpoint: input.breakpoint,
+      readSettings: compiledItemSettings,
+      ...canvasMetadata,
+    }),
+    [input.breakpoint, canvasMetadata],
   );
+  // The application holds every block it may: Duplicate and every other insert are off.
+  const placed =
+    input.palette?.targets.kind === "available"
+      ? (input.palette.targets.targets[0]?.placed ?? 0)
+      : 0;
+  const full = definitionLimitReached("compositionPlacements", placed);
   const permissions = useMemo(
     () => ({
       drag: permitted,
-      duplicate: permitted,
+      duplicate: permitted && !full,
       delete: permitted,
       edit: false,
       insert: false,
     }),
-    [permitted],
+    [permitted, full],
   );
   const empty = useMemo(
     (): Data => ({ root: { props: model.rootProps }, content: [] }),
