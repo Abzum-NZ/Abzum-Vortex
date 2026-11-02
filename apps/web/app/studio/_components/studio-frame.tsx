@@ -33,6 +33,7 @@ import {
 } from "@vortex/ui/components/collapsible";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@vortex/ui/components/tooltip";
 import { Separator } from "@vortex/ui/components/separator";
+import { Kbd } from "@vortex/ui/components/kbd";
 import { cn } from "@vortex/ui/lib/utils";
 
 /** The one scroll body of a Studio rail panel and its inspector; positioned, so screen-reader-only text stays inside the scroll area. */
@@ -77,6 +78,39 @@ const readStoredWidths = (): Record<string, number> => {
     return {};
   }
 };
+const collapsedStorageKey = "vortex.studio.panel-collapsed";
+// Without storage (a private window) the choice lasts for this visit only.
+let heldCollapsed: boolean | undefined;
+const collapsedListeners = new Set<() => void>();
+const readCollapsed = (): boolean => {
+  if (heldCollapsed !== undefined) return heldCollapsed;
+  try {
+    return window.localStorage.getItem(collapsedStorageKey) === "true";
+  } catch {
+    // Blocked storage: the panel opens, as it does by default.
+    return false;
+  }
+};
+const storeCollapsed = (collapsed: boolean): void => {
+  try {
+    window.localStorage.setItem(collapsedStorageKey, String(collapsed));
+  } catch {
+    // The choice is a convenience; without storage the held value covers this visit.
+    heldCollapsed = collapsed;
+  }
+  for (const notify of collapsedListeners) notify();
+};
+const subscribeCollapsed = (notify: () => void): (() => void) => {
+  collapsedListeners.add(notify);
+  window.addEventListener("storage", notify);
+  return () => {
+    collapsedListeners.delete(notify);
+    window.removeEventListener("storage", notify);
+  };
+};
+// The server and the first client render do not know the choice (`null`); it resolves in the same
+// post-hydration render as the layout width, so the panel never shows and then folds away.
+const readCollapsedOnServer = (): boolean | null => null;
 const storeWidths = (widths: Readonly<Record<string, number>>): void => {
   try {
     window.localStorage.setItem(widthStorageKey, JSON.stringify(widths));
@@ -156,12 +190,17 @@ function StudioRail<Key extends string>({
   open,
   onChoose,
   label,
+  collapsed,
+  onToggleCollapsed,
 }: Readonly<{
   tabs: readonly StudioRailTab<Key>[];
   active: Key;
   open: boolean;
   onChoose: (key: Key) => void;
   label: string;
+  collapsed: boolean;
+  /** Collapses or expands the panel beside the rail; absent where the panel is a sheet. */
+  onToggleCollapsed: (() => void) | undefined;
 }>) {
   const buttons = useRef(new Map<Key, HTMLButtonElement>());
   const [focusKey, setFocusKey] = useState<Key>(active);
@@ -187,52 +226,87 @@ function StudioRail<Key extends string>({
     buttons.current.get(next)?.focus();
   };
   return (
-    <div
-      role="tablist"
-      aria-orientation="vertical"
-      aria-label={label}
-      onKeyDown={move}
-      className="flex w-18 shrink-0 flex-col items-center gap-1 overflow-y-auto border-r border-sidebar-border bg-sidebar px-1 py-2 text-sidebar-foreground"
-    >
-      {tabs.map((tab, index) => {
-        const selected = tab.key === active;
-        const divided = index > 0 && tabs[index - 1]?.group !== tab.group;
-        return (
-          <div key={tab.key} className={cn("w-full", tab.group === "releases" && "mt-auto")}>
-            {divided && <Separator className="my-2" />}
-            <button
-              key={tab.key}
-              type="button"
-              role="tab"
-              id={`studio-rail-${tab.key}`}
-              aria-selected={selected}
-              aria-controls="studio-rail-panel"
-              aria-expanded={selected ? open : undefined}
-              tabIndex={tab.key === focusKey ? 0 : -1}
-              title={tab.label}
-              ref={(node) => {
-                if (node === null) buttons.current.delete(tab.key);
-                else buttons.current.set(tab.key, node);
-              }}
-              onFocus={() => setFocusKey(tab.key)}
-              onClick={() => onChoose(tab.key)}
-              className={cn(
-                "relative flex h-13 w-full flex-col items-center justify-center gap-1 rounded-lg border-0 px-1 py-0 text-xs font-medium outline-none transition-colors",
-                "hover:bg-sidebar-accent/60 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring",
-                selected
-                  ? "bg-sidebar-accent text-sidebar-accent-foreground before:absolute before:inset-y-3 before:-left-1 before:w-0.75 before:rounded-full before:bg-primary"
-                  : "bg-transparent text-muted-foreground",
-              )}
-            >
-              <Icon name={tab.icon} className="size-5" />
-              <span className="max-w-full truncate">{tab.label}</span>
-            </button>
-          </div>
-        );
-      })}
+    <div className="flex w-18 shrink-0 flex-col items-center gap-1 overflow-y-auto border-r border-sidebar-border bg-sidebar px-1 py-2 text-sidebar-foreground">
+      {onToggleCollapsed !== undefined && (
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <button
+                type="button"
+                id="studio-panel-toggle"
+                aria-label="Side panel"
+                aria-expanded={!collapsed}
+                aria-controls="studio-rail-panel"
+                onClick={onToggleCollapsed}
+                className="mb-1 flex size-9 shrink-0 items-center justify-center rounded-lg text-muted-foreground outline-none hover:bg-sidebar-accent/60 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+              />
+            }
+          >
+            <Icon name="panel-left" className="size-5" />
+          </TooltipTrigger>
+          <TooltipContent>
+            {collapsed ? "Expand panel" : "Collapse panel"} <Kbd>Ctrl B</Kbd>
+          </TooltipContent>
+        </Tooltip>
+      )}
+      <div
+        role="tablist"
+        aria-orientation="vertical"
+        aria-label={label}
+        onKeyDown={move}
+        className="flex min-h-0 w-full flex-1 flex-col items-center gap-1"
+      >
+        {tabs.map((tab, index) => {
+          const selected = tab.key === active;
+          const divided = index > 0 && tabs[index - 1]?.group !== tab.group;
+          return (
+            <div key={tab.key} className={cn("w-full", tab.group === "releases" && "mt-auto")}>
+              {divided && <Separator className="my-2" />}
+              <button
+                key={tab.key}
+                type="button"
+                role="tab"
+                id={`studio-rail-${tab.key}`}
+                aria-selected={selected}
+                aria-controls="studio-rail-panel"
+                aria-expanded={selected ? open : undefined}
+                tabIndex={tab.key === focusKey ? 0 : -1}
+                title={tab.label}
+                ref={(node) => {
+                  if (node === null) buttons.current.delete(tab.key);
+                  else buttons.current.set(tab.key, node);
+                }}
+                onFocus={() => setFocusKey(tab.key)}
+                onClick={() => onChoose(tab.key)}
+                className={cn(
+                  "relative flex h-13 w-full flex-col items-center justify-center gap-1 rounded-lg border-0 px-1 py-0 text-xs font-medium outline-none transition-colors",
+                  "hover:bg-sidebar-accent/60 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring",
+                  selected
+                    ? "bg-sidebar-accent text-sidebar-accent-foreground before:absolute before:inset-y-3 before:-left-1 before:w-0.75 before:rounded-full before:bg-primary"
+                    : "bg-transparent text-muted-foreground",
+                )}
+              >
+                <Icon name={tab.icon} className="size-5" />
+                <span className="max-w-full truncate">{tab.label}</span>
+              </button>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
+
+/**
+ * A select, menu or combobox opened from the panel portals its popup to the style root, outside the
+ * rail: while it is open (its trigger says `aria-haspopup` and `aria-expanded`) the panel still owns the focus.
+ */
+const panelPopupOpen = (): boolean =>
+  document.querySelector('#studio-rail-panel [aria-haspopup][aria-expanded="true"]') !== null;
+
+/** Whether an event target is in the rail or in its panel (a portal whose host sits inside the rail). */
+const inRailOrPanel = (rail: HTMLElement | null, target: EventTarget | null): boolean =>
+  rail !== null && target instanceof Node && rail.contains(target);
 
 /** The drag handle between the panel and the canvas; arrow keys resize it a quarter rem at a time. */
 function PanelResizer({
@@ -313,7 +387,10 @@ export function StudioFrame<Key extends string>({
   inspector,
   selectionKey,
   inspectorLabel = "Inspector",
+  dragging = false,
 }: Readonly<{
+  /** A block is being dragged: a collapsed panel's overlay gets out of its way until the drop. */
+  dragging?: boolean;
   topBar: ReactNode;
   tabs: readonly StudioRailTab<Key>[];
   activeTab: Key;
@@ -338,6 +415,40 @@ export function StudioFrame<Key extends string>({
   const dockInspector = viewport >= 1280;
   const { widthOf, setWidth } = useStudioPanelWidths<Key>();
   const [panelOpen, setPanelOpen] = useState(true);
+  // Collapsed: the panel is closed until the pointer visits the rail, and then it overlays the canvas.
+  // `null` until the stored choice is read, so a reload never shows the panel and then folds it away.
+  const storedCollapsed = useSyncExternalStore<boolean | null>(
+    subscribeCollapsed,
+    readCollapsed,
+    readCollapsedOnServer,
+  );
+  const collapsed = storedCollapsed === true;
+  const [peeking, setPeeking] = useState(false);
+  const peekTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const pointerInside = useRef(false);
+  const rail = useRef<HTMLDivElement>(null);
+  // Opening waits a moment, so passing over the rail does not pop the panel; closing waits longer.
+  const peek = useCallback((open: boolean, immediately = false) => {
+    clearTimeout(peekTimer.current);
+    if (open && immediately) setPeeking(true);
+    else peekTimer.current = setTimeout(() => setPeeking(open), open ? 150 : 300);
+  }, []);
+  useEffect(() => () => clearTimeout(peekTimer.current), []);
+  const toggleCollapsed = useCallback(() => {
+    if (!wide) return;
+    const inPanel = document.activeElement?.closest("#studio-rail-panel") != null;
+    storeCollapsed(!collapsed);
+    clearTimeout(peekTimer.current);
+    setPeeking(false);
+    // The panel leaves the page with the focus inside it: the toggle keeps it.
+    if (inPanel) document.getElementById("studio-panel-toggle")?.focus();
+  }, [wide, collapsed]);
+  // The drag ended: the overlay closes after the drop.
+  const wasDragging = useRef(false);
+  useEffect(() => {
+    if (wasDragging.current && !dragging) setPeeking(false);
+    wasDragging.current = dragging;
+  }, [dragging]);
   const [inspectorOpen, setInspectorOpen] = useState(true);
   const [narrowPanelOpen, setNarrowPanelOpen] = useState(false);
   const [narrowInspectorOpen, setNarrowInspectorOpen] = useState(false);
@@ -379,10 +490,14 @@ export function StudioFrame<Key extends string>({
         event.preventDefault();
         focusCanvas();
       }
+      if (event.key === "b" && dialog === null && wide) {
+        event.preventDefault();
+        toggleCollapsed();
+      }
     };
     window.addEventListener("keydown", shortcut);
     return () => window.removeEventListener("keydown", shortcut);
-  }, [focusCanvas, toggleInspector]);
+  }, [focusCanvas, toggleInspector, toggleCollapsed, wide]);
   const previousSelection = useRef(selectionKey);
   const [hosts, setHosts] = useState<PaneHosts | null>(null);
   // The hosts are made once per frame: effects run again when a suspended part of Studio shows again,
@@ -416,8 +531,10 @@ export function StudioFrame<Key extends string>({
     setFocused(false);
     // Selecting a tab always reveals its pane, including the tab restored from the URL on reload.
     onTabChange(key);
-    if (wide) setPanelOpen(true);
-    else setNarrowPanelOpen(true);
+    if (wide) {
+      setPanelOpen(true);
+      if (collapsed) peek(true, true);
+    } else setNarrowPanelOpen(true);
   };
   const active = tabs.find((tab) => tab.key === activeTab);
   const defaultWidth =
@@ -428,19 +545,83 @@ export function StudioFrame<Key extends string>({
         : (active?.width ?? 17);
   const width = widthOf(activeTab, defaultWidth);
   const inspectorWidth = widthOf("inspector", viewport >= 1920 ? 24 : viewport >= 1440 ? 22 : 20);
-  const showPanel = wide && panelOpen;
+  const showPanel = wide && panelOpen && storedCollapsed === false;
+  const overlayPanel = wide && panelOpen && collapsed && (peeking || dragging);
   const showInspector = hasInspector && dockInspector && inspectorOpen;
   return (
-    <div className="flex h-dvh min-w-0 flex-col bg-background text-foreground">
+    <div
+      className="flex h-dvh min-w-0 flex-col bg-background text-foreground"
+      // The panel's content is a portal: its events reach this element through React, not the rail's
+      // wrapper, so the overlay's keyboard path lives here and asks where the event came from.
+      onKeyDown={(event) => {
+        if (event.key !== "Escape" || event.defaultPrevented || !collapsed || !overlayPanel) return;
+        if (!inRailOrPanel(rail.current, event.target)) return;
+        // An open combobox or menu answers its own Escape.
+        if (
+          event.target instanceof Element &&
+          event.target.getAttribute("aria-expanded") === "true"
+        )
+          return;
+        event.stopPropagation();
+        clearTimeout(peekTimer.current);
+        setPeeking(false);
+        document.getElementById(`studio-rail-${activeTab}`)?.focus();
+      }}
+      onBlur={(event) => {
+        // Keyboard use: focus leaving the rail and its panel closes the overlay.
+        if (
+          !collapsed ||
+          pointerInside.current ||
+          !inRailOrPanel(rail.current, event.target) ||
+          inRailOrPanel(rail.current, event.relatedTarget) ||
+          panelPopupOpen()
+        )
+          return;
+        peek(false);
+      }}
+    >
       {topBar}
       <div className="flex min-h-0 min-w-0 flex-1">
-        <StudioRail
-          tabs={tabs}
-          active={activeTab}
-          open={wide ? panelOpen : narrowPanelOpen}
-          onChoose={choose}
-          label="Studio areas"
-        />
+        <div
+          ref={rail}
+          className="relative flex min-h-0 shrink-0"
+          onPointerEnter={() => {
+            pointerInside.current = true;
+            if (collapsed && wide) peek(true);
+          }}
+          onPointerLeave={() => {
+            pointerInside.current = false;
+            if (collapsed) peek(false);
+          }}
+        >
+          <StudioRail
+            tabs={tabs}
+            active={activeTab}
+            open={wide ? panelOpen && (!collapsed || peeking) : narrowPanelOpen}
+            onChoose={choose}
+            label="Studio areas"
+            collapsed={collapsed}
+            onToggleCollapsed={wide ? toggleCollapsed : undefined}
+          />
+          {collapsed && wide && (
+            <section
+              id="studio-rail-panel"
+              role="tabpanel"
+              aria-labelledby={`studio-rail-${activeTab}`}
+              aria-hidden={!overlayPanel}
+              data-studio-panel-overlay=""
+              className={cn(
+                "absolute inset-y-0 left-full z-30 flex min-h-0 flex-col border-r border-border bg-sidebar shadow-lg transition-opacity",
+                overlayPanel ? "opacity-100" : "pointer-events-none invisible opacity-0",
+                // The drag source stays mounted while it is dragged from; only its look leaves.
+                dragging && "pointer-events-none !visible opacity-0",
+              )}
+              style={{ width: `${width}rem` }}
+            >
+              <PaneSlot host={hosts?.panel ?? null} />
+            </section>
+          )}
+        </div>
         {showPanel && (
           <>
             <section

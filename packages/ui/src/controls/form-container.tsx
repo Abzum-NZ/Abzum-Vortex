@@ -1,5 +1,6 @@
 "use client";
 
+import { isInputElement } from "../lib/dom";
 import {
   useCallback,
   useContext,
@@ -444,7 +445,7 @@ export function FormContainer(props: FormContainerProps): ReactElement {
     if (
       event.key !== "Enter" ||
       event.nativeEvent.isComposing ||
-      !(target instanceof HTMLInputElement) ||
+      !isInputElement(target) ||
       NON_SUBMITTING_INPUT_TYPES.has(target.type)
     )
       return;

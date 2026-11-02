@@ -1,5 +1,6 @@
 "use client";
 
+import { isHtmlElement } from "../lib/dom";
 import * as React from "react";
 import { Dialog as DialogPrimitive } from "@base-ui/react/dialog";
 import { cn } from "../lib/utils";
@@ -21,12 +22,11 @@ function findStyleRoot(anchor: HTMLElement | null): HTMLElement | null {
   if (anchor === null) return null;
 
   const containingRoot = anchor.closest("[data-vortex-style-root]");
-  if (containingRoot instanceof HTMLElement) return containingRoot;
+  if (isHtmlElement(containingRoot)) return containingRoot;
 
   let sibling = anchor.previousElementSibling;
   while (sibling !== null) {
-    if (sibling instanceof HTMLElement && sibling.matches("[data-vortex-style-root]"))
-      return sibling;
+    if (isHtmlElement(sibling) && sibling.matches("[data-vortex-style-root]")) return sibling;
     // The application page may wrap its style root. Resolve that sibling before using focus:
     // once this dialog opens, the focused field belongs to the dialog's own nested style root.
     const nestedRoot = sibling.querySelector<HTMLElement>("[data-vortex-style-root]");
@@ -34,12 +34,14 @@ function findStyleRoot(anchor: HTMLElement | null): HTMLElement | null {
     sibling = sibling.previousElementSibling;
   }
 
-  const focusedRoot = document.activeElement?.closest("[data-vortex-style-root]");
-  if (focusedRoot instanceof HTMLElement) return focusedRoot;
+  // The anchor's own document: the Studio canvas draws blocks inside an iframe.
+  const ownerDocument = anchor.ownerDocument;
+  const focusedRoot = ownerDocument.activeElement?.closest("[data-vortex-style-root]");
+  if (isHtmlElement(focusedRoot)) return focusedRoot;
 
-  const roots = document.querySelectorAll("[data-vortex-style-root]");
+  const roots = ownerDocument.querySelectorAll("[data-vortex-style-root]");
   const onlyRoot = roots.length === 1 ? roots.item(0) : null;
-  return onlyRoot instanceof HTMLElement ? onlyRoot : null;
+  return isHtmlElement(onlyRoot) ? onlyRoot : null;
 }
 
 function DialogPortal({ container, ...props }: DialogPrimitive.Portal.Props) {

@@ -1,6 +1,7 @@
 "use client";
 
-import { createUsePuck, useGetPuck } from "@puckeditor/core";
+import { createUsePuck, useGetPuck, type Overrides } from "@puckeditor/core";
+import { StudioCanvasIframe } from "./studio-canvas-root";
 import { createPortal } from "react-dom";
 import { Copy, Trash2 } from "lucide-react";
 import { Button } from "../components/button";
@@ -101,5 +102,8 @@ export function StudioCanvasActions({ host }: Readonly<{ host: HTMLElement | nul
   );
 }
 
-/** Replaces Puck's floating action bar with StudioCanvasActions. */
-export const studioCanvasOverrides = { actionBar: () => <></> };
+/** Replaces Puck's floating action bar with StudioCanvasActions, and draws the frame in the iframe. */
+export const studioCanvasOverrides: Partial<Overrides> = {
+  actionBar: () => <></>,
+  iframe: StudioCanvasIframe,
+};

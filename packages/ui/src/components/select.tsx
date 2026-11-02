@@ -1,5 +1,6 @@
 "use client";
 
+import { isHtmlElement } from "../lib/dom";
 import * as React from "react";
 import { Select as SelectPrimitive } from "@base-ui/react/select";
 import { Icon } from "../icons/icon";
@@ -22,7 +23,7 @@ function SelectPortal({ container, ...props }: SelectPrimitive.Portal.Props) {
           container={
             container ??
             styleRoot?.element ??
-            (containingRoot instanceof HTMLElement ? containingRoot : undefined)
+            (isHtmlElement(containingRoot) ? containingRoot : undefined)
           }
           {...props}
         />

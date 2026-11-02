@@ -1,5 +1,6 @@
 "use client";
 
+import { isNode } from "../lib/dom";
 import {
   lazy,
   memo,
@@ -706,8 +707,9 @@ export function RecordsGrid({
   // focus back on the tab stop.
   useEffect(() => {
     if (!gridHasFocus.current) return;
-    const focused = document.activeElement;
-    if (focused === null || focused === document.body)
+    const ownerDocument = gridRef.current?.ownerDocument ?? document;
+    const focused = ownerDocument.activeElement;
+    if (focused === null || focused === ownerDocument.body)
       cellElement(activeRowRef.current, activeColumnIdRef.current)?.focus();
   }, [lines]);
 
@@ -816,16 +818,17 @@ export function RecordsGrid({
   };
 
   const pageStep = (): number => {
+    const view = (scrollRef.current ?? gridRef.current)?.ownerDocument.defaultView ?? window;
     const height = bounded
-      ? (scrollRef.current?.clientHeight ?? window.innerHeight)
-      : window.innerHeight;
+      ? (scrollRef.current?.clientHeight ?? view.innerHeight)
+      : view.innerHeight;
     return Math.max(1, Math.floor(height / rowHeight) - 1);
   };
 
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>): void => {
     if (event.defaultPrevented) return;
     // Keys from a portalled menu or from outside the grid are not grid navigation.
-    if (!(event.target instanceof Node) || !gridRef.current?.contains(event.target)) return;
+    if (!isNode(event.target) || !gridRef.current?.contains(event.target)) return;
     // Inside a row's related records the panel's own controls take every key but Escape, which
     // returns to the row's expand toggle.
     const panel = (event.target as Element).closest<HTMLElement>(PANEL);
@@ -1023,7 +1026,7 @@ export function RecordsGrid({
   };
   const onBlur = (event: FocusEvent<HTMLDivElement>): void => {
     const next = event.relatedTarget;
-    if (next instanceof Node && gridRef.current?.contains(next)) return;
+    if (isNode(next) && gridRef.current?.contains(next)) return;
     if (next !== null) gridHasFocus.current = false;
     setControlMode(false);
   };
@@ -1032,9 +1035,10 @@ export function RecordsGrid({
   const dragged = useRef<string | undefined>(undefined);
   // A resize drag released inside its own heading ends in a click on that heading; it must not sort.
   const resizing = useRef(false);
-  const startResize = (release: "mouseup" | "touchend"): void => {
+  // The document is the heading's own: the canvas draws the grid inside an iframe.
+  const startResize = (release: "mouseup" | "touchend", ownerDocument: Document): void => {
     resizing.current = true;
-    document.addEventListener(
+    ownerDocument.addEventListener(
       release,
       () => {
         layout.commit();
@@ -1183,12 +1187,14 @@ export function RecordsGrid({
                 // The width changes on screen while the pointer moves; it is stored once, when
                 // the pointer is released.
                 onMouseDown={(event) => {
-                  header.getResizeHandler()(event);
-                  startResize("mouseup");
+                  const ownerDocument = event.currentTarget.ownerDocument;
+                  header.getResizeHandler(ownerDocument)(event);
+                  startResize("mouseup", ownerDocument);
                 }}
                 onTouchStart={(event) => {
-                  header.getResizeHandler()(event);
-                  startResize("touchend");
+                  const ownerDocument = event.currentTarget.ownerDocument;
+                  header.getResizeHandler(ownerDocument)(event);
+                  startResize("touchend", ownerDocument);
                 }}
                 onDoubleClick={() => {
                   header.column.resetSize();

@@ -2,6 +2,7 @@
 
 import { Item, ItemContent, ItemDescription, ItemTitle } from "../components/item";
 import { Component, createContext, useContext, type ReactElement, type ReactNode } from "react";
+import { placementWrapperGeometry } from "../puck-config";
 import type { ComponentConfig, Config, Field } from "@puckeditor/core";
 import {
   canonicalResponsivePlacement,
@@ -13,11 +14,13 @@ import {
   typedSettingValue,
   type NavigationPermissionDecisions,
   type PlatformBlockRelease,
+  type ResponsivePlacement,
 } from "@vortex/platform/schema";
 import type { PlatformComponentRegistry } from "../registry";
 import { studioReleaseReadsQuery } from "./contextual-palette";
 import { useStudioCanvasGridEvents } from "./studio-canvas-grid";
 import type { StudioCompileFailure } from "./compile-failure";
+import { StudioCanvasRoot } from "./studio-canvas-root";
 
 /**
  * The Studio canvas renders the stored items Puck holds with the one Puck config. A block's render
@@ -194,21 +197,6 @@ const catalogueDefaults = (release: PlatformBlockRelease): Record<string, unknow
     ),
   );
 
-/**
- * The slot fields only, without Puck's `allow` lists: a block dropped or moved into any slot
- * reaches Studio, whose stored composition check admits it or refuses it with its place and rule.
- */
-const slotFields = (fields: Record<string, Field> | undefined): Record<string, Field> =>
-  Object.fromEntries(
-    Object.entries(fields ?? {}).flatMap(([key, field]) => {
-      if (field.type !== "slot") return [];
-      const slot: Record<string, unknown> = { ...field };
-      delete slot.allow;
-      delete slot.disallow;
-      return [[key, slot as unknown as Field]];
-    }),
-  );
-
 const releaseOf = (
   registry: PlatformComponentRegistry,
   props: Readonly<Record<string, unknown>>,
@@ -219,13 +207,57 @@ const releaseOf = (
     : undefined;
 };
 
+type DragRef = ((element: Element | null) => void) | null | undefined;
+
+const dragRefOf = (props: Readonly<Record<string, unknown>>): DragRef =>
+  (props.puck as { dragRef?: DragRef } | undefined)?.dragRef;
+
+/**
+ * The one box every placeholder of a canvas block draws in: the placement's own wrapper geometry
+ * (so a placeholder in a grid takes its declared cell) with Puck's drag reference on it.
+ */
+function CanvasPlaceholder({
+  dragRef,
+  props,
+  children,
+  ...data
+}: Readonly<{
+  dragRef: DragRef;
+  props: Readonly<Record<string, unknown>>;
+  children: ReactNode;
+}> &
+  Readonly<Record<`data-${string}`, string>>): ReactElement {
+  const vortex = props.vortex as StoredVortex | undefined;
+  const breakpoint =
+    (props.puck as { metadata?: { breakpoint?: "desktop" | "tablet" | "phone" } } | undefined)
+      ?.metadata?.breakpoint ?? "desktop";
+  const responsive =
+    vortex?.responsive === undefined
+      ? undefined
+      : (canonicalResponsivePlacement(vortex.responsive) as ResponsivePlacement);
+  const geometry = placementWrapperGeometry(responsive, breakpoint);
+  return (
+    <div
+      ref={dragRef ?? undefined}
+      data-vortex-layout-wrapper=""
+      data-vortex-placement-id={typeof props.id === "string" ? props.id : ""}
+      {...(geometry.gridChild ? { "data-vortex-grid-child": "" } : {})}
+      {...data}
+      className={geometry.className}
+      style={geometry.style}
+    >
+      {children}
+    </div>
+  );
+}
+
 /**
  * One canvas block that cannot be drawn says so in its own place, with the reason, while the rest of
  * the page and the outline stay usable; the cause goes to the console. It draws again when the
  * block's settings change.
  */
 class CanvasBlockBoundary extends Component<
-  Readonly<{ settings: unknown; children: ReactNode }>,
+  Readonly<{ settings: unknown; props: Readonly<Record<string, unknown>>; children: ReactNode }>,
   Readonly<{ message: string | null }>
 > {
   override state: Readonly<{ message: string | null }> = { message: null };
@@ -246,12 +278,14 @@ class CanvasBlockBoundary extends Component<
   override render() {
     if (this.state.message === null) return this.props.children;
     return (
-      <Item variant="outline" size="sm" role="alert" className="border-destructive">
-        <ItemContent>
-          <ItemTitle>This block can't be shown</ItemTitle>
-          <ItemDescription>{this.state.message}</ItemDescription>
-        </ItemContent>
-      </Item>
+      <CanvasPlaceholder dragRef={dragRefOf(this.props.props)} props={this.props.props}>
+        <Item variant="outline" size="sm" role="alert" className="border-destructive">
+          <ItemContent>
+            <ItemTitle>This block can't be shown</ItemTitle>
+            <ItemDescription>{this.state.message}</ItemDescription>
+          </ItemContent>
+        </Item>
+      </CanvasPlaceholder>
     );
   }
 }
@@ -270,17 +304,20 @@ function CanvasBlock({
   const viewer = useContext(CanvasViewerContext);
   const publishControl = useContext(CanvasControlContext);
   const id = typeof props.id === "string" ? props.id : "";
+  const dragRef = dragRefOf(props);
   const release = releaseOf(registry, props);
   const current = Object.hasOwn(compiled, id) && records.saved.get(id) === records.current.get(id);
   const gridEvents = useStudioCanvasGridEvents(props, current ? compiled[id] : undefined, release);
   // A block just dropped from the palette is shown as a placeholder until Studio adds it.
   if (props.vortex === undefined)
     return (
-      <Item variant="outline" size="sm" className="border-dashed">
-        <ItemContent>
-          <ItemDescription>Adding the block…</ItemDescription>
-        </ItemContent>
-      </Item>
+      <CanvasPlaceholder dragRef={dragRef} props={props}>
+        <Item variant="outline" size="sm" className="border-dashed">
+          <ItemContent>
+            <ItemDescription>Adding the block…</ItemDescription>
+          </ItemContent>
+        </Item>
+      </CanvasPlaceholder>
     );
   const viewKey = (props.vortex as { view_permission?: unknown }).view_permission;
   if (
@@ -291,16 +328,18 @@ function CanvasBlock({
     )
   )
     return (
-      <Item
-        variant="outline"
-        size="sm"
-        className="border-dashed opacity-60"
-        data-vortex-canvas-hidden={id}
-      >
-        <ItemContent>
-          <ItemDescription>Hidden from {viewer.roleName}</ItemDescription>
-        </ItemContent>
-      </Item>
+      <CanvasPlaceholder dragRef={dragRef} props={props}>
+        <Item
+          variant="outline"
+          size="sm"
+          className="border-dashed opacity-60"
+          data-vortex-canvas-hidden={id}
+        >
+          <ItemContent>
+            <ItemDescription>Hidden from {viewer.roleName}</ItemDescription>
+          </ItemContent>
+        </Item>
+      </CanvasPlaceholder>
     );
   const render = component.render as (props: Record<string, unknown>) => ReactElement;
   const refusal = records.refusal;
@@ -312,30 +351,34 @@ function CanvasBlock({
         studioReleaseReadsQuery(release)))
   )
     return (
-      <Item
-        variant="outline"
-        role="alert"
-        className="border-destructive"
-        data-vortex-canvas-refusal={id}
-      >
-        <ItemContent>
-          <ItemTitle>
-            {refusal.sentence ?? records.sentence ?? "This block cannot run yet."}
-          </ItemTitle>
-          {refusal.guidance === undefined ? null : (
-            <ItemDescription>{refusal.guidance}</ItemDescription>
-          )}
-        </ItemContent>
-      </Item>
+      <CanvasPlaceholder dragRef={dragRef} props={props}>
+        <Item
+          variant="outline"
+          role="alert"
+          className="border-destructive"
+          data-vortex-canvas-refusal={id}
+        >
+          <ItemContent>
+            <ItemTitle>
+              {refusal.sentence ?? records.sentence ?? "This block cannot run yet."}
+            </ItemTitle>
+            {refusal.guidance === undefined ? null : (
+              <ItemDescription>{refusal.guidance}</ItemDescription>
+            )}
+          </ItemContent>
+        </Item>
+      </CanvasPlaceholder>
     );
   if (records.state === "not_runnable" && release !== undefined && studioReleaseReadsQuery(release))
     return (
-      <Item variant="outline" data-vortex-canvas-records-note={id}>
-        <ItemContent>
-          <ItemTitle>{release.name}</ItemTitle>
-          <ItemDescription>Records show here once the draft can run.</ItemDescription>
-        </ItemContent>
-      </Item>
+      <CanvasPlaceholder dragRef={dragRef} props={props}>
+        <Item variant="outline" data-vortex-canvas-records-note={id}>
+          <ItemContent>
+            <ItemTitle>{release.name}</ItemTitle>
+            <ItemDescription>Records show here once the draft can run.</ItemDescription>
+          </ItemContent>
+        </Item>
+      </CanvasPlaceholder>
     );
   // A block whose drawing needs what the compiler derives (an automatic field input's control, a
   // data block's resolved fields) is drawn only from a compile of exactly this block. Until then
@@ -346,14 +389,16 @@ function CanvasBlock({
     (findFieldInputBinding(release.properties) !== undefined || studioReleaseReadsQuery(release))
   )
     return (
-      <Item variant="outline" className="border-dashed" data-vortex-canvas-pending={id}>
-        <ItemContent>
-          <ItemTitle>{release.name}</ItemTitle>
-          <ItemDescription>
-            {records.updating ? "Updating the canvas…" : "Save to show this block."}
-          </ItemDescription>
-        </ItemContent>
-      </Item>
+      <CanvasPlaceholder dragRef={dragRef} props={props}>
+        <Item variant="outline" className="border-dashed" data-vortex-canvas-pending={id}>
+          <ItemContent>
+            <ItemTitle>{release.name}</ItemTitle>
+            <ItemDescription>
+              {records.updating ? "Updating the canvas…" : "Save to show this block."}
+            </ItemDescription>
+          </ItemContent>
+        </Item>
+      </CanvasPlaceholder>
     );
   // Data blocks use this revision's compiled settings even before their records arrive. Authored
   // groups can omit nested catalogue defaults and must never replace the compiled contract.
@@ -421,9 +466,11 @@ function CanvasBlock({
       },
     })
   ) : (
-    <p className="text-xs text-muted-foreground" data-vortex-canvas-records-note={id}>
-      {note}
-    </p>
+    <CanvasPlaceholder dragRef={dragRef} props={props}>
+      <p className="text-xs text-muted-foreground" data-vortex-canvas-records-note={id}>
+        {note}
+      </p>
+    </CanvasPlaceholder>
   );
 }
 
@@ -446,7 +493,8 @@ const formFieldRendererKeys = (registry: PlatformComponentRegistry): ReadonlySet
 
 /**
  * The canvas config: the one config's components and root, each component drawing its stored
- * item as above. Only slot fields remain, because Puck finds slots through them and Studio edits
+ * item as above. The fields stay exactly as the one config declares them (each slot with its
+ * `allow` list, every other prop an opaque object), because Puck finds slots through them and Studio edits
  * settings in its inspector. No defaults are merged: a block dropped from the palette is added by
  * Studio's add command, never by Puck.
  */
@@ -461,7 +509,9 @@ export const studioCanvasConfig = (config: Config, registry: PlatformComponentRe
       type,
       {
         label: component.label,
-        fields: slotFields(component.fields as Record<string, Field> | undefined),
+        // Every canvas component is measured and dragged by its own root element.
+        inline: true,
+        fields: (component.fields ?? {}) as Record<string, Field>,
         ...(component.resolveFields === undefined
           ? {}
           : {
@@ -471,11 +521,11 @@ export const studioCanvasConfig = (config: Config, registry: PlatformComponentRe
                   data: { props: Record<string, unknown> },
                   params: unknown,
                 ) => Record<string, Field>;
-                return slotFields(resolve({ ...data, props }, params));
+                return resolve({ ...data, props }, params);
               },
             }),
         render: (props: Record<string, unknown>) => (
-          <CanvasBlockBoundary settings={props.vortex}>
+          <CanvasBlockBoundary settings={props.vortex} props={props}>
             <CanvasBlock component={component} registry={registry} props={props} />
           </CanvasBlockBoundary>
         ),
@@ -485,7 +535,12 @@ export const studioCanvasConfig = (config: Config, registry: PlatformComponentRe
       },
     ]),
   );
-  canvas = { ...config, components } as unknown as Config;
+  canvas = {
+    ...config,
+    components,
+    // The application frame is the canvas root: it draws the theme, appearance and shell around the page.
+    root: { ...config.root, render: StudioCanvasRoot },
+  } as unknown as Config;
   canvasConfigs.set(config, canvas);
   return canvas;
 };

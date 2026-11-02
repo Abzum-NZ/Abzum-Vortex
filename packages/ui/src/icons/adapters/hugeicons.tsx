@@ -1,4 +1,5 @@
 import {
+  Table01Icon,
   File01Icon,
   InformationCircleIcon,
   DragDropVerticalIcon,
@@ -122,6 +123,7 @@ export const icons: VortexIconAdapter = {
   "contact-round": hugeicon(Contact01Icon),
   users: hugeicon(UserGroupIcon),
   "sliders-horizontal": hugeicon(SlidersHorizontalIcon),
+  "table-columns": hugeicon(Table01Icon),
   filter: hugeicon(FilterIcon),
   pencil: hugeicon(PencilEdit01Icon),
   trash: hugeicon(Delete02Icon),
