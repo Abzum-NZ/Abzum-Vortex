@@ -1331,6 +1331,49 @@
         "triggers": [],
         "tasks": [
           {
+            "id": "verify_step_up",
+            "type": "interface.verify",
+            "version": "1.0.0",
+            "properties": {
+              "requires": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "two_step"
+                }
+              },
+              "message": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "Changing an organisation needs two-step verification."
+                }
+              }
+            }
+          },
+          {
+            "id": "step_up_unverified",
+            "type": "if",
+            "condition": {
+              "op": "not",
+              "arg": {
+                "op": "reference",
+                "reference": {
+                  "source": "task_output",
+                  "task": "verify_step_up",
+                  "key": "confirmed"
+                }
+              }
+            },
+            "then": [
+              {
+                "id": "stop_step_up_unverified",
+                "type": "stop",
+                "outcome": "cancelled"
+              }
+            ]
+          },
+          {
             "id": "form",
             "type": "interface.show_form",
             "version": "1.0.0",
@@ -1463,6 +1506,49 @@
         "variables": {},
         "triggers": [],
         "tasks": [
+          {
+            "id": "verify_step_up",
+            "type": "interface.verify",
+            "version": "1.0.0",
+            "properties": {
+              "requires": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "two_step"
+                }
+              },
+              "message": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "Creating an organisation needs two-step verification."
+                }
+              }
+            }
+          },
+          {
+            "id": "step_up_unverified",
+            "type": "if",
+            "condition": {
+              "op": "not",
+              "arg": {
+                "op": "reference",
+                "reference": {
+                  "source": "task_output",
+                  "task": "verify_step_up",
+                  "key": "confirmed"
+                }
+              }
+            },
+            "then": [
+              {
+                "id": "stop_step_up_unverified",
+                "type": "stop",
+                "outcome": "cancelled"
+              }
+            ]
+          },
           {
             "id": "form",
             "type": "interface.show_form",
@@ -1706,6 +1792,49 @@
         "variables": {},
         "triggers": [],
         "tasks": [
+          {
+            "id": "verify_step_up",
+            "type": "interface.verify",
+            "version": "1.0.0",
+            "properties": {
+              "requires": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "two_step"
+                }
+              },
+              "message": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "Moving an organisation needs two-step verification."
+                }
+              }
+            }
+          },
+          {
+            "id": "step_up_unverified",
+            "type": "if",
+            "condition": {
+              "op": "not",
+              "arg": {
+                "op": "reference",
+                "reference": {
+                  "source": "task_output",
+                  "task": "verify_step_up",
+                  "key": "confirmed"
+                }
+              }
+            },
+            "then": [
+              {
+                "id": "stop_step_up_unverified",
+                "type": "stop",
+                "outcome": "cancelled"
+              }
+            ]
+          },
           {
             "id": "parent_form",
             "type": "interface.show_form",

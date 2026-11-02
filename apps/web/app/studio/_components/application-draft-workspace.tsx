@@ -50,10 +50,8 @@ export type StudioWorkspacePlace = Readonly<{
   organizationName: string;
   /** Studio's shared application frame: its top bar, the signed-in person and the addresses. */
   frame: StudioFrameDefinition;
-  /** The running application, opened from the top bar when it is live; absent when the builder may not open it. */
-  applicationHref: string | undefined;
   /** Where the application stood in the organisation when the editor opened. */
-  standing: ApplicationReleaseStanding["kind"];
+  standing: ApplicationReleaseStanding;
   /** The other applications a Navigate step can open, with their pages. */
   navigationTargets: readonly StudioNavigationApplication[];
 }>;
@@ -327,7 +325,7 @@ function ExistingApplicationWorkspace(props: ExistingProps) {
                 undoDisabled={draft.locked}
                 onUndo={draft.undo}
                 onRedo={draft.redo}
-                applicationHref={place.applicationHref}
+                applicationHref={releases.openHref}
                 install={releases.install}
                 onInstall={releases.openInstall}
                 installPending={releases.actionPending === "install"}

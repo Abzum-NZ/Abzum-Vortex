@@ -13,6 +13,8 @@ export const pageStepIntents = {
   "interface.clear_message": "clear_message",
   "interface.show_form": "show_form",
   "interface.confirm": "confirm",
+  "interface.verify": "verify",
+  "interface.wizard": "wizard",
   "interface.navigate": "navigate",
   "interface.refresh": "refresh",
   "interface.set_panel": "set_panel",

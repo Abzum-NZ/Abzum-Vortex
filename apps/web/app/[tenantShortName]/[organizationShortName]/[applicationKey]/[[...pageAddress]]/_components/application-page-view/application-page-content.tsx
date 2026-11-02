@@ -339,8 +339,16 @@ export function ApplicationPageViewContent({
     });
   }, [placementEventNames]);
   // Registered once per page: a new invoker would re-register every tool on each render.
-  const agentPageRef = useRef({ state: runtimeState, confirm: host.confirm });
-  agentPageRef.current = { state: runtimeState, confirm: host.confirm };
+  // An agent's confirmation has no earlier step to go back to: anything but a yes is a no.
+  const askPerson = useCallback(
+    async (...[confirmation, signal]: Parameters<FlowIntentHost["confirm"]>) => {
+      const answer = await host.confirm(confirmation, signal);
+      return "confirmed" in answer ? answer : { confirmed: false };
+    },
+    [host],
+  );
+  const agentPageRef = useRef({ state: runtimeState, confirm: askPerson });
+  agentPageRef.current = { state: runtimeState, confirm: askPerson };
   const invokeAgentTool = useCallback(
     async (tool: PageAgentTool, input: unknown, signal?: AbortSignal): Promise<unknown> => {
       if (signal?.aborted) return { outcome: "cancelled" };

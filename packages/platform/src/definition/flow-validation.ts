@@ -9,6 +9,7 @@ import {
   recordTypeIdSchema,
 } from "../catalogue/identifiers";
 import { isSetBasedForEach } from "../workflows/flow-set-based";
+import { checkGuidedTask } from "./flow-guided-step-checks";
 import {
   flowMessageActionFlowName,
   flowMessageActionLimits,
@@ -1334,6 +1335,14 @@ export function validateFlow(
               else checkInputMap(action.inputs, flow, where, [...at, "inputs", "entries"]);
             });
         }
+        checkGuidedTask(node, (name, message, missing) =>
+          add(
+            [...path, "properties", name],
+            "vortex.definition.workflow_node_values",
+            missing === true ? "required_value" : "invalid_value",
+            message,
+          ),
+        );
         if (node.type === "interface.show_form") {
           const named = node.properties.form !== undefined;
           const declared = node.properties.fields !== undefined;

@@ -15,6 +15,8 @@ import { applicationStoreService } from "./application-store-service";
 import { humanOrganizationRequests } from "./server-composition";
 import { platformPermissionSource } from "./platform-permission-source";
 import { loadPermittedApplicationsAtAddress } from "./organization-context";
+import { applicationHomePathByRoot } from "./application-home";
+import { mayManageApplications } from "./application-management";
 import { loadInstalledContext, requestDependencies } from "./application-page/installed-context";
 
 /**
@@ -115,17 +117,50 @@ export const readApplicationReleaseOffer = async (
   }
 };
 
+/** The home page of the application when the person may open it, else undefined. */
+const readApplicationOpenHref = async (
+  session: IdentitySession,
+  scope: Address & Readonly<{ applicationRootId: ApplicationRootId }>,
+): Promise<string | undefined> => {
+  const home = await applicationHomePathByRoot(
+    session,
+    scope.tenantShortName,
+    scope.organizationShortName,
+    String(scope.applicationRootId),
+  );
+  return home.kind === "path" ? home.path : undefined;
+};
+
 /** Where the application stands in the builder's organisation, as the App Store's review says it. */
 export type ApplicationReleaseStanding =
-  | Readonly<{ kind: "system"; version: string; installedVersion: string }>
-  | Readonly<{ kind: "live"; version: string; rolesWaiting: boolean; appStoreHref: string }>
+  | Readonly<{
+      kind: "system";
+      version: string;
+      installedVersion: string;
+      openHref?: string;
+    }>
+  | Readonly<{
+      kind: "live";
+      version: string;
+      rolesWaiting: boolean;
+      appStoreHref: string;
+      /** The application's home page, when the person may open it now (no role means nothing to open). */
+      openHref?: string;
+    }>
   | Readonly<{
       kind: "waiting";
       version: string;
       installedVersion: string;
       appStoreHref: string;
+      /** Whether the person may install or upgrade: the editor offers the control only to them. */
+      mayInstall: boolean;
     }>
-  | Readonly<{ kind: "not_installed"; version: string; appStoreHref: string }>
+  | Readonly<{
+      kind: "not_installed";
+      version: string;
+      appStoreHref: string;
+      mayInstall: boolean;
+    }>
   | Readonly<{ kind: "not_published" }>
   /** The person may not manage installations here, or the review cannot be made now. */
   | Readonly<{ kind: "unknown"; appStoreHref?: string }>;
@@ -245,7 +280,13 @@ export const readApplicationReleaseStanding = async (
       );
       return { kind: "unknown" };
     }
-    return { kind: "system", version, installedVersion };
+    const openHref = await readApplicationOpenHref(session, scope);
+    return {
+      kind: "system",
+      version,
+      installedVersion,
+      ...(openHref === undefined ? {} : { openHref }),
+    };
   }
   const review = await applicationStoreService().review(
     session,
@@ -267,8 +308,16 @@ export const readApplicationReleaseStanding = async (
     return appStoreHref === undefined ? { kind: "unknown" } : { kind: "unknown", appStoreHref };
   switch (value.change) {
     case "current":
-    case "roles":
-      return { kind: "live", version, rolesWaiting: value.change === "roles", appStoreHref };
+    case "roles": {
+      const openHref = await readApplicationOpenHref(session, scope);
+      return {
+        kind: "live",
+        version,
+        rolesWaiting: value.change === "roles",
+        appStoreHref,
+        ...(openHref === undefined ? {} : { openHref }),
+      };
+    }
     case "upgrade":
       return {
         kind: "waiting",
@@ -276,9 +325,15 @@ export const readApplicationReleaseStanding = async (
         installedVersion:
           typeof value.installed_version === "string" ? value.installed_version : "",
         appStoreHref,
+        mayInstall: (await mayManageApplications(session, scope.organizationId)) === true,
       };
     case "install":
-      return { kind: "not_installed", version, appStoreHref };
+      return {
+        kind: "not_installed",
+        version,
+        appStoreHref,
+        mayInstall: (await mayManageApplications(session, scope.organizationId)) === true,
+      };
     default:
       console.error(`[release-standing] review cannot install or upgrade: ${String(value.reason)}`);
       return { kind: "unknown", appStoreHref };

@@ -2,182 +2,27 @@
 
 import {
   useEffect,
-  useId,
   useMemo,
   useRef,
   useSyncExternalStore,
   type ReactElement,
   type RefObject,
-  type ReactNode,
 } from "react";
-import { Button } from "../components/button";
 import { Notice } from "../components/notice";
-import { Checkbox } from "../components/checkbox";
 import { toast } from "../components/sonner";
-import { useConfirm } from "../components/confirm-dialog";
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "../components/dialog";
-import type { LinkNavigationEnvironment } from "../launcher/link-navigation";
 import { performNavigateTask } from "../launcher/link-navigation";
 import type {
-  FlowConfirmationDetail,
   FlowConfirmAnswer,
-  FlowConfirmIntent,
   FlowFormAnswer,
-  FlowFormIntent,
-  FlowInlineFormIntent,
   FlowIntentHost,
   FlowMessageAction,
   FlowMessageIntent,
 } from "./intents";
-import { surfaceCancellationError } from "./intents";
-import { FlowSurfaceContext } from "./flow-surface-context";
-import { InlineFormFields } from "./inline-form-surface";
+import { isBackAnswer, surfaceCancellationError } from "./intents";
+import { createWizardStore, SurfaceScreen, WizardWorking, type WizardStore } from "./flow-surfaces";
+import type { Answered, FlowIntentHostOptions, Surface } from "./flow-surface-types";
 import type { FlowRuntimeState } from "./flow-runtime";
 import type { PageMessageTarget } from "./messages";
-
-type Surface =
-  | Readonly<{ id: number; kind: "message"; message: FlowMessageIntent; settle: () => void }>
-  | Readonly<{
-      id: number;
-      kind: "confirm";
-      confirmation: FlowConfirmIntent;
-      settle: (answer: FlowConfirmAnswer) => void;
-    }>
-  | Readonly<{
-      id: number;
-      kind: "form";
-      form: FlowFormIntent | FlowInlineFormIntent;
-      settle: (answer: FlowFormAnswer) => void;
-    }>;
-
-export type FlowIntentHostOptions = Readonly<{
-  /**
-   * Renders the form a Show form task names. Forms are Application data the shell resolves, so the
-   * shell supplies its title and body and calls `submit` with the typed values or `cancel` when dismissed.
-   */
-  renderForm: (
-    form: FlowFormIntent,
-    controls: Readonly<{
-      submit: (values: Extract<FlowFormAnswer, { kind: "submit" }>["values"]) => void;
-      cancel: () => void;
-    }>,
-  ) => Readonly<{ title: string; body: ReactNode }>;
-  navigation: LinkNavigationEnvironment;
-  state: FlowRuntimeState;
-  onMessageAction: (message: FlowMessageIntent, action: FlowMessageAction) => void;
-  /** Whether this person is offered an action; a shell that knows one is not theirs leaves it out. */
-  actionOffered?: (action: FlowMessageAction) => boolean;
-  refresh?: FlowIntentHost["refresh"];
-  setPanel?: FlowIntentHost["setPanel"];
-  setFilter?: FlowIntentHost["setFilter"];
-}>;
-
-/** Flow surface width, the same 36rem the theme's medium dialog scale used. */
-const FLOW_SURFACE_CLASS = "sm:max-w-xl";
-
-/**
- * One modal flow surface on the shadcn Dialog (Base UI), like every other surface in the product.
- * The primitive traps focus inside the surface, makes the rest of the page inert and returns focus
- * to the element that had it when the surface opened, and the title it renders is the surface's
- * accessible name. Escape is the only way the primitive can dismiss a surface, because a press
- * outside it is not a dismissal; every dismissal settles the surface exactly as the person's own
- * answer would, so a flow run is never left waiting on a surface that has gone.
- */
-function FlowDialog({
-  title,
-  onDismiss,
-  actions,
-  children,
-}: Readonly<{
-  title: string;
-  onDismiss: () => void;
-  actions?: ReactNode;
-  children: ReactNode;
-}>): ReactElement {
-  return (
-    <Dialog
-      open
-      disablePointerDismissal
-      onOpenChange={(nextOpen) => {
-        if (!nextOpen) onDismiss();
-      }}
-    >
-      <DialogContent
-        showCloseButton={false}
-        data-vortex-flow-surface="true"
-        className={FLOW_SURFACE_CLASS}
-      >
-        <DialogHeader>
-          <DialogTitle>{title}</DialogTitle>
-        </DialogHeader>
-        <FlowSurfaceContext.Provider value={true}>
-          <div>{children}</div>
-        </FlowSurfaceContext.Provider>
-        {actions === undefined ? null : <DialogFooter>{actions}</DialogFooter>}
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-/**
- * A confirmation: its message, the lines it covers, and its one opt-in, which starts unticked for
- * every prompt and counts only with a yes. Any dismissal is a no.
- */
-function ConfirmSurface({
-  confirmation,
-  settle,
-}: Readonly<{
-  confirmation: FlowConfirmIntent;
-  settle: (answer: FlowConfirmAnswer) => void;
-}>): ReactElement {
-  const [confirm, dialog] = useConfirm();
-  const choiceId = useId();
-  useEffect(() => {
-    let mounted = true;
-    let choice = false;
-    void confirm({
-      title: confirmation.title ?? "Confirm",
-      description: confirmation.message,
-      confirmLabel: confirmation.confirmLabel ?? "Confirm",
-      ...(confirmation.destructive === undefined ? {} : { destructive: confirmation.destructive }),
-      details: (
-        <div className="flex flex-col gap-3">
-          {confirmation.details.length === 0 ? null : (
-            // item 10: CRM-FIX-PLATFORM
-            <ConfirmationDetails entries={confirmation.details} />
-          )}
-          {confirmation.choice === undefined ? null : (
-            <div className="flex items-start gap-2 text-sm">
-              <Checkbox
-                id={choiceId}
-                defaultChecked={false}
-                onCheckedChange={(checked) => {
-                  choice = checked === true;
-                }}
-              />
-              <label htmlFor={choiceId}>{confirmation.choice}</label>
-            </div>
-          )}
-        </div>
-      ),
-    }).then((confirmed) => {
-      if (mounted)
-        settle(
-          confirmed && confirmation.choice !== undefined ? { confirmed, choice } : { confirmed },
-        );
-    });
-    return () => {
-      mounted = false;
-    };
-  }, [confirm, confirmation, settle, choiceId]);
-  return dialog;
-}
 
 /** The modal queue notifies only its own surface, keeping the page renderer independent. */
 function createSurfaceQueue() {
@@ -307,189 +152,200 @@ function FlowToastRegion({ state }: Readonly<{ state: FlowRuntimeState }>): null
 /** Only this subtree re-renders when a flow opens or closes a surface. */
 function FlowSurfaceHost({
   queue,
+  wizards,
   optionsRef,
+  start,
 }: Readonly<{
   queue: SurfaceQueue;
+  wizards: WizardStore;
   optionsRef: RefObject<FlowIntentHostOptions>;
+  start: (message: FlowMessageIntent, action: FlowMessageAction, chain: number) => void;
 }>): ReactElement | null {
   const current = useSyncExternalStore(queue.subscribe, queue.snapshot, () => null);
-  if (current?.kind === "message") {
-    const { message, settle } = current;
+  const wizard = useSyncExternalStore(wizards.subscribe, wizards.snapshot, () => null);
+  const leave = optionsRef.current.guidedLeaveLabel ?? "Close";
+  if (current !== null)
     return (
-      <FlowDialog
+      <SurfaceScreen
         key={current.id}
-        title={message.title ?? "Message"}
-        onDismiss={() => settle()}
-        actions={
-          <>
-            {(message.actions ?? [])
-              .filter((action) => optionsRef.current.actionOffered?.(action) !== false)
-              .map((action) => (
-                <Button
-                  key={`${action.flow}:${action.label}`}
-                  type="button"
-                  variant="secondary"
-                  onClick={() => {
-                    settle();
-                    optionsRef.current.onMessageAction(message, action);
-                  }}
-                >
-                  {action.label}
-                </Button>
-              ))}
-            <Button type="button" onClick={() => settle()}>
-              OK
-            </Button>
-          </>
-        }
-      >
-        <p
-          role={message.severity === "warning" || message.severity === "error" ? "alert" : "status"}
-          aria-live={
-            message.severity === "warning" || message.severity === "error" ? "assertive" : "polite"
-          }
-        >
-          {message.text}
-        </p>
-      </FlowDialog>
-    );
-  }
-  if (current?.kind === "confirm")
-    return (
-      <ConfirmSurface
-        key={current.id}
-        confirmation={current.confirmation}
-        settle={current.settle}
+        current={current}
+        options={optionsRef.current}
+        start={(message, action) => start(message, action, current.chain)}
+        // Guided steps wrap only the dialogs of the run chain that opened them.
+        wizard={wizard !== null && wizard.chain === current.chain ? wizard : null}
+        onLeave={wizards.close}
       />
     );
-  if (current?.kind === "form" && "fields" in current.form) {
-    const { form, settle } = current;
-    return (
-      <FlowDialog
-        key={current.id}
-        title={form.title ?? "Details"}
-        onDismiss={() => settle({ kind: "cancel" })}
-      >
-        <InlineFormFields
-          form={form}
-          onSubmit={(values) => settle({ kind: "submit", values })}
-          onCancel={() => settle({ kind: "cancel" })}
-        />
-      </FlowDialog>
-    );
-  }
-  if (current?.kind === "form" && !("fields" in current.form)) {
-    const { form, settle } = current;
-    const rendered = optionsRef.current.renderForm(form, {
-      submit: (values) => settle({ kind: "submit", values }),
-      cancel: () => settle({ kind: "cancel" }),
-    });
-    return (
-      <FlowDialog
-        key={current.id}
-        title={rendered.title}
-        onDismiss={() => settle({ kind: "cancel" })}
-      >
-        {rendered.body}
-      </FlowDialog>
-    );
-  }
+  if (wizard?.working !== undefined)
+    return <WizardWorking wizard={wizard} leaveLabel={leave} onLeave={wizards.close} />;
   return null;
 }
 
-/** Presents flow intents without re-rendering the page when a surface changes. */
-/** Shows every review line; a role entry lists what it allows under its own line. */
-// item 10: CRM-FIX-PLATFORM
-const ConfirmationDetails = ({
-  entries,
-}: Readonly<{ entries: readonly FlowConfirmationDetail[] }>): ReactElement => (
-  <ul className="flex list-disc flex-col gap-1 pl-5 text-sm">
-    {entries.map((entry, index) =>
-      typeof entry === "string" ? (
-        <li key={index}>{entry}</li>
-      ) : (
-        <li key={index}>
-          {entry.text}
-          {/* item 10: CRM-FIX-PLATFORM */}
-          <ul className="flex list-[circle] flex-col gap-1 pl-5">
-            {entry.lines.map((line, lineIndex) => (
-              <li key={lineIndex}>{line}</li>
-            ))}
-          </ul>
-        </li>
-      ),
-    )}
-  </ul>
-);
+/** One run chain: the runs that hand over to one another, the dialogs they open and where Back leads. */
+type Chain = {
+  readonly id: number;
+  runs: number;
+  stood: ReturnType<WizardStore["snapshot"]>[];
+};
 
+/** Presents flow intents without re-rendering the page when a surface changes. */
 export function useFlowIntentHost(
   options: FlowIntentHostOptions,
 ): Readonly<{ host: FlowIntentHost; element: ReactElement; banner: ReactElement }> {
   const optionsRef = useRef(options);
   optionsRef.current = options;
   const queue = useMemo(() => createSurfaceQueue(), []);
-  useEffect(() => () => queue.abandon(), [queue]);
-  const host = useMemo<FlowIntentHost>(
-    () => ({
-      showMessage: (message, signal) => {
-        const state = optionsRef.current.state;
-        const id = crypto.randomUUID();
-        const offeredAction = message.actions?.find(
-          (action) => optionsRef.current.actionOffered?.(action) !== false,
-        );
-        state.messages.show({
-          id,
-          target: message.target,
-          severity: message.severity,
-          text: message.text,
-          ...(message.component === undefined ? {} : { component: message.component }),
-          ...(message.title === undefined ? {} : { title: message.title }),
-          ...(message.dismissAfterMs === undefined
-            ? {}
-            : { dismissAfterMs: message.dismissAfterMs }),
-          // Outside a dialog a message offers one action.
-          ...(offeredAction === undefined
-            ? {}
-            : {
-                action: {
-                  kind: "flow" as const,
-                  label: offeredAction.label,
-                  run: () => optionsRef.current.onMessageAction(message, offeredAction),
-                },
-              }),
-        });
-        if (message.target !== "dialog") return;
-        return queue
-          .enqueue<void>(
-            (surfaceId, settle) => ({ id: surfaceId, kind: "message", message, settle }),
-            signal,
-          )
-          .finally(() => state.messages.clear("dialog", undefined, id));
-      },
-      clearMessage: (target, component) => {
-        optionsRef.current.state.messages.clear(target, component);
-        const current = queue.snapshot();
-        if (target === "dialog" && current?.kind === "message") current.settle();
-      },
-      showForm: (form, signal) =>
-        queue.enqueue<FlowFormAnswer>((id, settle) => ({ id, kind: "form", form, settle }), signal),
-      confirm: (confirmation, signal) =>
-        queue.enqueue<FlowConfirmAnswer>(
-          (id, settle) => ({ id, kind: "confirm", confirmation, settle }),
-          signal,
-        ),
-      navigate: (intent) => performNavigateTask(intent, optionsRef.current.navigation),
-      refresh: (component) => optionsRef.current.refresh?.(component),
-      setPanel: (panel, state) => optionsRef.current.setPanel?.(panel, state),
-      setFilter: (component, field, value) =>
-        optionsRef.current.setFilter?.(component, field, value),
-    }),
-    [queue],
+  const wizards = useMemo(() => createWizardStore(), []);
+  useEffect(
+    () => () => {
+      queue.abandon();
+      wizards.close();
+    },
+    [queue, wizards],
   );
+  const { host, start } = useMemo(() => {
+    let nextChain = 0;
+    const chains = new Map<number, Chain>();
+    const chainOf = (id: number | undefined): Chain => {
+      const held = id === undefined ? undefined : chains.get(id);
+      if (held !== undefined) return held;
+      const created: Chain = { id: (nextChain += 1), runs: 0, stood: [] };
+      chains.set(created.id, created);
+      return created;
+    };
+    // The chain a run started by a message action joins, taken by the run's host as it starts.
+    let inherit: number | undefined;
+    const hostFor = (chain: Chain): FlowIntentHost => {
+      const trackRun: NonNullable<FlowIntentHost["trackRun"]> = (run) => {
+        chain.runs += 1;
+        return run.finally(() => {
+          chain.runs -= 1;
+          if (chain.runs > 0) return;
+          // The last run of the chain has ended: its steps and its way back go with it.
+          chain.stood = [];
+          chains.delete(chain.id);
+          if (queue.snapshot()?.chain !== chain.id) wizards.closeChain(chain.id);
+        });
+      };
+      const ask = async <Answer extends object>(
+        build: (id: number, settle: (answer: Answered<Answer>) => void) => Surface,
+        signal?: AbortSignal,
+      ): Promise<Answered<Answer>> => {
+        wizards.clearWorking();
+        chain.stood.push(wizards.snapshot());
+        const answer = await queue.enqueue<Answered<Answer>>(build, signal);
+        if (isBackAnswer(answer)) {
+          // Back to the dialog before this one: the steps stand where they did when it was shown,
+          // and showing it again records that place once more.
+          chain.stood.pop();
+          const earlier = chain.stood.pop();
+          if (earlier !== undefined) wizards.restore(earlier);
+        }
+        return answer;
+      };
+      return {
+        showMessage: (message, signal) => {
+          const state = optionsRef.current.state;
+          const id = crypto.randomUUID();
+          const offeredAction = message.actions?.find(
+            (action) => optionsRef.current.actionOffered?.(action) !== false,
+          );
+          state.messages.show({
+            id,
+            target: message.target,
+            severity: message.severity,
+            text: message.text,
+            ...(message.component === undefined ? {} : { component: message.component }),
+            ...(message.title === undefined ? {} : { title: message.title }),
+            ...(message.dismissAfterMs === undefined
+              ? {}
+              : { dismissAfterMs: message.dismissAfterMs }),
+            // Outside a dialog a message offers one action.
+            ...(offeredAction === undefined
+              ? {}
+              : {
+                  action: {
+                    kind: "flow" as const,
+                    label: offeredAction.label,
+                    run: () => void optionsRef.current.onMessageAction(message, offeredAction),
+                  },
+                }),
+          });
+          if (message.target !== "dialog") return;
+          wizards.clearWorking();
+          return queue
+            .enqueue<void>(
+              (surfaceId, settle) => ({
+                id: surfaceId,
+                chain: chain.id,
+                kind: "message",
+                message,
+                settle,
+              }),
+              signal,
+            )
+            .finally(() => state.messages.clear("dialog", undefined, id));
+        },
+        clearMessage: (target, component) => {
+          optionsRef.current.state.messages.clear(target, component);
+          const current = queue.snapshot();
+          if (target === "dialog" && current?.kind === "message") current.settle();
+        },
+        showForm: (form, signal) =>
+          ask<FlowFormAnswer>(
+            (id, settle) => ({ id, chain: chain.id, kind: "form", form, settle }),
+            signal,
+          ),
+        confirm: (confirmation, signal) =>
+          ask<FlowConfirmAnswer>(
+            (id, settle) => ({ id, chain: chain.id, kind: "confirm", confirmation, settle }),
+            signal,
+          ),
+        verify: async (verification, signal) => {
+          const checker = optionsRef.current.verification;
+          if (checker === undefined) throw new Error("FLOW_VERIFY_UNAVAILABLE");
+          // A proof the person already gave recently is not asked for again.
+          if ((await checker.status(verification.requires, signal)) === "satisfied")
+            return { confirmed: true, asked: false };
+          return ask<FlowConfirmAnswer>(
+            (id, settle) => ({ id, chain: chain.id, kind: "verify", verification, settle }),
+            signal,
+          );
+        },
+        wizard: (wizard) => wizards.set(wizard, chain.id),
+        trackRun,
+        forRun: () => {
+          const joined = chainOf(inherit);
+          inherit = undefined;
+          return hostFor(joined);
+        },
+        navigate: (intent) => performNavigateTask(intent, optionsRef.current.navigation),
+        refresh: (component) => optionsRef.current.refresh?.(component),
+        setPanel: (panel, state) => optionsRef.current.setPanel?.(panel, state),
+        setFilter: (component, field, value) =>
+          optionsRef.current.setFilter?.(component, field, value),
+      };
+    };
+    /** A message action starts its flow in the same chain; the dialog waits for it and says so. */
+    const startAction = (
+      message: FlowMessageIntent,
+      action: FlowMessageAction,
+      chain: number,
+    ): void => {
+      wizards.working(`${action.label}…`);
+      inherit = chain;
+      try {
+        void optionsRef.current.onMessageAction(message, action);
+      } finally {
+        inherit = undefined;
+      }
+    };
+    return { host: hostFor(chainOf(undefined)), start: startAction };
+  }, [queue, wizards]);
   const element = (
     <>
       <FlowToastRegion state={options.state} />
-      <FlowSurfaceHost queue={queue} optionsRef={optionsRef} />
+      <FlowSurfaceHost queue={queue} wizards={wizards} optionsRef={optionsRef} start={start} />
     </>
   );
   return { host, element, banner: <MessageTarget state={options.state} target="banner" /> };

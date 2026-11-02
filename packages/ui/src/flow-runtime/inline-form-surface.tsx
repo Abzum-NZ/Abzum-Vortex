@@ -16,10 +16,13 @@ export function InlineFormFields({
   form,
   onSubmit,
   onCancel,
+  onBack,
 }: Readonly<{
   form: FlowInlineFormIntent;
   onSubmit: (values: Record<string, string>) => void;
   onCancel: () => void;
+  /** Inside guided steps: goes back to the step before this one. */
+  onBack?: () => void;
 }>): ReactElement {
   const [values, setValues] = useState<Record<string, string>>(() =>
     Object.fromEntries(form.fields.map((field) => [field.name, form.inputs[field.name] ?? ""])),
@@ -82,6 +85,11 @@ export function InlineFormFields({
         })}
       </FieldGroup>
       <div className="flex justify-end gap-2">
+        {onBack === undefined ? null : (
+          <Button type="button" variant="ghost" className="mr-auto" onClick={onBack}>
+            Back
+          </Button>
+        )}
         <Button type="button" variant="secondary" onClick={onCancel}>
           Cancel
         </Button>

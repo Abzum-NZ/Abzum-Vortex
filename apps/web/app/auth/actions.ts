@@ -20,13 +20,7 @@ import {
   serializeSignInContinuation,
   type SignInContinuation,
 } from "./_lib/sign-in-continuation";
-import {
-  bootstrapIdentitySession,
-  endIdentitySession,
-  enrollMfaFactor,
-  readMfaFactor,
-  verifyMfaFactor,
-} from "./_lib/session-server";
+import { bootstrapIdentitySession, endIdentitySession, readMfaFactor } from "./_lib/session-server";
 import { mapWebError } from "../_lib/web-error-mapper";
 
 const formValue = (formData: FormData, name: string, trim = true): string => {
@@ -117,32 +111,11 @@ export async function signIn(formData: FormData): Promise<never> {
   );
 }
 
-export type MfaFormState =
-  | { kind: "setup"; error?: string }
-  | { kind: "enrolled"; factorId: string; error?: string }
-  | { kind: "challenge"; factorId: string; error?: string };
-
-export async function completeMfa(
-  formData: FormData,
-): Promise<
-  | { kind: "enrolled"; factorId: string; secret: string; qrCode: string }
-  | { kind: "error"; error: string }
-> {
-  if (formValue(formData, "intent") === "enroll") {
-    const enrolled = await enrollMfaFactor();
-    return enrolled.kind === "enrolled"
-      ? enrolled
-      : { kind: "error", error: "Two-step verification could not be set up. Try again." };
-  }
-  const factorId = formValue(formData, "factor_id");
-  const code = formValue(formData, "code");
-  if (
-    !/^[0-9a-f-]{36}$/iu.test(factorId) ||
-    !/^\d{6}$/u.test(code) ||
-    !(await verifyMfaFactor(factorId, code))
-  )
-    return { kind: "error", error: "The code could not be verified. Check it and try again." };
-  const continuation = parseSingleSignInContinuation(formData.getAll("continuation"));
+/** Goes on to where the person was heading once their authenticator code has been accepted. */
+export async function finishMfa(continuationValue: string): Promise<never> {
+  const continuation = parseSingleSignInContinuation(
+    continuationValue === "" ? [] : [continuationValue],
+  );
   redirect(continuation === undefined ? "/signed-in" : signInContinuationAddressPath(continuation));
 }
 

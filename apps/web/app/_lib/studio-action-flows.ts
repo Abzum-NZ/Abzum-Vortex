@@ -1,14 +1,12 @@
 import "server-only";
+import { mayManageApplications } from "./application-management";
 
 import {
   applicationRootIdSchema,
   organizationIdSchema,
   organizationSelectionCandidateSchema,
 } from "@vortex/platform/schema";
-import {
-  createBuilderAuthority,
-  readCurrentOrganizationAppStoreAddressAfterAuthorization,
-} from "@vortex/platform/server";
+import { readCurrentOrganizationAppStoreAddressAfterAuthorization } from "@vortex/platform/server";
 import type { PlacementFlowBinding } from "@vortex/ui";
 import { resolveIdentitySession } from "../auth/_lib/session-server";
 import { resolveApplicationAddress } from "./application-address";
@@ -17,7 +15,6 @@ import { loadApplicationPage } from "./application-page";
 import { pageSubjectParameter } from "./application-page/placement-helpers";
 import { loadOrganizationLauncher } from "./organization-context";
 import { humanOrganizationRequests } from "./server-composition";
-import { platformPermissionSource } from "./platform-permission-source";
 import { studioActionTokens, type StudioActionToken } from "./studio-action-tokens";
 
 /**
@@ -127,20 +124,8 @@ export const readStudioActionFlows = async (
   }
   const { model } = page;
   // The same decision the App Store makes before it shows an install control.
-  const install = await humanOrganizationRequests().run(
-    session,
-    organizationSelectionCandidateSchema.parse({ organizationId: organization.data }),
-    async (transaction, scope) =>
-      (
-        await createBuilderAuthority({
-          transaction,
-          scope,
-          targetFacts: async () => ({ isSystemApplication: false }),
-          permissions: platformPermissionSource,
-        }).require({ kind: "application_management" })
-      ).outcome === "allowed",
-  );
-  if (install.kind === "temporarily_unavailable") return { kind: "temporarily_unavailable" };
+  const mayInstall = await mayManageApplications(session, organization.data);
+  if (mayInstall === undefined) return { kind: "temporarily_unavailable" };
   const startable: Partial<Record<StudioActionToken, { placementId: string; bindingId: string }>> =
     {};
   for (const [placementId, bindings] of Object.entries(model.bindings))
@@ -167,7 +152,7 @@ export const readStudioActionFlows = async (
       },
       pageParameters: { [pageSubjectParameter]: root.data },
       subject,
-      mayInstall: install.kind === "available" && install.value,
+      mayInstall,
       flowTimeZone: model.invocation.flowTimeZone,
       bindings: model.bindings,
       startable,

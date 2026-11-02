@@ -49,9 +49,10 @@ export const flowRefusalFeedbackSentences: Readonly<Record<FlowRefusalFeedbackCo
   relationship_already_linked: "This field already links to another record. Edit the field to replace its link.",
   duplicate_conflict: "A conflicting item already exists.",
   stale_revision: "This item changed. Refresh and try again.",
-  multi_factor_required: "This needs two-step verification. Verify, or set it up, then try again.",
+  multi_factor_required:
+    "Your verification ran out before this finished, and nothing was changed. Start it again to verify and carry on.",
   recent_authentication_required:
-    "To protect your organisation, this change needs a sign-in within the last 15 minutes. Sign in again, then retry the change.",
+    "Your sign-in is too old for this change, and nothing was changed. Start it again to sign in and carry on.",
   role_acceptance_required: "This role revision needs accepting before it can be assigned.",
   role_key_in_use: "A role with this key already exists.",
   role_settings_change_required:

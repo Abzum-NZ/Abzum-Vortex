@@ -112,14 +112,21 @@ const standingWords = (
  */
 export type StudioInstallControl = "install" | "upgrade" | "open" | undefined;
 
-const installControlOf = (kind: ApplicationReleaseStanding["kind"]): StudioInstallControl =>
-  kind === "not_installed"
-    ? "install"
-    : kind === "waiting"
-      ? "upgrade"
-      : kind === "live" || kind === "system"
+const installControlOf = (standing: ApplicationReleaseStanding): StudioInstallControl =>
+  standing.kind === "not_installed"
+    ? standing.mayInstall
+      ? "install"
+      : undefined
+    : standing.kind === "waiting"
+      ? standing.mayInstall
+        ? "upgrade"
+        : undefined
+      : standing.kind === "live" || standing.kind === "system"
         ? "open"
         : undefined;
+
+const openHrefOf = (standing: ApplicationReleaseStanding): string | undefined =>
+  standing.kind === "live" || standing.kind === "system" ? standing.openHref : undefined;
 
 /**
  * The Releases tab and what acts on the saved draft as a whole: Publish and Install or upgrade
@@ -135,7 +142,7 @@ export function useStudioReleasesTab({
 }: Readonly<{
   draft: StudioDraft;
   /** Where the application stood in the organisation when the editor opened. */
-  initialStanding: ApplicationReleaseStanding["kind"];
+  initialStanding: ApplicationReleaseStanding;
   hidden: boolean;
   initialSection: StudioReleasesSection;
 }>) {
@@ -481,7 +488,9 @@ export function useStudioReleasesTab({
     title,
     openPublish,
     openInstall,
-    install: installControlOf(standing?.kind ?? initialStanding),
+    install: installControlOf(standing ?? initialStanding),
+    /** Where the application opens once it is installed: read with its standing, so an install made here shows it at once. */
+    openHref: openHrefOf(standing ?? initialStanding),
     /** The action whose App Store page is being read before its first dialog opens. */
     actionPending: actions.pending,
     /** The dialogs, toasts and banner the flows show over the editor. */

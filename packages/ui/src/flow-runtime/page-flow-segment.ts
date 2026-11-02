@@ -50,6 +50,10 @@ export async function drivePageFlowSegment(
   const library: FlowProgramLibrary = (id) => (id === program.id ? program : undefined);
   try {
     let step = startPageFlowSegment(program, start, resolveMember, previous, resolveForm);
+    // The dialogs answered so far in this segment. Nothing in a page segment changes a record, so
+    // the person may go back to any of them and answer again; a protected step ends the segment.
+    const answered: Extract<FlowRunStep, { kind: "interface" }>[] = [];
+    let returning = false;
     for (let round = 0; round < 50; round += 1) {
       if (signal?.aborted) return { kind: "abandoned" };
       if (step.kind === "boundary") {
@@ -64,7 +68,9 @@ export async function drivePageFlowSegment(
       const waiting = step.kind === "interface" ? intents.at(-1) : undefined;
       for (const intent of waiting === undefined ? intents : intents.slice(0, -1)) {
         if (signal?.aborted) return { kind: "abandoned" };
-        if (intent.kind === "confirm" || intent.kind === "show_form")
+        // Coming back to a dialog repeats only where the guided steps stand, not what else was said.
+        if (returning && intent.kind !== "wizard") continue;
+        if (intent.kind === "confirm" || intent.kind === "show_form" || intent.kind === "verify")
           throw new Error("FLOW_PAGE_UNEXPECTED_PAUSE");
         if (
           step.kind === "finished" &&
@@ -79,15 +85,29 @@ export async function drivePageFlowSegment(
       if (step.kind === "finished") return step;
       if (
         waiting === undefined ||
-        waiting.kind !== (step.awaiting === "form" ? "show_form" : "confirm")
+        (step.awaiting === "form"
+          ? waiting.kind !== "show_form"
+          : waiting.kind !== "confirm" && waiting.kind !== "verify")
       )
         throw new Error("FLOW_PAGE_PAUSE_INVALID");
-      const answer = await performPageFlowIntent(waiting, host, signal);
+      returning = false;
+      const answer = await performPageFlowIntent(waiting, host, signal, answered.length > 0);
       if (signal?.aborted) return { kind: "abandoned" };
       if (answer === undefined) throw new Error("FLOW_PAGE_ANSWER_INVALID");
+      if (answer.kind === "back") {
+        const earlier = answered.pop();
+        if (earlier === undefined) throw new Error("FLOW_PAGE_BACK_UNAVAILABLE");
+        step = earlier;
+        returning = true;
+        // Going back is not progress: it does not use up the segment's rounds.
+        round -= 1;
+        continue;
+      }
+      const silent = answer.kind === "confirm" && "asked" in answer;
+      if (!silent) answered.push(step);
       step = resumeFlowRun(
         { ...step.state, pageValues: input.readPageValues() },
-        answer,
+        silent ? { kind: "confirm", confirmed: answer.confirmed } : answer,
         library,
         resolveMember,
         undefined,

@@ -2,6 +2,7 @@ import { safeFlowResultDescriptors } from "@vortex/platform/schema";
 import type { FlowRuntimeOptions, FlowBindingReference } from "./flow-runtime";
 import type { FlowSubjectContext } from "./server-flow-client";
 import type { PageDriver } from "../agent/page-driver";
+import { isBackAnswer } from "./intents";
 import type { FlowDispatchResult } from "./flow-runtime";
 
 /** The page host of one binding's run: while a call waits on the person, the binding's timeout clock stands still. */
@@ -22,6 +23,9 @@ const hostWaitingOnPerson = (
     showMessage: (message, signal) => waiting(() => host.showMessage(message, signal)),
     showForm: (form, signal) => waiting(() => host.showForm(form, signal)),
     confirm: (confirmation, signal) => waiting(() => host.confirm(confirmation, signal)),
+    ...(host.verify === undefined
+      ? {}
+      : { verify: (verification, signal) => waiting(() => host.verify!(verification, signal)) }),
   };
 };
 
@@ -84,7 +88,7 @@ export async function runFlowBinding(
       runSignal,
     );
     if (runSignal.aborted) return { kind: "abandoned" };
-    if (!answer.confirmed)
+    if (isBackAnswer(answer) || !answer.confirmed)
       return { kind: "refused", reason: "You did not allow the agent's action." };
   }
   const browser = options.browserBinding(binding.bindingId);

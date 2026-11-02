@@ -34,14 +34,21 @@ import {
 import { Button } from "@vortex/ui/components/button";
 import { DialogFooter } from "@vortex/ui/components/dialog";
 import { noteCommittedWrite, useNavigator } from "@vortex/ui/routing";
-import { resolveApplicationPagePathAction } from "../../../frame-actions";
+import {
+  resolveApplicationHomePathByRootAction,
+  resolveApplicationPagePathAction,
+} from "../../../frame-actions";
 import { useApplicationFrame } from "../../../_components/application-frame-state";
 import { refreshShownPage } from "../../../_components/shown-page";
 import type { ApplicationPageModel } from "../../../../../../_lib/application-page";
 import type { SubmittedForm, PageMessageDraft } from "./types";
 import type { ControlDrafts } from "../../../_components/application-frame-state";
 import { formSurfaceComposition, runtimeInputWithFormDefault } from "./form-surface";
-import { unavailableNotice } from "../../../../../../_lib/flow-run-notices";
+import {
+  cannotOpenApplicationNotice,
+  unavailableNotice,
+} from "../../../../../../_lib/flow-run-notices";
+import { stepUpVerification } from "../../../../../../_components/step-up-panel";
 
 export function useFlowRuntime({
   application,
@@ -190,22 +197,36 @@ export function useFlowRuntime({
         // the destination still authorises its own read). Another application's page is resolved
         // against the person's current access in the same organisation. A page that is not offered
         // never falls back to an application's home address.
+        const unresolved = (error: unknown): undefined => {
+          console.error("[flow] navigate target could not be resolved", error);
+          return undefined;
+        };
+        let notice = unavailableNotice;
         const path =
-          target.applicationKey === undefined
-            ? model.pages.some((page) => sameId(page.pageId, target.page))
-              ? resolvePageHref(target.page)
-              : undefined
-            : await resolveApplicationPagePathAction(
+          target.applicationRootId !== undefined
+            ? await resolveApplicationHomePathByRootAction(
                 application.tenantShortName,
                 application.organizationShortName,
-                target.applicationKey,
-                target.page,
-              ).catch((error: unknown) => {
-                console.error("[flow] navigate target could not be resolved", error);
-                return undefined;
-              });
+                target.applicationRootId,
+              )
+                .then((home) => {
+                  if (home.kind === "not_permitted") notice = cannotOpenApplicationNotice;
+                  return home.kind === "path" ? home.path : undefined;
+                })
+                .catch(unresolved)
+            : target.applicationKey === undefined
+              ? target.page !== undefined &&
+                model.pages.some((page) => sameId(page.pageId, target.page!))
+                ? resolvePageHref(target.page)
+                : undefined
+              : await resolveApplicationPagePathAction(
+                  application.tenantShortName,
+                  application.organizationShortName,
+                  target.applicationKey,
+                  target.page,
+                ).catch(unresolved);
         if (path === undefined) {
-          showPageMessage(unavailableNotice);
+          showPageMessage(notice);
           return undefined;
         }
         return `${path}${query === "" ? "" : `?${query}`}`;
@@ -368,9 +389,9 @@ export function useFlowRuntime({
     },
     [currentData, dialogState, formCancelledRef, model, navigation, resolvePageHref, router],
   );
-  const messageActionRef = useRef<(message: FlowMessageIntent, offered: FlowMessageAction) => void>(
-    () => undefined,
-  );
+  const messageActionRef = useRef<
+    (message: FlowMessageIntent, offered: FlowMessageAction) => void | Promise<unknown>
+  >(() => undefined);
   const {
     host,
     element: intentHostElement,
@@ -379,6 +400,7 @@ export function useFlowRuntime({
     renderForm,
     navigation: navigationEnvironment,
     state: runtimeState,
+    verification: stepUpVerification,
     onMessageAction: (message, action) => messageActionRef.current(message, action),
     setPanel: (panel, state) => setPanelRef.current?.(panel, state),
   });
@@ -499,7 +521,8 @@ export function useFlowRuntime({
     applyMessageActionRef.current(dispatched, action.bindingId);
     // An action carried to the next page (Undo after a delete that opened the list) finishes after
     // this page has gone: the page now showing re-reads the data it shows.
-    void dispatched.then(() => {
+    // The run is handed back so guided steps stay open until it ends.
+    return dispatched.then(() => {
       if (!mountedRef.current) refreshShownPage();
     });
   };
