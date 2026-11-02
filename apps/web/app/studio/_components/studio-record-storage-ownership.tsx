@@ -20,8 +20,8 @@ import { StudioField } from "./studio-field";
 import { studioEditProblem, type StudioDataEdit } from "../_lib/studio-data-model";
 
 export const recordStorageLabels: Readonly<Record<RecordStorageScope, string>> = {
-  organization_shared: "Shared within organisation",
-  application_contained: "Only this application",
+  organization_shared: "Organisation",
+  application_contained: "This application",
 };
 
 export const recordOwnershipLabels: Readonly<Record<RecordOwnershipMode, string>> = {

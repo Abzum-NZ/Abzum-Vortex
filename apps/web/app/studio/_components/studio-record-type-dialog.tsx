@@ -26,7 +26,7 @@ import {
   StudioSegmentedControl,
 } from "@vortex/ui/studio";
 import { StudioField } from "./studio-field";
-import { recordOwnershipLabels } from "./studio-record-storage-ownership";
+import { recordOwnershipLabels, recordStorageLabels } from "./studio-record-storage-ownership";
 import { studioEditProblem, type StudioDataEdit } from "../_lib/studio-data-model";
 
 type CreatedOwnership = "none" | "organization_account" | "group";
@@ -35,11 +35,6 @@ const storageScopes: readonly RecordStorageScope[] = [
   "organization_shared",
   "application_contained",
 ];
-/** Short segment labels; the field's hint explains what each means. */
-const storageShort: Readonly<Record<RecordStorageScope, string>> = {
-  organization_shared: "Organisation",
-  application_contained: "This application",
-};
 
 /** The plural a builder most likely means; they can change it. */
 const pluralOf = (name: string): string => {
@@ -196,7 +191,7 @@ export function StudioRecordTypeDialog({
               title="Advanced"
               defaultOpen={false}
               persist={false}
-              summary={`Key ${effectiveKey || "…"} · Title field ${titleLabel || "…"} · ${storageShort[storageScope]} · ${recordOwnershipLabels[ownershipMode]}`}
+              summary={`Key ${effectiveKey || "…"} · Title field ${titleLabel || "…"} · ${recordStorageLabels[storageScope]} · ${recordOwnershipLabels[ownershipMode]}`}
             >
               <StudioField label="Key" hint="Made from the name. It does not change later.">
                 {(control) => (
@@ -240,7 +235,7 @@ export function StudioRecordTypeDialog({
                     value={storageScope}
                     options={storageScopes.map((value) => ({
                       value,
-                      label: storageShort[value],
+                      label: recordStorageLabels[value],
                     }))}
                     onChange={setStorageScope}
                   />
