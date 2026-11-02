@@ -19,7 +19,7 @@ import {
 import { studioFormChangeRefusal, studioFormShapeRefusal } from "./application-composition-forms";
 import { studioPlacementReferenceSentence } from "./composition-references";
 import type { StudioSemanticSelection } from "./semantic-selection";
-import { validateStoredApplicationOutlets } from "./stored-composition";
+import { validateStoredApplicationOutlets } from "@vortex/platform/schema";
 
 /**
  * Gate edits keep every placement, form context and flow reference intact, and never hide what a

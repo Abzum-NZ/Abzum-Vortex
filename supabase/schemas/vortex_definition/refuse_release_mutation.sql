@@ -1,8 +1,12 @@
-CREATE FUNCTION vortex_definition.refuse_release_mutation() RETURNS trigger
+CREATE OR REPLACE FUNCTION vortex_definition.refuse_release_mutation() RETURNS trigger
     LANGUAGE plpgsql
     SET search_path TO ''
     AS $$
 begin
+  -- Only the history purge role may delete these rows; it owns one function and nothing else.
+  if tg_op = 'DELETE' and current_user = 'vortex_history_purger' then
+    return old;
+  end if;
   raise exception using
     errcode = '23514',
     message = 'Definition releases and dependency manifests are append-only';

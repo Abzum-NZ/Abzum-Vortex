@@ -10,7 +10,7 @@ import { studioRecordDetailItem } from "./application-record-page-detail";
 import { placed } from "./application-record-page-shared";
 import { sourceNames } from "./composition-references";
 import { studioQueryChoices } from "./contextual-palette";
-import { syncStoredBlockDependencies } from "./stored-composition";
+import { syncStoredBlockDependencies } from "@vortex/platform/schema";
 
 /** Writes a row-click flow that opens the ordinary Drawer and Record detail composition. */
 export const ensureStudioRecordSheet = (

@@ -1929,8 +1929,8 @@
           },
           {
             "field": "status",
-            "operator": "not_in",
-            "value": ["available"]
+            "operator": "in",
+            "value": ["installed", "update_available"]
           }
         ]
       },

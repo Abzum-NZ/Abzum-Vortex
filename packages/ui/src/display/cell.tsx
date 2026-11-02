@@ -1,5 +1,4 @@
 import type { ReactElement } from "react";
-import { Badge } from "../components/badge";
 import {
   Table,
   TableBody,
@@ -12,7 +11,8 @@ import {
 import { DefinitionRenderError } from "../definition-error";
 import { NavigationLink } from "../routing/navigation-link";
 import { FormattedTime } from "./date-format-context";
-import { optionToneBadgeClass } from "./option-tone";
+import { Badge } from "../components/badge";
+import { optionToneFillClass } from "./option-tone";
 import {
   isSafeLinkAddress,
   RESTRICTED_TEXT,
@@ -26,6 +26,8 @@ import {
   type DisplayTableField,
 } from "./projected-data";
 import { RichTextDocumentView } from "./rich-text";
+
+const statusDot = "size-1.5 shrink-0 rounded-full";
 
 /**
  * A table field's rows as a compact read-only table that scrolls sideways inside its own container,
@@ -92,9 +94,12 @@ export function DisplayCellView({ value }: Readonly<{ value: DisplayDetailCell }
         <Badge
           variant="outline"
           data-vortex-choice-key={value.key}
-          data-vortex-option-tone={value.tone}
-          className={optionToneBadgeClass(value.tone)}
+          data-vortex-option-tone={value.tone ?? "neutral"}
         >
+          <span
+            aria-hidden="true"
+            className={`${statusDot} ${optionToneFillClass[value.tone ?? "neutral"]}`}
+          />
           {value.label}
         </Badge>
       );

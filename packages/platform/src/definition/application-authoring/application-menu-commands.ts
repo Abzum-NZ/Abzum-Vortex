@@ -1,10 +1,9 @@
+import { safeHttpsUrlSchema } from "../../catalogue/common";
+import { VORTEX_ICON_NAMES, type VortexIconName } from "../../catalogue/icon-names";
 import {
   applicationSourceDocumentSchema,
-  safeHttpsUrlSchema,
-  VORTEX_ICON_NAMES,
   type ApplicationSourceDocument,
-  type VortexIconName,
-} from "@vortex/platform/schema";
+} from "../application-source-contracts";
 
 /**
  * The Menu tab's edits of the application's one navigation definition (`body.navigation`): add a

@@ -83,10 +83,6 @@ export const loadApplicationSurfaces = async (
           return application !== undefined && mayBuild(application)
             ? `/studio/${encodeURIComponent(organizationId)}/${encodeURIComponent(application.applicationRootId)}`
             : undefined;
-        case "studio_new_application":
-          return capabilities.mayBuild
-            ? `/studio/${encodeURIComponent(organizationId)}/new`
-            : undefined;
         case "app_store_upgrade":
           return application !== undefined &&
             capabilities.mayInstall &&

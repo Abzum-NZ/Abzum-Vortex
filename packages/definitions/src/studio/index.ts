@@ -1,0 +1,1 @@
+export { studioApplication } from "./application";

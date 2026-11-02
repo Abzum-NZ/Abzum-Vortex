@@ -15,6 +15,9 @@ import { usePendingGesture } from "./pending-gesture";
 import { usePlacementReactions } from "../flow-runtime/placement-reactions";
 import { FlowRuntimeStateContext } from "../flow-runtime/flow-runtime-state-context";
 import { NavigationLink } from "../routing/navigation-link";
+import { Icon } from "../icons/icon";
+import { resolveVortexIconName } from "../icons/icon-names";
+import { Tooltip, TooltipContent, TooltipTrigger } from "../components/tooltip";
 
 export type ButtonProps = ControlRenderProps<ButtonPayload>;
 
@@ -64,6 +67,8 @@ export function Button(props: ButtonProps): ReactElement {
 
   const label = context.accessibleName ?? props.metadata.name;
   const href = context.values?.kind === "button" ? context.values.href : undefined;
+  const hidden = context.values?.kind === "button" && context.values.hidden === true;
+  const icon = settings.choice<string>("icon", "");
   const pending =
     context.pending || gesture.pending || (mode === "submit" && form?.pending === true);
   const disabled =
@@ -117,27 +122,36 @@ export function Button(props: ButtonProps): ReactElement {
     [agent, form?.formId, label, mode, props.placementId],
   );
 
+  const iconName = resolveVortexIconName(icon);
+  const iconOnly = iconName !== undefined;
   const button = (
     <>
       {href === undefined ? (
         <SharedButton
           type={mode === "action" ? "button" : mode}
           variant={SHARED_BUTTON_VARIANTS[variant]}
+          size={iconOnly ? "icon" : "default"}
           data-vortex-control="button"
           data-vortex-placement-id={props.placementId}
           data-vortex-action-kind={mode}
           data-vortex-variant={variant}
           disabled={disabled}
           aria-busy={pending}
+          {...(iconOnly ? { "aria-label": label } : {})}
           {...(note === undefined ? {} : { "aria-describedby": noteId })}
           onClick={click}
         >
-          {pending ? <Spinner data-icon="inline-start" aria-hidden="true" /> : null}
-          {label}
+          {pending ? (
+            <Spinner data-icon="inline-start" aria-hidden="true" />
+          ) : iconOnly ? (
+            <Icon name={iconName} aria-hidden="true" />
+          ) : null}
+          {iconOnly ? null : label}
         </SharedButton>
       ) : (
         <SharedButton
           variant={SHARED_BUTTON_VARIANTS[variant]}
+          size={iconOnly ? "icon" : "default"}
           data-vortex-control="button"
           data-vortex-placement-id={props.placementId}
           data-vortex-action-kind="link"
@@ -145,9 +159,10 @@ export function Button(props: ButtonProps): ReactElement {
           disabled={disabled}
           {...(note === undefined ? {} : { "aria-describedby": noteId })}
           nativeButton={false}
+          {...(iconOnly ? { "aria-label": label } : {})}
           render={<NavigationLink href={href} />}
         >
-          {label}
+          {iconOnly ? <Icon name={iconName} aria-hidden="true" /> : label}
         </SharedButton>
       )}
       {note === undefined ? null : (
@@ -157,11 +172,20 @@ export function Button(props: ButtonProps): ReactElement {
       )}
     </>
   );
-  return mode === "submit" ? (
-    <div ref={submitActionHostRef} data-vortex-form-actions="">
-      {button}
-    </div>
+  if (hidden) return <></>;
+  const drawn = iconOnly ? (
+    <Tooltip>
+      <TooltipTrigger render={<span className="inline-flex" />}>{button}</TooltipTrigger>
+      <TooltipContent>{label}</TooltipContent>
+    </Tooltip>
   ) : (
     button
+  );
+  return mode === "submit" ? (
+    <div ref={submitActionHostRef} data-vortex-form-actions="">
+      {drawn}
+    </div>
+  ) : (
+    drawn
   );
 }

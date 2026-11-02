@@ -233,7 +233,7 @@ export function RecordDetailDisplay(props: DisplayRenderProps<RecordDetailPayloa
                         )}
                       >
                         <dt className="text-xs font-medium text-muted-foreground">{field.label}</dt>
-                        <dd className="m-0 break-words text-sm">
+                        <dd className="m-0 whitespace-pre-line break-words text-sm">
                           <DisplayCellView value={field.value} />
                         </dd>
                       </div>

@@ -20,7 +20,8 @@ import { Input } from "../components/input";
 import { StudioReferencePicker } from "./studio-reference-picker";
 import { StudioField } from "./studio-field";
 import { StudioRecordReferenceControl } from "./studio-record-reference-control";
-import { StudioOptionControl, type StudioSettingChoices } from "./studio-setting-controls";
+import { StudioOptionControl } from "./studio-setting-basic-controls";
+import type { StudioSettingChoices } from "./studio-setting-model";
 import type { StudioQueryChoice } from "./contextual-palette";
 
 type Value = SourceBlockPropertyValueContract;

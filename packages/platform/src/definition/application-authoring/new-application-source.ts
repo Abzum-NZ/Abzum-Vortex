@@ -1,13 +1,16 @@
+import { definitionContractVersion } from "../application-contract-versions";
+import { IMMUTABLE_PLATFORM_BLOCK_CATALOGUE } from "../application-composition-catalogue";
+import type { ImmutablePlatformBlockCatalogue } from "../application-composition/platform-block-release";
 import {
-  addOwnedInlineModule,
-  definitionContractVersion,
-  applicationSourceDocumentSchema,
   DEFAULT_PLATFORM_THEME_RELEASE_IDENTITY,
   DEFAULT_SOURCE_APPLICATION_THEME_SELECTION,
+} from "../application-composition/theme";
+import {
+  applicationSourceDocumentSchema,
   type ApplicationSourceDocument,
-  type ImmutablePlatformBlockCatalogue,
-} from "@vortex/platform/schema";
-import { studioStarterFrame } from "@vortex/ui/studio";
+} from "../application-source-contracts";
+import { addOwnedInlineModule } from "../module-record-type-shape";
+import { newApplicationStarterFrame } from "./application-structure";
 
 /** What a builder enters for a new application; everything else is made from it. */
 export type MinimumApplicationInputs = Readonly<{
@@ -17,7 +20,7 @@ export type MinimumApplicationInputs = Readonly<{
   key: string;
 }>;
 
-type MinimumApplicationSourceResult =
+export type MinimumApplicationSourceResult =
   | Readonly<{ kind: "valid"; source: ApplicationSourceDocument }>
   | Readonly<{
       kind: "invalid";
@@ -26,7 +29,7 @@ type MinimumApplicationSourceResult =
     }>;
 
 /** The key a new application gets from its name: `app.` and the name's words, `app.assets_hub`, cut to the 40-character segment limit. */
-export const applicationKeyFromName = (name: string): string => {
+const applicationKeyFromName = (name: string): string => {
   const words = name
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "_")
@@ -70,7 +73,7 @@ const invalid = (
  */
 export const minimumApplicationSource = (
   inputs: MinimumApplicationInputs,
-  catalogue: ImmutablePlatformBlockCatalogue,
+  catalogue: ImmutablePlatformBlockCatalogue = IMMUTABLE_PLATFORM_BLOCK_CATALOGUE,
 ): MinimumApplicationSourceResult => {
   const name = inputs.name.trim();
   const description = inputs.description.trim();
@@ -171,7 +174,7 @@ export const minimumApplicationSource = (
     }
     return invalid(fieldErrors);
   }
-  const framed = studioStarterFrame(catalogue, parsed.data);
+  const framed = newApplicationStarterFrame(catalogue, parsed.data);
   if (framed.kind === "refused") {
     console.error("[studio] new application starter frame refused", framed.message);
     return {

@@ -3,7 +3,7 @@ export * from "./tenant-administration";
 export * from "./organisation-administration";
 export * from "./operations";
 export * from "./landing-zone";
-export * from "./app-store";
+export * from "./studio";
 export * from "./platform-permissions";
 export * from "./shipped-sources";
 export * from "./privacy-notice";
