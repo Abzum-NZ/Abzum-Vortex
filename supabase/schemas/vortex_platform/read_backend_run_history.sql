@@ -64,8 +64,9 @@ begin
     from vortex_platform.backend_runs as run
     where run.organization_id = (checked_context ->> 'organizationId')::uuid
       and run.application_root_id = p_application_root_id
-      and (p_cursor_created_at is null
-        or (run.created_at, run.backend_run_id) < (p_cursor_created_at, p_cursor_run_id))
+      and (run.created_at, run.backend_run_id) < (
+        coalesce(p_cursor_created_at, 'infinity'::timestamptz),
+        coalesce(p_cursor_run_id, 'ffffffff-ffff-ffff-ffff-ffffffffffff'::uuid))
     order by run.created_at desc, run.backend_run_id desc
     limit p_page_size + 1;
   end if;

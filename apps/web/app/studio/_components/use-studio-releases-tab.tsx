@@ -42,7 +42,7 @@ import {
 import type { StudioDraft } from "./use-studio-draft";
 import { studioNotice } from "./studio-save-state";
 import { Button } from "@vortex/ui/components/button";
-import { StudioReleasesStanding } from "./studio-releases-standing";
+import { appStoreHrefOf, StudioReleasesStanding } from "./studio-releases-standing";
 import type { StudioStandardPageAdoptionLoadResult } from "../../_lib/studio-standard-page-adoption";
 import { useIntentPreload } from "../_lib/use-intent-preload";
 import type { StudioActionToken } from "../../_lib/studio-action-tokens";
@@ -110,8 +110,8 @@ function PageAdoptionNotice({
     <Alert variant="warning">
       <AlertDescription>
         {waiting === 1
-          ? "An upgrade left 1 page with your own version next to the standard one."
-          : `An upgrade left ${waiting} pages with your own version next to the standard one.`}
+          ? "1 page has your own version next to the standard one."
+          : `${waiting} pages have your own version next to the standard one.`}
       </AlertDescription>
       <AlertAction>
         <Button type="button" variant="outline" size="sm" onClick={onReview}>
@@ -244,9 +244,11 @@ export function useStudioReleasesTab({
     hold: (on) => draft.hold("publication", on),
     onCommitted: (action) => {
       void readStanding();
-      // An upgrade is when adoption choices appear.
-      void readAdoption();
-      if (action === "publish") setHistoryGeneration((generation) => generation + 1);
+      // A published version changes what the draft is compared with; an install or upgrade does not.
+      if (action === "publish") {
+        void readAdoption();
+        setHistoryGeneration((generation) => generation + 1);
+      }
     },
   });
   const startAction = async (
@@ -429,11 +431,11 @@ export function useStudioReleasesTab({
     : savedWait;
 
   const shownStanding = standing ?? initialStanding;
-  const appStoreHref = "appStoreHref" in shownStanding ? shownStanding.appStoreHref : undefined;
+  const appStoreHref = appStoreHrefOf(shownStanding);
   const centre: ReactNode = (
     <div className="mx-auto max-w-5xl space-y-4 px-8 py-6 text-foreground">
       <StudioReleasesStanding
-        standing={standing}
+        standing={shownStanding}
         actionPending={actions.pending !== undefined}
         onReviewRoles={openInstall}
       />
@@ -558,7 +560,6 @@ export function useStudioReleasesTab({
               key={runsGeneration}
               organizationId={organizationId}
               rootId={draft.state.rootId}
-              savedRevision={draft.saved.draftRevision}
             />
           )}
         </TabsContent>

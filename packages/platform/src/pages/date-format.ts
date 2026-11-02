@@ -223,15 +223,29 @@ export function formatIsoRelative(
   const seconds = Math.abs(gap) < 60 ? 0 : gap;
   const [unit, size] =
     RELATIVE_UNITS.find(([, length]) => Math.abs(seconds) >= length) ?? RELATIVE_UNITS[5]!;
+  return relativeFormatterFor(options.locale ?? DEFAULT_LOCALE).format(
+    Math.trunc(seconds / size),
+    unit,
+  );
+}
+
+const relativeFormatters = new Map<string, Intl.RelativeTimeFormat>();
+
+/** One cached formatter per locale; an unsupported locale is logged once, when its entry is made, and uses the default. */
+const relativeFormatterFor = (locale: string): Intl.RelativeTimeFormat => {
+  const cached = relativeFormatters.get(locale);
+  if (cached !== undefined) return cached;
   let formatter: Intl.RelativeTimeFormat;
   try {
-    formatter = new Intl.RelativeTimeFormat(options.locale ?? DEFAULT_LOCALE, { numeric: "auto" });
+    formatter = new Intl.RelativeTimeFormat(locale, { numeric: "auto" });
   } catch (error) {
     console.error("[display] relative time locale unsupported, using the default", error);
     formatter = new Intl.RelativeTimeFormat(DEFAULT_LOCALE, { numeric: "auto" });
   }
-  return formatter.format(Math.trunc(seconds / size), unit);
-}
+  if (relativeFormatters.size >= MAXIMUM_CACHED_FORMATTERS) relativeFormatters.clear();
+  relativeFormatters.set(locale, formatter);
+  return formatter;
+};
 
 /** Spreadsheet number-format characters that need no quoting between date and time codes. */
 const EXCEL_PLAIN_LITERAL = /^[ :/-]+$/;

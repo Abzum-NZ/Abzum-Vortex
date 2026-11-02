@@ -116,7 +116,11 @@ export function FormattedTime({
   relative?: boolean;
 }>): ReactElement {
   const options = useDateFormatOptions();
-  const minute = useSyncExternalStore(subscribeToMinute, readMinute, readServerMinute);
+  const minute = useSyncExternalStore(
+    relative ? subscribeToMinute : subscribeToNothing,
+    relative ? readMinute : readServerMinute,
+    readServerMinute,
+  );
   const exact = formatIsoDate(iso, options);
   const text = relative && minute !== 0 ? (formatIsoRelative(iso, options) ?? exact) : exact;
   useInvalidDateLog(text === undefined);
@@ -130,7 +134,7 @@ export function FormattedTime({
   if (relative && title !== undefined)
     return (
       <Tooltip>
-        <TooltipTrigger render={<time className={className} dateTime={iso} />}>
+        <TooltipTrigger render={<time className={className} dateTime={iso} tabIndex={0} />}>
           {text}
         </TooltipTrigger>
         <TooltipContent>{title}</TooltipContent>

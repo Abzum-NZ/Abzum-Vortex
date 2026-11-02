@@ -90,6 +90,8 @@ export type StudioApplicationReleaseChangesResult =
       kind: "available";
       /** True for the first version, which has nothing to compare with. */
       first: boolean;
+      /** False for a version published in an earlier source format. */
+      comparable: boolean;
       rows: readonly SourceChangeRow[];
     }>;
 export type StudioApplicationHistoryListResult =
@@ -473,15 +475,10 @@ export const readStudioApplicationReleaseChanges = async (
   candidate: unknown,
 ): Promise<StudioApplicationReleaseChangesResult> => {
   const request = changesRequestSchema.safeParse(candidate);
-  if (
-    !request.success ||
-    request.data.expected.anchorReleaseRevision === null ||
-    request.data.releaseRevision > request.data.expected.anchorReleaseRevision
-  )
+  const anchor = request.success ? request.data.expected.anchorReleaseRevision : null;
+  if (!request.success || anchor === null || request.data.releaseRevision > anchor)
     return declined({ kind: "refused", reason: "request_invalid" });
   const command = request.data;
-  const anchor = command.expected.anchorReleaseRevision;
-  if (anchor === null) return declined({ kind: "refused", reason: "request_invalid" });
   const result = await executeRead(
     organizationId,
     command.rootId,
@@ -501,11 +498,13 @@ export const readStudioApplicationReleaseChanges = async (
         throw new HistoryRefused();
       const before = previousSourceOf(page, entry);
       const after = comparableSource(entry.authoredSource);
-      if (entry.previousReleaseRevision !== null && (before === undefined || after === undefined))
-        throw new HistoryStorageUnavailable();
+      const first = entry.previousReleaseRevision === null;
+      const comparable = first || (before !== undefined && after !== undefined);
       return {
         value: {
-          first: entry.previousReleaseRevision === null,
+          first,
+          // A version published in an earlier source format cannot be compared: the sheet says so.
+          comparable,
           rows:
             before === undefined || after === undefined ? [] : summarizeSourceChange(before, after),
         },

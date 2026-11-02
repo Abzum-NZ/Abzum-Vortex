@@ -50,6 +50,12 @@ import {
   type StudioApplicationSourceImportSnapshot,
 } from "../_lib/application-source-import";
 
+// The import's notices replace one another: a refusal does not stay on screen through a later
+// successful check or the replace.
+const importNotice = (message: string, kind?: "success" | "error" | "info"): void => {
+  studioNotice(message, kind, undefined, { id: "studio-source-import" });
+};
+
 type ReviewedSource = Readonly<{
   snapshot: StudioApplicationSourceImportSnapshot;
   text: string;
@@ -185,7 +191,7 @@ export function ApplicationSourceImport({
     busy.current = null;
     setOperation(null);
     if (file.size > maximumApplicationSourceImportBytes) {
-      studioNotice(
+      importNotice(
         "The JSON source must be at most 2 MiB. Your existing input is preserved.",
         "error",
       );
@@ -197,7 +203,7 @@ export function ApplicationSourceImport({
       const value = new TextDecoder("utf-8", { fatal: true }).decode(await file.arrayBuffer());
       if (!active.current || epoch.current !== requestEpoch) return;
       if (!sameStudioApplicationSourceImportSnapshot(snapshot, readSnapshot())) {
-        studioNotice(
+        importNotice(
           "The editor changed while reading. Your previous input is preserved.",
           "error",
         );
@@ -207,7 +213,7 @@ export function ApplicationSourceImport({
         value.length > maximumApplicationSourceImportBytes ||
         new TextEncoder().encode(value).byteLength > maximumApplicationSourceImportBytes
       ) {
-        studioNotice(
+        importNotice(
           "The JSON source must be at most 2 MiB. Your previous input is preserved.",
           "error",
         );
@@ -215,11 +221,11 @@ export function ApplicationSourceImport({
       }
       raw.current = value;
       setText(value);
-      studioNotice("File ready. Check it before replacing the draft.");
+      importNotice("File ready. Check it before replacing the draft.");
     } catch (error) {
       console.error("[studio] application import file could not be read", error);
       if (active.current && epoch.current === requestEpoch)
-        studioNotice(
+        importNotice(
           "The selected file could not be read. Your previous input is preserved.",
           "error",
         );
@@ -245,7 +251,7 @@ export function ApplicationSourceImport({
       snapshot.rootAlias,
     );
     if (candidate.kind !== "valid") {
-      studioNotice(candidate.message, "error");
+      importNotice(candidate.message, "error");
       return;
     }
     busy.current = "reviewing";
@@ -271,13 +277,13 @@ export function ApplicationSourceImport({
       )
         return;
       if (!responseIsCurrent()) {
-        studioNotice("The editor changed. Review again; your JSON input is preserved.", "error");
+        importNotice("The editor changed. Review again; your JSON input is preserved.", "error");
         return;
       }
       const parsed = studioApplicationSourceReviewResultSchema.safeParse(response);
       if (!parsed.success) {
         console.error("[studio] invalid application source review response", parsed.error);
-        studioNotice("The review could not be verified. What you typed is kept.", "error");
+        importNotice("The review could not be verified. What you typed is kept.", "error");
         return;
       }
       const result = parsed.data;
@@ -286,7 +292,7 @@ export function ApplicationSourceImport({
         result.kind !== "validation_failed" &&
         result.kind !== "identity_conflict"
       ) {
-        studioNotice(
+        importNotice(
           result.kind === "conflict"
             ? "The saved draft changed. Reopen explicitly before reviewing again."
             : result.kind === "invalid"
@@ -306,7 +312,7 @@ export function ApplicationSourceImport({
         result.draftRevision !== snapshot.draftRevision ||
         result.savedSourceFingerprint !== snapshot.savedSourceFingerprint
       ) {
-        studioNotice(
+        importNotice(
           "The review does not match this source and draft. What you typed is kept.",
           "error",
         );
@@ -315,7 +321,7 @@ export function ApplicationSourceImport({
       const submittedFingerprint = await fingerprintSourceDocument(candidate.source);
       if (!responseIsCurrent()) return;
       if (result.candidateSourceFingerprint !== submittedFingerprint) {
-        studioNotice(
+        importNotice(
           "The review does not match the submitted source. What you typed is kept.",
           "error",
         );
@@ -325,7 +331,7 @@ export function ApplicationSourceImport({
         const names = result.conflicts
           .map((conflict) => `${conflict.kind.replaceAll("_", " ")} “${conflict.name}”`)
           .join(", ");
-        studioNotice(
+        importNotice(
           `This file gives names already used in this application to different components: ${names}. Keep each existing component's original id when editing its name, or choose a name that has never been used. Your draft is unchanged.`,
           "error",
         );
@@ -340,7 +346,7 @@ export function ApplicationSourceImport({
                 error.location.documentKey === snapshot.key),
           )
         ) {
-          studioNotice(
+          importNotice(
             "The validation locations do not match this Application. What you typed is kept.",
             "error",
           );
@@ -352,7 +358,7 @@ export function ApplicationSourceImport({
           epoch: requestEpoch,
           validation: result.validation,
         });
-        studioNotice(
+        importNotice(
           "The file has problems. Fix the issues listed below and check it again. What you typed is kept.",
           "error",
         );
@@ -363,7 +369,7 @@ export function ApplicationSourceImport({
         result.source.root_alias !== snapshot.rootAlias ||
         canonicalJson(result.source) !== canonicalJson(candidate.source)
       ) {
-        studioNotice(
+        importNotice(
           "The review does not match this source and draft. What you typed is kept.",
           "error",
         );
@@ -378,11 +384,11 @@ export function ApplicationSourceImport({
       };
       acceptedReview.current = next;
       setReviewed(next);
-      studioNotice("Checked. Review what will change below, then apply it to your draft.");
+      importNotice("Checked. Review what will change below, then apply it to your draft.");
     } catch (error) {
       console.error("[studio] application source review failed", error);
       if (responseIsCurrent())
-        studioNotice("The review could not be completed. What you typed is kept.", "error");
+        importNotice("The review could not be completed. What you typed is kept.", "error");
     } finally {
       if (active.current && epoch.current === requestEpoch) {
         busy.current = null;
@@ -412,11 +418,11 @@ export function ApplicationSourceImport({
         currentSnapshotReader.current(),
       );
     if (candidate === null || !isCurrent()) {
-      studioNotice("The check is out of date. What you typed is kept; check it again.", "error");
+      importNotice("The check is out of date. What you typed is kept; check it again.", "error");
       return;
     }
     if (canonicalJson(candidate.source) === canonicalJson(candidate.snapshot.source)) {
-      studioNotice("Your draft already matches this file. Nothing was changed.");
+      importNotice("Your draft already matches this file. Nothing was changed.");
       return;
     }
     if (
@@ -428,16 +434,16 @@ export function ApplicationSourceImport({
     )
       return;
     if (!isCurrent()) {
-      studioNotice("The draft changed, so nothing was replaced.", "error");
+      importNotice("The draft changed, so nothing was replaced.", "error");
       return;
     }
     const result = onApply(candidate.snapshot, candidate.source);
     if (result === "applied") {
       replaceText("");
       onOpenChange(false);
-      studioNotice("Imported. Your draft is the imported file now.", "success");
+      importNotice("Imported. Your draft is the imported file now.", "success");
     } else
-      studioNotice(
+      importNotice(
         result === "unchanged"
           ? "Your draft already matches this file. Nothing was changed."
           : "The editor changed. What you typed is kept; review again.",
@@ -446,7 +452,7 @@ export function ApplicationSourceImport({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex max-h-[90vh] flex-col gap-4 sm:max-w-2xl">
+      <DialogContent className="flex max-h-[90vh] flex-col gap-4 overflow-hidden sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>Replace draft from a file</DialogTitle>
           <DialogDescription>
@@ -472,7 +478,7 @@ export function ApplicationSourceImport({
               setDragging(false);
               if (disabled) return;
               if (event.dataTransfer.files.length !== 1) {
-                studioNotice("Choose one application file at a time.", "error");
+                importNotice("Choose one application file at a time.", "error");
                 return;
               }
               void readFile(event.dataTransfer.files[0]);
@@ -601,7 +607,7 @@ export function ApplicationSourceImport({
             onClick={() => {
               replaceText("");
               if (fileInput.current !== null) fileInput.current.value = "";
-              studioNotice("Cleared. Your draft is unchanged.");
+              importNotice("Cleared. Your draft is unchanged.");
             }}
           >
             Clear

@@ -97,8 +97,11 @@ function ExistingApplicationWorkspace(props: ExistingProps) {
   // Every way of opening a tab shares this state, including rule links and the rail.
   useEffect(() => {
     const url = new URL(window.location.href);
-    if (url.searchParams.get("tab") === tab) return;
+    // The Releases tab's section belongs to that tab alone.
+    const leavesSection = tab !== "releases" && url.searchParams.has("section");
+    if (url.searchParams.get("tab") === tab && !leavesSection) return;
     url.searchParams.set("tab", tab);
+    if (tab !== "releases") url.searchParams.delete("section");
     window.history.replaceState(window.history.state, "", url);
   }, [tab]);
   useEffect(() => {

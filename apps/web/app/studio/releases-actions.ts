@@ -49,7 +49,15 @@ const backendRunPageRequestSchema = z.union([
   z
     .object({
       kind: z.enum(["older", "newer"]),
-      cursor: z.object({ createdAt: z.string().max(64), runId: z.uuid() }).strict(),
+      cursor: z
+        .object({
+          // The timestamp text the database wrote with the run, to the microsecond.
+          createdAt: z
+            .string()
+            .regex(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(\.\d{1,6})?[+-]\d{2}(:\d{2})?$/),
+          runId: z.uuid(),
+        })
+        .strict(),
     })
     .strict(),
 ]);

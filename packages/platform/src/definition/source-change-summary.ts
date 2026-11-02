@@ -75,6 +75,7 @@ const collectionChanges = (
   to: unknown,
   rows: SourceChangeRow[],
 ): void => {
+  const start = rows.length;
   const area = areaLabel(key);
   const was = new Map<string, { entry: unknown; index: number }>();
   const now = new Map<string, { entry: unknown; index: number }>();
@@ -99,16 +100,57 @@ const collectionChanges = (
       const childFrom = before[childKey];
       const childTo = after[childKey];
       if (canonicalJson(childFrom ?? null) === canonicalJson(childTo ?? null)) continue;
+      // The entry itself was recorded as changed above; only its own collections are looked into.
       if (isCollection(childKey, childFrom) || isCollection(childKey, childTo))
         collectionChanges(childKey, childFrom, childTo, rows);
-      else if (childKey !== "id" && childKey !== "key" && childKey !== "name")
-        rows.push({ area, change: "Changed", item: itemName(entry, index) });
     }
+    if (key === "pages") blockChanges(old.entry, entry, rows);
   }
   for (const [id, { entry, index }] of was)
     if (!now.has(id)) rows.push({ area, change: "Removed", item: itemName(entry, index) });
   // A reorder keeps every entry and changes only their order.
-  if (!rows.some((row) => row.area === area)) rows.push({ area, change: "Changed", item: "Order" });
+  if (rows.length === start) rows.push({ area, change: "Changed", item: "Order" });
+};
+
+/** Every block of a page's composition, by the id its settings carry: an object with a type and settings that hold an id. */
+const blocksOf = (page: unknown): ReadonlyMap<string, Readonly<Record<string, unknown>>> => {
+  const blocks = new Map<string, Readonly<Record<string, unknown>>>();
+  const visit = (value: unknown): void => {
+    if (Array.isArray(value)) {
+      for (const member of value) visit(member);
+      return;
+    }
+    const fields = asRecord(value);
+    if (fields === undefined) return;
+    const props = asRecord(fields.props);
+    if (typeof fields.type === "string" && props !== undefined && typeof props.id === "string")
+      blocks.set(props.id, fields);
+    for (const member of Object.values(fields)) visit(member);
+  };
+  visit(asRecord(page)?.composition);
+  return blocks;
+};
+
+/** The blocks a page that stayed gained, lost or changed, so a block edit counts as one block and not only as a changed page. */
+const blockChanges = (from: unknown, to: unknown, rows: SourceChangeRow[]): void => {
+  const was = blocksOf(from);
+  const now = blocksOf(to);
+  const label = (block: Readonly<Record<string, unknown>>): string => {
+    const props = asRecord(block.props);
+    for (const field of ["title", "label", "name"]) {
+      const value = props?.[field];
+      if (typeof value === "string" && value.trim() !== "") return value.trim();
+    }
+    return String(block.type);
+  };
+  for (const [id, block] of now) {
+    const old = was.get(id);
+    if (old === undefined) rows.push({ area: "Blocks", change: "Added", item: label(block) });
+    else if (canonicalJson(old.props) !== canonicalJson(block.props))
+      rows.push({ area: "Blocks", change: "Changed", item: label(block) });
+  }
+  for (const [id, block] of was)
+    if (!now.has(id)) rows.push({ area: "Blocks", change: "Removed", item: label(block) });
 };
 
 /** What replacing one source with another would change, by area and item name, without showing any source. */
@@ -142,6 +184,65 @@ export type SourceChangeCount = Readonly<{
   changed: number;
   removed: number;
 }>;
+
+/** The areas a release summary names (design 9.2); every other area of the source counts as `other`. */
+export const releaseSummaryAreas = [
+  "pages",
+  "blocks",
+  "fields",
+  "flows",
+  "roles",
+  "other",
+] as const;
+export type ReleaseSummaryArea = (typeof releaseSummaryAreas)[number];
+
+const summaryAreaOf: Readonly<Record<string, ReleaseSummaryArea>> = {
+  Pages: "pages",
+  Blocks: "blocks",
+  Fields: "fields",
+  Flows: "flows",
+  "Access groups": "roles",
+  Permissions: "roles",
+};
+
+/** Items changed (added, changed or removed) in each summary area, from the counts by source area. */
+export const summarizeChangeAreas = (
+  counts: readonly SourceChangeCount[],
+): Readonly<Record<ReleaseSummaryArea, number>> => {
+  const totals: Record<ReleaseSummaryArea, number> = {
+    pages: 0,
+    blocks: 0,
+    fields: 0,
+    flows: 0,
+    roles: 0,
+    other: 0,
+  };
+  for (const count of counts)
+    totals[summaryAreaOf[count.area] ?? "other"] += count.added + count.changed + count.removed;
+  return totals;
+};
+
+const summaryNouns: Readonly<Record<ReleaseSummaryArea, readonly [string, string]>> = {
+  pages: ["page", "pages"],
+  blocks: ["block", "blocks"],
+  fields: ["field", "fields"],
+  flows: ["flow", "flows"],
+  roles: ["role", "roles"],
+  other: ["other item", "other items"],
+};
+
+/**
+ * "3 pages, 2 blocks, 1 flow changed": the one sentence for what a version changed, used by the
+ * version history and the publish confirmation so both count the same way. Undefined when nothing
+ * changed.
+ */
+export const describeSourceChange = (counts: readonly SourceChangeCount[]): string | undefined => {
+  const totals = summarizeChangeAreas(counts);
+  const shown = releaseSummaryAreas
+    .filter((area) => totals[area] > 0)
+    .map((area) => `${totals[area]} ${summaryNouns[area][totals[area] === 1 ? 0 : 1]}`);
+  return shown.length === 0 ? undefined : `${shown.join(", ")} changed`;
+};
 
 /** The rows of a source change counted by area, in the order the areas first appear. */
 export const countSourceChange = (

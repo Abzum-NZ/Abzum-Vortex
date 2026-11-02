@@ -73,8 +73,9 @@ begin
     from vortex_platform.backend_runs as run
     where run.organization_id = (checked_context ->> 'organizationId')::uuid
       and run.application_root_id = p_application_root_id
-      and (p_cursor_created_at is null
-        or (run.created_at, run.backend_run_id) < (p_cursor_created_at, p_cursor_run_id))
+      and (run.created_at, run.backend_run_id) < (
+        coalesce(p_cursor_created_at, 'infinity'::timestamptz),
+        coalesce(p_cursor_run_id, 'ffffffff-ffff-ffff-ffff-ffffffffffff'::uuid))
     order by run.created_at desc, run.backend_run_id desc
     limit p_page_size + 1;
   end if;
@@ -132,20 +133,32 @@ begin
     raise exception using errcode = '40001', message = 'Definition publication history anchor changed';
   end if;
   -- Newest first. One release more than the page is read to learn whether a further page exists.
-  select pg_catalog.array_agg(page.release_revision order by page.release_revision desc)
-  into picked
-  from (
-    select release.release_revision
-    from vortex_definition.releases as release
-    where release.root_id = p_root_id
-      and release.release_revision <= p_anchor_release_revision
-      and (p_cursor_release_revision is null
-        or (p_direction = 'older' and release.release_revision < p_cursor_release_revision)
-        or (p_direction = 'newer' and release.release_revision > p_cursor_release_revision))
-    order by case when p_direction = 'newer' then release.release_revision end asc,
-      release.release_revision desc
-    limit p_page_size + 1
-  ) as page;
+  -- Two static queries, each with its bound inside the index scan whatever plan is chosen.
+  if p_direction = 'newer' then
+    select pg_catalog.array_agg(page.release_revision order by page.release_revision desc)
+    into picked
+    from (
+      select release.release_revision
+      from vortex_definition.releases as release
+      where release.root_id = p_root_id
+        and release.release_revision <= p_anchor_release_revision
+        and release.release_revision > p_cursor_release_revision
+      order by release.release_revision asc
+      limit p_page_size + 1
+    ) as page;
+  else
+    select pg_catalog.array_agg(page.release_revision order by page.release_revision desc)
+    into picked
+    from (
+      select release.release_revision
+      from vortex_definition.releases as release
+      where release.root_id = p_root_id
+        and release.release_revision <= p_anchor_release_revision
+        and release.release_revision < coalesce(p_cursor_release_revision, p_anchor_release_revision + 1)
+      order by release.release_revision desc
+      limit p_page_size + 1
+    ) as page;
+  end if;
   picked := coalesce(picked, '{}'::bigint[]);
   if p_direction = 'newer' then
     has_newer := pg_catalog.cardinality(picked) > p_page_size;

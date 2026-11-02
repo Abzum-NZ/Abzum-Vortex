@@ -69,7 +69,8 @@ const standingWords = (
   }
 };
 
-const appStoreHrefOf = (standing: ApplicationReleaseStanding): string | undefined =>
+/** The App Store page that shows the application, when where it stands names one. */
+export const appStoreHrefOf = (standing: ApplicationReleaseStanding): string | undefined =>
   "appStoreHref" in standing ? standing.appStoreHref : undefined;
 
 /**
@@ -90,7 +91,7 @@ export function StudioReleasesStanding({
   if (standing === null || words === null) return null;
   const href = appStoreHrefOf(standing);
   return (
-    <Item variant="outline" size="sm" aria-label="Installation">
+    <Item variant="outline" size="sm" role="group" aria-label="Installation">
       <ItemMedia variant="icon">
         <Icon name={words.icon} />
       </ItemMedia>

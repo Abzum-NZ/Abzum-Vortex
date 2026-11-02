@@ -62,9 +62,37 @@ const installedFlowNames = async (
   );
 };
 
+// The installed release is loaded in full to name flows, so the names are kept for five minutes
+// per application: a page whose flows are all known (Older, Newer, Reload) loads nothing.
+const flowNameLifetimeMs = 5 * 60_000;
+const flowNameCache = new Map<
+  string,
+  Readonly<{ at: number; names: ReadonlyMap<string, string> }>
+>();
+const flowNamesFor = async (
+  session: Parameters<typeof loadInstalledContext>[0],
+  organizationId: OrganizationId,
+  applicationRootId: ApplicationRootId,
+  flowIds: readonly string[],
+): Promise<ReadonlyMap<string, string>> => {
+  const key = `${organizationId}:${applicationRootId}`;
+  const cached = flowNameCache.get(key);
+  if (
+    cached !== undefined &&
+    Date.now() - cached.at < flowNameLifetimeMs &&
+    flowIds.every((id) => cached.names.has(id))
+  )
+    return cached.names;
+  const names = await installedFlowNames(session, organizationId, applicationRootId);
+  // A release that could not be read is not remembered, so the next page tries again.
+  if (names.size > 0) flowNameCache.set(key, { at: Date.now(), names });
+  return names;
+};
+
 /**
- * The newest back-end runs of one application for its builders. The database function decides
- * the caller's authority from the request context; the history never carries outputs.
+ * One keyset page of the back-end runs of one application for its builders, newest first. The
+ * database function decides the caller's authority from the request context; the history never
+ * carries outputs.
  */
 export const readStudioBackendRunHistory = async (
   candidateOrganizationId: string,
@@ -83,7 +111,12 @@ export const readStudioBackendRunHistory = async (
       requests: humanOrganizationRequests(),
     }).read(resolved.session, organization.data, root.data, request);
     if (result.kind === "available") {
-      const names = await installedFlowNames(resolved.session, organization.data, root.data);
+      const names = await flowNamesFor(
+        resolved.session,
+        organization.data,
+        root.data,
+        result.runs.flatMap((run) => (run.flowId === null ? [] : [run.flowId.toLowerCase()])),
+      );
       return {
         kind: "available",
         hasOlder: result.hasOlder,

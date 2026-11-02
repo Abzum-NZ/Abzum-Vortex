@@ -52,7 +52,7 @@ import { studioNotice } from "./studio-save-state";
 import { StudioPager } from "./studio-pager";
 
 import { useEffect, useRef, useState } from "react";
-import type { SourceChangeRow } from "@vortex/platform/schema";
+import { describeSourceChange, type SourceChangeRow } from "@vortex/platform/schema";
 import type {
   StudioApplicationHistoryFailure,
   StudioApplicationHistoryPage,
@@ -105,17 +105,14 @@ const restoreFailureMessage = (
           ? "Restoring was refused for your account or this version, so nothing was restored."
           : "Restoring is temporarily unavailable, so nothing was restored. Try again in a moment.";
 
-/** "3 pages, 2 fields changed": the areas a version touched, by how many items each had. */
+/** "3 pages, 2 blocks, 1 flow changed": the design's areas a version touched, as the publish confirmation words it. */
 const changeSummary = (changes: StudioReleaseChanges): string => {
   if (changes.kind === "first") return "First version";
-  if (changes.kind === "unavailable") return "Not comparable with the version before";
-  if (changes.counts.length === 0) return "No change to the application";
-  const shown = changes.counts
-    .slice(0, 3)
-    .map((count) => `${count.added + count.changed + count.removed} ${count.area.toLowerCase()}`);
-  const more = changes.counts.length - shown.length;
-  return `${shown.join(", ")}${more > 0 ? ` and ${more} more` : ""} changed`;
+  if (changes.kind === "unavailable") return notComparable;
+  return describeSourceChange(changes.counts) ?? "No change to the application";
 };
+
+const notComparable = "This version was published in an earlier format and cannot be compared.";
 
 /** Added, changed and removed counts of each area, for the summary's tooltip. */
 const changeDetail = (changes: StudioReleaseChanges): string | undefined =>
@@ -134,8 +131,13 @@ const changeDetail = (changes: StudioReleaseChanges): string | undefined =>
 
 type ChangesLoad =
   | Readonly<{ kind: "loading" }>
-  | Readonly<{ kind: "available"; first: boolean; rows: readonly SourceChangeRow[] }>
-  | Readonly<{ kind: "unavailable" }>;
+  | Readonly<{
+      kind: "available";
+      first: boolean;
+      comparable: boolean;
+      rows: readonly SourceChangeRow[];
+    }>
+  | Readonly<{ kind: "unavailable"; conflict: boolean }>;
 
 /**
  * The Releases tab's published versions, newest first, 40 to a page: each with when and by whom it
@@ -208,15 +210,20 @@ export function ApplicationReleaseHistory({
       (result) => {
         if (!current) return;
         if (result.kind === "available")
-          setChangesLoad({ kind: "available", first: result.first, rows: result.rows });
+          setChangesLoad({
+            kind: "available",
+            first: result.first,
+            comparable: result.comparable,
+            rows: result.rows,
+          });
         else {
           console.error(`[studio] release changes ${result.kind}: ${result.reason}`);
-          setChangesLoad({ kind: "unavailable" });
+          setChangesLoad({ kind: "unavailable", conflict: result.kind === "conflict" });
         }
       },
       (error: unknown) => {
         console.error("[studio] release changes failed to load", error);
-        if (current) setChangesLoad({ kind: "unavailable" });
+        if (current) setChangesLoad({ kind: "unavailable", conflict: false });
       },
     );
     return () => {
@@ -556,7 +563,9 @@ export function ApplicationReleaseHistory({
                 {changesLoad.kind === "unavailable" && (
                   <Alert variant="destructive">
                     <AlertDescription>
-                      What this version changed could not be read. Close this panel and try again.
+                      {changesLoad.conflict
+                        ? "This list is out of date. Reload the versions."
+                        : "What this version changed could not be read. Close this panel and try again."}
                     </AlertDescription>
                   </Alert>
                 )}
@@ -565,6 +574,8 @@ export function ApplicationReleaseHistory({
                     <p className="text-sm text-muted-foreground">
                       The first version: there is nothing before it to compare with.
                     </p>
+                  ) : !changesLoad.comparable ? (
+                    <p className="text-sm text-muted-foreground">{notComparable}</p>
                   ) : changesLoad.rows.length === 0 ? (
                     <p className="text-sm text-muted-foreground">
                       This version changed nothing in the application.
@@ -593,7 +604,10 @@ export function ApplicationReleaseHistory({
                   ))}
                 <Collapsible>
                   <CollapsibleTrigger render={<Button variant="ghost" size="sm" />}>
-                    <Icon name="chevron-down" />
+                    <Icon
+                      name="chevron-right"
+                      className="transition-transform group-data-[panel-open]/button:rotate-90"
+                    />
                     Details
                   </CollapsibleTrigger>
                   <CollapsibleContent className="pt-2">
