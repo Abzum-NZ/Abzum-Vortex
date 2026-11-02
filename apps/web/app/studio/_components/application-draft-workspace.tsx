@@ -300,7 +300,7 @@ function ExistingApplicationWorkspace(props: ExistingProps) {
     <StudioFieldProblemsProvider>
       <StudioPlaceOpenerProvider opener={placeOpener}>
         <div
-          className="h-full"
+          className="flex h-full min-h-0 flex-col"
           aria-busy={draft.isHeld("publication") || draft.isHeld("reopening")}
         >
           <ApplicationDraftAgentTools
