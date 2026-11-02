@@ -113,7 +113,11 @@ export const useStudioCanvasModel = ({
     () =>
       fieldInputControlReleases === null
         ? NO_COMPONENTS
-        : studioCanvasConfig(getVortexPuckConfig(registry, fieldInputControlReleases), registry),
+        : studioCanvasConfig(
+            getVortexPuckConfig(registry, fieldInputControlReleases),
+            registry,
+            fieldInputControlReleases,
+          ),
     [registry, fieldInputControlReleases],
   );
   const page = source.body.pages.find((candidate) => candidate.id === pageAlias);

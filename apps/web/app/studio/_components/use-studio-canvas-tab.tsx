@@ -42,6 +42,7 @@ import {
   EmptyDescription,
 } from "@vortex/ui/components/empty";
 import { Button } from "@vortex/ui/components/button";
+import { Badge } from "@vortex/ui/components/badge";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@vortex/ui/components/tooltip";
 import { StudioCanvasPalette, StudioCanvasView } from "@vortex/ui/studio/canvas-view";
 import type {
@@ -1008,6 +1009,31 @@ export function useStudioCanvasTab({
         </Tooltip>
       </>
     ) : undefined;
+  // The role the canvas previews says so in the canvas strip, where it cannot move the canvas.
+  const viewAsSentence =
+    canvasPage !== undefined && viewAsRole !== undefined && viewDecisions !== null
+      ? `${
+          holdsPermission(viewDecisions, canvasPage.permission)
+            ? `Blocks ${viewAsRole.name} cannot see are hidden.`
+            : `${viewAsRole.name} cannot open this page; it is shown so you can keep working on it.`
+        } Records are from your preview.${
+          draft.updatingCanvas ? " Your latest change shows once the canvas is updated." : ""
+        }`
+      : undefined;
+  const viewAsNote =
+    viewAsSentence === undefined || viewAsRole === undefined ? undefined : (
+      <>
+        <Tooltip>
+          <TooltipTrigger render={<Badge variant="outline" tabIndex={0} className="shrink-0" />}>
+            {`As ${viewAsRole.name}`}
+          </TooltipTrigger>
+          <TooltipContent>{viewAsSentence}</TooltipContent>
+        </Tooltip>
+        <span role="status" className="sr-only">
+          {viewAsSentence}
+        </span>
+      </>
+    );
   const shown = canvasPage !== undefined && (inspector.status === "resolved" || selected === null);
   const centre = (
     <section
@@ -1053,16 +1079,6 @@ export function useStudioCanvasTab({
           <AlertDescription>{theme.problem}</AlertDescription>
         </Alert>
       )}
-      {canvasPage !== undefined && viewAsRole !== undefined && viewDecisions !== null && (
-        <p role="status" className="text-sm text-muted-foreground">
-          {holdsPermission(viewDecisions, canvasPage.permission)
-            ? `Showing what ${viewAsRole.name} sees`
-            : `${viewAsRole.name} cannot open this page; it is shown so you can keep working on it`}
-          {draft.updatingCanvas
-            ? ", as the saved draft grants it. Your latest change shows once the canvas is updated."
-            : "."}
-        </p>
-      )}
       {shown &&
         canvasPage !== undefined &&
         fieldInputControlReleases !== null &&
@@ -1075,7 +1091,12 @@ export function useStudioCanvasTab({
               <StudioCanvasView
                 zoom={canvasZoom}
                 onFitZoom={setFitZoom}
-                note={firstRecordTypeNote}
+                note={
+                  <>
+                    {viewAsNote}
+                    {firstRecordTypeNote}
+                  </>
+                }
               />
             </Suspense>
           </div>
