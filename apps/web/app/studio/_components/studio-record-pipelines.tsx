@@ -1,4 +1,5 @@
 "use client";
+import { FieldLegend } from "@vortex/ui/components/field";
 import { useState, type FormEvent } from "react";
 import {
   applicationUses,
@@ -425,7 +426,7 @@ function PipelineDialog({
           </div>
 
           <fieldset className="space-y-2">
-            <legend className="text-sm font-medium">Stages, in board order</legend>
+            <FieldLegend variant="label">Stages, in board order</FieldLegend>
             <ul className="space-y-2">
               {stages.map((stage, index) => (
                 <Item key={stage.option} render={<li />} variant="outline" size="sm">
@@ -508,7 +509,6 @@ function PipelineDialog({
                           option: stage.option,
                         }}
                         name={label(stage.option)}
-                        collapsed
                         onBeforeOpen={onClose}
                       />
                     </div>
@@ -524,7 +524,7 @@ function PipelineDialog({
           </fieldset>
 
           <fieldset className="space-y-2">
-            <legend className="text-sm font-medium">Allowed moves</legend>
+            <FieldLegend variant="label">Allowed moves</FieldLegend>
             <p className="text-sm text-muted-foreground">
               Tick each move a record may make. Any other move between two stages is refused. A new
               record without a stage starts at the first stage.

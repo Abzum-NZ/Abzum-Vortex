@@ -16,6 +16,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@vortex/ui/components/dialog";
+import { FieldGroup } from "@vortex/ui/components/field";
 import { Input } from "@vortex/ui/components/input";
 import { StudioField } from "./studio-field";
 import { studioEditProblem, type StudioDataEdit } from "../_lib/studio-data-model";
@@ -62,46 +63,53 @@ export function StudioModuleDialog({
             Group related record types. Modules publish with this application.
           </DialogDescription>
         </DialogHeader>
-        <form id="studio-module-form" className="grid gap-4" onSubmit={submit} noValidate>
-          <StudioField label="Module name" hint="For example Assets or People.">
-            {(control) => (
-              <Input
-                {...control}
-                autoFocus
-                required
-                maxLength={120}
-                value={name}
-                onChange={(event) => {
-                  setName(event.target.value);
-                  setProblem(undefined);
-                }}
-              />
-            )}
-          </StudioField>
-          <StudioInspectorGroup title="Details" defaultOpen={false}>
-            <StudioField
-              label="Module key"
-              hint="Made from the name. It is permanent after creation."
-            >
+        <form id="studio-module-form" onSubmit={submit} noValidate>
+          <FieldGroup>
+            <StudioField label="Module name">
               {(control) => (
                 <Input
                   {...control}
+                  autoFocus
                   required
                   maxLength={120}
-                  value={effectiveKey}
+                  value={name}
                   onChange={(event) => {
-                    setKey(event.target.value);
+                    setName(event.target.value);
                     setProblem(undefined);
                   }}
                 />
               )}
             </StudioField>
-          </StudioInspectorGroup>
-          {problem === undefined ? null : (
-            <Alert variant="destructive">
-              <AlertDescription>{problem}</AlertDescription>
-            </Alert>
-          )}
+            <StudioInspectorGroup
+              title="Advanced"
+              defaultOpen={false}
+              persist={false}
+              summary={`Key ${effectiveKey}`}
+            >
+              <StudioField
+                label="Module key"
+                hint="Made from the name. It is permanent after creation."
+              >
+                {(control) => (
+                  <Input
+                    {...control}
+                    required
+                    maxLength={120}
+                    value={effectiveKey}
+                    onChange={(event) => {
+                      setKey(event.target.value);
+                      setProblem(undefined);
+                    }}
+                  />
+                )}
+              </StudioField>
+            </StudioInspectorGroup>
+            {problem === undefined ? null : (
+              <Alert variant="destructive">
+                <AlertDescription>{problem}</AlertDescription>
+              </Alert>
+            )}
+          </FieldGroup>
         </form>
         <DialogFooter>
           <Button type="button" variant="ghost" onClick={onClose}>

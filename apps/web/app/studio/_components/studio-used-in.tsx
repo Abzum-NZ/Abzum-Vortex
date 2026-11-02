@@ -3,6 +3,7 @@ import { createContext, useContext, useMemo, useState, type ReactNode } from "re
 import {
   applicationUses,
   describeApplicationUsers,
+  type ApplicationPlaceOpen,
   type ApplicationSourceDocument,
   type ApplicationUsePlace,
   type ApplicationUseTarget,
@@ -10,6 +11,7 @@ import {
 import { StudioInspectorGroup } from "@vortex/ui/studio";
 import { Alert, AlertDescription, AlertTitle } from "@vortex/ui/components/alert";
 import { Button } from "@vortex/ui/components/button";
+import { Fragment } from "react";
 
 /**
  * Where a part of the draft is used, from the draft's one reference index (`applicationUses`): the
@@ -20,9 +22,9 @@ import { Button } from "@vortex/ui/components/button";
 
 export type StudioPlaceOpener = Readonly<{
   /** Opens a place's item in its tab with it selected. Places Studio cannot open are not passed. */
-  open: (place: ApplicationUsePlace) => void;
-  /** The outline's name of a block or flow step a place opens, when the outline knows it. */
-  nameOf: (place: ApplicationUsePlace) => string | undefined;
+  open: (open: ApplicationPlaceOpen) => void;
+  /** The outline's name of a block or flow step, when the outline knows it. */
+  nameOf: (open: ApplicationPlaceOpen) => string | undefined;
 }>;
 
 const OpenerContext = createContext<StudioPlaceOpener | null>(null);
@@ -41,9 +43,18 @@ export const useStudioPlaceOpener = (): StudioPlaceOpener => {
   return opener;
 };
 
-const placesWord = (count: number) => (count === 1 ? "one place" : `${count} places`);
+/** A place's path as a person reads it: blocks and steps carry the names Studio's outline shows. */
+const trailOf = (place: ApplicationUsePlace, opener: StudioPlaceOpener): readonly string[] =>
+  place.trail.map((segment, at) => {
+    const named = place.named?.find((entry) => entry.at === at);
+    return (named === undefined ? undefined : opener.nameOf(named.open)) ?? segment;
+  });
 
-/** The places, each a link to its item when Studio can open it. `onBeforeOpen` closes a dialog first. */
+/**
+ * The places as breadcrumb rows ("Sales CRM › Menu › Home"). The last segment opens the place's
+ * item when Studio can open it; the earlier segments are plain text. `onBeforeOpen` closes a
+ * dialog first.
+ */
 export function StudioPlaceList({
   places,
   label,
@@ -57,29 +68,44 @@ export function StudioPlaceList({
   return (
     <ul className="space-y-1 text-sm" aria-label={label}>
       {places.map((place, index) => {
-        const name = opener.nameOf(place);
-        const text =
-          name === undefined || place.within === undefined
-            ? place.label
-            : `${name}, on the ${place.within}`;
+        const trail = trailOf(place, opener);
+        const last = trail.length - 1;
         return (
           <li key={index} className="break-words">
-            {place.open.kind === "none" ? (
-              text
-            ) : (
-              <Button
-                type="button"
-                variant="link"
-                size="sm"
-                className="h-auto whitespace-normal text-left underline underline-offset-4 dark:text-foreground"
-                onClick={() => {
-                  onBeforeOpen?.();
-                  opener.open(place);
-                }}
-              >
-                {text}
-              </Button>
-            )}
+            {trail.map((segment, at) => {
+              const text =
+                at === last && place.open.kind !== "none" ? (
+                  <Button
+                    type="button"
+                    variant="link"
+                    size="xs"
+                    aria-label={`Go to ${trail.join(" › ")}`}
+                    className="h-auto whitespace-normal break-words p-0 text-left text-sm text-foreground"
+                    onClick={() => {
+                      onBeforeOpen?.();
+                      opener.open(place.open);
+                    }}
+                  >
+                    {segment}
+                  </Button>
+                ) : (
+                  <span className={at === last ? undefined : "text-muted-foreground"}>
+                    {segment}
+                  </span>
+                );
+              // The separator and the segment after it are one unit, so a line never ends in " › ".
+              return at === 0 ? (
+                <Fragment key={at}>{text}</Fragment>
+              ) : (
+                <Fragment key={at}>
+                  {" "}
+                  <span className="inline-flex max-w-full items-start gap-1 align-top">
+                    <span className="shrink-0 text-muted-foreground">›</span>
+                    <span className="min-w-0">{text}</span>
+                  </span>
+                </Fragment>
+              );
+            })}
           </li>
         );
       })}
@@ -87,34 +113,33 @@ export function StudioPlaceList({
   );
 }
 
-/**
- * The "Used in" section for one part of the draft: every place that uses it. `collapsed` shows only
- * the count until it is opened, for a row among many (an action, a permission, a stage).
- */
+/** The "Used in" section for one part of the draft: every place that uses it, closed until opened. */
 export function StudioUsedIn({
   source,
   target,
   name,
-  collapsed = false,
   onBeforeOpen,
 }: Readonly<{
   source: ApplicationSourceDocument;
   target: ApplicationUseTarget;
   /** What the part is called, for the list's accessible name. */
   name: string;
-  collapsed?: boolean;
   onBeforeOpen?: () => void;
 }>) {
   const places = useMemo(() => applicationUses(source, target), [source, target]);
-  if (collapsed && places.length === 0)
-    return <p className="text-sm text-muted-foreground">Not used anywhere yet.</p>;
   return (
     <StudioInspectorGroup
-      title={collapsed ? `Used in ${placesWord(places.length)}` : "Used in"}
-      defaultOpen={!collapsed}
+      title="Used in"
+      defaultOpen={false}
+      persist={false}
+      summary={
+        places.length === 0
+          ? "Not used"
+          : `${places.length} ${places.length === 1 ? "place" : "places"}`
+      }
     >
       {places.length === 0 ? (
-        <p className="text-sm text-muted-foreground">Nothing in the draft uses {name} yet.</p>
+        <p className="text-sm text-muted-foreground">Not used anywhere yet.</p>
       ) : (
         <StudioPlaceList
           places={places}

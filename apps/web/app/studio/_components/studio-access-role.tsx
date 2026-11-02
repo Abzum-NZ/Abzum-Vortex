@@ -177,7 +177,7 @@ function FieldAccess({
           <Table
             aria-label={`Field access for ${recordName}`}
             containerClassName="border-0"
-            className="[&_tr]:h-11 [&_tr>:first-child]:sticky [&_tr>:first-child]:left-0 [&_tr>:first-child]:bg-card [&_tr]:hover:bg-muted/40 [&_th]:text-xs [&_th]:text-foreground [&_th]:normal-case [&_th]:tracking-normal [&_th]:font-medium"
+            className="[&_tr]:h-11 [&_tr>:first-child]:sticky [&_tr>:first-child]:left-0 [&_tr>:first-child]:bg-card [&_tr]:hover:bg-muted/40 [&_th]:text-xs [&_th]:text-foreground [&_th]:font-medium"
           >
             <TableHeader>
               <TableRow>
@@ -440,7 +440,7 @@ export function StudioAccessRoleEditor({
                 <Table
                   aria-label="Record access"
                   containerClassName="border-0"
-                  className="[&_tr]:h-11 [&_tr>:first-child]:sticky [&_tr>:first-child]:left-0 [&_tr>:first-child]:bg-card [&_tr]:hover:bg-muted/40 [&_th]:bg-muted/50 [&_th]:text-xs [&_th]:normal-case [&_th]:tracking-normal [&_th]:font-medium [&_th]:text-foreground"
+                  className="[&_tr]:h-11 [&_tr>:first-child]:sticky [&_tr>:first-child]:left-0 [&_tr>:first-child]:bg-card [&_tr]:hover:bg-muted/40 [&_th]:bg-muted/50 [&_th]:text-xs [&_th]:font-medium [&_th]:text-foreground"
                 >
                   <TableHeader>
                     <TableRow>
@@ -611,7 +611,7 @@ export function StudioAccessRoleEditor({
               <Table
                 aria-label="Page access"
                 containerClassName="border-0"
-                className="[&_tr]:h-11 [&_tr>:first-child]:sticky [&_tr>:first-child]:left-0 [&_tr>:first-child]:bg-card [&_tr]:hover:bg-muted/40 [&_th]:bg-muted/50 [&_th]:text-xs [&_th]:normal-case [&_th]:tracking-normal [&_th]:font-medium [&_th]:text-foreground"
+                className="[&_tr]:h-11 [&_tr>:first-child]:sticky [&_tr>:first-child]:left-0 [&_tr>:first-child]:bg-card [&_tr]:hover:bg-muted/40 [&_th]:bg-muted/50 [&_th]:text-xs [&_th]:font-medium [&_th]:text-foreground"
               >
                 <TableHeader>
                   <TableRow>
@@ -662,7 +662,7 @@ export function StudioAccessRoleEditor({
                 <Table
                   aria-label="Menu access"
                   containerClassName="border-0"
-                  className="[&_tr]:h-11 [&_tr>:first-child]:sticky [&_tr>:first-child]:left-0 [&_tr>:first-child]:bg-card [&_tr]:hover:bg-muted/40 [&_th]:normal-case [&_th]:tracking-normal [&_th]:text-foreground"
+                  className="[&_tr]:h-11 [&_tr>:first-child]:sticky [&_tr>:first-child]:left-0 [&_tr>:first-child]:bg-card [&_tr]:hover:bg-muted/40 [&_th]:text-foreground"
                 >
                   <TableHeader>
                     <TableRow>
@@ -710,7 +710,7 @@ export function StudioAccessRoleEditor({
                 <Table
                   aria-label="Action access"
                   containerClassName="border-0"
-                  className="[&_tr]:h-11 [&_tr>:first-child]:sticky [&_tr>:first-child]:left-0 [&_tr>:first-child]:bg-card [&_tr]:hover:bg-muted/40 [&_th]:bg-muted/50 [&_th]:text-xs [&_th]:normal-case [&_th]:tracking-normal [&_th]:font-medium [&_th]:text-foreground"
+                  className="[&_tr]:h-11 [&_tr>:first-child]:sticky [&_tr>:first-child]:left-0 [&_tr>:first-child]:bg-card [&_tr]:hover:bg-muted/40 [&_th]:bg-muted/50 [&_th]:text-xs [&_th]:font-medium [&_th]:text-foreground"
                 >
                   <TableHeader>
                     <TableRow>

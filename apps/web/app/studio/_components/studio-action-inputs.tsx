@@ -1,4 +1,5 @@
 "use client";
+import { FieldLegend } from "@vortex/ui/components/field";
 import { useRef } from "react";
 import { deriveFieldKey, type ApplicationSourceDocument } from "@vortex/platform/schema";
 import { Icon } from "@vortex/ui";
@@ -63,7 +64,7 @@ export function StudioActionInputs({
     );
   return (
     <fieldset className="space-y-3">
-      <legend className="text-sm font-medium">Inputs</legend>
+      <FieldLegend variant="label">Inputs</FieldLegend>
       <StudioEntryList
         label="Action inputs"
         itemName="input"

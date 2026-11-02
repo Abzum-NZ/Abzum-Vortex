@@ -1,4 +1,5 @@
 "use client";
+import { StudioHelp } from "../studio-field";
 
 import { useId, useState, type ReactElement } from "react";
 import {
@@ -12,14 +13,7 @@ import {
 import { Input } from "../../components/input";
 import { Label } from "../../components/label";
 import { Checkbox } from "../../components/checkbox";
-import {
-  Field,
-  FieldDescription,
-  FieldGroup,
-  FieldLabel,
-  FieldLegend,
-  FieldSet,
-} from "../../components/field";
+import { Field, FieldGroup, FieldLabel, FieldLegend, FieldSet } from "../../components/field";
 import { ToggleGroup, ToggleGroupItem } from "../../components/toggle-group";
 
 type Group = Extract<SourceBlockPropertyValueContract, { kind: "group" }>;
@@ -66,7 +60,7 @@ export function StudioExportEditor({
         Download the columns shown, as flat records. Selections above the row limit are refused.
       </p>
       <fieldset className="space-y-2" disabled={disabled}>
-        <legend className="text-sm font-medium">File formats</legend>
+        <FieldLegend variant="label">File formats</FieldLegend>
         {recordsTableExportFormats.map((format) => {
           const checked = selected.some((item) => item.kind === "choice" && item.value === format);
           return (
@@ -91,12 +85,11 @@ export function StudioExportEditor({
         })}
       </fieldset>
       <FieldSet disabled={disabled}>
-        <FieldLegend variant="label">Values per column</FieldLegend>
-        <FieldDescription>
-          Every column downloads as the table shows it. Choose Raw to download a column's stored
-          value instead: the choice key, the ISO date, the canonical number.
-        </FieldDescription>
-        <FieldGroup className="gap-2">
+        <div className="flex items-center gap-1">
+          <FieldLegend variant="label">Values per column</FieldLegend>
+          <StudioHelp hint="Every column downloads as the table shows it. Choose Raw to download a column's stored value instead: the choice key, the ISO date, the canonical number." />
+        </div>
+        <FieldGroup>
           {facts.fields
             .filter((field) => columns.includes(field.field))
             .map((field) => (
@@ -134,7 +127,10 @@ export function StudioExportEditor({
             ))}
         </FieldGroup>
       </FieldSet>
-      <Label htmlFor={`${id}-max-rows`}>Most records in one export</Label>
+      <div className="flex items-center gap-1">
+        <Label htmlFor={`${id}-max-rows`}>Most records in one export</Label>
+        <StudioHelp hint={`Up to ${formatCount(RECORDS_TABLE_EXPORT_MAXIMUM_ROWS)} records.`} />
+      </div>
       <Input
         id={`${id}-max-rows`}
         type="number"
@@ -160,9 +156,6 @@ export function StudioExportEditor({
           });
         }}
       />
-      <p className="text-xs text-muted-foreground">
-        Up to {formatCount(RECORDS_TABLE_EXPORT_MAXIMUM_ROWS)} records.
-      </p>
     </div>
   );
 }

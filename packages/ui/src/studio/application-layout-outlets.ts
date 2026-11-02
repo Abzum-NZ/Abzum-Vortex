@@ -93,8 +93,9 @@ const outletHoldsBlocks = (page: Source["body"]["pages"][number], shell: Shell, 
       sourcePageRootSlots(data).some(([id, items]) => id === outletId && items.length > 0),
   );
 
-const pageUse = (page: Source["body"]["pages"][number]): ApplicationUsePlace => ({
+const pageUse = (source: Source, page: Source["body"]["pages"][number]): ApplicationUsePlace => ({
   label: `Page ${quoted(page.name)}`,
+  trail: [source.body.name, page.name],
   open: { kind: "page", pageAlias: page.id },
 });
 
@@ -114,11 +115,12 @@ export const studioLayoutOutletPlacementUses = (
     return [
       ...outlets.map((outlet): ApplicationUsePlace => ({
         label: `Content outlet ${quoted(outlet.label)} in layout ${quoted(shell.name)}`,
+        trail: [source.body.name, "Layouts", shell.name, outlet.label],
         open: { kind: "shell", shellAlias: shell.id },
       })),
       ...source.body.pages
         .filter((page) => outlets.some((outlet) => outletHoldsBlocks(page, shell, outlet.id)))
-        .map(pageUse),
+        .map((page) => pageUse(source, page)),
     ];
   }
   return [];
@@ -146,7 +148,7 @@ export const editLayoutOutlet = (
     if (uses.length > 0)
       return refuse(
         `The outlet ${quoted(existing!.label)} holds blocks on these pages. Move or remove those blocks first.`,
-        uses.map(pageUse),
+        uses.map((page) => pageUse(candidate, page)),
       );
     if (shell.content_slots.length === 1)
       return refuse(
@@ -221,7 +223,7 @@ export const editLayoutOutlet = (
     if (incompatible.length > 0)
       return refuse(
         `The outlet ${quoted(label)} cannot admit the existing blocks on these pages. Move the blocks or allow their categories first.`,
-        incompatible.map(pageUse),
+        incompatible.map((page) => pageUse(candidate, page)),
       );
     if (existing === undefined) shell.content_slots.push(outlet);
     else shell.content_slots[shell.content_slots.indexOf(existing)] = outlet;
@@ -254,7 +256,7 @@ export const editLayoutOutlet = (
     console.error("[studio] layout outlet refused", { part: error.location, reason: error.reason });
     return refuse(
       `This change would make the layout invalid. ${error.message}.`,
-      pages.map(pageUse),
+      pages.map((page) => pageUse(candidate, page)),
     );
   }
   return {

@@ -1,4 +1,5 @@
 "use client";
+import { Label } from "../components/label";
 
 import { useState } from "react";
 import type { JsonValue } from "@vortex/platform/schema";
@@ -92,7 +93,7 @@ export function StudioOptionsControl({
       )}
       <div className="max-h-64 space-y-1 overflow-y-auto rounded-md border p-2">
         {visible.map((option) => (
-          <label
+          <Label
             key={option.value}
             className="flex min-w-0 cursor-pointer items-center gap-3 rounded-md px-2 py-2 text-sm hover:bg-accent"
           >
@@ -110,7 +111,7 @@ export function StudioOptionsControl({
               }
             />
             <span className="min-w-0 break-words">{option.label}</span>
-          </label>
+          </Label>
         ))}
         {visible.length === 0 && (
           <p className="p-2 text-sm text-muted-foreground">No matching options.</p>

@@ -8,12 +8,12 @@ import {
   type ApplicationUsePlace,
 } from "@vortex/platform/schema";
 import { StudioInspectorGroup } from "@vortex/ui/studio";
-import { Switch } from "@vortex/ui/components/switch";
-import { StudioField } from "./studio-field";
+import { Checkbox } from "@vortex/ui/components/checkbox";
+import { Label } from "@vortex/ui/components/label";
 import { StudioReferencesAlert } from "./studio-used-in";
 import { studioEditProblem, type StudioDataEdit } from "../_lib/studio-data-model";
 
-/** Each switch changes the operation, generated permission and ordinary role references together. */
+/** Each checkbox changes the operation, generated permission and ordinary role references together. */
 export function StudioRecordStandardActions({
   source,
   moduleKey,
@@ -34,17 +34,23 @@ export function StudioRecordStandardActions({
     .find((module) => module.key === moduleKey)
     ?.record_types.find((item) => item.key === recordKey);
   if (record === undefined) return null;
+  const on = standardRecordActions.filter((entry) =>
+    record.standard_actions.includes(entry.action),
+  ).length;
   return (
-    <StudioInspectorGroup title="Standard actions">
-      <p className="text-sm text-muted-foreground">
-        Enabling an action creates its permission. Give access groups that permission in Access.
-      </p>
-      {standardRecordActions.map((entry) => (
-        <StudioField key={entry.action} label={entry.verb}>
-          {(control) => (
-            <div className="flex items-center">
-              <Switch
-                {...control}
+    <StudioInspectorGroup
+      title="Standard actions"
+      defaultOpen={false}
+      hint="Turning an action on creates its permission. Give access groups that permission in Access."
+      summary={`${on} of ${standardRecordActions.length} on`}
+    >
+      <div className="grid grid-cols-2 gap-x-3 gap-y-1.5">
+        {standardRecordActions.map((entry) => {
+          const id = `standard-action-${moduleKey}-${recordKey}-${entry.action}`;
+          return (
+            <div key={entry.action} className="flex items-center gap-2">
+              <Checkbox
+                id={id}
                 checked={record.standard_actions.includes(entry.action)}
                 disabled={disabled}
                 onCheckedChange={(checked) => {
@@ -65,10 +71,13 @@ export function StudioRecordStandardActions({
                   setRefusals((value) => value + 1);
                 }}
               />
+              <Label htmlFor={id} className="font-normal">
+                {entry.verb}
+              </Label>
             </div>
-          )}
-        </StudioField>
-      ))}
+          );
+        })}
+      </div>
       {problem === undefined ? null : (
         <Alert variant="destructive">
           <AlertDescription>{problem}</AlertDescription>

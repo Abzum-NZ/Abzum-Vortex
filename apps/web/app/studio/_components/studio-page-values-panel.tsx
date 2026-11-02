@@ -1,15 +1,17 @@
 "use client";
 import { Alert, AlertDescription } from "@vortex/ui/components/alert";
-import { useState, type FormEvent } from "react";
-import { Button } from "@vortex/ui/components/button";
+import { useState } from "react";
 import { Input } from "@vortex/ui/components/input";
-import { Label } from "@vortex/ui/components/label";
 import {
   currentIso4217Alpha3CodeSetV2026_01_01,
   type ApplicationSourceDocument,
   type ApplicationUsePlace,
 } from "@vortex/platform/schema";
 import {
+  StudioDialog,
+  StudioField,
+  StudioAddButton,
+  StudioRemoveButton,
   StudioInspectorGroup,
   studioPageValueTypes,
   type StudioPageValueCommand,
@@ -44,6 +46,7 @@ export function StudioPageValuesPanel({
   const [label, setLabel] = useState("");
   const [type, setType] = useState<StudioPageValueType>("decimal_number");
   const [currency, setCurrency] = useState("");
+  const [adding, setAdding] = useState(false);
   if (page === undefined) return null;
   const values = Object.entries(page.values ?? {});
   const run = (command: StudioPageValueCommand, subject: string): boolean => {
@@ -58,8 +61,7 @@ export function StudioPageValuesPanel({
     setRefusedName(subject);
     return false;
   };
-  const add = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
+  const add = () => {
     if (
       run(
         {
@@ -75,17 +77,47 @@ export function StudioPageValuesPanel({
     ) {
       setName("");
       setLabel("");
+      setAdding(false);
     }
   };
+  const refusal =
+    problem === "" ? null : refusedUsers.length > 0 ? (
+      <StudioReferencesAlert
+        name={refusedName}
+        issue={problem}
+        references={refusedUsers}
+        title={`${refusedName} cannot be changed`}
+        onBeforeOpen={() => setAdding(false)}
+      />
+    ) : (
+      <Alert variant="destructive">
+        <AlertDescription>{problem}</AlertDescription>
+      </Alert>
+    );
   return (
-    <StudioInspectorGroup title="Page values">
-      <p className="text-sm text-muted-foreground">
-        Values this page keeps while it is open. Flows set them; displays, messages and conditions
-        read them.
-      </p>
-      {values.length === 0 && <p className="text-sm">This page declares no values yet.</p>}
+    <StudioInspectorGroup
+      title="Page values"
+      defaultOpen={false}
+      hint="Values this page keeps while it is open. Flows set them; displays, messages and conditions read them."
+      summary={values.length === 1 ? "1 value" : `${values.length} values`}
+      action={
+        <StudioAddButton
+          label="Add value"
+          disabled={disabled}
+          onClick={() => {
+            setProblem("");
+            setRefusedUsers([]);
+            setAdding(true);
+          }}
+        />
+      }
+    >
+      {!adding && refusal}
+      {values.length === 0 && (
+        <p className="text-sm text-muted-foreground">This page declares no values yet.</p>
+      )}
       {values.map(([key, declaration]) => (
-        <div key={key} className="space-y-1.5 rounded-md border p-2 text-sm">
+        <div key={key} className="space-y-1 rounded-md border px-2 py-1.5 text-sm">
           <div className="flex items-center justify-between gap-2">
             <span className="min-w-0">
               <span className="block truncate font-medium">{declaration.label}</span>
@@ -95,86 +127,81 @@ export function StudioPageValuesPanel({
                 {declaration.currency === undefined ? "" : ` ${declaration.currency}`}
               </span>
             </span>
-            <Button
-              type="button"
-              size="sm"
-              variant="ghost"
+            <StudioRemoveButton
+              label="Remove value"
               disabled={disabled}
               onClick={() => run({ kind: "remove", pageAlias, name: key }, declaration.label)}
-            >
-              Remove
-            </Button>
+            />
           </div>
           <StudioUsedIn
             source={source}
             target={{ kind: "page_value", pageAlias, name: key }}
             name={declaration.label}
-            collapsed
           />
         </div>
       ))}
-      {problem !== "" && refusedUsers.length > 0 && (
-        <StudioReferencesAlert
-          name={refusedName}
-          issue={problem}
-          references={refusedUsers}
-          title={`${refusedName} cannot be changed`}
-        />
-      )}
-      {problem !== "" && refusedUsers.length === 0 && (
-        <Alert variant="destructive">
-          <AlertDescription>{problem}</AlertDescription>
-        </Alert>
-      )}
-      <form onSubmit={add} className="space-y-2">
-        <Label className="flex flex-col items-start gap-1 text-xs">
-          Label
-          <Input
-            required
-            maxLength={60}
-            disabled={disabled}
-            value={label}
-            onChange={(event) => setLabel(event.target.value)}
-          />
-        </Label>
-        <Label className="flex flex-col items-start gap-1 text-xs">
-          Name (lower case, no spaces)
-          <Input
-            required
-            maxLength={60}
-            disabled={disabled}
-            value={name}
-            onChange={(event) => setName(event.target.value)}
-          />
-        </Label>
-        <Label className="flex flex-col items-start gap-1 text-xs">
-          Type
-          <StudioOptionControl
-            value={type}
-            disabled={disabled}
-            options={studioPageValueTypes.map((entry) => ({
-              value: entry.type,
-              label: entry.label,
-            }))}
-            onChange={(value) => setType(value as StudioPageValueType)}
-          />
-        </Label>
-        {type === "money" && (
-          <Label className="flex flex-col items-start gap-1 text-xs">
-            Currency
-            <StudioOptionControl
-              value={currency}
+      <StudioDialog
+        open={adding}
+        onOpenChange={setAdding}
+        title="Add page value"
+        submitLabel="Add value"
+        submitDisabled={disabled}
+        onSubmit={add}
+      >
+        {adding && refusal}
+        <StudioField label="Label">
+          {(control) => (
+            <Input
+              {...control}
+              required
+              maxLength={60}
               disabled={disabled}
-              unset="Choose a currency…"
-              options={currencies.map((code) => ({ value: code, label: code }))}
-              onChange={setCurrency}
+              value={label}
+              onChange={(event) => setLabel(event.target.value)}
             />
-          </Label>
+          )}
+        </StudioField>
+        <StudioField label="Name" hint="Lower case, no spaces">
+          {(control) => (
+            <Input
+              {...control}
+              required
+              maxLength={60}
+              disabled={disabled}
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+            />
+          )}
+        </StudioField>
+        <StudioField label="Type">
+          {(control) => (
+            <StudioOptionControl
+              {...control}
+              value={type}
+              disabled={disabled}
+              options={studioPageValueTypes.map((entry) => ({
+                value: entry.type,
+                label: entry.label,
+              }))}
+              onChange={(value) => setType(value as StudioPageValueType)}
+            />
+          )}
+        </StudioField>
+        {type === "money" && (
+          <StudioField label="Currency">
+            {(control) => (
+              <StudioOptionControl
+                {...control}
+                value={currency}
+                disabled={disabled}
+                unset="Choose a currency…"
+                options={currencies.map((code) => ({ value: code, label: code }))}
+                onChange={setCurrency}
+              />
+            )}
+          </StudioField>
         )}
-        <Button type="submit" size="sm" variant="outline" disabled={disabled}>
-          Add value
-        </Button>
-      </form>
+      </StudioDialog>
     </StudioInspectorGroup>
   );
 }

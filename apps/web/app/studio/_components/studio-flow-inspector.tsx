@@ -1,4 +1,5 @@
 "use client";
+import { StudioInspectorFooter } from "./studio-inspector";
 import { Alert, AlertDescription } from "@vortex/ui/components/alert";
 import { useEffect, useMemo, useState } from "react";
 import { Icon } from "@vortex/ui";
@@ -14,7 +15,6 @@ import {
 import {
   StudioField,
   StudioReferencePicker,
-  StudioHelp,
   StudioInspectorGroup,
   StudioInspectorActions,
   StudioOptionControl,
@@ -342,32 +342,40 @@ export function StudioFlowInspector({
             return result.kind === "applied" ? true : result.reason;
           }}
         />
-        {ownerNote === undefined ? null : <StudioHelp hint={ownerNote} />}
-        <StudioHelp hint="Select a step on the canvas to change its settings, move it or add a step after it." />
-        {main !== undefined && (
-          <StudioFlowStepPicker
-            context={pickerContext([...main.path, main.tasks.length])}
-            id="flow-add-last"
-            label="Add a step at the end"
-            types={typesAt(main.path)}
-            disabled={disabled}
-            action="Add"
-            onAdd={(taskType, settings) =>
-              add(
-                {
-                  kind: "insert_task",
-                  taskType,
-                  settings,
-                  listPath: main.path,
-                  index: main.tasks.length,
-                },
-                "Step added at the end.",
-              )
-            }
-          />
+        {ownerNote === undefined ? null : (
+          <p role="status" className="text-sm text-muted-foreground">
+            {ownerNote}
+          </p>
         )}
         {messages}
         {confirmDialog}
+        {main !== undefined && (
+          <StudioInspectorFooter>
+            <div className="w-full">
+              <StudioFlowStepPicker
+                context={pickerContext([...main.path, main.tasks.length])}
+                id="flow-add-last"
+                label="Add a step at the end"
+                hint="Select a step on the canvas to change its settings, move it or add a step after it."
+                types={typesAt(main.path)}
+                disabled={disabled}
+                action="Add"
+                onAdd={(taskType, settings) =>
+                  add(
+                    {
+                      kind: "insert_task",
+                      taskType,
+                      settings,
+                      listPath: main.path,
+                      index: main.tasks.length,
+                    },
+                    "Step added at the end.",
+                  )
+                }
+              />
+            </div>
+          </StudioInspectorFooter>
+        )}
       </div>
     );
   }

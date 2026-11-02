@@ -1,4 +1,5 @@
 "use client";
+import { FieldLegend } from "@vortex/ui/components/field";
 import { Alert, AlertDescription } from "@vortex/ui/components/alert";
 import { useState, type FormEvent } from "react";
 import { Button } from "@vortex/ui/components/button";
@@ -242,7 +243,7 @@ export function StudioNewFlowDialog({
           )}
           {asksStep && (
             <fieldset className="space-y-2">
-              <legend className="text-sm font-medium">What should it do?</legend>
+              <FieldLegend variant="label">What should it do?</FieldLegend>
               <RadioGroup
                 value={what}
                 onValueChange={(value) => setWhat(value as "operation" | "message")}

@@ -1,4 +1,5 @@
 "use client";
+import { StudioHelp } from "@vortex/ui/studio";
 import { Alert, AlertDescription } from "@vortex/ui/components/alert";
 import { useState } from "react";
 import { Badge } from "@vortex/ui/components/badge";
@@ -212,11 +213,10 @@ export function StudioFlowTestRun({
 
   return (
     <section aria-label="Test run" className="space-y-3 border-t p-3">
-      <h3 className="m-0 text-sm font-semibold">Test run</h3>
-      <p className="m-0 text-xs text-muted-foreground">
-        Runs the saved flow on the preview&apos;s records as you. Nothing is saved, sent or
-        announced.
-      </p>
+      <h3 className="m-0 flex items-center gap-1 text-sm font-semibold">
+        Test run
+        <StudioHelp hint="Runs the saved flow on the preview's records as you. Nothing is saved, sent or announced." />
+      </h3>
       {inputs.map(([name, declaration]) => (
         <div key={name} className="space-y-1">
           <Label htmlFor={`test-run-${name}`}>

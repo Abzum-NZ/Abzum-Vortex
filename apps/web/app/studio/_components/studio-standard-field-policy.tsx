@@ -72,6 +72,13 @@ export function StudioStandardFieldPolicy({
     <form aria-label={`Access of ${available.label}`} className="space-y-4" onSubmit={submit}>
       <StudioInspectorGroup
         title={`${available.scopeEditable ? "Fields and scope" : "Fields"} of ${available.label}`}
+        hint={
+          available.changesFields
+            ? `Choose the ${available.recordName} fields this permission reads and changes. A changed field is read too.`
+            : available.needsReadableField
+              ? `Choose the ${available.recordName} fields this permission reads. Keep at least one.`
+              : `Choose the ${available.recordName} fields this permission reads. It may read none.`
+        }
       >
         {available.scopeEditable && (
           <StudioRecordScopeField
@@ -84,14 +91,7 @@ export function StudioStandardFieldPolicy({
             onChange={setScope}
           />
         )}
-        <p className="text-sm text-muted-foreground">
-          {available.changesFields
-            ? `Choose the ${available.recordName} fields this permission reads and changes. A changed field is read too.`
-            : available.needsReadableField
-              ? `Choose the ${available.recordName} fields this permission reads. Keep at least one.`
-              : `Choose the ${available.recordName} fields this permission reads. It may read none.`}
-        </p>
-        <p className="text-sm text-muted-foreground">
+        <p role="status" className="text-sm text-muted-foreground">
           {available.roles.length === 0
             ? "No role holds it yet. Its name comes with the record type."
             : `Every role holding it gets these fields${available.scopeEditable ? " and this record scope" : ""}: ${available.roles.join(", ")}. Its name${available.scopeEditable ? "" : " and scope"} comes with the record type.`}

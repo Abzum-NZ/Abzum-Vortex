@@ -1,6 +1,7 @@
 "use client";
+import { Label } from "../components/label";
 import { useId } from "react";
-import { FieldError } from "../components/field";
+import { FieldError, FieldLegend } from "../components/field";
 import { Input } from "@vortex/ui/components/input";
 import { Textarea } from "@vortex/ui/components/textarea";
 import { StudioOptionControl } from "./studio-setting-basic-controls";
@@ -109,7 +110,7 @@ export function LiteralEditor({
 
   if (collectionElementType && collectionElementType !== "text")
     return (
-      <label className="flex flex-col gap-2 text-sm">
+      <Label className="flex flex-col items-stretch gap-2">
         {label}
         <Textarea
           key={JSON.stringify(operand.value)}
@@ -136,11 +137,11 @@ export function LiteralEditor({
           }}
         />
         {error && <FieldError id={errorId}>{error}</FieldError>}
-      </label>
+      </Label>
     );
   if (semanticType === "yes_no")
     return (
-      <label className="flex flex-col gap-2 text-sm">
+      <Label className="flex flex-col items-stretch gap-2">
         {label}
         <StudioOptionControl
           aria-label={label}
@@ -155,12 +156,12 @@ export function LiteralEditor({
           onChange={(next) => onCommit(next === "true")}
         />
         {error && <FieldError id={errorId}>{error}</FieldError>}
-      </label>
+      </Label>
     );
 
   if (semanticType === "whole_number")
     return (
-      <label className="flex flex-col gap-2 text-sm">
+      <Label className="flex flex-col items-stretch gap-2">
         {label}
         <Input
           key={JSON.stringify(operand.value)}
@@ -195,12 +196,12 @@ export function LiteralEditor({
           }}
         />
         {error && <FieldError id={errorId}>{error}</FieldError>}
-      </label>
+      </Label>
     );
 
   if (semanticType === "decimal_number")
     return (
-      <label className="flex flex-col gap-2 text-sm">
+      <Label className="flex flex-col items-stretch gap-2">
         {label}
         <Input
           aria-invalid={error !== undefined}
@@ -211,12 +212,12 @@ export function LiteralEditor({
           onChange={(event) => onCommit(event.currentTarget.value)}
         />
         {error && <FieldError id={errorId}>{error}</FieldError>}
-      </label>
+      </Label>
     );
 
   if (semanticType === "date")
     return (
-      <label className="flex flex-col gap-2 text-sm">
+      <Label className="flex flex-col items-stretch gap-2">
         {label}
         <Input
           aria-invalid={error !== undefined}
@@ -226,14 +227,14 @@ export function LiteralEditor({
           onChange={(event) => onCommit(event.currentTarget.value)}
         />
         {error && <FieldError id={errorId}>{error}</FieldError>}
-      </label>
+      </Label>
     );
 
   if (semanticType === "date_time")
     return (
       <fieldset className="space-y-4">
-        <legend>{label}</legend>
-        <label className="flex flex-col gap-2 text-sm">
+        <FieldLegend variant="label">{label}</FieldLegend>
+        <Label className="flex flex-col items-stretch gap-2">
           Local date and time (whole seconds)
           <Input
             aria-invalid={error !== undefined}
@@ -255,8 +256,8 @@ export function LiteralEditor({
               onCommit(instant);
             }}
           />
-        </label>
-        <label className="flex flex-col gap-2 text-sm">
+        </Label>
+        <Label className="flex flex-col items-stretch gap-2">
           Exact instant (ISO 8601 with offset)
           <Input
             aria-invalid={error !== undefined}
@@ -265,7 +266,7 @@ export function LiteralEditor({
             value={literalInputValue(operand.value)}
             onChange={(event) => onCommit(event.currentTarget.value)}
           />
-        </label>
+        </Label>
         {error && <FieldError id={errorId}>{error}</FieldError>}
       </fieldset>
     );
@@ -276,8 +277,8 @@ export function LiteralEditor({
     const currency = typeof current.currency === "string" ? current.currency : "";
     return (
       <fieldset className="space-y-4">
-        <legend>{label}</legend>
-        <label className="flex flex-col gap-2 text-sm">
+        <FieldLegend variant="label">{label}</FieldLegend>
+        <Label className="flex flex-col items-stretch gap-2">
           Amount
           <Input
             aria-invalid={error !== undefined}
@@ -287,8 +288,8 @@ export function LiteralEditor({
             value={amount}
             onChange={(event) => onCommit({ amount: event.currentTarget.value, currency })}
           />
-        </label>
-        <label className="flex flex-col gap-2 text-sm">
+        </Label>
+        <Label className="flex flex-col items-stretch gap-2">
           Currency
           <StudioOptionControl
             aria-label="Currency"
@@ -300,7 +301,7 @@ export function LiteralEditor({
             options={currencyCodes.map((code) => ({ value: code, label: code }))}
             onChange={(next) => onCommit({ amount, currency: next })}
           />
-        </label>
+        </Label>
         {error && <FieldError id={errorId}>{error}</FieldError>}
       </fieldset>
     );
@@ -308,7 +309,7 @@ export function LiteralEditor({
 
   if (semanticType === "text_collection")
     return (
-      <label className="flex flex-col gap-2 text-sm">
+      <Label className="flex flex-col items-stretch gap-2">
         {label} (one item per line)
         <Textarea
           aria-invalid={error !== undefined}
@@ -317,7 +318,7 @@ export function LiteralEditor({
           onChange={(event) => onCommit(event.currentTarget.value.split("\n"))}
         />
         {error && <FieldError id={errorId}>{error}</FieldError>}
-      </label>
+      </Label>
     );
 
   if (
@@ -326,7 +327,7 @@ export function LiteralEditor({
     semanticType === "organization_account_reference"
   )
     return (
-      <label className="flex flex-col gap-2 text-sm">
+      <Label className="flex flex-col items-stretch gap-2">
         {label} (JSON value)
         <Textarea
           key={JSON.stringify(operand.value)}
@@ -348,11 +349,11 @@ export function LiteralEditor({
           }}
         />
         {error && <FieldError id={errorId}>{error}</FieldError>}
-      </label>
+      </Label>
     );
 
   return (
-    <label className="flex flex-col gap-2 text-sm">
+    <Label className="flex flex-col items-stretch gap-2">
       {label}
       <Input
         aria-invalid={error !== undefined}
@@ -362,6 +363,6 @@ export function LiteralEditor({
         onChange={(event) => onCommit(event.currentTarget.value)}
       />
       {error && <FieldError id={errorId}>{error}</FieldError>}
-    </label>
+    </Label>
   );
 }
