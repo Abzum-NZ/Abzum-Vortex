@@ -185,6 +185,7 @@ switch (command) {
     runCli(lane, ["stop"]);
     break;
   case "reset":
+    if (lane === 3) fail("Lane 3 is the shared demo lane and cannot be reset.");
     if (worktreeArgument === undefined) fail(usage);
     await sync(lane, worktreeArgument);
     runCli(lane, ["db", "reset"]);
