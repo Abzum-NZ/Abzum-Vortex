@@ -221,12 +221,13 @@ export function AttachmentInput(props: ControlRenderProps<AttachmentInputPayload
         ))}
       </ul>
       {/* The native file input stays the labelled control, visually hidden; the themed button opens it. */}
-      <div className="flex items-center gap-3">
+      <div data-vortex-focus-group="" className="flex items-center gap-3">
         <Input
           ref={fileInput}
           id={ids.control}
           type="file"
-          className="peer sr-only"
+          data-vortex-focus-primary=""
+          className="sr-only"
           multiple={settings.boolean("multiple")}
           accept={settings.text("accepted_extensions")}
           disabled={chooseDisabled}
@@ -241,7 +242,6 @@ export function AttachmentInput(props: ControlRenderProps<AttachmentInputPayload
           type="button"
           variant="outline"
           size="sm"
-          className="peer-focus-visible:ring-2 peer-focus-visible:ring-ring"
           disabled={chooseDisabled}
           aria-hidden="true"
           tabIndex={-1}

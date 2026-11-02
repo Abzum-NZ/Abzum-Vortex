@@ -14,6 +14,7 @@ import { useStudioScreen } from "./studio-canvas-screen";
 import { studioPuckIframeCss } from "./studio-puck-style";
 
 const resolvePageHref = () => "#";
+
 const usePuckSelector = createUsePuck();
 
 /**
@@ -120,6 +121,13 @@ export function StudioCanvasIframe({
   children,
   document: frameDocument,
 }: Readonly<{ children: ReactNode; document?: Document | undefined }>) {
+  const previewMode = usePuckSelector((state) => state.appState.ui.previewMode);
+  // While blocks are edited the canvas is a picture of the page, outside Studio's Tab path (blocks
+  // are chosen in the Outline); while grids are arranged its column controls need the keyboard.
+  useEffect(() => {
+    const frame = frameDocument?.defaultView?.frameElement;
+    if (isHtmlElement(frame)) frame.tabIndex = previewMode === "interactive" ? 0 : -1;
+  }, [frameDocument, previewMode]);
   useEffect(() => {
     if (frameDocument === undefined) return;
     const style = frameDocument.createElement("style");
