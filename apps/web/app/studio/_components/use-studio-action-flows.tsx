@@ -16,11 +16,15 @@ import { Button } from "@vortex/ui/components/button";
 import { DialogFooter } from "@vortex/ui/components/dialog";
 import { toast } from "@vortex/ui/components/sonner";
 import { noteCommittedWrite, useNavigator } from "@vortex/ui/routing";
+import { stepUpVerification } from "../../_components/step-up-panel";
 import { applicationPageAddressPath } from "../../_lib/address-paths";
 import { bindingCallerInputs } from "../../_lib/binding-caller-inputs";
 import type { StudioActionFlows } from "../../_lib/studio-action-flows";
 import type { StudioActionToken } from "../../_lib/studio-action-tokens";
-import { resolveApplicationPagePathAction } from "../../[tenantShortName]/[organizationShortName]/[applicationKey]/frame-actions";
+import {
+  resolveApplicationHomePathByRootAction,
+  resolveApplicationPagePathAction,
+} from "../../[tenantShortName]/[organizationShortName]/[applicationKey]/frame-actions";
 import { finishedRunNotice } from "../../_lib/flow-run-notices";
 import { readStudioActionFlows } from "../action-flow-actions";
 import { studioNotice } from "./studio-save-state";
@@ -33,19 +37,27 @@ const tell = (message: string, link?: Readonly<{ label: string; href: string }>)
 
 const notAvailable = "That is not available right now. Your changes are kept. Try again shortly.";
 
+/** An installed application nobody here may open yet: it opens for a person who holds a role in it. */
+const cannotOpenYet =
+  "You cannot open this application yet: you hold no role in it. Give yourself one in IAM, then open it.";
+
 /** What each action is called in a sentence that says the person may not do it. */
 const refusedSentence: Readonly<Record<StudioActionToken, string>> = {
   publish: "You cannot publish this application: you need permission to publish versions.",
   install: "You cannot install or upgrade this application here.",
 };
 
+/** A refusal for a proof that ran out: the guided steps ask for it again, so it is not a link away. */
+const verificationRanOut =
+  "Your verification ran out before this finished, and nothing was changed. Start it again to verify and carry on.";
+
 /**
  * Starts the App Store's action flows over the editor: Publish and Install or upgrade. They are
  * the very flows the App Store's own page runs, through the same flow endpoint and with the same
- * dialogs (the review, the release note, signing in again, the confirmation), so the builder never
- * leaves the editor and the editor keeps its selection, tab and undo history. The page that owns
- * the flows is read when an action starts, so each run sees the bindings and record as they are
- * now; the endpoint decides the person's access again on every request.
+ * guided steps (the review, the release note, verifying, the version, the install review), so the
+ * builder never leaves the editor and the editor keeps its selection, tab and undo history. The
+ * page that owns the flows is read when an action starts, so each run sees the bindings and
+ * record as they are now; the endpoint decides the person's access again on every request.
  */
 export function useStudioActionFlows({
   organizationId,
@@ -80,6 +92,13 @@ export function useStudioActionFlows({
   }, []);
   const latest = useRef({ hold, onCommitted });
   latest.current = { hold, onCommitted };
+  // What a run told the person belongs to the editor that ran it: it goes when the editor does.
+  useEffect(
+    () => () => {
+      toast.dismiss(noticeId);
+    },
+    [],
+  );
   const active = useRef<
     | {
         flows: StudioActionFlows;
@@ -133,6 +152,15 @@ export function useStudioActionFlows({
           }
           if (["completed", "committed"].includes(result.descriptor.outcome) && !result.failure)
             return;
+          const refusalCode = result.failure?.diagnostic?.code;
+          if (
+            result.descriptor.commit === "none" &&
+            (refusalCode === "multi_factor_required" ||
+              refusalCode === "recent_authentication_required")
+          ) {
+            tell(verificationRanOut);
+            return;
+          }
           const notice = finishedRunNotice(result, {
             destinationHref: (applicationKey, pageKey) =>
               addressOf(applicationKey, pageKey) ?? window.location.pathname,
@@ -182,32 +210,41 @@ export function useStudioActionFlows({
             parameters.set(name, String(value));
         const query = parameters.toString();
         const { tenantShortName, organizationShortName } = flows.address;
+        const unresolved = (error: unknown): undefined => {
+          console.error(
+            `[studio] navigate target could not be resolved: ${describeFailure(error)}`,
+          );
+          return undefined;
+        };
         const path =
-          target.applicationKey === undefined
-            ? (() => {
-                const page = flows.pages.find((entry) => sameId(entry.pageId, target.page));
-                return page === undefined
-                  ? undefined
-                  : applicationPageAddressPath(
-                      tenantShortName,
-                      organizationShortName,
-                      flows.address.applicationKey,
-                      page.key,
-                    );
-              })()
-            : await resolveApplicationPagePathAction(
+          target.applicationRootId !== undefined
+            ? await resolveApplicationHomePathByRootAction(
                 tenantShortName,
                 organizationShortName,
-                target.applicationKey,
-                target.page,
-              ).catch((error: unknown) => {
-                console.error(
-                  `[studio] navigate target could not be resolved: ${describeFailure(error)}`,
-                );
-                return undefined;
-              });
+                target.applicationRootId,
+              ).catch(unresolved)
+            : target.applicationKey === undefined
+              ? (() => {
+                  const page = flows.pages.find(
+                    (entry) => target.page !== undefined && sameId(entry.pageId, target.page),
+                  );
+                  return page === undefined
+                    ? undefined
+                    : applicationPageAddressPath(
+                        tenantShortName,
+                        organizationShortName,
+                        flows.address.applicationKey,
+                        page.key,
+                      );
+                })()
+              : await resolveApplicationPagePathAction(
+                  tenantShortName,
+                  organizationShortName,
+                  target.applicationKey,
+                  target.page,
+                ).catch(unresolved);
         if (path === undefined) {
-          tell(notAvailable);
+          tell(target.applicationRootId === undefined ? notAvailable : cannotOpenYet);
           return undefined;
         }
         return `${path}${query === "" ? "" : `?${query}`}`;
@@ -220,9 +257,9 @@ export function useStudioActionFlows({
     [navigator],
   );
 
-  const messageActionRef = useRef<(message: FlowMessageIntent, offered: FlowMessageAction) => void>(
-    () => undefined,
-  );
+  const messageActionRef = useRef<
+    (message: FlowMessageIntent, offered: FlowMessageAction) => void | Promise<unknown>
+  >(() => undefined);
   const { host, element, banner } = useFlowIntentHost({
     // Every form a flow shows here declares its own fields; none is a form placed on a page.
     renderForm: (form, controls) => ({
@@ -244,6 +281,8 @@ export function useStudioActionFlows({
     }),
     navigation,
     state: runtimeState,
+    verification: stepUpVerification,
+    guidedLeaveLabel: "Back to the editor",
     onMessageAction: (message, action) => messageActionRef.current(message, action),
     // Install or upgrade is left out of a confirmation for a person who may not install.
     actionOffered: (offered) =>
@@ -275,7 +314,8 @@ export function useStudioActionFlows({
       return;
     }
     holdDraft(true);
-    void current.runtime
+    // The run is handed back so the guided steps stay open until it ends.
+    return current.runtime
       .dispatch(
         action,
         offered.inputs,

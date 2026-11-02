@@ -12,10 +12,13 @@ type LinkTarget = Readonly<{
   kind: "page";
   /**
    * Another installed application of the same organisation, by key; absent for this application.
-   * With it, `page` is a page key of that application; without it, this application's page identity.
+   * With it, `page` is a page key of that application, or absent for its home page; without it,
+   * `page` is this application's page identity.
    */
   applicationKey?: string;
-  page: string;
+  /** Another installed application of the organisation, by identity: its home page opens. */
+  applicationRootId?: string;
+  page?: string;
   /** Parameters of the Navigate task that opened it (a record page's `record_id`, for example). */
   parameters?: Readonly<Record<string, JsonValue>>;
 }>;
@@ -47,9 +50,25 @@ export type LinkNavigationEnvironment = Readonly<{
 
 /** The page target a Navigate task intent names; undefined when it names no valid page. */
 const linkTargetForNavigateIntent = (intent: FlowIntent): LinkTarget | undefined => {
-  const { application, page, parameters } = intent.properties;
-  if (intent.kind !== "navigate" || typeof page !== "string" || page.length === 0) return undefined;
+  const { application, application_root: root, page, parameters } = intent.properties;
+  if (intent.kind !== "navigate") return undefined;
   if (application !== undefined && (typeof application !== "string" || application.length === 0))
+    return undefined;
+  if (root !== undefined) {
+    // An application by identity opens at its home page, with no page and no key beside it.
+    if (
+      typeof root !== "string" ||
+      root.length === 0 ||
+      page !== undefined ||
+      application !== undefined
+    )
+      return undefined;
+    return { kind: "page", applicationRootId: root };
+  }
+  // Another application without a page is that application's home page.
+  if (
+    page === undefined ? application === undefined : typeof page !== "string" || page.length === 0
+  )
     return undefined;
   const bag =
     typeof parameters === "object" && parameters !== null && !Array.isArray(parameters)
@@ -58,7 +77,7 @@ const linkTargetForNavigateIntent = (intent: FlowIntent): LinkTarget | undefined
   return {
     kind: "page",
     ...(application === undefined ? {} : { applicationKey: application }),
-    page,
+    ...(page === undefined ? {} : { page: page as string }),
     ...(bag === undefined ? {} : { parameters: bag }),
   };
 };

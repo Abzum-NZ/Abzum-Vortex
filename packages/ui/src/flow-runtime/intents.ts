@@ -1,5 +1,7 @@
 import {
+  flowVerificationRequirements,
   maximumFlowConfirmationDetailLines,
+  maximumFlowWizardSteps,
   flowMessageDismissBounds,
   flowMessageSeverities,
   flowMessageTargets,
@@ -22,6 +24,8 @@ export type FlowIntent = Readonly<{
     | "clear_message"
     | "show_form"
     | "confirm"
+    | "verify"
+    | "wizard"
     | "navigate"
     | "refresh"
     | "set_panel"
@@ -88,13 +92,40 @@ export type FlowConfirmIntent = Readonly<{
   choice: string | undefined;
   confirmLabel: string | undefined;
   destructive: boolean | undefined;
+  /** Inside guided steps: the person may go back to the previous step. */
+  back?: boolean;
 }>;
 /** The person's answer to a confirmation; `choice` is set only when one was offered. */
 export type FlowConfirmAnswer = Readonly<{ confirmed: boolean; choice?: boolean }>;
+/**
+ * The person went back to the step before this one. Only a dialog inside guided steps offers it,
+ * and only while nothing the flow did since that step has changed anything.
+ */
+export type FlowBackAnswer = Readonly<{ back: true }>;
+export const isBackAnswer = (answer: object): answer is FlowBackAnswer =>
+  "back" in answer && answer.back === true;
+/** What a Verify step asks the person to prove. */
+export type FlowVerification = (typeof flowVerificationRequirements)[number];
+/** A verification: what it is for, the proof it asks, and whether the person may step back. */
+export type FlowVerifyIntent = Readonly<{
+  requires: FlowVerification;
+  message: string;
+  confirmLabel: string | undefined;
+  back?: boolean;
+}>;
+/** The guided steps a flow shows: the dialog's heading, the ordered steps and where the flow is. */
+export type FlowWizardIntent = Readonly<{
+  title: string;
+  steps: readonly string[];
+  step: string;
+  /** A progress message shown until the next dialog. */
+  working: string | undefined;
+}>;
 export type FlowFormIntent = Readonly<{
   taskId: string;
   formId: string;
   inputs: Readonly<Record<string, JsonValue>>;
+  back?: boolean;
 }>;
 /** A text field a Show form step declares itself. */
 type FlowInlineField = Readonly<{
@@ -112,6 +143,7 @@ export type FlowInlineFormIntent = Readonly<{
   fields: readonly FlowInlineField[];
   inputs: Readonly<Record<string, string>>;
   expect: Readonly<Record<string, string>>;
+  back?: boolean;
 }>;
 
 const maximumTextLength = 2_000;
@@ -250,6 +282,40 @@ export const readConfirmIntent = (intent: FlowIntent): FlowConfirmIntent | undef
       };
 };
 
+/** Undefined when the verification is missing its message or names a proof the platform does not know. */
+export const readVerifyIntent = (intent: FlowIntent): FlowVerifyIntent | undefined => {
+  const requires = text(intent.properties.requires);
+  const message = text(intent.properties.message);
+  return message === undefined ||
+    requires === undefined ||
+    !(flowVerificationRequirements as readonly string[]).includes(requires)
+    ? undefined
+    : {
+        requires: requires as FlowVerification,
+        message,
+        confirmLabel: text(intent.properties.confirm_label),
+      };
+};
+
+/** Undefined when the guided steps are not 2 to 8 different names with the current one among them. */
+const readWizardIntent = (intent: FlowIntent): FlowWizardIntent | undefined => {
+  const title = text(intent.properties.title);
+  const step = text(intent.properties.step);
+  const steps = intent.properties.steps;
+  if (
+    title === undefined ||
+    step === undefined ||
+    !Array.isArray(steps) ||
+    steps.length < 2 ||
+    steps.length > maximumFlowWizardSteps ||
+    !steps.every((name): name is string => typeof name === "string" && name.length > 0) ||
+    new Set(steps).size !== steps.length ||
+    !steps.includes(step)
+  )
+    return undefined;
+  return { title, steps, step, working: text(intent.properties.working) };
+};
+
 /** The resume answer for a confirmation, carrying the opt-in only when one was offered. */
 export const confirmAnswer = (
   confirmation: FlowConfirmIntent,
@@ -319,8 +385,23 @@ export type FlowIntentHost = Readonly<{
   showForm: (
     form: FlowFormIntent | FlowInlineFormIntent,
     signal?: AbortSignal,
-  ) => Promise<FlowFormAnswer>;
-  confirm: (confirmation: FlowConfirmIntent, signal?: AbortSignal) => Promise<FlowConfirmAnswer>;
+  ) => Promise<FlowFormAnswer | FlowBackAnswer>;
+  confirm: (
+    confirmation: FlowConfirmIntent,
+    signal?: AbortSignal,
+  ) => Promise<FlowConfirmAnswer | FlowBackAnswer>;
+  /** Asks the person to prove who they are; answers yes once they have, or already had. */
+  verify?: (
+    verification: FlowVerifyIntent,
+    signal?: AbortSignal,
+  ) => Promise<FlowConfirmAnswer | FlowBackAnswer>;
+  /** Opens the guided steps, or moves them to the current step. */
+  wizard?: (wizard: FlowWizardIntent) => void;
+  /**
+   * Follows a run for as long as it lives, so guided steps stay open across a flow that hands over
+   * to another and close when none is left.
+   */
+  trackRun?: <Result>(run: Promise<Result>) => Promise<Result>;
   navigate: (intent: FlowIntent) => boolean | Promise<boolean>;
   refresh?: (component: string | undefined) => void | Promise<void>;
   setPanel?: (panel: string, state: string) => void | Promise<void>;
@@ -360,6 +441,12 @@ export async function performPresentationIntent(
       )
         throw new Error("FLOW_CLEAR_MESSAGE_INTENT_INVALID");
       host.clearMessage(target as PageMessageTarget, component);
+      return;
+    }
+    case "wizard": {
+      const wizard = readWizardIntent(intent);
+      if (wizard === undefined) throw new Error("FLOW_WIZARD_INTENT_INVALID");
+      host.wizard?.(wizard);
       return;
     }
     case "navigate":

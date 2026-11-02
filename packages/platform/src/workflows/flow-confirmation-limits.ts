@@ -5,3 +5,9 @@
 
 /** Maximum number of detail lines a flow confirmation can present for explicit review. */
 export const maximumFlowConfirmationDetailLines = 500;
+
+/** What a Verify step may ask the person to prove: a recent sign-in, or two-step verification. */
+export const flowVerificationRequirements = ["recent_sign_in", "two_step"] as const;
+
+/** The most steps a flow's guided dialog lists. */
+export const maximumFlowWizardSteps = 8;

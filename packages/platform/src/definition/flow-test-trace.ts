@@ -86,7 +86,8 @@ export const createFlowTraceCollector = (
             ? "failed"
             : "refused"
           : observation.taskType === "interface.show_form" ||
-              observation.taskType === "interface.confirm"
+              observation.taskType === "interface.confirm" ||
+              observation.taskType === "interface.verify"
             ? "paused"
             : "completed",
       ms: lap(),

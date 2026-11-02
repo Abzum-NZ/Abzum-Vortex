@@ -670,7 +670,17 @@ const help: Readonly<Record<string, string>> = {
   "interface.navigate parameters": "A record page opens the record you name here.",
   "interface.navigate application":
     "Leave it unset to open a page of this application, or choose another application of the organisation.",
-  "interface.navigate page": "The page to open; with another application, one of its pages.",
+  "interface.navigate page":
+    "The page to open; with another application, one of its pages, or leave it unset to open that application's home page.",
+  "interface.navigate application_root":
+    "Opens the home page of an application by its identity, for the application a step just installed. Use it instead of the application and page above.",
+  "interface.verify requires":
+    "recent_sign_in asks for the password (a sign-in within the last 15 minutes); two_step asks for the code from the authenticator app, which the person can set up in the step. The step that follows still checks again.",
+  "interface.wizard steps":
+    "The names of the steps, in order, as a list of two to eight different texts. Every step of the flow that uses guided steps lists the same names.",
+  "interface.wizard step": "The step the flow is at now: one of the names in the list.",
+  "interface.wizard working":
+    "A progress message with a spinner, shown until the next dialog opens, for a step that works in the background.",
 };
 
 /** The selected-record read a step stores: its field references, or the stored value when unreadable. */

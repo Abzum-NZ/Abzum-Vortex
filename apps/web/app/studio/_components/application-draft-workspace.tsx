@@ -327,7 +327,7 @@ function ExistingApplicationWorkspace(props: ExistingProps) {
                 undoDisabled={draft.locked}
                 onUndo={draft.undo}
                 onRedo={draft.redo}
-                applicationHref={place.applicationHref}
+                applicationHref={releases.openHref ?? place.applicationHref}
                 install={releases.install}
                 onInstall={releases.openInstall}
                 installPending={releases.actionPending === "install"}

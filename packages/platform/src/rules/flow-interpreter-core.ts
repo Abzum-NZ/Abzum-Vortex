@@ -750,7 +750,8 @@ const execute = (machine: Machine, task: FlowTask, taskPath: readonly PathSegmen
     if (kind === undefined) return failed("task_not_available", "failed", taskId);
     const intent: FlowInterfaceIntent = { kind, taskId, properties };
     replaceTop(machine, next);
-    if (kind !== "show_form" && kind !== "confirm") {
+    // A verification waits like a confirmation: the person's yes is its answer.
+    if (kind !== "show_form" && kind !== "confirm" && kind !== "verify") {
       machine.state.pendingIntents = [...machine.state.pendingIntents, intent];
       return { kind: "continue" };
     }

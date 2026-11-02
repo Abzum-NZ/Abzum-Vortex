@@ -775,7 +775,7 @@
       {
         "id": "flow_install_or_upgrade_application",
         "key": "install_or_upgrade_application",
-        "description": "Reviews the latest published version of the selected application, then installs it for the first time or upgrades to it after the person confirms.",
+        "description": "Reviews the latest published version of the selected application in guided steps, verifies the person, then installs it for the first time or upgrades to it after they confirm, and opens it.",
         "labels": {
           "name": "Install or upgrade"
         },
@@ -793,6 +793,119 @@
         "variables": {},
         "triggers": [],
         "tasks": [
+          {
+            "id": "wizard_install_signin",
+            "type": "interface.wizard",
+            "version": "1.0.0",
+            "properties": {
+              "title": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "Install or upgrade application"
+                }
+              },
+              "steps": {
+                "kind": "literal",
+                "literal": {
+                  "type": "json",
+                  "value": ["Review", "Release note", "Verify", "Publish", "Install", "Done"]
+                }
+              },
+              "step": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "Install"
+                }
+              },
+              "working": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "Checking your sign-in…"
+                }
+              }
+            }
+          },
+          {
+            "id": "verify_install_review",
+            "type": "interface.verify",
+            "version": "1.0.0",
+            "properties": {
+              "requires": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "recent_sign_in"
+                }
+              },
+              "message": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "Installing changes who can do what in this organisation, so it needs a sign-in within the last 15 minutes."
+                }
+              }
+            }
+          },
+          {
+            "id": "install_review_unverified",
+            "type": "if",
+            "condition": {
+              "op": "not",
+              "arg": {
+                "op": "reference",
+                "reference": {
+                  "source": "task_output",
+                  "task": "verify_install_review",
+                  "key": "confirmed"
+                }
+              }
+            },
+            "then": [
+              {
+                "id": "stop_install_review_unverified",
+                "type": "stop",
+                "outcome": "cancelled"
+              }
+            ]
+          },
+          {
+            "id": "wizard_install_review",
+            "type": "interface.wizard",
+            "version": "1.0.0",
+            "properties": {
+              "title": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "Install or upgrade application"
+                }
+              },
+              "steps": {
+                "kind": "literal",
+                "literal": {
+                  "type": "json",
+                  "value": ["Review", "Release note", "Verify", "Publish", "Install", "Done"]
+                }
+              },
+              "step": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "Install"
+                }
+              },
+              "working": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "Checking the installation…"
+                }
+              }
+            }
+          },
           {
             "id": "review",
             "type": "operation.call",
@@ -1129,6 +1242,133 @@
                             ]
                           },
                           {
+                            "id": "wizard_install_verify",
+                            "type": "interface.wizard",
+                            "version": "1.0.0",
+                            "properties": {
+                              "title": {
+                                "kind": "literal",
+                                "literal": {
+                                  "type": "text",
+                                  "value": "Install or upgrade application"
+                                }
+                              },
+                              "steps": {
+                                "kind": "literal",
+                                "literal": {
+                                  "type": "json",
+                                  "value": [
+                                    "Review",
+                                    "Release note",
+                                    "Verify",
+                                    "Publish",
+                                    "Install",
+                                    "Done"
+                                  ]
+                                }
+                              },
+                              "step": {
+                                "kind": "literal",
+                                "literal": {
+                                  "type": "text",
+                                  "value": "Install"
+                                }
+                              },
+                              "working": {
+                                "kind": "literal",
+                                "literal": {
+                                  "type": "text",
+                                  "value": "Checking your verification…"
+                                }
+                              }
+                            }
+                          },
+                          {
+                            "id": "verify_install",
+                            "type": "interface.verify",
+                            "version": "1.0.0",
+                            "properties": {
+                              "requires": {
+                                "kind": "literal",
+                                "literal": {
+                                  "type": "text",
+                                  "value": "two_step"
+                                }
+                              },
+                              "message": {
+                                "kind": "literal",
+                                "literal": {
+                                  "type": "text",
+                                  "value": "Installing and accepting roles changes who can do what, so it needs two-step verification."
+                                }
+                              }
+                            }
+                          },
+                          {
+                            "id": "install_unverified",
+                            "type": "if",
+                            "condition": {
+                              "op": "not",
+                              "arg": {
+                                "op": "reference",
+                                "reference": {
+                                  "source": "task_output",
+                                  "task": "verify_install",
+                                  "key": "confirmed"
+                                }
+                              }
+                            },
+                            "then": [
+                              {
+                                "id": "stop_install_unverified",
+                                "type": "stop",
+                                "outcome": "cancelled"
+                              }
+                            ]
+                          },
+                          {
+                            "id": "wizard_install_commit",
+                            "type": "interface.wizard",
+                            "version": "1.0.0",
+                            "properties": {
+                              "title": {
+                                "kind": "literal",
+                                "literal": {
+                                  "type": "text",
+                                  "value": "Install or upgrade application"
+                                }
+                              },
+                              "steps": {
+                                "kind": "literal",
+                                "literal": {
+                                  "type": "json",
+                                  "value": [
+                                    "Review",
+                                    "Release note",
+                                    "Verify",
+                                    "Publish",
+                                    "Install",
+                                    "Done"
+                                  ]
+                                }
+                              },
+                              "step": {
+                                "kind": "literal",
+                                "literal": {
+                                  "type": "text",
+                                  "value": "Install"
+                                }
+                              },
+                              "working": {
+                                "kind": "literal",
+                                "literal": {
+                                  "type": "text",
+                                  "value": "Installing…"
+                                }
+                              }
+                            }
+                          },
+                          {
                             "id": "install",
                             "type": "operation.call",
                             "version": "1.0.0",
@@ -1302,6 +1542,41 @@
                                 },
                                 "tasks": [
                                   {
+                                    "id": "wizard_install_done",
+                                    "type": "interface.wizard",
+                                    "version": "1.0.0",
+                                    "properties": {
+                                      "title": {
+                                        "kind": "literal",
+                                        "literal": {
+                                          "type": "text",
+                                          "value": "Install or upgrade application"
+                                        }
+                                      },
+                                      "steps": {
+                                        "kind": "literal",
+                                        "literal": {
+                                          "type": "json",
+                                          "value": [
+                                            "Review",
+                                            "Release note",
+                                            "Verify",
+                                            "Publish",
+                                            "Install",
+                                            "Done"
+                                          ]
+                                        }
+                                      },
+                                      "step": {
+                                        "kind": "literal",
+                                        "literal": {
+                                          "type": "text",
+                                          "value": "Done"
+                                        }
+                                      }
+                                    }
+                                  },
+                                  {
                                     "id": "install_done",
                                     "type": "interface.show_message",
                                     "version": "1.1.0",
@@ -1381,7 +1656,7 @@
                                         "kind": "literal",
                                         "literal": {
                                           "type": "text",
-                                          "value": "Install or upgrade"
+                                          "value": "Installed"
                                         }
                                       },
                                       "target": {
@@ -1395,8 +1670,44 @@
                                         "kind": "literal",
                                         "literal": {
                                           "type": "text",
-                                          "value": "info"
+                                          "value": "success"
                                         }
+                                      },
+                                      "actions": {
+                                        "kind": "array",
+                                        "items": [
+                                          {
+                                            "kind": "map",
+                                            "entries": {
+                                              "label": {
+                                                "kind": "literal",
+                                                "literal": {
+                                                  "type": "text",
+                                                  "value": "Open the application"
+                                                }
+                                              },
+                                              "flow": {
+                                                "kind": "literal",
+                                                "literal": {
+                                                  "type": "text",
+                                                  "value": "flow_open_installed_application"
+                                                }
+                                              },
+                                              "inputs": {
+                                                "kind": "map",
+                                                "entries": {
+                                                  "application_root_id": {
+                                                    "kind": "reference",
+                                                    "reference": {
+                                                      "source": "input",
+                                                      "name": "application_root_id"
+                                                    }
+                                                  }
+                                                }
+                                              }
+                                            }
+                                          }
+                                        ]
                                       }
                                     }
                                   }
@@ -1725,6 +2036,133 @@
                             ]
                           },
                           {
+                            "id": "wizard_upgrade_verify",
+                            "type": "interface.wizard",
+                            "version": "1.0.0",
+                            "properties": {
+                              "title": {
+                                "kind": "literal",
+                                "literal": {
+                                  "type": "text",
+                                  "value": "Install or upgrade application"
+                                }
+                              },
+                              "steps": {
+                                "kind": "literal",
+                                "literal": {
+                                  "type": "json",
+                                  "value": [
+                                    "Review",
+                                    "Release note",
+                                    "Verify",
+                                    "Publish",
+                                    "Install",
+                                    "Done"
+                                  ]
+                                }
+                              },
+                              "step": {
+                                "kind": "literal",
+                                "literal": {
+                                  "type": "text",
+                                  "value": "Install"
+                                }
+                              },
+                              "working": {
+                                "kind": "literal",
+                                "literal": {
+                                  "type": "text",
+                                  "value": "Checking your verification…"
+                                }
+                              }
+                            }
+                          },
+                          {
+                            "id": "verify_upgrade",
+                            "type": "interface.verify",
+                            "version": "1.0.0",
+                            "properties": {
+                              "requires": {
+                                "kind": "literal",
+                                "literal": {
+                                  "type": "text",
+                                  "value": "two_step"
+                                }
+                              },
+                              "message": {
+                                "kind": "literal",
+                                "literal": {
+                                  "type": "text",
+                                  "value": "Installing and accepting roles changes who can do what, so it needs two-step verification."
+                                }
+                              }
+                            }
+                          },
+                          {
+                            "id": "upgrade_unverified",
+                            "type": "if",
+                            "condition": {
+                              "op": "not",
+                              "arg": {
+                                "op": "reference",
+                                "reference": {
+                                  "source": "task_output",
+                                  "task": "verify_upgrade",
+                                  "key": "confirmed"
+                                }
+                              }
+                            },
+                            "then": [
+                              {
+                                "id": "stop_upgrade_unverified",
+                                "type": "stop",
+                                "outcome": "cancelled"
+                              }
+                            ]
+                          },
+                          {
+                            "id": "wizard_upgrade_commit",
+                            "type": "interface.wizard",
+                            "version": "1.0.0",
+                            "properties": {
+                              "title": {
+                                "kind": "literal",
+                                "literal": {
+                                  "type": "text",
+                                  "value": "Install or upgrade application"
+                                }
+                              },
+                              "steps": {
+                                "kind": "literal",
+                                "literal": {
+                                  "type": "json",
+                                  "value": [
+                                    "Review",
+                                    "Release note",
+                                    "Verify",
+                                    "Publish",
+                                    "Install",
+                                    "Done"
+                                  ]
+                                }
+                              },
+                              "step": {
+                                "kind": "literal",
+                                "literal": {
+                                  "type": "text",
+                                  "value": "Install"
+                                }
+                              },
+                              "working": {
+                                "kind": "literal",
+                                "literal": {
+                                  "type": "text",
+                                  "value": "Upgrading…"
+                                }
+                              }
+                            }
+                          },
+                          {
                             "id": "upgrade",
                             "type": "operation.call",
                             "version": "1.0.0",
@@ -1899,6 +2337,41 @@
                                 },
                                 "tasks": [
                                   {
+                                    "id": "wizard_upgrade_done",
+                                    "type": "interface.wizard",
+                                    "version": "1.0.0",
+                                    "properties": {
+                                      "title": {
+                                        "kind": "literal",
+                                        "literal": {
+                                          "type": "text",
+                                          "value": "Install or upgrade application"
+                                        }
+                                      },
+                                      "steps": {
+                                        "kind": "literal",
+                                        "literal": {
+                                          "type": "json",
+                                          "value": [
+                                            "Review",
+                                            "Release note",
+                                            "Verify",
+                                            "Publish",
+                                            "Install",
+                                            "Done"
+                                          ]
+                                        }
+                                      },
+                                      "step": {
+                                        "kind": "literal",
+                                        "literal": {
+                                          "type": "text",
+                                          "value": "Done"
+                                        }
+                                      }
+                                    }
+                                  },
+                                  {
                                     "id": "upgrade_done",
                                     "type": "interface.show_message",
                                     "version": "1.1.0",
@@ -2003,7 +2476,7 @@
                                         "kind": "literal",
                                         "literal": {
                                           "type": "text",
-                                          "value": "Install or upgrade"
+                                          "value": "Upgraded"
                                         }
                                       },
                                       "target": {
@@ -2017,8 +2490,44 @@
                                         "kind": "literal",
                                         "literal": {
                                           "type": "text",
-                                          "value": "info"
+                                          "value": "success"
                                         }
+                                      },
+                                      "actions": {
+                                        "kind": "array",
+                                        "items": [
+                                          {
+                                            "kind": "map",
+                                            "entries": {
+                                              "label": {
+                                                "kind": "literal",
+                                                "literal": {
+                                                  "type": "text",
+                                                  "value": "Open the application"
+                                                }
+                                              },
+                                              "flow": {
+                                                "kind": "literal",
+                                                "literal": {
+                                                  "type": "text",
+                                                  "value": "flow_open_installed_application"
+                                                }
+                                              },
+                                              "inputs": {
+                                                "kind": "map",
+                                                "entries": {
+                                                  "application_root_id": {
+                                                    "kind": "reference",
+                                                    "reference": {
+                                                      "source": "input",
+                                                      "name": "application_root_id"
+                                                    }
+                                                  }
+                                                }
+                                              }
+                                            }
+                                          }
+                                        ]
                                       }
                                     }
                                   }
@@ -2260,6 +2769,133 @@
                             ]
                           },
                           {
+                            "id": "wizard_accept_roles_verify",
+                            "type": "interface.wizard",
+                            "version": "1.0.0",
+                            "properties": {
+                              "title": {
+                                "kind": "literal",
+                                "literal": {
+                                  "type": "text",
+                                  "value": "Install or upgrade application"
+                                }
+                              },
+                              "steps": {
+                                "kind": "literal",
+                                "literal": {
+                                  "type": "json",
+                                  "value": [
+                                    "Review",
+                                    "Release note",
+                                    "Verify",
+                                    "Publish",
+                                    "Install",
+                                    "Done"
+                                  ]
+                                }
+                              },
+                              "step": {
+                                "kind": "literal",
+                                "literal": {
+                                  "type": "text",
+                                  "value": "Install"
+                                }
+                              },
+                              "working": {
+                                "kind": "literal",
+                                "literal": {
+                                  "type": "text",
+                                  "value": "Checking your verification…"
+                                }
+                              }
+                            }
+                          },
+                          {
+                            "id": "verify_accept_roles",
+                            "type": "interface.verify",
+                            "version": "1.0.0",
+                            "properties": {
+                              "requires": {
+                                "kind": "literal",
+                                "literal": {
+                                  "type": "text",
+                                  "value": "two_step"
+                                }
+                              },
+                              "message": {
+                                "kind": "literal",
+                                "literal": {
+                                  "type": "text",
+                                  "value": "Installing and accepting roles changes who can do what, so it needs two-step verification."
+                                }
+                              }
+                            }
+                          },
+                          {
+                            "id": "accept_roles_unverified",
+                            "type": "if",
+                            "condition": {
+                              "op": "not",
+                              "arg": {
+                                "op": "reference",
+                                "reference": {
+                                  "source": "task_output",
+                                  "task": "verify_accept_roles",
+                                  "key": "confirmed"
+                                }
+                              }
+                            },
+                            "then": [
+                              {
+                                "id": "stop_accept_roles_unverified",
+                                "type": "stop",
+                                "outcome": "cancelled"
+                              }
+                            ]
+                          },
+                          {
+                            "id": "wizard_accept_roles_commit",
+                            "type": "interface.wizard",
+                            "version": "1.0.0",
+                            "properties": {
+                              "title": {
+                                "kind": "literal",
+                                "literal": {
+                                  "type": "text",
+                                  "value": "Install or upgrade application"
+                                }
+                              },
+                              "steps": {
+                                "kind": "literal",
+                                "literal": {
+                                  "type": "json",
+                                  "value": [
+                                    "Review",
+                                    "Release note",
+                                    "Verify",
+                                    "Publish",
+                                    "Install",
+                                    "Done"
+                                  ]
+                                }
+                              },
+                              "step": {
+                                "kind": "literal",
+                                "literal": {
+                                  "type": "text",
+                                  "value": "Install"
+                                }
+                              },
+                              "working": {
+                                "kind": "literal",
+                                "literal": {
+                                  "type": "text",
+                                  "value": "Accepting the role changes…"
+                                }
+                              }
+                            }
+                          },
+                          {
                             "id": "accept_roles",
                             "type": "operation.call",
                             "version": "1.0.0",
@@ -2434,6 +3070,41 @@
                                 },
                                 "tasks": [
                                   {
+                                    "id": "wizard_accept_roles_done",
+                                    "type": "interface.wizard",
+                                    "version": "1.0.0",
+                                    "properties": {
+                                      "title": {
+                                        "kind": "literal",
+                                        "literal": {
+                                          "type": "text",
+                                          "value": "Install or upgrade application"
+                                        }
+                                      },
+                                      "steps": {
+                                        "kind": "literal",
+                                        "literal": {
+                                          "type": "json",
+                                          "value": [
+                                            "Review",
+                                            "Release note",
+                                            "Verify",
+                                            "Publish",
+                                            "Install",
+                                            "Done"
+                                          ]
+                                        }
+                                      },
+                                      "step": {
+                                        "kind": "literal",
+                                        "literal": {
+                                          "type": "text",
+                                          "value": "Done"
+                                        }
+                                      }
+                                    }
+                                  },
+                                  {
                                     "id": "accept_roles_done",
                                     "type": "interface.show_message",
                                     "version": "1.1.0",
@@ -2499,7 +3170,7 @@
                                         "kind": "literal",
                                         "literal": {
                                           "type": "text",
-                                          "value": "Install or upgrade"
+                                          "value": "Role changes accepted"
                                         }
                                       },
                                       "target": {
@@ -2513,8 +3184,44 @@
                                         "kind": "literal",
                                         "literal": {
                                           "type": "text",
-                                          "value": "info"
+                                          "value": "success"
                                         }
+                                      },
+                                      "actions": {
+                                        "kind": "array",
+                                        "items": [
+                                          {
+                                            "kind": "map",
+                                            "entries": {
+                                              "label": {
+                                                "kind": "literal",
+                                                "literal": {
+                                                  "type": "text",
+                                                  "value": "Open the application"
+                                                }
+                                              },
+                                              "flow": {
+                                                "kind": "literal",
+                                                "literal": {
+                                                  "type": "text",
+                                                  "value": "flow_open_installed_application"
+                                                }
+                                              },
+                                              "inputs": {
+                                                "kind": "map",
+                                                "entries": {
+                                                  "application_root_id": {
+                                                    "kind": "reference",
+                                                    "reference": {
+                                                      "source": "input",
+                                                      "name": "application_root_id"
+                                                    }
+                                                  }
+                                                }
+                                              }
+                                            }
+                                          }
+                                        ]
                                       }
                                     }
                                   }
@@ -5343,7 +6050,7 @@
       {
         "id": "flow_publish_application",
         "key": "publish_application",
-        "description": "Publishes the saved draft as the next version of the application, with a release note.",
+        "description": "Publishes the saved draft as the next version of the application in guided steps: the review, the release note, verifying the person, the version and, when they may, installing it.",
         "labels": {
           "name": "Publish application"
         },
@@ -5361,6 +6068,119 @@
         "variables": {},
         "triggers": [],
         "tasks": [
+          {
+            "id": "wizard_publish_signin",
+            "type": "interface.wizard",
+            "version": "1.0.0",
+            "properties": {
+              "title": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "Publish application"
+                }
+              },
+              "steps": {
+                "kind": "literal",
+                "literal": {
+                  "type": "json",
+                  "value": ["Review", "Release note", "Verify", "Publish", "Install", "Done"]
+                }
+              },
+              "step": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "Review"
+                }
+              },
+              "working": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "Checking your sign-in…"
+                }
+              }
+            }
+          },
+          {
+            "id": "verify_publication_review",
+            "type": "interface.verify",
+            "version": "1.0.0",
+            "properties": {
+              "requires": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "recent_sign_in"
+                }
+              },
+              "message": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "Publishing makes a version every organisation can install, so it needs a sign-in within the last 15 minutes."
+                }
+              }
+            }
+          },
+          {
+            "id": "publication_review_unverified",
+            "type": "if",
+            "condition": {
+              "op": "not",
+              "arg": {
+                "op": "reference",
+                "reference": {
+                  "source": "task_output",
+                  "task": "verify_publication_review",
+                  "key": "confirmed"
+                }
+              }
+            },
+            "then": [
+              {
+                "id": "stop_publication_review_unverified",
+                "type": "stop",
+                "outcome": "cancelled"
+              }
+            ]
+          },
+          {
+            "id": "wizard_publish_review",
+            "type": "interface.wizard",
+            "version": "1.0.0",
+            "properties": {
+              "title": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "Publish application"
+                }
+              },
+              "steps": {
+                "kind": "literal",
+                "literal": {
+                  "type": "json",
+                  "value": ["Review", "Release note", "Verify", "Publish", "Install", "Done"]
+                }
+              },
+              "step": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "Review"
+                }
+              },
+              "working": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "Checking the draft…"
+                }
+              }
+            }
+          },
           {
             "id": "review_publication",
             "type": "operation.call",
@@ -5620,6 +6440,41 @@
                         ]
                       },
                       {
+                        "id": "wizard_publish_note",
+                        "type": "interface.wizard",
+                        "version": "1.0.0",
+                        "properties": {
+                          "title": {
+                            "kind": "literal",
+                            "literal": {
+                              "type": "text",
+                              "value": "Publish application"
+                            }
+                          },
+                          "steps": {
+                            "kind": "literal",
+                            "literal": {
+                              "type": "json",
+                              "value": [
+                                "Review",
+                                "Release note",
+                                "Verify",
+                                "Publish",
+                                "Install",
+                                "Done"
+                              ]
+                            }
+                          },
+                          "step": {
+                            "kind": "literal",
+                            "literal": {
+                              "type": "text",
+                              "value": "Release note"
+                            }
+                          }
+                        }
+                      },
+                      {
                         "id": "publish_note_form",
                         "type": "interface.show_form",
                         "version": "1.0.0",
@@ -5656,7 +6511,7 @@
                             "kind": "literal",
                             "literal": {
                               "type": "text",
-                              "value": "Publish"
+                              "value": "Continue"
                             }
                           },
                           "inputs": {
@@ -5696,6 +6551,153 @@
                             "outcome": "cancelled"
                           }
                         ]
+                      },
+                      {
+                        "id": "wizard_publish_verify",
+                        "type": "interface.wizard",
+                        "version": "1.0.0",
+                        "properties": {
+                          "title": {
+                            "kind": "literal",
+                            "literal": {
+                              "type": "text",
+                              "value": "Publish application"
+                            }
+                          },
+                          "steps": {
+                            "kind": "literal",
+                            "literal": {
+                              "type": "json",
+                              "value": [
+                                "Review",
+                                "Release note",
+                                "Verify",
+                                "Publish",
+                                "Install",
+                                "Done"
+                              ]
+                            }
+                          },
+                          "step": {
+                            "kind": "literal",
+                            "literal": {
+                              "type": "text",
+                              "value": "Verify"
+                            }
+                          },
+                          "working": {
+                            "kind": "literal",
+                            "literal": {
+                              "type": "text",
+                              "value": "Checking your sign-in…"
+                            }
+                          }
+                        }
+                      },
+                      {
+                        "id": "verify_publication",
+                        "type": "interface.verify",
+                        "version": "1.0.0",
+                        "properties": {
+                          "requires": {
+                            "kind": "literal",
+                            "literal": {
+                              "type": "text",
+                              "value": "recent_sign_in"
+                            }
+                          },
+                          "message": {
+                            "kind": "literal",
+                            "literal": {
+                              "type": "text",
+                              "value": "Publishing makes a version every organisation can install, so it needs a sign-in within the last 15 minutes."
+                            }
+                          }
+                        }
+                      },
+                      {
+                        "id": "publication_unverified",
+                        "type": "if",
+                        "condition": {
+                          "op": "not",
+                          "arg": {
+                            "op": "reference",
+                            "reference": {
+                              "source": "task_output",
+                              "task": "verify_publication",
+                              "key": "confirmed"
+                            }
+                          }
+                        },
+                        "then": [
+                          {
+                            "id": "stop_publication_unverified",
+                            "type": "stop",
+                            "outcome": "cancelled"
+                          }
+                        ]
+                      },
+                      {
+                        "id": "wizard_publish_commit",
+                        "type": "interface.wizard",
+                        "version": "1.0.0",
+                        "properties": {
+                          "title": {
+                            "kind": "literal",
+                            "literal": {
+                              "type": "text",
+                              "value": "Publish application"
+                            }
+                          },
+                          "steps": {
+                            "kind": "literal",
+                            "literal": {
+                              "type": "json",
+                              "value": [
+                                "Review",
+                                "Release note",
+                                "Verify",
+                                "Publish",
+                                "Install",
+                                "Done"
+                              ]
+                            }
+                          },
+                          "step": {
+                            "kind": "literal",
+                            "literal": {
+                              "type": "text",
+                              "value": "Publish"
+                            }
+                          },
+                          "working": {
+                            "kind": "formula",
+                            "formula": {
+                              "op": "join",
+                              "parts": [
+                                {
+                                  "op": "literal",
+                                  "type": "text",
+                                  "value": "Publishing version "
+                                },
+                                {
+                                  "op": "reference",
+                                  "reference": {
+                                    "source": "task_output",
+                                    "task": "review_publication",
+                                    "key": "result",
+                                    "path": ["release_version"]
+                                  }
+                                },
+                                {
+                                  "op": "literal",
+                                  "type": "text",
+                                  "value": "…"
+                                }
+                              ]
+                            }
+                          }
+                        }
                       },
                       {
                         "id": "publish",
@@ -5762,11 +6764,67 @@
                             },
                             "tasks": [
                               {
+                                "id": "publish_refresh",
+                                "type": "interface.refresh",
+                                "version": "1.0.0",
+                                "properties": {
+                                  "component": {
+                                    "kind": "literal",
+                                    "literal": {
+                                      "type": "text",
+                                      "value": "store_applications_region"
+                                    }
+                                  }
+                                }
+                              },
+                              {
+                                "id": "wizard_publish_install",
+                                "type": "interface.wizard",
+                                "version": "1.0.0",
+                                "properties": {
+                                  "title": {
+                                    "kind": "literal",
+                                    "literal": {
+                                      "type": "text",
+                                      "value": "Publish application"
+                                    }
+                                  },
+                                  "steps": {
+                                    "kind": "literal",
+                                    "literal": {
+                                      "type": "json",
+                                      "value": [
+                                        "Review",
+                                        "Release note",
+                                        "Verify",
+                                        "Publish",
+                                        "Install",
+                                        "Done"
+                                      ]
+                                    }
+                                  },
+                                  "step": {
+                                    "kind": "literal",
+                                    "literal": {
+                                      "type": "text",
+                                      "value": "Install"
+                                    }
+                                  }
+                                }
+                              },
+                              {
                                 "id": "publish_done",
                                 "type": "interface.show_message",
                                 "version": "1.1.0",
                                 "properties": {
                                   "message": {
+                                    "kind": "literal",
+                                    "literal": {
+                                      "type": "text",
+                                      "value": "Organisations can now install or upgrade to it from the App Store."
+                                    }
+                                  },
+                                  "title": {
                                     "kind": "formula",
                                     "formula": {
                                       "op": "join",
@@ -5788,16 +6846,9 @@
                                         {
                                           "op": "literal",
                                           "type": "text",
-                                          "value": " was published. Install or upgrade it to use it in this organisation."
+                                          "value": " is published"
                                         }
                                       ]
-                                    }
-                                  },
-                                  "title": {
-                                    "kind": "literal",
-                                    "literal": {
-                                      "type": "text",
-                                      "value": "Publish application"
                                     }
                                   },
                                   "target": {
@@ -5824,7 +6875,7 @@
                                             "kind": "literal",
                                             "literal": {
                                               "type": "text",
-                                              "value": "Install or upgrade"
+                                              "value": "Review and install"
                                             }
                                           },
                                           "flow": {
@@ -5847,53 +6898,8 @@
                                             }
                                           }
                                         }
-                                      },
-                                      {
-                                        "kind": "map",
-                                        "entries": {
-                                          "label": {
-                                            "kind": "literal",
-                                            "literal": {
-                                              "type": "text",
-                                              "value": "View in App Store"
-                                            }
-                                          },
-                                          "flow": {
-                                            "kind": "literal",
-                                            "literal": {
-                                              "type": "text",
-                                              "value": "flow_open_store_application"
-                                            }
-                                          },
-                                          "inputs": {
-                                            "kind": "map",
-                                            "entries": {
-                                              "record_id": {
-                                                "kind": "reference",
-                                                "reference": {
-                                                  "source": "input",
-                                                  "name": "application_root_id"
-                                                }
-                                              }
-                                            }
-                                          }
-                                        }
                                       }
                                     ]
-                                  }
-                                }
-                              },
-                              {
-                                "id": "publish_refresh",
-                                "type": "interface.refresh",
-                                "version": "1.0.0",
-                                "properties": {
-                                  "component": {
-                                    "kind": "literal",
-                                    "literal": {
-                                      "type": "text",
-                                      "value": "store_applications_region"
-                                    }
                                   }
                                 }
                               }
@@ -6107,6 +7113,46 @@
                 }
               }
             ]
+          }
+        ],
+        "outputs": {},
+        "errors": [],
+        "finally": []
+      },
+      {
+        "id": "flow_open_installed_application",
+        "key": "open_installed_application",
+        "description": "Opens the home page of an installed application.",
+        "labels": {
+          "name": "Open the application"
+        },
+        "execution": "interactive",
+        "runAs": {
+          "kind": "initiator"
+        },
+        "inputs": {
+          "application_root_id": {
+            "type": "record_reference",
+            "required": true,
+            "recordTypeIds": ["vortex.app_store:store_application"]
+          }
+        },
+        "variables": {},
+        "triggers": [],
+        "tasks": [
+          {
+            "id": "open_home",
+            "type": "interface.navigate",
+            "version": "1.0.0",
+            "properties": {
+              "application_root": {
+                "kind": "reference",
+                "reference": {
+                  "source": "input",
+                  "name": "application_root_id"
+                }
+              }
+            }
           }
         ],
         "outputs": {},

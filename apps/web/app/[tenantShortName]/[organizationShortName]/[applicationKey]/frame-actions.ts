@@ -14,17 +14,18 @@ type ApplicationSearchView = Awaited<ReturnType<typeof loadApplicationSearch>>;
 /**
  * Resolves a flow's Navigate target in another application of the same organisation to its final
  * page address. Only the application and page keys come from the browser; the organisation is the
- * address the person is on, and the page must be one the signed-in person may open now. Undefined
- * when it is missing, withdrawn or refused, so the step opens nothing.
+ * address the person is on, and the page must be one the signed-in person may open now. Without a
+ * page key it is the application's home page. Undefined when it is missing, withdrawn or refused,
+ * so the step opens nothing.
  */
 export async function resolveApplicationPagePathAction(
   tenantShortName: string,
   organizationShortName: string,
   applicationKey: string,
-  pageKey: string,
+  pageKey?: string,
 ): Promise<string | undefined> {
   if (
-    [tenantShortName, organizationShortName, applicationKey, pageKey].some(
+    [tenantShortName, organizationShortName, applicationKey, pageKey ?? "home"].some(
       (value) => typeof value !== "string" || value.length === 0,
     )
   ) {
@@ -53,6 +54,52 @@ export async function resolveApplicationPagePathAction(
     addressed.application.key,
     addressed.pageKey,
   );
+}
+
+/**
+ * Resolves a flow's Navigate target that names another application of the same organisation by
+ * its identity (the application a step just installed) to its home page address. Only the
+ * identity comes from the browser; the application must be one the signed-in person may open now.
+ * Undefined when it is missing, not installed or not theirs to open, so the step opens nothing.
+ */
+export async function resolveApplicationHomePathByRootAction(
+  tenantShortName: string,
+  organizationShortName: string,
+  applicationRootId: string,
+): Promise<string | undefined> {
+  if (
+    [tenantShortName, organizationShortName, applicationRootId].some(
+      (value) => typeof value !== "string" || value.length === 0,
+    )
+  ) {
+    console.error("[application-frame] navigate target refused: malformed address");
+    return undefined;
+  }
+  const resolution = await resolveIdentitySession();
+  if (resolution.kind !== "active") {
+    console.error(`[application-frame] navigate target refused: session ${resolution.kind}`);
+    return undefined;
+  }
+  const read = await loadPermittedApplicationsAtAddress(
+    resolution.session,
+    tenantShortName,
+    organizationShortName,
+  );
+  if (read.kind !== "available") {
+    console.error(`[application-frame] navigate target refused: applications ${read.kind}`);
+    return undefined;
+  }
+  const application = read.applications.find(
+    (candidate) => candidate.applicationRootId.toLowerCase() === applicationRootId.toLowerCase(),
+  );
+  return application === undefined
+    ? undefined
+    : applicationPageAddressPath(
+        tenantShortName,
+        organizationShortName,
+        application.key,
+        application.homePageKey,
+      );
 }
 
 /** Reads the viewer's permitted application links on switcher intent or open. */

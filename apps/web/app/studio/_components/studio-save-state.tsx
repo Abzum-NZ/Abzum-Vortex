@@ -45,7 +45,9 @@ export function studioNotice(
   }>,
 ) {
   // A link action is a link: it changes page in place (asking about unsaved work in a frame), or
-  // opens a new tab when it says so.
+  // opens a new tab when it says so. A notice that sends the person away has done its job: it is
+  // dismissed when they follow it, so it is not waiting for them when they come back.
+  const id = details?.id ?? crypto.randomUUID();
   const action =
     details?.action ??
     (link === undefined ? undefined : link.newTab === true ? (
@@ -53,12 +55,12 @@ export function studioNotice(
         {link.label}
       </a>
     ) : (
-      <NavigationLink className="underline" href={link.href}>
+      <NavigationLink className="underline" href={link.href} onNavigate={() => toast.dismiss(id)}>
         {link.label}
       </NavigationLink>
     ));
   const options = {
-    ...(details?.id === undefined ? {} : { id: details.id }),
+    id,
     ...(details?.description === undefined ? {} : { description: details.description }),
     ...(details?.duration === undefined ? {} : { duration: details.duration }),
     ...(details?.closeButton === undefined ? {} : { closeButton: details.closeButton }),

@@ -482,6 +482,8 @@ export function useStudioReleasesTab({
     openPublish,
     openInstall,
     install: installControlOf(standing?.kind ?? initialStanding),
+    /** Where the application opens once it is installed: read with its standing, so an install made here shows it at once. */
+    openHref: standing?.kind === "live" ? standing.openHref : undefined,
     /** The action whose App Store page is being read before its first dialog opens. */
     actionPending: actions.pending,
     /** The dialogs, toasts and banner the flows show over the editor. */

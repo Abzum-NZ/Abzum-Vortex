@@ -597,7 +597,9 @@ export function createFlowRuntime(options: FlowRuntimeOptions): FlowRuntime {
       };
     };
     try {
-      const result = keepRetry(await execute(signal));
+      // Guided steps stay open for as long as a run lives, so one run can hand over to the next.
+      const running = execute(signal);
+      const result = keepRetry(await (options.host.trackRun?.(running) ?? running));
       agent?.settled(result);
       return result;
     } catch (error) {

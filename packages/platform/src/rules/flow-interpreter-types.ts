@@ -103,6 +103,8 @@ export type FlowInterfaceIntent = Readonly<{
     | "clear_message"
     | "show_form"
     | "confirm"
+    | "verify"
+    | "wizard"
     | "navigate"
     | "refresh"
     | "set_panel"

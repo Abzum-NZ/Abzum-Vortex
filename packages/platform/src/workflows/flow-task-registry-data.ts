@@ -43,6 +43,8 @@ export const flowRegisteredTaskTypeKeys = [
   "interface.validate_form",
   "interface.show_form",
   "interface.confirm",
+  "interface.verify",
+  "interface.wizard",
   "interface.navigate",
   "interface.refresh",
   "interface.set_panel",
@@ -94,6 +96,8 @@ const flowTaskRuns = Object.freeze({
   "interface.validate_form": page,
   "interface.show_form": page,
   "interface.confirm": page,
+  "interface.verify": page,
+  "interface.wizard": page,
   "interface.navigate": page,
   "interface.refresh": page,
   "interface.set_panel": page,
@@ -590,18 +594,54 @@ const registeredDefinitions: Record<FlowRegisteredTaskTypeKey, DefinitionInput> 
     },
     outputs: [output("confirmed", "yes_no"), output("choice", "yes_no")],
   },
+  "interface.verify": {
+    title: "Verify the person",
+    summary:
+      "Asks the person to prove who they are inside the flow, when the next step needs it: signing in again for a recent sign-in (`requires` is recent_sign_in) or the code from their authenticator app for two-step verification (`requires` is two_step). The step is answered at once when they have already done it. The platform checks the proof again where the protected step runs.",
+    runLocations: ["browser"],
+    effect: "interface",
+    properties: {
+      /** recent_sign_in or two_step. */
+      requires: { ...required("builder_key"), default: { type: "text", value: "recent_sign_in" } },
+      /** What the verification is for, in a sentence ("Publishing needs a recent sign-in."). */
+      message: required("message_text"),
+      confirm_label: optional("message_text"),
+    },
+    outputs: [output("confirmed", "yes_no"), output("choice", "yes_no")],
+  },
+  "interface.wizard": {
+    title: "Guided steps",
+    summary:
+      "Shows the flow as steps in one dialog: opens it, or moves it to the current step. The dialogs the flow shows next appear inside it with a step indicator and, where going back is safe, a Back button; `working` shows a progress message until the next dialog. The dialog closes when the flow ends.",
+    runLocations: ["browser"],
+    effect: "interface",
+    properties: {
+      title: required("message_text"),
+      /** The ordered step names, a list of texts. */
+      steps: {
+        ...required("json"),
+        default: { type: "json", value: ["First step", "Second step"] },
+      },
+      /** The current step: one of the names in `steps`. */
+      step: { ...required("message_text"), default: { type: "text", value: "First step" } },
+      /** Shown with a spinner while the flow works, until the next dialog. */
+      working: optional("message_text"),
+    },
+  },
   "interface.navigate": {
     title: "Navigate",
     summary:
-      "Opens a page of this application, or of another application of the organisation, with a record when the page shows one.",
+      "Opens a page of this application, or of another application of the organisation, with a record when the page shows one. With another application and no page, opens that application's home page; `application_root` names that application by its identity (the application a step just installed) instead of its key.",
     runLocations: ["browser"],
     effect: "interface",
     // Without `application` the page is one of this application's pages, resolved when the flow
     // is published. With it, the page is a page key of that other installed application of the same
-    // organisation, resolved against the person's own access when the step runs.
+    // organisation, resolved against the person's own access when the step runs; without a page it
+    // is that application's home page.
     properties: {
       application: optional("application_key"),
-      page: required("page_id"),
+      application_root: optional("record_reference"),
+      page: optional("page_id"),
       parameters: optional("input_map"),
     },
   },

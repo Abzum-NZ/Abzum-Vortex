@@ -115,10 +115,42 @@ export const readApplicationReleaseOffer = async (
   }
 };
 
+/** The home page of the application when the person may open it, else undefined. */
+const readApplicationOpenHref = async (
+  session: IdentitySession,
+  scope: Address & Readonly<{ applicationRootId: ApplicationRootId }>,
+): Promise<string | undefined> => {
+  const applications = await loadPermittedApplicationsAtAddress(
+    session,
+    scope.tenantShortName,
+    scope.organizationShortName,
+  );
+  if (applications.kind !== "available") return undefined;
+  const application = applications.applications.find(
+    (candidate) =>
+      candidate.applicationRootId.toLowerCase() === String(scope.applicationRootId).toLowerCase(),
+  );
+  return application === undefined
+    ? undefined
+    : applicationPageAddressPath(
+        scope.tenantShortName,
+        scope.organizationShortName,
+        application.key,
+        application.homePageKey,
+      );
+};
+
 /** Where the application stands in the builder's organisation, as the App Store's review says it. */
 export type ApplicationReleaseStanding =
   | Readonly<{ kind: "system"; version: string; installedVersion: string }>
-  | Readonly<{ kind: "live"; version: string; rolesWaiting: boolean; appStoreHref: string }>
+  | Readonly<{
+      kind: "live";
+      version: string;
+      rolesWaiting: boolean;
+      appStoreHref: string;
+      /** The application's home page, when the person may open it now (no role means nothing to open). */
+      openHref?: string;
+    }>
   | Readonly<{
       kind: "waiting";
       version: string;
@@ -267,8 +299,16 @@ export const readApplicationReleaseStanding = async (
     return appStoreHref === undefined ? { kind: "unknown" } : { kind: "unknown", appStoreHref };
   switch (value.change) {
     case "current":
-    case "roles":
-      return { kind: "live", version, rolesWaiting: value.change === "roles", appStoreHref };
+    case "roles": {
+      const openHref = await readApplicationOpenHref(session, scope);
+      return {
+        kind: "live",
+        version,
+        rolesWaiting: value.change === "roles",
+        appStoreHref,
+        ...(openHref === undefined ? {} : { openHref }),
+      };
+    }
     case "upgrade":
       return {
         kind: "waiting",

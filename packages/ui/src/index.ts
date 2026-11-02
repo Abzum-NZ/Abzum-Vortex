@@ -31,6 +31,7 @@ export { getAccessibleName } from "./display/display-state-container";
 export { continueFlowEventCycle } from "./flow-runtime/flow-cycle";
 export type { FlowEventCycle } from "./flow-runtime/flow-cycle";
 export { useFlowIntentHost } from "./flow-runtime/flow-intent-host";
+export type { FlowVerificationOptions } from "./flow-runtime/flow-surface-types";
 export {
   createFlowRuntime,
   createFlowRuntimeState,
@@ -49,6 +50,7 @@ export type {
   FlowIntentHost,
   FlowMessageAction,
   FlowMessageIntent,
+  FlowVerification,
 } from "./flow-runtime/intents";
 export { createFlowInvokeClient } from "./flow-runtime/lazy-flow-client";
 export type { PageMessageDraft } from "./flow-runtime/messages";
