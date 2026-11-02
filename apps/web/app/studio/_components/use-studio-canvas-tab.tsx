@@ -1,7 +1,5 @@
 "use client";
 import { Alert, AlertDescription } from "@vortex/ui/components/alert";
-import { useIntentPreload } from "../_lib/use-intent-preload";
-import dynamic from "next/dynamic";
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   applicationSourceDocumentSchema,
@@ -44,11 +42,13 @@ import {
   EmptyDescription,
 } from "@vortex/ui/components/empty";
 import { Button } from "@vortex/ui/components/button";
+import { StudioCanvasPalette, StudioCanvasView } from "@vortex/ui/studio/canvas-view";
 import type {
   StudioCanvasAddRequest,
   StudioCanvasBreakpoint,
   StudioCanvasFrame,
-} from "@vortex/ui/studio/page-puck-editor";
+  StudioPuckProviderProps,
+} from "@vortex/ui/studio/puck-provider";
 import { FirstRecordTypeEmptyState } from "../../_components/first-record-type-empty-state";
 import { readStudioCanvasRecords, readStudioDataRecords } from "../_lib/studio-preview-reader";
 import { readWhenPreviewReady } from "../_lib/studio-preview-gate";
@@ -77,18 +77,10 @@ import type { StudioStructureCommandRunner } from "./use-studio-structure-tab";
 import { StudioUsedIn } from "./studio-used-in";
 import type { StudioModuleOwnerApplication } from "./module-fields-editor";
 import { StudioBlockOutlinePanel } from "./studio-outline-panels";
-import type { StudioRailKey } from "./studio-rail-tabs";
+import { railShowsCanvas, type StudioRailKey } from "./studio-rail-tabs";
 import type { StudioDraft, StudioDraftStep } from "./use-studio-draft";
 import { StudioPageValuesPanel } from "./studio-page-values-panel";
 import type { useStudioDraftTheme } from "./use-studio-draft-theme";
-
-// The Puck editor is the heaviest Studio dependency; load it only when a page is selected.
-const ApplicationPagePuckEditor = dynamic(
-  () =>
-    import("@vortex/ui/studio/page-puck-editor").then((module) => module.ApplicationPagePuckEditor),
-  { ssr: false },
-);
-const preloadPuckEditor = () => import("@vortex/ui/studio/page-puck-editor");
 
 /**
  * The application frame the canvas draws the page inside: the compiled draft's shell, with the
@@ -169,10 +161,6 @@ export function useStudioCanvasTab({
   /** The organisation's applications, which name the owner of a choice from a used Module. */
   applications: readonly StudioModuleOwnerApplication[];
 }>) {
-  useIntentPreload(
-    preloadPuckEditor,
-    "#studio-rail-outline, #studio-rail-blocks, #studio-rail-menu, #studio-rail-theme, [data-studio-rail-panel] [data-tree-key^='page:']",
-  );
   const { organizationId, source, selected, state, view } = draft;
   const rootId = state.rootId;
   const key = draft.saved.key;
@@ -187,7 +175,6 @@ export function useStudioCanvasTab({
   const [appearance, setAppearance] = useState<"light" | "dark">("light");
   // "Who can see this": the role the canvas and its menu are previewed as; null is the builder's view.
   const [viewAs, setViewAs] = useState<string | null>(null);
-  const [paletteHost, setPaletteHost] = useState<HTMLElement | null>(null);
   const [paletteMessage, setPaletteMessage] = useState("");
   const [blockSetup, setBlockSetup] = useState<StudioBlockSetupRequest | null>(null);
   const [notice, setNotice] = useState("");
@@ -197,8 +184,6 @@ export function useStudioCanvasTab({
   useEffect(() => {
     if (draft.locked) setArrangeGrid(false);
   }, [draft.locked, arrangeGrid]);
-  // A block is being dragged on the canvas or from the palette: a collapsed panel gets out of its way.
-  const [dragging, onDragging] = useState(false);
   const [gridStates, setGridStates] = useState<ReadonlyMap<string, StudioCanvasGridState>>(
     new Map(),
   );
@@ -852,8 +837,8 @@ export function useStudioCanvasTab({
         }
         hidden={tab !== "blocks"}
       >
-        {/* The canvas's editor draws the palette here, so its blocks drag with the canvas's own drag and drop. */}
-        <div ref={setPaletteHost} />
+        {/* Drawn inside the workspace's Puck editor, so its blocks drag with the canvas's own drag and drop. */}
+        <StudioCanvasPalette />
         {canvasPage === undefined && (
           <Empty>
             <EmptyHeader>
@@ -1049,71 +1034,7 @@ export function useStudioCanvasTab({
             {/* A newly chosen icon library loads before the canvas draws with it; only the canvas
                 waits, and it draws no placeholder meanwhile. */}
             <Suspense fallback={null}>
-              <ApplicationPagePuckEditor
-                key={`canvas:${canvasPage.id}`}
-                source={source}
-                compiledSource={view.source}
-                platformBlockCatalogue={catalogue}
-                fieldInputControlReleases={fieldInputControlReleases}
-                platformThemeTokens={platformThemeTokens}
-                pageAlias={canvasPage.id}
-                compiledSlots={view.slots?.[canvasPage.id]}
-                frame={canvasFrameFor(
-                  view.frames,
-                  canvasPage.id,
-                  source,
-                  theme.theme,
-                  viewDecisions,
-                )}
-                viewer={
-                  viewAsRole === undefined || viewDecisions === null
-                    ? null
-                    : { roleName: viewAsRole.name, decisions: viewDecisions }
-                }
-                selectedPlacementAlias={
-                  selected?.kind === "placement" ? selected.placementAlias : null
-                }
-                onSelectPlacement={(alias) =>
-                  Promise.resolve(
-                    alias !== null
-                      ? draft.select({
-                          kind: "placement",
-                          placementAlias: alias,
-                        })
-                      : canvasPageRef.current !== undefined &&
-                          draft.select({
-                            kind: "page",
-                            pageAlias: canvasPageRef.current,
-                          }),
-                  )
-                }
-                breakpoint={breakpoint}
-                zoom={canvasZoom}
-                onFitZoom={setFitZoom}
-                appearance={appearance}
-                disabled={draft.locked}
-                compileFailure={view.failure}
-                onChange={applyPuckPageEdit}
-                readRecords={readCanvasRecords}
-                arrangeGrid={arrangeGrid}
-                onArrangeGrid={setArrangeGrid}
-                onArrangeableGrids={setArrangeableGrids}
-                onDragging={onDragging}
-                onGridChange={onGridChange}
-                gridReads={gridReads}
-                updating={draft.updatingCanvas}
-                palette={
-                  addTargets === null
-                    ? undefined
-                    : {
-                        host: paletteHost,
-                        targets: addTargets,
-                        owner: addOwner?.kind ?? "page",
-                        message: paletteMessage,
-                        onAdd: addBlock,
-                      }
-                }
-              />
+              <StudioCanvasView zoom={canvasZoom} onFitZoom={setFitZoom} />
             </Suspense>
           </div>
         )}
@@ -1175,8 +1096,57 @@ export function useStudioCanvasTab({
     </>
   );
 
+  // The one Puck editor around the workspace: the page on the canvas, its draft and its selection.
+  const puck: Omit<StudioPuckProviderProps, "children"> = {
+    source,
+    compiledSource: view.source,
+    platformBlockCatalogue: catalogue,
+    fieldInputControlReleases,
+    platformThemeTokens,
+    pageAlias: canvasPage?.id,
+    compiledSlots: canvasPage === undefined ? undefined : view.slots?.[canvasPage.id],
+    frame:
+      canvasPage === undefined
+        ? undefined
+        : canvasFrameFor(view.frames, canvasPage.id, source, theme.theme, viewDecisions),
+    viewer:
+      viewAsRole === undefined || viewDecisions === null
+        ? null
+        : { roleName: viewAsRole.name, decisions: viewDecisions },
+    selectedPlacementAlias: selected?.kind === "placement" ? selected.placementAlias : null,
+    onSelectPlacement: (alias) =>
+      Promise.resolve(
+        alias !== null
+          ? draft.select({ kind: "placement", placementAlias: alias })
+          : canvasPageRef.current !== undefined &&
+              draft.select({ kind: "page", pageAlias: canvasPageRef.current }),
+      ),
+    canvasShown: railShowsCanvas(tab),
+    breakpoint,
+    appearance,
+    disabled: draft.locked,
+    compileFailure: view.failure,
+    onChange: applyPuckPageEdit,
+    readRecords: readCanvasRecords,
+    arrangeGrid,
+    onArrangeGrid: setArrangeGrid,
+    onArrangeableGrids: setArrangeableGrids,
+    onGridChange,
+    gridReads,
+    updating: draft.updatingCanvas,
+    palette:
+      addTargets === null
+        ? undefined
+        : {
+            targets: addTargets,
+            owner: addOwner?.kind ?? "page",
+            message: paletteMessage,
+            onAdd: addBlock,
+          },
+  };
+
   return {
-    dragging,
+    puck,
     panels,
     inspector: inspectorPanel,
     centre,

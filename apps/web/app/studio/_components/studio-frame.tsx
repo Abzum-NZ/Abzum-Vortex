@@ -42,6 +42,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@vortex/ui/components/t
 import { Separator } from "@vortex/ui/components/separator";
 import { Kbd } from "@vortex/ui/components/kbd";
 import { cn } from "@vortex/ui/lib/utils";
+import { useStudioCanvasDragging } from "@vortex/ui/studio/puck-provider";
 
 /** The one scroll body of a Studio rail panel and its inspector; positioned, so screen-reader-only text stays inside the scroll area. */
 export const STUDIO_RAIL_BODY_CLASS = "relative min-h-0 flex-1 space-y-6 overflow-y-auto px-4 py-3";
@@ -56,8 +57,6 @@ export type StudioRailTab<Key extends string> = Readonly<{
   key: Key;
   label: string;
   icon: VortexIconName;
-  /** The width (in rem) the tab's panel opens at until the person resizes it. */
-  width: number;
   group: "build" | "logic" | "look" | "releases";
 }>;
 
@@ -125,11 +124,11 @@ const storeWidths = (widths: Readonly<Record<string, number>>): void => {
 };
 
 /**
- * Each rail tab asks for the width it needs (a theme gallery is wider than a page tree) and keeps
- * the width the person drags it to, per tab, in this browser. `loaded` turns true once the stored
+ * The panel and the inspector keep the width the person drags them to, in this browser, the same
+ * for every rail tab so the canvas stays where it is. `loaded` turns true once the stored
  * widths are read, so the frame can apply them to panels that were already drawn.
  */
-function useStudioPanelWidths<Key extends string>() {
+function useStudioPanelWidths() {
   const [widths, setWidths] = useState<Record<string, number>>({});
   const [loaded, setLoaded] = useState(false);
   useEffect(() => {
@@ -137,13 +136,13 @@ function useStudioPanelWidths<Key extends string>() {
     setLoaded(true);
   }, []);
   const widthOf = useCallback(
-    (key: Key | "inspector", initial: number): number =>
+    (key: "panel" | "inspector", initial: number): number =>
       key === "inspector"
         ? clampWidth(widths[key] ?? initial, inspectorLimits)
         : clampWidth(widths[key] ?? initial, panelLimits),
     [widths],
   );
-  const setWidth = useCallback((key: Key | "inspector", rem: number) => {
+  const setWidth = useCallback((key: "panel" | "inspector", rem: number) => {
     setWidths((current) => {
       const next = {
         ...current,
@@ -382,10 +381,7 @@ export function StudioFrame<Key extends string>({
   inspector,
   selectionKey,
   inspectorLabel = "Inspector",
-  dragging = false,
 }: Readonly<{
-  /** A block is being dragged: a collapsed panel's overlay gets out of its way until the drop. */
-  dragging?: boolean;
   topBar: ReactNode;
   tabs: readonly StudioRailTab<Key>[];
   activeTab: Key;
@@ -405,10 +401,13 @@ export function StudioFrame<Key extends string>({
   selectionKey: string;
   inspectorLabel?: string;
 }>) {
+  // A block is being dragged, from the palette or on the canvas: a collapsed panel's overlay gets
+  // out of its way until the drop. Puck's own state says so.
+  const dragging = useStudioCanvasDragging();
   const wide = useSyncExternalStore(subscribeWide, readWide, readWideOnServer);
   const viewport = useSyncExternalStore(subscribeViewport, readViewport, readViewportOnServer);
   const dockInspector = viewport >= 1280;
-  const { widthOf, setWidth, loaded } = useStudioPanelWidths<Key>();
+  const { widthOf, setWidth, loaded } = useStudioPanelWidths();
   // The docked panel's and the hover overlay's content is portalled into these hosts, so the rail's
   // vertical Tabs root is not a DOM ancestor of anything a panel, the canvas or the inspector draws
   // (a nested horizontal Tabs would otherwise pick up the vertical rules) while the tab and its
@@ -533,13 +532,8 @@ export function StudioFrame<Key extends string>({
     previousSelection.current = selectionKey;
   }, [selectionKey, wide, dockInspector, focused, hasInspector, hosts]);
   const active = tabs.find((tab) => tab.key === activeTab);
-  const defaultWidth =
-    viewport < 1440
-      ? Math.min(active?.width ?? 17, 16)
-      : viewport >= 1920
-        ? Math.max(active?.width ?? 17, 18)
-        : (active?.width ?? 17);
-  const width = widthOf(activeTab, defaultWidth);
+  // One panel width for every rail tab, so the canvas does not move or resize when the tab changes.
+  const width = widthOf("panel", viewport < 1440 ? 16 : viewport >= 1920 ? 18 : 17);
   const inspectorWidth = widthOf("inspector", viewport >= 1920 ? 24 : viewport >= 1440 ? 22 : 20);
   // The default width follows the window's size class; a stored width does not.
   const sizeClass = viewport < 1440 ? "compact" : viewport >= 1920 ? "large" : "regular";
@@ -556,9 +550,9 @@ export function StudioFrame<Key extends string>({
         const inspectorMoved = movedHandle.current === "inspector";
         const size = (inspectorMoved ? inspectorRef : panelRef).current?.getSize().inPixels;
         if (size !== undefined)
-          setWidth(inspectorMoved ? "inspector" : activeTab, size / pixelsPerRem());
+          setWidth(inspectorMoved ? "inspector" : "panel", size / pixelsPerRem());
       },
-      [activeTab, setWidth, panelRef, inspectorRef],
+      [setWidth, panelRef, inspectorRef],
     );
   // Arrow keys on a handle move its panel by half a rem (two with Shift); Home and End take it to its
   // smallest and largest width.
@@ -589,7 +583,7 @@ export function StudioFrame<Key extends string>({
       event.stopPropagation();
       const clamped = clampWidth(next, limits);
       ref.current?.resize(`${clamped}rem`);
-      setWidth(inspectorHandle ? "inspector" : activeTab, clamped);
+      setWidth(inspectorHandle ? "inspector" : "panel", clamped);
     };
   const choose = (key: Key) => {
     setFocused(false);
@@ -727,7 +721,7 @@ export function StudioFrame<Key extends string>({
               <SidePanel
                 id="studio-panel"
                 panelRef={panelRef}
-                sizeKey={`${activeTab}:${loaded}:${sizeClass}`}
+                sizeKey={`panel:${loaded}:${sizeClass}`}
                 size={width}
                 limits={panelLimits}
               >
@@ -745,7 +739,7 @@ export function StudioFrame<Key extends string>({
           <ResizablePanel id="studio-canvas" minSize="20rem">
             <section
               aria-label="Canvas"
-              className="flex h-full min-h-0 min-w-0 flex-col bg-background"
+              className="relative flex h-full min-h-0 min-w-0 flex-col bg-background"
             >
               {canvas({
                 inspectorOpen:

@@ -5,7 +5,16 @@ import { Button } from "@vortex/ui/components/button";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@vortex/ui/components/tooltip";
 import { ToggleGroup, ToggleGroupItem } from "@vortex/ui/components/toggle-group";
 import { Kbd } from "@vortex/ui/components/kbd";
-import type { StudioCanvasBreakpoint } from "@vortex/ui/studio/page-puck-editor";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@vortex/ui/components/dropdown-menu";
+import type { StudioCanvasBreakpoint } from "@vortex/ui/studio/puck-provider";
 
 const devices: readonly Readonly<{
   value: StudioCanvasBreakpoint;
@@ -76,182 +85,252 @@ export function StudioCanvasToolbar({
   const effectiveZoom = zoom === "fit" ? fitZoom : zoom;
   const zoomOut = [...studioCanvasZooms].reverse().find((step) => step < effectiveZoom);
   const zoomIn = studioCanvasZooms.find((step) => step > effectiveZoom);
+  const arrangeTip = locked
+    ? "Arrange grid columns: the draft is locked"
+    : arrangeGrid || arrangeableGrids
+      ? "Arrange grid columns"
+      : "Arrange grid columns: this page has no data grid with columns yet";
   return (
-    <div className="flex min-h-12 min-w-0 shrink-0 flex-wrap items-center gap-2 border-b border-border bg-background px-4 py-2">
-      <h2 className="min-w-0 flex-1 truncate text-sm font-semibold" title={title}>
-        {title}
-      </h2>
-      <div className="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-1">
-        {showsCanvas && (
-          <>
-            <Tooltip>
-              <TooltipTrigger
-                render={
-                  <Button
-                    type="button"
-                    size="icon-sm"
-                    variant={arrangeGrid ? "secondary" : "ghost"}
-                    aria-label="Arrange grid columns"
-                    aria-pressed={arrangeGrid}
-                    // Stays focusable and hoverable, so its tooltip explains why it is off.
-                    disabled={locked || (!arrangeGrid && !arrangeableGrids)}
-                    focusableWhenDisabled
-                    className="aria-disabled:opacity-50"
-                    onClick={onArrangeGrid}
-                  />
-                }
+    // One row that never wraps. What does not fit a narrow centre moves into the More menu (the
+    // appearance and the grid arrangement) or is dropped (the zoom steps, the title).
+    <div className="@container/toolbar shrink-0 border-b border-border bg-background">
+      <div className="flex h-12 min-w-0 flex-nowrap items-center gap-2 px-4">
+        <h2
+          className="min-w-0 flex-1 truncate text-sm font-semibold @max-[34rem]/toolbar:hidden"
+          title={title}
+        >
+          {title}
+        </h2>
+        <div className="ml-auto flex min-w-0 shrink-0 flex-nowrap items-center gap-1">
+          {showsCanvas && (
+            <>
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <div className="flex w-32 shrink-0 items-center gap-1">
+                      <Icon name="eye" className="shrink-0 text-muted-foreground" />
+                      <StudioOptionControl
+                        value={viewAs.value ?? ""}
+                        aria-label="View as: who can see this"
+                        disabled={false}
+                        unset="Builder"
+                        options={viewAs.roles.map((role) => ({
+                          value: role.key,
+                          label: role.name,
+                        }))}
+                        onChange={(value) => viewAs.onChange(value === "" ? null : value)}
+                      />
+                    </div>
+                  }
+                />
+                <TooltipContent>View as: who can see this</TooltipContent>
+              </Tooltip>
+              <ToggleGroup
+                aria-label="Screen size"
+                size="sm"
+                value={[breakpoint]}
+                onValueChange={(values) => {
+                  const device = devices.find((entry) => entry.value === values[0]);
+                  if (device) onBreakpoint(device.value);
+                }}
               >
-                <Icon name="table-columns" />
-              </TooltipTrigger>
-              <TooltipContent>
-                {locked
-                  ? "Arrange grid columns: the draft is locked"
-                  : arrangeGrid || arrangeableGrids
-                    ? "Arrange grid columns"
-                    : "Arrange grid columns: this page has no data grid with columns yet"}
-              </TooltipContent>
-            </Tooltip>
-            <label className="flex items-center gap-2 text-sm">
-              <span>View as:</span>
-              <StudioOptionControl
-                value={viewAs.value ?? ""}
-                aria-label="Who can see this: view the canvas as a role"
-                disabled={false}
-                unset="Builder"
-                options={viewAs.roles.map((role) => ({ value: role.key, label: role.name }))}
-                onChange={(value) => viewAs.onChange(value === "" ? null : value)}
-              />
-            </label>
-            <ToggleGroup
-              aria-label="Screen size"
-              size="sm"
-              value={[breakpoint]}
-              onValueChange={(values) => {
-                const device = devices.find((entry) => entry.value === values[0]);
-                if (device) onBreakpoint(device.value);
-              }}
-            >
-              {devices.map((device) => (
-                <ToggleGroupItem
-                  key={device.value}
-                  value={device.value}
-                  aria-label={device.label}
-                  title={device.label}
-                  className="size-8"
+                {devices.map((device) => (
+                  <ToggleGroupItem
+                    key={device.value}
+                    value={device.value}
+                    aria-label={device.label}
+                    title={device.label}
+                    className="size-8"
+                  >
+                    <Icon name={device.icon} />
+                  </ToggleGroupItem>
+                ))}
+              </ToggleGroup>
+              <div className="flex items-center gap-1 @max-[46rem]/toolbar:hidden">
+                <ToggleGroup
+                  aria-label="Preview appearance"
+                  size="sm"
+                  value={[appearance]}
+                  onValueChange={(values) => {
+                    const mode = values[0];
+                    if (mode === "light" || mode === "dark") onAppearance(mode);
+                  }}
                 >
-                  <Icon name={device.icon} />
-                </ToggleGroupItem>
-              ))}
-            </ToggleGroup>
-            <ToggleGroup
-              aria-label="Preview appearance"
-              size="sm"
-              value={[appearance]}
-              onValueChange={(values) => {
-                const mode = values[0];
-                if (mode === "light" || mode === "dark") onAppearance(mode);
-              }}
-            >
-              <ToggleGroupItem
-                value="light"
-                aria-label="Light appearance"
-                title="Light appearance"
-                className="size-8"
-              >
-                <Icon name="sun" />
-              </ToggleGroupItem>
-              <ToggleGroupItem
-                value="dark"
-                aria-label="Dark appearance"
-                title="Dark appearance"
-                className="size-8"
-              >
-                <Icon name="moon" />
-              </ToggleGroupItem>
-            </ToggleGroup>
-            <div role="group" aria-label="Canvas zoom" className="flex items-center">
-              <Button
-                type="button"
-                size="icon-sm"
-                variant="ghost"
-                aria-label="Zoom out"
-                disabled={zoomOut === undefined}
-                onClick={() => {
-                  if (zoomOut !== undefined) onZoom(zoomOut);
-                }}
-              >
-                <Icon name="minus" />
-              </Button>
-              <StudioOptionControl
-                aria-label="Canvas zoom"
-                value={String(zoom)}
-                disabled={false}
-                options={[
-                  { value: "fit", label: "Fit" },
-                  ...studioCanvasZooms.map((value) => ({
-                    value: String(value),
-                    label: `${value}%`,
-                  })),
-                ]}
-                onChange={(value) =>
-                  onZoom(value === "fit" ? "fit" : (Number(value) as StudioCanvasZoom))
-                }
-              />
-              <Button
-                type="button"
-                size="icon-sm"
-                variant="ghost"
-                aria-label="Zoom in"
-                disabled={zoomIn === undefined}
-                onClick={() => {
-                  if (zoomIn !== undefined) onZoom(zoomIn);
-                }}
-              >
-                <Icon name="plus" />
-              </Button>
-            </div>
-          </>
-        )}
-        <Tooltip>
-          <TooltipTrigger
-            render={
-              <Button
-                type="button"
-                size="icon-sm"
-                variant={focused ? "secondary" : "ghost"}
-                aria-label="Focus canvas"
-                aria-pressed={focused}
-                onClick={onFocusCanvas}
-              />
-            }
-          >
-            <Icon name="monitor" />
-          </TooltipTrigger>
-          <TooltipContent>
-            Focus canvas <Kbd>Ctrl \\</Kbd>
-          </TooltipContent>
-        </Tooltip>
-        {onToggleInspector !== undefined && (
+                  <ToggleGroupItem
+                    value="light"
+                    aria-label="Light appearance"
+                    title="Light appearance"
+                    className="size-8"
+                  >
+                    <Icon name="sun" />
+                  </ToggleGroupItem>
+                  <ToggleGroupItem
+                    value="dark"
+                    aria-label="Dark appearance"
+                    title="Dark appearance"
+                    className="size-8"
+                  >
+                    <Icon name="moon" />
+                  </ToggleGroupItem>
+                </ToggleGroup>
+                <Tooltip>
+                  <TooltipTrigger
+                    render={
+                      <Button
+                        type="button"
+                        size="icon-sm"
+                        variant={arrangeGrid ? "secondary" : "ghost"}
+                        aria-label="Arrange grid columns"
+                        aria-pressed={arrangeGrid}
+                        // Stays focusable and hoverable, so its tooltip explains why it is off.
+                        disabled={locked || (!arrangeGrid && !arrangeableGrids)}
+                        focusableWhenDisabled
+                        className="aria-disabled:opacity-50"
+                        onClick={onArrangeGrid}
+                      />
+                    }
+                  >
+                    <Icon name="table-columns" />
+                  </TooltipTrigger>
+                  <TooltipContent>{arrangeTip}</TooltipContent>
+                </Tooltip>
+              </div>
+              <div className="@min-[46rem]/toolbar:hidden">
+                <DropdownMenu>
+                  <Tooltip>
+                    <TooltipTrigger
+                      render={
+                        <DropdownMenuTrigger
+                          render={
+                            <Button
+                              type="button"
+                              size="icon-sm"
+                              variant="ghost"
+                              aria-label="More canvas controls"
+                            />
+                          }
+                        />
+                      }
+                    >
+                      <Icon name="more-horizontal" />
+                    </TooltipTrigger>
+                    <TooltipContent>Appearance and grid arrangement</TooltipContent>
+                  </Tooltip>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuRadioGroup
+                      value={appearance}
+                      onValueChange={(mode) => {
+                        if (mode === "light" || mode === "dark") onAppearance(mode);
+                      }}
+                    >
+                      <DropdownMenuRadioItem value="light">
+                        <Icon name="sun" />
+                        Light appearance
+                      </DropdownMenuRadioItem>
+                      <DropdownMenuRadioItem value="dark">
+                        <Icon name="moon" />
+                        Dark appearance
+                      </DropdownMenuRadioItem>
+                    </DropdownMenuRadioGroup>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      disabled={locked || (!arrangeGrid && !arrangeableGrids)}
+                      onClick={onArrangeGrid}
+                    >
+                      <Icon name="table-columns" />
+                      {arrangeGrid ? "Stop arranging grid columns" : "Arrange grid columns"}
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+              <div role="group" aria-label="Canvas zoom" className="flex items-center">
+                <Button
+                  type="button"
+                  size="icon-sm"
+                  variant="ghost"
+                  aria-label="Zoom out"
+                  className="@max-[40rem]/toolbar:hidden"
+                  disabled={zoomOut === undefined}
+                  onClick={() => {
+                    if (zoomOut !== undefined) onZoom(zoomOut);
+                  }}
+                >
+                  <Icon name="minus" />
+                </Button>
+                <div className="w-20 shrink-0">
+                  <StudioOptionControl
+                    aria-label="Canvas zoom"
+                    value={String(zoom)}
+                    disabled={false}
+                    options={[
+                      { value: "fit", label: "Fit" },
+                      ...studioCanvasZooms.map((value) => ({
+                        value: String(value),
+                        label: `${value}%`,
+                      })),
+                    ]}
+                    onChange={(value) =>
+                      onZoom(value === "fit" ? "fit" : (Number(value) as StudioCanvasZoom))
+                    }
+                  />
+                </div>
+                <Button
+                  type="button"
+                  size="icon-sm"
+                  variant="ghost"
+                  aria-label="Zoom in"
+                  className="@max-[40rem]/toolbar:hidden"
+                  disabled={zoomIn === undefined}
+                  onClick={() => {
+                    if (zoomIn !== undefined) onZoom(zoomIn);
+                  }}
+                >
+                  <Icon name="plus" />
+                </Button>
+              </div>
+            </>
+          )}
           <Tooltip>
             <TooltipTrigger
               render={
                 <Button
                   type="button"
                   size="icon-sm"
-                  variant={inspectorOpen ? "secondary" : "ghost"}
-                  aria-label="Inspector"
-                  aria-pressed={inspectorOpen}
-                  onClick={onToggleInspector}
+                  variant={focused ? "secondary" : "ghost"}
+                  aria-label="Focus canvas"
+                  aria-pressed={focused}
+                  onClick={onFocusCanvas}
                 />
               }
             >
-              <Icon name="panel-left" className="rotate-180" />
+              <Icon name="monitor" />
             </TooltipTrigger>
             <TooltipContent>
-              Inspector <Kbd>Ctrl .</Kbd>
+              Focus canvas <Kbd>Ctrl \\</Kbd>
             </TooltipContent>
           </Tooltip>
-        )}
+          {onToggleInspector !== undefined && (
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <Button
+                    type="button"
+                    size="icon-sm"
+                    variant={inspectorOpen ? "secondary" : "ghost"}
+                    aria-label="Inspector"
+                    aria-pressed={inspectorOpen}
+                    onClick={onToggleInspector}
+                  />
+                }
+              >
+                <Icon name="panel-left" className="rotate-180" />
+              </TooltipTrigger>
+              <TooltipContent>
+                Inspector <Kbd>Ctrl .</Kbd>
+              </TooltipContent>
+            </Tooltip>
+          )}
+        </div>
       </div>
     </div>
   );
