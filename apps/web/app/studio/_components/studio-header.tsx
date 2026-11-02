@@ -223,11 +223,9 @@ export function StudioHeader({
       ) : install === "install" || install === "upgrade" ? (
         <IconAction
           tip={
-            publishDisabled
-              ? "Resolve the blocked draft before installing"
-              : install === "install"
-                ? "Install the published version in this organisation"
-                : "Upgrade this organisation to the published version"
+            install === "install"
+              ? "Install the published version in this organisation"
+              : "Upgrade this organisation to the published version"
           }
           type="button"
           variant="ghost"
@@ -236,10 +234,10 @@ export function StudioHeader({
             install === "install" ? "Install in this organisation" : "Upgrade this organisation"
           }
           aria-busy={installPending}
-          disabled={publishDisabled || installPending}
+          disabled={installPending}
           onClick={onInstall}
         >
-          {installPending ? <Spinner /> : <Icon name="arrow-down" />}
+          {installPending ? <Spinner /> : <Icon name="package-plus" />}
         </IconAction>
       ) : null}
       <IconAction

@@ -76,6 +76,7 @@ export const VORTEX_ICON_NAMES = [
   "book-open",
   "mail",
   "megaphone",
+  "package-plus",
 ] as const;
 
 export const vortexIconNameSchema = z.enum(VORTEX_ICON_NAMES);

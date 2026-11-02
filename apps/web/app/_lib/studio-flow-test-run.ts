@@ -24,10 +24,7 @@ import { installedReleaseCatalogue } from "./definition-catalogue";
 import { getQueryContinuationKey } from "./query-continuation-key";
 import { appTelemetry } from "./server-composition";
 import { readStudioPreviewState, studioPreviewRunsDraft } from "./studio-application-preview";
-import {
-  finishedNotice,
-  refusalNotices,
-} from "../[tenantShortName]/[organizationShortName]/[applicationKey]/[[...pageAddress]]/_components/application-page-view/notices";
+import { finishedNotice, refusalNotices } from "./flow-run-notices";
 
 export const studioFlowTestRunRequestSchema = z
   .object({

@@ -16,7 +16,14 @@ type MessageActionBinding = Readonly<{
   taskId: string;
 }>;
 
-/** Derives finite message-action bindings from the installed flows and an authored binding. */
+/**
+ * Derives finite message-action bindings from the installed flows and an authored binding, one per
+ * action a message offers. A derived binding is gated by the control of the binding it came from;
+ * it is never wider than what the person could already start from that control. What the target
+ * flow changes is decided again by its protected operations for the person and the record (the
+ * gate for Install or upgrade is the installation authority, not the button), and a shell that
+ * knows an action is not the person's may leave it out of the message it shows.
+ */
 export function messageActionBindings(
   origin: ComponentFlowBinding,
   flows: readonly FlowDefinition[],

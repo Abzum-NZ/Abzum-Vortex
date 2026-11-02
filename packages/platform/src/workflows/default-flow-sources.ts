@@ -1,4 +1,5 @@
 import type { SourceFlow } from "./flow-source-contracts";
+import { showMessageTaskVersion } from "./flow-message-actions";
 
 /**
  * The generated default flows (architecture decision 2): the default Save of a form is one
@@ -65,7 +66,7 @@ const showMessage = (
   ({
     id,
     type: "interface.show_message",
-    version: taskVersion,
+    version: showMessageTaskVersion,
     properties: {
       message: typeof text === "string" ? textLiteral(text) : text,
       target: textLiteral(options.target ?? "toast"),

@@ -5,7 +5,10 @@ import {
   organizationIdSchema,
   organizationSelectionCandidateSchema,
 } from "@vortex/platform/schema";
-import { readCurrentOrganizationAppStoreAddressAfterAuthorization } from "@vortex/platform/server";
+import {
+  createBuilderAuthority,
+  readCurrentOrganizationAppStoreAddressAfterAuthorization,
+} from "@vortex/platform/server";
 import type { PlacementFlowBinding } from "@vortex/ui";
 import { resolveIdentitySession } from "../auth/_lib/session-server";
 import { resolveApplicationAddress } from "./application-address";
@@ -14,6 +17,7 @@ import { loadApplicationPage } from "./application-page";
 import { pageSubjectParameter } from "./application-page/placement-helpers";
 import { loadOrganizationLauncher } from "./organization-context";
 import { humanOrganizationRequests } from "./server-composition";
+import { platformPermissionSource } from "./platform-permission-source";
 import { studioActionTokens, type StudioActionToken } from "./studio-action-tokens";
 
 /**
@@ -31,6 +35,8 @@ export type StudioActionFlows = Readonly<{
   /** The address parameters the page is opened with: the record it is about. */
   pageParameters: Readonly<Record<string, string>>;
   subject: Readonly<{ recordId: string; revision: number }>;
+  /** Whether this person may install and upgrade applications here; the editor offers Install only then. */
+  mayInstall: boolean;
   flowTimeZone: string | undefined;
   /** Every placement's bindings, authored and derived (a message's action), by placement. */
   bindings: Readonly<Record<string, readonly PlacementFlowBinding[]>>;
@@ -77,7 +83,9 @@ export const readStudioActionFlows = async (
   );
   if (appStore.kind === "temporarily_unavailable") return { kind: "temporarily_unavailable" };
   if (appStore.kind !== "available" || appStore.value === null || appStore.value === "invalid") {
-    console.error(
+    // A person with no access to the organisation settings is refused, which is an answer; an unset or invalid address is a configuration defect.
+    const log = appStore.kind === "unavailable" ? console.info : console.error;
+    log(
       `[studio] action flows: App Store address ${appStore.kind === "available" ? (appStore.value ?? "not set") : appStore.kind}`,
     );
     return { kind: "unavailable" };
@@ -111,10 +119,28 @@ export const readStudioActionFlows = async (
   if (page.kind === "temporarily_unavailable") return page;
   const subject = page.kind === "available" ? page.model.subject : undefined;
   if (page.kind !== "available" || subject === undefined) {
-    console.error(`[studio] action flows: the App Store page answered ${page.kind}`);
+    // A page or record the person may not open answers "unavailable"; anything else is a defect.
+    (page.kind === "unavailable" ? console.info : console.error)(
+      `[studio] action flows: the App Store page answered ${page.kind}`,
+    );
     return { kind: "unavailable" };
   }
   const { model } = page;
+  // The same decision the App Store makes before it shows an install control.
+  const install = await humanOrganizationRequests().run(
+    session,
+    organizationSelectionCandidateSchema.parse({ organizationId: organization.data }),
+    async (transaction, scope) =>
+      (
+        await createBuilderAuthority({
+          transaction,
+          scope,
+          targetFacts: async () => ({ isSystemApplication: false }),
+          permissions: platformPermissionSource,
+        }).require({ kind: "application_management" })
+      ).outcome === "allowed",
+  );
+  if (install.kind === "temporarily_unavailable") return { kind: "temporarily_unavailable" };
   const startable: Partial<Record<StudioActionToken, { placementId: string; bindingId: string }>> =
     {};
   for (const [placementId, bindings] of Object.entries(model.bindings))
@@ -141,6 +167,7 @@ export const readStudioActionFlows = async (
       },
       pageParameters: { [pageSubjectParameter]: root.data },
       subject,
+      mayInstall: install.kind === "available" && install.value,
       flowTimeZone: model.invocation.flowTimeZone,
       bindings: model.bindings,
       startable,

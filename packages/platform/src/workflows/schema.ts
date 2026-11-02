@@ -5,6 +5,7 @@ export * from "./flow-effects";
 export * from "./flow-confirmation-limits";
 export * from "./flow-confirm-details";
 export * from "./flow-values";
+export * from "./flow-message-actions";
 export * from "./flow-warning-notice";
 export * from "./form-answer";
 export * from "./flow-invocation-contracts";

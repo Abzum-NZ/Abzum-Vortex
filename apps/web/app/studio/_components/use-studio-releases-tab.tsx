@@ -198,7 +198,12 @@ export function useStudioReleasesTab({
       if (action === "publish") setHistoryGeneration((generation) => generation + 1);
     },
   });
-  const startAction = async (action: StudioActionToken): Promise<boolean> => {
+  const startAction = async (
+    action: StudioActionToken,
+    origin: "person" | "agent" = "person",
+  ): Promise<boolean> => {
+    // Installing moves the organisation to the published version; the draft is not involved.
+    if (action === "install") return actions.start(action, origin);
     if (!(await latest.current.flush())) {
       studioNotice(
         `Your latest change is not saved. Resolve it, then ${action === "publish" ? "publish" : "install"}.`,
@@ -206,7 +211,7 @@ export function useStudioReleasesTab({
       );
       return false;
     }
-    return actions.start(action);
+    return actions.start(action, origin);
   };
   const openPublish = () => {
     void startAction("publish");
@@ -384,7 +389,7 @@ export function useStudioReleasesTab({
               <Button
                 type="button"
                 size="sm"
-                disabled={draft.locked || actions.pending !== undefined}
+                disabled={actions.pending !== undefined}
                 onClick={openInstall}
               >
                 {standingShown.install}

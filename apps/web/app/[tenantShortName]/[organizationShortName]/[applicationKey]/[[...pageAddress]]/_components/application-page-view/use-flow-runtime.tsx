@@ -41,7 +41,7 @@ import type { ApplicationPageModel } from "../../../../../../_lib/application-pa
 import type { SubmittedForm, PageMessageDraft } from "./types";
 import type { ControlDrafts } from "../../../_components/application-frame-state";
 import { formSurfaceComposition, runtimeInputWithFormDefault } from "./form-surface";
-import { unavailableNotice } from "./notices";
+import { unavailableNotice } from "../../../../../../_lib/flow-run-notices";
 
 export function useFlowRuntime({
   application,

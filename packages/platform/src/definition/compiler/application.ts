@@ -30,7 +30,7 @@ import {
   type DefinitionCompilerRefusalCode,
 } from "../compilation-error";
 import { flowBindingSettingsSchema } from "../application-flow-bindings";
-import { flowAsksBeforeChanging } from "../flow-asks-first";
+import { flowAsksBeforeChanging, flowNamesPageForm } from "../flow-asks-first";
 import {
   compileFlowPlans,
   flowBindingPlanIssue,
@@ -657,10 +657,11 @@ function compileApplicationFlowBindings(
     const settings = flowBindingSettingsSchema.safeParse(binding.settings);
     if (!settings.success)
       fail("vortex.definition.application_flow_binding_inputs", "invalid_value", location);
-    // Another surface may start a flow only when it is an action that asks before it changes anything.
+    // Another surface may start a flow only when it is an action that asks before it changes anything
+    // and shows only forms it declares itself, since that surface has no page to place a form on.
     if (
       settings.data.startableAs !== undefined &&
-      (binding.event !== "action" || !flowAsksBeforeChanging(flow))
+      (binding.event !== "action" || !flowAsksBeforeChanging(flow) || flowNamesPageForm(flow))
     )
       fail("vortex.definition.application_flow_binding_inputs", "invalid_value", location);
     const resolveForm = (form: string) => resolution.id(definitionKey, "block_placement", form);

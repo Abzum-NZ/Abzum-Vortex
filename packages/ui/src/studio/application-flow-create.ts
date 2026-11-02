@@ -3,6 +3,7 @@ import {
   recordsTableRowActionsFeature,
   recordsTableRowEditEvent,
   isRecord,
+  flowTaskRegistry,
 } from "@vortex/platform/schema";
 import {
   applicationSourceDocumentSchema,
@@ -1109,7 +1110,7 @@ export const applyStudioFlowCreate = (
           {
             id: "show_message",
             type: "interface.show_message",
-            version: "1.0.0",
+            version: flowTaskRegistry["interface.show_message"].version,
             // The message is headed by what the person was doing: the flow's name.
             properties: {
               message: message(step.message.trim()),

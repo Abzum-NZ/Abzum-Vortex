@@ -295,7 +295,7 @@ export function ApplicationDraftAgentTools({
   /** The saved draft the preview runs; null while edits or requests are pending. */
   readSavedDraft: () => SavedDraftContext | null;
   /** Saves the latest edits, then opens one App Store action flow over the editor. */
-  startAction: (action: StudioActionToken) => Promise<boolean>;
+  startAction: (action: StudioActionToken, origin: "agent") => Promise<boolean>;
 }) {
   const [runtime, setRuntime] = useState<ApplicationWebMcpRuntime>();
   const running = useRef(false);
@@ -561,7 +561,7 @@ export function ApplicationDraftAgentTools({
         }
         if (found.name === "start_application_action") {
           const input = parsed.data as { action: StudioActionToken };
-          const started = await actions.current.startAction(input.action);
+          const started = await actions.current.startAction(input.action, "agent");
           return started
             ? {
                 outcome: "started",

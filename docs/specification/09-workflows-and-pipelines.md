@@ -80,7 +80,7 @@ The registered task types:
 | Query | Query records (server and back end); Read selected record fields and Acquire record pin identity (server) | Read |
 | Data | Calculate, Set variable and Build list (page, server and back end); Format value and Build record link value (server and back end) | Pure |
 | Save rules | Require field, Warn and Refuse save | Server, in the save transaction | Pure |
-| Interface | Show message (target, severity, one optional action), Clear message, Set value, Validate form, Show form, Confirm, Navigate, Refresh, Open or close panel and Set filter | Page | Interface |
+| Interface | Show message (target, severity, and `actions`: up to three in a dialog and one elsewhere, each `{label, flow, inputs}` that starts a page flow through a derived binding gated like any press), Clear message, Set value, Validate form, Show form, Confirm, Navigate, Refresh, Open or close panel and Set filter | Page | Interface |
 | Back end | Run on back end (`await` or `start`) | Server and back end; the child runs on the back-end adapter | Background start |
 | Guided form | Save guided-form draft and Discard guided-form draft | Server | Change |
 | Events | Announce event | Server, in the save transaction for the record being saved | Change |
@@ -110,6 +110,7 @@ The registry excludes arbitrary SQL, JavaScript, shell commands, database creden
 
 - A flow holds at most 100 tasks including nested tasks, nested no deeper than five levels.
 - One interactive or back-end run has at most 100 **For each** items, at most 25 protected operations, at most 10 seconds of server time and a **Run flow** depth of at most 3. A bulk action over up to 200 selected records is one set-based transaction; "all matching" beyond 200 runs as `backend.run` in `start` mode with per-batch transactions.
+- An action binding may declare `startableAs`, a token by which another surface (Studio’s editor, the Studio agent) starts its flow in place on the person’s own session, as a press would. Only a flow that asks before it first changes anything (a confirmation or a form comes first) may declare it, and a flow that names a page form is refused, because no other surface has that page. The server never reads the token: the flow endpoint decides access again.
 - An exclusive binding declares a timeout; `latest_wins` is allowed only on a binding whose plan changes no data.
 - Every external side effect has a stable duplicate-protection key.
 - Retries use bounded delay and a task-specific maximum attempt count.

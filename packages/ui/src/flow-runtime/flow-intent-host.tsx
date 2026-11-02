@@ -71,6 +71,8 @@ export type FlowIntentHostOptions = Readonly<{
   navigation: LinkNavigationEnvironment;
   state: FlowRuntimeState;
   onMessageAction: (message: FlowMessageIntent, action: FlowMessageAction) => void;
+  /** Whether this person is offered an action; a shell that knows one is not theirs leaves it out. */
+  actionOffered?: (action: FlowMessageAction) => boolean;
   refresh?: FlowIntentHost["refresh"];
   setPanel?: FlowIntentHost["setPanel"];
   setFilter?: FlowIntentHost["setFilter"];
@@ -320,19 +322,21 @@ function FlowSurfaceHost({
         onDismiss={() => settle()}
         actions={
           <>
-            {(message.actions ?? []).map((action) => (
-              <Button
-                key={`${action.flow}:${action.label}`}
-                type="button"
-                variant="secondary"
-                onClick={() => {
-                  settle();
-                  optionsRef.current.onMessageAction(message, action);
-                }}
-              >
-                {action.label}
-              </Button>
-            ))}
+            {(message.actions ?? [])
+              .filter((action) => optionsRef.current.actionOffered?.(action) !== false)
+              .map((action) => (
+                <Button
+                  key={`${action.flow}:${action.label}`}
+                  type="button"
+                  variant="secondary"
+                  onClick={() => {
+                    settle();
+                    optionsRef.current.onMessageAction(message, action);
+                  }}
+                >
+                  {action.label}
+                </Button>
+              ))}
             <Button type="button" onClick={() => settle()}>
               OK
             </Button>
@@ -430,6 +434,9 @@ export function useFlowIntentHost(
       showMessage: (message, signal) => {
         const state = optionsRef.current.state;
         const id = crypto.randomUUID();
+        const offeredAction = message.actions?.find(
+          (action) => optionsRef.current.actionOffered?.(action) !== false,
+        );
         state.messages.show({
           id,
           target: message.target,
@@ -441,13 +448,13 @@ export function useFlowIntentHost(
             ? {}
             : { dismissAfterMs: message.dismissAfterMs }),
           // Outside a dialog a message offers one action.
-          ...(message.actions?.[0] === undefined
+          ...(offeredAction === undefined
             ? {}
             : {
                 action: {
                   kind: "flow" as const,
-                  label: message.actions[0].label,
-                  run: () => optionsRef.current.onMessageAction(message, message.actions![0]!),
+                  label: offeredAction.label,
+                  run: () => optionsRef.current.onMessageAction(message, offeredAction),
                 },
               }),
         });

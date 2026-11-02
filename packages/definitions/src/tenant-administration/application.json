@@ -1,5 +1,5 @@
 {
-  "source_contract_version": "4.6.0",
+  "source_contract_version": "4.7.0",
   "root_alias": "app_tenant_administration",
   "key": "vortex.app.tenant_administration",
   "kind": "application",
@@ -1401,7 +1401,7 @@
           {
             "id": "done",
             "type": "interface.show_message",
-            "version": "1.0.0",
+            "version": "1.1.0",
             "properties": {
               "message": {
                 "kind": "literal",
@@ -1639,7 +1639,7 @@
           {
             "id": "done",
             "type": "interface.show_message",
-            "version": "1.0.0",
+            "version": "1.1.0",
             "properties": {
               "message": {
                 "kind": "literal",
@@ -1868,7 +1868,7 @@
                   {
                     "id": "message_committed",
                     "type": "interface.show_message",
-                    "version": "1.0.0",
+                    "version": "1.1.0",
                     "properties": {
                       "message": {
                         "kind": "literal",
@@ -1912,7 +1912,7 @@
                   {
                     "id": "message_conflict",
                     "type": "interface.show_message",
-                    "version": "1.0.0",
+                    "version": "1.1.0",
                     "properties": {
                       "message": {
                         "kind": "literal",
@@ -1956,7 +1956,7 @@
                   {
                     "id": "message_refused",
                     "type": "interface.show_message",
-                    "version": "1.0.0",
+                    "version": "1.1.0",
                     "properties": {
                       "message": {
                         "kind": "literal",
@@ -2000,7 +2000,7 @@
                   {
                     "id": "message_validation",
                     "type": "interface.show_message",
-                    "version": "1.0.0",
+                    "version": "1.1.0",
                     "properties": {
                       "message": {
                         "kind": "literal",

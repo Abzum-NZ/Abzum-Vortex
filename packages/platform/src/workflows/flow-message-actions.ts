@@ -1,5 +1,8 @@
 import type { FlowValue } from "./flow-values";
 
+/** The version of the Show message step that carries `actions` (1.0.0 carried one action in three properties). */
+export const showMessageTaskVersion = "1.1.0";
+
 /** A dialog offers at most this many actions; any other message target offers one. */
 export const flowMessageActionLimits = Object.freeze({ dialog: 3, other: 1 });
 

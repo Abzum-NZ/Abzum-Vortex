@@ -2,6 +2,7 @@ import type { z } from "zod";
 import type { FlowTaskEffectClass, safeFlowResultKindSchema } from "./flow-effects";
 import { flowControlTaskTypeKeys } from "./flow-task-tree";
 import { flowMaximumServerSeconds } from "./flow-limits";
+import { showMessageTaskVersion } from "./flow-message-actions";
 import type {
   FlowStepRuns,
   FlowTaskPropertyType,
@@ -143,6 +144,8 @@ type DefinitionInput = {
   properties?: Record<string, Property>;
   outputs?: readonly Output[];
   redaction?: "identifiers_only" | "safe_fields" | "no_payload";
+  /** The task version when it is not the shared first one. */
+  version?: string;
 };
 
 const allLocations = ["browser", "server", "transaction"] as const;
@@ -500,6 +503,7 @@ const registeredDefinitions: Record<FlowRegisteredTaskTypeKey, DefinitionInput> 
 
   // Interface tasks: browser-only, answered by the page runner.
   "interface.show_message": {
+    version: showMessageTaskVersion,
     title: "Show message",
     summary:
       "Shows a safe message: in a dialog, a toast, the page banner, under a component or in a message slot.",
@@ -636,7 +640,7 @@ const buildDefinition = (type: string, input: DefinitionInput): FlowTaskTypeDefi
   return {
     type,
     category,
-    version: "1.0.0",
+    version: input.version ?? "1.0.0",
     title: input.title,
     summary: input.summary,
     runLocations: [...input.runLocations],

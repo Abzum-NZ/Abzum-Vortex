@@ -60,7 +60,8 @@ const firstInstallApplicationReleaseSetCommandSchema = z
   .strict();
 
 const parseFirstInstallHumanContext = (candidate: unknown): FirstInstallHumanContext => {
-  if (!isRecord(candidate)) throw new DefinitionError("DEFINITION_CONTEXT_REFUSED");
+  // A context that is not a human web context at all is a caller defect, not a refusal.
+  if (!isRecord(candidate)) throw new DefinitionError("DEFINITION_CONTEXT_INVALID");
   const { channel: rawChannel, ...sessionContextCandidate } = candidate;
   const channel = protectedOperationChannelSchema.safeParse(rawChannel);
   const parsedContext = sessionContextSchema.safeParse(sessionContextCandidate);
@@ -71,7 +72,7 @@ const parseFirstInstallHumanContext = (candidate: unknown): FirstInstallHumanCon
     parsedContext.data.callerKind !== "human" ||
     parsedContext.data.applicationRootId !== undefined
   )
-    throw new DefinitionError("DEFINITION_CONTEXT_REFUSED");
+    throw new DefinitionError("DEFINITION_CONTEXT_INVALID");
   return parsedContext.data;
 };
 

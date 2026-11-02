@@ -16,7 +16,12 @@ import type {
   PageMessageDraft,
   TableContinuationTarget,
 } from "./types";
-import { unavailableNotice, finishedRunNotice, ruleMessagesOf, outcomeNotices } from "./notices";
+import {
+  unavailableNotice,
+  finishedRunNotice,
+  ruleMessagesOf,
+  outcomeNotices,
+} from "../../../../../../_lib/flow-run-notices";
 import { formSurfaceComposition, visibleOwningFormFieldLabel } from "./form-surface";
 
 export function useApplyDispatch({

@@ -21,7 +21,7 @@ import { bindingCallerInputs } from "../../_lib/binding-caller-inputs";
 import type { StudioActionFlows } from "../../_lib/studio-action-flows";
 import type { StudioActionToken } from "../../_lib/studio-action-tokens";
 import { resolveApplicationPagePathAction } from "../../[tenantShortName]/[organizationShortName]/[applicationKey]/frame-actions";
-import { finishedRunNotice } from "../../[tenantShortName]/[organizationShortName]/[applicationKey]/[[...pageAddress]]/_components/application-page-view/notices";
+import { finishedRunNotice } from "../../_lib/flow-run-notices";
 import { readStudioActionFlows } from "../action-flow-actions";
 import { studioNotice } from "./studio-save-state";
 
@@ -60,7 +60,8 @@ export function useStudioActionFlows({
   /** A flow committed a change: the editor's own reads of the release standing are now old. */
   onCommitted: (action: StudioActionToken | undefined) => void;
 }>): Readonly<{
-  start: (action: StudioActionToken) => Promise<boolean>;
+  /** `origin` says who started it: the person, or the Studio agent for them (recorded as such). */
+  start: (action: StudioActionToken, origin?: "person" | "agent") => Promise<boolean>;
   /** The action whose page is being read before its first dialog opens. */
   pending: StudioActionToken | undefined;
   element: ReactElement;
@@ -94,6 +95,20 @@ export function useStudioActionFlows({
     holding.current += on ? 1 : -1;
     latest.current.hold(holding.current > 0);
   }, []);
+
+  /** The action a flow is the start of, when it is one of the editor's. */
+  const actionOfFlow = (flowId: string): StudioActionToken | undefined => {
+    const flows = active.current?.flows;
+    if (flows === undefined) return undefined;
+    for (const [token, target] of Object.entries(flows.startable))
+      if (
+        flows.bindings[target.placementId]?.some(
+          (held) => held.bindingId === target.bindingId && sameId(held.flowId, flowId),
+        )
+      )
+        return token as StudioActionToken;
+    return undefined;
+  };
 
   const addressOf = useCallback((applicationKey: string, pageKey: string): string | undefined => {
     const flows = active.current?.flows;
@@ -142,7 +157,7 @@ export function useStudioActionFlows({
           tell("The outcome is not known. Check the Releases tab before trying again.");
           return;
         case "refused":
-          tell(result.reason ?? notAvailable);
+          tell(result.reason ?? (action === undefined ? notAvailable : refusedSentence[action]));
           return;
         case "unavailable":
         case "cells_refused":
@@ -230,6 +245,11 @@ export function useStudioActionFlows({
     navigation,
     state: runtimeState,
     onMessageAction: (message, action) => messageActionRef.current(message, action),
+    // Install or upgrade is left out of a confirmation for a person who may not install.
+    actionOffered: (offered) =>
+      active.current === undefined ||
+      active.current.flows.mayInstall ||
+      actionOfFlow(offered.flow) !== "install",
   });
 
   // A message's action (Install or upgrade, after a publish) runs the flow it names through the
@@ -263,7 +283,7 @@ export function useStudioActionFlows({
         message.subject ?? current.flows.subject,
         message.sourceTablePlacementId,
       )
-      .then((result) => report(result, "install"))
+      .then((result) => report(result, actionOfFlow(offered.flow)))
       .catch((error: unknown) => {
         console.error(`[studio] action flow failed: ${describeFailure(error)}`);
         tell(notAvailable);
@@ -272,7 +292,7 @@ export function useStudioActionFlows({
   };
 
   const start = useCallback(
-    async (action: StudioActionToken): Promise<boolean> => {
+    async (action: StudioActionToken, origin: "person" | "agent" = "person"): Promise<boolean> => {
       if (running.current) return false;
       running.current = true;
       toast.dismiss(noticeId);
@@ -295,7 +315,7 @@ export function useStudioActionFlows({
             : flows.bindings[target.placementId]?.find(
                 (held) => held.bindingId === target.bindingId,
               );
-        if (binding === undefined) {
+        if (binding === undefined || (action === "install" && !flows.mayInstall)) {
           tell(refusedSentence[action]);
           return false;
         }
@@ -328,6 +348,8 @@ export function useStudioActionFlows({
             address: flows.address,
             pageInputs: () => ({ parameters: flows.pageParameters, controls: {} }),
             subject: flows.subject,
+            // The agent's channel records that the Studio agent started it, for the person.
+            ...(origin === "agent" ? { endpoint: "/api/flows/invoke/webmcp" } : {}),
           },
           async () => (loaded) => loaded,
         );

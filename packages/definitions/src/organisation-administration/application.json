@@ -1,5 +1,5 @@
 {
-  "source_contract_version": "4.6.0",
+  "source_contract_version": "4.7.0",
   "root_alias": "app_organisation_administration",
   "key": "vortex.app.organisation_administration",
   "kind": "application",
@@ -2475,7 +2475,7 @@
           {
             "id": "done",
             "type": "interface.show_message",
-            "version": "1.0.0",
+            "version": "1.1.0",
             "properties": {
               "message": {
                 "kind": "literal",
@@ -2586,7 +2586,7 @@
           {
             "id": "done",
             "type": "interface.show_message",
-            "version": "1.0.0",
+            "version": "1.1.0",
             "properties": {
               "message": {
                 "kind": "literal",
@@ -2760,7 +2760,7 @@
           {
             "id": "invitation_sent",
             "type": "interface.show_message",
-            "version": "1.0.0",
+            "version": "1.1.0",
             "properties": {
               "message": {
                 "kind": "formula",
@@ -2968,7 +2968,7 @@
           {
             "id": "invitation_sent",
             "type": "interface.show_message",
-            "version": "1.0.0",
+            "version": "1.1.0",
             "properties": {
               "message": {
                 "kind": "literal",
@@ -3072,7 +3072,7 @@
           {
             "id": "done",
             "type": "interface.show_message",
-            "version": "1.0.0",
+            "version": "1.1.0",
             "properties": {
               "message": {
                 "kind": "literal",
@@ -3183,7 +3183,7 @@
           {
             "id": "health_result_message",
             "type": "interface.show_message",
-            "version": "1.0.0",
+            "version": "1.1.0",
             "properties": {
               "message": {
                 "kind": "reference",
@@ -3381,7 +3381,7 @@
           {
             "id": "invitation_sent",
             "type": "interface.show_message",
-            "version": "1.0.0",
+            "version": "1.1.0",
             "properties": {
               "message": {
                 "kind": "literal",

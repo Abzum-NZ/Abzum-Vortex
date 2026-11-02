@@ -1,6 +1,5 @@
 import { flowRefusalFeedbackSentences, type FlowRefusalFeedback } from "@vortex/platform/schema";
-import type { FormFlowFeedback } from "@vortex/ui";
-import type { PageMessageDraft } from "./types";
+import type { FormFlowFeedback, PageMessageDraft } from "@vortex/ui";
 
 /**
  * The fixed sentence for each safe flow outcome. The endpoint returns the outcome and, for a rule
