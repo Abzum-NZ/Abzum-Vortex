@@ -13,9 +13,8 @@ import { studioCanvasMetadata } from "./studio-canvas-metadata";
 import { useStudioScreen } from "./studio-canvas-screen";
 import { studioPuckIframeCss } from "./studio-puck-style";
 
-const usePuckSelector = createUsePuck();
-
 const resolvePageHref = () => "#";
+
 const usePuckSelector = createUsePuck();
 
 /**
