@@ -1,5 +1,4 @@
 "use client";
-import { Label } from "../components/label";
 import { Alert, AlertDescription } from "../components/alert";
 import { StudioReferencePicker } from "./studio-reference-picker";
 import { StudioField } from "./studio-field";
@@ -118,21 +117,26 @@ function TreeEditor({
       createInitialStudioCondition(context) === undefined;
     return (
       <div className="min-w-0 space-y-3 text-sm">
-        <Label className="flex flex-col items-stretch gap-2">
-          Match when
-          <StudioOptionControl
-            aria-label="Match when"
-            value={condition.kind}
-            disabled={false}
-            options={[
-              { value: "all", label: "Every condition matches" },
-              { value: "any", label: "At least one condition matches" },
-            ]}
-            onChange={(next) =>
-              onReplace({ kind: next === "any" ? "any" : "all", conditions: condition.conditions })
-            }
-          />
-        </Label>
+        <StudioField label="Match when">
+          {(control) => (
+            <StudioOptionControl
+              {...control}
+              aria-label="Match when"
+              value={condition.kind}
+              disabled={false}
+              options={[
+                { value: "all", label: "Every condition matches" },
+                { value: "any", label: "At least one condition matches" },
+              ]}
+              onChange={(next) =>
+                onReplace({
+                  kind: next === "any" ? "any" : "all",
+                  conditions: condition.conditions,
+                })
+              }
+            />
+          )}
+        </StudioField>
         <StudioEntryList
           label={condition.kind === "all" ? "All of these conditions" : "Any of these conditions"}
           itemName="condition"
@@ -349,21 +353,24 @@ function TreeEditor({
           </StudioField>
         );
       return (
-        <Label className="flex flex-col items-stretch gap-2">
-          Option
-          <StudioOptionControl
-            aria-label="Option"
-            value={typeof operand.value === "string" ? operand.value : ""}
-            aria-invalid={optionError !== undefined}
-            disabled={false}
-            unset="Choose an option…"
-            options={choiceOptions.map((option) => ({ value: option.value, label: option.label }))}
-            onChange={(next) => {
-              if (next !== "") commitLiteral(next);
-            }}
-          />
-          {optionError && <span role="alert">{optionError}</span>}
-        </Label>
+        <StudioField label="Option" error={optionError}>
+          {(control) => (
+            <StudioOptionControl
+              {...control}
+              aria-label="Option"
+              value={typeof operand.value === "string" ? operand.value : ""}
+              disabled={false}
+              unset="Choose an option…"
+              options={choiceOptions.map((option) => ({
+                value: option.value,
+                label: option.label,
+              }))}
+              onChange={(next) => {
+                if (next !== "") commitLiteral(next);
+              }}
+            />
+          )}
+        </StudioField>
       );
     }
     if (operand.value === null) {
@@ -505,29 +512,30 @@ function TreeEditor({
   return (
     <div className="min-w-0 space-y-4 text-sm">
       {operandSelector("left")}
-      <Label className="flex flex-col items-stretch gap-2">
-        Comparison
-        <StudioOptionControl
-          aria-label="Comparison"
-          aria-invalid={operatorIssue !== undefined || !currentOperatorAvailable}
-          value={condition.operator}
-          disabled={false}
-          options={[
-            ...(currentOperatorAvailable
-              ? []
-              : [
-                  {
-                    value: condition.operator,
-                    label: `${currentOperatorLabel} (not valid for these values)`,
-                    disabled: true,
-                  },
-                ]),
-            ...rightOptions.map((option) => ({ value: option.operator, label: option.label })),
-          ]}
-          onChange={(next) => changeOperator(next as ConditionOperator)}
-        />
-        {operatorIssue && <span role="alert">{operatorIssue}</span>}
-      </Label>
+      <StudioField label="Comparison" error={operatorIssue}>
+        {(control) => (
+          <StudioOptionControl
+            {...control}
+            aria-label="Comparison"
+            aria-invalid={operatorIssue !== undefined || !currentOperatorAvailable}
+            value={condition.operator}
+            disabled={false}
+            options={[
+              ...(currentOperatorAvailable
+                ? []
+                : [
+                    {
+                      value: condition.operator,
+                      label: `${currentOperatorLabel} (not valid for these values)`,
+                      disabled: true,
+                    },
+                  ]),
+              ...rightOptions.map((option) => ({ value: option.operator, label: option.label })),
+            ]}
+            onChange={(next) => changeOperator(next as ConditionOperator)}
+          />
+        )}
+      </StudioField>
       {!unaryOperators.has(condition.operator) && <>{operandSelector("right")}</>}
       <StudioIconButton
         label="Reset condition"

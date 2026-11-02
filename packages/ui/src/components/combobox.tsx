@@ -3,6 +3,7 @@
 import * as React from "react";
 import { Combobox as ComboboxPrimitive } from "@base-ui/react";
 import { Icon } from "../icons/icon";
+import { Button } from "./button";
 import { InputGroupButton, InputGroupInput } from "./input-group";
 import { cn } from "../lib/utils";
 import { useVortexStylePortalRoot } from "../theme/vortex-style-root";
@@ -154,14 +155,92 @@ function ComboboxEmpty({ className, ...props }: ComboboxPrimitive.Empty.Props) {
   );
 }
 
+const ComboboxValue = ComboboxPrimitive.Value;
+
+function ComboboxGroup({ className, ...props }: ComboboxPrimitive.Group.Props) {
+  return (
+    <ComboboxPrimitive.Group
+      data-slot="combobox-group"
+      className={cn("cn-combobox-group", className)}
+      {...props}
+    />
+  );
+}
+
+function ComboboxLabel({ className, ...props }: ComboboxPrimitive.GroupLabel.Props) {
+  return (
+    <ComboboxPrimitive.GroupLabel
+      data-slot="combobox-label"
+      className={cn("cn-combobox-label", className)}
+      {...props}
+    />
+  );
+}
+
+const ComboboxCollection = ComboboxPrimitive.Collection;
+
+/** The selected values of a multiple combobox, drawn as removable chips beside the text input. */
+function ComboboxChips({ className, ...props }: ComboboxPrimitive.Chips.Props) {
+  return (
+    <ComboboxPrimitive.Chips
+      data-slot="combobox-chips"
+      className={cn("cn-combobox-chips", className)}
+      {...props}
+    />
+  );
+}
+
+function ComboboxChip({ className, children, ...props }: ComboboxPrimitive.Chip.Props) {
+  return (
+    <ComboboxPrimitive.Chip
+      data-slot="combobox-chip"
+      className={cn("cn-combobox-chip", className)}
+      {...props}
+    >
+      {children}
+      <ComboboxPrimitive.ChipRemove
+        data-slot="combobox-chip-remove"
+        render={<Button variant="ghost" size="icon-xs" />}
+        className="cn-combobox-chip-remove"
+        aria-label="Remove"
+      >
+        <Icon name="close" className="pointer-events-none" />
+      </ComboboxPrimitive.ChipRemove>
+    </ComboboxPrimitive.Chip>
+  );
+}
+
+function ComboboxChipsInput({ className, ...props }: ComboboxPrimitive.Input.Props) {
+  return (
+    <ComboboxPrimitive.Input
+      data-slot="combobox-chip-input"
+      className={cn("cn-combobox-chip-input", className)}
+      {...props}
+    />
+  );
+}
+
+/** The element a multiple combobox's popup is positioned against (its chips box). */
+function useComboboxAnchor() {
+  return React.useRef<HTMLDivElement | null>(null);
+}
+
 export {
   Combobox,
+  ComboboxChip,
+  ComboboxChips,
+  ComboboxChipsInput,
   ComboboxClear,
+  ComboboxCollection,
   ComboboxContent,
   ComboboxEmpty,
+  ComboboxGroup,
   ComboboxInput,
   ComboboxItem,
+  ComboboxLabel,
   ComboboxList,
   ComboboxPortal,
   ComboboxTrigger,
+  ComboboxValue,
+  useComboboxAnchor,
 };
