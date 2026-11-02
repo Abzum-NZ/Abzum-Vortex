@@ -141,7 +141,9 @@ const blockChanges = (from: unknown, to: unknown, rows: SourceChangeRow[]): void
       const value = props?.[field];
       if (typeof value === "string" && value.trim() !== "") return value.trim();
     }
-    return String(block.type);
+    // The block's type as words: "platform.renderer.text" reads "Text".
+    const type = String(block.type).split(".").at(-1) ?? "block";
+    return type.replaceAll("_", " ").replace(/^./, (first) => first.toUpperCase());
   };
   for (const [id, block] of now) {
     const old = was.get(id);

@@ -18,6 +18,7 @@ import {
   CollapsibleTrigger,
 } from "@vortex/ui/components/collapsible";
 import { Spinner } from "@vortex/ui/components/spinner";
+import { toast } from "@vortex/ui/components/sonner";
 import { studioNotice } from "./studio-save-state";
 import { Textarea } from "@vortex/ui/components/textarea";
 import {
@@ -52,8 +53,12 @@ import {
 
 // The import's notices replace one another: a refusal does not stay on screen through a later
 // successful check or the replace.
+let lastImportNotice: string | undefined;
 const importNotice = (message: string, kind?: "success" | "error" | "info"): void => {
-  studioNotice(message, kind, undefined, { id: "studio-source-import" });
+  if (lastImportNotice !== undefined) toast.dismiss(lastImportNotice);
+  const id = `studio-source-import-${crypto.randomUUID()}`;
+  lastImportNotice = id;
+  studioNotice(message, kind, undefined, { id });
 };
 
 type ReviewedSource = Readonly<{
