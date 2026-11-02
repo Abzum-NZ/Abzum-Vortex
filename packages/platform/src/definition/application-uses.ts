@@ -1343,7 +1343,12 @@ const placementUses = (source: Source, index: UseIndex, alias: string): Use[] =>
       const binding = at(source, path.slice(0, -1));
       return isObject(binding) && binding.source === "control";
     })
-    .map(({ path }) => ({ path }));
+    .map(({ path }) => {
+      const place = describeSourcePlace(source, path);
+      return place.open.kind === "placement"
+        ? { path, label: `Block "${place.open.placementAlias}"` }
+        : { path };
+    });
 
 /**
  * Where the application is entered or offered: its home page, each public address, the role a
