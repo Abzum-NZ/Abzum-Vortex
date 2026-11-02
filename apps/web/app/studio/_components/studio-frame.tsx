@@ -6,8 +6,8 @@ import {
   useRef,
   useState,
   useSyncExternalStore,
-  type KeyboardEvent,
-  type PointerEvent,
+  type ComponentProps,
+  type KeyboardEvent as ReactKeyboardEvent,
   type ReactNode,
 } from "react";
 import { createPortal } from "react-dom";
@@ -31,6 +31,13 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@vortex/ui/components/collapsible";
+import {
+  ResizableHandle,
+  ResizablePanel,
+  ResizablePanelGroup,
+  usePanelRef,
+} from "@vortex/ui/components/resizable";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@vortex/ui/components/tabs";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@vortex/ui/components/tooltip";
 import { Separator } from "@vortex/ui/components/separator";
 import { Kbd } from "@vortex/ui/components/kbd";
@@ -54,13 +61,11 @@ export type StudioRailTab<Key extends string> = Readonly<{
   group: "build" | "logic" | "look" | "releases";
 }>;
 
-const minimumPanelWidth = 15;
-const maximumPanelWidth = 32;
-const clampWidth = (
-  rem: number,
-  minimum = minimumPanelWidth,
-  maximum = maximumPanelWidth,
-): number => Math.min(maximum, Math.max(minimum, Math.round(rem * 4) / 4));
+/** The width limits (in rem) of the panel beside the rail and of the inspector. */
+const panelLimits = { minimum: 15, maximum: 32 } as const;
+const inspectorLimits = { minimum: 18, maximum: 30 } as const;
+const clampWidth = (rem: number, limits: Readonly<{ minimum: number; maximum: number }>): number =>
+  Math.min(limits.maximum, Math.max(limits.minimum, Math.round(rem * 4) / 4));
 
 const widthStorageKey = "vortex.studio.panel-widths";
 const readStoredWidths = (): Record<string, number> => {
@@ -121,32 +126,38 @@ const storeWidths = (widths: Readonly<Record<string, number>>): void => {
 
 /**
  * Each rail tab asks for the width it needs (a theme gallery is wider than a page tree) and keeps
- * the width the person drags it to, per tab, in this browser.
+ * the width the person drags it to, per tab, in this browser. `loaded` turns true once the stored
+ * widths are read, so the frame can apply them to panels that were already drawn.
  */
 function useStudioPanelWidths<Key extends string>() {
   const [widths, setWidths] = useState<Record<string, number>>({});
+  const [loaded, setLoaded] = useState(false);
   useEffect(() => {
     setWidths(readStoredWidths());
+    setLoaded(true);
   }, []);
   const widthOf = useCallback(
     (key: Key | "inspector", initial: number): number =>
       key === "inspector"
-        ? clampWidth(widths[key] ?? initial, 18, 30)
-        : clampWidth(widths[key] ?? initial),
+        ? clampWidth(widths[key] ?? initial, inspectorLimits)
+        : clampWidth(widths[key] ?? initial, panelLimits),
     [widths],
   );
   const setWidth = useCallback((key: Key | "inspector", rem: number) => {
     setWidths((current) => {
       const next = {
         ...current,
-        [key]: key === "inspector" ? clampWidth(rem, 18, 30) : clampWidth(rem),
+        [key]: clampWidth(rem, key === "inspector" ? inspectorLimits : panelLimits),
       };
       storeWidths(next);
       return next;
     });
   }, []);
-  return { widthOf, setWidth };
+  return { widthOf, setWidth, loaded };
 }
+
+const pixelsPerRem = (): number =>
+  Number.parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
 
 const wideQuery = "(min-width: 1024px)";
 const subscribeWide = (notify: () => void) => {
@@ -183,48 +194,32 @@ function PaneSlot({ host }: Readonly<{ host: HTMLDivElement | null }>) {
 
 type PaneHosts = Readonly<{ panel: HTMLDivElement; inspector: HTMLDivElement }>;
 
-/** The vertical icon rail: one tab per Studio area, operated with the arrow keys, Home and End. */
+/** The vertical icon rail: one tab per Studio area; the arrow keys, Home and End move between them. */
 function StudioRail<Key extends string>({
   tabs,
   active,
-  open,
+  panelShown,
+  modal,
   onChoose,
   label,
   collapsed,
+  controls,
   onToggleCollapsed,
 }: Readonly<{
   tabs: readonly StudioRailTab<Key>[];
   active: Key;
-  open: boolean;
+  /** Whether the active tab's panel is on screen (docked, as the hover overlay, or as a sheet). */
+  panelShown: boolean;
+  /** The panel opens as a modal sheet (a narrow window). */
+  modal: boolean;
   onChoose: (key: Key) => void;
   label: string;
   collapsed: boolean;
+  /** The id of the element the toggle shows or hides. */
+  controls: string | undefined;
   /** Collapses or expands the panel beside the rail; absent where the panel is a sheet. */
   onToggleCollapsed: (() => void) | undefined;
 }>) {
-  const buttons = useRef(new Map<Key, HTMLButtonElement>());
-  const [focusKey, setFocusKey] = useState<Key>(active);
-  useEffect(() => {
-    setFocusKey(active);
-  }, [active]);
-  const move = (event: KeyboardEvent<HTMLDivElement>) => {
-    const index = tabs.findIndex((tab) => tab.key === focusKey);
-    const target =
-      event.key === "ArrowDown"
-        ? (index + 1) % tabs.length
-        : event.key === "ArrowUp"
-          ? (index - 1 + tabs.length) % tabs.length
-          : event.key === "Home"
-            ? 0
-            : event.key === "End"
-              ? tabs.length - 1
-              : undefined;
-    if (target === undefined) return;
-    event.preventDefault();
-    const next = tabs[target]!.key;
-    setFocusKey(next);
-    buttons.current.get(next)?.focus();
-  };
   return (
     <div className="flex w-18 shrink-0 flex-col items-center gap-1 overflow-y-auto border-r border-sidebar-border bg-sidebar px-1 py-2 text-sidebar-foreground">
       {onToggleCollapsed !== undefined && (
@@ -236,7 +231,7 @@ function StudioRail<Key extends string>({
                 id="studio-panel-toggle"
                 aria-label="Side panel"
                 aria-expanded={!collapsed}
-                aria-controls="studio-rail-panel"
+                aria-controls={controls}
                 onClick={onToggleCollapsed}
                 className="mb-1 flex size-9 shrink-0 items-center justify-center rounded-lg text-muted-foreground outline-none hover:bg-sidebar-accent/60 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
               />
@@ -249,51 +244,76 @@ function StudioRail<Key extends string>({
           </TooltipContent>
         </Tooltip>
       )}
-      <div
-        role="tablist"
-        aria-orientation="vertical"
+      <TabsList
         aria-label={label}
-        onKeyDown={move}
-        className="flex min-h-0 w-full flex-1 flex-col items-center gap-1"
+        className="min-h-0 w-full flex-1 justify-start gap-1 rounded-none bg-transparent p-0"
       >
-        {tabs.map((tab, index) => {
-          const selected = tab.key === active;
-          const divided = index > 0 && tabs[index - 1]?.group !== tab.group;
-          return (
-            <div key={tab.key} className={cn("w-full", tab.group === "releases" && "mt-auto")}>
-              {divided && <Separator className="my-2" />}
-              <button
-                key={tab.key}
-                type="button"
-                role="tab"
-                id={`studio-rail-${tab.key}`}
-                aria-selected={selected}
-                aria-controls="studio-rail-panel"
-                aria-expanded={selected ? open : undefined}
-                tabIndex={tab.key === focusKey ? 0 : -1}
-                title={tab.label}
-                ref={(node) => {
-                  if (node === null) buttons.current.delete(tab.key);
-                  else buttons.current.set(tab.key, node);
-                }}
-                onFocus={() => setFocusKey(tab.key)}
-                onClick={() => onChoose(tab.key)}
-                className={cn(
-                  "relative flex h-13 w-full flex-col items-center justify-center gap-1 rounded-lg border-0 px-1 py-0 text-xs font-medium outline-none transition-colors",
-                  "hover:bg-sidebar-accent/60 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring",
-                  selected
-                    ? "bg-sidebar-accent text-sidebar-accent-foreground before:absolute before:inset-y-3 before:-left-1 before:w-0.75 before:rounded-full before:bg-primary"
-                    : "bg-transparent text-muted-foreground",
-                )}
-              >
-                <Icon name={tab.icon} className="size-5" />
-                <span className="max-w-full truncate">{tab.label}</span>
-              </button>
-            </div>
-          );
-        })}
-      </div>
+        {tabs.map((tab, index) => (
+          <RailTab
+            key={tab.key}
+            tab={tab}
+            divided={index > 0 && tabs[index - 1]?.group !== tab.group}
+            expanded={tab.key === active ? panelShown : undefined}
+            modal={modal}
+            onChoose={onChoose}
+          />
+        ))}
+      </TabsList>
     </div>
+  );
+}
+
+/**
+ * One rail tab. Choosing the tab that is already active still reveals its panel (a collapsed or
+ * narrow layout hides it), so the choice runs on every click rather than on a change of value.
+ */
+function RailTab<Key extends string>({
+  tab,
+  divided,
+  expanded,
+  modal,
+  onChoose,
+}: Readonly<{
+  tab: StudioRailTab<Key>;
+  divided: boolean;
+  /** Whether this tab's panel is shown; absent on the tabs that are not active. */
+  expanded: boolean | undefined;
+  modal: boolean;
+  onChoose: (key: Key) => void;
+}>) {
+  return (
+    <>
+      {divided && (
+        <Separator
+          aria-hidden
+          role="none"
+          className={cn("my-2", tab.group === "releases" && "mt-auto")}
+        />
+      )}
+      <Tooltip>
+        <TooltipTrigger
+          render={
+            <TabsTrigger
+              value={tab.key}
+              id={`studio-rail-${tab.key}`}
+              aria-expanded={expanded}
+              aria-haspopup={modal ? "dialog" : undefined}
+              onClick={() => onChoose(tab.key)}
+              className={cn(
+                "h-13 w-full flex-none flex-col justify-center gap-1 rounded-lg border-0 px-0.5 py-0 text-xs shadow-none group-data-vertical/tabs:justify-center data-active:shadow-none",
+                "text-muted-foreground hover:bg-sidebar-accent/60 hover:text-foreground",
+                "data-active:bg-sidebar-accent data-active:text-sidebar-accent-foreground dark:data-active:bg-sidebar-accent dark:data-active:text-sidebar-accent-foreground",
+                "before:absolute before:inset-y-3 before:-left-1 before:w-0.75 before:rounded-full before:bg-primary before:opacity-0 data-active:before:opacity-100",
+              )}
+            />
+          }
+        >
+          <Icon name={tab.icon} className="size-5" />
+          <span className="max-w-full truncate">{tab.label}</span>
+        </TooltipTrigger>
+        <TooltipContent side="inline-end">{tab.label}</TooltipContent>
+      </Tooltip>
+    </>
   );
 }
 
@@ -302,78 +322,53 @@ function StudioRail<Key extends string>({
  * rail: while it is open (its trigger says `aria-haspopup` and `aria-expanded`) the panel still owns the focus.
  */
 const panelPopupOpen = (): boolean =>
-  document.querySelector('#studio-rail-panel [aria-haspopup][aria-expanded="true"]') !== null;
+  document.querySelector('[data-studio-rail-panel] [aria-haspopup][aria-expanded="true"]') !== null;
 
 /** Whether an event target is in the rail or in its panel (a portal whose host sits inside the rail). */
 const inRailOrPanel = (rail: HTMLElement | null, target: EventTarget | null): boolean =>
   rail !== null && target instanceof Node && rail.contains(target);
 
-/** The drag handle between the panel and the canvas; arrow keys resize it a quarter rem at a time. */
-function PanelResizer({
-  width,
-  onResize,
-  label,
-  inspector = false,
+/**
+ * A resizable side panel that opens at the width it keeps. The width is applied on mount and again
+ * when `sizeKey` changes (another rail tab, or the stored widths arriving), never when the window
+ * resizes: the panel keeps its pixel width and the canvas takes the difference.
+ */
+function SidePanel({
+  panelRef,
+  sizeKey,
+  size,
+  limits,
+  children,
+  ...props
 }: Readonly<{
-  width: number;
-  onResize: (rem: number) => void;
-  label: string;
-  inspector?: boolean;
+  id: string;
+  panelRef: ReturnType<typeof usePanelRef>;
+  sizeKey: string;
+  /** The width in rem. */
+  size: number;
+  limits: Readonly<{ minimum: number; maximum: number }>;
+  children: ReactNode;
 }>) {
-  const drag = useRef<{ startX: number; startWidth: number; pixelsPerRem: number } | null>(null);
-  const start = (event: PointerEvent<HTMLDivElement>) => {
-    const pixelsPerRem =
-      Number.parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
-    event.preventDefault();
-    drag.current = { startX: event.clientX, startWidth: width, pixelsPerRem };
-    event.currentTarget.setPointerCapture(event.pointerId);
-  };
-  const moveTo = (event: PointerEvent<HTMLDivElement>) => {
-    const current = drag.current;
-    if (current === null) return;
-    onResize(
-      current.startWidth +
-        ((inspector ? -1 : 1) * (event.clientX - current.startX)) / current.pixelsPerRem,
-    );
-  };
-  const end = () => {
-    drag.current = null;
-  };
-  const key = (event: KeyboardEvent<HTMLDivElement>) => {
-    const step = event.shiftKey ? 2 : 0.5;
-    if (event.key === "ArrowLeft") {
-      event.preventDefault();
-      onResize(width + (inspector ? step : -step));
-    }
-    if (event.key === "ArrowRight") {
-      event.preventDefault();
-      onResize(width + (inspector ? -step : step));
-    }
-    if (event.key === "Home") {
-      event.preventDefault();
-      onResize(inspector ? 18 : minimumPanelWidth);
-    }
-    if (event.key === "End") {
-      event.preventDefault();
-      onResize(inspector ? 30 : maximumPanelWidth);
-    }
-  };
+  const [initial] = useState(size);
+  const latest = useRef(size);
+  latest.current = size;
+  const applied = useRef(sizeKey);
+  useEffect(() => {
+    if (applied.current === sizeKey) return;
+    applied.current = sizeKey;
+    panelRef.current?.resize(`${latest.current}rem`);
+  }, [sizeKey, panelRef]);
   return (
-    <div
-      role="separator"
-      aria-orientation="vertical"
-      aria-label={label}
-      tabIndex={0}
-      aria-valuemin={inspector ? 18 : minimumPanelWidth}
-      aria-valuemax={inspector ? 30 : maximumPanelWidth}
-      aria-valuenow={width}
-      onPointerDown={start}
-      onPointerMove={moveTo}
-      onPointerUp={end}
-      onPointerCancel={end}
-      onKeyDown={key}
-      className="relative z-10 w-px shrink-0 cursor-col-resize touch-none select-none bg-border outline-none transition-colors before:absolute before:inset-y-0 before:-left-1 before:w-2 hover:bg-primary focus-visible:bg-primary"
-    />
+    <ResizablePanel
+      {...props}
+      panelRef={panelRef}
+      defaultSize={`${initial}rem`}
+      minSize={`${limits.minimum}rem`}
+      maxSize={`${limits.maximum}rem`}
+      groupResizeBehavior="preserve-pixel-size"
+    >
+      {children}
+    </ResizablePanel>
   );
 }
 
@@ -413,7 +408,17 @@ export function StudioFrame<Key extends string>({
   const wide = useSyncExternalStore(subscribeWide, readWide, readWideOnServer);
   const viewport = useSyncExternalStore(subscribeViewport, readViewport, readViewportOnServer);
   const dockInspector = viewport >= 1280;
-  const { widthOf, setWidth } = useStudioPanelWidths<Key>();
+  const { widthOf, setWidth, loaded } = useStudioPanelWidths<Key>();
+  // The docked panel's and the hover overlay's content is portalled into these hosts, so the rail's
+  // vertical Tabs root is not a DOM ancestor of anything a panel, the canvas or the inspector draws
+  // (a nested horizontal Tabs would otherwise pick up the vertical rules) while the tab and its
+  // panel still register through React context.
+  const [dockHost, setDockHost] = useState<HTMLDivElement | null>(null);
+  const [overlayHost, setOverlayHost] = useState<HTMLDivElement | null>(null);
+  // Which handle the pointer is on: a drag stores only that panel's width.
+  const movedHandle = useRef<"panel" | "inspector">("panel");
+  const panelRef = usePanelRef();
+  const inspectorRef = usePanelRef();
   const [panelOpen, setPanelOpen] = useState(true);
   // Collapsed: the panel is closed until the pointer visits the rail, and then it overlays the canvas.
   // `null` until the stored choice is read, so a reload never shows the panel and then folds it away.
@@ -436,7 +441,7 @@ export function StudioFrame<Key extends string>({
   useEffect(() => () => clearTimeout(peekTimer.current), []);
   const toggleCollapsed = useCallback(() => {
     if (!wide) return;
-    const inPanel = document.activeElement?.closest("#studio-rail-panel") != null;
+    const inPanel = document.activeElement?.closest("[data-studio-rail-panel]") != null;
     storeCollapsed(!collapsed);
     clearTimeout(peekTimer.current);
     setPeeking(false);
@@ -527,15 +532,6 @@ export function StudioFrame<Key extends string>({
     if (inspectorBody !== null && inspectorBody !== undefined) inspectorBody.scrollTop = 0;
     previousSelection.current = selectionKey;
   }, [selectionKey, wide, dockInspector, focused, hasInspector, hosts]);
-  const choose = (key: Key) => {
-    setFocused(false);
-    // Selecting a tab always reveals its pane, including the tab restored from the URL on reload.
-    onTabChange(key);
-    if (wide) {
-      setPanelOpen(true);
-      if (collapsed) peek(true, true);
-    } else setNarrowPanelOpen(true);
-  };
   const active = tabs.find((tab) => tab.key === activeTab);
   const defaultWidth =
     viewport < 1440
@@ -545,12 +541,68 @@ export function StudioFrame<Key extends string>({
         : (active?.width ?? 17);
   const width = widthOf(activeTab, defaultWidth);
   const inspectorWidth = widthOf("inspector", viewport >= 1920 ? 24 : viewport >= 1440 ? 22 : 20);
+  // The default width follows the window's size class; a stored width does not.
+  const sizeClass = viewport < 1440 ? "compact" : viewport >= 1920 ? "large" : "regular";
   const showPanel = wide && panelOpen && storedCollapsed === false;
   const overlayPanel = wide && panelOpen && collapsed && (peeking || dragging);
   const showInspector = hasInspector && dockInspector && inspectorOpen;
+  const panelShown = wide ? panelOpen && (!collapsed || overlayPanel) : narrowPanelOpen;
+  // Only a drag is the person's choice, and only of the panel at the handle that moved; a tab switch
+  // or a window resize is not stored.
+  const layoutChanged: NonNullable<ComponentProps<typeof ResizablePanelGroup>["onLayoutChanged"]> =
+    useCallback(
+      (_layout, meta) => {
+        if (!meta.isUserInteraction) return;
+        const inspectorMoved = movedHandle.current === "inspector";
+        const size = (inspectorMoved ? inspectorRef : panelRef).current?.getSize().inPixels;
+        if (size !== undefined)
+          setWidth(inspectorMoved ? "inspector" : activeTab, size / pixelsPerRem());
+      },
+      [activeTab, setWidth, panelRef, inspectorRef],
+    );
+  // Arrow keys on a handle move its panel by half a rem (two with Shift); Home and End take it to its
+  // smallest and largest width.
+  const resizeByKey =
+    (which: "panel" | "inspector") => (event: ReactKeyboardEvent<HTMLElement>) => {
+      const inspectorHandle = which === "inspector";
+      const ref = inspectorHandle ? inspectorRef : panelRef;
+      const limits = inspectorHandle ? inspectorLimits : panelLimits;
+      const current = ref.current?.getSize().inPixels;
+      if (current === undefined) return;
+      // On the inspector's left edge, moving the handle left widens the inspector.
+      const direction = inspectorHandle ? -1 : 1;
+      const step = event.shiftKey ? 2 : 0.5;
+      const rem = current / pixelsPerRem();
+      const next =
+        event.key === "ArrowRight"
+          ? rem + direction * step
+          : event.key === "ArrowLeft"
+            ? rem - direction * step
+            : event.key === "Home"
+              ? limits.minimum
+              : event.key === "End"
+                ? limits.maximum
+                : undefined;
+      if (next === undefined) return;
+      // Captured before the library's own key handling on the handle sees the event.
+      event.preventDefault();
+      event.stopPropagation();
+      const clamped = clampWidth(next, limits);
+      ref.current?.resize(`${clamped}rem`);
+      setWidth(inspectorHandle ? "inspector" : activeTab, clamped);
+    };
+  const choose = (key: Key) => {
+    setFocused(false);
+    // Selecting a tab always reveals its pane, including the tab restored from the URL on reload.
+    onTabChange(key);
+    if (wide) {
+      setPanelOpen(true);
+      if (collapsed) peek(true, true);
+    } else setNarrowPanelOpen(true);
+  };
   return (
     <div
-      className="flex h-dvh min-w-0 flex-col bg-background text-foreground"
+      className="flex min-h-0 min-w-0 flex-1 flex-col bg-background text-foreground"
       // The panel's content is a portal: its events reach this element through React, not the rail's
       // wrapper, so the overlay's keyboard path lives here and asks where the event came from.
       onKeyDown={(event) => {
@@ -559,7 +611,9 @@ export function StudioFrame<Key extends string>({
         // An open combobox or menu answers its own Escape.
         if (
           event.target instanceof Element &&
-          event.target.getAttribute("aria-expanded") === "true"
+          event.target.matches(
+            '[aria-haspopup][aria-expanded="true"], [role="combobox"][aria-expanded="true"]',
+          )
         )
           return;
         event.stopPropagation();
@@ -594,20 +648,63 @@ export function StudioFrame<Key extends string>({
             if (collapsed) peek(false);
           }}
         >
-          <StudioRail
-            tabs={tabs}
-            active={activeTab}
-            open={wide ? panelOpen && (!collapsed || peeking) : narrowPanelOpen}
-            onChoose={choose}
-            label="Studio areas"
-            collapsed={collapsed}
-            onToggleCollapsed={wide ? toggleCollapsed : undefined}
-          />
+          <Tabs orientation="vertical" value={activeTab} className="min-h-0 flex-row gap-0">
+            <StudioRail
+              tabs={tabs}
+              active={activeTab}
+              panelShown={panelShown}
+              modal={!wide}
+              onChoose={choose}
+              label="Studio areas"
+              collapsed={collapsed}
+              controls={collapsed ? "studio-panel-overlay" : showPanel ? "studio-panel" : undefined}
+              onToggleCollapsed={wide ? toggleCollapsed : undefined}
+            />
+            {overlayHost !== null &&
+              createPortal(
+                <TabsContent
+                  value={activeTab}
+                  data-studio-rail-panel=""
+                  tabIndex={-1}
+                  className="flex h-full text-base min-h-0 flex-col"
+                >
+                  <PaneSlot host={hosts?.panel ?? null} />
+                </TabsContent>,
+                overlayHost,
+              )}
+            {dockHost !== null &&
+              createPortal(
+                <TabsContent
+                  value={activeTab}
+                  data-studio-rail-panel=""
+                  tabIndex={-1}
+                  className="flex h-full text-base min-h-0 flex-col bg-sidebar"
+                >
+                  <PaneSlot host={hosts?.panel ?? null} />
+                </TabsContent>,
+                dockHost,
+              )}
+            <Sheet open={!wide && narrowPanelOpen} onOpenChange={setNarrowPanelOpen}>
+              <SheetContent side="left" className="w-80 max-w-full overflow-y-auto p-0 pt-10">
+                <SheetHeader className="sr-only">
+                  <SheetTitle>{active?.label}</SheetTitle>
+                  <SheetDescription>The {active?.label} panel.</SheetDescription>
+                </SheetHeader>
+                <TabsContent
+                  value={activeTab}
+                  data-studio-rail-panel=""
+                  tabIndex={-1}
+                  className="flex text-base min-h-0 min-w-0 flex-1 flex-col"
+                >
+                  <PaneSlot host={hosts?.panel ?? null} />
+                </TabsContent>
+              </SheetContent>
+            </Sheet>
+          </Tabs>
           {collapsed && wide && (
-            <section
-              id="studio-rail-panel"
-              role="tabpanel"
-              aria-labelledby={`studio-rail-${activeTab}`}
+            <div
+              ref={setOverlayHost}
+              id="studio-panel-overlay"
               aria-hidden={!overlayPanel}
               data-studio-panel-overlay=""
               className={cn(
@@ -617,70 +714,75 @@ export function StudioFrame<Key extends string>({
                 dragging && "pointer-events-none !visible opacity-0",
               )}
               style={{ width: `${width}rem` }}
-            >
-              <PaneSlot host={hosts?.panel ?? null} />
-            </section>
+            />
           )}
         </div>
-        {showPanel && (
-          <>
+        <ResizablePanelGroup
+          orientation="horizontal"
+          onLayoutChanged={layoutChanged}
+          className="min-h-0 min-w-0 flex-1"
+        >
+          {showPanel && (
+            <>
+              <SidePanel
+                id="studio-panel"
+                panelRef={panelRef}
+                sizeKey={`${activeTab}:${loaded}:${sizeClass}`}
+                size={width}
+                limits={panelLimits}
+              >
+                <div ref={setDockHost} className="h-full min-h-0" />
+              </SidePanel>
+              <ResizableHandle
+                aria-label={`Resize the ${active?.label ?? ""} panel`}
+                onPointerDownCapture={() => {
+                  movedHandle.current = "panel";
+                }}
+                onKeyDownCapture={resizeByKey("panel")}
+              />
+            </>
+          )}
+          <ResizablePanel id="studio-canvas" minSize="20rem">
             <section
-              id="studio-rail-panel"
-              role="tabpanel"
-              aria-labelledby={`studio-rail-${activeTab}`}
-              className="flex min-h-0 shrink-0 flex-col bg-sidebar"
-              style={{ width: `${width}rem` }}
+              aria-label="Canvas"
+              className="flex h-full min-h-0 min-w-0 flex-col bg-background"
             >
-              <PaneSlot host={hosts?.panel ?? null} />
+              {canvas({
+                inspectorOpen:
+                  hasInspector && (dockInspector ? inspectorOpen : narrowInspectorOpen),
+                toggleInspector: hasInspector ? toggleInspector : undefined,
+                focused,
+                focusCanvas,
+              })}
             </section>
-            <PanelResizer
-              width={width}
-              onResize={(rem) => setWidth(activeTab, rem)}
-              label={`Resize the ${active?.label ?? ""} panel`}
-            />
-          </>
-        )}
-        <section aria-label="Canvas" className="flex min-h-0 min-w-0 flex-1 flex-col bg-background">
-          {canvas({
-            inspectorOpen: hasInspector && (dockInspector ? inspectorOpen : narrowInspectorOpen),
-            toggleInspector: hasInspector ? toggleInspector : undefined,
-            focused,
-            focusCanvas,
-          })}
-        </section>
-        {showInspector && (
-          <>
-            <PanelResizer
-              inspector
-              width={inspectorWidth}
-              onResize={(rem) => setWidth("inspector", rem)}
-              label="Resize the inspector"
-            />
-            <aside
-              aria-label={inspectorLabel}
-              style={{ width: `${inspectorWidth}rem` }}
-              className="flex min-h-0 shrink-0 flex-col bg-sidebar"
-            >
-              <PaneSlot host={hosts?.inspector ?? null} />
-            </aside>
-          </>
-        )}
+          </ResizablePanel>
+          {showInspector && (
+            <>
+              <ResizableHandle
+                aria-label="Resize the inspector"
+                onPointerDownCapture={() => {
+                  movedHandle.current = "inspector";
+                }}
+                onKeyDownCapture={resizeByKey("inspector")}
+              />
+              <SidePanel
+                id="studio-inspector"
+                panelRef={inspectorRef}
+                sizeKey={`inspector:${loaded}:${sizeClass}`}
+                size={inspectorWidth}
+                limits={inspectorLimits}
+              >
+                <aside
+                  aria-label={inspectorLabel}
+                  className="flex h-full min-h-0 flex-col bg-sidebar"
+                >
+                  <PaneSlot host={hosts?.inspector ?? null} />
+                </aside>
+              </SidePanel>
+            </>
+          )}
+        </ResizablePanelGroup>
       </div>
-      <Sheet open={!wide && narrowPanelOpen} onOpenChange={setNarrowPanelOpen}>
-        <SheetContent side="left" className="w-80 max-w-full overflow-y-auto p-0 pt-10">
-          <SheetHeader className="sr-only">
-            <SheetTitle>{active?.label}</SheetTitle>
-            <SheetDescription>The {active?.label} panel.</SheetDescription>
-          </SheetHeader>
-          <div
-            id="studio-rail-panel"
-            role="tabpanel"
-            className="flex min-h-0 min-w-0 flex-1 flex-col"
-          >
-            <PaneSlot host={hosts?.panel ?? null} />
-          </div>
-        </SheetContent>
-      </Sheet>
       <Sheet
         open={hasInspector && !dockInspector && narrowInspectorOpen}
         onOpenChange={setNarrowInspectorOpen}

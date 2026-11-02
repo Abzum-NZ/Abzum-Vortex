@@ -6,7 +6,7 @@ import { documentStylesheetHref } from "../_lib/document-styles";
 
 export default function StudioLayout({ children }: Readonly<{ children: ReactNode }>) {
   return (
-    <VortexStyleRoot documentTheme {...STUDIO_DOCUMENT_THEME}>
+    <VortexStyleRoot documentTheme className="h-full" {...STUDIO_DOCUMENT_THEME}>
       <link rel="stylesheet" href={documentStylesheetHref("studio")} precedence="platform" />
       <TooltipProvider>{children}</TooltipProvider>
     </VortexStyleRoot>

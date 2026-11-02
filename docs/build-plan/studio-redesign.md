@@ -155,7 +155,7 @@ Numbers in tables and counts use `tabular-nums`. The longest reading line is `ma
 - Tablist semantics and arrow-key handling stay exactly as they are.
 
 **Navigator pane** (the rail panel, `bg-sidebar`):
-- Resizable with the existing `PanelResizer`, now a hairline: a 1 px `bg-border` line with an 8 px invisible hit area, which shows `bg-primary` on hover and focus.
+- Resizable with a shadcn `ResizableHandle` in a `ResizablePanelGroup`: a 1 px `bg-border` line with a wider hit area, which shows the ring colour on hover and focus. Arrow keys move it 0.5 rem (2 rem with Shift); Home and End take the panel to its smallest and largest width.
 - Clamp 15-32 rem. Per-tab stored widths stay.
 - Default widths: structure, outline, flows, access and releases 17; blocks and data 18; menu 20; theme 22.
 
@@ -166,7 +166,7 @@ Numbers in tables and counts use `tabular-nums`. The longest reading line is `ma
 
 **Inspector pane** (`bg-sidebar border-l`):
 - Collapsible with the canvas-header toggle and with Ctrl+. (period).
-- **Resizable** with the same `PanelResizer` on its left edge (storage key `inspector`), clamp 18-30 rem.
+- **Resizable** with a `ResizableHandle` on its left edge (storage key `inspector`), clamp 18-30 rem.
 - Defaults: 20 rem at 1280-1439, 22 rem at 1440-1919, 24 rem at 1920 and wider.
 - "Focus canvas" (Ctrl+\\) collapses both side panes. It is also a canvas-header icon button.
 
