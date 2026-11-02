@@ -5,10 +5,7 @@ import { recordLinkLabelKey } from "../../definition/viewer-safe-record-link";
 import { compareExactDecimals, parseExactDecimal } from "../../records/exact-decimal";
 import type { RecordsExportCell } from "../../queries/export-records";
 import { cellValueToText, NO_TEXT, RESTRICTED_TEXT, YES_TEXT } from "../cell-text";
-import {
-  PLAIN_NUMBER_TEXT,
-  recordsTableExportableTypes,
-} from "../../definition/application-composition/records-table-features/export";
+import { PLAIN_NUMBER_TEXT } from "../../definition/application-composition/records-table-features/export";
 import {
   asRecordLink,
   projectCell,
