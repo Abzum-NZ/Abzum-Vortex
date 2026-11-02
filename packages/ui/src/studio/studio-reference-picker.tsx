@@ -1,12 +1,14 @@
 "use client";
 import { useState } from "react";
-import { Combobox as Primitive } from "@base-ui/react/combobox";
 import {
   Combobox,
+  ComboboxCollection,
   ComboboxContent,
   ComboboxEmpty,
+  ComboboxGroup,
   ComboboxInput,
   ComboboxItem,
+  ComboboxLabel,
   ComboboxList,
   ComboboxTrigger,
 } from "../components/combobox";
@@ -108,16 +110,12 @@ export function StudioReferencePicker({
         <ComboboxEmpty>No matching choices.</ComboboxEmpty>
         <ComboboxList>
           {groups.map((group) => (
-            <Primitive.Group
+            <ComboboxGroup
               key={group}
               items={matches.filter((entry) => (entry.group ?? "") === group)}
             >
-              {group !== "" && (
-                <Primitive.GroupLabel className="px-3 py-2 text-xs font-medium text-muted-foreground">
-                  {group}
-                </Primitive.GroupLabel>
-              )}
-              <Primitive.Collection>
+              {group !== "" && <ComboboxLabel>{group}</ComboboxLabel>}
+              <ComboboxCollection>
                 {(entry: StudioReferencePickerOption) => (
                   <ComboboxItem key={entry.value} value={entry} disabled={entry.disabled}>
                     <span className="flex min-w-0 flex-1 flex-col text-sm">
@@ -138,8 +136,8 @@ export function StudioReferencePicker({
                     </span>
                   </ComboboxItem>
                 )}
-              </Primitive.Collection>
-            </Primitive.Group>
+              </ComboboxCollection>
+            </ComboboxGroup>
           ))}
         </ComboboxList>
       </ComboboxContent>
