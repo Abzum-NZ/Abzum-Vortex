@@ -25,6 +25,7 @@ import {
   studioWords,
   type StudioConditionValidation,
   type StudioFlowConditionContext,
+  type StudioFlowActionDraft,
   type StudioFlowControlDraft,
   type StudioFlowDraftChoices,
   type StudioFlowNamedEntry,
@@ -179,6 +180,119 @@ function EntryRows({
         >
           <Icon name="plus" />
           Add an entry
+        </Button>
+      </StudioEntryList>
+    </fieldset>
+  );
+}
+
+/**
+ * The buttons a message offers: each has a label, the flow it starts (one of this application's
+ * page flows) and that flow's inputs. Rows can be added, removed and moved; a dialog holds up to
+ * three, any other message one.
+ */
+function MessageActions({
+  id,
+  field,
+  value,
+  references,
+  disabled,
+  onChange,
+}: Readonly<{
+  id: string;
+  field: StudioFlowPropertyField;
+  value: StudioFlowPropertyDraft | null;
+  references: readonly StudioFlowReferenceChoice[];
+  disabled: boolean;
+  onChange: (value: StudioFlowPropertyDraft | null) => void;
+}>) {
+  const actions = value?.kind === "actions" ? value.actions : [];
+  const targets = field.actionFlows ?? [];
+  const limit = field.actionLimit ?? 1;
+  const { keys, newKey } = useStudioEntryKeys(actions.length);
+  const commit = (next: readonly StudioFlowActionDraft[]) =>
+    onChange(next.length === 0 && !field.required ? null : { kind: "actions", actions: next });
+  const change = (index: number, patch: Partial<StudioFlowActionDraft>) =>
+    commit(actions.map((action, at) => (at === index ? { ...action, ...patch } : action)));
+  return (
+    <fieldset className="space-y-2">
+      <FieldLegend variant="label">
+        {field.label}
+        {field.help === undefined ? null : <StudioHelp hint={field.help} />}
+      </FieldLegend>
+      <StudioEntryList
+        label={field.label}
+        itemName="action"
+        disabled={disabled}
+        empty="No actions: the message only says its text."
+        items={actions.map((action, index) => ({
+          key: keys.current[index]!,
+          title: action.label === "" ? "New action" : action.label,
+          summary: targets.find((target) => target.value === action.flow)?.label ?? "Choose a flow",
+          content: (
+            <>
+              <div className="space-y-1.5">
+                <Label htmlFor={`${id}-${index}-label`}>Button label</Label>
+                <Input
+                  id={`${id}-${index}-label`}
+                  disabled={disabled}
+                  value={action.label}
+                  onChange={(event) => change(index, { label: event.target.value })}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor={`${id}-${index}-flow`}>
+                  Flow it starts
+                  <StudioHelp hint="Another flow of this application that a person can start from a page. It runs as if they had pressed its own button." />
+                </Label>
+                <StudioReferencePicker
+                  id={`${id}-${index}-flow`}
+                  disabled={disabled}
+                  value={action.flow}
+                  options={targets}
+                  unset={targets.length === 0 ? "No other page flow yet" : "Choose…"}
+                  onChange={(flow) => change(index, { flow, inputs: [] })}
+                />
+              </div>
+              <EntryRows
+                id={`${id}-${index}-inputs`}
+                label="Inputs it gives that flow"
+                entries={action.inputs}
+                expected={targets.find((target) => target.value === action.flow)?.entries}
+                references={references}
+                disabled={disabled}
+                onChange={(inputs) => change(index, { inputs })}
+              />
+            </>
+          ),
+        }))}
+        onMove={(from, to) => {
+          const next = [...actions];
+          const [moved] = next.splice(from, 1);
+          const movedKey = keys.current.splice(from, 1)[0];
+          next.splice(to, 0, moved!);
+          keys.current.splice(to, 0, movedKey!);
+          commit(next);
+        }}
+        onRemove={(index) => {
+          keys.current.splice(index, 1);
+          commit(actions.filter((_, at) => at !== index));
+        }}
+      >
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          disabled={disabled || actions.length >= limit}
+          onClick={() => {
+            keys.current.push(newKey());
+            commit([...actions, { label: "", flow: "", inputs: [] }]);
+          }}
+        >
+          <Icon name="plus" />
+          {actions.length >= limit
+            ? `At most ${limit} ${limit === 1 ? "action" : "actions"}`
+            : "Add an action"}
         </Button>
       </StudioEntryList>
     </fieldset>
@@ -529,6 +643,17 @@ function PropertyControl({
           label={label}
           field={field}
           value={value}
+          disabled={disabled}
+          onChange={onChange}
+        />
+      );
+    case "message_actions":
+      return (
+        <MessageActions
+          id={id}
+          field={field}
+          value={value}
+          references={references}
           disabled={disabled}
           onChange={onChange}
         />

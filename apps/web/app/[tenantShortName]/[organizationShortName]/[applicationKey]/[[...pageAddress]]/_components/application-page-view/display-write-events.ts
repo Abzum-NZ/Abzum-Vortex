@@ -2,7 +2,7 @@ import type { DisplayInlineEditResult, DisplaySemanticEvent } from "@vortex/ui";
 import type { PlacementFlowBinding } from "../../../../../../_lib/application-page";
 import type { useRuntimeInputs } from "./use-runtime-inputs";
 import { bindingFor, suppliedValues } from "./event-values";
-import { cancelledMoveNotice, unavailableNotice } from "./notices";
+import { cancelledMoveNotice, unavailableNotice } from "../../../../../../_lib/flow-run-notices";
 
 type Inputs = Parameters<typeof useRuntimeInputs>[0];
 type Context = Pick<Inputs, "runBinding"> & {

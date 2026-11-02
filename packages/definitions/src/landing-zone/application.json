@@ -1,5 +1,5 @@
 {
-  "source_contract_version": "4.6.0",
+  "source_contract_version": "4.7.0",
   "root_alias": "app_landing_zone",
   "key": "vortex.app.landing_zone",
   "kind": "application",
@@ -1824,7 +1824,7 @@
           {
             "id": "saved",
             "type": "interface.show_message",
-            "version": "1.0.0",
+            "version": "1.1.0",
             "properties": {
               "message": {
                 "kind": "literal",
@@ -1965,7 +1965,7 @@
           {
             "id": "saved",
             "type": "interface.show_message",
-            "version": "1.0.0",
+            "version": "1.1.0",
             "properties": {
               "message": {
                 "kind": "literal",
@@ -2104,7 +2104,7 @@
           {
             "id": "removed",
             "type": "interface.show_message",
-            "version": "1.0.0",
+            "version": "1.1.0",
             "properties": {
               "message": {
                 "kind": "literal",

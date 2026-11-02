@@ -48,7 +48,7 @@ import type {
   ControlReport,
 } from "./types";
 import { bindingFor, suppliedValues, bindingOfEvent, asComponentBinding } from "./event-values";
-import { unavailableNotice } from "./notices";
+import { unavailableNotice } from "../../../../../../_lib/flow-run-notices";
 import {
   publishedControlData,
   rememberPublishedChoices,

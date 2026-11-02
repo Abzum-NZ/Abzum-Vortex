@@ -9,7 +9,7 @@ import type { PageMessageDraft, SubmittedForm } from "./types";
 import type { useApplyDispatch } from "./use-apply-dispatch";
 import { asComponentBinding } from "./event-values";
 import { placementIdsInLayout } from "./placement-helpers";
-import { unavailableNotice } from "./notices";
+import { unavailableNotice } from "../../../../../../_lib/flow-run-notices";
 
 export function useGuidedFormSteps({
   model,

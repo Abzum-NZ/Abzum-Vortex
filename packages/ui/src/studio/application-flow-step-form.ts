@@ -8,12 +8,15 @@ import {
   type FlowLiteral,
   type FlowTaskPropertyType,
   type FlowValue,
+  flowMessageActionLimits,
   flowReadFieldsScalarTypeForField,
+  readFlowMessageActions,
   type ImmutablePlatformBlockCatalogue,
   type SourceFlow,
   type SourceFlowTask,
 } from "@vortex/platform/schema";
 import {
+  studioFlowLabel,
   traverseStudioSemanticSelectionDraft,
   type StudioSemanticPlacementOwner,
 } from "./semantic-selection";
@@ -344,7 +347,8 @@ export type StudioFlowPropertyControl =
   | "calculation"
   | "field_values"
   | "read_fields"
-  | "input_map";
+  | "input_map"
+  | "message_actions";
 
 /** One field of a record type, as a field mapping row offers it. */
 export type StudioFlowRecordField = Readonly<{
@@ -370,7 +374,25 @@ export type StudioFlowPropertyField = Readonly<{
   fields?: readonly StudioFlowRecordField[];
   /** For a field: the fields it can name, each stored as `<record type>.<field>`. */
   options?: readonly Readonly<{ value: string; label: string }>[];
+  /** For a message's actions: the page flows an action may start, with the inputs each asks for. */
+  actionFlows?: readonly StudioFlowActionTarget[];
+  /** For a message's actions: how many it may offer (three in a dialog, one elsewhere). */
+  actionLimit?: number;
   help?: string;
+}>;
+
+/** A flow a message action may start, and the inputs it asks for. */
+export type StudioFlowActionTarget = Readonly<{
+  value: string;
+  label: string;
+  entries: readonly StudioFlowNamedEntry[];
+}>;
+
+/** One action of a message as its form edits it: a label, the flow it starts and that flow's inputs. */
+export type StudioFlowActionDraft = Readonly<{
+  label: string;
+  flow: string;
+  inputs: readonly Readonly<{ name: string; source: StudioFlowValueSource }>[];
 }>;
 
 export type StudioFlowPropertyDraft =
@@ -389,6 +411,8 @@ export type StudioFlowPropertyDraft =
       kind: "map";
       entries: readonly Readonly<{ name: string; source: StudioFlowValueSource }>[];
     }>
+  /** A message's actions, in the order they are offered. */
+  | Readonly<{ kind: "actions"; actions: readonly StudioFlowActionDraft[] }>
   /** A stored value the form shows but does not rebuild (a formula, a nested map); kept until replaced. */
   | Readonly<{ kind: "kept"; value: FlowValue }>;
 
@@ -441,8 +465,7 @@ const propertyLabels: Readonly<Record<string, string>> = {
   severity: "Severity",
   title: "Title",
   component: "Component",
-  action_label: "Action label",
-  action_flow: "Action flow",
+  actions: "Actions it offers",
   result_type: "Result type",
   mode: "Wait for it",
   to: "New value",
@@ -494,6 +517,8 @@ const controlFor = (type: FlowTaskPropertyType): StudioFlowPropertyControl | und
       return "field_values";
     case "input_map":
       return "input_map";
+    case "message_actions":
+      return "message_actions";
     case "any_value":
     case "record_change_list":
       return "value";
@@ -640,6 +665,8 @@ const help: Readonly<Record<string, string>> = {
     "All the answers of a form, or the fields one by one: each from a fixed value, an input or an earlier step.",
   "record.save action_inputs":
     "Saving an option that a named action owns runs that action; give the inputs it asks for.",
+  "interface.show_message actions":
+    "Buttons the message offers, each starting another flow of this application. A dialog offers up to three, any other message one.",
   "interface.navigate parameters": "A record page opens the record you name here.",
   "interface.navigate application":
     "Leave it unset to open a page of this application, or choose another application of the organisation.",
@@ -665,9 +692,32 @@ const readFieldsDraft = (value: FlowValue): StudioFlowPropertyDraft => {
   return { kind: "read_fields", fields };
 };
 
+/** A message's actions as its form edits them; kept as stored when one is not a plain label and flow. */
+const actionsDraft = (value: FlowValue): StudioFlowPropertyDraft => {
+  const stored = readFlowMessageActions(value);
+  if (stored === undefined) return { kind: "kept", value };
+  const actions: StudioFlowActionDraft[] = [];
+  for (const action of stored) {
+    const label = literalText(action.label);
+    const flow = literalText(action.flow);
+    if (label === undefined || flow === undefined) return { kind: "kept", value };
+    actions.push({
+      label,
+      flow,
+      inputs: Object.entries(action.inputs).map(([name, entry]) => ({
+        name,
+        source: studioFlowValueSourceOf(entry),
+      })),
+    });
+  }
+  return { kind: "actions", actions };
+};
+
 const propertyDraft = (type: FlowTaskPropertyType, value: FlowValue): StudioFlowPropertyDraft => {
   const control = controlFor(type);
   switch (control) {
+    case "message_actions":
+      return actionsDraft(value);
     case "key":
     case "record_type":
     case "page":
@@ -872,6 +922,23 @@ export const projectStudioFlowStepForm = (
               ? "text"
               : undefined;
       const hint = help[`${task.type} ${key}`];
+      const actionFlows =
+        control === "message_actions"
+          ? siblings
+              .filter(
+                (candidate) => candidate.id !== flow.id && candidate.execution === "interactive",
+              )
+              .map((candidate) => ({
+                value: candidate.id,
+                label: studioFlowLabel(candidate),
+                entries: Object.entries(candidate.inputs ?? {}).map(([name, declaration]) => ({
+                  name,
+                  label: studioWords(name),
+                  type: declaration.type,
+                  required: declaration.required,
+                })),
+              }))
+          : undefined;
       return {
         key,
         label: propertyLabels[key] ?? studioWords(key),
@@ -884,6 +951,15 @@ export const projectStudioFlowStepForm = (
         ...(entries === undefined ? {} : { entries }),
         ...(recordFieldList === undefined ? {} : { fields: recordFieldList }),
         ...(options === undefined ? {} : { options }),
+        ...(actionFlows === undefined
+          ? {}
+          : {
+              actionFlows,
+              actionLimit:
+                literalText(task.properties.target) === "dialog"
+                  ? flowMessageActionLimits.dialog
+                  : flowMessageActionLimits.other,
+            }),
         ...(hint === undefined ? {} : { help: hint }),
       };
     });
@@ -997,6 +1073,35 @@ const propertyValue = (
     case "map": {
       const built = entryMap(draft.entries, label);
       return built.ok ? { ok: true, value: { kind: "map", entries: built.value } } : built;
+    }
+    case "actions": {
+      const limit = field.actionLimit ?? flowMessageActionLimits.other;
+      if (draft.actions.length === 0)
+        return { ok: false, reason: `${label}: add an action, or leave the setting unset.` };
+      if (draft.actions.length > limit)
+        return {
+          ok: false,
+          reason: `${label}: this message offers at most ${limit} ${limit === 1 ? "action" : "actions"}.`,
+        };
+      const items: FlowValue[] = [];
+      for (const [index, action] of draft.actions.entries()) {
+        const where = `${label}, action ${index + 1}`;
+        if (action.label.trim().length === 0)
+          return { ok: false, reason: `${where}: write the label of the button.` };
+        if (action.flow.length === 0)
+          return { ok: false, reason: `${where}: choose the flow it starts.` };
+        const inputs = entryMap(action.inputs, where);
+        if (!inputs.ok) return inputs;
+        items.push({
+          kind: "map",
+          entries: {
+            label: { kind: "literal", literal: { type: "text", value: action.label.trim() } },
+            flow: { kind: "literal", literal: { type: "text", value: action.flow } },
+            inputs: { kind: "map", entries: inputs.value },
+          },
+        });
+      }
+      return { ok: true, value: { kind: "array", items } };
     }
   }
 };

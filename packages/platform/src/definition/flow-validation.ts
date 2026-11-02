@@ -9,6 +9,11 @@ import {
   recordTypeIdSchema,
 } from "../catalogue/identifiers";
 import { isSetBasedForEach } from "../workflows/flow-set-based";
+import {
+  flowMessageActionFlowName,
+  flowMessageActionLimits,
+  readFlowMessageActions,
+} from "../workflows/flow-message-actions";
 import type {
   DefinitionRuleFailureFamily,
   DefinitionValidationLocation,
@@ -207,6 +212,7 @@ const acceptedTypes = (propertyType: string): readonly string[] | undefined => {
   switch (propertyType) {
     case "any_value":
     case "input_map":
+    case "message_actions":
     case "field_values":
     case "record_change_list":
     case "json":
@@ -1295,34 +1301,38 @@ export function validateFlow(
           if (definition === undefined) valueType(value, where, propertyPath);
           else checkProperty(node, definition, name, value, where, propertyPath);
         }
-        if (node.type === "interface.show_message") {
-          const action = node.properties.action_flow;
-          const inputs = node.properties.action_inputs;
-          if (action !== undefined && isTextLiteral(action)) {
-            const target = findFlow(
-              String((action as Extract<FlowValue, { kind: "literal" }>).literal.value),
-            );
-            if (inputs !== undefined && inputs.kind !== "map")
-              add(
-                [...path, "properties", "action_inputs"],
-                "vortex.definition.workflow_node_values",
-                "invalid_value",
-                "Message action inputs must be a map of named values",
-              );
-            else
-              checkInputMap(inputs?.kind === "map" ? inputs.entries : {}, target, where, [
-                ...path,
-                "properties",
-                "action_inputs",
-                "entries",
-              ]);
-          } else if (inputs !== undefined)
+        if (node.type === "interface.show_message" && node.properties.actions !== undefined) {
+          const actionsPath = [...path, "properties", "actions"];
+          const actions = readFlowMessageActions(node.properties.actions);
+          const target = node.properties.target;
+          const limit =
+            isTextLiteral(target) &&
+            (target as { literal: { value: unknown } }).literal.value === "dialog"
+              ? flowMessageActionLimits.dialog
+              : flowMessageActionLimits.other;
+          if (actions === undefined || actions.length === 0)
             add(
-              [...path, "properties", "action_inputs"],
+              actionsPath,
               "vortex.definition.workflow_node_values",
               "invalid_value",
-              "Message action inputs require an action flow",
+              "Message actions must be a list of actions, each with a label, a flow and optional inputs",
             );
+          else if (actions.length > limit)
+            add(
+              actionsPath,
+              "vortex.definition.workflow_node_values",
+              "invalid_value",
+              `A ${limit === 1 ? "message outside a dialog" : "dialog"} offers at most ${limit} ${limit === 1 ? "action" : "actions"}`,
+            );
+          else
+            actions.forEach((action, index) => {
+              const flowName = flowMessageActionFlowName(action);
+              const at = [...actionsPath, "items", index, "entries"];
+              const flow = flowName === undefined ? undefined : findFlow(flowName);
+              if (flowName === undefined || flow === undefined)
+                refuseUnknownTarget([...at, "flow"]);
+              else checkInputMap(action.inputs, flow, where, [...at, "inputs", "entries"]);
+            });
         }
         if (node.type === "interface.show_form") {
           const named = node.properties.form !== undefined;

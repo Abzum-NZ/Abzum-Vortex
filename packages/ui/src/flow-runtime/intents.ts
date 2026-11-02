@@ -51,7 +51,14 @@ export const surfaceCancellationError = (): Error => {
 export const isSurfaceCancellation = (error: unknown): boolean =>
   error instanceof Error && error.name === "AbortError";
 
-/** A message's evaluated presentation and optional action. */
+/** One action a message offers: its label, the flow it starts and the inputs it gives that flow. */
+export type FlowMessageAction = Readonly<{
+  label: string;
+  flow: string;
+  inputs?: Readonly<Record<string, JsonValue>>;
+}>;
+
+/** A message's evaluated presentation and optional actions. */
 export type FlowMessageIntent = Readonly<{
   taskId?: string;
   target: PageMessageTarget;
@@ -59,9 +66,8 @@ export type FlowMessageIntent = Readonly<{
   text: string;
   severity: NoticeSeverity;
   title?: string;
-  actionLabel?: string;
-  actionFlow?: string;
-  actionInputs?: Readonly<Record<string, JsonValue>>;
+  /** The actions it offers, each starting a flow ("Undo", "View in App Store"). */
+  actions?: readonly FlowMessageAction[];
   dismissAfterMs?: number;
   originBindingId?: string;
   sourceFlowId?: string;
@@ -118,6 +124,34 @@ const text = (candidate: JsonValue | undefined): string | undefined =>
 const record = (candidate: JsonValue | undefined): Readonly<Record<string, JsonValue>> =>
   typeof candidate === "object" && candidate !== null && !Array.isArray(candidate) ? candidate : {};
 
+/** The actions of a message: undefined when it has none, null when what it carries is not actions. */
+const readActions = (
+  candidate: JsonValue | undefined,
+): readonly FlowMessageAction[] | undefined | null => {
+  if (candidate === undefined) return undefined;
+  if (!Array.isArray(candidate) || candidate.length === 0) return null;
+  const actions: FlowMessageAction[] = [];
+  for (const entry of candidate) {
+    if (typeof entry !== "object" || entry === null || Array.isArray(entry)) return null;
+    const label = text(entry.label);
+    const flow = text(entry.flow);
+    const inputs = entry.inputs;
+    if (
+      label === undefined ||
+      flow === undefined ||
+      (inputs !== undefined &&
+        (typeof inputs !== "object" || inputs === null || Array.isArray(inputs)))
+    )
+      return null;
+    actions.push({
+      label,
+      flow,
+      ...(inputs === undefined ? {} : { inputs: inputs as Readonly<Record<string, JsonValue>> }),
+    });
+  }
+  return actions;
+};
+
 /** Undefined when a platform-produced intent does not match the message contract. */
 export const readMessageIntent = (intent: FlowIntent): FlowMessageIntent | undefined => {
   const message = text(intent.properties.message);
@@ -125,9 +159,7 @@ export const readMessageIntent = (intent: FlowIntent): FlowMessageIntent | undef
   const target = text(intent.properties.target);
   const severity = text(intent.properties.severity);
   const component = text(intent.properties.component);
-  const actionLabel = text(intent.properties.action_label);
-  const actionFlow = text(intent.properties.action_flow);
-  const actionInputs = intent.properties.action_inputs;
+  const actions = readActions(intent.properties.actions);
   const dismissAfterMs = intent.properties.dismiss_after_ms;
   if (
     message === undefined ||
@@ -136,9 +168,8 @@ export const readMessageIntent = (intent: FlowIntent): FlowMessageIntent | undef
     severity === undefined ||
     !(flowMessageSeverities as readonly string[]).includes(severity) ||
     ((target === "inline" || target === "slot") && component === undefined) ||
-    (actionLabel === undefined) !== (actionFlow === undefined) ||
-    (actionInputs !== undefined &&
-      (typeof actionInputs !== "object" || actionInputs === null || Array.isArray(actionInputs))) ||
+    actions === null ||
+    (actions !== undefined && actions.length > (target === "dialog" ? 3 : 1)) ||
     (dismissAfterMs !== undefined &&
       (typeof dismissAfterMs !== "number" ||
         !Number.isInteger(dismissAfterMs) ||
@@ -155,11 +186,7 @@ export const readMessageIntent = (intent: FlowIntent): FlowMessageIntent | undef
     severity: severity as FlowMessageSeverity,
     ...(title === undefined ? {} : { title }),
     ...(component === undefined ? {} : { component }),
-    ...(actionLabel === undefined ? {} : { actionLabel }),
-    ...(actionFlow === undefined ? {} : { actionFlow }),
-    ...(actionInputs === undefined
-      ? {}
-      : { actionInputs: actionInputs as Readonly<Record<string, JsonValue>> }),
+    ...(actions === undefined ? {} : { actions }),
     ...(dismissAfterMs === undefined ? {} : { dismissAfterMs: dismissAfterMs as number }),
   };
 };

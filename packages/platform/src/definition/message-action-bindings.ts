@@ -3,6 +3,10 @@ import { defaultFlowBindingSettings } from "./component-semantic-events";
 import { derivedDefinitionId } from "./derived-definition-id";
 import type { FlowDefinition, FlowTask } from "../workflows/flow-contracts";
 import { flowTaskChildLists } from "../workflows/flow-task-tree";
+import {
+  flowMessageActionFlowName,
+  readFlowMessageActions,
+} from "../workflows/flow-message-actions";
 import { reachablePageFlows } from "../workflows/flow-reachability";
 
 type MessageActionBinding = Readonly<{
@@ -12,7 +16,14 @@ type MessageActionBinding = Readonly<{
   taskId: string;
 }>;
 
-/** Derives finite message-action bindings from the installed flows and an authored binding. */
+/**
+ * Derives finite message-action bindings from the installed flows and an authored binding, one per
+ * action a message offers. A derived binding is gated by the control of the binding it came from;
+ * it is never wider than what the person could already start from that control. What the target
+ * flow changes is decided again by its protected operations for the person and the record (the
+ * gate for Install or upgrade is the installation authority, not the button), and a shell that
+ * knows an action is not the person's may leave it out of the message it shows.
+ */
 export function messageActionBindings(
   origin: ComponentFlowBinding,
   flows: readonly FlowDefinition[],
@@ -25,14 +36,11 @@ export function messageActionBindings(
     const visit = (tasks: readonly FlowTask[]): void => {
       for (const task of tasks) {
         if (task.type === "interface.show_message") {
-          const action = task.properties.action_flow;
-          const target =
-            action?.kind === "literal" && typeof action.literal.value === "string"
-              ? byId.get(action.literal.value)
-              : undefined;
-          if (target !== undefined) {
-            const mapped = task.properties.action_inputs;
-            const names = mapped?.kind === "map" ? Object.keys(mapped.entries) : [];
+          for (const action of readFlowMessageActions(task.properties.actions) ?? []) {
+            const name = flowMessageActionFlowName(action);
+            const target = name === undefined ? undefined : byId.get(name);
+            if (target === undefined) continue;
+            const names = Object.keys(action.inputs);
             result.push({
               authoredBindingId: String(origin.bindingId),
               sourceFlowId: String(source.id),
@@ -43,6 +51,7 @@ export function messageActionBindings(
                   String(origin.bindingId).toLowerCase(),
                   String(source.id).toLowerCase(),
                   task.id,
+                  String(target.id).toLowerCase(),
                 ]) as ComponentFlowBinding["bindingId"],
                 controlId: origin.controlId,
                 eventId: origin.eventId,

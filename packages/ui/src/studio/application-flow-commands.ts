@@ -735,7 +735,7 @@ export const noChangeGuard = (
         {
           id: uniqueTaskId("none_changed", used),
           type: "interface.show_message",
-          version: "1.0.0",
+          version: flowTaskRegistry["interface.show_message"].version,
           properties: {
             message: text("No changes to save."),
             target: text(form === undefined ? "dialog" : "inline"),

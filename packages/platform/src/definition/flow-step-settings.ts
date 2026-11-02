@@ -105,11 +105,6 @@ export const flowStepSettingIssues = (
             "Show message: auto-dismiss is available only for an info or success toast or banner",
           );
       }
-      if ((properties.action_label === undefined) !== (properties.action_flow === undefined))
-        invalid(
-          [...path, "action_label"],
-          "Show message: an action needs both its label and its flow",
-        );
     } else if (type === "interface.clear_message") checkTarget(properties, path, "Clear message");
     else if (type === "interface.set_value") {
       const page = properties.value !== undefined;

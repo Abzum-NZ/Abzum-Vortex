@@ -439,7 +439,11 @@ export const createHumanOrganizationRequestService = (
         multiFactorRequired ||
         roleSettingsChangeRequired ||
         roleKeyInUse ||
-        (error instanceof Error && error.name === "FirstInstallUnavailable");
+        (error instanceof Error && error.name === "FirstInstallUnavailable") ||
+        // Nothing to publish, or a person the builder authority does not allow: the answers the
+        // platform is there to give, so the log, the telemetry and the answer all say refused.
+        (error instanceof DefinitionError &&
+          (error.code === "DEFINITION_NO_CHANGE" || error.code === "DEFINITION_CONTEXT_REFUSED"));
       const cause = describeFailure(error);
       // A request its caller abandoned (the browser left the page) is stopped on purpose, and a
       // refusal the access model raises is it answering: neither is a failure of the platform, so

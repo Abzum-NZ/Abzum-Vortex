@@ -47,6 +47,7 @@ export type {
   FlowFormAnswer,
   FlowFormIntent,
   FlowIntentHost,
+  FlowMessageAction,
   FlowMessageIntent,
 } from "./flow-runtime/intents";
 export { createFlowInvokeClient } from "./flow-runtime/lazy-flow-client";

@@ -32,6 +32,7 @@ import type {
   FlowFormIntent,
   FlowInlineFormIntent,
   FlowIntentHost,
+  FlowMessageAction,
   FlowMessageIntent,
 } from "./intents";
 import { surfaceCancellationError } from "./intents";
@@ -69,7 +70,9 @@ export type FlowIntentHostOptions = Readonly<{
   ) => Readonly<{ title: string; body: ReactNode }>;
   navigation: LinkNavigationEnvironment;
   state: FlowRuntimeState;
-  onMessageAction: (message: FlowMessageIntent) => void;
+  onMessageAction: (message: FlowMessageIntent, action: FlowMessageAction) => void;
+  /** Whether this person is offered an action; a shell that knows one is not theirs leaves it out. */
+  actionOffered?: (action: FlowMessageAction) => boolean;
   refresh?: FlowIntentHost["refresh"];
   setPanel?: FlowIntentHost["setPanel"];
   setFilter?: FlowIntentHost["setFilter"];
@@ -319,18 +322,21 @@ function FlowSurfaceHost({
         onDismiss={() => settle()}
         actions={
           <>
-            {message.actionLabel === undefined ? null : (
-              <Button
-                type="button"
-                variant="secondary"
-                onClick={() => {
-                  settle();
-                  optionsRef.current.onMessageAction(message);
-                }}
-              >
-                {message.actionLabel}
-              </Button>
-            )}
+            {(message.actions ?? [])
+              .filter((action) => optionsRef.current.actionOffered?.(action) !== false)
+              .map((action) => (
+                <Button
+                  key={`${action.flow}:${action.label}`}
+                  type="button"
+                  variant="secondary"
+                  onClick={() => {
+                    settle();
+                    optionsRef.current.onMessageAction(message, action);
+                  }}
+                >
+                  {action.label}
+                </Button>
+              ))}
             <Button type="button" onClick={() => settle()}>
               OK
             </Button>
@@ -428,6 +434,9 @@ export function useFlowIntentHost(
       showMessage: (message, signal) => {
         const state = optionsRef.current.state;
         const id = crypto.randomUUID();
+        const offeredAction = message.actions?.find(
+          (action) => optionsRef.current.actionOffered?.(action) !== false,
+        );
         state.messages.show({
           id,
           target: message.target,
@@ -438,13 +447,14 @@ export function useFlowIntentHost(
           ...(message.dismissAfterMs === undefined
             ? {}
             : { dismissAfterMs: message.dismissAfterMs }),
-          ...(message.actionLabel === undefined
+          // Outside a dialog a message offers one action.
+          ...(offeredAction === undefined
             ? {}
             : {
                 action: {
                   kind: "flow" as const,
-                  label: message.actionLabel,
-                  run: () => optionsRef.current.onMessageAction(message),
+                  label: offeredAction.label,
+                  run: () => optionsRef.current.onMessageAction(message, offeredAction),
                 },
               }),
         });

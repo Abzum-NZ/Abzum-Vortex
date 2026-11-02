@@ -1,5 +1,5 @@
 {
-  "source_contract_version": "4.6.0",
+  "source_contract_version": "4.7.0",
   "root_alias": "app_studio",
   "key": "vortex.app.studio",
   "kind": "application",
@@ -1304,7 +1304,7 @@
                                   {
                                     "id": "install_done",
                                     "type": "interface.show_message",
-                                    "version": "1.0.0",
+                                    "version": "1.1.0",
                                     "properties": {
                                       "message": {
                                         "kind": "formula",
@@ -1412,7 +1412,7 @@
                                   {
                                     "id": "install_conflict",
                                     "type": "interface.show_message",
-                                    "version": "1.0.0",
+                                    "version": "1.1.0",
                                     "properties": {
                                       "message": {
                                         "kind": "literal",
@@ -1456,7 +1456,7 @@
                                   {
                                     "id": "install_refused",
                                     "type": "interface.show_message",
-                                    "version": "1.0.0",
+                                    "version": "1.1.0",
                                     "properties": {
                                       "message": {
                                         "kind": "literal",
@@ -1495,7 +1495,7 @@
                               {
                                 "id": "install_unknown",
                                 "type": "interface.show_message",
-                                "version": "1.0.0",
+                                "version": "1.1.0",
                                 "properties": {
                                   "message": {
                                     "kind": "literal",
@@ -1901,7 +1901,7 @@
                                   {
                                     "id": "upgrade_done",
                                     "type": "interface.show_message",
-                                    "version": "1.0.0",
+                                    "version": "1.1.0",
                                     "properties": {
                                       "message": {
                                         "kind": "formula",
@@ -2034,7 +2034,7 @@
                                   {
                                     "id": "upgrade_conflict",
                                     "type": "interface.show_message",
-                                    "version": "1.0.0",
+                                    "version": "1.1.0",
                                     "properties": {
                                       "message": {
                                         "kind": "literal",
@@ -2078,7 +2078,7 @@
                                   {
                                     "id": "upgrade_refused",
                                     "type": "interface.show_message",
-                                    "version": "1.0.0",
+                                    "version": "1.1.0",
                                     "properties": {
                                       "message": {
                                         "kind": "literal",
@@ -2117,7 +2117,7 @@
                               {
                                 "id": "upgrade_unknown",
                                 "type": "interface.show_message",
-                                "version": "1.0.0",
+                                "version": "1.1.0",
                                 "properties": {
                                   "message": {
                                     "kind": "literal",
@@ -2436,7 +2436,7 @@
                                   {
                                     "id": "accept_roles_done",
                                     "type": "interface.show_message",
-                                    "version": "1.0.0",
+                                    "version": "1.1.0",
                                     "properties": {
                                       "message": {
                                         "kind": "formula",
@@ -2530,7 +2530,7 @@
                                   {
                                     "id": "accept_roles_conflict",
                                     "type": "interface.show_message",
-                                    "version": "1.0.0",
+                                    "version": "1.1.0",
                                     "properties": {
                                       "message": {
                                         "kind": "literal",
@@ -2574,7 +2574,7 @@
                                   {
                                     "id": "accept_roles_refused",
                                     "type": "interface.show_message",
-                                    "version": "1.0.0",
+                                    "version": "1.1.0",
                                     "properties": {
                                       "message": {
                                         "kind": "literal",
@@ -2613,7 +2613,7 @@
                               {
                                 "id": "accept_roles_unknown",
                                 "type": "interface.show_message",
-                                "version": "1.0.0",
+                                "version": "1.1.0",
                                 "properties": {
                                   "message": {
                                     "kind": "literal",
@@ -2659,7 +2659,7 @@
                           {
                             "id": "up_to_date",
                             "type": "interface.show_message",
-                            "version": "1.0.0",
+                            "version": "1.1.0",
                             "properties": {
                               "message": {
                                 "kind": "formula",
@@ -2752,7 +2752,7 @@
                                   {
                                     "id": "unavailable_not_published",
                                     "type": "interface.show_message",
-                                    "version": "1.0.0",
+                                    "version": "1.1.0",
                                     "properties": {
                                       "message": {
                                         "kind": "literal",
@@ -2796,7 +2796,7 @@
                                   {
                                     "id": "unavailable_installation_incomplete",
                                     "type": "interface.show_message",
-                                    "version": "1.0.0",
+                                    "version": "1.1.0",
                                     "properties": {
                                       "message": {
                                         "kind": "literal",
@@ -2840,7 +2840,7 @@
                                   {
                                     "id": "unavailable_registration_misaligned",
                                     "type": "interface.show_message",
-                                    "version": "1.0.0",
+                                    "version": "1.1.0",
                                     "properties": {
                                       "message": {
                                         "kind": "literal",
@@ -2879,7 +2879,7 @@
                               {
                                 "id": "unavailable_other",
                                 "type": "interface.show_message",
-                                "version": "1.0.0",
+                                "version": "1.1.0",
                                 "properties": {
                                   "message": {
                                     "kind": "literal",
@@ -2920,7 +2920,7 @@
                       {
                         "id": "change_unknown",
                         "type": "interface.show_message",
-                        "version": "1.0.0",
+                        "version": "1.1.0",
                         "properties": {
                           "message": {
                             "kind": "literal",
@@ -2966,7 +2966,7 @@
                   {
                     "id": "review_refused",
                     "type": "interface.show_message",
-                    "version": "1.0.0",
+                    "version": "1.1.0",
                     "properties": {
                       "message": {
                         "kind": "literal",
@@ -3005,7 +3005,7 @@
               {
                 "id": "review_unknown",
                 "type": "interface.show_message",
-                "version": "1.0.0",
+                "version": "1.1.0",
                 "properties": {
                   "message": {
                     "kind": "literal",
@@ -3723,7 +3723,7 @@
                                       {
                                         "id": "purge_done",
                                         "type": "interface.show_message",
-                                        "version": "1.0.0",
+                                        "version": "1.1.0",
                                         "properties": {
                                           "message": {
                                             "kind": "literal",
@@ -3781,7 +3781,7 @@
                                       {
                                         "id": "purge_refused",
                                         "type": "interface.show_message",
-                                        "version": "1.0.0",
+                                        "version": "1.1.0",
                                         "properties": {
                                           "message": {
                                             "kind": "literal",
@@ -3820,7 +3820,7 @@
                                   {
                                     "id": "purge_failed",
                                     "type": "interface.show_message",
-                                    "version": "1.0.0",
+                                    "version": "1.1.0",
                                     "properties": {
                                       "message": {
                                         "kind": "literal",
@@ -4012,7 +4012,7 @@
                                       {
                                         "id": "removal_done",
                                         "type": "interface.show_message",
-                                        "version": "1.0.0",
+                                        "version": "1.1.0",
                                         "properties": {
                                           "message": {
                                             "kind": "literal",
@@ -4070,7 +4070,7 @@
                                       {
                                         "id": "removal_conflict",
                                         "type": "interface.show_message",
-                                        "version": "1.0.0",
+                                        "version": "1.1.0",
                                         "properties": {
                                           "message": {
                                             "kind": "literal",
@@ -4114,7 +4114,7 @@
                                       {
                                         "id": "removal_refused",
                                         "type": "interface.show_message",
-                                        "version": "1.0.0",
+                                        "version": "1.1.0",
                                         "properties": {
                                           "message": {
                                             "kind": "literal",
@@ -4153,7 +4153,7 @@
                                   {
                                     "id": "removal_failed",
                                     "type": "interface.show_message",
-                                    "version": "1.0.0",
+                                    "version": "1.1.0",
                                     "properties": {
                                       "message": {
                                         "kind": "literal",
@@ -4196,7 +4196,7 @@
                       {
                         "id": "purge_review_failed",
                         "type": "interface.show_message",
-                        "version": "1.0.0",
+                        "version": "1.1.0",
                         "properties": {
                           "message": {
                             "kind": "literal",
@@ -4242,7 +4242,7 @@
                   {
                     "id": "removal_review_refused",
                     "type": "interface.show_message",
-                    "version": "1.0.0",
+                    "version": "1.1.0",
                     "properties": {
                       "message": {
                         "kind": "literal",
@@ -4281,7 +4281,7 @@
               {
                 "id": "removal_review_failed",
                 "type": "interface.show_message",
-                "version": "1.0.0",
+                "version": "1.1.0",
                 "properties": {
                   "message": {
                     "kind": "literal",
@@ -4843,7 +4843,7 @@
                           {
                             "id": "delete_done",
                             "type": "interface.show_message",
-                            "version": "1.0.0",
+                            "version": "1.1.0",
                             "properties": {
                               "message": {
                                 "kind": "literal",
@@ -4901,7 +4901,7 @@
                           {
                             "id": "delete_refused",
                             "type": "interface.show_message",
-                            "version": "1.0.0",
+                            "version": "1.1.0",
                             "properties": {
                               "message": {
                                 "kind": "literal",
@@ -4940,7 +4940,7 @@
                       {
                         "id": "delete_failed",
                         "type": "interface.show_message",
-                        "version": "1.0.0",
+                        "version": "1.1.0",
                         "properties": {
                           "message": {
                             "kind": "literal",
@@ -4986,7 +4986,7 @@
                   {
                     "id": "delete_review_refused",
                     "type": "interface.show_message",
-                    "version": "1.0.0",
+                    "version": "1.1.0",
                     "properties": {
                       "message": {
                         "kind": "literal",
@@ -5025,7 +5025,7 @@
               {
                 "id": "delete_review_failed",
                 "type": "interface.show_message",
-                "version": "1.0.0",
+                "version": "1.1.0",
                 "properties": {
                   "message": {
                     "kind": "literal",
@@ -5248,7 +5248,7 @@
                   {
                     "id": "create_done",
                     "type": "interface.show_message",
-                    "version": "1.0.0",
+                    "version": "1.1.0",
                     "properties": {
                       "message": {
                         "kind": "literal",
@@ -5301,7 +5301,7 @@
               {
                 "id": "create_failed",
                 "type": "interface.show_message",
-                "version": "1.0.0",
+                "version": "1.1.0",
                 "properties": {
                   "message": {
                     "kind": "literal",
@@ -5764,7 +5764,7 @@
                               {
                                 "id": "publish_done",
                                 "type": "interface.show_message",
-                                "version": "1.0.0",
+                                "version": "1.1.0",
                                 "properties": {
                                   "message": {
                                     "kind": "formula",
@@ -5788,7 +5788,7 @@
                                         {
                                           "op": "literal",
                                           "type": "text",
-                                          "value": " was published. Install or upgrade it from the list to use it."
+                                          "value": " was published. Install or upgrade it to use it in this organisation."
                                         }
                                       ]
                                     }
@@ -5813,6 +5813,73 @@
                                       "type": "text",
                                       "value": "success"
                                     }
+                                  },
+                                  "actions": {
+                                    "kind": "array",
+                                    "items": [
+                                      {
+                                        "kind": "map",
+                                        "entries": {
+                                          "label": {
+                                            "kind": "literal",
+                                            "literal": {
+                                              "type": "text",
+                                              "value": "Install or upgrade"
+                                            }
+                                          },
+                                          "flow": {
+                                            "kind": "literal",
+                                            "literal": {
+                                              "type": "text",
+                                              "value": "flow_install_or_upgrade_application"
+                                            }
+                                          },
+                                          "inputs": {
+                                            "kind": "map",
+                                            "entries": {
+                                              "application_root_id": {
+                                                "kind": "reference",
+                                                "reference": {
+                                                  "source": "input",
+                                                  "name": "application_root_id"
+                                                }
+                                              }
+                                            }
+                                          }
+                                        }
+                                      },
+                                      {
+                                        "kind": "map",
+                                        "entries": {
+                                          "label": {
+                                            "kind": "literal",
+                                            "literal": {
+                                              "type": "text",
+                                              "value": "View in App Store"
+                                            }
+                                          },
+                                          "flow": {
+                                            "kind": "literal",
+                                            "literal": {
+                                              "type": "text",
+                                              "value": "flow_open_store_application"
+                                            }
+                                          },
+                                          "inputs": {
+                                            "kind": "map",
+                                            "entries": {
+                                              "record_id": {
+                                                "kind": "reference",
+                                                "reference": {
+                                                  "source": "input",
+                                                  "name": "application_root_id"
+                                                }
+                                              }
+                                            }
+                                          }
+                                        }
+                                      }
+                                    ]
                                   }
                                 }
                               },
@@ -5842,7 +5909,7 @@
                               {
                                 "id": "publish_conflict",
                                 "type": "interface.show_message",
-                                "version": "1.0.0",
+                                "version": "1.1.0",
                                 "properties": {
                                   "message": {
                                     "kind": "literal",
@@ -5881,7 +5948,7 @@
                           {
                             "id": "publish_failed",
                             "type": "interface.show_message",
-                            "version": "1.0.0",
+                            "version": "1.1.0",
                             "properties": {
                               "message": {
                                 "kind": "literal",
@@ -5920,7 +5987,7 @@
                       {
                         "id": "publication_not_ready",
                         "type": "interface.show_message",
-                        "version": "1.0.0",
+                        "version": "1.1.0",
                         "properties": {
                           "message": {
                             "kind": "reference",
@@ -5968,7 +6035,7 @@
                   {
                     "id": "publication_review_refused",
                     "type": "interface.show_message",
-                    "version": "1.0.0",
+                    "version": "1.1.0",
                     "properties": {
                       "message": {
                         "kind": "literal",
@@ -6007,7 +6074,7 @@
               {
                 "id": "publication_review_failed",
                 "type": "interface.show_message",
-                "version": "1.0.0",
+                "version": "1.1.0",
                 "properties": {
                   "message": {
                     "kind": "literal",
@@ -6166,7 +6233,7 @@
           "concurrency": "ignore_while_running",
           "exclusive": "none",
           "timeoutMs": null,
-          "startFromAddress": {
+          "startableAs": {
             "token": "install"
           }
         }
@@ -6188,10 +6255,7 @@
           "debounceMs": 0,
           "concurrency": "ignore_while_running",
           "exclusive": "none",
-          "timeoutMs": null,
-          "startFromAddress": {
-            "token": "remove"
-          }
+          "timeoutMs": null
         }
       },
       {
@@ -6212,7 +6276,7 @@
           "concurrency": "ignore_while_running",
           "exclusive": "none",
           "timeoutMs": null,
-          "startFromAddress": {
+          "startableAs": {
             "token": "publish"
           }
         }
@@ -6249,10 +6313,7 @@
           "debounceMs": 0,
           "concurrency": "ignore_while_running",
           "exclusive": "none",
-          "timeoutMs": null,
-          "startFromAddress": {
-            "token": "delete"
-          }
+          "timeoutMs": null
         }
       }
     ]

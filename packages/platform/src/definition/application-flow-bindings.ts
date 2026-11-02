@@ -76,10 +76,11 @@ export const flowBindingSettingsSchema = z
     exclusive: flowBindingExclusiveScopeSchema,
     timeoutMs: z.number().int().min(100).max(flowBindingMaximumTimeoutMs).nullable(),
     /**
-     * An action binding that a link to its page may start (the page opened with `run=` and this
-     * binding's `startToken`). Only a flow that asks before it first changes anything may say so.
+     * An action binding that another surface (Studio's editor, the Studio agent) may start in place
+     * under this token, as a press on its control would. Only a flow that asks before it first
+     * changes anything may say so.
      */
-    startFromAddress: z
+    startableAs: z
       .object({ token: z.string().regex(/^[a-z][a-z0-9_]{0,39}$/) })
       .strict()
       .optional(),

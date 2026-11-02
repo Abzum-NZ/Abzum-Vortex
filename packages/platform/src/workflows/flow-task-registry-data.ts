@@ -2,6 +2,7 @@ import type { z } from "zod";
 import type { FlowTaskEffectClass, safeFlowResultKindSchema } from "./flow-effects";
 import { flowControlTaskTypeKeys } from "./flow-task-tree";
 import { flowMaximumServerSeconds } from "./flow-limits";
+import { showMessageTaskVersion } from "./flow-message-actions";
 import type {
   FlowStepRuns,
   FlowTaskPropertyType,
@@ -143,6 +144,8 @@ type DefinitionInput = {
   properties?: Record<string, Property>;
   outputs?: readonly Output[];
   redaction?: "identifiers_only" | "safe_fields" | "no_payload";
+  /** The task version when it is not the shared first one. */
+  version?: string;
 };
 
 const allLocations = ["browser", "server", "transaction"] as const;
@@ -500,6 +503,7 @@ const registeredDefinitions: Record<FlowRegisteredTaskTypeKey, DefinitionInput> 
 
   // Interface tasks: browser-only, answered by the page runner.
   "interface.show_message": {
+    version: showMessageTaskVersion,
     title: "Show message",
     summary:
       "Shows a safe message: in a dialog, a toast, the page banner, under a component or in a message slot.",
@@ -515,10 +519,11 @@ const registeredDefinitions: Record<FlowRegisteredTaskTypeKey, DefinitionInput> 
       severity: required("builder_key"),
       /** A dialog's heading: what the person was doing ("Install or upgrade"). */
       title: optional("message_text"),
-      /** One action the message offers, bound to a flow ("Undo"). */
-      action_label: optional("message_text"),
-      action_flow: optional("flow_id"),
-      action_inputs: optional("input_map"),
+      /**
+       * The actions the message offers, each bound to a flow ("Undo", "View in App Store"): an array
+       * of {label, flow, inputs}. A dialog offers up to three; any other target offers one.
+       */
+      actions: optional("message_actions"),
       /** A short-lived informational toast or banner, in milliseconds. */
       dismiss_after_ms: optional("whole_number"),
     },
@@ -635,7 +640,7 @@ const buildDefinition = (type: string, input: DefinitionInput): FlowTaskTypeDefi
   return {
     type,
     category,
-    version: "1.0.0",
+    version: input.version ?? "1.0.0",
     title: input.title,
     summary: input.summary,
     runLocations: [...input.runLocations],
