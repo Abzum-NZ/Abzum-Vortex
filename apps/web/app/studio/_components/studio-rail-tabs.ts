@@ -5,14 +5,14 @@ export type StudioRailKey =
   "structure" | "outline" | "blocks" | "menu" | "data" | "flows" | "theme" | "access" | "releases";
 
 export const studioRailTabs: readonly StudioRailTab<StudioRailKey>[] = [
-  { key: "structure", label: "Structure", icon: "sitemap", width: 17, group: "build" },
-  { key: "outline", label: "Outline", icon: "list-tree", width: 17, group: "build" },
-  { key: "blocks", label: "Blocks", icon: "blocks", width: 18, group: "build" },
-  { key: "menu", label: "Menu", icon: "menu", width: 20, group: "build" },
-  { key: "data", label: "Data", icon: "database", width: 18, group: "logic" },
-  { key: "flows", label: "Flows", icon: "workflow", width: 17, group: "logic" },
-  { key: "theme", label: "Theme", icon: "palette", width: 22, group: "look" },
-  { key: "access", label: "Access", icon: "shield", width: 17, group: "look" },
+  { key: "structure", label: "Structure", icon: "sitemap", group: "build" },
+  { key: "outline", label: "Outline", icon: "list-tree", group: "build" },
+  { key: "blocks", label: "Blocks", icon: "blocks", group: "build" },
+  { key: "menu", label: "Menu", icon: "menu", group: "build" },
+  { key: "data", label: "Data", icon: "database", group: "logic" },
+  { key: "flows", label: "Flows", icon: "workflow", group: "logic" },
+  { key: "theme", label: "Theme", icon: "palette", group: "look" },
+  { key: "access", label: "Access", icon: "shield", group: "look" },
   { key: "releases", label: "Releases", icon: "history", panel: false, group: "releases" },
 ];
 

@@ -2,7 +2,6 @@
 
 import { createUsePuck, useGetPuck, type Overrides } from "@puckeditor/core";
 import { StudioCanvasIframe } from "./studio-canvas-root";
-import { createPortal } from "react-dom";
 import { Copy, Trash2 } from "lucide-react";
 import { Button } from "../components/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../components/tooltip";
@@ -10,11 +9,11 @@ import { Icon } from "../icons";
 
 const usePuckSelector = createUsePuck();
 
-/** Selection actions live outside the scaled page, never over its content. */
-export function StudioCanvasActions({ host }: Readonly<{ host: HTMLElement | null }>) {
+/** Selection actions live above the scaled page, never over its content. */
+export function StudioCanvasActions() {
   const selected = usePuckSelector((state) => state.selectedItem);
   const getPuck = useGetPuck();
-  if (host === null || selected === null) return null;
+  if (selected === null) return null;
   const puck = getPuck();
   const permissions = puck.getPermissions({ item: selected });
   const parent = puck.getParentById(selected.props.id);
@@ -33,13 +32,13 @@ export function StudioCanvasActions({ host }: Readonly<{ host: HTMLElement | nul
         : { type: "remove", index: selector.index, zone: selector.zone },
     );
   };
-  return createPortal(
+  return (
     <div
       role="toolbar"
       aria-label="Selected block actions"
-      className="flex min-h-9 min-w-0 items-center gap-1"
+      className="flex shrink-0 items-center gap-1"
     >
-      <span className="mr-auto truncate text-sm font-medium">{label}</span>
+      <span className="mr-1 max-w-40 truncate text-sm font-medium">{label}</span>
       {parent === undefined ? null : (
         <Tooltip>
           <TooltipTrigger
@@ -97,8 +96,7 @@ export function StudioCanvasActions({ host }: Readonly<{ host: HTMLElement | nul
         </TooltipTrigger>
         <TooltipContent>Delete block</TooltipContent>
       </Tooltip>
-    </div>,
-    host,
+    </div>
   );
 }
 

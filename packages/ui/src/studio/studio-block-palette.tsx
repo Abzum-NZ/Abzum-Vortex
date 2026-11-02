@@ -109,16 +109,10 @@ export function StudioBlockPalette({
           onChange={(event) => setSearch(event.target.value)}
         />
       </div>
-      <p className="text-sm text-muted-foreground">
-        {owner === "layout"
-          ? "Use Add to put a block into the layout."
-          : "Drag onto the page or use Add."}
+      {/* The answer to an Add is announced, not drawn: a line that comes and goes would move the list. */}
+      <p role="status" aria-live="polite" className="sr-only">
+        {message}
       </p>
-      {message.length === 0 ? null : (
-        <p role="status" aria-live="polite" className="text-sm">
-          {message}
-        </p>
-      )}
       {groups.length === 0 ? (
         <Empty role="status">
           <EmptyHeader>

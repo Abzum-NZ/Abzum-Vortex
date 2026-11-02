@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { SourceIdentityReservation } from "@vortex/platform/schema";
 import {
   StudioFieldProblemsProvider,
@@ -28,6 +28,11 @@ import { StudioSaveState } from "./studio-save-state";
 import { StudioHeader, type StudioFrameDefinition } from "./studio-header";
 import type { ApplicationReleaseStanding } from "../../_lib/application-release-adoption";
 import { StudioPlaceOpenerProvider, type StudioPlaceOpener } from "./studio-used-in";
+import {
+  StudioPuckProvider,
+  useStudioDragGate,
+  whenNotDragging,
+} from "@vortex/ui/studio/puck-provider";
 import { useStudioCanvasTab } from "./use-studio-canvas-tab";
 import { useStudioDraft } from "./use-studio-draft";
 import { useStudioDraftTheme } from "./use-studio-draft-theme";
@@ -81,8 +86,14 @@ export function ApplicationDraftWorkspace(props: WorkspaceProps) {
  */
 function ExistingApplicationWorkspace(props: ExistingProps) {
   const { organizationId, place, applications } = props;
-  const [tab, setTab] = useState<StudioRailKey>(
+  const [tab, setCurrentTab] = useState<StudioRailKey>(
     isStudioRailKey(props.initialTab) ? props.initialTab : "structure",
+  );
+  // A block being dragged keeps its canvas: the rail tab and the open page change after the drop.
+  const dragGate = useStudioDragGate();
+  const setTab = useCallback(
+    (next: StudioRailKey) => whenNotDragging(dragGate, () => setCurrentTab(next)),
+    [dragGate],
   );
   const [structureForm, setStructureForm] = useState<StudioStructureForm>("none");
   const draft = useStudioDraft({
@@ -92,6 +103,7 @@ function ExistingApplicationWorkspace(props: ExistingProps) {
     creation:
       structureForm === "shell" ? "layout" : structureForm === "record" ? "record_page" : undefined,
     initialView: props.initialView,
+    dragGate,
   });
   const catalogue = draft.view.catalogue;
   // Every way of opening a tab shares this state, including rule links and the rail.
@@ -286,13 +298,19 @@ function ExistingApplicationWorkspace(props: ExistingProps) {
         (target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName))
       )
         return;
-      if ((!event.ctrlKey && !event.metaKey) || event.altKey || event.key.toLowerCase() !== "z")
-        return;
+      if ((!event.ctrlKey && !event.metaKey) || event.altKey) return;
+      // The physical key, so the shortcuts also work on layouts that do not type Latin letters.
+      const key =
+        event.code === "KeyZ" ? "z" : event.code === "KeyY" ? "y" : event.key.toLowerCase();
+      // Undo is Ctrl+Z; Redo is Ctrl+Shift+Z or Ctrl+Y. Studio's draft history is the one history:
+      // Puck's own hotkeys have nothing to go back to.
+      const redo = key === "y" ? !event.shiftKey : key === "z" && event.shiftKey;
+      if (key !== "z" && !redo) return;
       event.preventDefault();
       // A modal owns its actions. Also prevent native Undo reaching the previously focused input.
       if (target instanceof Element && target.closest('[role="dialog"], [role="alertdialog"]'))
         return;
-      if (event.shiftKey) draft.redo();
+      if (redo) draft.redo();
       else draft.undo();
     };
     window.addEventListener("keydown", shortcut, true);
@@ -312,107 +330,107 @@ function ExistingApplicationWorkspace(props: ExistingProps) {
             readQueries={canvas.readQueries}
             {...releases.agent}
           />
-          <StudioFrame
-            dragging={canvas.dragging}
-            tabs={studioRailTabs}
-            activeTab={tab}
-            onTabChange={setTab}
-            selectionKey={draft.selected === null ? "" : studioSemanticSelectionKey(draft.selected)}
-            topBar={
-              <StudioHeader
-                frame={place.frame}
-                applicationName={source.body.name}
-                onApplication={() => {
-                  draft.select({ kind: "application", applicationRootId: state.rootId });
-                }}
-                saveState={<StudioSaveState draft={draft} />}
-                canUndo={state.canUndo}
-                canRedo={state.canRedo}
-                undoDisabled={draft.locked}
-                onUndo={draft.undo}
-                onRedo={draft.redo}
-                applicationHref={releases.openHref}
-                install={releases.install}
-                onInstall={releases.openInstall}
-                installPending={releases.actionPending === "install"}
-                onPreview={releases.openPreview}
-                previewPending={releases.previewPending}
-                previewDisabled={draft.locked}
-                onPublish={releases.openPublish}
-                publishDisabled={draft.locked}
-                publishPending={releases.actionPending === "publish"}
-              />
-            }
-            panel={
-              <>
-                {structure.panel}
-                {canvas.panels}
-                {menuTheme.menuPanel}
-                {data.panel}
-                {flows.panel}
-                {menuTheme.themePanel}
-                {access.panel}
-              </>
-            }
-            inspector={
-              tab === "access" || tab === "releases"
-                ? null
-                : tab === "data"
-                  ? data.inspector
-                  : canvas.inspector
-            }
-            canvas={({ inspectorOpen, toggleInspector, focused, focusCanvas }) => (
-              <>
-                {canvas.toolbar(
-                  inspectorOpen,
-                  toggleInspector,
-                  centreTitle,
-                  canvasShown,
-                  focused,
-                  focusCanvas,
-                )}
-                {releases.flowHost.banner}
-                {draft.viewProblem !== null ? (
-                  <div role="alert" className="px-4 py-2 text-sm">
-                    {draft.viewProblem.message}{" "}
-                    {draft.viewProblem.retry ? (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                          void draft.refreshView();
-                        }}
-                      >
-                        Try again
-                      </Button>
-                    ) : null}
+          <StudioPuckProvider input={canvas.puck} dragGate={dragGate}>
+            <StudioFrame
+              tabs={studioRailTabs}
+              activeTab={tab}
+              onTabChange={setTab}
+              selectionKey={
+                draft.selected === null ? "" : studioSemanticSelectionKey(draft.selected)
+              }
+              topBar={
+                <StudioHeader
+                  frame={place.frame}
+                  applicationName={source.body.name}
+                  onApplication={() => {
+                    draft.select({ kind: "application", applicationRootId: state.rootId });
+                  }}
+                  saveState={<StudioSaveState draft={draft} />}
+                  canUndo={state.canUndo}
+                  canRedo={state.canRedo}
+                  undoDisabled={draft.locked}
+                  onUndo={draft.undo}
+                  onRedo={draft.redo}
+                  applicationHref={releases.openHref}
+                  install={releases.install}
+                  onInstall={releases.openInstall}
+                  installPending={releases.actionPending === "install"}
+                  onPreview={releases.openPreview}
+                  previewPending={releases.previewPending}
+                  previewDisabled={draft.locked}
+                  onPublish={releases.openPublish}
+                  publishDisabled={draft.locked}
+                  publishPending={releases.actionPending === "publish"}
+                />
+              }
+              panel={
+                <>
+                  {structure.panel}
+                  {canvas.panels}
+                  {menuTheme.menuPanel}
+                  {data.panel}
+                  {flows.panel}
+                  {menuTheme.themePanel}
+                  {access.panel}
+                </>
+              }
+              inspector={
+                tab === "access" || tab === "releases"
+                  ? null
+                  : tab === "data"
+                    ? data.inspector
+                    : canvas.inspector
+              }
+              canvas={({ inspectorOpen, toggleInspector, focused, focusCanvas }) => (
+                <>
+                  {canvas.toolbar(
+                    inspectorOpen,
+                    toggleInspector,
+                    centreTitle,
+                    canvasShown,
+                    focused,
+                    focusCanvas,
+                    draft.loadingView,
+                  )}
+                  {releases.flowHost.banner}
+                  {draft.viewProblem !== null ? (
+                    <div role="alert" className="px-4 py-2 text-sm">
+                      {draft.viewProblem.message}{" "}
+                      {draft.viewProblem.retry ? (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            void draft.refreshView();
+                          }}
+                        >
+                          Try again
+                        </Button>
+                      ) : null}
+                    </div>
+                  ) : draft.view.failure !== null ? (
+                    <p role="alert" className="px-4 py-2 text-sm">
+                      This draft cannot be published:{" "}
+                      {describeStudioCompileFailure(draft.view.failure, draft.source).message}
+                    </p>
+                  ) : null}
+                  <div
+                    className={
+                      canvasShown
+                        ? "flex min-h-0 flex-1 flex-col overflow-hidden"
+                        : "min-h-0 flex-1 overflow-auto p-4"
+                    }
+                  >
+                    {canvasShown && canvas.centre}
+                    {tab === "flows" && flows.centre}
+                    {tab === "data" && data.centre}
+                    {tab === "access" && access.centre}
+                    <div hidden={tab !== "releases"}>{releases.centre}</div>
                   </div>
-                ) : draft.view.failure !== null ? (
-                  <p role="alert" className="px-4 py-2 text-sm">
-                    This draft cannot be published:{" "}
-                    {describeStudioCompileFailure(draft.view.failure, draft.source).message}
-                  </p>
-                ) : draft.loadingView ? (
-                  <p role="status" className="px-4 py-2 text-sm">
-                    Loading this editor…
-                  </p>
-                ) : null}
-                <div
-                  className={
-                    canvasShown
-                      ? "flex min-h-0 flex-1 flex-col overflow-auto"
-                      : "min-h-0 flex-1 overflow-auto p-4"
-                  }
-                >
-                  {canvasShown && canvas.centre}
-                  {tab === "flows" && flows.centre}
-                  {tab === "data" && data.centre}
-                  {tab === "access" && access.centre}
-                  <div hidden={tab !== "releases"}>{releases.centre}</div>
-                </div>
-              </>
-            )}
-          />
+                </>
+              )}
+            />
+          </StudioPuckProvider>
           {canvas.dialog}
           {data.dialog}
           {releases.flowHost.element}
