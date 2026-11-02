@@ -38,6 +38,10 @@ import type { FlowOrchestratorDependencies, FlowRelease, Run } from "./flow-orch
 import { createFlowProtectedExecutor } from "./flow-protected-executor";
 import { createFlowTaskRunner } from "./flow-task-runner";
 import type { FlowTraceCollector } from "./flow-test-trace";
+import {
+  isBackendRunRefusalCode,
+  type BackendRunRefusalCode,
+} from "../workflows/backend-run-failure-codes";
 import type { ApplicationStoreService } from "./installation-application-store";
 import { createInstalledContextLoader } from "./installed-page-bundle-context";
 
@@ -46,7 +50,7 @@ const mintedSessionSeconds = 300;
 
 type ResolvedActor =
   | Readonly<{ kind: "available"; identityId: string }>
-  | Readonly<{ kind: "refused"; reason: string }>;
+  | Readonly<{ kind: "refused"; reason: BackendRunRefusalCode }>;
 
 const resolveActor = async (organizationId: string, actorId: string): Promise<ResolvedActor> => {
   const rows = await withRuntimeTransaction(
@@ -57,7 +61,7 @@ const resolveActor = async (organizationId: string, actorId: string): Promise<Re
   const result = rows.length === 1 && isRecord(rows[0]) ? rows[0].result : undefined;
   if (isRecord(result) && result.kind === "available" && typeof result.identityId === "string")
     return { kind: "available", identityId: result.identityId };
-  if (isRecord(result) && result.kind === "refused" && typeof result.reason === "string")
+  if (isRecord(result) && result.kind === "refused" && isBackendRunRefusalCode(result.reason))
     return { kind: "refused", reason: result.reason };
   throw new Error("BACKEND_ACTOR_RESULT_INVALID");
 };
@@ -78,7 +82,10 @@ const mintSession = (identityId: string): IdentitySession => {
   });
 };
 
-const refused = (failureCode: string): BackendRunOutcome => ({ state: "refused", failureCode });
+const refused = (failureCode: BackendRunRefusalCode): BackendRunOutcome => ({
+  state: "refused",
+  failureCode,
+});
 
 export type BackgroundRunDependencies = Readonly<{
   /** The request dependencies the host's other flow services run under. */
@@ -108,7 +115,7 @@ export const openBackendActorScope = async (
   organizationId: string,
   applicationRootId: string,
   actorId: string,
-): Promise<BackendActorScope | Readonly<{ reason: string }>> => {
+): Promise<BackendActorScope | Readonly<{ reason: BackendRunRefusalCode }>> => {
   const actor = await resolveActor(organizationId, actorId);
   if (actor.kind === "refused") return { reason: actor.reason };
   const session = mintSession(actor.identityId);

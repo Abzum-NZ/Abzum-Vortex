@@ -12,9 +12,11 @@ import {
 import {
   formatIsoDate,
   formatIsoDateTitle,
+  formatIsoRelative,
   INVALID_DATE_TEXT,
   type DateFormatOptions,
 } from "@vortex/platform/schema";
+import { Tooltip, TooltipContent, TooltipTrigger } from "../components/tooltip";
 
 const DateFormatContext = createContext<DateFormatOptions>({});
 
@@ -58,6 +60,33 @@ export function DateFormatProvider({
   return <DateFormatContext.Provider value={format}>{children}</DateFormatContext.Provider>;
 }
 
+// One timer for every relative time on the page: the current minute, or 0 on the server and while
+// hydrating (the exact time shows then), so the first client render matches the server's.
+let minuteNow = 0;
+const minuteListeners = new Set<() => void>();
+let minuteTimer: ReturnType<typeof setInterval> | undefined;
+const subscribeToMinute = (listener: () => void): (() => void) => {
+  minuteListeners.add(listener);
+  if (minuteTimer === undefined) {
+    minuteTimer = setInterval(() => {
+      minuteNow = Math.floor(Date.now() / 60_000) * 60_000;
+      for (const notify of minuteListeners) notify();
+    }, 60_000);
+  }
+  return () => {
+    minuteListeners.delete(listener);
+    if (minuteListeners.size === 0 && minuteTimer !== undefined) {
+      clearInterval(minuteTimer);
+      minuteTimer = undefined;
+    }
+  };
+};
+const readMinute = (): number => {
+  if (minuteNow === 0) minuteNow = Math.floor(Date.now() / 60_000) * 60_000;
+  return minuteNow;
+};
+const readServerMinute = (): number => 0;
+
 /** Logs an unreadable stored date once per mount, with a stable code and never the value itself. */
 function useInvalidDateLog(invalid: boolean): void {
   useEffect(() => {
@@ -79,9 +108,21 @@ export function FormattedDate({ iso }: Readonly<{ iso: string }>): ReactElement 
 export function FormattedTime({
   iso,
   className,
-}: Readonly<{ iso: string; className?: string }>): ReactElement {
+  relative = false,
+}: Readonly<{
+  iso: string;
+  className?: string;
+  /** Shows how long ago it is ("3 days ago"), kept current each minute, with the exact time on hover. */
+  relative?: boolean;
+}>): ReactElement {
   const options = useDateFormatOptions();
-  const text = formatIsoDate(iso, options);
+  const minute = useSyncExternalStore(
+    relative ? subscribeToMinute : subscribeToNothing,
+    relative ? readMinute : readServerMinute,
+    readServerMinute,
+  );
+  const exact = formatIsoDate(iso, options);
+  const text = relative && minute !== 0 ? (formatIsoRelative(iso, options) ?? exact) : exact;
   useInvalidDateLog(text === undefined);
   if (text === undefined)
     return (
@@ -90,6 +131,15 @@ export function FormattedTime({
       </span>
     );
   const title = formatIsoDateTitle(iso, options);
+  if (relative && title !== undefined)
+    return (
+      <Tooltip>
+        <TooltipTrigger render={<time className={className} dateTime={iso} tabIndex={0} />}>
+          {text}
+        </TooltipTrigger>
+        <TooltipContent>{title}</TooltipContent>
+      </Tooltip>
+    );
   return (
     <time className={className} dateTime={iso} {...(title === undefined ? {} : { title })}>
       {text}

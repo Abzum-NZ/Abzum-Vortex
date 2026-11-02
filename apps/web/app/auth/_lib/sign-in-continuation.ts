@@ -26,10 +26,7 @@ const studioAddressSchema = z
     if (segments.length === 3) return true;
     if (segments[3] === "new") return segments.length === 4;
     if (!applicationRootIdSchema.safeParse(segments[3]).success) return false;
-    return (
-      segments.length === 4 ||
-      (segments.length === 5 && ["history", "page-adoption"].includes(segments[4]!))
-    );
+    return segments.length === 4;
   });
 
 const continuationSchema = z

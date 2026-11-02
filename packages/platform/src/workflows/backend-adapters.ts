@@ -1,6 +1,7 @@
 import "server-only";
 
 import { z } from "zod";
+import type { BackendRunNamedCode } from "./backend-run-failure-codes";
 import { jsonValueSchema, type JsonValue } from "../catalogue/common";
 import { withRuntimeTransaction } from "../db/request-transaction";
 
@@ -173,7 +174,7 @@ const finishedResult = (
   state === "succeeded"
     ? { kind: "finished", backendRunId, outputs: outputs ?? {} }
     : state === "refused" || state === "failed"
-      ? { kind: "not_finished", backendRunId, state, failureCode: failureCode ?? "unspecified" }
+      ? { kind: "not_finished", backendRunId, state, failureCode: failureCode ?? ("unspecified" satisfies BackendRunNamedCode) }
       : { kind: "started", backendRunId };
 
 export const createSimulatedBackendAdapter = (dependencies: BackendAdapterDependencies) => {
@@ -186,7 +187,7 @@ export const createSimulatedBackendAdapter = (dependencies: BackendAdapterDepend
       outcome = await dependencies.execute(claimed);
     } catch (error) {
       console.error("[backend] run failed unexpectedly", error);
-      outcome = { state: "failed", failureCode: "unexpected_failure" };
+      outcome = { state: "failed", failureCode: "unexpected_failure" satisfies BackendRunNamedCode };
     }
     await finishRun(backendRunId, outcome);
     return outcome;

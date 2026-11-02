@@ -57,6 +57,8 @@ export type StudioRailTab<Key extends string> = Readonly<{
   key: Key;
   label: string;
   icon: VortexIconName;
+  /** False for a tab whose editor is the centre alone: it has no side panel, so no panel opens for it. */
+  panel?: false;
   group: "build" | "logic" | "look" | "releases";
 }>;
 
@@ -208,7 +210,7 @@ function StudioRail<Key extends string>({
   tabs: readonly StudioRailTab<Key>[];
   active: Key;
   /** Whether the active tab's panel is on screen (docked, as the hover overlay, or as a sheet). */
-  panelShown: boolean;
+  panelShown: boolean | undefined;
   /** The panel opens as a modal sheet (a narrow window). */
   modal: boolean;
   onChoose: (key: Key) => void;
@@ -405,6 +407,7 @@ export function StudioFrame<Key extends string>({
   // out of its way until the drop. Puck's own state says so.
   const dragging = useStudioCanvasDragging();
   const wide = useSyncExternalStore(subscribeWide, readWide, readWideOnServer);
+  const hasPanel = tabs.find((tab) => tab.key === activeTab)?.panel !== false;
   const viewport = useSyncExternalStore(subscribeViewport, readViewport, readViewportOnServer);
   const dockInspector = viewport >= 1280;
   const { widthOf, setWidth, loaded } = useStudioPanelWidths();
@@ -439,14 +442,14 @@ export function StudioFrame<Key extends string>({
   }, []);
   useEffect(() => () => clearTimeout(peekTimer.current), []);
   const toggleCollapsed = useCallback(() => {
-    if (!wide) return;
+    if (!wide || !hasPanel) return;
     const inPanel = document.activeElement?.closest("[data-studio-rail-panel]") != null;
     storeCollapsed(!collapsed);
     clearTimeout(peekTimer.current);
     setPeeking(false);
     // The panel leaves the page with the focus inside it: the toggle keeps it.
     if (inPanel) document.getElementById("studio-panel-toggle")?.focus();
-  }, [wide, collapsed]);
+  }, [wide, hasPanel, collapsed]);
   // The drag ended: the overlay closes after the drop.
   const wasDragging = useRef(false);
   useEffect(() => {
@@ -494,14 +497,14 @@ export function StudioFrame<Key extends string>({
         event.preventDefault();
         focusCanvas();
       }
-      if (event.key === "b" && dialog === null && wide) {
+      if (event.key === "b" && dialog === null && wide && hasPanel) {
         event.preventDefault();
         toggleCollapsed();
       }
     };
     window.addEventListener("keydown", shortcut);
     return () => window.removeEventListener("keydown", shortcut);
-  }, [focusCanvas, toggleInspector, toggleCollapsed, wide]);
+  }, [focusCanvas, toggleInspector, toggleCollapsed, wide, hasPanel]);
   const previousSelection = useRef(selectionKey);
   const [hosts, setHosts] = useState<PaneHosts | null>(null);
   // The hosts are made once per frame: effects run again when a suspended part of Studio shows again,
@@ -537,10 +540,14 @@ export function StudioFrame<Key extends string>({
   const inspectorWidth = widthOf("inspector", viewport >= 1920 ? 24 : viewport >= 1440 ? 22 : 20);
   // The default width follows the window's size class; a stored width does not.
   const sizeClass = viewport < 1440 ? "compact" : viewport >= 1920 ? "large" : "regular";
-  const showPanel = wide && panelOpen && storedCollapsed === false;
-  const overlayPanel = wide && panelOpen && collapsed && (peeking || dragging);
+  const showPanel = hasPanel && wide && panelOpen && storedCollapsed === false;
+  const overlayPanel = hasPanel && wide && panelOpen && collapsed && (peeking || dragging);
   const showInspector = hasInspector && dockInspector && inspectorOpen;
-  const panelShown = wide ? panelOpen && (!collapsed || overlayPanel) : narrowPanelOpen;
+  const panelShown = hasPanel
+    ? wide
+      ? panelOpen && (!collapsed || overlayPanel)
+      : narrowPanelOpen
+    : undefined;
   // Only a drag is the person's choice, and only of the panel at the handle that moved; a tab switch
   // or a window resize is not stored.
   const layoutChanged: NonNullable<ComponentProps<typeof ResizablePanelGroup>["onLayoutChanged"]> =
@@ -589,10 +596,12 @@ export function StudioFrame<Key extends string>({
     setFocused(false);
     // Selecting a tab always reveals its pane, including the tab restored from the URL on reload.
     onTabChange(key);
+    // A tab without a panel opens its centre alone: nothing peeks and no sheet opens.
+    const panelled = tabs.find((tab) => tab.key === key)?.panel !== false;
     if (wide) {
       setPanelOpen(true);
-      if (collapsed) peek(true, true);
-    } else setNarrowPanelOpen(true);
+      if (collapsed && panelled) peek(true, true);
+    } else setNarrowPanelOpen(panelled);
   };
   return (
     <div
@@ -635,7 +644,7 @@ export function StudioFrame<Key extends string>({
           className="relative flex min-h-0 shrink-0"
           onPointerEnter={() => {
             pointerInside.current = true;
-            if (collapsed && wide) peek(true);
+            if (collapsed && wide && hasPanel) peek(true);
           }}
           onPointerLeave={() => {
             pointerInside.current = false;
@@ -652,7 +661,7 @@ export function StudioFrame<Key extends string>({
               label="Studio areas"
               collapsed={collapsed}
               controls={collapsed ? "studio-panel-overlay" : showPanel ? "studio-panel" : undefined}
-              onToggleCollapsed={wide ? toggleCollapsed : undefined}
+              onToggleCollapsed={wide && hasPanel ? toggleCollapsed : undefined}
             />
             {overlayHost !== null &&
               createPortal(
@@ -678,7 +687,7 @@ export function StudioFrame<Key extends string>({
                 </TabsContent>,
                 dockHost,
               )}
-            <Sheet open={!wide && narrowPanelOpen} onOpenChange={setNarrowPanelOpen}>
+            <Sheet open={!wide && hasPanel && narrowPanelOpen} onOpenChange={setNarrowPanelOpen}>
               <SheetContent side="left" className="w-80 max-w-full overflow-y-auto p-0 pt-10">
                 <SheetHeader className="sr-only">
                   <SheetTitle>{active?.label}</SheetTitle>
@@ -695,7 +704,7 @@ export function StudioFrame<Key extends string>({
               </SheetContent>
             </Sheet>
           </Tabs>
-          {collapsed && wide && (
+          {collapsed && wide && hasPanel && (
             <div
               ref={setOverlayHost}
               id="studio-panel-overlay"
