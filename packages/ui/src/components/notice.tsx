@@ -84,7 +84,7 @@ function renderNoticeContent(content: NoticeContent): ReactNode {
         key={key}
         href={href}
         {...(external ? { referrerPolicy: "no-referrer" as const } : {})}
-        className="underline underline-offset-2 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+        className="cn-notice-link"
       >
         {part.label}
         {external ? <span className="ml-1 text-xs">(external)</span> : null}
@@ -102,7 +102,7 @@ function NoticeLinkAction({
   return safe === undefined ? (
     <span>{label}</span>
   ) : (
-    <NavigationLink className="underline" href={safe}>
+    <NavigationLink className="cn-notice-link" href={safe}>
       {label}
     </NavigationLink>
   );
@@ -142,7 +142,10 @@ export function Notice({
             <p className="m-0">{renderNoticeContent(content)}</p>
           </AlertDescription>
           {dismissible || action !== undefined ? (
-            <div data-slot="notice-actions" className="mt-2 flex flex-wrap items-center gap-1">
+            <div
+              data-slot="notice-actions"
+              className="cn-notice-actions flex flex-wrap items-center"
+            >
               {action === undefined ? null : action.kind === "link" ? (
                 <NoticeLinkAction label={action.label} href={action.href} />
               ) : (

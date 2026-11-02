@@ -201,5 +201,17 @@
   "--vs-d8c9437e": "var(--primary)",
   "--vs-738c28d2": "6px",
   "--vs-3e5813bf": "calc(infinity * 1px)",
-  "--vs-f6f51c7c": "calc(var(--spacing, 0.25rem) * 8)"
+  "--vs-f6f51c7c": "calc(var(--spacing, 0.25rem) * 8)",
+  "--vs-e5ca406c": "var(--radius-xl)",
+  "--vs-8a405698": "var(--radius-4xl)",
+  "--vs-15d66a9d": "calc(var(--spacing, 0.25rem) * 3)",
+  "--vs-9e153e7c": "calc(var(--spacing, 0.25rem) * 2)",
+  "--vs-251f77f7": "0",
+  "--vs-03e41499": "calc(var(--spacing, 0.25rem) * 1)",
+  "--vs-c01744dc": "color-mix(in oklab, var(--border) 50%, transparent)",
+  "--vs-202e8209": "var(--radius-lg)",
+  "--vs-c2606a71": "var(--radius-2xl)",
+  "--vs-7c5fb50a": "calc(var(--spacing, 0.25rem) * 3)",
+  "--vs-b2092e6d": "calc(var(--spacing, 0.25rem) * 2)",
+  "--vs-e09fa815": "calc(var(--spacing, 0.25rem) * 9)"
 }
