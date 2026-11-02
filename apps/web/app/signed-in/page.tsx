@@ -56,7 +56,8 @@ export const dynamic = "force-dynamic";
  * The first load right after sign-in (for example straight after a database reset) can meet a
  * transient failure in the session or organisation read, so a temporarily unavailable result is
  * read once more before the person is shown the unavailable page. Refusals are never retried, and
- * a lasting failure is logged without any token, cookie or identity value.
+ * each retry is logged without any token, cookie or identity value so a lasting failure stays
+ * visible.
  */
 const retryOnceWhenTemporarilyUnavailable = async <Result extends Readonly<{ kind: string }>>(
   read: "session" | "organisations",
@@ -64,6 +65,7 @@ const retryOnceWhenTemporarilyUnavailable = async <Result extends Readonly<{ kin
 ): Promise<Result> => {
   const first = await load();
   if (first.kind !== "temporarily_unavailable") return first;
+  console.error(`[signed-in] ${read} read temporarily unavailable; retrying once`);
   await new Promise((resolve) => setTimeout(resolve, 250));
   const second = await load();
   if (second.kind === "temporarily_unavailable")
