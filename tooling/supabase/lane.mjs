@@ -5,6 +5,7 @@ import { existsSync } from "node:fs";
 import { cp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { URL } from "node:url";
+import { setTimeout as delay } from "node:timers/promises";
 import { ensureLocalSigningKey } from "./ensure-local-signing-key.mjs";
 
 /**
@@ -282,7 +283,7 @@ try {
         }
         if (Date.now() >= deadline)
           fail(`Lane ${lane} operation is held by ${holder?.worktree ?? "an unknown worktree"}.`);
-        await new Promise((resolve) => setTimeout(resolve, 500));
+        await delay(500);
       }
     }
   }
