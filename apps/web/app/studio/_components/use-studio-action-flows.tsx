@@ -25,7 +25,7 @@ import {
   resolveApplicationHomePathByRootAction,
   resolveApplicationPagePathAction,
 } from "../../[tenantShortName]/[organizationShortName]/[applicationKey]/frame-actions";
-import { finishedRunNotice } from "../../_lib/flow-run-notices";
+import { cannotOpenApplicationNotice, finishedRunNotice } from "../../_lib/flow-run-notices";
 import { readStudioActionFlows } from "../action-flow-actions";
 import { studioNotice } from "./studio-save-state";
 
@@ -37,19 +37,11 @@ const tell = (message: string, link?: Readonly<{ label: string; href: string }>)
 
 const notAvailable = "That is not available right now. Your changes are kept. Try again shortly.";
 
-/** An installed application nobody here may open yet: it opens for a person who holds a role in it. */
-const cannotOpenYet =
-  "You cannot open this application yet: you hold no role in it. Give yourself one in IAM, then open it.";
-
 /** What each action is called in a sentence that says the person may not do it. */
 const refusedSentence: Readonly<Record<StudioActionToken, string>> = {
   publish: "You cannot publish this application: you need permission to publish versions.",
   install: "You cannot install or upgrade this application here.",
 };
-
-/** A refusal for a proof that ran out: the guided steps ask for it again, so it is not a link away. */
-const verificationRanOut =
-  "Your verification ran out before this finished, and nothing was changed. Start it again to verify and carry on.";
 
 /**
  * Starts the App Store's action flows over the editor: Publish and Install or upgrade. They are
@@ -152,23 +144,9 @@ export function useStudioActionFlows({
           }
           if (["completed", "committed"].includes(result.descriptor.outcome) && !result.failure)
             return;
-          const refusalCode = result.failure?.diagnostic?.code;
-          if (
-            result.descriptor.commit === "none" &&
-            (refusalCode === "multi_factor_required" ||
-              refusalCode === "recent_authentication_required")
-          ) {
-            tell(verificationRanOut);
-            return;
-          }
           const notice = finishedRunNotice(result, {
             destinationHref: (applicationKey, pageKey) =>
               addressOf(applicationKey, pageKey) ?? window.location.pathname,
-            // Signing in again comes back to this editor, on this tab.
-            continuation: JSON.stringify({
-              kind: "studio",
-              address: `${window.location.pathname}${window.location.search}`,
-            }),
           });
           tell(
             notice.text,
@@ -216,13 +194,19 @@ export function useStudioActionFlows({
           );
           return undefined;
         };
+        let notice: string = notAvailable;
         const path =
           target.applicationRootId !== undefined
             ? await resolveApplicationHomePathByRootAction(
                 tenantShortName,
                 organizationShortName,
                 target.applicationRootId,
-              ).catch(unresolved)
+              )
+                .then((home) => {
+                  if (home.kind === "not_permitted") notice = cannotOpenApplicationNotice.text;
+                  return home.kind === "path" ? home.path : undefined;
+                })
+                .catch(unresolved)
             : target.applicationKey === undefined
               ? (() => {
                   const page = flows.pages.find(
@@ -244,7 +228,7 @@ export function useStudioActionFlows({
                   target.page,
                 ).catch(unresolved);
         if (path === undefined) {
-          tell(target.applicationRootId === undefined ? notAvailable : cannotOpenYet);
+          tell(notice);
           return undefined;
         }
         return `${path}${query === "" ? "" : `?${query}`}`;

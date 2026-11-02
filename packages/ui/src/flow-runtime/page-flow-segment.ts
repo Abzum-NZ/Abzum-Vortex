@@ -99,12 +99,15 @@ export async function drivePageFlowSegment(
         if (earlier === undefined) throw new Error("FLOW_PAGE_BACK_UNAVAILABLE");
         step = earlier;
         returning = true;
+        // Going back is not progress: it does not use up the segment's rounds.
+        round -= 1;
         continue;
       }
-      answered.push(step);
+      const silent = answer.kind === "confirm" && "asked" in answer;
+      if (!silent) answered.push(step);
       step = resumeFlowRun(
         { ...step.state, pageValues: input.readPageValues() },
-        answer,
+        silent ? { kind: "confirm", confirmed: answer.confirmed } : answer,
         library,
         resolveMember,
         undefined,

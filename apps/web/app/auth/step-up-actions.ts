@@ -20,7 +20,10 @@ import {
  * sign-in, and the authenticator for two-step verification. They collect the proof only. The
  * protected step the flow runs next asks the platform again, with the 15-minute and one-hour
  * windows it always used, so nothing here is trusted for the change itself. No code, password or
- * secret is stored or logged here; the setup key and QR code are returned once to the signed-in
+ * secret is stored or logged here. Signing in again starts a one-step session; the panel then asks
+ * a person who has an authenticator for its code too, so the session a Verify step leaves is as
+ * strong as the one the sign-in page produces. Neither this module nor the sign-in page keeps a
+ * second copy of the enrol and verify calls: both use the functions below; the setup key and QR code are returned once to the signed-in
  * person who asked for them.
  */
 

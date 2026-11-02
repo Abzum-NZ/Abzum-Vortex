@@ -110,7 +110,6 @@ export type FlowVerification = (typeof flowVerificationRequirements)[number];
 export type FlowVerifyIntent = Readonly<{
   requires: FlowVerification;
   message: string;
-  confirmLabel: string | undefined;
   back?: boolean;
 }>;
 /** The guided steps a flow shows: the dialog's heading, the ordered steps and where the flow is. */
@@ -290,11 +289,7 @@ export const readVerifyIntent = (intent: FlowIntent): FlowVerifyIntent | undefin
     requires === undefined ||
     !(flowVerificationRequirements as readonly string[]).includes(requires)
     ? undefined
-    : {
-        requires: requires as FlowVerification,
-        message,
-        confirmLabel: text(intent.properties.confirm_label),
-      };
+    : { requires: requires as FlowVerification, message };
 };
 
 /** Undefined when the guided steps are not 2 to 8 different names with the current one among them. */
@@ -394,7 +389,8 @@ export type FlowIntentHost = Readonly<{
   verify?: (
     verification: FlowVerifyIntent,
     signal?: AbortSignal,
-  ) => Promise<FlowConfirmAnswer | FlowBackAnswer>;
+    /** `asked` is false when the session already showed the proof and nothing was put to the person. */
+  ) => Promise<(FlowConfirmAnswer & Readonly<{ asked?: boolean }>) | FlowBackAnswer>;
   /** Opens the guided steps, or moves them to the current step. */
   wizard?: (wizard: FlowWizardIntent) => void;
   /**
@@ -402,6 +398,11 @@ export type FlowIntentHost = Readonly<{
    * to another and close when none is left.
    */
   trackRun?: <Result>(run: Promise<Result>) => Promise<Result>;
+  /**
+   * The host one run uses: its dialogs and guided steps belong to that run and to the runs it hands
+   * over to, so another run's dialog is never drawn inside this run's steps.
+   */
+  forRun?: () => FlowIntentHost;
   navigate: (intent: FlowIntent) => boolean | Promise<boolean>;
   refresh?: (component: string | undefined) => void | Promise<void>;
   setPanel?: (panel: string, state: string) => void | Promise<void>;

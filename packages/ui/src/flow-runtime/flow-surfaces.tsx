@@ -44,7 +44,8 @@ function FlowDialog({
   children,
   guided,
 }: Readonly<{
-  title: string;
+  /** The screen's own heading; absent when the guided step already says it. */
+  title?: string;
   onDismiss: () => void;
   actions?: ReactNode;
   children: ReactNode;
@@ -66,12 +67,14 @@ function FlowDialog({
         className={FLOW_SURFACE_CLASS}
       >
         <DialogHeader>
-          <DialogTitle>{guided === undefined ? title : guided.title}</DialogTitle>
+          <DialogTitle>{guided === undefined ? (title ?? "") : guided.title}</DialogTitle>
         </DialogHeader>
         {guided === undefined ? null : <WizardProgress wizard={guided} />}
         <FlowSurfaceContext.Provider value={true}>
           <div className="flex flex-col gap-3">
-            {guided === undefined ? null : <p className="text-sm font-medium">{title}</p>}
+            {guided === undefined || title === undefined || title === guided.step ? null : (
+              <p className="text-sm font-medium">{title}</p>
+            )}
             {children}
           </div>
         </FlowSurfaceContext.Provider>
@@ -97,9 +100,15 @@ export function createWizardStore() {
       };
     },
     snapshot: () => wizard,
-    /** Moves to a step; what the flow is working on is cleared by the next dialog. */
-    set: (next: FlowWizardIntent) => {
-      wizard = { ...next };
+    /** Opens or moves the steps for a run chain; what the flow is working on is cleared by the next dialog. */
+    set: (next: FlowWizardIntent, chain: number) => {
+      wizard = { ...next, chain };
+      notify();
+    },
+    /** Closes the steps when the chain that opened them is the one that ended. */
+    closeChain: (chain: number) => {
+      if (wizard === null || wizard.chain !== chain) return;
+      wizard = null;
       notify();
     },
     /** Puts the guided steps back where they stood (or closes them), when the person goes back. */
@@ -143,9 +152,23 @@ function WizardProgress({ wizard }: Readonly<{ wizard: Wizard }>): ReactElement 
 }
 
 /** Between two dialogs the guided steps say what the flow is doing, so the person is never left guessing. */
-export function WizardWorking({ wizard }: Readonly<{ wizard: Wizard }>): ReactElement {
+export function WizardWorking({
+  wizard,
+  leaveLabel,
+  onLeave,
+}: Readonly<{ wizard: Wizard; leaveLabel: string; onLeave: () => void }>): ReactElement {
   return (
-    <FlowDialog title={wizard.step} onDismiss={() => undefined} guided={wizard}>
+    <FlowDialog
+      onDismiss={onLeave}
+      guided={wizard}
+      actions={
+        // A step that hangs must not hold the editor: the dialog goes, the run carries on and its
+        // outcome still reaches the person as a notice.
+        <Button type="button" variant="outline" onClick={onLeave}>
+          {leaveLabel}
+        </Button>
+      }
+    >
       <div className="flex items-center gap-3 py-2 text-sm" role="status" aria-live="polite">
         <Spinner />
         <span>{wizard.working}</span>
@@ -164,7 +187,6 @@ function BackButton({ onBack }: Readonly<{ onBack: () => void }>): ReactElement 
 }
 
 /** Shows every review line; a role entry lists what it allows under its own line. */
-// item 10: CRM-FIX-PLATFORM
 const ConfirmationDetails = ({
   entries,
 }: Readonly<{ entries: readonly FlowConfirmationDetail[] }>): ReactElement => (
@@ -175,7 +197,6 @@ const ConfirmationDetails = ({
       ) : (
         <li key={index}>
           {entry.text}
-          {/* item 10: CRM-FIX-PLATFORM */}
           <ul className="flex list-[circle] flex-col gap-1 pl-5">
             {entry.lines.map((line, lineIndex) => (
               <li key={lineIndex}>{line}</li>
@@ -234,7 +255,6 @@ function ConfirmScreen({
       <DialogDescription className="whitespace-pre-line">{confirmation.message}</DialogDescription>
       {confirmation.details.length === 0 ? null : (
         <div className="max-h-80 overflow-y-auto">
-          {/* item 10: CRM-FIX-PLATFORM */}
           <ConfirmationDetails entries={confirmation.details} />
         </div>
       )}
@@ -295,9 +315,12 @@ function MessageScreen({
   options,
   start,
   wizard,
+  onLeave,
 }: Readonly<{
   message: FlowMessageIntent;
   settle: () => void;
+  /** Leaves the guided steps. */
+  onLeave: () => void;
   options: FlowIntentHostOptions;
   start: (message: FlowMessageIntent, action: FlowMessageAction) => void;
   wizard: Wizard | null;
@@ -309,7 +332,10 @@ function MessageScreen({
   return (
     <FlowDialog
       title={message.title ?? "Message"}
-      onDismiss={() => settle()}
+      onDismiss={() => {
+        settle();
+        if (wizard !== null) onLeave();
+      }}
       {...(wizard === null ? {} : { guided: wizard })}
       actions={
         <>
@@ -329,7 +355,10 @@ function MessageScreen({
           <Button
             type="button"
             variant={wizard !== null && offered.length > 0 ? "secondary" : "default"}
-            onClick={() => settle()}
+            onClick={() => {
+              settle();
+              if (wizard !== null) onLeave();
+            }}
           >
             {wizard === null ? "OK" : (options.guidedLeaveLabel ?? "Close")}
           </Button>
@@ -353,11 +382,13 @@ export function SurfaceScreen({
   options,
   start,
   wizard,
+  onLeave,
 }: Readonly<{
   current: Surface;
   options: FlowIntentHostOptions;
   start: (message: FlowMessageIntent, action: FlowMessageAction) => void;
   wizard: Wizard | null;
+  onLeave: () => void;
 }>): ReactElement {
   switch (current.kind) {
     case "message":
@@ -368,6 +399,7 @@ export function SurfaceScreen({
           options={options}
           start={start}
           wizard={wizard}
+          onLeave={onLeave}
         />
       );
     case "confirm":

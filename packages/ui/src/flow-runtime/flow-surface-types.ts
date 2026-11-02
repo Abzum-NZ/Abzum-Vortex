@@ -18,29 +18,38 @@ import type { FlowRuntimeState } from "./flow-runtime";
 /** What a surface answers: the person's answer, or that they went back a step. */
 export type Answered<Answer> = Answer | FlowBackAnswer;
 
+/** The run chain a dialog belongs to: guided steps wrap only the dialogs of the chain that opened them. */
+type Chained = Readonly<{ chain: number }>;
+
 export type Surface =
-  | Readonly<{ id: number; kind: "message"; message: FlowMessageIntent; settle: () => void }>
-  | Readonly<{
-      id: number;
-      kind: "confirm";
-      confirmation: FlowConfirmIntent;
-      settle: (answer: Answered<FlowConfirmAnswer>) => void;
-    }>
-  | Readonly<{
-      id: number;
-      kind: "form";
-      form: FlowFormIntent | FlowInlineFormIntent;
-      settle: (answer: Answered<FlowFormAnswer>) => void;
-    }>
-  | Readonly<{
-      id: number;
-      kind: "verify";
-      verification: FlowVerifyIntent;
-      settle: (answer: Answered<FlowConfirmAnswer>) => void;
-    }>;
+  | (Chained &
+      Readonly<{ id: number; kind: "message"; message: FlowMessageIntent; settle: () => void }>)
+  | (Chained &
+      Readonly<{
+        id: number;
+        kind: "confirm";
+        confirmation: FlowConfirmIntent;
+        settle: (answer: Answered<FlowConfirmAnswer>) => void;
+      }>)
+  | (Chained &
+      Readonly<{
+        id: number;
+        kind: "form";
+        form: FlowFormIntent | FlowInlineFormIntent;
+        settle: (answer: Answered<FlowFormAnswer>) => void;
+      }>)
+  | (Chained &
+      Readonly<{
+        id: number;
+        kind: "verify";
+        verification: FlowVerifyIntent;
+        settle: (answer: Answered<FlowConfirmAnswer>) => void;
+      }>);
 
 /** The guided steps a flow has open: where the person is in them and what the flow is doing. */
 export type Wizard = Readonly<{
+  /** The run chain that opened the steps. */
+  chain: number;
   title: string;
   steps: readonly string[];
   step: string;

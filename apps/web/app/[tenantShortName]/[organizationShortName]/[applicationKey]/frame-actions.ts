@@ -6,6 +6,10 @@ import { loadApplicationSearch } from "../../../_lib/application-search";
 import { loadPermittedApplicationsAtAddress } from "../../../_lib/organization-context";
 import { resolveApplicationAddress } from "../../../_lib/application-address";
 import { applicationPageAddressPath } from "../../../_lib/address-paths";
+import {
+  applicationHomePathByRoot,
+  type ApplicationHomePath,
+} from "../../../_lib/application-home";
 import { loadStudioCreateAccess } from "../../../_lib/studio-application-draft";
 import { matchesLiteralSearchText, splitSearchFilters } from "@vortex/platform/server";
 
@@ -25,9 +29,10 @@ export async function resolveApplicationPagePathAction(
   pageKey?: string,
 ): Promise<string | undefined> {
   if (
-    [tenantShortName, organizationShortName, applicationKey, pageKey ?? "home"].some(
+    [tenantShortName, organizationShortName, applicationKey].some(
       (value) => typeof value !== "string" || value.length === 0,
-    )
+    ) ||
+    (pageKey !== undefined && (typeof pageKey !== "string" || pageKey.length === 0))
   ) {
     console.error("[application-frame] navigate target refused: malformed address");
     return undefined;
@@ -58,48 +63,33 @@ export async function resolveApplicationPagePathAction(
 
 /**
  * Resolves a flow's Navigate target that names another application of the same organisation by
- * its identity (the application a step just installed) to its home page address. Only the
- * identity comes from the browser; the application must be one the signed-in person may open now.
- * Undefined when it is missing, not installed or not theirs to open, so the step opens nothing.
+ * its identity (the application a step just installed) to its home page address. Only the identity
+ * comes from the browser; the application must be one the signed-in person may open now.
  */
 export async function resolveApplicationHomePathByRootAction(
   tenantShortName: string,
   organizationShortName: string,
   applicationRootId: string,
-): Promise<string | undefined> {
+): Promise<ApplicationHomePath> {
   if (
     [tenantShortName, organizationShortName, applicationRootId].some(
       (value) => typeof value !== "string" || value.length === 0,
     )
   ) {
     console.error("[application-frame] navigate target refused: malformed address");
-    return undefined;
+    return { kind: "unavailable" };
   }
   const resolution = await resolveIdentitySession();
   if (resolution.kind !== "active") {
     console.error(`[application-frame] navigate target refused: session ${resolution.kind}`);
-    return undefined;
+    return { kind: "unavailable" };
   }
-  const read = await loadPermittedApplicationsAtAddress(
+  return applicationHomePathByRoot(
     resolution.session,
     tenantShortName,
     organizationShortName,
+    applicationRootId,
   );
-  if (read.kind !== "available") {
-    console.error(`[application-frame] navigate target refused: applications ${read.kind}`);
-    return undefined;
-  }
-  const application = read.applications.find(
-    (candidate) => candidate.applicationRootId.toLowerCase() === applicationRootId.toLowerCase(),
-  );
-  return application === undefined
-    ? undefined
-    : applicationPageAddressPath(
-        tenantShortName,
-        organizationShortName,
-        application.key,
-        application.homePageKey,
-      );
 }
 
 /** Reads the viewer's permitted application links on switcher intent or open. */

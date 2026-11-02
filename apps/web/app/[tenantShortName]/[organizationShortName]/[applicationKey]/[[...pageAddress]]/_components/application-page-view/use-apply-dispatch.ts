@@ -166,7 +166,6 @@ export function useApplyDispatch({
             ["completed", "committed"].includes(server.descriptor.outcome)
           )
             runtimeState.messages.clear("inline", `retry:${sourceControlId}`);
-          // Signing in again, or verifying, comes back to this page and record, where the person can retry.
           let resultNotice = finishedRunNotice(server, {
             destinationHref: (applicationKey, pageKey) =>
               applicationPageAddressPath(
@@ -175,14 +174,6 @@ export function useApplyDispatch({
                 applicationKey,
                 pageKey,
               ),
-            continuation: JSON.stringify({
-              kind: "application_page",
-              tenantShortName: model.invocation.tenantShortName,
-              organizationShortName: model.invocation.organizationShortName,
-              applicationKey: model.invocation.applicationKey,
-              pageKey: model.invocation.pageKey,
-              ...(model.subject === undefined ? {} : { recordId: model.subject.recordId }),
-            }),
           });
           const diagnostic = server.failure?.diagnostic;
           const fieldLabel =

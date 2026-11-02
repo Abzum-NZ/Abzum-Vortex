@@ -44,7 +44,10 @@ import type { ApplicationPageModel } from "../../../../../../_lib/application-pa
 import type { SubmittedForm, PageMessageDraft } from "./types";
 import type { ControlDrafts } from "../../../_components/application-frame-state";
 import { formSurfaceComposition, runtimeInputWithFormDefault } from "./form-surface";
-import { unavailableNotice } from "../../../../../../_lib/flow-run-notices";
+import {
+  cannotOpenApplicationNotice,
+  unavailableNotice,
+} from "../../../../../../_lib/flow-run-notices";
 import { stepUpVerification } from "../../../../../../_components/step-up-panel";
 
 export function useFlowRuntime({
@@ -198,13 +201,19 @@ export function useFlowRuntime({
           console.error("[flow] navigate target could not be resolved", error);
           return undefined;
         };
+        let notice = unavailableNotice;
         const path =
           target.applicationRootId !== undefined
             ? await resolveApplicationHomePathByRootAction(
                 application.tenantShortName,
                 application.organizationShortName,
                 target.applicationRootId,
-              ).catch(unresolved)
+              )
+                .then((home) => {
+                  if (home.kind === "not_permitted") notice = cannotOpenApplicationNotice;
+                  return home.kind === "path" ? home.path : undefined;
+                })
+                .catch(unresolved)
             : target.applicationKey === undefined
               ? target.page !== undefined &&
                 model.pages.some((page) => sameId(page.pageId, target.page!))
@@ -217,15 +226,7 @@ export function useFlowRuntime({
                   target.page,
                 ).catch(unresolved);
         if (path === undefined) {
-          showPageMessage(
-            target.applicationRootId === undefined
-              ? unavailableNotice
-              : {
-                  target: "banner",
-                  severity: "error",
-                  text: "You cannot open this application yet: you hold no role in it. Ask an administrator to give you one in IAM.",
-                },
-          );
+          showPageMessage(notice);
           return undefined;
         }
         return `${path}${query === "" ? "" : `?${query}`}`;

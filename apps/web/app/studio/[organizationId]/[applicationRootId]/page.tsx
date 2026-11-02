@@ -1,5 +1,4 @@
 import { loadStudioApplicationDraft } from "../../../_lib/studio-application-draft";
-import { applicationPageAddressPath, organizationAddressPath } from "../../../_lib/address-paths";
 import {
   loadOrganizationLauncher,
   loadPermittedApplicationsAtAddress,
@@ -87,10 +86,6 @@ const loadWorkspacePlace = async (
       reason:
         "This organisation's App Store address is not an application address. An organisation administrator corrects it in the organisation settings.",
     };
-  const organizationPath = organizationAddressPath(
-    entry.tenantShortName,
-    entry.organizationShortName,
-  );
   const applications = await loadPermittedApplicationsAtAddress(
     resolved.session,
     entry.tenantShortName,
@@ -100,21 +95,6 @@ const loadWorkspacePlace = async (
     console.error(
       `[studio] installed applications could not be read: ${applications.kind}${applications.kind === "temporarily_unavailable" && applications.cause !== undefined ? ` (${applications.cause})` : ""}`,
     );
-  // Links name an installed application's home page, never its address that would redirect there.
-  const pathOf = (key: string): string => {
-    const application =
-      applications.kind === "available"
-        ? applications.applications.find((candidate) => candidate.key === key)
-        : undefined;
-    return application === undefined
-      ? `${organizationPath}/${encodeURIComponent(key)}`
-      : applicationPageAddressPath(
-          entry.tenantShortName,
-          entry.organizationShortName,
-          application.key,
-          application.homePageKey,
-        );
-  };
   // The installed Studio release shapes the frame the editor shows.
   const studioApplicationEntry =
     applications.kind === "available"
@@ -144,11 +124,8 @@ const loadWorkspacePlace = async (
     homePageKey: studioApplicationEntry.homePageKey,
     context: studioResolved.installedContext,
   };
-  // Whether the builder may open this application, and where it stands in the organisation: the
-  // facts the toolbar needs to offer Open the application, Install, Upgrade or none of them.
-  const openable =
-    applications.kind === "available" &&
-    applications.applications.some((candidate) => candidate.key === applicationKey);
+  // Where the application stands in the organisation, with whether the builder may open and
+  // install it: the facts the toolbar needs to offer Open the application, Install, Upgrade or none.
   const standing = await readApplicationReleaseStanding(resolved.session, {
     tenantShortName: entry.tenantShortName,
     organizationShortName: entry.organizationShortName,
@@ -190,8 +167,7 @@ const loadWorkspacePlace = async (
     place: {
       organizationName: entry.organizationDisplayName,
       frame: studioFrameOf(entry, email, studioInstalled),
-      applicationHref: openable ? pathOf(applicationKey) : undefined,
-      standing: standing.kind,
+      standing,
       navigationTargets,
     },
   };

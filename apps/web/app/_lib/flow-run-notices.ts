@@ -54,6 +54,13 @@ export const unavailableNotice: PageMessageDraft = {
   text: "That is not available right now.",
 };
 
+/** The home page of an installed application that the person may not open yet. */
+export const cannotOpenApplicationNotice: PageMessageDraft = {
+  target: "banner",
+  severity: "error",
+  text: "You cannot open this application yet: you hold no role in it.",
+};
+
 /**
  * A run that reached a task the platform cannot run yet. It is not a refusal, so the person is
  * never told they lack a permission for it.
@@ -83,32 +90,12 @@ export const finishedNotice = (
       ? failedUnchangedNotice
       : (outcomeNotices[outcome ?? "failed"] ?? unavailableNotice);
 
-/** Signing in again for a recent sign-in; the dispatcher adds where to come back to. */
-const reauthenticationPath = "/auth/session-ended?status=reauthenticate";
-
-/** Verifying with, or setting up, an authenticator for the two-step verification a change needs. */
-const multiFactorPath = "/auth/sign-in?mfa=1";
-
 export const refusalNotices: Readonly<
   Record<Extract<FormFlowFeedback, { kind: "refusal" }>["code"], PageMessageDraft>
 > = Object.fromEntries(
   Object.entries(flowRefusalFeedbackSentences).map(([code, text]) => [
     code,
-    code === "recent_authentication_required"
-      ? {
-          target: "banner",
-          severity: "error",
-          text,
-          action: { kind: "link", label: "Sign in again", href: reauthenticationPath },
-        }
-      : code === "multi_factor_required"
-        ? {
-            target: "banner",
-            severity: "error",
-            text,
-            action: { kind: "link", label: "Verify", href: multiFactorPath },
-          }
-        : { target: "banner", severity: "error", text },
+    { target: "banner", severity: "error", text },
   ]),
 ) as Readonly<Record<Extract<FormFlowFeedback, { kind: "refusal" }>["code"], PageMessageDraft>>;
 
@@ -131,8 +118,8 @@ export const ruleMessagesOf = (
 /**
  * The one sentence a finished run's outcome is told in, wherever the run was started: the page
  * runtime and Studio's editor both use it. A refusal carries its own wording and, when the flow
- * names one, a link to where the person can put it right; signing in again or verifying comes back
- * to `continuation`, the place the person was working in, where they can retry.
+ * names one, a link to where the person can put it right. A proof that ran out is not a link away:
+ * the flow's own Verify step asks for it again when the person starts the action again.
  */
 export const finishedRunNotice = (
   run: Readonly<{
@@ -141,7 +128,6 @@ export const finishedRunNotice = (
   }>,
   where: Readonly<{
     destinationHref: (applicationKey: string, pageKey: string) => string;
-    continuation: string;
   }>,
 ): PageMessageDraft => {
   let notice = finishedNotice(run.descriptor.outcome, run.failure?.code, run.descriptor.commit);
@@ -177,14 +163,5 @@ export const finishedRunNotice = (
           : `${presentation?.message ?? reason.text} ${notice.text}`,
     };
   }
-  const recoveryAction = notice.action?.kind === "link" ? notice.action : undefined;
-  if (recoveryAction?.href === reauthenticationPath || recoveryAction?.href === multiFactorPath)
-    notice = {
-      ...notice,
-      action: {
-        ...recoveryAction,
-        href: `${recoveryAction.href}&${new URLSearchParams({ continuation: where.continuation })}`,
-      },
-    };
   return notice;
 };

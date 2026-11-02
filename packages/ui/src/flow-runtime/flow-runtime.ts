@@ -542,6 +542,9 @@ export function createFlowRuntime(options: FlowRuntimeOptions): FlowRuntime {
       console.error(`[flow] binding ${binding.bindingId} has no projected settings`);
       return { kind: "refused" };
     }
+    // This run's own host, so what it shows is not mixed up with another run's dialogs.
+    const runHost = options.host.forRun?.() ?? options.host;
+    const runOptions = runHost === options.host ? options : { ...options, host: runHost };
     // An agent's gesture claimed this control, or this run continues one an agent started.
     const agent = cycle?.agent ?? options.state.agent.take(settings.controlId);
     agent?.started();
@@ -570,7 +573,7 @@ export function createFlowRuntime(options: FlowRuntimeOptions): FlowRuntime {
         try {
           const { runFlowBinding } = await import("./flow-runtime-driver");
           return await runFlowBinding(
-            options,
+            runOptions,
             binding,
             attempt.inputs,
             attempt.runId,
@@ -599,7 +602,7 @@ export function createFlowRuntime(options: FlowRuntimeOptions): FlowRuntime {
     try {
       // Guided steps stay open for as long as a run lives, so one run can hand over to the next.
       const running = execute(signal);
-      const result = keepRetry(await (options.host.trackRun?.(running) ?? running));
+      const result = keepRetry(await (runHost.trackRun?.(running) ?? running));
       agent?.settled(result);
       return result;
     } catch (error) {

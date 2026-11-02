@@ -11,7 +11,11 @@ import {
 } from "./intents";
 
 /** What a waiting step answers: the person's answer, or that they went back a step. */
-type PageStepAnswer = FormAnswer | Readonly<{ kind: "back" }>;
+type PageStepAnswer =
+  | FormAnswer
+  | Readonly<{ kind: "back" }>
+  /** A verification the session already satisfied: nothing was asked, so there is nothing to go back to. */
+  | Readonly<{ kind: "confirm"; confirmed: boolean; asked: false }>;
 const wentBack: PageStepAnswer = { kind: "back" };
 
 type PageStepImplementation = (
@@ -55,7 +59,10 @@ const pageStepImplementations = {
       back === true ? { ...verification, back } : verification,
       signal,
     );
-    return isBackAnswer(answer) ? wentBack : { kind: "confirm", confirmed: answer.confirmed };
+    if (isBackAnswer(answer)) return wentBack;
+    return answer.asked === false
+      ? { kind: "confirm", confirmed: answer.confirmed, asked: false }
+      : { kind: "confirm", confirmed: answer.confirmed };
   },
   "interface.navigate": presentation,
   "interface.refresh": presentation,

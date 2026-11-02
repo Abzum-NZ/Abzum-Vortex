@@ -788,6 +788,12 @@
             "type": "record_reference",
             "required": true,
             "recordTypeIds": ["vortex.app_store:store_application"]
+          },
+          "after_publish": {
+            "type": "yes_no",
+            "required": false,
+            "default": false,
+            "description": "The install continues a publish in the same guided dialog."
           }
         },
         "variables": {},
@@ -806,17 +812,49 @@
                 }
               },
               "steps": {
-                "kind": "literal",
-                "literal": {
-                  "type": "json",
-                  "value": ["Review", "Release note", "Verify", "Publish", "Install", "Done"]
+                "kind": "formula",
+                "formula": {
+                  "op": "if",
+                  "condition": {
+                    "op": "reference",
+                    "reference": {
+                      "source": "input",
+                      "name": "after_publish"
+                    }
+                  },
+                  "then": {
+                    "op": "literal",
+                    "type": "json",
+                    "value": ["Review", "Release note", "Verify", "Publish", "Install", "Done"]
+                  },
+                  "else": {
+                    "op": "literal",
+                    "type": "json",
+                    "value": ["Verify", "Review", "Install", "Done"]
+                  }
                 }
               },
               "step": {
-                "kind": "literal",
-                "literal": {
-                  "type": "text",
-                  "value": "Install"
+                "kind": "formula",
+                "formula": {
+                  "op": "if",
+                  "condition": {
+                    "op": "reference",
+                    "reference": {
+                      "source": "input",
+                      "name": "after_publish"
+                    }
+                  },
+                  "then": {
+                    "op": "literal",
+                    "type": "text",
+                    "value": "Install"
+                  },
+                  "else": {
+                    "op": "literal",
+                    "type": "text",
+                    "value": "Verify"
+                  }
                 }
               },
               "working": {
@@ -884,17 +922,49 @@
                 }
               },
               "steps": {
-                "kind": "literal",
-                "literal": {
-                  "type": "json",
-                  "value": ["Review", "Release note", "Verify", "Publish", "Install", "Done"]
+                "kind": "formula",
+                "formula": {
+                  "op": "if",
+                  "condition": {
+                    "op": "reference",
+                    "reference": {
+                      "source": "input",
+                      "name": "after_publish"
+                    }
+                  },
+                  "then": {
+                    "op": "literal",
+                    "type": "json",
+                    "value": ["Review", "Release note", "Verify", "Publish", "Install", "Done"]
+                  },
+                  "else": {
+                    "op": "literal",
+                    "type": "json",
+                    "value": ["Verify", "Review", "Install", "Done"]
+                  }
                 }
               },
               "step": {
-                "kind": "literal",
-                "literal": {
-                  "type": "text",
-                  "value": "Install"
+                "kind": "formula",
+                "formula": {
+                  "op": "if",
+                  "condition": {
+                    "op": "reference",
+                    "reference": {
+                      "source": "input",
+                      "name": "after_publish"
+                    }
+                  },
+                  "then": {
+                    "op": "literal",
+                    "type": "text",
+                    "value": "Install"
+                  },
+                  "else": {
+                    "op": "literal",
+                    "type": "text",
+                    "value": "Review"
+                  }
                 }
               },
               "working": {
@@ -1254,24 +1324,56 @@
                                 }
                               },
                               "steps": {
-                                "kind": "literal",
-                                "literal": {
-                                  "type": "json",
-                                  "value": [
-                                    "Review",
-                                    "Release note",
-                                    "Verify",
-                                    "Publish",
-                                    "Install",
-                                    "Done"
-                                  ]
+                                "kind": "formula",
+                                "formula": {
+                                  "op": "if",
+                                  "condition": {
+                                    "op": "reference",
+                                    "reference": {
+                                      "source": "input",
+                                      "name": "after_publish"
+                                    }
+                                  },
+                                  "then": {
+                                    "op": "literal",
+                                    "type": "json",
+                                    "value": [
+                                      "Review",
+                                      "Release note",
+                                      "Verify",
+                                      "Publish",
+                                      "Install",
+                                      "Done"
+                                    ]
+                                  },
+                                  "else": {
+                                    "op": "literal",
+                                    "type": "json",
+                                    "value": ["Verify", "Review", "Install", "Done"]
+                                  }
                                 }
                               },
                               "step": {
-                                "kind": "literal",
-                                "literal": {
-                                  "type": "text",
-                                  "value": "Install"
+                                "kind": "formula",
+                                "formula": {
+                                  "op": "if",
+                                  "condition": {
+                                    "op": "reference",
+                                    "reference": {
+                                      "source": "input",
+                                      "name": "after_publish"
+                                    }
+                                  },
+                                  "then": {
+                                    "op": "literal",
+                                    "type": "text",
+                                    "value": "Install"
+                                  },
+                                  "else": {
+                                    "op": "literal",
+                                    "type": "text",
+                                    "value": "Install"
+                                  }
                                 }
                               },
                               "working": {
@@ -1339,24 +1441,56 @@
                                 }
                               },
                               "steps": {
-                                "kind": "literal",
-                                "literal": {
-                                  "type": "json",
-                                  "value": [
-                                    "Review",
-                                    "Release note",
-                                    "Verify",
-                                    "Publish",
-                                    "Install",
-                                    "Done"
-                                  ]
+                                "kind": "formula",
+                                "formula": {
+                                  "op": "if",
+                                  "condition": {
+                                    "op": "reference",
+                                    "reference": {
+                                      "source": "input",
+                                      "name": "after_publish"
+                                    }
+                                  },
+                                  "then": {
+                                    "op": "literal",
+                                    "type": "json",
+                                    "value": [
+                                      "Review",
+                                      "Release note",
+                                      "Verify",
+                                      "Publish",
+                                      "Install",
+                                      "Done"
+                                    ]
+                                  },
+                                  "else": {
+                                    "op": "literal",
+                                    "type": "json",
+                                    "value": ["Verify", "Review", "Install", "Done"]
+                                  }
                                 }
                               },
                               "step": {
-                                "kind": "literal",
-                                "literal": {
-                                  "type": "text",
-                                  "value": "Install"
+                                "kind": "formula",
+                                "formula": {
+                                  "op": "if",
+                                  "condition": {
+                                    "op": "reference",
+                                    "reference": {
+                                      "source": "input",
+                                      "name": "after_publish"
+                                    }
+                                  },
+                                  "then": {
+                                    "op": "literal",
+                                    "type": "text",
+                                    "value": "Install"
+                                  },
+                                  "else": {
+                                    "op": "literal",
+                                    "type": "text",
+                                    "value": "Install"
+                                  }
                                 }
                               },
                               "working": {
@@ -1554,162 +1688,309 @@
                                         }
                                       },
                                       "steps": {
-                                        "kind": "literal",
-                                        "literal": {
-                                          "type": "json",
-                                          "value": [
-                                            "Review",
-                                            "Release note",
-                                            "Verify",
-                                            "Publish",
-                                            "Install",
-                                            "Done"
-                                          ]
+                                        "kind": "formula",
+                                        "formula": {
+                                          "op": "if",
+                                          "condition": {
+                                            "op": "reference",
+                                            "reference": {
+                                              "source": "input",
+                                              "name": "after_publish"
+                                            }
+                                          },
+                                          "then": {
+                                            "op": "literal",
+                                            "type": "json",
+                                            "value": [
+                                              "Review",
+                                              "Release note",
+                                              "Verify",
+                                              "Publish",
+                                              "Install",
+                                              "Done"
+                                            ]
+                                          },
+                                          "else": {
+                                            "op": "literal",
+                                            "type": "json",
+                                            "value": ["Verify", "Review", "Install", "Done"]
+                                          }
                                         }
                                       },
                                       "step": {
-                                        "kind": "literal",
-                                        "literal": {
-                                          "type": "text",
-                                          "value": "Done"
+                                        "kind": "formula",
+                                        "formula": {
+                                          "op": "if",
+                                          "condition": {
+                                            "op": "reference",
+                                            "reference": {
+                                              "source": "input",
+                                              "name": "after_publish"
+                                            }
+                                          },
+                                          "then": {
+                                            "op": "literal",
+                                            "type": "text",
+                                            "value": "Done"
+                                          },
+                                          "else": {
+                                            "op": "literal",
+                                            "type": "text",
+                                            "value": "Done"
+                                          }
                                         }
                                       }
                                     }
                                   },
                                   {
-                                    "id": "install_done",
-                                    "type": "interface.show_message",
-                                    "version": "1.1.0",
-                                    "properties": {
-                                      "message": {
-                                        "kind": "formula",
-                                        "formula": {
-                                          "op": "join",
-                                          "parts": [
-                                            {
-                                              "op": "reference",
-                                              "reference": {
-                                                "source": "task_output",
-                                                "task": "install",
-                                                "key": "result",
-                                                "path": ["application_name"]
-                                              }
-                                            },
-                                            {
-                                              "op": "literal",
-                                              "type": "text",
-                                              "value": " "
-                                            },
-                                            {
-                                              "op": "reference",
-                                              "reference": {
-                                                "source": "task_output",
-                                                "task": "install",
-                                                "key": "result",
-                                                "path": ["release_version"]
-                                              }
-                                            },
-                                            {
-                                              "op": "if",
-                                              "condition": {
-                                                "op": "reference",
-                                                "reference": {
-                                                  "source": "task_output",
-                                                  "task": "confirm_install",
-                                                  "key": "choice"
-                                                }
-                                              },
-                                              "then": {
-                                                "op": "join",
-                                                "parts": [
-                                                  {
-                                                    "op": "literal",
-                                                    "type": "text",
-                                                    "value": " is installed and you now have the role "
-                                                  },
-                                                  {
+                                    "id": "install_done_choice",
+                                    "type": "if",
+                                    "condition": {
+                                      "op": "reference",
+                                      "reference": {
+                                        "source": "task_output",
+                                        "task": "confirm_install",
+                                        "key": "choice"
+                                      }
+                                    },
+                                    "then": [
+                                      {
+                                        "id": "install_done",
+                                        "type": "interface.show_message",
+                                        "version": "1.1.0",
+                                        "properties": {
+                                          "message": {
+                                            "kind": "formula",
+                                            "formula": {
+                                              "op": "join",
+                                              "parts": [
+                                                {
+                                                  "op": "reference",
+                                                  "reference": {
+                                                    "source": "task_output",
+                                                    "task": "install",
+                                                    "key": "result",
+                                                    "path": ["application_name"]
+                                                  }
+                                                },
+                                                {
+                                                  "op": "literal",
+                                                  "type": "text",
+                                                  "value": " "
+                                                },
+                                                {
+                                                  "op": "reference",
+                                                  "reference": {
+                                                    "source": "task_output",
+                                                    "task": "install",
+                                                    "key": "result",
+                                                    "path": ["release_version"]
+                                                  }
+                                                },
+                                                {
+                                                  "op": "if",
+                                                  "condition": {
                                                     "op": "reference",
                                                     "reference": {
                                                       "source": "task_output",
-                                                      "task": "review",
-                                                      "key": "result",
-                                                      "path": ["member_role_name"]
+                                                      "task": "confirm_install",
+                                                      "key": "choice"
                                                     }
                                                   },
-                                                  {
+                                                  "then": {
+                                                    "op": "join",
+                                                    "parts": [
+                                                      {
+                                                        "op": "literal",
+                                                        "type": "text",
+                                                        "value": " is installed and you now have the role "
+                                                      },
+                                                      {
+                                                        "op": "reference",
+                                                        "reference": {
+                                                          "source": "task_output",
+                                                          "task": "review",
+                                                          "key": "result",
+                                                          "path": ["member_role_name"]
+                                                        }
+                                                      },
+                                                      {
+                                                        "op": "literal",
+                                                        "type": "text",
+                                                        "value": ". Find it in the launcher; give other people their roles in IAM."
+                                                      }
+                                                    ]
+                                                  },
+                                                  "else": {
                                                     "op": "literal",
                                                     "type": "text",
-                                                    "value": ". Find it in the launcher; give other people their roles in IAM."
+                                                    "value": " is installed with its roles. Give people their roles in IAM; people with a role find the application in the launcher."
                                                   }
-                                                ]
-                                              },
-                                              "else": {
-                                                "op": "literal",
-                                                "type": "text",
-                                                "value": " is installed with its roles. Give people their roles in IAM; people with a role find the application in the launcher."
-                                              }
+                                                }
+                                              ]
                                             }
-                                          ]
-                                        }
-                                      },
-                                      "title": {
-                                        "kind": "literal",
-                                        "literal": {
-                                          "type": "text",
-                                          "value": "Installed"
-                                        }
-                                      },
-                                      "target": {
-                                        "kind": "literal",
-                                        "literal": {
-                                          "type": "text",
-                                          "value": "dialog"
-                                        }
-                                      },
-                                      "severity": {
-                                        "kind": "literal",
-                                        "literal": {
-                                          "type": "text",
-                                          "value": "success"
-                                        }
-                                      },
-                                      "actions": {
-                                        "kind": "array",
-                                        "items": [
-                                          {
-                                            "kind": "map",
-                                            "entries": {
-                                              "label": {
-                                                "kind": "literal",
-                                                "literal": {
-                                                  "type": "text",
-                                                  "value": "Open the application"
-                                                }
-                                              },
-                                              "flow": {
-                                                "kind": "literal",
-                                                "literal": {
-                                                  "type": "text",
-                                                  "value": "flow_open_installed_application"
-                                                }
-                                              },
-                                              "inputs": {
+                                          },
+                                          "title": {
+                                            "kind": "literal",
+                                            "literal": {
+                                              "type": "text",
+                                              "value": "Installed"
+                                            }
+                                          },
+                                          "target": {
+                                            "kind": "literal",
+                                            "literal": {
+                                              "type": "text",
+                                              "value": "dialog"
+                                            }
+                                          },
+                                          "severity": {
+                                            "kind": "literal",
+                                            "literal": {
+                                              "type": "text",
+                                              "value": "success"
+                                            }
+                                          },
+                                          "actions": {
+                                            "kind": "array",
+                                            "items": [
+                                              {
                                                 "kind": "map",
                                                 "entries": {
-                                                  "application_root_id": {
-                                                    "kind": "reference",
-                                                    "reference": {
-                                                      "source": "input",
-                                                      "name": "application_root_id"
+                                                  "label": {
+                                                    "kind": "literal",
+                                                    "literal": {
+                                                      "type": "text",
+                                                      "value": "Open the application"
+                                                    }
+                                                  },
+                                                  "flow": {
+                                                    "kind": "literal",
+                                                    "literal": {
+                                                      "type": "text",
+                                                      "value": "flow_open_installed_application"
+                                                    }
+                                                  },
+                                                  "inputs": {
+                                                    "kind": "map",
+                                                    "entries": {
+                                                      "application_root_id": {
+                                                        "kind": "reference",
+                                                        "reference": {
+                                                          "source": "input",
+                                                          "name": "application_root_id"
+                                                        }
+                                                      }
                                                     }
                                                   }
                                                 }
                                               }
+                                            ]
+                                          }
+                                        }
+                                      }
+                                    ],
+                                    "else": [
+                                      {
+                                        "id": "install_done_plain",
+                                        "type": "interface.show_message",
+                                        "version": "1.1.0",
+                                        "properties": {
+                                          "message": {
+                                            "kind": "formula",
+                                            "formula": {
+                                              "op": "join",
+                                              "parts": [
+                                                {
+                                                  "op": "reference",
+                                                  "reference": {
+                                                    "source": "task_output",
+                                                    "task": "install",
+                                                    "key": "result",
+                                                    "path": ["application_name"]
+                                                  }
+                                                },
+                                                {
+                                                  "op": "literal",
+                                                  "type": "text",
+                                                  "value": " "
+                                                },
+                                                {
+                                                  "op": "reference",
+                                                  "reference": {
+                                                    "source": "task_output",
+                                                    "task": "install",
+                                                    "key": "result",
+                                                    "path": ["release_version"]
+                                                  }
+                                                },
+                                                {
+                                                  "op": "if",
+                                                  "condition": {
+                                                    "op": "reference",
+                                                    "reference": {
+                                                      "source": "task_output",
+                                                      "task": "confirm_install",
+                                                      "key": "choice"
+                                                    }
+                                                  },
+                                                  "then": {
+                                                    "op": "join",
+                                                    "parts": [
+                                                      {
+                                                        "op": "literal",
+                                                        "type": "text",
+                                                        "value": " is installed and you now have the role "
+                                                      },
+                                                      {
+                                                        "op": "reference",
+                                                        "reference": {
+                                                          "source": "task_output",
+                                                          "task": "review",
+                                                          "key": "result",
+                                                          "path": ["member_role_name"]
+                                                        }
+                                                      },
+                                                      {
+                                                        "op": "literal",
+                                                        "type": "text",
+                                                        "value": ". Find it in the launcher; give other people their roles in IAM."
+                                                      }
+                                                    ]
+                                                  },
+                                                  "else": {
+                                                    "op": "literal",
+                                                    "type": "text",
+                                                    "value": " is installed with its roles. Give people their roles in IAM; people with a role find the application in the launcher."
+                                                  }
+                                                }
+                                              ]
+                                            }
+                                          },
+                                          "title": {
+                                            "kind": "literal",
+                                            "literal": {
+                                              "type": "text",
+                                              "value": "Installed"
+                                            }
+                                          },
+                                          "target": {
+                                            "kind": "literal",
+                                            "literal": {
+                                              "type": "text",
+                                              "value": "dialog"
+                                            }
+                                          },
+                                          "severity": {
+                                            "kind": "literal",
+                                            "literal": {
+                                              "type": "text",
+                                              "value": "success"
                                             }
                                           }
-                                        ]
+                                        }
                                       }
-                                    }
+                                    ]
                                   }
                                 ]
                               },
@@ -2048,24 +2329,56 @@
                                 }
                               },
                               "steps": {
-                                "kind": "literal",
-                                "literal": {
-                                  "type": "json",
-                                  "value": [
-                                    "Review",
-                                    "Release note",
-                                    "Verify",
-                                    "Publish",
-                                    "Install",
-                                    "Done"
-                                  ]
+                                "kind": "formula",
+                                "formula": {
+                                  "op": "if",
+                                  "condition": {
+                                    "op": "reference",
+                                    "reference": {
+                                      "source": "input",
+                                      "name": "after_publish"
+                                    }
+                                  },
+                                  "then": {
+                                    "op": "literal",
+                                    "type": "json",
+                                    "value": [
+                                      "Review",
+                                      "Release note",
+                                      "Verify",
+                                      "Publish",
+                                      "Install",
+                                      "Done"
+                                    ]
+                                  },
+                                  "else": {
+                                    "op": "literal",
+                                    "type": "json",
+                                    "value": ["Verify", "Review", "Install", "Done"]
+                                  }
                                 }
                               },
                               "step": {
-                                "kind": "literal",
-                                "literal": {
-                                  "type": "text",
-                                  "value": "Install"
+                                "kind": "formula",
+                                "formula": {
+                                  "op": "if",
+                                  "condition": {
+                                    "op": "reference",
+                                    "reference": {
+                                      "source": "input",
+                                      "name": "after_publish"
+                                    }
+                                  },
+                                  "then": {
+                                    "op": "literal",
+                                    "type": "text",
+                                    "value": "Install"
+                                  },
+                                  "else": {
+                                    "op": "literal",
+                                    "type": "text",
+                                    "value": "Install"
+                                  }
                                 }
                               },
                               "working": {
@@ -2133,24 +2446,56 @@
                                 }
                               },
                               "steps": {
-                                "kind": "literal",
-                                "literal": {
-                                  "type": "json",
-                                  "value": [
-                                    "Review",
-                                    "Release note",
-                                    "Verify",
-                                    "Publish",
-                                    "Install",
-                                    "Done"
-                                  ]
+                                "kind": "formula",
+                                "formula": {
+                                  "op": "if",
+                                  "condition": {
+                                    "op": "reference",
+                                    "reference": {
+                                      "source": "input",
+                                      "name": "after_publish"
+                                    }
+                                  },
+                                  "then": {
+                                    "op": "literal",
+                                    "type": "json",
+                                    "value": [
+                                      "Review",
+                                      "Release note",
+                                      "Verify",
+                                      "Publish",
+                                      "Install",
+                                      "Done"
+                                    ]
+                                  },
+                                  "else": {
+                                    "op": "literal",
+                                    "type": "json",
+                                    "value": ["Verify", "Review", "Install", "Done"]
+                                  }
                                 }
                               },
                               "step": {
-                                "kind": "literal",
-                                "literal": {
-                                  "type": "text",
-                                  "value": "Install"
+                                "kind": "formula",
+                                "formula": {
+                                  "op": "if",
+                                  "condition": {
+                                    "op": "reference",
+                                    "reference": {
+                                      "source": "input",
+                                      "name": "after_publish"
+                                    }
+                                  },
+                                  "then": {
+                                    "op": "literal",
+                                    "type": "text",
+                                    "value": "Install"
+                                  },
+                                  "else": {
+                                    "op": "literal",
+                                    "type": "text",
+                                    "value": "Install"
+                                  }
                                 }
                               },
                               "working": {
@@ -2349,24 +2694,56 @@
                                         }
                                       },
                                       "steps": {
-                                        "kind": "literal",
-                                        "literal": {
-                                          "type": "json",
-                                          "value": [
-                                            "Review",
-                                            "Release note",
-                                            "Verify",
-                                            "Publish",
-                                            "Install",
-                                            "Done"
-                                          ]
+                                        "kind": "formula",
+                                        "formula": {
+                                          "op": "if",
+                                          "condition": {
+                                            "op": "reference",
+                                            "reference": {
+                                              "source": "input",
+                                              "name": "after_publish"
+                                            }
+                                          },
+                                          "then": {
+                                            "op": "literal",
+                                            "type": "json",
+                                            "value": [
+                                              "Review",
+                                              "Release note",
+                                              "Verify",
+                                              "Publish",
+                                              "Install",
+                                              "Done"
+                                            ]
+                                          },
+                                          "else": {
+                                            "op": "literal",
+                                            "type": "json",
+                                            "value": ["Verify", "Review", "Install", "Done"]
+                                          }
                                         }
                                       },
                                       "step": {
-                                        "kind": "literal",
-                                        "literal": {
-                                          "type": "text",
-                                          "value": "Done"
+                                        "kind": "formula",
+                                        "formula": {
+                                          "op": "if",
+                                          "condition": {
+                                            "op": "reference",
+                                            "reference": {
+                                              "source": "input",
+                                              "name": "after_publish"
+                                            }
+                                          },
+                                          "then": {
+                                            "op": "literal",
+                                            "type": "text",
+                                            "value": "Done"
+                                          },
+                                          "else": {
+                                            "op": "literal",
+                                            "type": "text",
+                                            "value": "Done"
+                                          }
                                         }
                                       }
                                     }
@@ -2492,42 +2869,6 @@
                                           "type": "text",
                                           "value": "success"
                                         }
-                                      },
-                                      "actions": {
-                                        "kind": "array",
-                                        "items": [
-                                          {
-                                            "kind": "map",
-                                            "entries": {
-                                              "label": {
-                                                "kind": "literal",
-                                                "literal": {
-                                                  "type": "text",
-                                                  "value": "Open the application"
-                                                }
-                                              },
-                                              "flow": {
-                                                "kind": "literal",
-                                                "literal": {
-                                                  "type": "text",
-                                                  "value": "flow_open_installed_application"
-                                                }
-                                              },
-                                              "inputs": {
-                                                "kind": "map",
-                                                "entries": {
-                                                  "application_root_id": {
-                                                    "kind": "reference",
-                                                    "reference": {
-                                                      "source": "input",
-                                                      "name": "application_root_id"
-                                                    }
-                                                  }
-                                                }
-                                              }
-                                            }
-                                          }
-                                        ]
                                       }
                                     }
                                   }
@@ -2781,24 +3122,56 @@
                                 }
                               },
                               "steps": {
-                                "kind": "literal",
-                                "literal": {
-                                  "type": "json",
-                                  "value": [
-                                    "Review",
-                                    "Release note",
-                                    "Verify",
-                                    "Publish",
-                                    "Install",
-                                    "Done"
-                                  ]
+                                "kind": "formula",
+                                "formula": {
+                                  "op": "if",
+                                  "condition": {
+                                    "op": "reference",
+                                    "reference": {
+                                      "source": "input",
+                                      "name": "after_publish"
+                                    }
+                                  },
+                                  "then": {
+                                    "op": "literal",
+                                    "type": "json",
+                                    "value": [
+                                      "Review",
+                                      "Release note",
+                                      "Verify",
+                                      "Publish",
+                                      "Install",
+                                      "Done"
+                                    ]
+                                  },
+                                  "else": {
+                                    "op": "literal",
+                                    "type": "json",
+                                    "value": ["Verify", "Review", "Install", "Done"]
+                                  }
                                 }
                               },
                               "step": {
-                                "kind": "literal",
-                                "literal": {
-                                  "type": "text",
-                                  "value": "Install"
+                                "kind": "formula",
+                                "formula": {
+                                  "op": "if",
+                                  "condition": {
+                                    "op": "reference",
+                                    "reference": {
+                                      "source": "input",
+                                      "name": "after_publish"
+                                    }
+                                  },
+                                  "then": {
+                                    "op": "literal",
+                                    "type": "text",
+                                    "value": "Install"
+                                  },
+                                  "else": {
+                                    "op": "literal",
+                                    "type": "text",
+                                    "value": "Install"
+                                  }
                                 }
                               },
                               "working": {
@@ -2866,24 +3239,56 @@
                                 }
                               },
                               "steps": {
-                                "kind": "literal",
-                                "literal": {
-                                  "type": "json",
-                                  "value": [
-                                    "Review",
-                                    "Release note",
-                                    "Verify",
-                                    "Publish",
-                                    "Install",
-                                    "Done"
-                                  ]
+                                "kind": "formula",
+                                "formula": {
+                                  "op": "if",
+                                  "condition": {
+                                    "op": "reference",
+                                    "reference": {
+                                      "source": "input",
+                                      "name": "after_publish"
+                                    }
+                                  },
+                                  "then": {
+                                    "op": "literal",
+                                    "type": "json",
+                                    "value": [
+                                      "Review",
+                                      "Release note",
+                                      "Verify",
+                                      "Publish",
+                                      "Install",
+                                      "Done"
+                                    ]
+                                  },
+                                  "else": {
+                                    "op": "literal",
+                                    "type": "json",
+                                    "value": ["Verify", "Review", "Install", "Done"]
+                                  }
                                 }
                               },
                               "step": {
-                                "kind": "literal",
-                                "literal": {
-                                  "type": "text",
-                                  "value": "Install"
+                                "kind": "formula",
+                                "formula": {
+                                  "op": "if",
+                                  "condition": {
+                                    "op": "reference",
+                                    "reference": {
+                                      "source": "input",
+                                      "name": "after_publish"
+                                    }
+                                  },
+                                  "then": {
+                                    "op": "literal",
+                                    "type": "text",
+                                    "value": "Install"
+                                  },
+                                  "else": {
+                                    "op": "literal",
+                                    "type": "text",
+                                    "value": "Install"
+                                  }
                                 }
                               },
                               "working": {
@@ -3082,24 +3487,56 @@
                                         }
                                       },
                                       "steps": {
-                                        "kind": "literal",
-                                        "literal": {
-                                          "type": "json",
-                                          "value": [
-                                            "Review",
-                                            "Release note",
-                                            "Verify",
-                                            "Publish",
-                                            "Install",
-                                            "Done"
-                                          ]
+                                        "kind": "formula",
+                                        "formula": {
+                                          "op": "if",
+                                          "condition": {
+                                            "op": "reference",
+                                            "reference": {
+                                              "source": "input",
+                                              "name": "after_publish"
+                                            }
+                                          },
+                                          "then": {
+                                            "op": "literal",
+                                            "type": "json",
+                                            "value": [
+                                              "Review",
+                                              "Release note",
+                                              "Verify",
+                                              "Publish",
+                                              "Install",
+                                              "Done"
+                                            ]
+                                          },
+                                          "else": {
+                                            "op": "literal",
+                                            "type": "json",
+                                            "value": ["Verify", "Review", "Install", "Done"]
+                                          }
                                         }
                                       },
                                       "step": {
-                                        "kind": "literal",
-                                        "literal": {
-                                          "type": "text",
-                                          "value": "Done"
+                                        "kind": "formula",
+                                        "formula": {
+                                          "op": "if",
+                                          "condition": {
+                                            "op": "reference",
+                                            "reference": {
+                                              "source": "input",
+                                              "name": "after_publish"
+                                            }
+                                          },
+                                          "then": {
+                                            "op": "literal",
+                                            "type": "text",
+                                            "value": "Done"
+                                          },
+                                          "else": {
+                                            "op": "literal",
+                                            "type": "text",
+                                            "value": "Done"
+                                          }
                                         }
                                       }
                                     }
@@ -3186,42 +3623,6 @@
                                           "type": "text",
                                           "value": "success"
                                         }
-                                      },
-                                      "actions": {
-                                        "kind": "array",
-                                        "items": [
-                                          {
-                                            "kind": "map",
-                                            "entries": {
-                                              "label": {
-                                                "kind": "literal",
-                                                "literal": {
-                                                  "type": "text",
-                                                  "value": "Open the application"
-                                                }
-                                              },
-                                              "flow": {
-                                                "kind": "literal",
-                                                "literal": {
-                                                  "type": "text",
-                                                  "value": "flow_open_installed_application"
-                                                }
-                                              },
-                                              "inputs": {
-                                                "kind": "map",
-                                                "entries": {
-                                                  "application_root_id": {
-                                                    "kind": "reference",
-                                                    "reference": {
-                                                      "source": "input",
-                                                      "name": "application_root_id"
-                                                    }
-                                                  }
-                                                }
-                                              }
-                                            }
-                                          }
-                                        ]
                                       }
                                     }
                                   }
@@ -3773,6 +4174,119 @@
         "triggers": [],
         "tasks": [
           {
+            "id": "wizard_remove_signin",
+            "type": "interface.wizard",
+            "version": "1.0.0",
+            "properties": {
+              "title": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "Remove application"
+                }
+              },
+              "steps": {
+                "kind": "literal",
+                "literal": {
+                  "type": "json",
+                  "value": ["Verify", "Review", "Confirm", "Done"]
+                }
+              },
+              "step": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "Verify"
+                }
+              },
+              "working": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "Checking your sign-in…"
+                }
+              }
+            }
+          },
+          {
+            "id": "verify_remove_review",
+            "type": "interface.verify",
+            "version": "1.0.0",
+            "properties": {
+              "requires": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "recent_sign_in"
+                }
+              },
+              "message": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "Changing what is installed needs a sign-in within the last 15 minutes."
+                }
+              }
+            }
+          },
+          {
+            "id": "remove_review_unverified",
+            "type": "if",
+            "condition": {
+              "op": "not",
+              "arg": {
+                "op": "reference",
+                "reference": {
+                  "source": "task_output",
+                  "task": "verify_remove_review",
+                  "key": "confirmed"
+                }
+              }
+            },
+            "then": [
+              {
+                "id": "stop_remove_review_unverified",
+                "type": "stop",
+                "outcome": "cancelled"
+              }
+            ]
+          },
+          {
+            "id": "wizard_remove_review",
+            "type": "interface.wizard",
+            "version": "1.0.0",
+            "properties": {
+              "title": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "Remove application"
+                }
+              },
+              "steps": {
+                "kind": "literal",
+                "literal": {
+                  "type": "json",
+                  "value": ["Verify", "Review", "Confirm", "Done"]
+                }
+              },
+              "step": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "Review"
+                }
+              },
+              "working": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "Reviewing what removing it takes…"
+                }
+              }
+            }
+          },
+          {
             "id": "review_removal",
             "type": "operation.call",
             "version": "1.0.0",
@@ -4061,6 +4575,34 @@
                         },
                         "tasks": [
                           {
+                            "id": "wizard_remove_confirm",
+                            "type": "interface.wizard",
+                            "version": "1.0.0",
+                            "properties": {
+                              "title": {
+                                "kind": "literal",
+                                "literal": {
+                                  "type": "text",
+                                  "value": "Remove application"
+                                }
+                              },
+                              "steps": {
+                                "kind": "literal",
+                                "literal": {
+                                  "type": "json",
+                                  "value": ["Verify", "Review", "Confirm", "Done"]
+                                }
+                              },
+                              "step": {
+                                "kind": "literal",
+                                "literal": {
+                                  "type": "text",
+                                  "value": "Confirm"
+                                }
+                              }
+                            }
+                          },
+                          {
                             "id": "confirm_removal",
                             "type": "interface.confirm",
                             "version": "1.0.0",
@@ -4275,6 +4817,119 @@
                                 ]
                               },
                               {
+                                "id": "wizard_purge_verify",
+                                "type": "interface.wizard",
+                                "version": "1.0.0",
+                                "properties": {
+                                  "title": {
+                                    "kind": "literal",
+                                    "literal": {
+                                      "type": "text",
+                                      "value": "Remove application"
+                                    }
+                                  },
+                                  "steps": {
+                                    "kind": "literal",
+                                    "literal": {
+                                      "type": "json",
+                                      "value": ["Verify", "Review", "Confirm", "Done"]
+                                    }
+                                  },
+                                  "step": {
+                                    "kind": "literal",
+                                    "literal": {
+                                      "type": "text",
+                                      "value": "Confirm"
+                                    }
+                                  },
+                                  "working": {
+                                    "kind": "literal",
+                                    "literal": {
+                                      "type": "text",
+                                      "value": "Checking your sign-in…"
+                                    }
+                                  }
+                                }
+                              },
+                              {
+                                "id": "verify_purge",
+                                "type": "interface.verify",
+                                "version": "1.0.0",
+                                "properties": {
+                                  "requires": {
+                                    "kind": "literal",
+                                    "literal": {
+                                      "type": "text",
+                                      "value": "recent_sign_in"
+                                    }
+                                  },
+                                  "message": {
+                                    "kind": "literal",
+                                    "literal": {
+                                      "type": "text",
+                                      "value": "Changing what is installed needs a sign-in within the last 15 minutes."
+                                    }
+                                  }
+                                }
+                              },
+                              {
+                                "id": "purge_unverified",
+                                "type": "if",
+                                "condition": {
+                                  "op": "not",
+                                  "arg": {
+                                    "op": "reference",
+                                    "reference": {
+                                      "source": "task_output",
+                                      "task": "verify_purge",
+                                      "key": "confirmed"
+                                    }
+                                  }
+                                },
+                                "then": [
+                                  {
+                                    "id": "stop_purge_unverified",
+                                    "type": "stop",
+                                    "outcome": "cancelled"
+                                  }
+                                ]
+                              },
+                              {
+                                "id": "wizard_purge_commit",
+                                "type": "interface.wizard",
+                                "version": "1.0.0",
+                                "properties": {
+                                  "title": {
+                                    "kind": "literal",
+                                    "literal": {
+                                      "type": "text",
+                                      "value": "Remove application"
+                                    }
+                                  },
+                                  "steps": {
+                                    "kind": "literal",
+                                    "literal": {
+                                      "type": "json",
+                                      "value": ["Verify", "Review", "Confirm", "Done"]
+                                    }
+                                  },
+                                  "step": {
+                                    "kind": "literal",
+                                    "literal": {
+                                      "type": "text",
+                                      "value": "Confirm"
+                                    }
+                                  },
+                                  "working": {
+                                    "kind": "literal",
+                                    "literal": {
+                                      "type": "text",
+                                      "value": "Deleting the application and its data…"
+                                    }
+                                  }
+                                }
+                              },
+                              {
                                 "id": "purge",
                                 "type": "operation.call",
                                 "version": "1.0.0",
@@ -4428,6 +5083,34 @@
                                     },
                                     "tasks": [
                                       {
+                                        "id": "wizard_purge_done",
+                                        "type": "interface.wizard",
+                                        "version": "1.0.0",
+                                        "properties": {
+                                          "title": {
+                                            "kind": "literal",
+                                            "literal": {
+                                              "type": "text",
+                                              "value": "Remove application"
+                                            }
+                                          },
+                                          "steps": {
+                                            "kind": "literal",
+                                            "literal": {
+                                              "type": "json",
+                                              "value": ["Verify", "Review", "Confirm", "Done"]
+                                            }
+                                          },
+                                          "step": {
+                                            "kind": "literal",
+                                            "literal": {
+                                              "type": "text",
+                                              "value": "Done"
+                                            }
+                                          }
+                                        }
+                                      },
+                                      {
                                         "id": "purge_done",
                                         "type": "interface.show_message",
                                         "version": "1.1.0",
@@ -4563,6 +5246,119 @@
                               }
                             ],
                             "else": [
+                              {
+                                "id": "wizard_remove_verify",
+                                "type": "interface.wizard",
+                                "version": "1.0.0",
+                                "properties": {
+                                  "title": {
+                                    "kind": "literal",
+                                    "literal": {
+                                      "type": "text",
+                                      "value": "Remove application"
+                                    }
+                                  },
+                                  "steps": {
+                                    "kind": "literal",
+                                    "literal": {
+                                      "type": "json",
+                                      "value": ["Verify", "Review", "Confirm", "Done"]
+                                    }
+                                  },
+                                  "step": {
+                                    "kind": "literal",
+                                    "literal": {
+                                      "type": "text",
+                                      "value": "Confirm"
+                                    }
+                                  },
+                                  "working": {
+                                    "kind": "literal",
+                                    "literal": {
+                                      "type": "text",
+                                      "value": "Checking your sign-in…"
+                                    }
+                                  }
+                                }
+                              },
+                              {
+                                "id": "verify_remove",
+                                "type": "interface.verify",
+                                "version": "1.0.0",
+                                "properties": {
+                                  "requires": {
+                                    "kind": "literal",
+                                    "literal": {
+                                      "type": "text",
+                                      "value": "recent_sign_in"
+                                    }
+                                  },
+                                  "message": {
+                                    "kind": "literal",
+                                    "literal": {
+                                      "type": "text",
+                                      "value": "Changing what is installed needs a sign-in within the last 15 minutes."
+                                    }
+                                  }
+                                }
+                              },
+                              {
+                                "id": "remove_unverified",
+                                "type": "if",
+                                "condition": {
+                                  "op": "not",
+                                  "arg": {
+                                    "op": "reference",
+                                    "reference": {
+                                      "source": "task_output",
+                                      "task": "verify_remove",
+                                      "key": "confirmed"
+                                    }
+                                  }
+                                },
+                                "then": [
+                                  {
+                                    "id": "stop_remove_unverified",
+                                    "type": "stop",
+                                    "outcome": "cancelled"
+                                  }
+                                ]
+                              },
+                              {
+                                "id": "wizard_remove_commit",
+                                "type": "interface.wizard",
+                                "version": "1.0.0",
+                                "properties": {
+                                  "title": {
+                                    "kind": "literal",
+                                    "literal": {
+                                      "type": "text",
+                                      "value": "Remove application"
+                                    }
+                                  },
+                                  "steps": {
+                                    "kind": "literal",
+                                    "literal": {
+                                      "type": "json",
+                                      "value": ["Verify", "Review", "Confirm", "Done"]
+                                    }
+                                  },
+                                  "step": {
+                                    "kind": "literal",
+                                    "literal": {
+                                      "type": "text",
+                                      "value": "Confirm"
+                                    }
+                                  },
+                                  "working": {
+                                    "kind": "literal",
+                                    "literal": {
+                                      "type": "text",
+                                      "value": "Removing the application…"
+                                    }
+                                  }
+                                }
+                              },
                               {
                                 "id": "remove",
                                 "type": "operation.call",
@@ -4716,6 +5512,34 @@
                                       "value": "committed"
                                     },
                                     "tasks": [
+                                      {
+                                        "id": "wizard_removal_done",
+                                        "type": "interface.wizard",
+                                        "version": "1.0.0",
+                                        "properties": {
+                                          "title": {
+                                            "kind": "literal",
+                                            "literal": {
+                                              "type": "text",
+                                              "value": "Remove application"
+                                            }
+                                          },
+                                          "steps": {
+                                            "kind": "literal",
+                                            "literal": {
+                                              "type": "json",
+                                              "value": ["Verify", "Review", "Confirm", "Done"]
+                                            }
+                                          },
+                                          "step": {
+                                            "kind": "literal",
+                                            "literal": {
+                                              "type": "text",
+                                              "value": "Done"
+                                            }
+                                          }
+                                        }
+                                      },
                                       {
                                         "id": "removal_done",
                                         "type": "interface.show_message",
@@ -5049,6 +5873,119 @@
         "triggers": [],
         "tasks": [
           {
+            "id": "wizard_delete_signin",
+            "type": "interface.wizard",
+            "version": "1.0.0",
+            "properties": {
+              "title": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "Delete application"
+                }
+              },
+              "steps": {
+                "kind": "literal",
+                "literal": {
+                  "type": "json",
+                  "value": ["Verify", "Review", "Confirm", "Done"]
+                }
+              },
+              "step": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "Verify"
+                }
+              },
+              "working": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "Checking your sign-in…"
+                }
+              }
+            }
+          },
+          {
+            "id": "verify_delete_review",
+            "type": "interface.verify",
+            "version": "1.0.0",
+            "properties": {
+              "requires": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "recent_sign_in"
+                }
+              },
+              "message": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "Changing what is installed needs a sign-in within the last 15 minutes."
+                }
+              }
+            }
+          },
+          {
+            "id": "delete_review_unverified",
+            "type": "if",
+            "condition": {
+              "op": "not",
+              "arg": {
+                "op": "reference",
+                "reference": {
+                  "source": "task_output",
+                  "task": "verify_delete_review",
+                  "key": "confirmed"
+                }
+              }
+            },
+            "then": [
+              {
+                "id": "stop_delete_review_unverified",
+                "type": "stop",
+                "outcome": "cancelled"
+              }
+            ]
+          },
+          {
+            "id": "wizard_delete_review",
+            "type": "interface.wizard",
+            "version": "1.0.0",
+            "properties": {
+              "title": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "Delete application"
+                }
+              },
+              "steps": {
+                "kind": "literal",
+                "literal": {
+                  "type": "json",
+                  "value": ["Verify", "Review", "Confirm", "Done"]
+                }
+              },
+              "step": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "Review"
+                }
+              },
+              "working": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "Reviewing what deleting it takes…"
+                }
+              }
+            }
+          },
+          {
             "id": "review_delete",
             "type": "operation.call",
             "version": "1.0.0",
@@ -5199,6 +6136,34 @@
                   "value": "completed"
                 },
                 "tasks": [
+                  {
+                    "id": "wizard_delete_confirm",
+                    "type": "interface.wizard",
+                    "version": "1.0.0",
+                    "properties": {
+                      "title": {
+                        "kind": "literal",
+                        "literal": {
+                          "type": "text",
+                          "value": "Delete application"
+                        }
+                      },
+                      "steps": {
+                        "kind": "literal",
+                        "literal": {
+                          "type": "json",
+                          "value": ["Verify", "Review", "Confirm", "Done"]
+                        }
+                      },
+                      "step": {
+                        "kind": "literal",
+                        "literal": {
+                          "type": "text",
+                          "value": "Confirm"
+                        }
+                      }
+                    }
+                  },
                   {
                     "id": "confirm_delete",
                     "type": "interface.confirm",
@@ -5395,6 +6360,119 @@
                     ]
                   },
                   {
+                    "id": "wizard_delete_verify",
+                    "type": "interface.wizard",
+                    "version": "1.0.0",
+                    "properties": {
+                      "title": {
+                        "kind": "literal",
+                        "literal": {
+                          "type": "text",
+                          "value": "Delete application"
+                        }
+                      },
+                      "steps": {
+                        "kind": "literal",
+                        "literal": {
+                          "type": "json",
+                          "value": ["Verify", "Review", "Confirm", "Done"]
+                        }
+                      },
+                      "step": {
+                        "kind": "literal",
+                        "literal": {
+                          "type": "text",
+                          "value": "Confirm"
+                        }
+                      },
+                      "working": {
+                        "kind": "literal",
+                        "literal": {
+                          "type": "text",
+                          "value": "Checking your sign-in…"
+                        }
+                      }
+                    }
+                  },
+                  {
+                    "id": "verify_delete",
+                    "type": "interface.verify",
+                    "version": "1.0.0",
+                    "properties": {
+                      "requires": {
+                        "kind": "literal",
+                        "literal": {
+                          "type": "text",
+                          "value": "recent_sign_in"
+                        }
+                      },
+                      "message": {
+                        "kind": "literal",
+                        "literal": {
+                          "type": "text",
+                          "value": "Changing what is installed needs a sign-in within the last 15 minutes."
+                        }
+                      }
+                    }
+                  },
+                  {
+                    "id": "delete_unverified",
+                    "type": "if",
+                    "condition": {
+                      "op": "not",
+                      "arg": {
+                        "op": "reference",
+                        "reference": {
+                          "source": "task_output",
+                          "task": "verify_delete",
+                          "key": "confirmed"
+                        }
+                      }
+                    },
+                    "then": [
+                      {
+                        "id": "stop_delete_unverified",
+                        "type": "stop",
+                        "outcome": "cancelled"
+                      }
+                    ]
+                  },
+                  {
+                    "id": "wizard_delete_commit",
+                    "type": "interface.wizard",
+                    "version": "1.0.0",
+                    "properties": {
+                      "title": {
+                        "kind": "literal",
+                        "literal": {
+                          "type": "text",
+                          "value": "Delete application"
+                        }
+                      },
+                      "steps": {
+                        "kind": "literal",
+                        "literal": {
+                          "type": "json",
+                          "value": ["Verify", "Review", "Confirm", "Done"]
+                        }
+                      },
+                      "step": {
+                        "kind": "literal",
+                        "literal": {
+                          "type": "text",
+                          "value": "Confirm"
+                        }
+                      },
+                      "working": {
+                        "kind": "literal",
+                        "literal": {
+                          "type": "text",
+                          "value": "Deleting the application…"
+                        }
+                      }
+                    }
+                  },
+                  {
                     "id": "delete",
                     "type": "operation.call",
                     "version": "1.0.0",
@@ -5547,6 +6625,34 @@
                           "value": "committed"
                         },
                         "tasks": [
+                          {
+                            "id": "wizard_delete_done",
+                            "type": "interface.wizard",
+                            "version": "1.0.0",
+                            "properties": {
+                              "title": {
+                                "kind": "literal",
+                                "literal": {
+                                  "type": "text",
+                                  "value": "Delete application"
+                                }
+                              },
+                              "steps": {
+                                "kind": "literal",
+                                "literal": {
+                                  "type": "json",
+                                  "value": ["Verify", "Review", "Confirm", "Done"]
+                                }
+                              },
+                              "step": {
+                                "kind": "literal",
+                                "literal": {
+                                  "type": "text",
+                                  "value": "Done"
+                                }
+                              }
+                            }
+                          },
                           {
                             "id": "delete_done",
                             "type": "interface.show_message",
@@ -6893,6 +7999,13 @@
                                                 "reference": {
                                                   "source": "input",
                                                   "name": "application_root_id"
+                                                }
+                                              },
+                                              "after_publish": {
+                                                "kind": "literal",
+                                                "literal": {
+                                                  "type": "yes_no",
+                                                  "value": true
                                                 }
                                               }
                                             }
