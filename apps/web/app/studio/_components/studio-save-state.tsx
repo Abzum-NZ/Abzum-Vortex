@@ -136,23 +136,28 @@ export function StudioSaveState({ draft }: Readonly<{ draft: StudioDraft }>) {
     </Badge>
   );
 
+  const badgeTrigger = (
+    <Button
+      type="button"
+      variant="ghost"
+      className="h-auto rounded-full border-0 p-0 hover:bg-transparent aria-expanded:bg-transparent active:translate-y-0"
+    />
+  );
+
   return (
     <>
-      <span role="status" aria-live="polite" className="inline-flex shrink-0">
+      <span
+        role="status"
+        aria-live="polite"
+        data-studio-save-state
+        className="inline-flex shrink-0"
+      >
         {notSaved ? (
           <Popover>
-            <PopoverTrigger
-              aria-label={`${label}: show save details`}
-              render={
-                <button
-                  type="button"
-                  className="rounded-full border-0 bg-transparent p-0 outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                />
-              }
-            >
+            <PopoverTrigger aria-label={`${label}: show save details`} render={badgeTrigger}>
               {badge}
             </PopoverTrigger>
-            <PopoverContent className="space-y-3">
+            <PopoverContent data-studio-save-state className="space-y-3">
               <PopoverTitle>Your latest change is not saved</PopoverTitle>
               <PopoverDescription>
                 {sessionEnded
@@ -189,16 +194,7 @@ export function StudioSaveState({ draft }: Readonly<{ draft: StudioDraft }>) {
           </Popover>
         ) : (
           <Tooltip>
-            <TooltipTrigger
-              render={
-                <button
-                  type="button"
-                  className="rounded-full border-0 bg-transparent p-0 outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                />
-              }
-            >
-              {badge}
-            </TooltipTrigger>
+            <TooltipTrigger render={badgeTrigger}>{badge}</TooltipTrigger>
             <TooltipContent>
               {busy ? (
                 label

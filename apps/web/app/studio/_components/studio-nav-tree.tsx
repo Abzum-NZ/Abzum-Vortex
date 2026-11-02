@@ -210,7 +210,25 @@ export function StudioNavItem({
       {settings === undefined ? (
         selectable
       ) : (
-        <Popover open={settingsOpen} onOpenChange={onSettingsOpenChange}>
+        <Popover
+          open={settingsOpen}
+          onOpenChange={(open, details) => {
+            // The save badge explains why an edit is not saved; pressing it or its popover must not close the editor, which would discard the edit it explains.
+            const target =
+              details.event instanceof FocusEvent
+                ? details.event.relatedTarget
+                : details.event.target;
+            if (
+              !open &&
+              target instanceof Element &&
+              target.closest("[data-studio-save-state]") !== null
+            ) {
+              details.cancel();
+              return;
+            }
+            onSettingsOpenChange?.(open);
+          }}
+        >
           <PopoverTrigger render={selectable} />
           <PopoverContent
             side="right"

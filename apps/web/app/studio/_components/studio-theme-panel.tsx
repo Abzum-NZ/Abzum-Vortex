@@ -3,6 +3,7 @@ import { useState } from "react";
 import type { SourceApplicationThemeSelection } from "@vortex/platform/schema";
 import { createVortexStyleRootProps, Icon, VORTEX_STYLES } from "@vortex/ui";
 import { Button } from "@vortex/ui/components/button";
+import { FieldLabel } from "@vortex/ui/components/field";
 import { Input } from "@vortex/ui/components/input";
 import { InputGroup, InputGroupInput, InputGroupAddon } from "@vortex/ui/components/input-group";
 import { Notice } from "@vortex/ui/components/notice";
@@ -50,16 +51,14 @@ function StylePreview({ style }: Readonly<{ style: string }>) {
   if (props === undefined) throw new Error(`No preview for catalogue style ${style}`);
   return (
     <div {...props} data-vortex-theme="" aria-hidden="true" inert>
-      <div style={{ zoom: 0.65 }}>
-        <div className="space-y-3 bg-background p-3 text-foreground">
-          <p className="text-sm font-semibold">Overview</p>
+      <div className="min-w-0 space-y-3 overflow-hidden bg-background p-3 text-foreground">
+        <p className="truncate text-sm font-semibold">Overview</p>
 
-          <div className="flex items-center gap-2">
-            <Input placeholder="Search" tabIndex={-1} />
-            <Button type="button" tabIndex={-1}>
-              Go
-            </Button>
-          </div>
+        <div className="flex flex-col items-start gap-2">
+          <Input placeholder="Search" tabIndex={-1} />
+          <Button type="button" tabIndex={-1}>
+            Go
+          </Button>
         </div>
       </div>
     </div>
@@ -73,63 +72,47 @@ function PresetPreview({
 }: Readonly<{ preset: StudioThemePreset; mode: "light" | "dark" }>) {
   const colours = preset.preview[mode];
   return (
-    <div
-      className="space-y-2 rounded-md p-2"
+    <span
+      className="block space-y-2 rounded-md p-2"
       style={{ background: colours.background, color: colours.text }}
       aria-hidden="true"
     >
-      <div className="flex items-center justify-between gap-2">
-        <span className="text-[10px] font-semibold">Overview</span>
+      <span className="flex flex-wrap items-center justify-between gap-1">
+        <span className="text-xs font-semibold">Overview</span>
         <span
-          className="rounded-full px-1.5 py-0.5 text-[9px] font-medium"
+          className="rounded-full px-1.5 py-0.5 text-xs font-medium"
           style={{ background: colours.primary, color: colours.primaryForeground }}
         >
           {mode === "light" ? "Light" : "Dark"}
         </span>
-      </div>
-      <div className="space-y-1 rounded p-1.5" style={{ background: colours.card }}>
-        <p className="text-[9px] font-medium">{preset.label}</p>
-        <p className="text-[9px] opacity-70">A card in this theme.</p>
+      </span>
+      <span className="block space-y-1 rounded p-1.5" style={{ background: colours.card }}>
+        <span className="block text-xs font-medium">{preset.label}</span>
+        <span className="block text-xs opacity-70">A card in this theme.</span>
         <span
-          className="inline-block rounded px-1.5 py-0.5 text-[9px] font-medium"
+          className="inline-block rounded px-1.5 py-0.5 text-xs font-medium"
           style={{ background: colours.primary, color: colours.primaryForeground }}
         >
           Continue
         </span>
-      </div>
-    </div>
+      </span>
+    </span>
   );
 }
 
-function ThemePresetCard({
-  preset,
-  selected,
-  disabled,
-  onPick,
-}: Readonly<{
-  preset: StudioThemePreset;
-  selected: boolean;
-  disabled: boolean;
-  onPick: () => void;
-}>) {
+function ThemePresetItem({ preset }: Readonly<{ preset: StudioThemePreset }>) {
   return (
-    <button
-      type="button"
-      aria-pressed={selected}
-      disabled={disabled}
-      onClick={onPick}
-      className={cn(
-        "space-y-2 rounded-lg border p-2 text-left transition-colors hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50",
-        selected && "ring-2 ring-primary",
-      )}
+    <ToggleGroupItem
+      value={preset.key}
+      className="h-auto flex-col items-stretch justify-start gap-2 p-2 text-left whitespace-normal aria-pressed:ring-2 aria-pressed:ring-primary"
     >
       <span className="block text-sm font-medium">{preset.label}</span>
-      <span className="block text-xs text-muted-foreground">{preset.description}</span>
-      <div className="grid min-w-0 grid-cols-1 gap-2">
+      <span className="block text-xs font-normal text-muted-foreground">{preset.description}</span>
+      <span className="grid min-w-0 grid-cols-1 gap-2">
         <PresetPreview preset={preset} mode="light" />
         <PresetPreview preset={preset} mode="dark" />
-      </div>
-    </button>
+      </span>
+    </ToggleGroupItem>
   );
 }
 
@@ -259,6 +242,11 @@ export function StudioThemePanel({
       `${dimension(key).label} set to ${studioThemeOptionLabel(options, key, id)}`,
     );
   };
+  const selectedPreset = options.presets.find(
+    (preset) =>
+      base.catalogue_theme_id === preset.base.catalogueThemeId &&
+      base.release_version === preset.base.releaseVersion,
+  );
   const applyPreset = async (preset: StudioThemePreset) => {
     if (locked) return;
     setPending(true);
@@ -378,20 +366,21 @@ export function StudioThemePanel({
         </p>
       )}
       <StudioInspectorGroup title="Themes">
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <ToggleGroup
+          variant="outline"
+          spacing={3}
+          value={selectedPreset === undefined ? [] : [selectedPreset.key]}
+          disabled={locked}
+          onValueChange={(next) => {
+            const preset = options.presets.find((candidate) => candidate.key === next[0]);
+            if (preset !== undefined) void applyPreset(preset);
+          }}
+          className="grid w-full grid-cols-1 sm:grid-cols-2"
+        >
           {options.presets.map((preset) => (
-            <ThemePresetCard
-              key={preset.key}
-              preset={preset}
-              selected={
-                base.catalogue_theme_id === preset.base.catalogueThemeId &&
-                base.release_version === preset.base.releaseVersion
-              }
-              disabled={locked}
-              onPick={() => void applyPreset(preset)}
-            />
+            <ThemePresetItem key={preset.key} preset={preset} />
           ))}
-        </div>
+        </ToggleGroup>
       </StudioInspectorGroup>
       <StudioInspectorGroup title="Style">
         <RadioGroup
@@ -405,9 +394,9 @@ export function StudioThemePanel({
             <div
               key={option.id}
               className={cn(
-                "relative cursor-pointer space-y-2 rounded-lg p-2 hover:bg-accent focus-within:ring-2 focus-within:ring-ring",
+                "relative space-y-2 rounded-lg p-2 hover:bg-accent focus-within:ring-2 focus-within:ring-ring",
                 selection.style === option.id && "ring-2 ring-primary",
-                locked && "cursor-not-allowed opacity-50",
+                locked && "opacity-50",
               )}
             >
               <RadioGroupItem
@@ -424,10 +413,13 @@ export function StudioThemePanel({
                 {option.label}
               </span>
               {/* The whole tile selects the radio; sample controls remain inert and outside its label. */}
-              <label
+              <FieldLabel
                 htmlFor={`studio-theme-style-${option.id}`}
                 aria-hidden="true"
-                className="absolute inset-0 cursor-inherit"
+                className={cn(
+                  "absolute inset-0 w-auto",
+                  locked ? "cursor-not-allowed" : "cursor-pointer",
+                )}
               />
             </div>
           ))}
