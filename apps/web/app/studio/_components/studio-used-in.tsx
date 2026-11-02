@@ -99,9 +99,9 @@ export function StudioPlaceList({
               ) : (
                 <Fragment key={at}>
                   {" "}
-                  <span className="inline-block max-w-full align-top">
-                    <span className="text-muted-foreground">› </span>
-                    {text}
+                  <span className="inline-flex max-w-full items-start gap-1 align-top">
+                    <span className="shrink-0 text-muted-foreground">›</span>
+                    <span className="min-w-0">{text}</span>
                   </span>
                 </Fragment>
               );

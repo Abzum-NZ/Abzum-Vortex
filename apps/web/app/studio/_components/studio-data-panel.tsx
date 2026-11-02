@@ -181,7 +181,7 @@ export function StudioDataPanel({
                       type="button"
                       size="icon-sm"
                       variant="ghost"
-                      aria-label="Add"
+                      aria-label="Add a record type or a module"
                       disabled={disabled}
                     />
                   }

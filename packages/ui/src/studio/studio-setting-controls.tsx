@@ -544,15 +544,13 @@ function SettingControl(props: ControlProps): ReactElement {
       const fallback =
         property.defaultValue?.kind === "boolean" ? property.defaultValue.value : false;
       return (
-        <div>
-          <Switch
-            id={id}
-            aria-describedby={descriptionId}
-            disabled={disabled}
-            checked={value?.kind === "boolean" ? value.value : fallback}
-            onCheckedChange={(checked) => onChange({ kind: "boolean", value: checked === true })}
-          />
-        </div>
+        <Switch
+          id={id}
+          aria-describedby={descriptionId}
+          disabled={disabled}
+          checked={value?.kind === "boolean" ? value.value : fallback}
+          onCheckedChange={(checked) => onChange({ kind: "boolean", value: checked === true })}
+        />
       );
     }
     case "choice": {
