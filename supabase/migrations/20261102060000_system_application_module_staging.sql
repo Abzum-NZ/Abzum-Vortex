@@ -3,14 +3,15 @@ set role vortex_owner;
 -- FIX-SYSTEM-APP-STAGING: choosing a platform system Application's record type as a Data grid
 -- source in Studio adds a query to its inline Module, so the preview stages that Module and draws
 -- it. (1) A person who may edit a platform system Application (the draft guard demands
--- platform.organization.system_applications.manage for it) stages and creates its inline Module
--- roots like an ordinary Application: stage_owned_module_source and create_root accept both
--- origins. (2) The preview resolves a query over a system projection (the platform's live read
--- model, with no preview copy) from the preview's own Module release, so a query the draft just
--- added resolves; the installed-release fallback in prepare_module_query_internal and
--- read_module_query_inputs, which only knew queries already installed, is removed. (3) The record
--- action context of a system projection read from a preview proves its storage against the
--- projection's installed release provisions, not the preview's unpublished release.
+-- platform.organization.system_applications.manage for it) stages its inline Module like an
+-- ordinary Application's: stage_owned_module_source relies on that guard alone. create_root is
+-- unchanged (the flow never creates a Module root). (2) The preview resolves a query over a system
+-- projection (the platform's live read model, with no preview copy) from the preview's own Module
+-- release, so a query the draft just added resolves, over the INSTALLED record type: a draft whose
+-- record type differs is refused. The installed-release fallback in prepare_module_query_internal
+-- and read_module_query_inputs is removed. (3) The record action context of a system projection
+-- read from a preview takes its record type, fields, permissions and storage proof from the
+-- active installation's release, never the draft's.
 -- No earlier migration rewrites any of these functions in place (the regprocedures were
 -- searched): the bodies below are the whole definitions and equal the canonical files in
 -- supabase/schemas.
@@ -40,13 +41,10 @@ declare
   actor_id uuid;
   operation_at timestamptz := pg_catalog.statement_timestamp();
   module_row vortex_definition.roots%rowtype;
-  owner_origin_kind text;
   saved_revision bigint;
 begin
   -- A Module is never drafted on its own: its owning Application's publication stages the
   -- current lowering of the Application's inline Module here, then compiles and releases it.
-  -- The draft guard above already demands the system-application permission for a platform
-  -- system Application, so both origins are staged.
   if p_root_id is null
     or p_root_id = '00000000-0000-0000-0000-000000000000'::uuid
     or p_expected_revision is null
@@ -65,7 +63,8 @@ begin
 
   human_write := vortex_platform.current_context() ->> 'callerKind' = 'human';
   if human_write then
-    -- The person needs draft authority over the owning Application.
+    -- The person needs draft authority over the owning Application: for a platform system
+    -- Application the guard also demands the system-application permission.
     checked_context := vortex_definition.validated_builder_draft_write_context_internal(
       module_row.owner_application_root_id
     );
@@ -80,15 +79,13 @@ begin
       message = 'Definition root does not belong to the context organization';
   end if;
 
-  select owner_root.application_origin_kind into owner_origin_kind
-  from vortex_definition.roots as owner_root
-  where owner_root.root_id = module_row.owner_application_root_id
-    and owner_root.organization_id = module_row.organization_id
-    and owner_root.kind = 'application';
-  if not found
-    or (human_write
-      and owner_origin_kind is distinct from 'ordinary'
-      and owner_origin_kind is distinct from 'platform_system_application')
+  if not exists (
+      select 1
+      from vortex_definition.roots as owner_root
+      where owner_root.root_id = module_row.owner_application_root_id
+        and owner_root.organization_id = module_row.organization_id
+        and owner_root.kind = 'application'
+    )
     or p_source ->> 'kind' is distinct from 'module'
     or p_source ->> 'key' is distinct from module_row.key
     or not vortex_definition.is_owned_module_source_internal(
@@ -153,192 +150,6 @@ comment on function vortex_definition.stage_owned_module_source(uuid, bigint, js
 alter function vortex_definition.stage_owned_module_source(uuid, bigint, jsonb, text, jsonb)
   owner to vortex_owner;
 
-create or replace function vortex_definition.create_root(
-  p_kind text,
-  p_key text,
-  p_draft_source jsonb,
-  p_source_fingerprint text,
-  p_identity_requirements jsonb,
-  p_application_origin_kind text,
-  p_owner_application_root_id uuid
-)
-returns table (
-  root_id uuid,
-  organization_id uuid,
-  kind text,
-  definition_key text,
-  draft_revision bigint,
-  published_revision bigint,
-  authored_source jsonb,
-  source_contract_version text,
-  source_fingerprint text,
-  created_at timestamptz,
-  created_by uuid,
-  updated_at timestamptz,
-  updated_by uuid
-)
-language plpgsql
-volatile
-security definer
-set search_path = ''
-as $function$
-declare
-  checked_context jsonb;
-  new_root_id uuid;
-  operation_at timestamptz := pg_catalog.statement_timestamp();
-  actor_id uuid;
-  human_write boolean;
-  system_projection_value boolean;
-  owner_origin_kind text;
-begin
-  human_write := vortex_platform.current_context() ->> 'callerKind' = 'human';
-  if human_write then
-    -- A person creates an ordinary Application root, or an internal Module root owned by an
-    -- Application they may draft (a platform system Application needs the system-application
-    -- permission, which the guard below demands): only that Application's publication creates one.
-    checked_context := vortex_definition.validated_builder_draft_write_context_internal(
-      case when p_kind = 'module' then p_owner_application_root_id end
-    );
-    if (p_kind = 'application' and p_application_origin_kind is distinct from 'ordinary')
-      or (p_kind = 'module' and p_owner_application_root_id is null)
-      or p_draft_source ->> 'kind' is distinct from p_kind
-      or p_draft_source ->> 'key' is distinct from p_key then
-      raise exception using errcode = '22023',
-        message = 'Definition draft write source is invalid';
-    end if;
-    actor_id := (checked_context ->> 'organizationAccountId')::uuid;
-  else
-    checked_context := vortex_definition.validated_system_context();
-    actor_id := (checked_context ->> 'systemActorId')::uuid;
-  end if;
-
-  if p_draft_source ->> 'kind' is distinct from p_kind
-    or p_draft_source ->> 'key' is distinct from p_key
-    or p_kind is null
-    or p_kind not in ('application', 'module')
-    or (p_kind = 'application' and (
-      p_application_origin_kind is null
-      or p_application_origin_kind not in ('ordinary', 'platform_system_application')
-      or p_owner_application_root_id is not null
-    ))
-    or (p_kind = 'module' and (
-      p_application_origin_kind is not null
-      or p_owner_application_root_id is null
-    )) then
-    raise exception using errcode = '22023',
-      message = 'Definition root source or provenance is invalid';
-  end if;
-
-  if p_kind = 'module' then
-    select owner_root.application_origin_kind into owner_origin_kind
-    from vortex_definition.roots as owner_root
-    where owner_root.root_id = p_owner_application_root_id
-      and owner_root.organization_id = (checked_context ->> 'organizationId')::uuid
-      and owner_root.kind = 'application';
-    if not found
-      or (human_write
-        and owner_origin_kind is distinct from 'ordinary'
-        and owner_origin_kind is distinct from 'platform_system_application')
-      or not vortex_definition.is_owned_module_source_internal(
-        p_owner_application_root_id,
-        (checked_context ->> 'organizationId')::uuid,
-        p_draft_source
-      ) then
-      raise exception using errcode = '22023',
-        message = 'A Module root must be an inline Module of its owning Application';
-    end if;
-  end if;
-
-  -- An owned Module's root is derived from its Application and key, so a draft compiled in
-  -- memory names a Module that is not yet created exactly as its creation will.
-  if p_kind = 'module' then
-    new_root_id := vortex_definition.derived_definition_id(array[
-      'owned_module_root', pg_catalog.lower(p_owner_application_root_id::text), p_key
-    ]);
-  else
-    loop
-      new_root_id := pg_catalog.gen_random_uuid();
-      exit when new_root_id <> '00000000-0000-0000-0000-000000000000'::uuid;
-    end loop;
-  end if;
-
-  system_projection_value := p_kind = 'module' and exists (
-    select 1
-    from pg_catalog.jsonb_array_elements(
-      coalesce(p_draft_source #> '{body,record_types}', '[]'::jsonb)
-    ) as record_type(value)
-    where record_type.value ? 'system_projection'
-  );
-
-  insert into vortex_definition.roots (
-    root_id, organization_id, kind, key, created_at, created_by,
-    application_origin_kind, system_projection, owner_application_root_id
-  ) values (
-    new_root_id,
-    (checked_context ->> 'organizationId')::uuid,
-    p_kind,
-    p_key,
-    operation_at,
-    actor_id,
-    p_application_origin_kind,
-    system_projection_value,
-    p_owner_application_root_id
-  );
-
-  perform vortex_definition.record_source_identities(
-    new_root_id, p_identity_requirements, actor_id, operation_at
-  );
-
-  insert into vortex_definition.drafts (
-    root_id, draft_revision, draft_source, source_contract_version,
-    identity_requirements, source_fingerprint, updated_at, updated_by
-  ) values (
-    new_root_id,
-    1,
-    p_draft_source,
-    p_draft_source ->> 'source_contract_version',
-    p_identity_requirements,
-    p_source_fingerprint,
-    operation_at,
-    actor_id
-  );
-
-  if human_write and p_kind = 'application' then
-    perform vortex_definition.validated_builder_draft_write_context_internal(new_root_id);
-  end if;
-
-  return query
-  select
-    root.root_id,
-    root.organization_id,
-    root.kind,
-    root.key,
-    draft.draft_revision,
-    root.current_release_revision,
-    draft.draft_source,
-    draft.source_contract_version,
-    draft.source_fingerprint,
-    root.created_at,
-    root.created_by,
-    draft.updated_at,
-    draft.updated_by
-  from vortex_definition.roots as root
-  join vortex_definition.drafts as draft on draft.root_id = root.root_id
-  where root.root_id = new_root_id;
-end
-$function$;
-
-revoke execute on function vortex_definition.create_root(text, text, jsonb, text, jsonb, text, uuid) from public, anon, authenticated, service_role, vortex_runtime;
-
-grant execute on function vortex_definition.create_root(text, text, jsonb, text, jsonb, text, uuid) to vortex_request;
-
-comment on function vortex_definition.create_root(text, text, jsonb, text, jsonb, text, uuid) is
-  'Creates a Definition root with permanent component identities and initial draft atomically: an Application with explicit provenance, or an internal Module owned by the Application whose inline Module it is.';
-
-alter function vortex_definition.create_root(p_kind text, p_key text, p_draft_source jsonb, p_source_fingerprint text, p_identity_requirements jsonb, p_application_origin_kind text, p_owner_application_root_id uuid) owner to vortex_owner;
-
-grant execute on function vortex_definition.create_root(p_kind text, p_key text, p_draft_source jsonb, p_source_fingerprint text, p_identity_requirements jsonb, p_application_origin_kind text, p_owner_application_root_id uuid) to postgres;
-
 reset role;
 
 set role vortex_record_adapter;
@@ -356,6 +167,8 @@ as $function$
 declare
   nil_uuid constant uuid := '00000000-0000-0000-0000-000000000000'::uuid;
   installation jsonb;
+  installed jsonb;
+  installed_release_revision bigint;
   module_bindings jsonb;
   storage_identities jsonb;
   preview_installation_id uuid;
@@ -591,16 +404,37 @@ begin
     return null;
   end if;
   -- A system projection has no preview copy: it is the platform's live read model, which a
-  -- preview reads on the live path under the reader's own live access. The preview resolves only
-  -- its query (an authored query added by the draft included), with no preview storage identity.
+  -- preview reads on the live path under the reader's own live access. Its record type, fields and
+  -- permissions are the installed release's, never the draft's: the draft contributes only its
+  -- query, and a draft whose record type differs from the installed one is refused.
   if record_type_item ? 'systemProjection' then
+    select (item.value ->> 'moduleReleaseRevision')::bigint
+    into installed_release_revision
+    from pg_catalog.jsonb_array_elements(
+      vortex_definition.read_active_installation_for_scope_internal(
+        (installation ->> 'organizationId')::uuid, (installation ->> 'applicationRootId')::uuid
+      ) -> 'moduleBindings'
+    ) as item(value)
+    where pg_catalog.lower(item.value ->> 'moduleRootId') = record_type_module_root_id::text;
+    select item.value
+    into installed
+    from vortex_definition.releases as release
+    cross join lateral pg_catalog.jsonb_array_elements(
+      release.compilation_output #> '{canonical,content,recordTypes}'
+    ) as item(value)
+    where release.root_id = record_type_module_root_id
+      and release.release_revision = installed_release_revision
+      and pg_catalog.lower(item.value ->> 'recordTypeId') = record_type_id::text;
+    if installed is null or installed is distinct from record_type_item then
+      return null;
+    end if;
     return pg_catalog.jsonb_build_object(
       'moduleReleaseRevision', query_release_revision,
       'moduleReleaseVersion', query_release_version,
       'query', query_item,
       'recordTypeId', record_type_id,
       'recordTypeModuleRootId', record_type_module_root_id,
-      'recordType', record_type_item
+      'recordType', installed
     );
   end if;
   release_storage_contract_id_text := record_type_item ->> 'storageContractId';
@@ -696,7 +530,7 @@ revoke all on function vortex_record.resolve_preview_module_query_internal(uuid,
 grant execute on function vortex_record.resolve_preview_module_query_internal(uuid, uuid)
   to vortex_record_adapter;
 comment on function vortex_record.resolve_preview_module_query_internal(uuid, uuid) is
-  'Private preview-only resolver for one query and its exact pinned record type and active preview storage identity (a system projection resolves its query and record type with no preview storage); it validates the current human-owned unexpired preview and never falls back to an active installation.';
+  'Private preview-only resolver for one query and its exact pinned record type and active preview storage identity (a system projection resolves the draft''s query over the installed record type, with no preview storage); it validates the current human-owned unexpired preview and never falls back to an active installation.';
 
 create or replace function vortex_record.read_module_query_inputs(
   p_module_root_id uuid,
@@ -1536,7 +1370,6 @@ grant execute on function vortex_record.prepare_module_query_internal(uuid, uuid
 comment on function vortex_record.prepare_module_query_internal(uuid, uuid, bigint, jsonb, jsonb, jsonb, text, jsonb) is
   'Shared owner-only Module query preparation for list and summary reads: derives organisation and application authority from validated_human_request_context(), resolves one installed query or the exact current human-owned preview pins, revalidates preview prior plans, exact active field mappings and preview catalogue/field bounds without using the installed read-scan routes, refuses a preview of a used Module''s record type with read_forbidden when the same read plan decision admits no read alternative, refuses an authored query of a Module the Application does not own unless that query is exposed, validates declared inputs and the published filter narrowed by the declared user filter, and returns the exact access predicate, pushed filter and residual per-row condition with bound inputs; it never accepts authority or identity from caller values.';
 
-
 create or replace function vortex_record.resolve_record_action_context_internal(
   p_record_type_id uuid,
   p_action_kind text
@@ -1553,7 +1386,8 @@ declare
   installation jsonb;
   preview_installation jsonb;
   preview_installation_id_value uuid;
-  projection_in_preview boolean := false;
+  target_content jsonb;
+  installed_release_revision bigint;
   binding_item jsonb;
   module_content jsonb;
   application_content jsonb;
@@ -1644,23 +1478,7 @@ begin
           return pg_catalog.jsonb_build_object('outcome', 'refused');
         end if;
       end if;
-      for permission_item in
-        select item.value
-        from pg_catalog.jsonb_array_elements(
-          coalesce(module_content -> 'permissions', '[]'::jsonb)
-        ) as item(value)
-        where (item.value ->> 'recordTypeId')::uuid = p_record_type_id
-          and item.value ->> 'actionKind' = p_action_kind
-          and (item.value ->> 'namedAction') is null
-      loop
-        required_permissions := required_permissions || pg_catalog.jsonb_build_array(
-          pg_catalog.jsonb_build_object(
-            'applicationRootId', application_root_id_value,
-            'ownerKind', 'module', 'ownerId', target_module_root_id,
-            'permissionId', (permission_item ->> 'permissionId')::uuid
-          )
-        );
-      end loop;
+      target_content := module_content;
     end if;
   end loop;
 
@@ -1675,9 +1493,62 @@ begin
     if preview_installation is not null and p_action_kind <> 'read' then
       return pg_catalog.jsonb_build_object('outcome', 'refused');
     end if;
-    projection_in_preview := preview_installation is not null;
+    if preview_installation is not null then
+      -- Its record type, fields and permissions are the installed release's, never the draft's: a
+      -- preview whose record type differs from the installed one is refused.
+      -- A preview request never reaches the live installation through the current-installation
+      -- reader, so the active installation of the previewed Application is read by its scope.
+      installation := vortex_definition.read_active_installation_for_scope_internal(
+        (preview_installation ->> 'organizationId')::uuid,
+        (preview_installation ->> 'applicationRootId')::uuid
+      );
+      select (item.value ->> 'moduleReleaseRevision')::bigint
+      into installed_release_revision
+      from pg_catalog.jsonb_array_elements(installation -> 'moduleBindings') as item(value)
+      where (item.value ->> 'moduleRootId')::uuid = target_module_root_id;
+      if installed_release_revision is null then
+        return pg_catalog.jsonb_build_object('outcome', 'refused');
+      end if;
+      select release.record_content into strict target_content
+      from vortex_definition.runtime_releases as release
+      where release.root_id = target_module_root_id
+        and release.release_revision = installed_release_revision;
+      select item.value into candidate_record_type_value
+      from pg_catalog.jsonb_array_elements(target_content -> 'recordTypes') as item(value)
+      where (item.value ->> 'recordTypeId')::uuid = p_record_type_id;
+      if not found or candidate_record_type_value is distinct from record_type_value then
+        return pg_catalog.jsonb_build_object('outcome', 'refused');
+      end if;
+      target_content := vortex_record.with_installed_record_contributions_internal(
+        target_content, (context_value ->> 'organizationId')::uuid, target_module_root_id
+      );
+      select item.value into strict record_type_value
+      from pg_catalog.jsonb_array_elements(target_content -> 'recordTypes') as item(value)
+      where (item.value ->> 'recordTypeId')::uuid = p_record_type_id;
+      target_release_revision := installed_release_revision;
+      release_storage_contract_id := (record_type_value ->> 'storageContractId')::uuid;
+      target_storage_contract_id := release_storage_contract_id;
+    end if;
     preview_installation_id_value := null;
   end if;
+
+  for permission_item in
+    select item.value
+    from pg_catalog.jsonb_array_elements(
+      coalesce(target_content -> 'permissions', '[]'::jsonb)
+    ) as item(value)
+    where (item.value ->> 'recordTypeId')::uuid = p_record_type_id
+      and item.value ->> 'actionKind' = p_action_kind
+      and (item.value ->> 'namedAction') is null
+  loop
+    required_permissions := required_permissions || pg_catalog.jsonb_build_array(
+      pg_catalog.jsonb_build_object(
+        'applicationRootId', application_root_id_value,
+        'ownerKind', 'module', 'ownerId', target_module_root_id,
+        'permissionId', (permission_item ->> 'permissionId')::uuid
+      )
+    );
+  end loop;
 
   select catalogue.* into catalogue_row
   from vortex_record.storage_catalogue as catalogue
@@ -1703,7 +1574,7 @@ begin
     or (preview_installation_id_value is null and not exists (
       select 1 from vortex_record.release_provisions as provision
       where provision.module_root_id = target_module_root_id
-        and (provision.release_revision = target_release_revision or projection_in_preview)
+        and provision.release_revision = target_release_revision
         and release_storage_contract_id = any (provision.storage_contract_ids)
     )) then
     raise exception using errcode = '55000',

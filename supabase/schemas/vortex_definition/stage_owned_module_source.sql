@@ -23,13 +23,10 @@ declare
   actor_id uuid;
   operation_at timestamptz := pg_catalog.statement_timestamp();
   module_row vortex_definition.roots%rowtype;
-  owner_origin_kind text;
   saved_revision bigint;
 begin
   -- A Module is never drafted on its own: its owning Application's publication stages the
   -- current lowering of the Application's inline Module here, then compiles and releases it.
-  -- The draft guard above already demands the system-application permission for a platform
-  -- system Application, so both origins are staged.
   if p_root_id is null
     or p_root_id = '00000000-0000-0000-0000-000000000000'::uuid
     or p_expected_revision is null
@@ -48,7 +45,8 @@ begin
 
   human_write := vortex_platform.current_context() ->> 'callerKind' = 'human';
   if human_write then
-    -- The person needs draft authority over the owning Application.
+    -- The person needs draft authority over the owning Application: for a platform system
+    -- Application the guard also demands the system-application permission.
     checked_context := vortex_definition.validated_builder_draft_write_context_internal(
       module_row.owner_application_root_id
     );
@@ -63,15 +61,13 @@ begin
       message = 'Definition root does not belong to the context organization';
   end if;
 
-  select owner_root.application_origin_kind into owner_origin_kind
-  from vortex_definition.roots as owner_root
-  where owner_root.root_id = module_row.owner_application_root_id
-    and owner_root.organization_id = module_row.organization_id
-    and owner_root.kind = 'application';
-  if not found
-    or (human_write
-      and owner_origin_kind is distinct from 'ordinary'
-      and owner_origin_kind is distinct from 'platform_system_application')
+  if not exists (
+      select 1
+      from vortex_definition.roots as owner_root
+      where owner_root.root_id = module_row.owner_application_root_id
+        and owner_root.organization_id = module_row.organization_id
+        and owner_root.kind = 'application'
+    )
     or p_source ->> 'kind' is distinct from 'module'
     or p_source ->> 'key' is distinct from module_row.key
     or not vortex_definition.is_owned_module_source_internal(

@@ -144,6 +144,15 @@ const classifyFailure = (error: unknown): Failure => {
     return { kind: "conflict", reason: "draft_stale_or_missing" };
   if (error instanceof DefinitionError && error.code === "DEFINITION_CONFIRMATION_MISMATCH")
     return { kind: "conflict", reason: "confirmation_mismatch" };
+  if (
+    error instanceof PublicationContextRefused &&
+    error.reason === "application_root_not_ordinary"
+  )
+    return {
+      kind: "refused",
+      reason: error.reason,
+      sentence: "Publishing a platform application from Studio is not available yet.",
+    };
   if (error instanceof PublicationContextRefused || error instanceof LiveContextRefused)
     return { kind: "refused", reason: error.reason };
   if (error instanceof BuilderAuthorityError)

@@ -32,16 +32,21 @@ type ApplicationDraft = Extract<StoredDefinitionDraft, { kind: "application" }>;
 type FailureKind = StudioApplicationRestoreFailure["kind"];
 
 class RestoreRefused extends Error {}
+/** Restoring a platform application's version from Studio is not available yet. */
+class RestorePlatformApplication extends Error {}
 class RestoreUnavailable extends Error {}
 
 const targetFacts: BuilderTargetFactsReader = async (transaction, _scope, rootId) => {
   if (rootId === undefined) throw new RestoreRefused();
-  if ((await readBuilderApplicationOrigin(transaction, rootId)) !== "ordinary")
-    throw new RestoreRefused();
+  if ((await readBuilderApplicationOrigin(transaction, rootId)) !== "ordinary") {
+    console.info("[studio] restore refused reason=application_root_not_ordinary");
+    throw new RestorePlatformApplication();
+  }
   return { isSystemApplication: false };
 };
 
 const failureKind = (error: unknown): FailureKind => {
+  if (error instanceof RestorePlatformApplication) return "platform_application";
   const kind = classifyDatabaseError(error);
   if (error instanceof DefinitionError) {
     if (error.code === "DEFINITION_DRAFT_STALE_OR_MISSING") return "conflict";

@@ -140,6 +140,27 @@ const failure = (error: unknown, reported = false): PreviewFailure => {
     }
     current = current.cause;
   }
+  // A permanent database refusal is reported as what it is; only a transient one is retried.
+  for (let current: unknown = error, depth = 0; depth < 8 && current instanceof Error; depth += 1) {
+    const sqlstate = (current as { readonly code?: unknown }).code;
+    if (sqlstate === "42501") {
+      if (!reported) console.error("[studio] preview refused by the database", error);
+      return { kind: "refused", reason: "permission_refused" };
+    }
+    if (sqlstate === "22023") {
+      if (!reported) console.error("[studio] preview refused by the database", error);
+      return {
+        kind: "not_runnable",
+        sentence: "This application's saved change cannot be run as a preview.",
+        refusal: {
+          reasonCode: "preview_staging_refused",
+          family: "preview",
+          sentence: "This application's saved change cannot be run as a preview.",
+        },
+      };
+    }
+    current = current.cause;
+  }
   if (!reported) console.error("[studio] preview provisioning failed", error);
   return { kind: "temporarily_unavailable" };
 };

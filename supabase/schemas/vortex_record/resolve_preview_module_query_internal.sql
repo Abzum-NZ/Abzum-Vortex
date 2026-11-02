@@ -11,6 +11,8 @@ as $function$
 declare
   nil_uuid constant uuid := '00000000-0000-0000-0000-000000000000'::uuid;
   installation jsonb;
+  installed jsonb;
+  installed_release_revision bigint;
   module_bindings jsonb;
   storage_identities jsonb;
   preview_installation_id uuid;
@@ -246,16 +248,37 @@ begin
     return null;
   end if;
   -- A system projection has no preview copy: it is the platform's live read model, which a
-  -- preview reads on the live path under the reader's own live access. The preview resolves only
-  -- its query (an authored query added by the draft included), with no preview storage identity.
+  -- preview reads on the live path under the reader's own live access. Its record type, fields and
+  -- permissions are the installed release's, never the draft's: the draft contributes only its
+  -- query, and a draft whose record type differs from the installed one is refused.
   if record_type_item ? 'systemProjection' then
+    select (item.value ->> 'moduleReleaseRevision')::bigint
+    into installed_release_revision
+    from pg_catalog.jsonb_array_elements(
+      vortex_definition.read_active_installation_for_scope_internal(
+        (installation ->> 'organizationId')::uuid, (installation ->> 'applicationRootId')::uuid
+      ) -> 'moduleBindings'
+    ) as item(value)
+    where pg_catalog.lower(item.value ->> 'moduleRootId') = record_type_module_root_id::text;
+    select item.value
+    into installed
+    from vortex_definition.releases as release
+    cross join lateral pg_catalog.jsonb_array_elements(
+      release.compilation_output #> '{canonical,content,recordTypes}'
+    ) as item(value)
+    where release.root_id = record_type_module_root_id
+      and release.release_revision = installed_release_revision
+      and pg_catalog.lower(item.value ->> 'recordTypeId') = record_type_id::text;
+    if installed is null or installed is distinct from record_type_item then
+      return null;
+    end if;
     return pg_catalog.jsonb_build_object(
       'moduleReleaseRevision', query_release_revision,
       'moduleReleaseVersion', query_release_version,
       'query', query_item,
       'recordTypeId', record_type_id,
       'recordTypeModuleRootId', record_type_module_root_id,
-      'recordType', record_type_item
+      'recordType', installed
     );
   end if;
   release_storage_contract_id_text := record_type_item ->> 'storageContractId';
@@ -351,4 +374,4 @@ revoke all on function vortex_record.resolve_preview_module_query_internal(uuid,
 grant execute on function vortex_record.resolve_preview_module_query_internal(uuid, uuid)
   to vortex_record_adapter;
 comment on function vortex_record.resolve_preview_module_query_internal(uuid, uuid) is
-  'Private preview-only resolver for one query and its exact pinned record type and active preview storage identity (a system projection resolves its query and record type with no preview storage); it validates the current human-owned unexpired preview and never falls back to an active installation.';
+  'Private preview-only resolver for one query and its exact pinned record type and active preview storage identity (a system projection resolves the draft''s query over the installed record type, with no preview storage); it validates the current human-owned unexpired preview and never falls back to an active installation.';

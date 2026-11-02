@@ -14,7 +14,8 @@ declare
   installation jsonb;
   preview_installation jsonb;
   preview_installation_id_value uuid;
-  projection_in_preview boolean := false;
+  target_content jsonb;
+  installed_release_revision bigint;
   binding_item jsonb;
   module_content jsonb;
   application_content jsonb;
@@ -105,23 +106,7 @@ begin
           return pg_catalog.jsonb_build_object('outcome', 'refused');
         end if;
       end if;
-      for permission_item in
-        select item.value
-        from pg_catalog.jsonb_array_elements(
-          coalesce(module_content -> 'permissions', '[]'::jsonb)
-        ) as item(value)
-        where (item.value ->> 'recordTypeId')::uuid = p_record_type_id
-          and item.value ->> 'actionKind' = p_action_kind
-          and (item.value ->> 'namedAction') is null
-      loop
-        required_permissions := required_permissions || pg_catalog.jsonb_build_array(
-          pg_catalog.jsonb_build_object(
-            'applicationRootId', application_root_id_value,
-            'ownerKind', 'module', 'ownerId', target_module_root_id,
-            'permissionId', (permission_item ->> 'permissionId')::uuid
-          )
-        );
-      end loop;
+      target_content := module_content;
     end if;
   end loop;
 
@@ -136,9 +121,62 @@ begin
     if preview_installation is not null and p_action_kind <> 'read' then
       return pg_catalog.jsonb_build_object('outcome', 'refused');
     end if;
-    projection_in_preview := preview_installation is not null;
+    if preview_installation is not null then
+      -- Its record type, fields and permissions are the installed release's, never the draft's: a
+      -- preview whose record type differs from the installed one is refused.
+      -- A preview request never reaches the live installation through the current-installation
+      -- reader, so the active installation of the previewed Application is read by its scope.
+      installation := vortex_definition.read_active_installation_for_scope_internal(
+        (preview_installation ->> 'organizationId')::uuid,
+        (preview_installation ->> 'applicationRootId')::uuid
+      );
+      select (item.value ->> 'moduleReleaseRevision')::bigint
+      into installed_release_revision
+      from pg_catalog.jsonb_array_elements(installation -> 'moduleBindings') as item(value)
+      where (item.value ->> 'moduleRootId')::uuid = target_module_root_id;
+      if installed_release_revision is null then
+        return pg_catalog.jsonb_build_object('outcome', 'refused');
+      end if;
+      select release.record_content into strict target_content
+      from vortex_definition.runtime_releases as release
+      where release.root_id = target_module_root_id
+        and release.release_revision = installed_release_revision;
+      select item.value into candidate_record_type_value
+      from pg_catalog.jsonb_array_elements(target_content -> 'recordTypes') as item(value)
+      where (item.value ->> 'recordTypeId')::uuid = p_record_type_id;
+      if not found or candidate_record_type_value is distinct from record_type_value then
+        return pg_catalog.jsonb_build_object('outcome', 'refused');
+      end if;
+      target_content := vortex_record.with_installed_record_contributions_internal(
+        target_content, (context_value ->> 'organizationId')::uuid, target_module_root_id
+      );
+      select item.value into strict record_type_value
+      from pg_catalog.jsonb_array_elements(target_content -> 'recordTypes') as item(value)
+      where (item.value ->> 'recordTypeId')::uuid = p_record_type_id;
+      target_release_revision := installed_release_revision;
+      release_storage_contract_id := (record_type_value ->> 'storageContractId')::uuid;
+      target_storage_contract_id := release_storage_contract_id;
+    end if;
     preview_installation_id_value := null;
   end if;
+
+  for permission_item in
+    select item.value
+    from pg_catalog.jsonb_array_elements(
+      coalesce(target_content -> 'permissions', '[]'::jsonb)
+    ) as item(value)
+    where (item.value ->> 'recordTypeId')::uuid = p_record_type_id
+      and item.value ->> 'actionKind' = p_action_kind
+      and (item.value ->> 'namedAction') is null
+  loop
+    required_permissions := required_permissions || pg_catalog.jsonb_build_array(
+      pg_catalog.jsonb_build_object(
+        'applicationRootId', application_root_id_value,
+        'ownerKind', 'module', 'ownerId', target_module_root_id,
+        'permissionId', (permission_item ->> 'permissionId')::uuid
+      )
+    );
+  end loop;
 
   select catalogue.* into catalogue_row
   from vortex_record.storage_catalogue as catalogue
@@ -164,7 +202,7 @@ begin
     or (preview_installation_id_value is null and not exists (
       select 1 from vortex_record.release_provisions as provision
       where provision.module_root_id = target_module_root_id
-        and (provision.release_revision = target_release_revision or projection_in_preview)
+        and provision.release_revision = target_release_revision
         and release_storage_contract_id = any (provision.storage_contract_ids)
     )) then
     raise exception using errcode = '55000',
