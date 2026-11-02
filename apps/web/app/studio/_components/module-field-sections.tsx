@@ -1,5 +1,5 @@
 "use client";
-import { FieldLegend } from "@vortex/ui/components/field";
+import { FieldLegend, FieldSet } from "@vortex/ui/components/field";
 
 import { Alert, AlertDescription, AlertTitle } from "@vortex/ui/components/alert";
 import { Button } from "@vortex/ui/components/button";
@@ -357,7 +357,7 @@ export function FieldFormatSection({
           onChange={total.onChange}
         />
       ) : unreadable ? (
-        <Alert variant="destructive" role="alert">
+        <Alert variant="destructive">
           <AlertTitle>These settings can&apos;t be read</AlertTitle>
           <AlertDescription>
             {`${[...new Set(readFailures.map((failure) => failure.path.join(", ")))].join("; ")}: ` +
@@ -545,7 +545,7 @@ export function FieldFormsAndListsSection({
           />
         ))}
       </div>
-      <fieldset className="space-y-1.5">
+      <FieldSet className="gap-1.5">
         <FieldLegend variant="label" className="mb-1.5">
           Also show it on
         </FieldLegend>
@@ -584,7 +584,7 @@ export function FieldFormsAndListsSection({
             Show field on selected pages
           </Button>
         )}
-      </fieldset>
+      </FieldSet>
     </StudioInspectorGroup>
   );
 }

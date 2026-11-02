@@ -1,4 +1,5 @@
 "use client";
+import { Spinner } from "@vortex/ui/components/spinner";
 import { useState } from "react";
 import type { SourceApplicationThemeSelection } from "@vortex/platform/schema";
 import { createVortexStyleRootProps, Icon, VORTEX_STYLES } from "@vortex/ui";
@@ -361,9 +362,10 @@ export function StudioThemePanel({
         </div>
       )}
       {pending && (
-        <p role="status" className="text-sm text-muted-foreground">
+        <div role="status" className="flex items-center gap-2 text-sm text-muted-foreground">
+          <Spinner aria-hidden="true" />
           Checking the theme…
-        </p>
+        </div>
       )}
       <StudioInspectorGroup title="Themes">
         <ToggleGroup

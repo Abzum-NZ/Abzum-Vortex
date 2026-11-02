@@ -1,5 +1,5 @@
 "use client";
-import { FieldLegend } from "@vortex/ui/components/field";
+import { FieldLegend, FieldSet } from "@vortex/ui/components/field";
 import { Alert, AlertDescription } from "@vortex/ui/components/alert";
 import { useMemo, useState, type FormEvent } from "react";
 import {
@@ -198,7 +198,7 @@ export function ActionDialog({
             />
           </div>
           <StudioActionInputs inputs={inputs} source={source} onChange={changeInputs} />
-          <fieldset className="space-y-2">
+          <FieldSet className="gap-2">
             <FieldLegend variant="label">Runs only when</FieldLegend>
             {projected.kind === "unsupported" && !replacing ? (
               <div className="space-y-2 text-sm">
@@ -228,7 +228,7 @@ export function ActionDialog({
                 <AlertDescription>{conditionProblem}</AlertDescription>
               </Alert>
             )}
-          </fieldset>
+          </FieldSet>
           <div className="flex items-start gap-2">
             <Checkbox
               id="action-owns"
@@ -256,11 +256,15 @@ export function ActionDialog({
             />
           </div>
           {issues.length === 0 ? null : (
-            <ul role="alert" className="space-y-1 text-sm text-destructive">
-              {issues.map((issue, index) => (
-                <li key={index}>{issue}</li>
-              ))}
-            </ul>
+            <Alert variant="destructive">
+              <AlertDescription>
+                <ul className="space-y-1">
+                  {issues.map((issue, index) => (
+                    <li key={index}>{issue}</li>
+                  ))}
+                </ul>
+              </AlertDescription>
+            </Alert>
           )}
           <StudioReferencesAlert
             name="the action's own permission"
@@ -468,11 +472,15 @@ export function StudioModuleActions({
         />
       )}
       {issues.length === 0 ? null : (
-        <ul role="alert" className="space-y-1 text-sm text-destructive">
-          {issues.map((issue, index) => (
-            <li key={index}>{issue}</li>
-          ))}
-        </ul>
+        <Alert variant="destructive">
+          <AlertDescription>
+            <ul className="space-y-1">
+              {issues.map((issue, index) => (
+                <li key={index}>{issue}</li>
+              ))}
+            </ul>
+          </AlertDescription>
+        </Alert>
       )}
       {editing !== null && (editing === "new" || chosen !== undefined) && (
         <ActionDialog

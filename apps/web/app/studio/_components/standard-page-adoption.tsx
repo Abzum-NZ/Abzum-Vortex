@@ -1,7 +1,9 @@
 "use client";
 import { useEffect, useRef, useTransition } from "react";
 import { Icon } from "@vortex/ui";
+import { Alert, AlertDescription, AlertAction } from "@vortex/ui/components/alert";
 import { Button } from "@vortex/ui/components/button";
+import { Spinner } from "@vortex/ui/components/spinner";
 import { Badge } from "@vortex/ui/components/badge";
 import {
   Collapsible,
@@ -127,22 +129,33 @@ export function StandardPageAdoption({
           Compare your replacement with the latest standard page. Each choice updates this draft.
         </p>
         {disabledReason !== undefined && (
-          <p role="status" className="text-sm text-muted-foreground">
-            {disabledReason}
-          </p>
+          <Alert role="status">
+            <AlertDescription>{disabledReason}</AlertDescription>
+          </Alert>
         )}
       </header>
-      {result === null && <p role="status">Loading the comparison…</p>}
+      {result === null && (
+        <div role="status" className="flex items-center gap-2 text-sm text-muted-foreground">
+          <Spinner aria-hidden="true" />
+          Loading the comparison…
+        </div>
+      )}
       {result?.kind === "temporarily_unavailable" && (
-        <p role="status">
-          The comparison is temporarily unavailable.{" "}
-          <Button variant="outline" onClick={() => void onReload()}>
-            Try again
-          </Button>
-        </p>
+        <Alert variant="warning" role="status">
+          <AlertDescription>The comparison is temporarily unavailable.</AlertDescription>
+          <AlertAction>
+            <Button variant="outline" onClick={() => void onReload()}>
+              Try again
+            </Button>
+          </AlertAction>
+        </Alert>
       )}
       {result?.kind === "refused" && (
-        <p role="status">The page comparison is unavailable for this application.</p>
+        <Alert variant="warning">
+          <AlertDescription>
+            The page comparison is unavailable for this application.
+          </AlertDescription>
+        </Alert>
       )}
       {result?.kind === "available" &&
         (result.choices.length === 0 ? (

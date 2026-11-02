@@ -19,6 +19,7 @@ import {
   type RecordSettingsContext,
   type ModuleExtensionPointUse,
 } from "@vortex/platform/schema";
+import { Alert, AlertDescription, AlertTitle } from "@vortex/ui/components/alert";
 import { Button } from "@vortex/ui/components/button";
 import { Input } from "@vortex/ui/components/input";
 import { useConfirm } from "@vortex/ui/components/confirm-dialog";
@@ -110,13 +111,17 @@ export type StudioDataModel = Readonly<{
 
 function Problems({ issues }: Readonly<{ issues: readonly string[] }>) {
   return issues.length === 0 ? null : (
-    <ul role="alert" className="space-y-1 text-sm text-destructive">
-      {issues.map((issue, index) => (
-        <li key={index} className="break-words">
-          {issue}
-        </li>
-      ))}
-    </ul>
+    <Alert variant="destructive">
+      <AlertDescription>
+        <ul className="space-y-1">
+          {issues.map((issue, index) => (
+            <li key={index} className="break-words">
+              {issue}
+            </li>
+          ))}
+        </ul>
+      </AlertDescription>
+    </Alert>
   );
 }
 
@@ -840,24 +845,26 @@ export function StudioDataInspectorView({ model }: Readonly<{ model: StudioDataM
   const body = (
     <>
       {compileProblem === null ? null : (
-        <div role="alert" className="space-y-2 rounded-md border border-destructive/50 p-3 text-sm">
-          <p className="font-semibold text-destructive">
+        <Alert variant="destructive">
+          <AlertTitle>
             {problemHere
               ? "This stops the draft from compiling"
               : "The draft does not compile, so it can't be previewed or published yet"}
-          </p>
-          <p className="break-words">{compileProblem.message}</p>
-          {compileProblem.selection === null || problemHere ? null : (
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              onClick={() => select(compileProblem.selection)}
-            >
-              Show me
-            </Button>
-          )}
-        </div>
+          </AlertTitle>
+          <AlertDescription className="space-y-2">
+            <p className="break-words">{compileProblem.message}</p>
+            {compileProblem.selection === null || problemHere ? null : (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => select(compileProblem.selection)}
+              >
+                Show me
+              </Button>
+            )}
+          </AlertDescription>
+        </Alert>
       )}
       {inspectorBody}
       {usedIn === null ? null : (

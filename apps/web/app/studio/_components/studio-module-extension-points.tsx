@@ -1,4 +1,5 @@
 "use client";
+import { Spinner } from "@vortex/ui/components/spinner";
 import { Alert, AlertDescription } from "@vortex/ui/components/alert";
 import { useId, useState, type FormEvent } from "react";
 import {
@@ -302,9 +303,10 @@ export function StudioModuleExtensionPoints({
         </Button>
       )}
       {uses === null ? (
-        <p role="status" className="text-sm text-muted-foreground">
+        <div role="status" className="flex items-center gap-2 text-sm text-muted-foreground">
+          <Spinner aria-hidden="true" />
           Loading extension uses…
-        </p>
+        </div>
       ) : null}
       {confirmDialog}
     </StudioInspectorGroup>
