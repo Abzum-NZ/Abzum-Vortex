@@ -116,7 +116,7 @@ export function useConfirm(): readonly [(prompt: ConfirmPrompt) => Promise<boole
         if (!nextOpen) requestDismiss();
       }}
     >
-      <AlertDialogContent>
+      <AlertDialogContent className="cn-confirm-dialog">
         <AlertDialogHeader>
           <AlertDialogTitle>{prompt?.title ?? ""}</AlertDialogTitle>
           <AlertDialogDescription className="whitespace-pre-line">

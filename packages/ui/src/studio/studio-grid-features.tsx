@@ -324,8 +324,17 @@ export function StudioGridFeatures({
           features,
           tablePageSize,
         );
+  const featuresOn = recordsTableFeatureKeys.filter((key) =>
+    incomplete.has(key)
+      ? authoredEnabled(key)
+      : features !== undefined && recordsTableFeatureState(features, key).enabled,
+  ).length;
   return (
-    <StudioInspectorGroup title="Features">
+    <StudioInspectorGroup
+      title="Grid features"
+      defaultOpen={false}
+      summary={featuresOn === 0 ? "None on" : `${featuresOn} on`}
+    >
       {viewportCheck?.kind === "not_possible" ? (
         <Alert variant="destructive">
           <AlertDescription>{viewportCheck.reason}</AlertDescription>

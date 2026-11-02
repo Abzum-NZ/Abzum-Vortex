@@ -1,4 +1,5 @@
 "use client";
+import { FieldLegend } from "@vortex/ui/components/field";
 import { useState } from "react";
 import type {
   ApplicationSourceDocument,
@@ -7,6 +8,7 @@ import type {
 import {
   studioLayoutOutletTargets,
   studioLayoutOutletPlacementUses,
+  StudioDialog,
   StudioField,
   StudioInspectorGroup,
   StudioReferencePicker,
@@ -21,13 +23,6 @@ import { Button } from "@vortex/ui/components/button";
 import { Input } from "@vortex/ui/components/input";
 import { Switch } from "@vortex/ui/components/switch";
 import { Checkbox } from "@vortex/ui/components/checkbox";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-} from "@vortex/ui/components/dialog";
 import { studioNotice } from "./studio-save-state";
 import { useStudioDraftText } from "./use-studio-draft-text";
 import { StudioPlaceList } from "./studio-used-in";
@@ -48,29 +43,27 @@ export function StudioLayoutOutletUses({
   const uses = studioLayoutOutletPlacementUses(source, placementAlias);
   if (uses.length === 0) return null;
   return (
-    <StudioInspectorGroup title="Content outlet references">
-      <p className="text-sm text-muted-foreground">
-        A content outlet reserves this block or a block inside it. Retarget the outlet before
-        removing this block.
-      </p>
+    <StudioInspectorGroup
+      title="Content outlet references"
+      defaultOpen={false}
+      hint="A content outlet reserves this block or a block inside it. Retarget the outlet before removing this block."
+      summary={uses.length === 1 ? "1 place" : `${uses.length} places`}
+    >
       <Button variant="outline" size="sm" onClick={() => setOpen(true)}>
         Show me where
       </Button>
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Where it is used</DialogTitle>
-            <DialogDescription>
-              Open the layout to retarget its outlet, or inspect a page that binds it.
-            </DialogDescription>
-          </DialogHeader>
-          <StudioPlaceList
-            places={uses}
-            label="Content outlet references"
-            onBeforeOpen={() => setOpen(false)}
-          />
-        </DialogContent>
-      </Dialog>
+      <StudioDialog
+        open={open}
+        onOpenChange={setOpen}
+        title="Where it is used"
+        description="Open the layout to retarget its outlet, or inspect a page that binds it."
+      >
+        <StudioPlaceList
+          places={uses}
+          label="Content outlet references"
+          onBeforeOpen={() => setOpen(false)}
+        />
+      </StudioDialog>
     </StudioInspectorGroup>
   );
 }
@@ -149,7 +142,9 @@ function OutletSettings({
         )}
       </StudioField>
       <fieldset className="space-y-2" disabled={disabled}>
-        <legend className="mb-2 text-sm font-medium">Allowed child categories</legend>
+        <FieldLegend variant="label" className="mb-2">
+          Allowed child categories
+        </FieldLegend>
         {target?.categories.map(({ value: category, label }) => (
           <label key={category} className="flex items-center gap-2 text-sm">
             <Checkbox
@@ -240,10 +235,10 @@ export function StudioLayoutOutlets({
     return result.message;
   };
   return (
-    <StudioInspectorGroup title="Content outlets">
-      <p className="text-xs text-muted-foreground">
-        Required outlets bind every page. Empty content is valid.
-      </p>
+    <StudioInspectorGroup
+      title="Content outlets"
+      hint="Required outlets bind every page. Empty content is valid."
+    >
       <div className="divide-y">
         {shell.content_slots.map((outlet) => (
           <div key={outlet.id}>
@@ -349,19 +344,18 @@ export function StudioLayoutOutlets({
         <Icon name="plus" />
         Add outlet
       </Button>
-      <Dialog open={showUses} onOpenChange={setShowUses}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Where it is used</DialogTitle>
-            <DialogDescription>{refusal?.message}</DialogDescription>
-          </DialogHeader>
-          <StudioPlaceList
-            places={refusal?.where ?? []}
-            label="Where it is used"
-            onBeforeOpen={() => setShowUses(false)}
-          />
-        </DialogContent>
-      </Dialog>
+      <StudioDialog
+        open={showUses}
+        onOpenChange={setShowUses}
+        title="Where it is used"
+        {...(refusal === null ? {} : { description: refusal.message })}
+      >
+        <StudioPlaceList
+          places={refusal?.where ?? []}
+          label="Where it is used"
+          onBeforeOpen={() => setShowUses(false)}
+        />
+      </StudioDialog>
     </StudioInspectorGroup>
   );
 }

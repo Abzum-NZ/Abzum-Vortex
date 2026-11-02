@@ -30,6 +30,7 @@ export function StudioQuerySheet({
   open,
   draft,
   doneLabel,
+  initialRecordType,
   onClose,
   onDone,
 }: Readonly<{
@@ -37,6 +38,8 @@ export function StudioQuerySheet({
   draft: StudioDraft;
   /** What the finishing button says, for example "Use this query". */
   doneLabel: string;
+  /** The record type (`<module>:<record>`) the query starts on, when it is made for one. */
+  initialRecordType?: string | undefined;
   onClose: () => void;
   /** The new query, as the qualified reference a block stores: `<module>:<query>`. */
   onDone: (reference: string) => void;
@@ -69,7 +72,12 @@ export function StudioQuerySheet({
     ],
     [owned, view.usedModules],
   );
-  const [step, setStep] = useState<Step>({ kind: "name", recordType: owned[0]?.value ?? "" });
+  const [step, setStep] = useState<Step>({
+    kind: "name",
+    recordType: owned.some((record) => record.value === initialRecordType)
+      ? initialRecordType!
+      : (owned[0]?.value ?? ""),
+  });
   const [moduleKey, recordKey] = step.kind === "name" ? step.recordType.split(":") : [];
   const exists =
     step.kind === "edit" &&

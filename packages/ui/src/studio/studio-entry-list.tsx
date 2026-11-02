@@ -173,13 +173,14 @@ export function StudioEntryList({
                     <GripVertical className="size-4" />
                   </span>
                 )}
-                <button
+                <Button
                   ref={(element) => {
                     if (element === null) headings.current.delete(item.key);
                     else headings.current.set(item.key, element);
                   }}
                   type="button"
-                  className="flex min-w-0 flex-1 items-center gap-1.5 rounded-md border-0 bg-transparent px-0 py-1.5 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  variant="ghost"
+                  className="h-auto min-w-0 flex-1 justify-start gap-1.5 px-0 py-1.5 text-left"
                   aria-expanded={item.content === undefined ? undefined : expanded}
                   aria-keyshortcuts={movable ? "Alt+ArrowUp Alt+ArrowDown" : undefined}
                   onClick={() => {
@@ -206,7 +207,7 @@ export function StudioEntryList({
                     {item.summary !== undefined && item.summary !== "" && (
                       <span
                         className={cn(
-                          "block truncate text-xs",
+                          "block truncate text-xs font-normal",
                           expanded
                             ? "text-foreground"
                             : "text-muted-foreground group-hover/entry:text-foreground group-focus-within/entry:text-foreground",
@@ -222,7 +223,7 @@ export function StudioEntryList({
                       aria-label="Has a problem"
                     />
                   )}
-                </button>
+                </Button>
                 <span className="flex shrink-0 items-center opacity-0 group-hover/entry:opacity-100 group-focus-within/entry:opacity-100">
                   {onMove !== undefined && (
                     <>

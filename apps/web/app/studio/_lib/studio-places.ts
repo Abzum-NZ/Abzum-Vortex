@@ -17,7 +17,7 @@ export const studioPlaceSelection = (
   open: ApplicationPlaceOpen,
   rootId: ApplicationRootId,
 ): StudioSemanticSelection | null =>
-  open.kind === "none"
+  open.kind === "none" || open.kind === "access_permissions"
     ? null
     : open.kind === "application"
       ? { kind: "application", applicationRootId: rootId }
@@ -55,6 +55,8 @@ export const studioUseTargetOf = (
       return { kind: "page", pageAlias: selection.pageAlias };
     case "navigation":
       return { kind: "navigation", navigationItemAlias: selection.navigationItemAlias };
+    case "application":
+      return { kind: "application" };
     case "flow":
     case "flow_step":
       return { kind: "flow", flowAlias: selection.flowAlias, moduleKey: selection.moduleKey };

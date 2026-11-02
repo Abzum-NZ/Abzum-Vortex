@@ -1,30 +1,16 @@
 "use client";
 import { useMemo, useState, type FormEvent } from "react";
-import { Icon } from "@vortex/ui";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@vortex/ui/components/dropdown-menu";
-import { Switch } from "@vortex/ui/components/switch";
 import { Alert, AlertDescription, AlertTitle } from "@vortex/ui/components/alert";
 import { Button } from "@vortex/ui/components/button";
-import { Checkbox } from "@vortex/ui/components/checkbox";
 import { useConfirm } from "@vortex/ui/components/confirm-dialog";
-import { Input } from "@vortex/ui/components/input";
-import { Label } from "@vortex/ui/components/label";
-import { Textarea } from "@vortex/ui/components/textarea";
 import {
   applyStudioFieldPlacements,
   applyStudioFlowCreate,
   studioFieldPlacements,
   studioRelationshipChoices,
   studioSettingProblems,
-  StudioOptionControl,
+  StudioInspectorActions,
   StudioInspectorGroup,
-  StudioSettingFields,
   studioSourceRecordTypes,
   type StudioCompositionContext,
   type StudioDataSelection,
@@ -37,7 +23,6 @@ import {
   changeInlineModuleField,
   deleteInlineModuleField,
   deriveFieldKey,
-  fieldTypeKeys,
   isOptionsFlowSource,
   joinTextAccepts,
   linkDependencyCandidates,
@@ -58,7 +43,6 @@ import {
   writeModuleFieldSettings,
   type ApplicationSourceDocument,
   type ApplicationUsePlace,
-  type LinkCardinality,
   type LinkDependencyField,
   type CalculationSettings,
   type FormulaField,
@@ -67,7 +51,17 @@ import {
   type PeopleDirectoryOwner,
   type TotalSettings,
 } from "@vortex/platform/schema";
-import { StudioField } from "./studio-field";
+import { StudioInspectorFooter, StudioInspectorHeader } from "./studio-inspector";
+import {
+  FieldDefaultSection,
+  FieldFormatSection,
+  FieldFormsAndListsSection,
+  FieldGeneralSection,
+  FieldPrivacySection,
+  FieldSearchSection,
+  type FieldFormState,
+  type Plain,
+} from "./module-field-sections";
 import { StudioReferencesAlert, StudioUsedIn, useStudioPlaceOpener } from "./studio-used-in";
 import { StudioOptionsSourceEditor } from "./studio-options-source-editor";
 import { optionsFlowInputs, optionsFlowSeed } from "./module-field-options-flow";
@@ -80,8 +74,6 @@ import {
   type StudioDataEdit,
   type StudioPublishedData,
 } from "../_lib/studio-data-model";
-import { StudioCalculationEditor } from "./studio-calculation-editor";
-import { StudioTotalEditor } from "./studio-total-editor";
 
 /** An application in this organisation, for the link to the owner of a used module. */
 export type StudioModuleOwnerApplication = Readonly<{ key: string; rootId: string; name: string }>;
@@ -89,7 +81,6 @@ export type StudioModuleOwnerApplication = Readonly<{ key: string; rootId: strin
 type Source = ApplicationSourceDocument;
 type SourceRecord = Source["body"]["modules"][number]["record_types"][number];
 type SourceField = SourceRecord["fields"][number];
-type Plain = Readonly<Record<string, unknown>>;
 /** The field types that declare where their options come from. */
 const optionsSourceTypes: ReadonlySet<string> = new Set([
   "choice",
@@ -120,91 +111,8 @@ export type ModuleFieldEditorContext = Readonly<{
   compiledFields: StudioCompiledFields | null;
 }>;
 
-type FormState = Readonly<{
-  label: string;
-  helpText: string;
-  type: ModuleFieldType;
-  required: boolean;
-  unique: boolean;
-  filterable: boolean;
-  sortable: boolean;
-  searchPriority: NonNullable<SourceField["search_priority"]> | null;
-  personalData: SourceField["personal_data"];
-  publicDisplay: SourceField["public_display"];
-  settings: StudioSettingValues;
-  defaultValue: StudioSettingValues;
-  /** A calculation's or a total's settings, as its formula or total editor holds them; empty for other types. */
-  computed: Plain;
-  /** How many records may link to one linked record; read only for a link. */
-  cardinality: LinkCardinality;
-}>;
-
 const computedTypes: ReadonlySet<ModuleFieldType> = new Set(["calculation", "total"]);
 const linkTypes: ReadonlySet<string> = new Set(["link", "link_to_one_of_several"]);
-
-/**
- * The colour of each option of a published choice field. A published field keeps its stored shape,
- * but an option's colour is presentation and publishes as a patch, so it stays editable while the
- * rest of the options stay fixed. // item 22: CRM-FIX-PLATFORM
- */
-function PublishedOptionColours({
-  declarations,
-  values,
-  onChange,
-}: Readonly<{
-  declarations: ReturnType<typeof moduleFieldSettingDeclarations>;
-  values: StudioSettingValues;
-  onChange: (values: StudioSettingValues) => void;
-}>) {
-  const list = declarations.find((declaration) => declaration.key === "options");
-  const current = values["options"];
-  if (list?.kind !== "list" || list.item.kind !== "group" || current?.kind !== "list") return null;
-  const tone = list.item.properties.find((property) => property.key === "tone");
-  if (tone?.kind !== "choice" || current.items.length === 0) return null;
-  const withTone = (index: number, next: string) =>
-    onChange({
-      ...values,
-      options: {
-        kind: "list",
-        items: current.items.map((item, position) => {
-          if (position !== index || item.kind !== "group") return item;
-          const rest = Object.fromEntries(
-            Object.entries(item.properties).filter(([key]) => key !== "tone"),
-          );
-          return {
-            kind: "group",
-            properties: next === "" ? rest : { ...rest, tone: { kind: "choice", value: next } },
-          };
-        }),
-      },
-    });
-  return (
-    <div className="space-y-2">
-      <Label>Option colours</Label>
-      {current.items.map((item, index) => {
-        if (item.kind !== "group") return null;
-        const label = item.properties["label"];
-        const held = item.properties["tone"];
-        const id = `module-field-option-colour-${index}`;
-        return (
-          <div key={id} className="flex items-center justify-between gap-2">
-            <Label htmlFor={id}>
-              {label?.kind === "text" ? label.value : `Option ${index + 1}`}
-            </Label>
-            <StudioOptionControl
-              id={id}
-              value={held?.kind === "choice" ? held.value : ""}
-              unset="No colour"
-              options={tone.options.map((option) => ({ value: option.key, label: option.label }))}
-              disabled={false}
-              onChange={(next) => withTone(index, next)}
-            />
-          </div>
-        );
-      })}
-    </div>
-  );
-}
 
 /**
  * The one field editor of the Data tab. Without a field it is the form that adds a field to a
@@ -227,6 +135,7 @@ export function ModuleFieldsEditor({
   onSelect,
   onAdded,
   onRemoved,
+  onCancel,
 }: Readonly<{
   source: Source;
   moduleKey: string;
@@ -243,6 +152,8 @@ export function ModuleFieldsEditor({
   onAdded?: (fieldKey: string) => void;
   /** Called after the field is removed from the draft. */
   onRemoved?: () => void;
+  /** Called when the builder gives up adding the field. */
+  onCancel?: () => void;
 }>) {
   const [confirm, confirmDialog] = useConfirm();
   const placeOpener = useStudioPlaceOpener();
@@ -409,7 +320,7 @@ export function ModuleFieldsEditor({
   };
   const storedDefault = (existing as { default?: unknown } | undefined)?.default;
   // The field as the draft holds it, or a new field's starting form.
-  const readForm = (): FormState => {
+  const readForm = (): FieldFormState => {
     const type = (existing?.type ?? initialType) as ModuleFieldType;
     const relationship =
       existing === undefined
@@ -433,7 +344,7 @@ export function ModuleFieldsEditor({
       cardinality: relationship?.cardinality === "one_to_one" ? "one_to_one" : "many_to_one",
     };
   };
-  const [created, setCreated] = useState<FormState>(readForm);
+  const [created, setCreated] = useState<FieldFormState>(readForm);
   const stored = adding || existing === undefined ? created : readForm();
   const readFailures =
     existing === undefined
@@ -462,7 +373,7 @@ export function ModuleFieldsEditor({
 
   /** One edit of the field: the patch over the field as the draft holds it. */
   const changeOf = (
-    next: FormState,
+    next: FieldFormState,
     settings: Plain,
     defaultValue: unknown,
   ): Parameters<typeof changeInlineModuleField>[1] => ({
@@ -485,13 +396,13 @@ export function ModuleFieldsEditor({
   });
 
   const commit = (
-    patch: Partial<FormState>,
+    patch: Partial<FieldFormState>,
     merge?: string,
     optionsSource?: Plain,
   ): string | undefined => {
     if (existing === undefined || record === undefined)
       return "The field is not in this record type any more.";
-    const next: FormState = { ...stored, ...patch };
+    const next: FieldFormState = { ...stored, ...patch };
     const typeChanged = next.type !== existing.type;
     const plain = plainOf(next.type);
     const declarations = declarationsFor(next.type, formSettings(next.settings), next.label);
@@ -585,10 +496,7 @@ export function ModuleFieldsEditor({
     );
     if (problem !== undefined) return problem;
     if (flowAlias !== undefined)
-      placeOpener.open({
-        label: flowName,
-        open: { kind: "flow", flowAlias, moduleKey: module.key },
-      });
+      placeOpener.open({ kind: "flow", flowAlias, moduleKey: module.key });
     return undefined;
   };
   const mergeKey = (part: string) => `field-${part}:${qualifiedRecord}.${fieldKey ?? ""}`;
@@ -603,7 +511,7 @@ export function ModuleFieldsEditor({
   const settingsValue = useStudioDraftHeld(stored.settings);
   const defaultValue = useStudioDraftHeld(stored.defaultValue);
   const computedValue = useStudioDraftHeld(stored.computed);
-  const form: FormState = {
+  const form: FieldFormState = {
     ...stored,
     type: typeValue.value,
     label: label.text,
@@ -680,7 +588,7 @@ export function ModuleFieldsEditor({
     );
 
   // A discrete choice applies at once; a refused one is answered with why and the draft keeps its value.
-  const change = (patch: Partial<FormState>) => {
+  const change = (patch: Partial<FieldFormState>) => {
     if (adding) {
       setCreated({ ...created, ...patch });
       setIssues([]);
@@ -691,7 +599,7 @@ export function ModuleFieldsEditor({
   };
   const typeHeld = existing !== undefined && typeValue.value !== existing.type;
   /** The held type with its settings: what the first valid settings edit applies together with the type. */
-  const heldBase: Partial<FormState> = typeHeld
+  const heldBase: Partial<FieldFormState> = typeHeld
     ? {
         type: form.type,
         settings: form.settings,
@@ -930,26 +838,23 @@ export function ModuleFieldsEditor({
       ? "Published storage settings are fixed. The formula and rounding can change."
       : "Published shape is fixed. Labels, help, defaults, privacy and link-back names can change, and filtering and sorting can be turned on."
     : undefined;
+  const typeHint = shapeLocked
+    ? "Published: the type is fixed. To hold another kind of value, add a new field."
+    : existing !== undefined
+      ? "Changing the type resets its settings and default."
+      : undefined;
   // Required and unique are stored constraints, fixed once published. Filtering and sorting can be
   // turned on after publication; the field rules say why one cannot be turned off.
-  const flag = (
-    key: "required" | "unique" | "filterable" | "sortable",
-    text: string,
-    extraDisabled = false,
-  ) => (
-    <div className="flex items-center gap-2">
-      <Switch
-        id={`module-field-${key}`}
-        checked={form[key]}
-        disabled={
-          disabled || (shapeLocked && (key === "required" || key === "unique")) || extraDisabled
-        }
-        onCheckedChange={(checked) => change({ [key]: checked })}
-      />
-      <Label htmlFor={`module-field-${key}`}>{text}</Label>
-    </div>
-  );
-  const problemOf = (text: string) => (text === "" ? undefined : text);
+  const requiredReason = shapeLocked
+    ? "Fixed after publishing"
+    : adding && recordPublished
+      ? "Fixed once the record type is published"
+      : undefined;
+  const uniqueReason = shapeLocked
+    ? "Fixed after publishing"
+    : linkTypes.has(form.type) && form.cardinality === "one_to_one"
+      ? "A one-to-one link is always unique"
+      : undefined;
   const privacyEvents =
     existing === undefined || form.personalData === "none"
       ? []
@@ -958,6 +863,23 @@ export function ModuleFieldsEditor({
             (event.record_type === record.key || event.record_type === qualifiedRecord) &&
             event.carries.includes(existing.key),
         );
+  const dependencyTarget =
+    candidates?.kind === "unavailable" && candidates.reason !== "no_parent_link" && canOpenTarget
+      ? {
+          label: `Open ${dependency.field.targetLabel}${candidates.fieldId === undefined ? "" : `'s ${dependency.targetFields.find((item) => item.id === candidates.fieldId)!.label}`}`,
+          open: () =>
+            onSelect(
+              candidates.fieldId === undefined
+                ? { kind: "record_type", moduleKey: targetModule!, recordKey: targetRecord! }
+                : {
+                    kind: "field",
+                    moduleKey: targetModule!,
+                    recordKey: targetRecord!,
+                    fieldKey: candidates.fieldId,
+                  },
+            ),
+        }
+      : undefined;
 
   return (
     <form
@@ -966,58 +888,37 @@ export function ModuleFieldsEditor({
       aria-label={adding ? `New field of ${record.name}` : `Field ${existing!.label}`}
     >
       {existing === undefined ? null : (
-        <div className="flex items-start justify-between gap-2">
-          <div>
-            <h3 className="text-base font-semibold">{existing.label}</h3>
-            <p className="text-xs text-muted-foreground">Field</p>
-          </div>
-          <DropdownMenu>
-            <DropdownMenuTrigger
-              render={
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-sm"
-                  aria-label={`More options for ${existing.label}`}
-                />
-              }
-            >
-              <Icon name="more-horizontal" />
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem
-                disabled={disabled || record.fields[0]?.key === existing.key}
-                onClick={() => move(-1)}
-              >
-                Move earlier
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                disabled={disabled || record.fields.at(-1)?.key === existing.key}
-                onClick={() => move(1)}
-              >
-                Move later
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                variant="destructive"
-                // A published field keeps its stored values, so it is not offered for deletion.
-                disabled={disabled || published}
-                onClick={() => {
-                  void remove();
-                }}
-              >
-                {published
-                  ? "Remove field (published: take it off the pages instead)"
-                  : "Remove field"}
-              </DropdownMenuItem>
-              {!published && (
-                <p className="px-2 py-1 text-xs text-muted-foreground">
-                  Deletes it from the draft. It was never published, so no stored value is lost.
-                </p>
-              )}
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
+        <StudioInspectorHeader
+          title={existing.label}
+          kind="Field"
+          actions={
+            <StudioInspectorActions
+              actions={[
+                {
+                  label: "Move earlier",
+                  disabled: disabled || record.fields[0]?.key === existing.key,
+                  onSelect: () => move(-1),
+                },
+                {
+                  label: "Move later",
+                  disabled: disabled || record.fields.at(-1)?.key === existing.key,
+                  onSelect: () => move(1),
+                },
+                {
+                  // A published field keeps its stored values, so it is not offered for deletion.
+                  label: published
+                    ? "Remove field (published: take it off the pages instead)"
+                    : "Remove field",
+                  destructive: true,
+                  disabled: disabled || published,
+                  onSelect: () => {
+                    void remove();
+                  },
+                },
+              ]}
+            />
+          }
+        />
       )}
       {issues.length === 0 ? null : (
         <ul
@@ -1043,12 +944,7 @@ export function ModuleFieldsEditor({
                   type="button"
                   size="xs"
                   variant="outline"
-                  onClick={() =>
-                    placeOpener.open({
-                      label: record.name,
-                      open: { kind: "record_type", moduleKey, recordKey },
-                    })
-                  }
+                  onClick={() => placeOpener.open({ kind: "record_type", moduleKey, recordKey })}
                 >
                   Choose the title field
                 </Button>
@@ -1058,396 +954,186 @@ export function ModuleFieldsEditor({
           <StudioReferencesAlert name={existing.label} action="removed" references={references} />
         </>
       )}
-      <StudioInspectorGroup title="General">
-        <StudioField
-          label="Label"
-          error={problemOf(label.problem)}
-          onUndo={label.reset}
-          hint={
-            adding
-              ? nextKey === undefined
-                ? "The label people see on forms and lists. A short key is made from it."
-                : `Its key will be "${nextKey}". It does not change later.`
-              : undefined
-          }
-        >
-          {(control) => (
-            <Input
-              {...control}
-              className="w-full"
-              value={label.text}
-              disabled={disabled}
-              maxLength={60}
-              onChange={(event) => {
-                label.change(event.target.value);
-                if (adding) setIssues([]);
-              }}
-            />
-          )}
-        </StudioField>
-        <StudioField
-          label="Type"
-          error={problemOf(typeValue.problem)}
-          hint={
-            shapeLocked
-              ? "Published: the type is fixed. To hold another kind of value, add a new field."
-              : existing !== undefined
-                ? "Changing the type resets its settings and default."
-                : undefined
-          }
-        >
-          {(control) => (
-            <StudioOptionControl
-              id={control.id}
-              value={form.type}
-              disabled={disabled || shapeLocked}
-              options={fieldTypeKeys.map((item) => ({
-                value: item,
-                label: moduleFieldTypeLabels[item],
-              }))}
-              onChange={(next) => changeType(next as ModuleFieldType)}
-            />
-          )}
-        </StudioField>
-        {flag("required", "Required", adding && recordPublished)}
-      </StudioInspectorGroup>
-      <StudioInspectorGroup
-        title={form.type === "choice" || form.type === "several_choices" ? "Choices" : "Format"}
-      >
-        {candidates?.kind === "unavailable" && (
-          <Alert variant="info" role="note">
-            <AlertTitle>Choices depend on another link</AlertTitle>
-            <AlertDescription>
-              <p>{candidates.message}</p>
-              {candidates.reason !== "no_parent_link" && canOpenTarget && (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="h-auto whitespace-normal text-left"
-                  onClick={() =>
-                    onSelect(
-                      candidates.fieldId === undefined
-                        ? {
-                            kind: "record_type",
-                            moduleKey: targetModule!,
-                            recordKey: targetRecord!,
-                          }
-                        : {
-                            kind: "field",
-                            moduleKey: targetModule!,
-                            recordKey: targetRecord!,
-                            fieldKey: candidates.fieldId,
-                          },
-                    )
-                  }
-                >
-                  {`Open ${dependency.field.targetLabel}${candidates.fieldId === undefined ? "" : `'s ${dependency.targetFields.find((item) => item.id === candidates.fieldId)!.label}`}`}
-                </Button>
-              )}
-            </AlertDescription>
-          </Alert>
-        )}
-        {shapeHint === undefined ? null : (
-          <p className="text-sm text-muted-foreground" role="note">
-            {shapeHint}
-          </p>
-        )}
-        {form.type === "calculation" ? (
-          <StudioCalculationEditor
-            key={`calculation:${computedValue.epoch}`}
-            idPrefix="module-field-formula"
-            settings={form.computed as CalculationSettings}
-            fields={formulaFields}
-            compiled={compiledOf(`${moduleKey}:${recordKey}`)}
+      <div>
+        <FieldGeneralSection
+          adding={adding}
+          nextKey={nextKey}
+          label={label}
+          onLabel={(next) => {
+            label.change(next);
+            if (adding) setIssues([]);
+          }}
+          typeProblem={typeValue.problem}
+          type={form.type}
+          typeHint={typeHint}
+          onType={changeType}
+          required={form.required}
+          requiredReason={requiredReason}
+          disabled={disabled}
+          typeLocked={shapeLocked}
+          onRequired={(required) => change({ required })}
+        />
+        <FieldFormatSection
+          type={form.type}
+          hint={shapeHint}
+          candidates={candidates}
+          linkTarget={dependencyTarget}
+          calculation={{
+            key: `calculation:${computedValue.epoch}`,
+            settings: form.computed as CalculationSettings,
+            fields: formulaFields,
+            compiled: compiledOf(`${moduleKey}:${recordKey}`),
+            onChange: changeComputed,
+          }}
+          total={{
+            key: `total:${computedValue.epoch}`,
+            settings: form.computed as TotalSettings,
+            relationships: totalLinks,
+            compiledOf,
+            onChange: changeComputed,
+          }}
+          unreadable={unreadable}
+          readFailures={readFailures}
+          declarations={declarations}
+          settings={form.settings}
+          choices={choices}
+          disabled={disabled}
+          shapeLocked={shapeLocked}
+          onSettings={changeSettings}
+          settingsProblem={settingsValue.problem}
+          computedProblem={computedValue.problem}
+        />
+        {existing !== undefined && optionsSourceTypes.has(form.type) && (
+          <StudioOptionsSourceEditor
+            key={`options-source:${qualifiedRecord}.${fieldKey ?? ""}`}
+            link={linkTypes.has(form.type)}
+            source={(existing.settings as { options_source?: Plain }).options_source}
+            fieldLabel={existing.label}
+            fields={formulaFields.map(({ key, label }) => ({ key, label }))}
+            queries={(module?.queries ?? []).map((query) => ({
+              reference: `${moduleKey}:${query.key}`,
+              label: query.label ?? query.key,
+              inputs: query.inputs.map((input) => ({
+                key: input.key,
+                label: input.label,
+                required: input.required,
+              })),
+            }))}
+            flows={(module?.flows ?? []).filter(isOptionsFlowSource).map((flow) => ({
+              alias: flow.id,
+              label: flow.labels.name ?? flow.key,
+              inputs: Object.entries(flow.inputs).map(([key, declaration]) => ({
+                key,
+                label: key.replaceAll("_", " "),
+                required: declaration.required,
+              })),
+            }))}
+            // Which values are offered is behaviour, not stored shape, so it changes after publication.
             disabled={disabled}
-            shapeLocked={shapeLocked}
-            onChange={changeComputed}
+            onChange={(next) => commit({}, undefined, next)}
+            onNewFlow={newOptionsFlow}
           />
-        ) : form.type === "total" ? (
-          <StudioTotalEditor
-            key={`total:${computedValue.epoch}`}
-            settings={form.computed as TotalSettings}
-            relationships={totalLinks}
-            compiledOf={compiledOf}
+        )}
+        {linkTypes.has(form.type) && (
+          <StudioLinkSection
+            settings={form.settings}
+            cardinality={form.cardinality}
+            label={form.label}
+            recordName={record.name}
+            recordPlural={record.plural_name}
+            targets={recordTypes}
             disabled={disabled || shapeLocked}
-            onChange={changeComputed}
+            usesDirectory={source.body.uses.some((use) => use.module === peopleDirectory.module)}
+            onCardinality={(cardinality) =>
+              change(cardinality === "one_to_one" ? { cardinality, unique: true } : { cardinality })
+            }
           />
-        ) : unreadable ? (
-          <Alert variant="destructive" role="alert">
-            <AlertTitle>These settings can&apos;t be read</AlertTitle>
-            <AlertDescription>
-              {`${[...new Set(readFailures.map((failure) => failure.path.join(", ")))].join("; ")}: ` +
-                "not in a form Studio edits, so the settings are not changed here. Change them in the application source."}
-            </AlertDescription>
-          </Alert>
-        ) : declarations.length === 0 ? (
-          <p className="text-sm text-muted-foreground">This type has no settings.</p>
-        ) : (
+        )}
+        <FieldDefaultSection
+          declaration={defaultModel.kind === "declared" ? defaultModel.declaration : undefined}
+          reason={defaultModel.kind === "declared" ? undefined : defaultModel.reason}
+          values={form.defaultValue}
+          choices={choices}
+          disabled={disabled}
+          onChange={changeDefault}
+          problem={defaultValue.problem}
+        />
+        <FieldFormsAndListsSection
+          helpText={helpText}
+          onHelpText={helpText.change}
+          disabled={disabled}
+          flags={{
+            unique: { checked: form.unique, reason: uniqueReason },
+            filterable: {
+              checked: form.filterable,
+              reason: isTitleField ? "The title is always filterable" : undefined,
+            },
+            sortable: { checked: form.sortable, reason: undefined },
+          }}
+          onFlag={(key, checked) => change({ [key]: checked })}
+          offered={offered}
+          checkedPlaces={placements}
+          onPlace={(id, checked) => {
+            setPlacementChoices(new Map(placementChoices).set(id, checked));
+            setIssues([]);
+          }}
+          onShowOnPages={showOnPages}
+          canShowOnPages={placements.size > 0}
+          adding={adding}
+          recordName={record.name}
+        />
+        <FieldSearchSection
+          value={form.searchPriority}
+          disabled={disabled}
+          onChange={(searchPriority) => change({ searchPriority })}
+        />
+        <FieldPrivacySection
+          personalData={form.personalData}
+          publicDisplay={form.publicDisplay}
+          disabled={disabled}
+          carriedBy={privacyEvents.map((event) => event.label ?? event.key)}
+          fieldLabel={existing?.label ?? form.label}
+          onPersonalData={(personalData) => change({ personalData })}
+          onPublicDisplay={(publicDisplay) => change({ publicDisplay })}
+          permissionsPlace={{
+            label: "Field permissions",
+            trail: [source.body.name, "Access", "Permissions"],
+            open: { kind: "access_permissions" },
+          }}
+        />
+        {existing === undefined ? null : (
           <>
-            {declarations.map((declaration) => (
-              <StudioSettingFields
-                key={declaration.key}
-                idPrefix="module-field-setting"
-                properties={[declaration]}
-                values={form.settings}
-                choices={choices}
-                disabled={disabled || (shapeLocked && declaration.key !== "reverse_name")}
-                onChange={changeSettings}
-              />
-            ))}
-            {shapeLocked && !disabled && (
-              <PublishedOptionColours
-                declarations={declarations}
-                values={form.settings}
-                onChange={changeSettings}
-              />
-            )}
+            <StudioUsedIn
+              source={source}
+              target={{ kind: "field", moduleKey, recordKey, fieldKey: existing.key }}
+              name={existing.label}
+            />
+            <StudioInspectorGroup title="Details" defaultOpen={false}>
+              <dl className="space-y-2 font-mono text-xs">
+                <div>
+                  <dt>Key</dt>
+                  <dd>{existing.key}</dd>
+                </div>
+                <div>
+                  <dt>Record type</dt>
+                  <dd>{qualifiedRecord}</dd>
+                </div>
+              </dl>
+            </StudioInspectorGroup>
           </>
         )}
-        {settingsValue.problem === "" ? null : (
-          <Alert variant="destructive">
-            <AlertDescription>{settingsValue.problem}</AlertDescription>
-          </Alert>
-        )}
-        {computedValue.problem === "" ? null : (
-          <Alert variant="destructive">
-            <AlertDescription>{computedValue.problem}</AlertDescription>
-          </Alert>
-        )}
-      </StudioInspectorGroup>
-      {existing !== undefined && optionsSourceTypes.has(form.type) && (
-        <StudioOptionsSourceEditor
-          key={`options-source:${qualifiedRecord}.${fieldKey ?? ""}`}
-          link={linkTypes.has(form.type)}
-          source={(existing.settings as { options_source?: Plain }).options_source}
-          fieldLabel={existing.label}
-          fields={formulaFields.map(({ key, label }) => ({ key, label }))}
-          queries={(module?.queries ?? []).map((query) => ({
-            reference: `${moduleKey}:${query.key}`,
-            label: query.label ?? query.key,
-            inputs: query.inputs.map((input) => ({
-              key: input.key,
-              label: input.label,
-              required: input.required,
-            })),
-          }))}
-          flows={(module?.flows ?? []).filter(isOptionsFlowSource).map((flow) => ({
-            alias: flow.id,
-            label: flow.labels.name ?? flow.key,
-            inputs: Object.entries(flow.inputs).map(([key, declaration]) => ({
-              key,
-              label: key.replaceAll("_", " "),
-              required: declaration.required,
-            })),
-          }))}
-          // Which values are offered is behaviour, not stored shape, so it changes after publication.
-          disabled={disabled}
-          onChange={(next) => commit({}, undefined, next)}
-          onNewFlow={newOptionsFlow}
-        />
-      )}
-      {linkTypes.has(form.type) && (
-        <StudioLinkSection
-          settings={form.settings}
-          cardinality={form.cardinality}
-          label={form.label}
-          recordName={record.name}
-          recordPlural={record.plural_name}
-          targets={recordTypes}
-          disabled={disabled || shapeLocked}
-          usesDirectory={source.body.uses.some((use) => use.module === peopleDirectory.module)}
-          onCardinality={(cardinality) =>
-            change(cardinality === "one_to_one" ? { cardinality, unique: true } : { cardinality })
-          }
-        />
-      )}
-      <StudioInspectorGroup title="Default value">
-        {defaultModel.kind === "declared" ? (
-          <StudioSettingFields
-            idPrefix="module-field-default"
-            properties={[defaultModel.declaration]}
-            values={form.defaultValue}
-            choices={choices}
-            disabled={disabled}
-            onChange={changeDefault}
-          />
-        ) : (
-          <p className="text-sm text-muted-foreground">Default value: {defaultModel.reason}</p>
-        )}
-        {defaultValue.problem === "" ? null : (
-          <Alert variant="destructive">
-            <AlertDescription>{defaultValue.problem}</AlertDescription>
-          </Alert>
-        )}
-      </StudioInspectorGroup>
-      <StudioInspectorGroup title="Behaviour">
-        <StudioField
-          label="Help text"
-          hint="Shown under the field on forms. Optional."
-          error={problemOf(helpText.problem)}
-          onUndo={helpText.reset}
-        >
-          {(control) => (
-            <Textarea
-              {...control}
-              value={helpText.text}
-              disabled={disabled}
-              maxLength={200}
-              onChange={(event) => helpText.change(event.target.value)}
-            />
-          )}
-        </StudioField>
-        {flag(
-          "unique",
-          "Unique value",
-          linkTypes.has(form.type) && form.cardinality === "one_to_one",
-        )}
-        {flag("filterable", "Allow filtering", isTitleField)}
-        {isTitleField ? (
-          <p className="text-xs text-muted-foreground">The title is always filterable.</p>
-        ) : null}
-        {flag("sortable", "Allow sorting")}
-        <StudioField
-          label="Search index priority"
-          hint="Rank this field when it is indexed. Field type and privacy rules still decide which values enter search. Choose application result fields in the record type's Search tab."
-        >
-          {(control) => (
-            <StudioOptionControl
-              {...control}
-              value={form.searchPriority ?? ""}
-              unset="Not indexed"
-              disabled={disabled}
-              options={[
-                { value: "first", label: "Found first" },
-                { value: "normal", label: "Normal" },
-                { value: "last", label: "Found last" },
-              ]}
-              onChange={(next) =>
-                change({
-                  searchPriority: next === "" ? null : (next as FormState["searchPriority"]),
-                })
-              }
-            />
-          )}
-        </StudioField>
-        <fieldset className="space-y-2">
-          <legend className="text-sm font-semibold">Also show it on</legend>
-          {offered.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              {record.name} has no detail, list or form page with a list of fields yet.
-            </p>
-          ) : (
-            offered.map((place) => (
-              <div key={place.id} className="flex items-start gap-2">
-                <Checkbox
-                  id={`module-field-place-${place.id}`}
-                  checked={place.shown === true || placements.has(place.id)}
-                  disabled={disabled || place.shown === true || place.unavailable !== undefined}
-                  onCheckedChange={(checked) => {
-                    setPlacementChoices(new Map(placementChoices).set(place.id, checked === true));
-                    setIssues([]);
-                  }}
-                />
-                <Label htmlFor={`module-field-place-${place.id}`} className="font-normal">
-                  {place.label}
-                  {place.shown === true
-                    ? " (already shown)"
-                    : place.unavailable === undefined
-                      ? ""
-                      : ` (${place.unavailable})`}
-                </Label>
-              </div>
-            ))
-          )}
-          {!adding && (
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              disabled={disabled || placements.size === 0}
-              onClick={showOnPages}
-            >
-              Show field on selected pages
+      </div>
+      {adding && (
+        <StudioInspectorFooter>
+          {onCancel !== undefined && (
+            <Button type="button" size="sm" variant="outline" onClick={onCancel}>
+              Cancel
             </Button>
           )}
-        </fieldset>
-      </StudioInspectorGroup>
-      <StudioInspectorGroup title="Privacy">
-        {privacyEvents.length === 0 ? null : (
-          <Alert variant="destructive">
-            <AlertDescription>
-              {existing!.label} contains personal or sensitive data, but is still carried by{" "}
-              {privacyEvents.map((event) => event.label ?? event.key).join(", ")}. Publishing is
-              refused. Set Personal data to None to correct the event&apos;s carried fields, then
-              apply the privacy choice again.
-            </AlertDescription>
-          </Alert>
-        )}
-        <StudioField
-          label="Personal data"
-          hint="Sensitive values never enter search. Personal values follow the organisation's search policy."
-        >
-          {(control) => (
-            <StudioOptionControl
-              {...control}
-              value={form.personalData}
-              disabled={disabled}
-              options={[
-                { value: "none", label: "None" },
-                { value: "personal", label: "Personal" },
-                { value: "sensitive", label: "Sensitive" },
-              ]}
-              onChange={(next) => change({ personalData: next as FormState["personalData"] })}
-            />
-          )}
-        </StudioField>
-        <StudioField
-          label="Public display"
-          hint="Eligibility for public pages only. Record and field permissions still control access."
-        >
-          {(control) => (
-            <StudioOptionControl
-              {...control}
-              value={form.publicDisplay}
-              disabled={disabled}
-              options={[
-                { value: "refused", label: "Refused" },
-                { value: "allowed", label: "Allowed" },
-              ]}
-              onChange={(next) => change({ publicDisplay: next as FormState["publicDisplay"] })}
-            />
-          )}
-        </StudioField>
-      </StudioInspectorGroup>
-      <StudioInspectorGroup title="Access" defaultOpen={false}>
-        <p className="text-sm text-muted-foreground">Field permissions are managed in Access.</p>
-      </StudioInspectorGroup>
-      {adding && (
-        <Button type="submit" size="sm" disabled={disabled || form.label.trim() === ""}>
-          Add field
-        </Button>
-      )}
-      {existing === undefined ? null : (
-        <>
-          <StudioUsedIn
-            source={source}
-            target={{ kind: "field", moduleKey, recordKey, fieldKey: existing.key }}
-            name={existing.label}
-          />
-          <StudioInspectorGroup title="Details" defaultOpen={false}>
-            <dl className="space-y-2 font-mono text-xs">
-              <div>
-                <dt>Key</dt>
-                <dd>{existing.key}</dd>
-              </div>
-              <div>
-                <dt>Record type</dt>
-                <dd>{qualifiedRecord}</dd>
-              </div>
-            </dl>
-          </StudioInspectorGroup>
-        </>
+          <Button type="submit" size="sm" disabled={disabled || form.label.trim() === ""}>
+            Add field
+          </Button>
+        </StudioInspectorFooter>
       )}
       {confirmDialog}
     </form>

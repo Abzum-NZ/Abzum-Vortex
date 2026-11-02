@@ -118,11 +118,14 @@ export function StudioField({
         {optional && <span className="text-xs text-muted-foreground">Optional</span>}
         {hint !== undefined && <StudioHelp hint={hint} id={id + "-hint"} />}
       </div>
-      {children({
-        id,
-        ...(error === undefined ? {} : { "aria-invalid": true as const }),
-        ...(description === "" ? {} : { "aria-describedby": description }),
-      })}
+      {/* The field stretches its direct children; a switch or checkbox keeps its own size inside this box. */}
+      <div className="min-w-0">
+        {children({
+          id,
+          ...(error === undefined ? {} : { "aria-invalid": true as const }),
+          ...(description === "" ? {} : { "aria-describedby": description }),
+        })}
+      </div>
       {error !== undefined && <FieldError id={id + "-error"}>{error}</FieldError>}
     </Field>
   );
