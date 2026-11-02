@@ -533,10 +533,9 @@ const literalProblem = (
   other: ConditionOperand | undefined,
   operator: ConditionOperator,
   context: StudioConditionControlsContext,
+  strictFit: boolean,
 ): string | undefined => {
-  if (value === null || operator === "contains" || operator === "not_contains") return undefined;
-  const values =
-    (operator === "in" || operator === "not_in") && Array.isArray(value) ? value : [value];
+  if (value === null) return undefined;
   const permission =
     other === undefined || other.source === "value"
       ? undefined
@@ -544,6 +543,11 @@ const literalProblem = (
           (candidate) => permissionKey(candidate) === referenceKey(other),
         );
   const label = permission?.label ?? "the field";
+  const cannotHold = `${permission?.label ?? "This field"} can't hold this value`;
+  if (operator === "contains" || operator === "not_contains")
+    return strictFit ? undefined : cannotHold;
+  const values =
+    (operator === "in" || operator === "not_in") && Array.isArray(value) ? value : [value];
   const options = choiceOptionsFor(other, context);
   if (options !== undefined && options.length > 0) {
     if (values.length === 0) return "Choose at least one option";
@@ -554,6 +558,7 @@ const literalProblem = (
       ? undefined
       : `Choose one of the options of ${label}; this value is not one of them`;
   }
+  if (!strictFit) return cannotHold;
   if (
     permission === undefined ||
     !isFieldOperandPermission(permission) ||
@@ -582,7 +587,9 @@ export const operatorFitsOperands = (
   if (operatorAcceptsOperands(operator, left, right)) return true;
   if (right === undefined || (left.source === "value") === (right.source === "value")) return false;
   const blank = (info: OperandInfo): OperandInfo =>
-    info.source === "value" ? { ...info, literal: null, semanticType: undefined } : info;
+    info.source === "value"
+      ? { ...info, literal: Array.isArray(info.literal) ? [] : null, semanticType: undefined }
+      : info;
   return operatorAcceptsOperands(operator, blank(left), blank(right));
 };
 const knownReferenceType = (operand: OperandInfo): ConditionValueType | undefined =>
@@ -663,14 +670,14 @@ export function studioConditionOperatorsFor(
     )
       return false;
     if (option.arity === "unary") return true;
-    const rightCandidates =
-      right === undefined
-        ? candidateRightOperands(left, context)
-        : [right, ...candidateRightOperands(left, context)];
-    return rightCandidates.some((candidate) => {
-      const rightInfo = infoForOperand(candidate, context);
+    const rightInfo = right === undefined ? undefined : infoForOperand(right, context);
+    if (rightInfo !== undefined && operatorFitsOperands(option.operator, leftInfo, rightInfo))
+      return true;
+    return candidateRightOperands(left, context).some((candidate) => {
+      const candidateInfo = infoForOperand(candidate, context);
       return (
-        rightInfo !== undefined && operatorAcceptsOperands(option.operator, leftInfo, rightInfo)
+        candidateInfo !== undefined &&
+        operatorAcceptsOperands(option.operator, leftInfo, candidateInfo)
       );
     });
   });
@@ -873,27 +880,25 @@ export function validateStudioCondition(
           "This operator is not valid for the selected operand types",
         ),
       );
-    else if (!unaryOperators.has(condition.operator))
+    else if (!unaryOperators.has(condition.operator)) {
+      const fits =
+        left === undefined ||
+        right === undefined ||
+        operatorAcceptsOperands(condition.operator, left, right);
       for (const side of ["left", "right"] as const) {
         const operand = condition[side];
         if (operand?.source !== "value") continue;
-        const other = side === "left" ? condition.right : condition.left;
-        const fits =
-          left === undefined ||
-          right === undefined ||
-          operatorAcceptsOperands(condition.operator, left, right);
-        const reference =
-          other?.source === "value"
-            ? undefined
-            : context.allowedOperands.find(
-                (candidate) => permissionKey(candidate) === (other && referenceKey(other)),
-              );
-        const problem =
-          literalProblem(operand.value, other, condition.operator, context) ??
-          (fits ? undefined : `${reference?.label ?? "the field"} can't hold this value`);
+        const problem = literalProblem(
+          operand.value,
+          side === "left" ? condition.right : condition.left,
+          condition.operator,
+          context,
+          fits,
+        );
         if (problem !== undefined)
           issues.push(makeIssue("invalid_literal", [...path, side], problem));
       }
+    }
   };
   visit(parsed.data, []);
   return { condition: parsed.data, issues, isValid: issues.length === 0 };

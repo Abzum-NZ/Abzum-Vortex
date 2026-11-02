@@ -103,7 +103,7 @@
   "--vs-105074d4": "calc(var(--spacing, 0.25rem) * 4)",
   "--vs-59ee59f6": "calc(var(--spacing, 0.25rem) * 4)",
   "--vs-d9359126": "var(--primary)",
-  "--vs-6dcaceaa": "var(--tw-ring-inset,) 0 0 0 calc(4px + var(--tw-ring-offset-width)) var(--tw-ring-color, currentcolor)",
+  "--vs-6dcaceaa": "4px",
   "--vs-90ceddbf": "calc(var(--spacing, 0.25rem) * 9)",
   "--vs-2faabe43": "calc(var(--spacing, 0.25rem) * 2)",
   "--vs-6bcb0071": "var(--spacing, 0.25rem)",

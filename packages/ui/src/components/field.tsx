@@ -7,11 +7,19 @@ import { cn } from "../lib/utils";
 import { Label } from "./label";
 import { Separator } from "./separator";
 
+/**
+ * A field group directly inside a fieldset is not a size container: an inline-size container in a
+ * flex fieldset loses its block size when a child changes (Chrome), which hid the fields below an
+ * appearing error.
+ */
 function FieldSet({ className, ...props }: React.ComponentProps<"fieldset">) {
   return (
     <fieldset
       data-slot="field-set"
-      className={cn("cn-field-set flex flex-col", className)}
+      className={cn(
+        "cn-field-set flex flex-col *:data-[slot=field-group]:[container-type:normal]",
+        className,
+      )}
       {...props}
     />
   );
