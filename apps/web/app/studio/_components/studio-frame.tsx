@@ -299,10 +299,10 @@ function StudioRail<Key extends string>({
 
 /**
  * A select, menu or combobox opened from the panel portals its popup to the style root, outside the
- * rail: while it is open (its trigger says `aria-expanded`) the panel still owns the focus.
+ * rail: while it is open (its trigger says `aria-haspopup` and `aria-expanded`) the panel still owns the focus.
  */
 const panelPopupOpen = (): boolean =>
-  document.querySelector('#studio-rail-panel [aria-expanded="true"]') !== null;
+  document.querySelector('#studio-rail-panel [aria-haspopup][aria-expanded="true"]') !== null;
 
 /** Whether an event target is in the rail or in its panel (a portal whose host sits inside the rail). */
 const inRailOrPanel = (rail: HTMLElement | null, target: EventTarget | null): boolean =>
