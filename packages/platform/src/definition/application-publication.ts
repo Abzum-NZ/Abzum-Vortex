@@ -7,6 +7,7 @@ import {
   type ExactDefinitionDependency,
   type PrepareDefinitionPublicationCommand,
 } from "./definition-store-contracts";
+import { assertSystemApplicationSurfaceUnchanged } from "./system-application-surface";
 import { definitionContractChangedReason, nextDefinitionVersion } from "./version-impact";
 import type { VersionImpact, VersionImpactReason } from "./version-impact";
 import { definitionContractVersion } from "./application-contract-versions";
@@ -421,6 +422,7 @@ export const planApplicationPublication = async (
   roots: ReadonlyMap<string, OwnedModuleRoot>,
   releaseNote: string,
   pinned?: readonly ExactDefinitionDependency[],
+  systemApplication = false,
 ): Promise<ApplicationPublicationState> => {
   const latestVersion = latestReleaseVersion(candidate) ?? undefined;
   const provisional =
@@ -450,6 +452,20 @@ export const planApplicationPublication = async (
   assertReleasable(application, candidate.releaseHistory, catalogue.permissions);
   if (canonicalJson(reasons) !== canonicalJson(provisionalReasons))
     refuse("DEFINITION_VERSION_REFUSED");
+  // A platform system application's protected surface is the platform's: its Application and each
+  // Module released with it may not change it (architecture decision 11).
+  if (systemApplication) {
+    for (const module of modules)
+      if (module.released)
+        assertSystemApplicationSurfaceUnchanged(
+          module.candidate.releaseHistory.latestRelease?.content,
+          module.output.canonical.content,
+        );
+    assertSystemApplicationSurfaceUnchanged(
+      candidate.releaseHistory.latestRelease?.content,
+      application.output.canonical.content,
+    );
+  }
   const confirmation = definitionPublicationConfirmationSchema.parse({
     outcome: latestVersion === undefined ? "initial_release" : "release_required",
     rootId: candidate.draft.rootId,

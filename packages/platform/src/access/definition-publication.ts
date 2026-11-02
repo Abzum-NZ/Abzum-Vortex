@@ -81,20 +81,26 @@ class ExpectedBuilderPublicationRefusal extends Error {
 /** Existing roots never acquire a default classification or a System fallback. */
 const targetFacts: BuilderTargetFactsReader = async (transaction, _scope, rootId) => {
   if (rootId === undefined) throw new PublicationContextRefused("root_missing");
-  if ((await readBuilderApplicationOrigin(transaction, rootId)) !== "ordinary")
-    throw new PublicationContextRefused("application_root_not_ordinary");
-  return { isSystemApplication: false };
+  const origin = await readBuilderApplicationOrigin(transaction, rootId);
+  if (origin === undefined) throw new PublicationContextRefused("root_missing");
+  return { isSystemApplication: origin === "platform_system_application" };
 };
 
 /** Recheck exact decisions after compilation/append and all returned-row verification. */
 const assertLiveCompletion = async (
   permissions: PlatformPermissionSource,
   transaction: RequestDatabaseTransaction,
+  scope: SelectedOrganizationScope,
   context: LiveHumanContext,
+  rootId: string,
   publishedAt?: string,
 ): Promise<void> => {
+  const facts = await targetFacts(transaction, scope, rootId);
   let deadline = Date.parse(context.expiresAt);
-  for (const key of ["platform.organization.definition_releases.manage"]) {
+  for (const key of [
+    "platform.organization.definition_releases.manage",
+    ...(facts.isSystemApplication ? ["platform.organization.system_applications.manage"] : []),
+  ]) {
     const decision = await assertLivePermission(
       transaction,
       platformOrganizationPermissionDeclaration(permissions, key),
@@ -131,6 +137,12 @@ const classifyFailure = (error: unknown): Failure => {
     return {
       kind: "refused",
       reason: "identity_retired",
+      ...(error.sentence === undefined ? {} : { sentence: error.sentence }),
+    };
+  if (error instanceof DefinitionError && error.code === "DEFINITION_SYSTEM_SURFACE_CHANGED")
+    return {
+      kind: "refused",
+      reason: "system_surface_changed",
       ...(error.sentence === undefined ? {} : { sentence: error.sentence }),
     };
   if (error instanceof DefinitionError && error.code === "DEFINITION_NO_CHANGE")
@@ -368,7 +380,9 @@ export const createHumanDefinitionPublisher = (
         await assertLiveCompletion(
           dependencies.catalogue.permissions,
           transaction,
+          scope,
           completion,
+          command.rootId,
           value.kind === "published" ? value.publication.publishedAt : undefined,
         );
         return value;

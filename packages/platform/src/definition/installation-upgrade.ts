@@ -33,11 +33,11 @@ import {
   InstallationProblem,
   installationOperation,
   installationProblem,
-  installationTargetFacts,
+  installationUpgradeTargetFacts,
   readInstallationAuthorityDeadlines,
   readInstallationDatabaseTime,
   readInstallationHumanContext,
-  readInstallationOrdinaryRoot,
+  readInstallationUpgradeRoot,
   requireInstallationAuthority,
   type InstallationHumanContext,
   type InstallationProblemShape,
@@ -124,7 +124,7 @@ const readCurrentInstallation = async (
   transaction: RequestDatabaseTransaction,
   selector: UpgradeSelector,
 ): Promise<Pick<UpgradeState, "active" | "bindings">> => {
-  await readInstallationOrdinaryRoot(transaction, selector.rootId);
+  await readInstallationUpgradeRoot(transaction, selector.rootId);
   let active: ActiveApplicationInstallation;
   try {
     active = await readCurrentActiveApplicationInstallation(transaction);
@@ -611,7 +611,7 @@ const coordinatorFor = (
               organizationId: selector.organizationId,
             },
           );
-          await readInstallationOrdinaryRoot(transaction, selector.rootId);
+          await readInstallationUpgradeRoot(transaction, selector.rootId);
           await currentInstallationStateForCoordinator(transaction, selector, baseline, context);
           if (beforeRegistration !== undefined) await beforeRegistration(transaction, scope);
           // The receipt completes before the activation, which changes the access version the
@@ -638,7 +638,7 @@ const coordinatorFor = (
       createBuilderAuthority({
         transaction,
         scope,
-        targetFacts: installationTargetFacts,
+        targetFacts: installationUpgradeTargetFacts,
         permissions: environment.permissions,
       }),
     containsCustomComponents: environment.containsCustomComponents,

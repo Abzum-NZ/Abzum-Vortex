@@ -25,6 +25,9 @@ declare
   original_context jsonb;
   locked_access_version bigint;
   permission_key text;
+  permission_keys text[];
+  system_publication boolean := false;
+  surface_violation text;
   permission_id uuid;
   permission_decision record;
   checked_at timestamptz;
@@ -96,15 +99,33 @@ begin
     else (checked_context ->> 'systemActorId')::uuid end;
 
   if human_publication then
-    foreach permission_key in array array[
+    -- Publishing a platform system Application, or a Module it owns, needs
+    -- platform.organization.system_applications.manage as well (architecture decision 11).
+    select exists (
+      select 1
+      from vortex_definition.roots as publication_root
+      left join vortex_definition.roots as owner_root
+        on owner_root.root_id = publication_root.owner_application_root_id
+        and owner_root.organization_id = publication_root.organization_id
+        and owner_root.kind = 'application'
+      where publication_root.root_id = p_root_id
+        and publication_root.organization_id = context_organization_id
+        and ((publication_root.kind = 'application'
+            and publication_root.application_origin_kind = 'platform_system_application')
+          or (publication_root.kind = 'module'
+            and owner_root.application_origin_kind = 'platform_system_application'))
+    ) into system_publication;
+    permission_keys := array[
       'platform.organization.definition_drafts.manage',
       'platform.organization.definition_releases.manage'
-    ] loop
-      permission_id := case permission_key
-        when 'platform.organization.definition_drafts.manage'
-          then vortex_access.platform_permission_id('platform.organization.definition_drafts.manage')
-        else vortex_access.platform_permission_id('platform.organization.definition_releases.manage')
-      end;
+    ] || case when system_publication
+      then array['platform.organization.system_applications.manage']
+      else array[]::text[] end;
+  end if;
+
+  if human_publication then
+    foreach permission_key in array permission_keys loop
+      permission_id := vortex_access.platform_permission_id(permission_key);
       select evaluated.* into strict permission_decision
       from vortex_access.evaluate_organization_permission_eligibility(
         pg_catalog.jsonb_build_object(
@@ -231,20 +252,36 @@ begin
   end if;
 
   -- A Module release is internal to its owning Application's publication: a person publishes
-  -- only an ordinary Application, and the Modules an ordinary Application owns.
+  -- only an Application, ordinary or platform system, and the Modules an Application owns.
   if human_publication and (root_row.kind not in ('application', 'module')
     or (root_row.kind = 'application'
-      and root_row.application_origin_kind is distinct from 'ordinary')
+      and root_row.application_origin_kind is null)
     or (root_row.kind = 'module' and not exists (
       select 1
       from vortex_definition.roots as owner_root
       where owner_root.root_id = root_row.owner_application_root_id
         and owner_root.organization_id = root_row.organization_id
         and owner_root.kind = 'application'
-        and owner_root.application_origin_kind = 'ordinary'
+        and owner_root.application_origin_kind is not null
     ))) then
     raise exception using errcode = '42501',
       message = 'Definition publication authority is unavailable';
+  end if;
+
+  -- A platform system Application's protected-operation bindings, system projections,
+  -- permissions and roles stay the platform's: the release may not change them, so the
+  -- organisation's steward always keeps a working way to manage access.
+  if human_publication and system_publication then
+    select vortex_definition.system_application_surface_violation(
+      (select previous_release.compilation_output #> '{canonical,content}'
+        from vortex_definition.releases as previous_release
+        where previous_release.root_id = p_root_id
+          and previous_release.release_revision = root_row.current_release_revision),
+      compilation_output_value #> '{canonical,content}'
+    ) into surface_violation;
+    if surface_violation is not null then
+      raise exception using errcode = '23514', message = surface_violation;
+    end if;
   end if;
 
   if compilation_output_value ->> 'kind' is distinct from root_row.kind
@@ -1111,15 +1148,8 @@ begin
   end if;
 
   if human_publication then
-    foreach permission_key in array array[
-      'platform.organization.definition_drafts.manage',
-      'platform.organization.definition_releases.manage'
-    ] loop
-      permission_id := case permission_key
-        when 'platform.organization.definition_drafts.manage'
-          then vortex_access.platform_permission_id('platform.organization.definition_drafts.manage')
-        else vortex_access.platform_permission_id('platform.organization.definition_releases.manage')
-      end;
+    foreach permission_key in array permission_keys loop
+      permission_id := vortex_access.platform_permission_id(permission_key);
       select evaluated.* into strict permission_decision
       from vortex_access.evaluate_organization_permission_eligibility(
         pg_catalog.jsonb_build_object(

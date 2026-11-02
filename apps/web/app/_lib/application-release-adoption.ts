@@ -137,6 +137,7 @@ export type ApplicationReleaseStanding =
       kind: "system";
       version: string;
       installedVersion: string;
+      appStoreHref: string;
       openHref?: string;
     }>
   | Readonly<{
@@ -285,6 +286,12 @@ export const readApplicationReleaseStanding = async (
       kind: "system",
       version,
       installedVersion,
+      appStoreHref: appStoreApplicationHref(
+        scope.tenantShortName,
+        scope.organizationShortName,
+        appStore.value,
+        scope.applicationRootId,
+      ),
       ...(openHref === undefined ? {} : { openHref }),
     };
   }

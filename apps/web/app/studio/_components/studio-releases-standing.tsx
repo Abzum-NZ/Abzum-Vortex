@@ -14,9 +14,6 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@vortex/ui/components/t
 import { NavigationLink } from "@vortex/ui/routing";
 import type { ApplicationReleaseStanding } from "../../_lib/application-release-adoption";
 
-/** The one wording of how a system application advances. */
-const systemRefreshMessage = "System applications move forward through the platform refresh.";
-
 /**
  * Where the application stands in the builder's organisation, in plain words. Installing and
  * upgrading are the top bar's controls (shown only to people who may use them), so this says what
@@ -32,11 +29,17 @@ const standingWords = (
 }> | null => {
   switch (standing.kind) {
     case "system":
-      return {
-        icon: "shield-check",
-        headline: "System application",
-        text: `Latest published version: ${standing.version}. Installed version: ${standing.installedVersion}. ${systemRefreshMessage}`,
-      };
+      return standing.installedVersion === standing.version
+        ? {
+            icon: "shield-check",
+            headline: "System application",
+            text: `Version ${standing.version} is live in your organisation.`,
+          }
+        : {
+            icon: "clock",
+            headline: "A newer version is waiting",
+            text: `Your organisation runs version ${standing.installedVersion}; version ${standing.version} is waiting. Upgrade it in the App Store.`,
+          };
     case "live":
       return {
         icon: "check",

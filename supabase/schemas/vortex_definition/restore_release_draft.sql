@@ -77,7 +77,6 @@ begin
       and root.kind = 'application'
     for update;
     if not found
-      or root_row.application_origin_kind is distinct from 'ordinary'
       or root_row.current_release_revision is null
       or p_target_release_revision > root_row.current_release_revision then
       return null;

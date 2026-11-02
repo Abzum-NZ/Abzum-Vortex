@@ -157,6 +157,32 @@ export const readInstallationOrdinaryRoot = async (
   return { isSystemApplication: false };
 };
 
+/**
+ * The root of an upgrade: an ordinary application, or a platform system application, whose
+ * upgrade needs only the installation permissions (an organisation's steward holds no builder
+ * permission by default). A system application is never installed, removed or purged by a person.
+ */
+export const readInstallationUpgradeRoot = async (
+  transaction: RequestDatabaseTransaction,
+  rootId: string,
+): Promise<Readonly<{ isSystemApplication: boolean }>> => {
+  const origin = await readBuilderApplicationOrigin(transaction, rootId);
+  if (origin === undefined)
+    installationProblem("application_root_unavailable", "refused", "unsupported_root");
+  return { isSystemApplication: origin === "platform_system_application" };
+};
+
+/** The target facts of the upgrade flow. */
+export const installationUpgradeTargetFacts = async (
+  transaction: RequestDatabaseTransaction,
+  _scope: SelectedOrganizationScope,
+  rootId: string | undefined,
+) => {
+  if (rootId === undefined)
+    installationProblem("application_root_missing", "refused", "unsupported_root");
+  return readInstallationUpgradeRoot(transaction, rootId);
+};
+
 /** The target facts of the Studio installation flows: only ordinary applications are installable. */
 export const installationTargetFacts = async (
   transaction: RequestDatabaseTransaction,

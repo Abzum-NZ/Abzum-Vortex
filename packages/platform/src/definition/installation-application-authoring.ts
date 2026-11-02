@@ -108,8 +108,6 @@ const publicationProblem = (
   if (failure.kind === "no_change") return known("no_change", "application_publication_no_change");
   if (failure.kind === "dependency_unavailable")
     return known("blocked", "application_publication_dependency");
-  if (failure.reason === "application_root_not_ordinary")
-    return known("blocked", "application_publication_platform");
   if (failure.reason === "release_permission_missing")
     return known("blocked", "application_publication_permission");
   if (failure.sentence !== undefined)

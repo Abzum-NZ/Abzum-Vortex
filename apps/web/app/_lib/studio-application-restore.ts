@@ -32,21 +32,16 @@ type ApplicationDraft = Extract<StoredDefinitionDraft, { kind: "application" }>;
 type FailureKind = StudioApplicationRestoreFailure["kind"];
 
 class RestoreRefused extends Error {}
-/** Restoring a platform application's version from Studio is not available yet. */
-class RestorePlatformApplication extends Error {}
 class RestoreUnavailable extends Error {}
 
 const targetFacts: BuilderTargetFactsReader = async (transaction, _scope, rootId) => {
   if (rootId === undefined) throw new RestoreRefused();
-  if ((await readBuilderApplicationOrigin(transaction, rootId)) !== "ordinary") {
-    console.info("[studio] restore refused reason=application_root_not_ordinary");
-    throw new RestorePlatformApplication();
-  }
-  return { isSystemApplication: false };
+  const origin = await readBuilderApplicationOrigin(transaction, rootId);
+  if (origin === undefined) throw new RestoreRefused();
+  return { isSystemApplication: origin === "platform_system_application" };
 };
 
 const failureKind = (error: unknown): FailureKind => {
-  if (error instanceof RestorePlatformApplication) return "platform_application";
   const kind = classifyDatabaseError(error);
   if (error instanceof DefinitionError) {
     if (error.code === "DEFINITION_DRAFT_STALE_OR_MISSING") return "conflict";
@@ -125,11 +120,8 @@ const failedCommand = (
   invocationStarted: boolean,
 ): StudioApplicationRestoreCommandResult => ({
   kind,
-  // A version of an earlier contract, and a platform application, are refused before any write.
-  stateMayHaveChanged:
-    invocationStarted && kind !== "superseded" && kind !== "platform_application"
-      ? "unknown"
-      : false,
+  // A version of an earlier contract is refused before any write.
+  stateMayHaveChanged: invocationStarted && kind !== "superseded" ? "unknown" : false,
 });
 
 /** Runs one explicitly confirmed HUMAN restore and reports success only after the request commits. */
