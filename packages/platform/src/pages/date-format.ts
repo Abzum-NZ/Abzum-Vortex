@@ -218,7 +218,9 @@ export function formatIsoRelative(
 ): string | undefined {
   const timestamp = Date.parse(iso);
   if (Number.isNaN(timestamp) || isCalendarDate(iso)) return undefined;
-  const seconds = Math.round((timestamp - now) / 1000);
+  // Under a minute either way reads as "now": the viewer's clock and the stored time are never that exact.
+  const gap = Math.round((timestamp - now) / 1000);
+  const seconds = Math.abs(gap) < 60 ? 0 : gap;
   const [unit, size] =
     RELATIVE_UNITS.find(([, length]) => Math.abs(seconds) >= length) ?? RELATIVE_UNITS[5]!;
   let formatter: Intl.RelativeTimeFormat;

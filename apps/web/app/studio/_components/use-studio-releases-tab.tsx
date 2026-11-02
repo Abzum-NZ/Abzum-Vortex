@@ -210,9 +210,11 @@ export function useStudioReleasesTab({
     if (next.kind !== "available") console.error(`[studio] page adoption comparison ${next.kind}`);
     if (latest.current.isActive()) setAdoption(next);
   }, [organizationId, rootId]);
+  // The comparison is of the saved draft, so a saved edit reads it again.
+  const savedRevision = draft.saved.draftRevision;
   useEffect(() => {
     if (!hidden) void readAdoption();
-  }, [hidden, readAdoption]);
+  }, [hidden, readAdoption, savedRevision]);
 
   /** The saved draft, when it is exactly what the workspace shows: nothing waiting to be saved and nothing held. */
   const readSnapshot = useCallback(() => {

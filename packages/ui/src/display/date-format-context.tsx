@@ -118,8 +118,7 @@ export function FormattedTime({
   const options = useDateFormatOptions();
   const minute = useSyncExternalStore(subscribeToMinute, readMinute, readServerMinute);
   const exact = formatIsoDate(iso, options);
-  const text =
-    relative && minute !== 0 ? (formatIsoRelative(iso, options, minute) ?? exact) : exact;
+  const text = relative && minute !== 0 ? (formatIsoRelative(iso, options) ?? exact) : exact;
   useInvalidDateLog(text === undefined);
   if (text === undefined)
     return (
