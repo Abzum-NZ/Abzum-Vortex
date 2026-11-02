@@ -223,6 +223,7 @@ switch (command) {
       fail(`Lane ${lane} has an invalid query continuation key.`);
     process.stdout.write(
       [
+        `VORTEX_SESSION_COOKIE_NAME=vortex-lane-${lane}-session`,
         `VORTEX_SUPABASE_URL=${status.API_URL}`,
         `VORTEX_SUPABASE_PUBLISHABLE_KEY=${status.PUBLISHABLE_KEY}`,
         `VORTEX_RUNTIME_DATABASE_URL=${runtimeDatabaseUrl(status)}`,

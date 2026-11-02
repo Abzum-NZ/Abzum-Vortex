@@ -78,7 +78,7 @@ sign-ups; never point it at a hosted database.
    pnpm dev
    ```
 
-   Open `http://127.0.0.1:3000` (or the origin in `VORTEX_SITE_URL`) and sign in with
+   Open `http://localhost:3000` (or the origin in `VORTEX_SITE_URL`) and sign in with
    `VORTEX_DEMO_OWNER_EMAIL` and `VORTEX_DEMO_OWNER_PASSWORD`. The Landing Zone lists the installed
    applications; further applications are built in App Studio and installed from the App Store.
 

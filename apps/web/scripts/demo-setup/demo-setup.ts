@@ -48,12 +48,12 @@ const validateDemoEnvironment = (): void => {
   const supabase = new URL(process.env.VORTEX_SUPABASE_URL!);
   if (
     site.protocol !== "http:" ||
-    site.hostname !== "127.0.0.1" ||
+    site.hostname !== "localhost" ||
     site.pathname !== "/" ||
     site.search.length > 0 ||
     site.hash.length > 0
   )
-    throw new Error("VORTEX_SITE_URL must use the canonical local host, 127.0.0.1.");
+    throw new Error("VORTEX_SITE_URL must use the canonical local host, localhost.");
   if (!isLocalSupabaseApiUrl(supabase))
     throw new Error(
       "VORTEX_SUPABASE_URL must be a loopback HTTP origin (the main stack or a database lane).",
