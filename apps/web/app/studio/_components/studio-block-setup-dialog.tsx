@@ -191,7 +191,15 @@ export function StudioBlockSetupDialog({
         onClose();
       }}
     >
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent
+        className="sm:max-w-lg"
+        // Focus starts on the first setting, not on the first label's "More information" button.
+        initialFocus={() =>
+          document.querySelector<HTMLElement>(
+            '[data-slot="dialog-content"] :is(input, textarea, select, [role="combobox"], [role="switch"]):not([type="hidden"])',
+          ) ?? true
+        }
+      >
         <DialogHeader>
           <DialogTitle>Set up {choice.name}</DialogTitle>
           <DialogDescription>

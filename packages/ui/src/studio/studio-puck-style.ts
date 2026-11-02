@@ -39,6 +39,12 @@ export const studioPuckStyle = {
   "--puck-color-interactive-soft-hover": "color-mix(in oklab, var(--primary) 10%, transparent)",
   "--puck-color-selection-bg": "color-mix(in oklab, var(--primary) 10%, transparent)",
   "--puck-font-family": "var(--font-sans)",
+  // The drawer's category headers (Puck's own buttons) are Studio headings: its size, colours and gap.
+  "--puck-drawer-category-font-size": "var(--text-sm, 0.875rem)",
+  "--puck-drawer-category-color-text": "var(--muted-foreground)",
+  "--puck-drawer-category-color-bg-hover": "var(--accent)",
+  "--puck-drawer-category-color-text-hover": "var(--accent-foreground)",
+  "--puck-drawer-category-space": "calc(var(--spacing, 0.25rem) * 2)",
 } as CSSProperties;
 
 /**

@@ -322,10 +322,23 @@ export const LAYOUT_ONLY_STYLES_CSS = `
 [data-vortex-studio-canvas] .vortex-puck-slot:empty {
   min-height: 4rem;
 }
+/* A screen the canvas shows view-only takes no drop, so an empty slot (a heading's or a link
+   tiles block's actions) draws no empty drop box. */
+[data-vortex-studio-canvas][data-vortex-view-only] .vortex-puck-slot:empty {
+  display: none;
+}
 [data-vortex-studio-canvas]
   :is([data-vortex-record-actions], [data-vortex-heading-actions])
   > .vortex-puck-slot:empty {
   min-height: 2.25rem;
+}
+/* An empty action row is a place to drop into, not content: Puck draws its box while a block is being
+   dragged (and for the area under the pointer), so every heading does not carry a dashed box. */
+[data-puck-entry]:not([data-puck-dragging])
+  :is([data-vortex-record-actions], [data-vortex-heading-actions])
+  > .vortex-puck-slot:empty:not(:hover) {
+  background: none;
+  outline: none;
 }
 [data-vortex-record-actions] > button {
   order: 1;
