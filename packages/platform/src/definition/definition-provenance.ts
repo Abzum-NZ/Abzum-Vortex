@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { definitionLimits } from "./definition-limits";
 import { namespacedKeySchema } from "../catalogue/identifiers";
 
 /**
@@ -8,7 +9,7 @@ import { namespacedKeySchema } from "../catalogue/identifiers";
  */
 const definitionPathSchema = z
   .array(z.union([z.string(), z.number().int().nonnegative()]))
-  .max(100);
+  .max(definitionLimits.provenancePathSegments);
 export const definitionProvenanceEntrySchema = z
   .object({
     canonicalPath: definitionPathSchema,

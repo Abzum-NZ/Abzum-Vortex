@@ -1,10 +1,15 @@
 "use client";
+import { StudioReasoned, studioLimitReason } from "@vortex/ui/studio";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   applicationUses,
+  definitionLimitNear,
+  definitionLimitUsage,
+  definitionLimits,
   type ApplicationSourceDocument,
   describeFailure,
 } from "@vortex/platform/schema";
+import { ToggleGroup, ToggleGroupItem } from "@vortex/ui/components/toggle-group";
 import { Icon } from "@vortex/ui";
 import {
   Empty,
@@ -537,6 +542,8 @@ function PreviewResults({
 export function StudioDataCentre({
   section,
   onSectionChange,
+  sortableOnly,
+  onSortableOnlyChange,
   organizationId,
   rootId,
   modules,
@@ -556,6 +563,8 @@ export function StudioDataCentre({
 }: Readonly<{
   section: string;
   onSectionChange: (section: string) => void;
+  sortableOnly: boolean;
+  onSortableOnlyChange: (on: boolean) => void;
   organizationId: string;
   rootId: string;
   modules: readonly StudioDataModule[];
@@ -632,6 +641,9 @@ export function StudioDataCentre({
     return (
       <StudioDataEmpty title="Item removed" description="Choose another record type in Data." />
     );
+  const sortableFields = record.fields.filter((field) => field.sortable);
+  const sortableCount = sortableFields.length;
+  const fieldLimitReason = studioLimitReason("fieldsPerRecordType", record.fields.length);
   const results = unsaved ? (
     <Empty className="border-0">
       <EmptyHeader>
@@ -695,19 +707,39 @@ export function StudioDataCentre({
           <TabsContent value="fields" className="space-y-6">
             <div className="flex items-center justify-between gap-3">
               <h3 className="text-base font-semibold">
-                Fields <Badge variant="secondary">{record.fields.length}</Badge>
+                Fields{" "}
+                <span className="text-sm font-normal text-muted-foreground">
+                  {definitionLimitNear("fieldsPerRecordType", record.fields.length)
+                    ? definitionLimitUsage("fieldsPerRecordType", record.fields.length)
+                    : null}
+                </span>
               </h3>
-              {onAddField === undefined ? null : (
-                <Button type="button" onClick={onAddField}>
-                  <Icon name="plus" />
-                  Field
-                </Button>
-              )}
+              <div className="flex items-center gap-2">
+                <ToggleGroup
+                  aria-label="Which fields to list"
+                  variant="outline"
+                  value={[sortableOnly ? "sortable" : "all"]}
+                  onValueChange={(next) => onSortableOnlyChange(next[0] === "sortable")}
+                >
+                  <ToggleGroupItem value="all">All</ToggleGroupItem>
+                  <ToggleGroupItem value="sortable">
+                    Sortable {sortableCount} of {definitionLimits.sortableFieldsPerRecordType}
+                  </ToggleGroupItem>
+                </ToggleGroup>
+                {onAddField === undefined ? null : (
+                  <StudioReasoned reason={fieldLimitReason}>
+                    <Button type="button" onClick={onAddField}>
+                      <Icon name="plus" />
+                      Field
+                    </Button>
+                  </StudioReasoned>
+                )}
+              </div>
             </div>
             <SchemaGrid
               source={source}
               moduleKey={module.key}
-              record={record}
+              record={sortableOnly ? { ...record, fields: sortableFields } : record}
               selectedField={selection.kind === "field" ? selection.fieldKey : undefined}
               onSelect={onSelect}
             />

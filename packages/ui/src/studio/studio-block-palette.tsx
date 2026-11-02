@@ -6,9 +6,11 @@ import { Drawer } from "@puckeditor/core";
 import { useId, useMemo, useState } from "react";
 import { studioPuckStyle } from "./studio-puck-style";
 import { Button } from "../components/button";
-import { Tooltip, TooltipContent, TooltipTrigger } from "../components/tooltip";
 import { Input } from "../components/input";
 import { Label } from "../components/label";
+import { Alert, AlertDescription } from "../components/alert";
+import { definitionLimitMessage, definitionLimitReached } from "@vortex/platform/schema";
+import { StudioLimitNote, StudioReasoned } from "./studio-limit";
 import { StudioOptionControl } from "./studio-setting-basic-controls";
 import type {
   StudioCompositionAddTarget,
@@ -54,8 +56,19 @@ export function StudioBlockPalette({
   const [search, setSearch] = useState("");
   const [targetId, setTargetId] = useState("");
   const searchId = useId();
+  const limitId = useId();
   const targetSelectId = useId();
   const target = targets.find((candidate) => candidate.id === targetId) ?? targets[0];
+  // The place is full when the application holds every block it may, or the place nests as deep as
+  // a block may: said once here, not on every row.
+  const limitReason =
+    target === undefined
+      ? undefined
+      : definitionLimitReached("compositionPlacements", target.placed)
+        ? definitionLimitMessage("compositionPlacements")
+        : definitionLimitReached("compositionDepth", target.depth)
+          ? definitionLimitMessage("compositionDepth")
+          : undefined;
   const groups = useMemo(
     () => groupStudioPaletteChoices(target?.choices ?? [], search),
     [target, search],
@@ -94,7 +107,10 @@ export function StudioBlockPalette({
           disabled={false}
           options={targets.map((candidate) => ({
             value: candidate.id,
-            label: `${"  ".repeat(candidate.depth)}${candidate.label}`,
+            label:
+              candidate.depth === 0
+                ? candidate.label
+                : `${candidate.label} (level ${candidate.depth + 1})`,
           }))}
           onChange={(value) => setTargetId(value)}
         />
@@ -113,6 +129,20 @@ export function StudioBlockPalette({
       <p role="status" aria-live="polite" className="sr-only">
         {message}
       </p>
+      {limitReason === undefined ? (
+        <>
+          <StudioLimitNote
+            limit="compositionPlacements"
+            used={target.placed}
+            label="Blocks in the application"
+          />
+          <StudioLimitNote limit="compositionDepth" used={target.depth} label="Levels above here" />
+        </>
+      ) : (
+        <Alert role="status" id={limitId}>
+          <AlertDescription>{limitReason}</AlertDescription>
+        </Alert>
+      )}
       {groups.length === 0 ? (
         <Empty role="status">
           <EmptyHeader>
@@ -155,32 +185,30 @@ export function StudioBlockPalette({
                               <div className="min-w-0">
                                 <span className="block text-sm font-medium">{choice.name}</span>
                                 <span className="line-clamp-1 text-sm text-muted-foreground group-hover:text-accent-foreground group-focus-within:text-accent-foreground">
-                                  {choice.unavailable ?? choice.description}
+                                  {choice.unavailable === limitReason
+                                    ? choice.description
+                                    : (choice.unavailable ?? choice.description)}
                                 </span>
                               </div>
                             </div>
                           )}
                         </Drawer.Item>
-                        <Tooltip>
-                          <TooltipTrigger
-                            render={
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon-sm"
-                                className="ml-auto shrink-0"
-                                disabled={!editable || !available}
-                                aria-label={`Add ${choice.name} to ${target.label}`}
-                                onClick={() => add(choice)}
-                              />
-                            }
+                        <StudioReasoned
+                          reason={choice.unavailable}
+                          describedBy={choice.unavailable === limitReason ? limitId : undefined}
+                        >
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon-sm"
+                            className="ml-auto shrink-0"
+                            disabled={!editable}
+                            aria-label={`Add ${choice.name} to ${target.label}`}
+                            onClick={() => add(choice)}
                           >
                             <Icon name="plus" />
-                          </TooltipTrigger>
-                          <TooltipContent>
-                            {choice.unavailable ?? `Add ${choice.name}`}
-                          </TooltipContent>
-                        </Tooltip>
+                          </Button>
+                        </StudioReasoned>
                       </div>
                     );
                   })}

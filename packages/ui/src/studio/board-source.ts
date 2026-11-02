@@ -1,7 +1,6 @@
 import {
   queryTotalLabel,
-  MODULE_QUERY_MAXIMUM_TOTALS,
-  MODULE_MAXIMUM_QUERIES,
+  definitionLimits,
   queryNumericTotalFieldTypes,
   readRecordsTableFeatures,
   type ApplicationSourceDocument,
@@ -190,7 +189,7 @@ export const studioBoardTotalChoices = (
     ...facts.aggregates.map((aggregate) => aggregate.alias),
   ]);
   const sums =
-    facts.aggregates.length >= MODULE_QUERY_MAXIMUM_TOTALS
+    facts.aggregates.length >= definitionLimits.queryTotals
       ? []
       : facts.fields.flatMap((field) => {
           const alias = boardSumAlias(keyOf(field.field));
@@ -305,7 +304,7 @@ export const createStudioBoardQuery = (
             ),
         );
   if (existing !== undefined) return { query: `${module.key}:${existing.key}` };
-  if (module.queries.length >= MODULE_MAXIMUM_QUERIES)
+  if (module.queries.length >= definitionLimits.queriesPerModule)
     return { problem: studioBoardQueryUnavailable };
   const key = uniqueKey(
     `${record.key}_by_${stageKey}`,

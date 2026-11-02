@@ -4,6 +4,7 @@ import type { StudioSemanticOutline, StudioSemanticOutlineNode } from "@vortex/u
 import { StudioPanelShell, StudioSearchBox, StudioSection } from "./studio-frame";
 import { StudioNavEmpty } from "./studio-nav-tree";
 import { StudioOutline } from "./studio-outline";
+import { StudioLimitRow } from "./studio-limit";
 
 /**
  * The rail panels drawn from the one semantic outline of the draft: Structure (the application, its
@@ -44,6 +45,13 @@ const filterNodes = (
     return children.length === 0 ? [] : [{ ...node, children }];
   });
 };
+
+/** How many blocks the nodes hold, against the composition limit. */
+const countBlocks = (nodes: readonly StudioSemanticOutlineNode[]): number =>
+  nodes.reduce(
+    (total, node) => total + (node.kind === "placement" ? 1 : 0) + countBlocks(node.children),
+    0,
+  );
 
 const withoutChildren = (node: StudioSemanticOutlineNode): StudioSemanticOutlineNode => ({
   ...node,
@@ -160,14 +168,19 @@ export function StudioBlockOutlinePanel({
   disabled,
   hidden,
   ownerKey,
+  levels,
 }: PanelProps &
   Readonly<{
+    /** The levels of nested blocks the open page uses, its layout's included. */
+    levels: number | undefined;
     /** The page or layout the canvas shows, whose blocks are listed. */
     ownerKey: string | undefined;
   }>) {
   const [query, setQuery] = useState("");
   const owner = ownerKey === undefined ? undefined : findNode(outline, ownerKey);
   const blocks = useMemo(() => filterNodes(owner?.children ?? [], query), [owner, query]);
+  // Blocks are counted across the application.
+  const placed = useMemo(() => countBlocks(outline.children), [outline]);
   return (
     <StudioPanelShell
       title="Outline"
@@ -200,6 +213,16 @@ export function StudioBlockOutlinePanel({
               empty={query.length > 0 ? "No block matches." : "This has no blocks yet."}
             />
           </StudioSection>
+          <section className="space-y-1 px-1 pt-2" aria-label="Application limits">
+            <StudioLimitRow
+              label="Blocks in the application"
+              limit="compositionPlacements"
+              used={placed}
+            />
+            {levels === undefined ? null : (
+              <StudioLimitRow label="Levels on this page" limit="compositionDepth" used={levels} />
+            )}
+          </section>
         </>
       )}
     </StudioPanelShell>

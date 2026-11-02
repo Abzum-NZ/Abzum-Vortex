@@ -34,6 +34,8 @@ import {
   peopleDirectory,
   plainSourceSettingValue,
   qualifiedLinkTarget,
+  definitionLimitMessage,
+  definitionLimitReached,
   readModuleFieldDefault,
   readModuleFieldSettings,
   settledCalculation,
@@ -137,6 +139,7 @@ export function ModuleFieldsEditor({
   onAdded,
   onRemoved,
   onCancel,
+  onShowSortable,
 }: Readonly<{
   source: Source;
   moduleKey: string;
@@ -155,6 +158,8 @@ export function ModuleFieldsEditor({
   onRemoved?: () => void;
   /** Called when the builder gives up adding the field. */
   onCancel?: () => void;
+  /** Lists the record type's sortable fields, from the sorting limit's "Show me". */
+  onShowSortable?: () => void;
 }>) {
   const [confirm, confirmDialog] = useConfirm();
   const placeOpener = useStudioPlaceOpener();
@@ -852,6 +857,29 @@ export function ModuleFieldsEditor({
     : linkTypes.has(form.type) && form.cardinality === "one_to_one"
       ? "A one-to-one link is always unique"
       : undefined;
+  const sortableInUse = record.fields.filter(
+    (item) => item.sortable && item.key !== existing?.key,
+  ).length;
+  const sortableUsed = sortableInUse + (form.sortable ? 1 : 0);
+  const filterableInUse = record.fields.filter(
+    (item) => item.filterable && item.key !== existing?.key,
+  ).length;
+  const searchableInUse = record.fields.filter(
+    (item) => item.search_priority !== undefined && item.key !== existing?.key,
+  ).length;
+  const filterableLimitReason =
+    !form.filterable && definitionLimitReached("filterableFieldsPerRecordType", filterableInUse)
+      ? definitionLimitMessage("filterableFieldsPerRecordType")
+      : undefined;
+  const searchableLimitReason =
+    form.searchPriority === null &&
+    definitionLimitReached("searchableFieldsPerRecordType", searchableInUse)
+      ? definitionLimitMessage("searchableFieldsPerRecordType")
+      : undefined;
+  const sortableReason =
+    !form.sortable && definitionLimitReached("sortableFieldsPerRecordType", sortableInUse)
+      ? definitionLimitMessage("sortableFieldsPerRecordType")
+      : undefined;
   const privacyEvents =
     existing === undefined || form.personalData === "none"
       ? []
@@ -1066,9 +1094,17 @@ export function ModuleFieldsEditor({
             unique: { checked: form.unique, reason: uniqueReason },
             filterable: {
               checked: form.filterable,
-              reason: isTitleField ? "The title is always filterable" : undefined,
+              reason: isTitleField ? "The title is always filterable" : filterableLimitReason,
+              limit: "filterableFieldsPerRecordType",
+              used: filterableInUse + (form.filterable ? 1 : 0),
             },
-            sortable: { checked: form.sortable, reason: undefined },
+            sortable: {
+              checked: form.sortable,
+              reason: sortableReason,
+              limit: "sortableFieldsPerRecordType",
+              used: sortableUsed,
+              showMe: sortableReason === undefined ? undefined : onShowSortable,
+            },
           }}
           onFlag={(key, checked) => change({ [key]: checked })}
           offered={offered}
@@ -1085,6 +1121,7 @@ export function ModuleFieldsEditor({
         <FieldSearchSection
           value={form.searchPriority}
           disabled={disabled}
+          limitReason={searchableLimitReason}
           onChange={(searchPriority) => change({ searchPriority })}
         />
         <FieldPrivacySection

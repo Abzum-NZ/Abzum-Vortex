@@ -144,6 +144,35 @@ export const regions = (source: ApplicationSourceDocument): Region[] => {
   return result;
 };
 
+/**
+ * How many blocks sit above a region's first level: the blocks of its layout that host it. A page
+ * shown in a layout is nested inside the layout's container, so the platform's depth limit counts
+ * those levels too. A layout's own region and a page without a layout start at none.
+ */
+export const regionHostLevels = (
+  catalogue: ImmutablePlatformBlockCatalogue,
+  source: ApplicationSourceDocument,
+  region: Region,
+): number => {
+  if (region.parent === undefined) return 0;
+  const hostId = region.parent.props.id;
+  const level = (items: readonly SourceItem[], at: number): number | undefined => {
+    for (const item of items) {
+      if (item.props.id === hostId) return at;
+      for (const child of itemSlots(catalogue, item).values()) {
+        const found = level(child.items, at + 1);
+        if (found !== undefined) return found;
+      }
+    }
+    return undefined;
+  };
+  for (const shell of source.body.shells) {
+    const found = level(shell.layout.content, 1);
+    if (found !== undefined) return found;
+  }
+  return 0;
+};
+
 export const releaseFor = (
   catalogue: ImmutablePlatformBlockCatalogue,
   item: SourceItem,

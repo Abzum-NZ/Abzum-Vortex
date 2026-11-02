@@ -1,3 +1,4 @@
+import { definitionLimits } from "./definition-limits";
 import type { BlockPropertySchemaContract } from "./application-composition/block-property-schema";
 import type { FieldInputControlKey } from "./application-composition/component-setting-reading";
 import type { BlockPropertyValueContract } from "./application-composition/block-property-values";
@@ -418,8 +419,8 @@ export const PLATFORM_BLOCK_RELEASES: readonly PlatformBlockRelease[] = Object.f
 export const IMMUTABLE_PLATFORM_BLOCK_CATALOGUE: ImmutablePlatformBlockCatalogue = deepFreeze(
   immutablePlatformBlockCatalogueSchema.parse({
     compositionPolicy: {
-      maximumDepth: 32,
-      maximumPlacements: 512,
+      maximumDepth: definitionLimits.compositionDepth,
+      maximumPlacements: definitionLimits.compositionPlacements,
     },
     releases: PLATFORM_BLOCK_RELEASES,
   }),

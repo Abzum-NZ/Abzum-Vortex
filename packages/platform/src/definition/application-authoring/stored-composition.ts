@@ -1,3 +1,4 @@
+import { definitionLimits } from "../definition-limits";
 import {
   isSourceItemShape,
   readSourceItem,
@@ -127,8 +128,15 @@ const boundItems = (
     for (const [index, raw] of value.entries()) {
       count += 1;
       if (count > catalogue.compositionPolicy.maximumPlacements)
-        refuse(at, "has more blocks than a page may hold");
-      if (depth > catalogue.compositionPolicy.maximumDepth) refuse(at, "nests blocks too deeply");
+        refuse(
+          at,
+          `has more than ${definitionLimits.compositionPlacements} blocks, more than any application may hold`,
+        );
+      if (depth > catalogue.compositionPolicy.maximumDepth)
+        refuse(
+          at,
+          `nests blocks more than ${definitionLimits.compositionDepth} levels deep, more than any page may hold`,
+        );
       if (!plainObject(raw) || !plainObject(raw.props))
         return refuse([...at, index], "is not a block");
       for (const [key, child] of Object.entries(raw.props))

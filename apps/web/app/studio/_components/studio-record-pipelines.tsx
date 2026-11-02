@@ -1,8 +1,12 @@
 "use client";
+import { StudioLimitNote, StudioReasoned, studioLimitReason } from "@vortex/ui/studio";
 import { FieldLegend, FieldSet } from "@vortex/ui/components/field";
 import { useState, type FormEvent } from "react";
 import {
   applicationUses,
+  definitionLimitNear,
+  definitionLimitReached,
+  definitionLimitUsage,
   deleteInlinePipeline,
   inlineActionSetsOption,
   inlineOptionOwner,
@@ -529,6 +533,7 @@ function PipelineDialog({
 
           <FieldSet className="gap-2">
             <FieldLegend variant="label">Allowed moves</FieldLegend>
+            <StudioLimitNote limit="pipelineTransitions" used={moves.length} />
             <p className="text-sm text-muted-foreground">
               Tick each move a record may make. Any other move between two stages is refused. A new
               record without a stage starts at the first stage.
@@ -559,6 +564,10 @@ function PipelineDialog({
                             <Checkbox
                               aria-label={`Allow ${label(from.option)} to ${label(to.option)}`}
                               checked={allowed(from.option, to.option)}
+                              disabled={
+                                !allowed(from.option, to.option) &&
+                                definitionLimitReached("pipelineTransitions", moves.length)
+                              }
                               onCheckedChange={(checked) =>
                                 change({
                                   transitions:
@@ -684,16 +693,27 @@ export function StudioRecordPipelines({
   return (
     <section className="space-y-6" aria-label={`Pipelines of ${record.plural_name}`}>
       <div className="flex items-center justify-between gap-2">
-        <h3 className="text-base font-semibold">Pipelines</h3>
-        <Button
-          type="button"
-          size="sm"
-          variant="outline"
-          disabled={disabled || !free}
-          onClick={() => setEditing("new")}
+        <h3 className="text-base font-semibold">
+          Pipelines{" "}
+          {definitionLimitNear("pipelinesPerRecordType", record.pipelines.length) && (
+            <span className="text-sm font-normal text-muted-foreground">
+              {definitionLimitUsage("pipelinesPerRecordType", record.pipelines.length)}
+            </span>
+          )}
+        </h3>
+        <StudioReasoned
+          reason={studioLimitReason("pipelinesPerRecordType", record.pipelines.length)}
         >
-          Add a pipeline
-        </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            disabled={disabled || !free}
+            onClick={() => setEditing("new")}
+          >
+            Add a pipeline
+          </Button>
+        </StudioReasoned>
       </div>
       {record.pipelines.length === 0 && (
         <Empty>
