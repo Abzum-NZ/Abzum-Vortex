@@ -42,10 +42,7 @@ import {
   readApplicationPurge,
   requireApplicationChangeStepUp,
 } from "./installation-purge";
-import {
-  createApplicationAuthoringService,
-  type NewApplicationSourceBuilder,
-} from "./installation-application-authoring";
+import { createApplicationAuthoringService } from "./installation-application-authoring";
 import { readApplicationRemoval, removeApplication } from "./installation-removal";
 import {
   readUpgradeAuthorizedState,
@@ -75,9 +72,7 @@ import {
  * showed (`expected`); the install and the upgrade refuse as a conflict when that state moved, so
  * a person only ever confirms what is still true.
  */
-type ApplicationStoreEnvironment = FirstInstallFlowEnvironment &
-  UpgradeRoleEnvironment &
-  Readonly<{ newApplicationSource: NewApplicationSourceBuilder }>;
+type ApplicationStoreEnvironment = FirstInstallFlowEnvironment & UpgradeRoleEnvironment;
 
 export type { StoreReceiptCompletion };
 
@@ -772,6 +767,7 @@ export const createApplicationStoreService = (environment: ApplicationStoreEnvir
     session: IdentitySession,
     selection: OrganizationSelectionCandidate,
     inputs: Readonly<Record<string, unknown>>,
+    change: "install_or_upgrade" | "uninstall",
   ): Promise<ApplicationStoreResult | undefined> => {
     const rootId = applicationRootInput(inputs.application_root_id);
     if (!rootId.success) return { kind: "unavailable" };
@@ -781,6 +777,7 @@ export const createApplicationStoreService = (environment: ApplicationStoreEnvir
         session,
         organizationOf(selection),
         rootId.data,
+        change,
       );
       return undefined;
     } catch (error) {

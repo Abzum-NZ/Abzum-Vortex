@@ -11,7 +11,7 @@ import {
   freshBlockName,
   StoredCompositionRefusal,
   syncStoredBlockDependencies,
-} from "./stored-composition";
+} from "@vortex/platform/schema";
 
 type StudioFlowShownFormResult =
   Readonly<{ ok: true; alias: string }> | Readonly<{ ok: false; reason: string }>;

@@ -194,214 +194,6 @@
                         }
                       }
                     }
-                  },
-                  {
-                    "type": "platform.renderer.form_container",
-                    "props": {
-                      "id": "studio_purge_form",
-                      "title": "Confirm by typing the application's name",
-                      "content": [
-                        {
-                          "type": "platform.renderer.text_input",
-                          "props": {
-                            "id": "shell_purge_confirm_name",
-                            "name": "confirm_name",
-                            "label": "Application name",
-                            "required": true,
-                            "vortex": {
-                              "block": {
-                                "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
-                                "release_version": "1.0.0"
-                              },
-                              "responsive": {
-                                "desktop": {
-                                  "visible": true,
-                                  "width": {
-                                    "kind": "fill"
-                                  },
-                                  "height": {
-                                    "kind": "content"
-                                  }
-                                }
-                              }
-                            }
-                          }
-                        }
-                      ],
-                      "vortex": {
-                        "block": {
-                          "block_id": "476e2c35-07d6-40cc-bf01-6ddb22ccca44",
-                          "release_version": "1.0.0"
-                        },
-                        "responsive": {
-                          "desktop": {
-                            "visible": false,
-                            "width": {
-                              "kind": "fill"
-                            },
-                            "height": {
-                              "kind": "content"
-                            }
-                          }
-                        }
-                      }
-                    }
-                  },
-                  {
-                    "type": "platform.renderer.form_container",
-                    "props": {
-                      "id": "studio_create_form",
-                      "title": "New application",
-                      "content": [
-                        {
-                          "type": "platform.renderer.text_input",
-                          "props": {
-                            "id": "shell_create_name",
-                            "name": "name",
-                            "label": "Name",
-                            "required": true,
-                            "vortex": {
-                              "block": {
-                                "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
-                                "release_version": "1.0.0"
-                              },
-                              "responsive": {
-                                "desktop": {
-                                  "visible": true,
-                                  "width": {
-                                    "kind": "fill"
-                                  },
-                                  "height": {
-                                    "kind": "content"
-                                  }
-                                }
-                              }
-                            }
-                          }
-                        },
-                        {
-                          "type": "platform.renderer.text_input",
-                          "props": {
-                            "id": "shell_create_description",
-                            "name": "description",
-                            "label": "Description",
-                            "required": true,
-                            "vortex": {
-                              "block": {
-                                "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
-                                "release_version": "1.0.0"
-                              },
-                              "responsive": {
-                                "desktop": {
-                                  "visible": true,
-                                  "width": {
-                                    "kind": "fill"
-                                  },
-                                  "height": {
-                                    "kind": "content"
-                                  }
-                                }
-                              }
-                            }
-                          }
-                        },
-                        {
-                          "type": "platform.renderer.text_input",
-                          "props": {
-                            "id": "shell_create_key",
-                            "name": "key",
-                            "label": "Key (optional)",
-                            "required": false,
-                            "vortex": {
-                              "block": {
-                                "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
-                                "release_version": "1.0.0"
-                              },
-                              "responsive": {
-                                "desktop": {
-                                  "visible": true,
-                                  "width": {
-                                    "kind": "fill"
-                                  },
-                                  "height": {
-                                    "kind": "content"
-                                  }
-                                }
-                              }
-                            }
-                          }
-                        }
-                      ],
-                      "vortex": {
-                        "block": {
-                          "block_id": "476e2c35-07d6-40cc-bf01-6ddb22ccca44",
-                          "release_version": "1.0.0"
-                        },
-                        "responsive": {
-                          "desktop": {
-                            "visible": false,
-                            "width": {
-                              "kind": "fill"
-                            },
-                            "height": {
-                              "kind": "content"
-                            }
-                          }
-                        }
-                      }
-                    }
-                  },
-                  {
-                    "type": "platform.renderer.form_container",
-                    "props": {
-                      "id": "studio_publish_form",
-                      "title": "Release note",
-                      "content": [
-                        {
-                          "type": "platform.renderer.text_input",
-                          "props": {
-                            "id": "shell_publish_release_note",
-                            "name": "release_note",
-                            "label": "What changed in this version?",
-                            "required": true,
-                            "vortex": {
-                              "block": {
-                                "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
-                                "release_version": "1.0.0"
-                              },
-                              "responsive": {
-                                "desktop": {
-                                  "visible": true,
-                                  "width": {
-                                    "kind": "fill"
-                                  },
-                                  "height": {
-                                    "kind": "content"
-                                  }
-                                }
-                              }
-                            }
-                          }
-                        }
-                      ],
-                      "vortex": {
-                        "block": {
-                          "block_id": "476e2c35-07d6-40cc-bf01-6ddb22ccca44",
-                          "release_version": "1.0.0"
-                        },
-                        "responsive": {
-                          "desktop": {
-                            "visible": false,
-                            "width": {
-                              "kind": "fill"
-                            },
-                            "height": {
-                              "kind": "content"
-                            }
-                          }
-                        }
-                      }
-                    }
                   }
                 ],
                 "vortex": {
@@ -513,6 +305,110 @@
                   }
                 },
                 {
+                  "type": "platform.renderer.form_container",
+                  "props": {
+                    "id": "studio_create_form",
+                    "title": "New application",
+                    "content": [
+                      {
+                        "type": "platform.renderer.text_input",
+                        "props": {
+                          "id": "shell_create_name",
+                          "name": "name",
+                          "label": "Name",
+                          "required": true,
+                          "vortex": {
+                            "block": {
+                              "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
+                              "release_version": "1.0.0"
+                            },
+                            "responsive": {
+                              "desktop": {
+                                "visible": true,
+                                "width": {
+                                  "kind": "fill"
+                                },
+                                "height": {
+                                  "kind": "content"
+                                }
+                              }
+                            }
+                          }
+                        }
+                      },
+                      {
+                        "type": "platform.renderer.text_input",
+                        "props": {
+                          "id": "shell_create_description",
+                          "name": "description",
+                          "label": "Description",
+                          "required": true,
+                          "vortex": {
+                            "block": {
+                              "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
+                              "release_version": "1.0.0"
+                            },
+                            "responsive": {
+                              "desktop": {
+                                "visible": true,
+                                "width": {
+                                  "kind": "fill"
+                                },
+                                "height": {
+                                  "kind": "content"
+                                }
+                              }
+                            }
+                          }
+                        }
+                      },
+                      {
+                        "type": "platform.renderer.text_input",
+                        "props": {
+                          "id": "shell_create_key",
+                          "name": "key",
+                          "label": "Key (optional)",
+                          "required": false,
+                          "vortex": {
+                            "block": {
+                              "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
+                              "release_version": "1.0.0"
+                            },
+                            "responsive": {
+                              "desktop": {
+                                "visible": true,
+                                "width": {
+                                  "kind": "fill"
+                                },
+                                "height": {
+                                  "kind": "content"
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    ],
+                    "vortex": {
+                      "block": {
+                        "block_id": "476e2c35-07d6-40cc-bf01-6ddb22ccca44",
+                        "release_version": "1.0.0"
+                      },
+                      "responsive": {
+                        "desktop": {
+                          "visible": false,
+                          "width": {
+                            "kind": "fill"
+                          },
+                          "height": {
+                            "kind": "content"
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                {
                   "type": "platform.renderer.table",
                   "props": {
                     "presentation": "grid",
@@ -599,32 +495,11 @@
                         "placement": "inline"
                       },
                       {
-                        "event_id": "event_publish_application",
-                        "application_capability": "publish_application",
-                        "label": "Publish",
-                        "icon": "check",
-                        "placement": "menu"
-                      },
-                      {
                         "event_id": "event_install_or_upgrade",
                         "application_capability": "install_application",
                         "label": "Install or upgrade",
                         "icon": "plus",
                         "placement": "inline"
-                      },
-                      {
-                        "event_id": "event_remove_application",
-                        "application_capability": "remove_application",
-                        "label": "Remove",
-                        "icon": "minus",
-                        "placement": "menu"
-                      },
-                      {
-                        "event_id": "event_delete_application",
-                        "application_capability": "delete_application",
-                        "label": "Delete",
-                        "icon": "trash",
-                        "placement": "menu"
                       }
                     ],
                     "vortex": {
@@ -693,6 +568,110 @@
           "root": {
             "props": {
               "slot_primary": [
+                {
+                  "type": "platform.renderer.form_container",
+                  "props": {
+                    "id": "studio_purge_form",
+                    "title": "Confirm by typing the application's name",
+                    "content": [
+                      {
+                        "type": "platform.renderer.text_input",
+                        "props": {
+                          "id": "shell_purge_confirm_name",
+                          "name": "confirm_name",
+                          "label": "Application name",
+                          "required": true,
+                          "vortex": {
+                            "block": {
+                              "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
+                              "release_version": "1.0.0"
+                            },
+                            "responsive": {
+                              "desktop": {
+                                "visible": true,
+                                "width": {
+                                  "kind": "fill"
+                                },
+                                "height": {
+                                  "kind": "content"
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    ],
+                    "vortex": {
+                      "block": {
+                        "block_id": "476e2c35-07d6-40cc-bf01-6ddb22ccca44",
+                        "release_version": "1.0.0"
+                      },
+                      "responsive": {
+                        "desktop": {
+                          "visible": false,
+                          "width": {
+                            "kind": "fill"
+                          },
+                          "height": {
+                            "kind": "content"
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                {
+                  "type": "platform.renderer.form_container",
+                  "props": {
+                    "id": "studio_publish_form",
+                    "title": "Release note",
+                    "content": [
+                      {
+                        "type": "platform.renderer.text_input",
+                        "props": {
+                          "id": "shell_publish_release_note",
+                          "name": "release_note",
+                          "label": "What changed in this version?",
+                          "required": true,
+                          "vortex": {
+                            "block": {
+                              "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
+                              "release_version": "1.0.0"
+                            },
+                            "responsive": {
+                              "desktop": {
+                                "visible": true,
+                                "width": {
+                                  "kind": "fill"
+                                },
+                                "height": {
+                                  "kind": "content"
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    ],
+                    "vortex": {
+                      "block": {
+                        "block_id": "476e2c35-07d6-40cc-bf01-6ddb22ccca44",
+                        "release_version": "1.0.0"
+                      },
+                      "responsive": {
+                        "desktop": {
+                          "visible": false,
+                          "width": {
+                            "kind": "fill"
+                          },
+                          "height": {
+                            "kind": "content"
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
                 {
                   "type": "platform.renderer.heading",
                   "props": {
@@ -6140,46 +6119,6 @@
         }
       },
       {
-        "id": "binding_remove_application",
-        "control": "store_applications_region",
-        "event_id": "event_remove_application",
-        "event": "row_action",
-        "flow": "flow_remove_application",
-        "inputs": {
-          "application_root_id": {
-            "kind": "caller",
-            "name": "record_id"
-          }
-        },
-        "settings": {
-          "condition": null,
-          "debounceMs": 0,
-          "concurrency": "ignore_while_running",
-          "exclusive": "none",
-          "timeoutMs": null
-        }
-      },
-      {
-        "id": "binding_delete_application",
-        "control": "store_applications_region",
-        "event_id": "event_delete_application",
-        "event": "row_action",
-        "flow": "flow_delete_application",
-        "inputs": {
-          "application_root_id": {
-            "kind": "caller",
-            "name": "record_id"
-          }
-        },
-        "settings": {
-          "condition": null,
-          "debounceMs": 0,
-          "concurrency": "ignore_while_running",
-          "exclusive": "none",
-          "timeoutMs": null
-        }
-      },
-      {
         "id": "binding_install_from_details",
         "control": "store_application_install",
         "event_id": "event_install_or_upgrade",
@@ -6205,26 +6144,6 @@
         "event_id": "event_remove_application",
         "event": "action",
         "flow": "flow_remove_application",
-        "inputs": {
-          "application_root_id": {
-            "kind": "caller",
-            "name": "record_id"
-          }
-        },
-        "settings": {
-          "condition": null,
-          "debounceMs": 0,
-          "concurrency": "ignore_while_running",
-          "exclusive": "none",
-          "timeoutMs": null
-        }
-      },
-      {
-        "id": "binding_publish_application",
-        "control": "store_applications_region",
-        "event_id": "event_publish_application",
-        "event": "row_action",
-        "flow": "flow_publish_application",
         "inputs": {
           "application_root_id": {
             "kind": "caller",

@@ -130,12 +130,14 @@ export function Button(props: ButtonProps): ReactElement {
         <SharedButton
           type={mode === "action" ? "button" : mode}
           variant={SHARED_BUTTON_VARIANTS[variant]}
+          size={iconOnly ? "icon" : "default"}
           data-vortex-control="button"
           data-vortex-placement-id={props.placementId}
           data-vortex-action-kind={mode}
           data-vortex-variant={variant}
           disabled={disabled}
           aria-busy={pending}
+          {...(iconOnly ? { "aria-label": label } : {})}
           {...(note === undefined ? {} : { "aria-describedby": noteId })}
           onClick={click}
         >
@@ -149,6 +151,7 @@ export function Button(props: ButtonProps): ReactElement {
       ) : (
         <SharedButton
           variant={SHARED_BUTTON_VARIANTS[variant]}
+          size={iconOnly ? "icon" : "default"}
           data-vortex-control="button"
           data-vortex-placement-id={props.placementId}
           data-vortex-action-kind="link"
@@ -156,6 +159,7 @@ export function Button(props: ButtonProps): ReactElement {
           disabled={disabled}
           {...(note === undefined ? {} : { "aria-describedby": noteId })}
           nativeButton={false}
+          {...(iconOnly ? { "aria-label": label } : {})}
           render={<NavigationLink href={href} />}
         >
           {iconOnly ? <Icon name={iconName} aria-hidden="true" /> : label}

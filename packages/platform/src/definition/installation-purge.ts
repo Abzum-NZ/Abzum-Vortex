@@ -208,6 +208,8 @@ export const requireApplicationChangeStepUp = async (
   session: IdentitySession,
   organizationId: z.infer<typeof organizationIdSchema>,
   rootId: z.infer<typeof applicationRootIdSchema>,
+  /** The change the review is for: a removal of a platform application is refused here, not after the form. */
+  change: "install_or_upgrade" | "uninstall",
 ): Promise<void> => {
   let failure: unknown;
   const result = await environment.requests.runChange(
@@ -221,7 +223,7 @@ export const requireApplicationChangeStepUp = async (
         await requireInstallationAuthority(transaction, scope, environment.permissions, {
           kind: "installation",
           applicationRootId: rootId,
-          change: "install_or_upgrade",
+          change,
           containsCustomComponents: false,
           acceptedPermissions: [],
           stepUp: true,

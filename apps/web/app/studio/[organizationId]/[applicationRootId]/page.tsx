@@ -6,7 +6,7 @@ import {
 } from "../../../_lib/organization-context";
 import { resolveIdentitySessionWithEmail } from "../../../auth/_lib/session-server";
 import { studioFrameOf } from "../../_lib/studio-frame";
-import { appStoreApplicationHref } from "../../../_lib/application-release-adoption";
+import { appStorePublishHref } from "../../../_lib/application-release-adoption";
 import { resolveApplicationAddress } from "../../../_lib/application-address";
 import { continueStudioSession } from "../../_lib/studio-session";
 import { StudioUnavailable } from "../../_components/studio-unavailable";
@@ -201,7 +201,7 @@ const loadWorkspacePlace = async (
       publishHref:
         settings.value === null || settings.value === "invalid"
           ? undefined
-          : appStoreApplicationHref(
+          : appStorePublishHref(
               entry.tenantShortName,
               entry.organizationShortName,
               settings.value,

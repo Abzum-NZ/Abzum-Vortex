@@ -33,7 +33,7 @@ import {
   type StudioApplicationSourceReviewResult,
 } from "./_lib/application-source-import";
 import { platformPermissionSource } from "../_lib/platform-permission-source";
-import { tokenName } from "@vortex/ui/studio";
+import { tokenName } from "@vortex/platform/schema";
 import type { StudioThemeResolution } from "./_lib/studio-theme-options";
 import type { StudioStoredApplicationDraft } from "@vortex/ui/studio";
 import { readStudioPersonLabel } from "../_lib/studio-person-labels";

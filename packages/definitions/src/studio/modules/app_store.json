@@ -7,8 +7,8 @@
     {
       "id": "rt_store_application",
       "key": "store_application",
-      "name": "Store application",
-      "plural_name": "Store applications",
+      "name": "Application",
+      "plural_name": "Applications",
       "title_field": "name",
       "storage_contract_id": "srt_app_store_store_application",
       "storage_scope": "organization_shared",

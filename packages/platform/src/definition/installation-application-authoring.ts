@@ -18,6 +18,7 @@ import type { JsonValue } from "../catalogue/common";
 import { applicationRootIdSchema, organizationIdSchema } from "../catalogue/identifiers";
 import { describeFailure } from "../catalogue/runtime-primitives";
 import type { FlowRefusalFeedback } from "../workflows/flow-refusal-feedback";
+import { minimumApplicationSource } from "./application-authoring/new-application-source";
 import { readApplicationDefinitionDraft } from "./definition-draft-read";
 import type { ImmutableDefinitionPublicationCatalogueDefinition } from "./publication/read";
 
@@ -33,16 +34,10 @@ export type ApplicationAuthoringResult =
       diagnostic: FlowRefusalFeedback;
     }>;
 
-/** The source of a new application from what a builder enters, or the reason it cannot be made. */
-export type NewApplicationSourceBuilder = (
-  inputs: Readonly<{ name: string; description: string; key: string }>,
-) => Promise<Readonly<{ kind: "valid"; source: unknown }> | Readonly<{ kind: "invalid" }>>;
-
 export type ApplicationAuthoringEnvironment = Readonly<{
   requests: ReturnType<typeof createHumanOrganizationRequestService>;
   catalogue: ImmutableDefinitionPublicationCatalogueDefinition;
   permissions: PlatformPermissionSource;
-  newApplicationSource: NewApplicationSourceBuilder;
 }>;
 
 const refuse = (code: FlowRefusalFeedback["code"]): ApplicationAuthoringResult => ({
@@ -152,7 +147,7 @@ export const createApplicationAuthoringService = (environment: ApplicationAuthor
         ...(typeof inputs.key === "string" && inputs.key.trim() !== "" ? { key: inputs.key } : {}),
       });
       if (!parsed.success) return refuse("application_input_invalid");
-      const built = await environment.newApplicationSource({
+      const built = minimumApplicationSource({
         name: parsed.data.name,
         description: parsed.data.description,
         key: parsed.data.key ?? "",
@@ -215,7 +210,7 @@ export const createApplicationAuthoringService = (environment: ApplicationAuthor
               release_version: "",
               release_note: "",
               summary_lines: [],
-              expected: null,
+              expected: {},
             },
           };
         }

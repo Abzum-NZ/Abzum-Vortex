@@ -1,7 +1,6 @@
 import "server-only";
 
 import {
-  IMMUTABLE_PLATFORM_BLOCK_CATALOGUE,
   createApplicationStoreService,
   createOrganizationAccessAdministrationService,
   type ApplicationStoreService,
@@ -25,14 +24,6 @@ export const applicationStoreService = (): ApplicationStoreService =>
     catalogue: installedReleaseCatalogue,
     permissions: platformPermissionSource,
     containsCustomComponents: releaseSetContainsCustomComponents,
-    // The starting frame of a new application is built where the editor builds every frame.
-    newApplicationSource: async (inputs) => {
-      // Loaded when an application is created: the editor frame it builds is browser-side code.
-      const { minimumApplicationSource } =
-        await import("../studio/_lib/minimum-application-source");
-      const built = minimumApplicationSource(inputs, IMMUTABLE_PLATFORM_BLOCK_CATALOGUE);
-      return built.kind === "valid" ? { kind: "valid", source: built.source } : { kind: "invalid" };
-    },
     requests: humanOrganizationRequests(),
     accessAdministration: createOrganizationAccessAdministrationService(
       humanOrganizationRequestDependencies(),

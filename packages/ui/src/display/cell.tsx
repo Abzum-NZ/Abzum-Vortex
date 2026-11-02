@@ -12,7 +12,8 @@ import { DefinitionRenderError } from "../definition-error";
 import { NavigationLink } from "../routing/navigation-link";
 import { formatIsoDate, INVALID_DATE_TEXT, type DateFormatOptions } from "./date-format";
 import { FormattedTime } from "./date-format-context";
-import { OptionToneDot } from "./option-tone";
+import { Badge } from "../components/badge";
+import { optionToneFillClass } from "./option-tone";
 import { isSafeLinkAddress } from "@vortex/platform/schema";
 import {
   isInternalAddress,
@@ -21,6 +22,8 @@ import {
   type DisplayTableField,
 } from "./projected-data";
 import { RichTextDocumentView, richTextToPlainText } from "./rich-text";
+
+const statusDot = "size-1.5 shrink-0 rounded-full";
 
 const RESTRICTED_TEXT = "Restricted";
 const UNAVAILABLE_TEXT = "Unavailable";
@@ -124,14 +127,17 @@ export function DisplayCellView({ value }: Readonly<{ value: DisplayDetailCell }
       return <FormattedTime className="vortex-cell-date" iso={value.iso} />;
     case "choice":
       return (
-        <span
-          className="inline-flex items-center gap-2"
+        <Badge
+          variant="outline"
           data-vortex-choice-key={value.key}
-          data-vortex-option-tone={value.tone}
+          data-vortex-option-tone={value.tone ?? "neutral"}
         >
-          <OptionToneDot tone={value.tone} />
+          <span
+            aria-hidden="true"
+            className={`${statusDot} ${optionToneFillClass[value.tone ?? "neutral"]}`}
+          />
           {value.label}
-        </span>
+        </Badge>
       );
     case "link":
       // Re-checked here because this view is exported and may receive unparsed values.

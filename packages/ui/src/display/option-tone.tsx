@@ -35,16 +35,3 @@ export function OptionToneMark({
     />
   );
 }
-
-const dotShape = "inline-block size-2 shrink-0 rounded-full";
-
-/** The dot a list or detail puts before a choice option's word; the neutral role is a muted dot. */
-export function OptionToneDot({ tone }: Readonly<{ tone: PipelineStageTone | undefined }>) {
-  return (
-    <span
-      aria-hidden="true"
-      data-vortex-option-tone={tone ?? "neutral"}
-      className={cn(dotShape, optionToneFillClass[tone ?? "neutral"])}
-    />
-  );
-}

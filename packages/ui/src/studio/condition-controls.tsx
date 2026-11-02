@@ -11,7 +11,7 @@ import {
 } from "@vortex/ui/components/dropdown-menu";
 import { Plus, RotateCcw } from "lucide-react";
 import { useState } from "react";
-import { StudioOptionControl } from "./studio-setting-controls";
+import { StudioOptionControl } from "./studio-setting-basic-controls";
 import { StudioOptionsControl } from "./studio-options-control";
 import { StudioEntryList, StudioIconButton, useStudioEntryKeys } from "./studio-entry-list";
 import { StudioInspectorActions } from "./studio-inspector-actions";

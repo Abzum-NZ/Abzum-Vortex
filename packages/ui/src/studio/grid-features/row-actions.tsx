@@ -16,9 +16,9 @@ import type { StudioActionChoice } from "../contextual-palette";
 import type { StudioFlowCreateCommand, StudioFlowCreateChoices } from "../application-flow-create";
 import { Input } from "../../components/input";
 import { Label } from "../../components/label";
-import { StudioOptionControl } from "../studio-setting-controls";
+import { StudioOptionControl } from "../studio-setting-basic-controls";
 import { StudioEntryList } from "../studio-entry-list";
-import { pruneUnboundEvents } from "../stored-composition";
+import { pruneUnboundEvents } from "@vortex/platform/schema";
 import {
   StudioReferencePicker,
   type StudioReferencePickerOption,

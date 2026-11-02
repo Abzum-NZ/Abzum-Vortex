@@ -21,7 +21,7 @@ import {
   validateStoredApplicationOutlets,
   validateStoredShell,
   validateStoredZone,
-} from "./stored-composition";
+} from "@vortex/platform/schema";
 import { PALETTE_GROUP_TITLES } from "../palette-groups";
 
 type Outlet = Shell["content_slots"][number];
