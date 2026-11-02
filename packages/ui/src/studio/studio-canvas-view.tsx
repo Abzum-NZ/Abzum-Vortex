@@ -1,9 +1,11 @@
 "use client";
 
 import { Puck } from "@puckeditor/core";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import type { Breakpoint } from "../definition-error";
 import { Alert, AlertDescription, AlertTitle } from "../components/alert";
+import { Badge } from "../components/badge";
+import { Tooltip, TooltipContent, TooltipTrigger } from "../components/tooltip";
 import { Button } from "../components/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "../components/collapsible";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "../components/empty";
@@ -97,7 +99,10 @@ export function StudioCanvasPalette() {
 export function StudioCanvasView({
   zoom,
   onFitZoom,
+  note,
 }: Readonly<{
+  /** Something the strip above the canvas says beside the canvas's own controls. */
+  note?: ReactNode;
   /** Device width is preserved while the page frame scales inside the well. */
   zoom: number | "fit";
   /** Reports the measured Fit percentage to the workspace zoom controls. */
@@ -252,13 +257,39 @@ export function StudioCanvasView({
             content area, what the canvas does, and the selection's actions. */}
         <div className="flex h-9 shrink-0 items-center gap-3 px-4">
           {picker}
-          <p className="min-w-0 flex-1 truncate text-sm text-muted-foreground">
-            {model.readOnlyCause !== undefined
-              ? "Shown read-only to keep it exactly as it is. Its blocks can still be changed in the inspector."
-              : breakpoint === "desktop"
-                ? "Click a block to select it. Drag blocks to rearrange them."
-                : `This is the ${breakpoint} layout and order. Rearrange blocks on Desktop.`}
-          </p>
+          {model.readOnlyCause !== undefined || breakpoint !== "desktop" ? (
+            <Tooltip>
+              <TooltipTrigger render={<Badge variant="secondary" className="shrink-0" />}>
+                {model.readOnlyCause !== undefined
+                  ? "Read-only"
+                  : `${breakpoint === "tablet" ? "Tablet" : "Phone"} view`}
+              </TooltipTrigger>
+              <TooltipContent>
+                {model.readOnlyCause !== undefined
+                  ? "Shown read-only to keep it exactly as it is. Its blocks can still be changed in the inspector."
+                  : `This is the ${breakpoint} layout and order. Rearrange blocks on Desktop.`}
+              </TooltipContent>
+            </Tooltip>
+          ) : (
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <span
+                    tabIndex={0}
+                    role="img"
+                    aria-label="How the canvas works"
+                    className="flex size-8 shrink-0 items-center justify-center rounded-md text-muted-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  />
+                }
+              >
+                <Icon name="info" className="size-4" />
+              </TooltipTrigger>
+              <TooltipContent>
+                Click a block to select it. Drag blocks to rearrange them.
+              </TooltipContent>
+            </Tooltip>
+          )}
+          <div className="flex min-w-0 flex-1 items-center gap-1">{note}</div>
           {arrangeGrid === true ? (
             <StudioArrangeBar
               arrangeable={model.arrangeable}

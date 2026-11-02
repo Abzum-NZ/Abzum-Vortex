@@ -42,12 +42,13 @@ import {
   EmptyDescription,
 } from "@vortex/ui/components/empty";
 import { Button } from "@vortex/ui/components/button";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@vortex/ui/components/tooltip";
 import { StudioCanvasPalette, StudioCanvasView } from "@vortex/ui/studio/canvas-view";
 import type {
   StudioCanvasAddRequest,
   StudioCanvasBreakpoint,
   StudioCanvasFrame,
-  StudioPuckProviderProps,
+  StudioPuckInput,
 } from "@vortex/ui/studio/puck-provider";
 import { FirstRecordTypeEmptyState } from "../../_components/first-record-type-empty-state";
 import { readStudioCanvasRecords, readStudioDataRecords } from "../_lib/studio-preview-reader";
@@ -104,6 +105,15 @@ const canvasFrameFor = (
         navigation: studioDraftNavigation(source, frames.pages, decisions),
         ...page,
       };
+};
+
+/** A function that keeps its identity while always calling the latest one. */
+const useStable = <Args extends unknown[], Result>(
+  latest: (...args: Args) => Result,
+): ((...args: Args) => Result) => {
+  const held = useRef(latest);
+  held.current = latest;
+  return useCallback((...args: Args) => held.current(...args), []);
 };
 
 const sameDestination = (
@@ -832,8 +842,8 @@ export function useStudioCanvasTab({
         title="Blocks"
         description={
           addOwner?.kind === "layout"
-            ? "Blocks to add to the selected layout."
-            : "Blocks to add to the page on the canvas."
+            ? "Blocks to add to the selected layout. Use Add to put a block into it."
+            : "Blocks to add to the page on the canvas. Drag a block onto the page, or use Add."
         }
         hidden={tab !== "blocks"}
       >
@@ -966,6 +976,38 @@ export function useStudioCanvasTab({
     </StudioInspector>
   );
 
+  // An application with no record type yet says so: in the canvas strip when a page is open (the
+  // canvas keeps its height), as the empty state when the application itself is selected.
+  const needsFirstRecordType =
+    source.body.uses.length === 0 &&
+    source.body.modules.every((module) => module.record_types.length === 0);
+  const firstRecordTypeNote =
+    canvasPage !== undefined && canvasPage.key === source.body.home_page && needsFirstRecordType ? (
+      <>
+        <span className="min-w-0 truncate text-sm text-muted-foreground">
+          Add your first record type
+        </span>
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <Button
+                type="button"
+                size="icon-sm"
+                variant="ghost"
+                aria-label="Add your first record type: open the Data tab"
+                onClick={() => openTab("data")}
+              />
+            }
+          >
+            <Icon name="database" />
+          </TooltipTrigger>
+          <TooltipContent>
+            Add your first record type in the Data tab. A record type is a kind of record people
+            keep here, such as assets or companies; then show its records on this page.
+          </TooltipContent>
+        </Tooltip>
+      </>
+    ) : undefined;
   const shown = canvasPage !== undefined && (inspector.status === "resolved" || selected === null);
   const centre = (
     <section
@@ -996,20 +1038,16 @@ export function useStudioCanvasTab({
           </EmptyHeader>
         </Empty>
       )}
-      {(canvasPage === undefined
-        ? selected?.kind === "application"
-        : canvasPage.key === source.body.home_page) &&
-        source.body.uses.length === 0 &&
-        source.body.modules.every((module) => module.record_types.length === 0) && (
-          <FirstRecordTypeEmptyState
-            action={
-              <Button type="button" onClick={() => openTab("data")}>
-                <Icon name="database" />
-                Open the Data tab
-              </Button>
-            }
-          />
-        )}
+      {canvasPage === undefined && selected?.kind === "application" && needsFirstRecordType && (
+        <FirstRecordTypeEmptyState
+          action={
+            <Button type="button" onClick={() => openTab("data")}>
+              <Icon name="database" />
+              Open the Data tab
+            </Button>
+          }
+        />
+      )}
       {canvasPage !== undefined && theme.problem.length > 0 && (
         <Alert variant="destructive">
           <AlertDescription>{theme.problem}</AlertDescription>
@@ -1034,7 +1072,11 @@ export function useStudioCanvasTab({
             {/* A newly chosen icon library loads before the canvas draws with it; only the canvas
                 waits, and it draws no placeholder meanwhile. */}
             <Suspense fallback={null}>
-              <StudioCanvasView zoom={canvasZoom} onFitZoom={setFitZoom} />
+              <StudioCanvasView
+                zoom={canvasZoom}
+                onFitZoom={setFitZoom}
+                note={firstRecordTypeNote}
+              />
             </Suspense>
           </div>
         )}
@@ -1048,6 +1090,7 @@ export function useStudioCanvasTab({
     showsCanvas: boolean,
     focused: boolean,
     focusCanvas: () => void,
+    loading: boolean,
   ) => (
     <StudioCanvasToolbar
       title={centreTitle}
@@ -1072,6 +1115,7 @@ export function useStudioCanvasTab({
       onToggleInspector={toggleInspector}
       focused={focused}
       onFocusCanvas={focusCanvas}
+      loading={loading}
     />
   );
 
@@ -1097,53 +1141,101 @@ export function useStudioCanvasTab({
   );
 
   // The one Puck editor around the workspace: the page on the canvas, its draft and its selection.
-  const puck: Omit<StudioPuckProviderProps, "children"> = {
-    source,
-    compiledSource: view.source,
-    platformBlockCatalogue: catalogue,
-    fieldInputControlReleases,
-    platformThemeTokens,
-    pageAlias: canvasPage?.id,
-    compiledSlots: canvasPage === undefined ? undefined : view.slots?.[canvasPage.id],
-    frame:
+  // Everything is kept as the same value until it really changes, so the canvas does not draw again
+  // for an edit that is not its own (typing in the inspector).
+  const canvasFrame = useMemo(
+    () =>
       canvasPage === undefined
         ? undefined
         : canvasFrameFor(view.frames, canvasPage.id, source, theme.theme, viewDecisions),
-    viewer:
+    [view.frames, canvasPage?.id, source, theme.theme, viewDecisions],
+  );
+  const canvasViewer = useMemo(
+    () =>
       viewAsRole === undefined || viewDecisions === null
         ? null
         : { roleName: viewAsRole.name, decisions: viewDecisions },
-    selectedPlacementAlias: selected?.kind === "placement" ? selected.placementAlias : null,
-    onSelectPlacement: (alias) =>
-      Promise.resolve(
-        alias !== null
-          ? draft.select({ kind: "placement", placementAlias: alias })
-          : canvasPageRef.current !== undefined &&
-              draft.select({ kind: "page", pageAlias: canvasPageRef.current }),
-      ),
-    canvasShown: railShowsCanvas(tab),
-    breakpoint,
-    appearance,
-    disabled: draft.locked,
-    compileFailure: view.failure,
-    onChange: applyPuckPageEdit,
-    readRecords: readCanvasRecords,
-    arrangeGrid,
-    onArrangeGrid: setArrangeGrid,
-    onArrangeableGrids: setArrangeableGrids,
-    onGridChange,
-    gridReads,
-    updating: draft.updatingCanvas,
-    palette:
+    [viewAsRole, viewDecisions],
+  );
+  const onSelectPlacement = useStable((alias: string | null) =>
+    Promise.resolve(
+      alias !== null
+        ? draft.select({ kind: "placement", placementAlias: alias })
+        : canvasPageRef.current !== undefined &&
+            draft.select({ kind: "page", pageAlias: canvasPageRef.current }),
+    ),
+  );
+  const onPageEdit = useStable(applyPuckPageEdit);
+  const onAddBlock = useStable(addBlock);
+  const palette = useMemo(
+    () =>
       addTargets === null
         ? undefined
         : {
             targets: addTargets,
-            owner: addOwner?.kind ?? "page",
+            owner: addOwner?.kind ?? ("page" as const),
             message: paletteMessage,
-            onAdd: addBlock,
+            onAdd: onAddBlock,
           },
-  };
+    [addTargets, addOwner?.kind, paletteMessage, onAddBlock],
+  );
+  const compiledSlots = canvasPage === undefined ? undefined : view.slots?.[canvasPage.id];
+  const selectedPlacementAlias = selected?.kind === "placement" ? selected.placementAlias : null;
+  const canvasShown = railShowsCanvas(tab);
+  const puck = useMemo<StudioPuckInput>(
+    () => ({
+      source,
+      compiledSource: view.source,
+      platformBlockCatalogue: catalogue,
+      fieldInputControlReleases,
+      platformThemeTokens,
+      pageAlias: canvasPage?.id,
+      compiledSlots,
+      frame: canvasFrame,
+      viewer: canvasViewer,
+      selectedPlacementAlias,
+      onSelectPlacement,
+      canvasShown,
+      breakpoint,
+      appearance,
+      disabled: draft.locked,
+      compileFailure: view.failure,
+      onChange: onPageEdit,
+      readRecords: readCanvasRecords,
+      arrangeGrid,
+      onArrangeGrid: setArrangeGrid,
+      onArrangeableGrids: setArrangeableGrids,
+      onGridChange,
+      gridReads,
+      updating: draft.updatingCanvas,
+      palette,
+    }),
+    [
+      source,
+      view.source,
+      catalogue,
+      fieldInputControlReleases,
+      platformThemeTokens,
+      canvasPage?.id,
+      compiledSlots,
+      canvasFrame,
+      canvasViewer,
+      selectedPlacementAlias,
+      onSelectPlacement,
+      canvasShown,
+      breakpoint,
+      appearance,
+      draft.locked,
+      view.failure,
+      onPageEdit,
+      readCanvasRecords,
+      arrangeGrid,
+      onGridChange,
+      gridReads,
+      draft.updatingCanvas,
+      palette,
+    ],
+  );
 
   return {
     puck,

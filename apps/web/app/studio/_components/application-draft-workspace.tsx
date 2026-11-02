@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { SourceIdentityReservation } from "@vortex/platform/schema";
 import {
   StudioFieldProblemsProvider,
@@ -28,7 +28,11 @@ import { StudioSaveState } from "./studio-save-state";
 import { StudioHeader, type StudioFrameDefinition } from "./studio-header";
 import type { ApplicationReleaseStanding } from "../../_lib/application-release-adoption";
 import { StudioPlaceOpenerProvider, type StudioPlaceOpener } from "./studio-used-in";
-import { StudioPuckProvider } from "@vortex/ui/studio/puck-provider";
+import {
+  StudioPuckProvider,
+  useStudioDragGate,
+  whenNotDragging,
+} from "@vortex/ui/studio/puck-provider";
 import { useStudioCanvasTab } from "./use-studio-canvas-tab";
 import { useStudioDraft } from "./use-studio-draft";
 import { useStudioDraftTheme } from "./use-studio-draft-theme";
@@ -82,8 +86,14 @@ export function ApplicationDraftWorkspace(props: WorkspaceProps) {
  */
 function ExistingApplicationWorkspace(props: ExistingProps) {
   const { organizationId, place, applications } = props;
-  const [tab, setTab] = useState<StudioRailKey>(
+  const [tab, setCurrentTab] = useState<StudioRailKey>(
     isStudioRailKey(props.initialTab) ? props.initialTab : "structure",
+  );
+  // A block being dragged keeps its canvas: the rail tab and the open page change after the drop.
+  const dragGate = useStudioDragGate();
+  const setTab = useCallback(
+    (next: StudioRailKey) => whenNotDragging(dragGate, () => setCurrentTab(next)),
+    [dragGate],
   );
   const [structureForm, setStructureForm] = useState<StudioStructureForm>("none");
   const draft = useStudioDraft({
@@ -93,6 +103,7 @@ function ExistingApplicationWorkspace(props: ExistingProps) {
     creation:
       structureForm === "shell" ? "layout" : structureForm === "record" ? "record_page" : undefined,
     initialView: props.initialView,
+    dragGate,
   });
   const catalogue = draft.view.catalogue;
   // Every way of opening a tab shares this state, including rule links and the rail.
@@ -285,7 +296,9 @@ function ExistingApplicationWorkspace(props: ExistingProps) {
       )
         return;
       if ((!event.ctrlKey && !event.metaKey) || event.altKey) return;
-      const key = event.key.toLowerCase();
+      // The physical key, so the shortcuts also work on layouts that do not type Latin letters.
+      const key =
+        event.code === "KeyZ" ? "z" : event.code === "KeyY" ? "y" : event.key.toLowerCase();
       // Undo is Ctrl+Z; Redo is Ctrl+Shift+Z or Ctrl+Y. Studio's draft history is the one history:
       // Puck's own hotkeys have nothing to go back to.
       const redo = key === "y" ? !event.shiftKey : key === "z" && event.shiftKey;
@@ -314,7 +327,7 @@ function ExistingApplicationWorkspace(props: ExistingProps) {
             readQueries={canvas.readQueries}
             {...releases.agent}
           />
-          <StudioPuckProvider {...canvas.puck}>
+          <StudioPuckProvider input={canvas.puck} dragGate={dragGate}>
             <StudioFrame
               tabs={studioRailTabs}
               activeTab={tab}
@@ -375,6 +388,7 @@ function ExistingApplicationWorkspace(props: ExistingProps) {
                     canvasShown,
                     focused,
                     focusCanvas,
+                    draft.loadingView,
                   )}
                   {releases.flowHost.banner}
                   {draft.viewProblem !== null ? (
@@ -396,13 +410,6 @@ function ExistingApplicationWorkspace(props: ExistingProps) {
                     <p role="alert" className="px-4 py-2 text-sm">
                       This draft cannot be published:{" "}
                       {describeStudioCompileFailure(draft.view.failure, draft.source).message}
-                    </p>
-                  ) : draft.loadingView ? (
-                    <p
-                      role="status"
-                      className="pointer-events-none absolute top-14 right-4 z-10 rounded-md bg-muted px-2 py-1 text-sm text-muted-foreground"
-                    >
-                      Loading this editor…
                     </p>
                   ) : null}
                   <div

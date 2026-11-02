@@ -38,6 +38,7 @@ import { applyStudioCanvasChange } from "./studio-canvas-change";
 import {
   destinationOfZone,
   holdsDroppedBlock,
+  itemsHold,
   puckSelectedAlias,
   withoutEmptyPuckZones,
   type StudioCanvasCompiledSlot,
@@ -70,7 +71,7 @@ export type StudioCanvasPalette = Readonly<{
   onAdd: (request: StudioCanvasAddRequest) => boolean;
 }>;
 
-export type StudioPuckProviderProps = Readonly<{
+export type StudioPuckInput = Readonly<{
   source: ApplicationSourceDocument;
   compiledSource: ApplicationSourceDocument;
   platformBlockCatalogue: ImmutablePlatformBlockCatalogue;
@@ -114,12 +115,28 @@ export type StudioPuckProviderProps = Readonly<{
   gridReads?: Readonly<Record<string, StudioCanvasGridRead>> | undefined;
   /** The block palette; absent when no page is open. */
   palette?: StudioCanvasPalette | undefined;
-  children: ReactNode;
 }>;
+
+/**
+ * What the workspace must not change while a block is being dragged: the rail tab and the open
+ * page. The drag lives in the canvas preview, which a change would unmount under it. The latest
+ * request made during the drag is kept and applied once the drop has settled.
+ */
+export type StudioDragGate = { dragging: boolean; pending: (() => void) | null };
+
+/** The gate of one workspace: create it once and hand it to `StudioPuckProvider`. */
+export const useStudioDragGate = (): RefObject<StudioDragGate> =>
+  useRef<StudioDragGate>({ dragging: false, pending: null });
+
+/** Applies `apply` now, or after the drag in progress has dropped. */
+export const whenNotDragging = (gate: RefObject<StudioDragGate>, apply: () => void): void => {
+  if (gate.current.dragging) gate.current.pending = apply;
+  else apply();
+};
 
 /** What the canvas and the palette read from the one Puck editor around the workspace. */
 export type StudioCanvasContextValue = Readonly<{
-  input: Omit<StudioPuckProviderProps, "children">;
+  input: StudioPuckInput;
   model: StudioCanvasModel;
   /** Why the last canvas change was refused; empty while the draft shows as it was edited. */
   refusal: string;
@@ -167,7 +184,15 @@ const notSelectionActions: ReadonlySet<PuckAction["type"]> = new Set([
  * before the draft takes it. The frame, the panels, the canvas and the inspector are drawn inside
  * this editor, so Puck's parts (the canvas preview, the block drag) work from any of them.
  */
-export function StudioPuckProvider({ children, ...input }: StudioPuckProviderProps) {
+export function StudioPuckProvider({
+  input,
+  dragGate,
+  children,
+}: Readonly<{
+  input: StudioPuckInput;
+  dragGate: RefObject<StudioDragGate>;
+  children: ReactNode;
+}>) {
   const model = useStudioCanvasModel(input);
   const [refused, setRefused] = useState<Readonly<{ area: string; message: string }> | null>(null);
   const [resync, setResync] = useState(0);
@@ -183,7 +208,13 @@ export function StudioPuckProvider({ children, ...input }: StudioPuckProviderPro
   // validated before the history takes it. A refused change is shown as the draft still is.
   const change = useCallback((candidate: Data) => {
     const { input: now, model: shown, permitted: allowed } = latest.current;
-    if (!allowed || synchronizing.current) return;
+    if (synchronizing.current) return;
+    // A change made while the canvas cannot take edits (hidden, read-only, locked) is never kept:
+    // Puck shows the draft again, so the move cannot be committed later.
+    if (!allowed) {
+      setResync((generation) => generation + 1);
+      return;
+    }
     if (now.pageAlias === undefined || shown.at === undefined) return;
     // A block dropped from the palette is added by Studio's add command, not by this edit.
     if (holdsDroppedBlock(candidate.content as unknown[])) return;
@@ -229,6 +260,9 @@ export function StudioPuckProvider({ children, ...input }: StudioPuckProviderPro
     if (sameSelector(state.ui.itemSelector, previous.ui.itemSelector)) return;
     const alias = puckSelectedAlias(state.data.content, state.ui.itemSelector);
     if (alias === now.selectedPlacementAlias) return;
+    // Only a block of the open page is a selection; a block dropped elsewhere (another page's block
+    // carried over by a drag that outlived a page change) is not.
+    if (alias !== null && (shown.slot === undefined || !itemsHold(shown.slot.items, alias))) return;
     // Puck calls this while it is changing its state; Studio's selection follows right after.
     queueMicrotask(() => {
       void latest.current.input.onSelectPlacement(alias).then((accepted) => {
@@ -258,11 +292,11 @@ export function StudioPuckProvider({ children, ...input }: StudioPuckProviderPro
   const shown = model.shown ?? empty;
   // Puck takes its data once, when it opens; every later change reaches it through `StudioPuckSync`.
   const [initial] = useState(shown);
-  const value: StudioCanvasContextValue = {
-    input,
-    model,
-    refusal: refused?.area === model.area ? refused.message : "",
-  };
+  const refusal = refused?.area === model.area ? refused.message : "";
+  const value = useMemo(
+    (): StudioCanvasContextValue => ({ input, model, refusal }),
+    [input, model, refusal],
+  );
   return (
     <StudioCanvasContext.Provider value={value}>
       <Puck
@@ -280,6 +314,8 @@ export function StudioPuckProvider({ children, ...input }: StudioPuckProviderPro
         <StudioPuckSync
           data={shown}
           resync={resync}
+          area={model.area}
+          dragGate={dragGate}
           canvasShown={input.canvasShown}
           arrangeGrid={input.arrangeGrid === true}
           onArrangeGrid={input.onArrangeGrid}
@@ -305,6 +341,8 @@ export function StudioPuckProvider({ children, ...input }: StudioPuckProviderPro
 function StudioPuckSync({
   data,
   resync,
+  area,
+  dragGate,
   canvasShown,
   arrangeGrid,
   onArrangeGrid,
@@ -316,6 +354,9 @@ function StudioPuckSync({
   showSelection,
 }: Readonly<{
   data: Data;
+  /** The page and content area on the canvas. */
+  area: string;
+  dragGate: RefObject<StudioDragGate>;
   /** Changes when Puck holds a change the draft refused, so the draft is shown again. */
   resync: number;
   canvasShown: boolean;
@@ -419,7 +460,33 @@ function StudioPuckSync({
       }
     }
     select(wantedRef.current);
-  }, [data, resync]);
+    // The draft is shown again every time the canvas comes into view, so nothing Puck held while
+    // it was hidden survives.
+  }, [data, resync, canvasShown, area]);
+
+  // A drag keeps the rail tab and the open page where they are (the workspace asks the gate), and
+  // what was asked meanwhile is applied once the drop's own animation has finished with the preview.
+  const dragging = usePuckSelector((state) => state.appState.ui.isDragging);
+  useEffect(() => {
+    dragGate.current.dragging = dragging;
+    if (dragging) return;
+    const pending = dragGate.current.pending;
+    dragGate.current.pending = null;
+    if (pending === null) return;
+    let frames = 0;
+    let frame = 0;
+    const settle = () => {
+      const previewDocument =
+        document.querySelector<HTMLIFrameElement>("iframe#preview-frame")?.contentDocument;
+      const moving = (target: Document | null | undefined) =>
+        target?.querySelector("[data-dnd-dragging], [data-dnd-dropping]") != null;
+      if ((moving(document) || moving(previewDocument)) && frames++ < 90)
+        frame = requestAnimationFrame(settle);
+      else pending();
+    };
+    frame = requestAnimationFrame(settle);
+    return () => cancelAnimationFrame(frame);
+  }, [dragging, dragGate]);
 
   // The outline or the inspector selected something, or the canvas came into or left view.
   useEffect(() => {

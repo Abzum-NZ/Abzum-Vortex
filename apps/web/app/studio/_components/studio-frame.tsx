@@ -739,7 +739,7 @@ export function StudioFrame<Key extends string>({
           <ResizablePanel id="studio-canvas" minSize="20rem">
             <section
               aria-label="Canvas"
-              className="relative flex h-full min-h-0 min-w-0 flex-col bg-background"
+              className="flex h-full min-h-0 min-w-0 flex-col bg-background"
             >
               {canvas({
                 inspectorOpen:

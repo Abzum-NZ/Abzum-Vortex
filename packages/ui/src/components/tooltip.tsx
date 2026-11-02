@@ -44,16 +44,7 @@ function TooltipContent({
           {...props}
         >
           {children}
-          <TooltipPrimitive.Arrow
-            className={cn(
-              "cn-tooltip-arrow cn-tooltip-arrow-logical bg-foreground",
-              // Where the arrow sits on each side: without these it stays at the popup's top edge,
-              // over the text, whenever the popup opens above or below its trigger.
-              "data-[side=top]:-bottom-2.5 data-[side=bottom]:top-1",
-              "data-[side=left]:top-1/2! data-[side=left]:-right-1 data-[side=left]:-translate-y-1/2",
-              "data-[side=right]:top-1/2! data-[side=right]:-left-1 data-[side=right]:-translate-y-1/2",
-            )}
-          />
+          <TooltipPrimitive.Arrow className="cn-tooltip-arrow cn-tooltip-arrow-logical bg-foreground" />
         </TooltipPrimitive.Popup>
       </TooltipPrimitive.Positioner>
     </TooltipPrimitive.Portal>

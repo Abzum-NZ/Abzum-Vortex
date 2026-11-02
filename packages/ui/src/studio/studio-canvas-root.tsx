@@ -53,12 +53,13 @@ export function StudioCanvasRoot({
       data-vortex-studio-canvas=""
       data-vortex-shell-outlet=""
       data-vortex-editing=""
+      aria-label={empty ? "Empty content area" : undefined}
       className={empty ? "relative min-h-48" : "min-h-24"}
     >
       <RootSlotGapProvider gap={gap}>{children}</RootSlotGapProvider>
       {empty && (
         <p className="pointer-events-none absolute inset-0 flex items-center justify-center px-6 text-center text-sm text-muted-foreground">
-          Drop a block here, or add one from Blocks. This guidance only appears in Studio.
+          Drop a block here, or add one from Blocks.
         </p>
       )}
     </div>

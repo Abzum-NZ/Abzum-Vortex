@@ -5,6 +5,7 @@ import { Button } from "@vortex/ui/components/button";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@vortex/ui/components/tooltip";
 import { ToggleGroup, ToggleGroupItem } from "@vortex/ui/components/toggle-group";
 import { Kbd } from "@vortex/ui/components/kbd";
+import { Spinner } from "@vortex/ui/components/spinner";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -46,6 +47,7 @@ export function StudioCanvasToolbar({
   onToggleInspector,
   focused,
   onFocusCanvas,
+  loading,
   appearance,
   onAppearance,
   viewAs,
@@ -81,6 +83,8 @@ export function StudioCanvasToolbar({
   onToggleInspector: (() => void) | undefined;
   focused: boolean;
   onFocusCanvas: () => void;
+  /** The editor is loading its view of the draft. */
+  loading: boolean;
 }>) {
   const effectiveZoom = zoom === "fit" ? fitZoom : zoom;
   const zoomOut = [...studioCanvasZooms].reverse().find((step) => step < effectiveZoom);
@@ -102,6 +106,14 @@ export function StudioCanvasToolbar({
           {title}
         </h2>
         <div className="ml-auto flex min-w-0 shrink-0 flex-nowrap items-center gap-1">
+          {loading && (
+            <Tooltip>
+              <TooltipTrigger render={<span className="flex size-8 items-center justify-center" />}>
+                <Spinner />
+              </TooltipTrigger>
+              <TooltipContent>Loading this editor</TooltipContent>
+            </Tooltip>
+          )}
           {showsCanvas && (
             <>
               <Tooltip>
@@ -135,15 +147,20 @@ export function StudioCanvasToolbar({
                 }}
               >
                 {devices.map((device) => (
-                  <ToggleGroupItem
-                    key={device.value}
-                    value={device.value}
-                    aria-label={device.label}
-                    title={device.label}
-                    className="size-8"
-                  >
-                    <Icon name={device.icon} />
-                  </ToggleGroupItem>
+                  <Tooltip key={device.value}>
+                    <TooltipTrigger
+                      render={
+                        <ToggleGroupItem
+                          value={device.value}
+                          aria-label={device.label}
+                          className="size-8"
+                        />
+                      }
+                    >
+                      <Icon name={device.icon} />
+                    </TooltipTrigger>
+                    <TooltipContent>{device.label}</TooltipContent>
+                  </Tooltip>
                 ))}
               </ToggleGroup>
               <div className="flex items-center gap-1 @max-[46rem]/toolbar:hidden">
@@ -156,22 +173,34 @@ export function StudioCanvasToolbar({
                     if (mode === "light" || mode === "dark") onAppearance(mode);
                   }}
                 >
-                  <ToggleGroupItem
-                    value="light"
-                    aria-label="Light appearance"
-                    title="Light appearance"
-                    className="size-8"
-                  >
-                    <Icon name="sun" />
-                  </ToggleGroupItem>
-                  <ToggleGroupItem
-                    value="dark"
-                    aria-label="Dark appearance"
-                    title="Dark appearance"
-                    className="size-8"
-                  >
-                    <Icon name="moon" />
-                  </ToggleGroupItem>
+                  <Tooltip>
+                    <TooltipTrigger
+                      render={
+                        <ToggleGroupItem
+                          value="light"
+                          aria-label="Light appearance"
+                          className="size-8"
+                        />
+                      }
+                    >
+                      <Icon name="sun" />
+                    </TooltipTrigger>
+                    <TooltipContent>Light appearance</TooltipContent>
+                  </Tooltip>
+                  <Tooltip>
+                    <TooltipTrigger
+                      render={
+                        <ToggleGroupItem
+                          value="dark"
+                          aria-label="Dark appearance"
+                          className="size-8"
+                        />
+                      }
+                    >
+                      <Icon name="moon" />
+                    </TooltipTrigger>
+                    <TooltipContent>Dark appearance</TooltipContent>
+                  </Tooltip>
                 </ToggleGroup>
                 <Tooltip>
                   <TooltipTrigger
@@ -244,19 +273,26 @@ export function StudioCanvasToolbar({
                 </DropdownMenu>
               </div>
               <div role="group" aria-label="Canvas zoom" className="flex items-center">
-                <Button
-                  type="button"
-                  size="icon-sm"
-                  variant="ghost"
-                  aria-label="Zoom out"
-                  className="@max-[40rem]/toolbar:hidden"
-                  disabled={zoomOut === undefined}
-                  onClick={() => {
-                    if (zoomOut !== undefined) onZoom(zoomOut);
-                  }}
-                >
-                  <Icon name="minus" />
-                </Button>
+                <Tooltip>
+                  <TooltipTrigger
+                    render={
+                      <Button
+                        type="button"
+                        size="icon-sm"
+                        variant="ghost"
+                        aria-label="Zoom out"
+                        className="@max-[40rem]/toolbar:hidden"
+                        disabled={zoomOut === undefined}
+                        onClick={() => {
+                          if (zoomOut !== undefined) onZoom(zoomOut);
+                        }}
+                      />
+                    }
+                  >
+                    <Icon name="minus" />
+                  </TooltipTrigger>
+                  <TooltipContent>Zoom out</TooltipContent>
+                </Tooltip>
                 <div className="w-20 shrink-0">
                   <StudioOptionControl
                     aria-label="Canvas zoom"
@@ -274,19 +310,26 @@ export function StudioCanvasToolbar({
                     }
                   />
                 </div>
-                <Button
-                  type="button"
-                  size="icon-sm"
-                  variant="ghost"
-                  aria-label="Zoom in"
-                  className="@max-[40rem]/toolbar:hidden"
-                  disabled={zoomIn === undefined}
-                  onClick={() => {
-                    if (zoomIn !== undefined) onZoom(zoomIn);
-                  }}
-                >
-                  <Icon name="plus" />
-                </Button>
+                <Tooltip>
+                  <TooltipTrigger
+                    render={
+                      <Button
+                        type="button"
+                        size="icon-sm"
+                        variant="ghost"
+                        aria-label="Zoom in"
+                        className="@max-[40rem]/toolbar:hidden"
+                        disabled={zoomIn === undefined}
+                        onClick={() => {
+                          if (zoomIn !== undefined) onZoom(zoomIn);
+                        }}
+                      />
+                    }
+                  >
+                    <Icon name="plus" />
+                  </TooltipTrigger>
+                  <TooltipContent>Zoom in</TooltipContent>
+                </Tooltip>
               </div>
             </>
           )}
@@ -303,10 +346,10 @@ export function StudioCanvasToolbar({
                 />
               }
             >
-              <Icon name="monitor" />
+              <Icon name="maximize" />
             </TooltipTrigger>
             <TooltipContent>
-              Focus canvas <Kbd>Ctrl \\</Kbd>
+              Focus canvas <Kbd>{"Ctrl \\"}</Kbd>
             </TooltipContent>
           </Tooltip>
           {onToggleInspector !== undefined && (
