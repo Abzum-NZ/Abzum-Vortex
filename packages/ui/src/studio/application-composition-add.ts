@@ -57,6 +57,7 @@ import {
   object,
   validContext,
   regions,
+  regionHostLevels,
   releaseFor,
   itemSlots,
   closedPlain,
@@ -180,6 +181,7 @@ export const addPlaces = (
   // The composition limit counts every block of the application: its pages and its layouts.
   const placed = regions(source).reduce((total, each) => total + countBlocks(each.zone.items), 0);
   for (const { region, area, label, admitted } of areas) {
+    const hostLevels = regionHostLevels(catalogue, source, region);
     // A place that would take a block past the composition limits offers every block as unavailable.
     const limited = (
       depth: number,
@@ -204,9 +206,9 @@ export const addPlaces = (
         area,
         destination: { kind: "root" },
         label,
-        depth: 0,
+        depth: hostLevels,
         placed,
-        choices: limited(0, studioPaletteChoices(catalogue, admitted())),
+        choices: limited(hostLevels, studioPaletteChoices(catalogue, admitted())),
       }),
     });
     // A form takes no other form: inside one, the form choice is offered as unavailable.
@@ -247,12 +249,12 @@ export const addPlaces = (
               area,
               destination: { kind: "child", parentAlias, slotKey: declaration.key },
               label: `${release.name} ${parentAlias}: ${declaration.label}${outlet === undefined ? "" : ` (page content: ${outlet})`}`,
-              depth: childSteps.length,
+              depth: hostLevels + childSteps.length,
               placed,
               choices:
                 outlet === undefined
                   ? limited(
-                      childSteps.length,
+                      hostLevels + childSteps.length,
                       formChoices(
                         childInForm,
                         studioPaletteChoices(

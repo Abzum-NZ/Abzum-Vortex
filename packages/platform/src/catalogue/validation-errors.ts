@@ -70,6 +70,8 @@ const definitionValidationErrorCodes = [
   "definition_too_few_items",
   "definition_too_many_items",
   "definition_sortable_field_limit",
+  "definition_composition_placement_limit",
+  "definition_composition_depth_limit",
   "definition_duplicate_key",
   "definition_broken_reference",
   "definition_unresolved_reference",
@@ -190,6 +192,17 @@ const definitionValidationErrorCatalogueSource = {
     message: definitionLimitMessage("sortableFieldsPerRecordType"),
     guidance: "Turn sorting off on another field of this record type, then publish again.",
   },
+  definition_composition_placement_limit: {
+    order: 66,
+    message: definitionLimitMessage("compositionPlacements"),
+    guidance: "Remove blocks from a page or a layout, then validate the definition again.",
+  },
+  definition_composition_depth_limit: {
+    order: 67,
+    message: definitionLimitMessage("compositionDepth"),
+    guidance: "Move blocks out of their containers, then validate the definition again.",
+  },
+
   definition_duplicate_key: {
     order: 70,
     message: "A key is used more than once in the same scope.",

@@ -738,3 +738,5 @@ grant execute on function vortex_record.provision_exact_module_storage(uuid, big
   to vortex_owner;
 comment on function vortex_record.provision_exact_module_storage(uuid, bigint) is
   'Private exact-release Module storage provisioner: creates or evolves generated record_data storage, or registers definition and field mappings for a system projection read only through its bounded protected reader, for one published Module release; removes a system projection record type or field, or a choice option, that the newest release drops when nothing stored holds or refers to it.';
+
+reset role;

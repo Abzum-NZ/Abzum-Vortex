@@ -126,11 +126,14 @@ export function StudioBlockPalette({
         {message}
       </p>
       {limitReason === undefined ? (
-        <StudioLimitNote
-          limit="compositionPlacements"
-          used={target.placed}
-          label="Blocks in the application"
-        />
+        <>
+          <StudioLimitNote
+            limit="compositionPlacements"
+            used={target.placed}
+            label="Blocks in the application"
+          />
+          <StudioLimitNote limit="compositionDepth" used={target.depth} label="Levels above here" />
+        </>
       ) : (
         <Alert role="status">
           <AlertDescription>{limitReason}</AlertDescription>

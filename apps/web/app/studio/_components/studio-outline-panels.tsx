@@ -46,21 +46,12 @@ const filterNodes = (
   });
 };
 
-/** How many blocks a page or layout holds and how deeply they nest, against the composition limits. */
-const measureBlocks = (
-  nodes: readonly StudioSemanticOutlineNode[],
-  depth = 0,
-): Readonly<{ count: number; deepest: number }> => {
-  let count = 0;
-  let deepest = depth;
-  for (const node of nodes) {
-    const placed = node.kind === "placement";
-    const inner = measureBlocks(node.children, placed ? depth + 1 : depth);
-    count += (placed ? 1 : 0) + inner.count;
-    deepest = Math.max(deepest, placed ? depth + 1 : depth, inner.deepest);
-  }
-  return { count, deepest };
-};
+/** How many blocks the nodes hold, against the composition limit. */
+const countBlocks = (nodes: readonly StudioSemanticOutlineNode[]): number =>
+  nodes.reduce(
+    (total, node) => total + (node.kind === "placement" ? 1 : 0) + countBlocks(node.children),
+    0,
+  );
 
 const withoutChildren = (node: StudioSemanticOutlineNode): StudioSemanticOutlineNode => ({
   ...node,
@@ -185,9 +176,8 @@ export function StudioBlockOutlinePanel({
   const [query, setQuery] = useState("");
   const owner = ownerKey === undefined ? undefined : findNode(outline, ownerKey);
   const blocks = useMemo(() => filterNodes(owner?.children ?? [], query), [owner, query]);
-  // Blocks are counted across the application; nesting is read for the page or layout open here.
-  const placed = useMemo(() => measureBlocks(outline.children).count, [outline]);
-  const nested = useMemo(() => measureBlocks(owner?.children ?? []).deepest, [owner]);
+  // Blocks are counted across the application.
+  const placed = useMemo(() => countBlocks(outline.children), [outline]);
   return (
     <StudioPanelShell
       title="Outline"
@@ -226,7 +216,6 @@ export function StudioBlockOutlinePanel({
               limit="compositionPlacements"
               used={placed}
             />
-            <StudioLimitRow label="Nesting in this page" limit="compositionDepth" used={nested} />
           </section>
         </>
       )}

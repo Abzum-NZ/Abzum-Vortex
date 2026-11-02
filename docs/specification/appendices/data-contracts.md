@@ -767,7 +767,7 @@ Every numeric limit of a definition that a builder can reach is declared once, i
 | Guided-form steps                | 20           | guided form                    |                                                                  |
 | Search fields; search record types | 100; 20    | application search             |                                                                  |
 | Blocks                           | 512          | application (pages and layouts together) |                                                        |
-| Block nesting depth              | 32 levels    | any content area               |                                                                  |
+| Block nesting depth              | 32 levels    | any content area, counting the layout blocks that host a page |                                                                  |
 | Source JSON nesting              | 112 levels   | source file                    | derived from the block depth: 3 per block level plus 16         |
 | Source members per object        | 1,000        | source file                    |                                                                  |
 | Source import size               | 2 MiB        | source file                    |                                                                  |

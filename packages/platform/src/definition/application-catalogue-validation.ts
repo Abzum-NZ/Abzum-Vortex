@@ -36,7 +36,6 @@ import {
 import { canonicalJson } from "./canonical-json";
 import type { ApplicationSourceDocument } from "./definition-source";
 import { applicationModuleKeys } from "./application-module-sources";
-import { definitionLimitMessage } from "./definition-limits";
 import { sourceAliasSchema } from "./definition-source-common";
 import { IMMUTABLE_PLATFORM_BLOCK_CATALOGUE } from "./application-composition-catalogue";
 
@@ -597,8 +596,9 @@ export function validateApplicationSourceCatalogue(
             "vortex.definition.application_layout_complete",
             "too_many_items",
             location,
-            undefined,
-            definitionLimitMessage(limit),
+            limit === "compositionPlacements"
+              ? "definition_composition_placement_limit"
+              : "definition_composition_depth_limit",
           );
         }
       }

@@ -18,7 +18,7 @@ import {
   type PageSlotAddress,
   type SourceItem,
 } from "@vortex/platform/schema";
-import { itemSlots, regions } from "./application-composition-regions";
+import { itemSlots, regionHostLevels, regions } from "./application-composition-regions";
 import {
   studioFormChangeRefusal,
   studioFormChangeRefusalSentence,
@@ -60,11 +60,21 @@ const compositionLimitRefusal = (
   catalogue: ImmutablePlatformBlockCatalogue,
   source: ApplicationSourceDocument,
 ): string | undefined => {
-  const zones = regions(source).map((region) => region.zone.items);
-  const placed = zones.reduce((total, items) => total + sourceItemTree(items).length, 0);
+  const each = regions(source);
+  const placed = each.reduce(
+    (total, region) => total + sourceItemTree(region.zone.items).length,
+    0,
+  );
   if (placed > definitionLimits.compositionPlacements)
     return definitionLimitMessage("compositionPlacements");
-  if (zones.some((items) => nestingOf(catalogue, items) > definitionLimits.compositionDepth))
+  // A page nests inside the container of its layout, so the platform counts those levels too.
+  if (
+    each.some(
+      (region) =>
+        regionHostLevels(catalogue, source, region) + nestingOf(catalogue, region.zone.items) >
+        definitionLimits.compositionDepth,
+    )
+  )
     return definitionLimitMessage("compositionDepth");
   return undefined;
 };
