@@ -4,7 +4,7 @@ import type {
   PlatformBlockRelease,
   SourceItem,
 } from "@vortex/platform/schema";
-import { freshBlockName } from "./stored-composition";
+import { freshBlockName } from "@vortex/platform/schema";
 import { studioRecordDetailItem } from "./application-record-page-detail";
 import { refuse } from "./application-structure-common";
 

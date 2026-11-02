@@ -1,5 +1,7 @@
 "use client";
-import type { ReactNode } from "react";
+import { createContext, useContext, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
+import { cn } from "@vortex/ui/lib/utils";
 import { Input } from "@vortex/ui/components/input";
 import { Textarea } from "@vortex/ui/components/textarea";
 import {
@@ -72,6 +74,66 @@ function LabelsForm({ labels }: Readonly<{ labels: StudioLabelsForm }>) {
   );
 }
 
+const HeaderSlotContext = createContext<HTMLElement | null>(null);
+
+/**
+ * Where an inspector's header goes: above the scrolling body, as in the canvas inspector. Items
+ * whose editors live inside the body (a field, a record type) draw their header with
+ * `StudioInspectorHeader`, which lands here.
+ */
+export function StudioInspectorHeaderSlot({ children }: Readonly<{ children: ReactNode }>) {
+  const [slot, setSlot] = useState<HTMLElement | null>(null);
+  return (
+    <HeaderSlotContext.Provider value={slot}>
+      <div ref={setSlot} className="shrink-0" />
+      {children}
+    </HeaderSlotContext.Provider>
+  );
+}
+
+/** The name and kind of the selected item, with its ⋯ menu, in the inspector's fixed header. */
+export function StudioInspectorHeader({
+  title,
+  kind,
+  actions,
+}: Readonly<{ title: string; kind: string; actions?: ReactNode }>) {
+  const slot = useContext(HeaderSlotContext);
+  const header = (
+    <header className="flex items-start justify-between gap-2 px-4 py-3">
+      <div className="min-w-0">
+        <h2 className="truncate text-base font-semibold">{title}</h2>
+        <p className="text-xs text-muted-foreground">{kind}</p>
+      </div>
+      {actions}
+    </header>
+  );
+  return slot === null ? header : createPortal(header, slot);
+}
+
+/**
+ * The inspector's one footer: the primary action of a create form, pinned to the bottom of the
+ * scroll body. It is the last child of the body, so it pins without touching the frame.
+ */
+export function StudioInspectorFooter({
+  children,
+  className,
+}: Readonly<{
+  children: ReactNode;
+  /** Another pane's padding, as negative margins and offset: the rail's is `-mx-4 -mb-3 -bottom-3`. */
+  className?: string;
+}>) {
+  return (
+    <div
+      className={cn(
+        "sticky z-10 flex justify-end gap-2 border-t bg-background px-4 py-3",
+        className ?? "-bottom-3 -mx-4 -mb-3",
+      )}
+    >
+      {children}
+    </div>
+  );
+}
+
 /**
  * The right-hand inspector: what is selected, its name (when it has one) and the editors for it,
  * which the workspace passes in as `children` because they edit its one draft history.
@@ -135,31 +197,33 @@ export function StudioInspector({
         </header>
       )}
       <div className={STUDIO_RAIL_BODY_CLASS} data-studio-rail-body="">
-        {labels !== undefined ? (
-          <StudioInspectorGroup title="General">
-            <LabelsForm key={labelsKey} labels={labels} />
-          </StudioInspectorGroup>
-        ) : note === undefined ? null : (
-          <p className="text-sm">{note}</p>
-        )}
-        {children}
-        <StudioInspectorGroup title="Details" defaultOpen={false}>
-          <dl className="space-y-3 font-mono text-xs">
-            {[
-              ["Kind", descriptor.kind],
-              ["Alias", descriptor.alias],
-              ["Source path", descriptor.sourcePath || "/"],
-            ].map(([label, value]) => (
-              <div key={label} className="flex items-start justify-between gap-2">
-                <div className="min-w-0">
-                  <dt className="font-semibold">{label}</dt>
-                  <dd className="break-all">{value}</dd>
+        <div>
+          {labels !== undefined ? (
+            <StudioInspectorGroup title="General">
+              <LabelsForm key={labelsKey} labels={labels} />
+            </StudioInspectorGroup>
+          ) : note === undefined ? null : (
+            <p className="text-sm">{note}</p>
+          )}
+          {children}
+          <StudioInspectorGroup title="Details" defaultOpen={false}>
+            <dl className="space-y-3 font-mono text-xs">
+              {[
+                ["Kind", descriptor.kind],
+                ["Alias", descriptor.alias],
+                ["Source path", descriptor.sourcePath || "/"],
+              ].map(([label, value]) => (
+                <div key={label} className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <dt className="font-semibold">{label}</dt>
+                    <dd className="break-all">{value}</dd>
+                  </div>
+                  <StudioCopyButton label={`Copy ${label?.toLowerCase()}`} value={value!} />
                 </div>
-                <StudioCopyButton label={`Copy ${label?.toLowerCase()}`} value={value!} />
-              </div>
-            ))}
-          </dl>
-        </StudioInspectorGroup>
+              ))}
+            </dl>
+          </StudioInspectorGroup>
+        </div>
       </div>
     </div>
   );

@@ -32,11 +32,9 @@ export const gridActionsWidth = (contract: RecordsTableContract): number => {
   const inline = contract.rowBehaviours.rowActions
     .filter((action) => action.placement === "inline")
     .slice(0, 3);
-  // Reserve the label as well as the icon, padding and gaps; the menu keeps every action reachable.
+  // Each inline action is an icon button (its label is its tooltip); the menu keeps every action reachable.
   const actionsWidth =
-    16 +
-    inline.reduce((width, action) => width + 48 + Array.from(action.label).length * 9, 0) +
-    36 * (1 + Number(contract.features.rowEdit.enabled));
+    16 + inline.length * 36 + 36 * (1 + Number(contract.features.rowEdit.enabled));
   return Math.max(editorWidth, actionsWidth);
 };
 

@@ -1,4 +1,5 @@
 "use client";
+import { FieldLegend } from "@vortex/ui/components/field";
 import { Alert, AlertDescription } from "@vortex/ui/components/alert";
 import { useState } from "react";
 import { Button } from "@vortex/ui/components/button";
@@ -94,7 +95,7 @@ function EntryRows({
   };
   return (
     <fieldset className="space-y-2">
-      <legend className="text-sm font-medium">{label}</legend>
+      <FieldLegend variant="label">{label}</FieldLegend>
       {named.map((entry) => (
         <StudioFlowValueControl
           key={entry.name}
@@ -204,10 +205,10 @@ function ReadFields({
   const options = field.options ?? [];
   return (
     <div className="space-y-1.5">
-      <Label htmlFor={id}>{label}</Label>
-      <p className="text-xs text-muted-foreground">
-        The step returns these fields as its values output, keyed by field name.
-      </p>
+      <div className="flex items-center gap-1">
+        <Label htmlFor={id}>{label}</Label>
+        <StudioHelp hint="The step returns these fields as its values output, keyed by field name." />
+      </div>
       {options.length === 0 ? (
         <p className="text-sm text-muted-foreground">Choose the record type first.</p>
       ) : (
@@ -256,10 +257,10 @@ function FieldValues({
   );
   return (
     <fieldset className="space-y-2">
-      <legend className="text-sm font-medium">
+      <FieldLegend variant="label">
         {field.label}
         {!field.required && <span className="text-xs text-muted-foreground"> Optional</span>}
-      </legend>
+      </FieldLegend>
       <StudioOptionControl
         id={`${id}-mode`}
         aria-label={`${field.label}: how they are given`}
@@ -313,7 +314,11 @@ function FieldValues({
               </AlertDescription>
             </Alert>
           )}
-          {entries.length === 0 && fields.length > 0 && <StudioHelp hint="No field is set yet." />}
+          {entries.length === 0 && fields.length > 0 && (
+            <p role="status" className="text-sm text-muted-foreground">
+              No field is set yet.
+            </p>
+          )}
           <StudioEntryList
             label={field.label}
             itemName="field"
@@ -678,9 +683,13 @@ function ConditionControl({
   };
   return (
     <fieldset className="space-y-2" id={id} disabled={disabled}>
-      <legend className="text-sm font-medium">Condition</legend>
+      <FieldLegend variant="label" className="flex items-center gap-1">
+        Condition
+      </FieldLegend>
       {tree === undefined && (
-        <StudioHelp hint="Set a condition. The step keeps its saved condition until this is complete." />
+        <p role="status" className="text-sm text-muted-foreground">
+          Set a condition. The step keeps its saved condition until this is complete.
+        </p>
       )}
       <StudioConditionControls
         {...(tree === undefined ? {} : { value: tree })}
@@ -735,14 +744,16 @@ function ControlForm({
     case "stop":
       return (
         <div className="space-y-1.5">
-          <Label htmlFor={id}>Outcome</Label>
+          <div className="flex items-center gap-1">
+            <Label htmlFor={id}>Outcome</Label>
+            <StudioHelp hint="A short name for how the flow ended, such as cancelled." />
+          </div>
           <Input
             id={id}
             disabled={disabled}
             value={control.outcome}
             onChange={(event) => onChange({ kind: "stop", outcome: event.target.value }, null)}
           />
-          <StudioHelp hint="A short name for how the flow ended, such as cancelled." />
         </div>
       );
     case "run_flow":
@@ -876,7 +887,9 @@ function ControlForm({
       );
     case "none":
       return (
-        <StudioHelp hint="This step only groups the steps of its branches; add steps to them on the canvas." />
+        <p role="status" className="text-sm text-muted-foreground">
+          This step only groups the steps of its branches; add steps to them on the canvas.
+        </p>
       );
   }
 }
@@ -920,78 +933,96 @@ export function StudioFlowStepForm({
           );
         })
         .map((field) => (
-          <div key={field.key} className="space-y-1" data-vortex-setting={field.key}>
-            <PropertyControl
-              id={`${id}-${field.key}`}
-              field={field}
-              disabled={disabled}
-              value={
-                Object.hasOwn(draft.properties, field.key) ? draft.properties[field.key]! : null
-              }
-              references={references}
-              choices={choices}
-              flows={flows}
-              onChange={(value) => {
-                const properties = { ...draft.properties, [field.key]: value };
-                if (
-                  field.key === "result_type" &&
-                  fields.some(
-                    (entry) => entry.key === "formula" && entry.control === "calculation",
-                  ) &&
-                  value?.kind === "text"
-                ) {
-                  if (value.value === "decimal_number" || value.value === "money") {
-                    properties.places = {
-                      kind: "whole",
-                      source: studioFlowValueSourceOf({
-                        kind: "literal",
-                        literal: { type: "whole_number", value: 2 },
-                      }),
-                    };
-                    properties.rounding = { kind: "text", value: "half_up" };
-                  } else {
-                    properties.places = null;
-                    properties.rounding = null;
-                  }
+          <div
+            key={field.key}
+            role="group"
+            aria-label={field.label}
+            aria-describedby={field.help === undefined ? undefined : `${id}-${field.key}-help`}
+            className="flex items-start gap-1"
+            data-vortex-setting={field.key}
+          >
+            <div className="min-w-0 flex-1">
+              <PropertyControl
+                id={`${id}-${field.key}`}
+                field={field}
+                disabled={disabled}
+                value={
+                  Object.hasOwn(draft.properties, field.key) ? draft.properties[field.key]! : null
                 }
-                // A message shown in a slot or inline names its component, any other does not: the two
-                // settings change together, so neither edit is refused for the other being unset.
-                let problem: string | null = null;
-                if (
-                  (field.key === "target" || field.key === "component") &&
-                  fields.some((entry) => entry.key === "component")
-                ) {
-                  if (field.key === "target" && value?.kind === "text") {
-                    const placed = value.value === "inline" || value.value === "slot";
-                    const current = choices.messagePlacements.find(
-                      (entry) =>
-                        properties.component?.kind === "text" &&
-                        entry.alias === properties.component.value,
-                    );
-                    const chosen =
-                      current?.kind === value.value
-                        ? current
-                        : choices.messagePlacements.find((entry) => entry.kind === value.value);
-                    properties.component =
-                      placed && chosen !== undefined ? { kind: "text", value: chosen.alias } : null;
-                    if (placed && chosen === undefined)
-                      problem = `This page has no ${value.value === "slot" ? "Notice slot" : "block to show a message under"}. Add one on the page first.`;
+                references={references}
+                choices={choices}
+                flows={flows}
+                onChange={(value) => {
+                  const properties = { ...draft.properties, [field.key]: value };
+                  if (
+                    field.key === "result_type" &&
+                    fields.some(
+                      (entry) => entry.key === "formula" && entry.control === "calculation",
+                    ) &&
+                    value?.kind === "text"
+                  ) {
+                    if (value.value === "decimal_number" || value.value === "money") {
+                      properties.places = {
+                        kind: "whole",
+                        source: studioFlowValueSourceOf({
+                          kind: "literal",
+                          literal: { type: "whole_number", value: 2 },
+                        }),
+                      };
+                      properties.rounding = { kind: "text", value: "half_up" };
+                    } else {
+                      properties.places = null;
+                      properties.rounding = null;
+                    }
                   }
-                  if (field.key === "component" && value?.kind === "text") {
-                    const placement = choices.messagePlacements.find(
-                      (entry) => entry.alias === value.value,
-                    );
-                    if (placement !== undefined)
-                      properties.target = { kind: "text", value: placement.kind };
+                  // A message shown in a slot or inline names its component, any other does not: the two
+                  // settings change together, so neither edit is refused for the other being unset.
+                  let problem: string | null = null;
+                  if (
+                    (field.key === "target" || field.key === "component") &&
+                    fields.some((entry) => entry.key === "component")
+                  ) {
+                    if (field.key === "target" && value?.kind === "text") {
+                      const placed = value.value === "inline" || value.value === "slot";
+                      const current = choices.messagePlacements.find(
+                        (entry) =>
+                          properties.component?.kind === "text" &&
+                          entry.alias === properties.component.value,
+                      );
+                      const chosen =
+                        current?.kind === value.value
+                          ? current
+                          : choices.messagePlacements.find((entry) => entry.kind === value.value);
+                      properties.component =
+                        placed && chosen !== undefined
+                          ? { kind: "text", value: chosen.alias }
+                          : null;
+                      if (placed && chosen === undefined)
+                        problem = `This page has no ${value.value === "slot" ? "Notice slot" : "block to show a message under"}. Add one on the page first.`;
+                    }
+                    if (field.key === "component" && value?.kind === "text") {
+                      const placement = choices.messagePlacements.find(
+                        (entry) => entry.alias === value.value,
+                      );
+                      if (placement !== undefined)
+                        properties.target = { kind: "text", value: placement.kind };
+                    }
                   }
-                }
-                onChange({ ...draft, properties }, problem, field.key);
-              }}
-            />
-            {field.help === undefined ? null : <StudioHelp hint={field.help} />}
+                  onChange({ ...draft, properties }, problem, field.key);
+                }}
+              />
+            </div>
+            {field.help === undefined ? null : (
+              <StudioHelp hint={field.help} id={`${id}-${field.key}-help`} />
+            )}
           </div>
         ))}
-      <StudioInspectorGroup title="Description">
+      <StudioInspectorGroup
+        title="Description"
+        defaultOpen={false}
+        hint="Shown on the canvas in place of the step's summary."
+        summary={draft.description === "" ? "None" : draft.description}
+      >
         <Label htmlFor={`${id}-description`}>
           Description <span className="text-xs text-muted-foreground">Optional</span>
         </Label>
@@ -1004,7 +1035,6 @@ export function StudioFlowStepForm({
             onChange({ ...draft, description: event.target.value }, null, "description")
           }
         />
-        <StudioHelp hint="Shown on the canvas in place of the step's summary." />
       </StudioInspectorGroup>
     </div>
   );

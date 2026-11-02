@@ -1,4 +1,5 @@
 "use client";
+import { FieldLegend } from "@vortex/ui/components/field";
 import { Alert, AlertDescription } from "@vortex/ui/components/alert";
 import {
   Suspense,
@@ -22,13 +23,13 @@ import { useConfirm } from "@vortex/ui/components/confirm-dialog";
 import { Input } from "@vortex/ui/components/input";
 import { cn } from "@vortex/ui/lib/utils";
 import {
-  StudioOptionControl,
   studioMenuPageChoices,
   studioMenuPosition,
   type StudioMenuCommand,
   type StudioMenuItem,
   type StudioMenuResult,
-} from "@vortex/ui/studio";
+} from "@vortex/platform/schema";
+import { StudioHelp, StudioOptionControl } from "@vortex/ui/studio";
 import { studioAccessGateChoices } from "@vortex/ui/studio";
 import { StudioNavTree, type StudioNavNode } from "./studio-nav-tree";
 import { StudioPanelShell, StudioSection } from "./studio-frame";
@@ -582,10 +583,10 @@ function StudioMenuEntryEditor({
         )}
       </StudioField>
       <fieldset className="space-y-1">
-        <legend className="text-sm font-medium">Icon</legend>
-        <p className="text-xs text-muted-foreground">
-          Drawn from the application&apos;s icon library, chosen in Theme.
-        </p>
+        <FieldLegend variant="label">
+          Icon
+          <StudioHelp hint="Drawn from the application's icon library, chosen in Theme." />
+        </FieldLegend>
         <div role="radiogroup" aria-label="Icon" className="grid grid-cols-7 gap-1">
           {VORTEX_ICON_NAMES.map((name: VortexIconName) => (
             <button
@@ -665,9 +666,10 @@ function StudioMenuEntryEditor({
         </div>
       )}
       {item.type === "heading" && (
-        <p className="text-xs text-muted-foreground">
-          A heading shows when a person can see at least one entry under it.
-        </p>
+        <div className="flex items-center gap-1 text-xs font-semibold">
+          Heading
+          <StudioHelp hint="A heading shows when a person can see at least one entry under it." />
+        </div>
       )}
       {item.type !== "heading" && position.headingAlias === null && (
         <form

@@ -1324,6 +1324,19 @@ export function validateFlow(
               "Message action inputs require an action flow",
             );
         }
+        if (node.type === "interface.show_form") {
+          const named = node.properties.form !== undefined;
+          const declared = node.properties.fields !== undefined;
+          if (named === declared)
+            add(
+              [...path, "properties", named ? "fields" : "form"],
+              "vortex.definition.workflow_node_values",
+              named ? "invalid_value" : "required_value",
+              named
+                ? "A Show form step uses a form on the page or declares its own fields, never both"
+                : "A Show form step names a form on the page or declares its own fields",
+            );
+        }
         if (node.type === "data.record_link") checkRecordLinkTask(node, path);
       }
     }

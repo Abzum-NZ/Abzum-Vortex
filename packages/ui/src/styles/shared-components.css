@@ -7075,3 +7075,28 @@
     }
   }
 }
+
+/*
+ * Theme hooks of the shared components that have no style of their own in the generated sheet. Each
+ * rule takes only theme tokens and inherited values, so a theme can restyle the component.
+ */
+.cn-spinner {
+  color: inherit;
+}
+
+.cn-collapsible-trigger:not(.cn-button) {
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  &:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+}
+
+.cn-notice {
+  text-wrap: pretty;
+}
+
+.cn-confirm-dialog {
+  text-wrap: pretty;
+}

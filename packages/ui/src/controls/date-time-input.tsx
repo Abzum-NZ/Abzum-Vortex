@@ -23,7 +23,7 @@ import {
   fieldFocusLost,
 } from "./field-parts";
 import { useFormFieldPublisher, useRequiredFormField } from "./form-context";
-import { assertTimeZone } from "../display/date-format";
+import { assertTimeZone } from "@vortex/platform/schema";
 import { toLocalInputValue, toStoredInstant } from "./date-time-zone";
 
 type DateTimeInputProps = ControlRenderProps<DateTimeInputPayload>;

@@ -1,5 +1,5 @@
 {
-  "source_contract_version": "4.5.0",
+  "source_contract_version": "4.6.0",
   "root_alias": "app_iam",
   "key": "vortex.app.iam",
   "kind": "application",
@@ -4985,14 +4985,14 @@
                                     "kind": "literal",
                                     "literal": {
                                       "type": "text",
-                                      "value": "vortex.app.app_store"
+                                      "value": "vortex.app.studio"
                                     }
                                   },
                                   "page_key": {
                                     "kind": "literal",
                                     "literal": {
                                       "type": "text",
-                                      "value": "app_store_catalogue"
+                                      "value": "app_store"
                                     }
                                   }
                                 }
@@ -5385,14 +5385,14 @@
                                     "kind": "literal",
                                     "literal": {
                                       "type": "text",
-                                      "value": "vortex.app.app_store"
+                                      "value": "vortex.app.studio"
                                     }
                                   },
                                   "page_key": {
                                     "kind": "literal",
                                     "literal": {
                                       "type": "text",
-                                      "value": "app_store_catalogue"
+                                      "value": "app_store"
                                     }
                                   }
                                 }

@@ -27,7 +27,7 @@ import { Progress } from "../../components/progress";
 import { Spinner } from "../../components/spinner";
 import { Icon } from "../../icons/icon";
 import type { DisplayTableBulkRun, DisplayTableSelectionScope } from "../projected-data";
-import { formatCount, recordsPhrase } from "../date-format";
+import { formatCount, recordsPhrase } from "@vortex/platform/schema";
 import type { GridFeatureContext, GridFeatureModule, GridFeaturePointProps } from "./registry";
 
 /** How a refused record is described in a run's summary, grouped by reason. */

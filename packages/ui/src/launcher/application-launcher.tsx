@@ -5,7 +5,7 @@ import { Icon, resolveVortexIconName } from "../icons";
 import { Button } from "../components/button";
 import { Card, CardDescription, CardFooter, CardHeader, CardTitle } from "../components/card";
 import { Empty, EmptyHeader, EmptyMedia, EmptyTitle } from "../components/empty";
-import { cellValueToText } from "../display/cell";
+import { cellValueToText } from "@vortex/platform/schema";
 import { DisplayHeader, RowActionControl } from "../display/controls";
 import { rowActionEventIdOf } from "../display/context";
 import { DisplayStateContainer } from "../display/display-state-container";

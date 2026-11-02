@@ -519,6 +519,58 @@ const skipToPageContent = (event: MouseEvent<HTMLAnchorElement>): void => {
   target.focus();
 };
 
+/** The top bar a definition's shell chooses: the same bar for every application, Studio's editor included. */
+export type ApplicationFrameTopBar = Exclude<
+  ApplicationPuckRootShell,
+  { kind: "default" }
+>["presentation"]["topBar"];
+
+/**
+ * The shared application frame top bar: breadcrumb, organisation and application switchers,
+ * appearance control and account menu, in the one height and styling. A surface that has its own
+ * commands (Studio's editor) puts them in `actions`, ahead of the switchers.
+ */
+export function ApplicationFrameHeader({
+  shellName,
+  topBar,
+  collapsibleSidebar = false,
+  runtime,
+  actions,
+}: Readonly<{
+  shellName: string;
+  topBar: ApplicationFrameTopBar;
+  collapsibleSidebar?: boolean;
+  runtime: ApplicationShellRuntime | undefined;
+  actions?: ReactNode;
+}>): ReactElement {
+  return (
+    <header className="sticky top-0 z-20 flex min-h-16 w-full shrink-0 flex-wrap items-center gap-x-[var(--vortex-space-sm)] gap-y-[var(--vortex-space-xs)] bg-background/95 px-[var(--vortex-space-md)] backdrop-blur supports-[backdrop-filter]:bg-background/80 sm:h-16 sm:flex-nowrap">
+      {/* The first stop for keyboard users: past the header and the navigation to the page. */}
+      <a
+        href={`#${mainContentId}`}
+        onClick={skipToPageContent}
+        className="sr-only bg-background px-[var(--vortex-space-md)] py-[var(--vortex-space-sm)] text-sm font-medium text-foreground focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-50 focus:ring-2 focus:ring-ring"
+      >
+        Skip to main content
+      </a>
+      {collapsibleSidebar ? <SidebarTrigger className="max-sm:hidden" /> : null}
+      {topBar.breadcrumbs ? <Breadcrumbs shellName={shellName} runtime={runtime} /> : null}
+      <div className="ms-auto flex min-w-0 items-center justify-end gap-[var(--vortex-space-xs)] max-sm:flex-wrap">
+        {actions}
+        {topBar.organizationSwitcher ? <OrganizationSwitcher runtime={runtime} /> : null}
+        {topBar.applicationSwitcher ? (
+          <ApplicationSwitcher shellName={shellName} runtime={runtime} />
+        ) : null}
+        {runtime?.webMcp === undefined ? null : <WebMcpStatus runtime={runtime.webMcp} />}
+        {topBar.appearanceToggle ? <AppearanceToggle /> : null}
+        {topBar.accountMenu ? (
+          <ApplicationAccountMenu offerOrganizationSwitch={!topBar.organizationSwitcher} />
+        ) : null}
+      </div>
+    </header>
+  );
+}
+
 /** Puck root renderer for a definition-selected application frame. */
 export function ApplicationShellRoot({
   shell,
@@ -561,37 +613,12 @@ export function ApplicationShellRoot({
         {...(editing ? { "data-vortex-editing": "" } : {})}
       >
         <style>{shellFrameCss}</style>
-        <header className="sticky top-0 z-20 flex min-h-16 w-full shrink-0 flex-wrap items-center gap-x-[var(--vortex-space-sm)] gap-y-[var(--vortex-space-xs)] bg-background/95 px-[var(--vortex-space-md)] backdrop-blur supports-[backdrop-filter]:bg-background/80 sm:h-16 sm:flex-nowrap">
-          {/* The first stop for keyboard users: past the header and the navigation to the page. */}
-          <a
-            href={`#${mainContentId}`}
-            onClick={skipToPageContent}
-            className="sr-only bg-background px-[var(--vortex-space-md)] py-[var(--vortex-space-sm)] text-sm font-medium text-foreground focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-50 focus:ring-2 focus:ring-ring"
-          >
-            Skip to main content
-          </a>
-          {presentation.sidebar.collapsible === "icon" ? (
-            <SidebarTrigger className="max-sm:hidden" />
-          ) : null}
-          {presentation.topBar.breadcrumbs ? (
-            <Breadcrumbs shellName={shell.name} runtime={runtime} />
-          ) : null}
-          <div className="ms-auto flex min-w-0 items-center justify-end gap-[var(--vortex-space-xs)] max-sm:flex-wrap">
-            {presentation.topBar.organizationSwitcher ? (
-              <OrganizationSwitcher runtime={runtime} />
-            ) : null}
-            {presentation.topBar.applicationSwitcher ? (
-              <ApplicationSwitcher shellName={shell.name} runtime={runtime} />
-            ) : null}
-            {runtime?.webMcp === undefined ? null : <WebMcpStatus runtime={runtime.webMcp} />}
-            {presentation.topBar.appearanceToggle ? <AppearanceToggle /> : null}
-            {presentation.topBar.accountMenu ? (
-              <ApplicationAccountMenu
-                offerOrganizationSwitch={!presentation.topBar.organizationSwitcher}
-              />
-            ) : null}
-          </div>
-        </header>
+        <ApplicationFrameHeader
+          shellName={shell.name}
+          topBar={presentation.topBar}
+          collapsibleSidebar={presentation.sidebar.collapsible === "icon"}
+          runtime={runtime}
+        />
         <main
           id={mainContentId}
           tabIndex={-1}

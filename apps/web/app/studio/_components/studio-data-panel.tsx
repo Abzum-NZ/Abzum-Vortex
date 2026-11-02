@@ -1,8 +1,15 @@
 "use client";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@vortex/ui/components/dropdown-menu";
 import { useMemo, useState } from "react";
 import { Icon } from "@vortex/ui";
 import { Badge } from "@vortex/ui/components/badge";
 import { Button } from "@vortex/ui/components/button";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@vortex/ui/components/tooltip";
 import { StudioPanelShell, StudioSearchBox, StudioSection } from "./studio-frame";
 import {
   StudioNavEmpty,
@@ -164,28 +171,32 @@ export function StudioDataPanel({
       title="Data"
       hidden={hidden}
       action={
-        <div className="flex items-center gap-1">
-          <Button
-            type="button"
-            size="sm"
-            variant="ghost"
-            onClick={onCreateModule}
-            disabled={disabled}
-          >
-            <Icon name="plus" />
-            Module
-          </Button>
-          <Button
-            type="button"
-            size="sm"
-            variant="secondary"
-            onClick={onCreate}
-            disabled={disabled}
-          >
-            <Icon name="plus" />
-            Record type
-          </Button>
-        </div>
+        <DropdownMenu>
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <DropdownMenuTrigger
+                  render={
+                    <Button
+                      type="button"
+                      size="icon-sm"
+                      variant="ghost"
+                      aria-label="Add a record type or a module"
+                      disabled={disabled}
+                    />
+                  }
+                />
+              }
+            >
+              <Icon name="plus" />
+            </TooltipTrigger>
+            <TooltipContent>Add a record type or a module</TooltipContent>
+          </Tooltip>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={onCreate}>Record type</DropdownMenuItem>
+            <DropdownMenuItem onClick={onCreateModule}>Module</DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       }
       search={
         <StudioSearchBox

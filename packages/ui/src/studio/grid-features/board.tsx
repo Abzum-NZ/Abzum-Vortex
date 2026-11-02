@@ -16,12 +16,9 @@ import {
   StudioReferencePicker,
   type StudioReferencePickerOption,
 } from "../studio-reference-picker";
-import {
-  StudioOptionControl,
-  StudioSettingFields,
-  type StudioSettingChoices,
-  type StudioSettingValues,
-} from "../studio-setting-controls";
+import { StudioSettingFields } from "../studio-setting-controls";
+import { StudioOptionControl } from "../studio-setting-basic-controls";
+import type { StudioSettingChoices, StudioSettingValues } from "../studio-setting-model";
 
 type GroupValue = Extract<SourceBlockPropertyValueContract, { kind: "group" }>;
 

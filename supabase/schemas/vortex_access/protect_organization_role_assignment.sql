@@ -3,6 +3,10 @@ CREATE OR REPLACE FUNCTION vortex_access.protect_organization_role_assignment() 
     SET search_path TO ''
     AS $$
 begin
+  -- Only the history purge role may delete these rows; it owns one function and nothing else.
+  if tg_op = 'DELETE' and current_user = 'vortex_history_purger' then
+    return old;
+  end if;
   if tg_op = 'DELETE' then
     raise exception using errcode = '23514',
       message = 'Organization role assignments cannot be deleted';

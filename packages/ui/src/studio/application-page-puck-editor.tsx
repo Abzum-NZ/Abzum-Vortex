@@ -57,7 +57,7 @@ import {
   withCopiedFlowBindings,
   removeFlowBindingsOf,
   syncStoredBlockDependencies,
-} from "./stored-composition";
+} from "@vortex/platform/schema";
 import {
   StudioCanvasCompiledSettings,
   studioCanvasConfig,

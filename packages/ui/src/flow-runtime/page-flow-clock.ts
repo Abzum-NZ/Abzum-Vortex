@@ -1,4 +1,4 @@
-import { zonedDateTimeParts } from "../display/date-format";
+import { zonedDateTimeParts } from "@vortex/platform/schema";
 
 /** The page clock and the same instant's calendar date in the organisation's time zone. */
 export const pageFlowClock = (

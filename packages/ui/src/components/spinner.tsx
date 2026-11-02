@@ -9,7 +9,7 @@ function Spinner({ className, ...props }: Omit<VortexIconProps, "name">) {
       data-slot="spinner"
       role="status"
       aria-label="Loading"
-      className={cn("size-4 animate-spin", className)}
+      className={cn("cn-spinner size-4 animate-spin", className)}
       {...props}
     />
   );

@@ -100,16 +100,34 @@ const namedActionFor = (
 };
 
 /**
- * Installing and removing need the installation permission; removing also needs current row facts
- * proving the application is not supplied by the platform. Opening and editing use declared links.
+ * Installing, removing and deleting need the installation permission, and the application's current
+ * row facts: an install or upgrade is offered where a published version is waiting, removing where
+ * the application is installed, and deleting where it is not; removing and deleting also need proof
+ * that the platform does not supply the application. Opening and editing use declared links.
  */
 export const applicationCapabilityAllowed = (
   capability: ApplicationActionCapability,
   application: Parameters<ApplicationSurfaceAccess["isOpenable"]>[0] | undefined,
   capabilities: ApplicationSurfaceAccess["capabilities"],
-): boolean =>
-  capabilities.mayInstall &&
-  (capability === "install_application" || application?.isSystemApplication === false);
+): boolean => {
+  // Creating needs no application: it is for whoever may change drafts.
+  if (capability === "create_application") return capabilities.mayBuild;
+  if (application === undefined) return false;
+  const installed = application.status === "installed" || application.status === "update_available";
+  switch (capability) {
+    case "publish_application":
+      return capabilities.mayPublish && application.isSystemApplication === false;
+    case "install_application":
+      return (
+        capabilities.mayInstall &&
+        (application.status === "available" || application.status === "update_available")
+      );
+    case "remove_application":
+      return capabilities.mayInstall && application.isSystemApplication === false && installed;
+    case "delete_application":
+      return capabilities.mayInstall && application.isSystemApplication === false && !installed;
+  }
+};
 
 /**
  * The application row actions of one read: a link action resolves its address per row (and is

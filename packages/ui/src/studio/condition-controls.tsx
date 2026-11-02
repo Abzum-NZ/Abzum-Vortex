@@ -1,4 +1,5 @@
 "use client";
+import { Label } from "../components/label";
 import { Alert, AlertDescription } from "../components/alert";
 import { StudioReferencePicker } from "./studio-reference-picker";
 import { StudioField } from "./studio-field";
@@ -11,7 +12,7 @@ import {
 } from "@vortex/ui/components/dropdown-menu";
 import { Plus, RotateCcw } from "lucide-react";
 import { useState } from "react";
-import { StudioOptionControl } from "./studio-setting-controls";
+import { StudioOptionControl } from "./studio-setting-basic-controls";
 import { StudioOptionsControl } from "./studio-options-control";
 import { StudioEntryList, StudioIconButton, useStudioEntryKeys } from "./studio-entry-list";
 import { StudioInspectorActions } from "./studio-inspector-actions";
@@ -117,7 +118,7 @@ function TreeEditor({
       createInitialStudioCondition(context) === undefined;
     return (
       <div className="min-w-0 space-y-3 text-sm">
-        <label className="flex flex-col gap-2 text-sm">
+        <Label className="flex flex-col items-stretch gap-2">
           Match when
           <StudioOptionControl
             aria-label="Match when"
@@ -131,7 +132,7 @@ function TreeEditor({
               onReplace({ kind: next === "any" ? "any" : "all", conditions: condition.conditions })
             }
           />
-        </label>
+        </Label>
         <StudioEntryList
           label={condition.kind === "all" ? "All of these conditions" : "Any of these conditions"}
           itemName="condition"
@@ -348,7 +349,7 @@ function TreeEditor({
           </StudioField>
         );
       return (
-        <label className="flex flex-col gap-2 text-sm">
+        <Label className="flex flex-col items-stretch gap-2">
           Option
           <StudioOptionControl
             aria-label="Option"
@@ -362,7 +363,7 @@ function TreeEditor({
             }}
           />
           {optionError && <span role="alert">{optionError}</span>}
-        </label>
+        </Label>
       );
     }
     if (operand.value === null) {
@@ -504,7 +505,7 @@ function TreeEditor({
   return (
     <div className="min-w-0 space-y-4 text-sm">
       {operandSelector("left")}
-      <label className="flex flex-col gap-2 text-sm">
+      <Label className="flex flex-col items-stretch gap-2">
         Comparison
         <StudioOptionControl
           aria-label="Comparison"
@@ -526,7 +527,7 @@ function TreeEditor({
           onChange={(next) => changeOperator(next as ConditionOperator)}
         />
         {operatorIssue && <span role="alert">{operatorIssue}</span>}
-      </label>
+      </Label>
       {!unaryOperators.has(condition.operator) && <>{operandSelector("right")}</>}
       <StudioIconButton
         label="Reset condition"

@@ -6,7 +6,7 @@ import type { RecordsTableColumnContract, RecordsTableDensity } from "@vortex/pl
 import { Card } from "../components/card";
 import { cn } from "../lib/utils";
 import type { DisplayRow } from "./projected-data";
-import { cellValueToText } from "./cell";
+import { cellValueToText } from "@vortex/platform/schema";
 import { useRowEntrance } from "./row-entrance";
 import type { RowExpansionControls } from "./row-expansion";
 import { RowExpansionToggle } from "./row-expansion-toggle";

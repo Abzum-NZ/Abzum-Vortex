@@ -360,7 +360,29 @@ const operation = <Schema extends z.ZodType>(definition: {
   });
 
 /** A read-only application catalogue review, run under the person's own authority. */
-const applicationStoreReview = (journey: "review" | "reviewRemoval"): Operation =>
+const applicationStoreReview = (
+  journey: "review" | "reviewRemoval" | "reviewPurge" | "reviewPublication",
+): Operation =>
+  Object.freeze({
+    execute: async (services, caller, inputs) => {
+      const store = services.applicationStore;
+      if (store === undefined) return { kind: "unavailable" };
+      // An install or removal review asks for a recent sign-in first; a read of the standing does not.
+      if (journey === "review" || journey === "reviewRemoval") {
+        const stepUp = await store.requireStepUp(
+          caller.session,
+          caller.selection,
+          inputs,
+          journey === "review" ? "install_or_upgrade" : "uninstall",
+        );
+        if (stepUp !== undefined) return stepUp;
+      }
+      return store[journey](caller.session, caller.selection, inputs);
+    },
+  });
+
+/** Creating an application or publishing a version of it: no installation receipt is involved. */
+const applicationAuthoringJourney = (journey: "create" | "publish"): Operation =>
   Object.freeze({
     execute: async (services, caller, inputs) => {
       const store = services.applicationStore;
@@ -374,7 +396,9 @@ const applicationStoreReview = (journey: "review" | "reviewRemoval"): Operation 
  * complete the claimed receipt with its own reported outputs, in the transaction that reaches its
  * target.
  */
-const applicationStoreJourney = (journey: "install" | "upgrade" | "remove"): Operation =>
+const applicationStoreJourney = (
+  journey: "install" | "upgrade" | "remove" | "purge" | "delete",
+): Operation =>
   Object.freeze({
     execute: async (services, caller, inputs) => {
       const store = services.applicationStore;
@@ -1195,6 +1219,12 @@ const operations: Readonly<Record<PlatformServiceOperationKey, Operation>> = Obj
   upgrade_application: applicationStoreJourney("upgrade"),
   review_application_removal: applicationStoreReview("reviewRemoval"),
   remove_application: applicationStoreJourney("remove"),
+  review_application_purge: applicationStoreReview("reviewPurge"),
+  purge_application: applicationStoreJourney("purge"),
+  delete_application: applicationStoreJourney("delete"),
+  create_application: applicationAuthoringJourney("create"),
+  review_application_publication: applicationStoreReview("reviewPublication"),
+  publish_application: applicationAuthoringJourney("publish"),
 } satisfies Record<PlatformServiceOperationKey, Operation>);
 
 /** A value of a declared type the executor does not carry yet is refused, never coerced. */

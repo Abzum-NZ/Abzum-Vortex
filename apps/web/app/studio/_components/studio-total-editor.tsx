@@ -1,4 +1,5 @@
 "use client";
+import { StudioHelp } from "@vortex/ui/studio";
 import { useMemo } from "react";
 import {
   calculationResultTypeLabels,
@@ -210,10 +211,10 @@ export function StudioTotalEditor({
         </StudioField>
       )}
       <section className="space-y-2" aria-label="Filter of the related records">
-        <h4 className="text-sm font-semibold">Only related records that match</h4>
-        <p className="text-xs text-muted-foreground">
-          Optional. Leave it empty to take every related record.
-        </p>
+        <h4 className="flex items-center gap-1 text-sm font-semibold">
+          Only related records that match
+          <StudioHelp hint="Optional. Leave it empty to take every related record." />
+        </h4>
         {relationship === undefined ? (
           <p className="text-sm text-muted-foreground">Choose the related records first.</p>
         ) : filterKeys.size === 0 && settings.filter === undefined ? (

@@ -258,7 +258,7 @@ const exactTextOf = (stored: JsonValue, cell: ProjectedScalarCellValue): string 
     typeof stored.amount === "string" &&
     typeof stored.currency === "string"
   )
-    // Code first, as the CSV export writes money: a leading "-" amount would run as a formula.
+    // Code first: a leading "-" amount would run as a formula.
     return `${stored.currency} ${stored.amount}`;
   if (cell.kind !== "number") return undefined;
   if (typeof stored === "string" && isExactDecimal(stored)) return stored;

@@ -11,7 +11,7 @@ import {
 } from "@vortex/platform/schema";
 import { uniqueKey } from "./application-structure-common";
 import { studioBoardFacts } from "./contextual-palette";
-import type { StudioSettingChoices } from "./studio-setting-controls";
+import type { StudioSettingChoices } from "./studio-setting-model";
 
 /** The refusal when the record type has no room for the query a board reads. */
 const studioBoardQueryUnavailable =

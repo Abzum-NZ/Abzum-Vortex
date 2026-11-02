@@ -1,9 +1,7 @@
 "use client";
 import { useEffect, useMemo, useRef, useState } from "react";
-import type {
-  ImmutablePlatformBlockCatalogue,
-  SourceIdentityReservation,
-} from "@vortex/platform/schema";
+import { useRouter } from "next/navigation";
+import type { SourceIdentityReservation } from "@vortex/platform/schema";
 import {
   StudioFieldProblemsProvider,
   projectStudioSemanticOutline,
@@ -11,13 +9,11 @@ import {
   type StudioSemanticSelection,
   type StudioStoredApplicationDraft,
 } from "@vortex/ui/studio";
-import type { FieldInputControlReleaseMap, PlatformThemeTokens } from "@vortex/ui";
 import { createStudioPlacementDescriber, studioOutlineLabels } from "../_lib/studio-labels";
 import { studioPlaceSelection, studioTabOfSelection } from "../_lib/studio-places";
 import { describeStudioCompileFailure } from "../_lib/studio-compile-failure";
 import { ApplicationDraftAgentTools } from "./application-draft-agent-tools";
 import type { StudioModuleOwnerApplication } from "./module-fields-editor";
-import { NewApplicationWorkspace } from "./new-application-workspace";
 import { useStudioAccessTab } from "./studio-access-tab";
 import { useStudioDataTab } from "./studio-data-tab";
 import { StudioFrame } from "./studio-frame";
@@ -30,7 +26,7 @@ import {
   type StudioReleasesSection,
 } from "./studio-rail-tabs";
 import { StudioSaveState } from "./studio-save-state";
-import { StudioTopBar } from "./studio-top-bar";
+import { StudioHeader, type StudioFrameDefinition } from "./studio-header";
 import { StudioPlaceOpenerProvider, type StudioPlaceOpener } from "./studio-used-in";
 import { useStudioCanvasTab } from "./use-studio-canvas-tab";
 import { useStudioDraft } from "./use-studio-draft";
@@ -52,47 +48,37 @@ import type { StudioStructureForm } from "./studio-structure-editor";
 /** Where the workspace sits: the organisation it belongs to and the running application it builds. */
 export type StudioWorkspacePlace = Readonly<{
   organizationName: string;
+  /** Studio's shared application frame: its top bar, the signed-in person and the addresses. */
+  frame: StudioFrameDefinition;
   /** The running application, for Back to app; absent when the builder may not open it or the organisation's address is unknown. */
   applicationHref: string | undefined;
   /** The App Store, where a published version is installed or upgraded to; absent like the above. */
   appStoreHref: string | undefined;
+  /** This application's page in the App Store, whose Publish flow publishes its saved draft. */
+  /** The application's App Store page with each action flow started, by action. */
+  actionHrefs: Readonly<Record<string, string>> | undefined;
   /** Whether the organisation has this application installed; undefined when that cannot be read. */
   installed: boolean | undefined;
   /** The other applications a Navigate step can open, with their pages. */
   navigationTargets: readonly StudioNavigationApplication[];
 }>;
 
-type WorkspaceProps =
-  | Readonly<{
-      mode: "new";
-      organizationId: string;
-      platformBlockCatalogue: ImmutablePlatformBlockCatalogue;
-      fieldInputControlReleases: FieldInputControlReleaseMap;
-      platformThemeTokens: PlatformThemeTokens;
-    }>
-  | Readonly<{
-      mode: "existing";
-      organizationId: string;
-      draft: StudioStoredApplicationDraft;
-      place: StudioWorkspacePlace;
-      initialTab?: string | undefined;
-      initialSection?: string | undefined;
-      initialModule?: string | undefined;
-      applications: readonly StudioModuleOwnerApplication[];
-      initialView: Parameters<typeof useStudioDraft>[0]["initialView"];
-    }>;
+type WorkspaceProps = Readonly<{
+  mode: "existing";
+  organizationId: string;
+  draft: StudioStoredApplicationDraft;
+  place: StudioWorkspacePlace;
+  initialTab?: string | undefined;
+  initialSection?: string | undefined;
+  initialModule?: string | undefined;
+  applications: readonly StudioModuleOwnerApplication[];
+  initialView: Parameters<typeof useStudioDraft>[0]["initialView"];
+}>;
 
 type ExistingProps = Extract<WorkspaceProps, { mode: "existing" }>;
 
 export function ApplicationDraftWorkspace(props: WorkspaceProps) {
-  return props.mode === "new" ? (
-    <NewApplicationWorkspace
-      organizationId={props.organizationId}
-      catalogue={props.platformBlockCatalogue}
-    />
-  ) : (
-    <ExistingApplicationWorkspace {...props} />
-  );
+  return <ExistingApplicationWorkspace {...props} />;
 }
 
 /**
@@ -150,15 +136,19 @@ function ExistingApplicationWorkspace(props: ExistingProps) {
   const labels = useMemo(() => studioOutlineLabels(outline), [outline]);
   // Every "Used in" entry and "Show me where" link opens its place in its own tab, selected.
   const placeOpener: StudioPlaceOpener = {
-    open: (where) => {
-      const next = studioPlaceSelection(where.open, state.rootId);
+    open: (target) => {
+      if (target.kind === "access_permissions") {
+        openAccessPermissions();
+        return;
+      }
+      const next = studioPlaceSelection(target, state.rootId);
       if (next === null) return;
       // The Access tab may be showing another of its views while the role is already selected.
       if (next.kind === "role") access.showRole();
       openIn(studioTabOfSelection(next), next);
     },
-    nameOf: (where) => {
-      const next = studioPlaceSelection(where.open, state.rootId);
+    nameOf: (open) => {
+      const next = studioPlaceSelection(open, state.rootId);
       return next === null ? undefined : labels.get(studioSemanticSelectionKey(next));
     },
   };
@@ -238,6 +228,10 @@ function ExistingApplicationWorkspace(props: ExistingProps) {
     onCommand: commandAccess,
     onPreview: canvas.previewAs,
   });
+  const openAccessPermissions = () => {
+    access.showPermissions();
+    setTab("access");
+  };
   const openAccessPages = () => {
     access.showPages();
     setTab("access");
@@ -270,10 +264,13 @@ function ExistingApplicationWorkspace(props: ExistingProps) {
     readRecords: canvas.readRecordChoices,
     structure: structureCommand,
   });
+  const router = useRouter();
   const releases = useStudioReleasesTab({
     draft,
-    compositionContext: canvas.compositionContext,
-    structure: structureCommand,
+    onAction: (action) => {
+      const href = place.actionHrefs?.[action];
+      if (href !== undefined) router.push(href);
+    },
     hidden: tab !== "releases",
     initialSection: isStudioReleasesSection(props.initialSection)
       ? props.initialSection
@@ -327,19 +324,11 @@ function ExistingApplicationWorkspace(props: ExistingProps) {
             onTabChange={setTab}
             selectionKey={draft.selected === null ? "" : studioSemanticSelectionKey(draft.selected)}
             topBar={
-              <StudioTopBar
-                location={{
-                  organizationName: place.organizationName,
-                  organizationHref: `/studio/${encodeURIComponent(organizationId)}`,
-                  applicationName: source.body.name,
-                  item: tab === "releases" ? releases.title : canvas.breadcrumbItem,
-                  applications: applications.map((app) => ({
-                    name: app.name,
-                    href: `/studio/${encodeURIComponent(organizationId)}/${encodeURIComponent(app.rootId)}`,
-                  })),
-                  onApplication: () => {
-                    draft.select({ kind: "application", applicationRootId: state.rootId });
-                  },
+              <StudioHeader
+                frame={place.frame}
+                applicationName={source.body.name}
+                onApplication={() => {
+                  draft.select({ kind: "application", applicationRootId: state.rootId });
                 }}
                 saveState={<StudioSaveState draft={draft} />}
                 canUndo={state.canUndo}
@@ -427,7 +416,6 @@ function ExistingApplicationWorkspace(props: ExistingProps) {
               </>
             )}
           />
-          {releases.dialog}
           {canvas.dialog}
           {data.dialog}
         </div>

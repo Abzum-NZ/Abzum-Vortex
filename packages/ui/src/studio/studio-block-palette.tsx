@@ -9,7 +9,7 @@ import { Button } from "../components/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../components/tooltip";
 import { Input } from "../components/input";
 import { Label } from "../components/label";
-import { StudioOptionControl } from "./studio-setting-controls";
+import { StudioOptionControl } from "./studio-setting-basic-controls";
 import type {
   StudioCompositionAddTarget,
   StudioCompositionDestination,

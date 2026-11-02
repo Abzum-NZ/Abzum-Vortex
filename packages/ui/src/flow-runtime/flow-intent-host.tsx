@@ -30,11 +30,13 @@ import type {
   FlowConfirmIntent,
   FlowFormAnswer,
   FlowFormIntent,
+  FlowInlineFormIntent,
   FlowIntentHost,
   FlowMessageIntent,
 } from "./intents";
 import { surfaceCancellationError } from "./intents";
 import { FlowSurfaceContext } from "./flow-surface-context";
+import { InlineFormFields } from "./inline-form-surface";
 import type { FlowRuntimeState } from "./flow-runtime";
 import type { PageMessageTarget } from "./messages";
 
@@ -49,7 +51,7 @@ type Surface =
   | Readonly<{
       id: number;
       kind: "form";
-      form: FlowFormIntent;
+      form: FlowFormIntent | FlowInlineFormIntent;
       settle: (answer: FlowFormAnswer) => void;
     }>;
 
@@ -354,7 +356,23 @@ function FlowSurfaceHost({
         settle={current.settle}
       />
     );
-  if (current?.kind === "form") {
+  if (current?.kind === "form" && "fields" in current.form) {
+    const { form, settle } = current;
+    return (
+      <FlowDialog
+        key={current.id}
+        title={form.title ?? "Details"}
+        onDismiss={() => settle({ kind: "cancel" })}
+      >
+        <InlineFormFields
+          form={form}
+          onSubmit={(values) => settle({ kind: "submit", values })}
+          onCancel={() => settle({ kind: "cancel" })}
+        />
+      </FlowDialog>
+    );
+  }
+  if (current?.kind === "form" && !("fields" in current.form)) {
     const { form, settle } = current;
     const rendered = optionsRef.current.renderForm(form, {
       submit: (values) => settle({ kind: "submit", values }),

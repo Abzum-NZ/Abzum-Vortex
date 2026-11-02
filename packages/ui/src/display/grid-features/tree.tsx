@@ -5,8 +5,8 @@ import {
   RECORDS_TABLE_TREE_MAXIMUM_PAGE_SIZE,
   recordsTableTreeFeature,
   type TableLevelReply,
+  cellValueToText,
 } from "@vortex/platform/schema";
-import { cellValueToText } from "../cell";
 import { fail } from "../payload-parse";
 import { REPLY_ENVELOPES, readProjectedResult, type DisplayRow } from "../projected-data";
 import type { SubRowEntry, SubRowsBeneath } from "../sub-rows";

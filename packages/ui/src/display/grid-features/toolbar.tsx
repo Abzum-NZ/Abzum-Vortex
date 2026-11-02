@@ -377,14 +377,22 @@ export function GridToolbar({
           )}
           {layoutControls === undefined ? null : (
             <DropdownMenu>
-              <DropdownMenuTrigger
-                render={
-                  <Button variant="outline" size="sm" aria-label={`Columns of ${accessibleName}`} />
-                }
-              >
-                <Icon name="sliders-horizontal" aria-hidden="true" />
-                Columns
-              </DropdownMenuTrigger>
+              <Tooltip>
+                <TooltipTrigger render={<span className="inline-flex" />}>
+                  <DropdownMenuTrigger
+                    render={
+                      <Button
+                        variant="outline"
+                        size="icon-sm"
+                        aria-label={`Columns of ${accessibleName}`}
+                      />
+                    }
+                  >
+                    <Icon name="sliders-horizontal" aria-hidden="true" />
+                  </DropdownMenuTrigger>
+                </TooltipTrigger>
+                <TooltipContent>Columns</TooltipContent>
+              </Tooltip>
               <DropdownMenuContent align="end">
                 <ColumnChoices {...layoutControls} />
                 <DropdownMenuSeparator />

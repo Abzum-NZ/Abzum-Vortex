@@ -12,7 +12,7 @@ import { platformPermissionSource } from "./platform-permission-source";
 const writeApplicationDraft = async (
   organizationId: string,
   candidate: unknown,
-  mode: "create" | "save",
+  mode: "save",
 ): Promise<HumanApplicationDraftWriteResult> => {
   try {
     const resolved = await resolveIdentitySession();
@@ -28,25 +28,16 @@ const writeApplicationDraft = async (
       requests: humanOrganizationRequests(),
       permissions: platformPermissionSource,
     });
-    return mode === "create"
-      ? await writer.createRoot(resolved.session, organizationId, candidate)
-      : await writer.saveDraft(resolved.session, organizationId, candidate);
+    return await writer.saveDraft(resolved.session, organizationId, candidate);
   } catch (error) {
     return mapWebError(error, {
       route: "definition-draft-write",
-      operation: mode === "create" ? "create" : "save",
-      code: mode === "create" ? "DEFINITION_DRAFT_CREATE_FAILED" : "DEFINITION_DRAFT_SAVE_FAILED",
+      operation: "save",
+      code: "DEFINITION_DRAFT_SAVE_FAILED",
       fallback: { kind: "temporarily_unavailable" },
     });
   }
 };
-
-/** Resolves its own current session; callers supply only organization selection and authored source. */
-export const createHumanApplicationDraft = (
-  organizationId: string,
-  candidate: unknown,
-): Promise<HumanApplicationDraftWriteResult> =>
-  writeApplicationDraft(organizationId, candidate, "create");
 
 /** Source validation belongs to the platform store; this boundary resolves only the live session. */
 export const saveHumanApplicationDraft = (

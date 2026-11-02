@@ -118,25 +118,23 @@ function RowCommands({ context, row }: GridFeatureCommandProps): ReactElement | 
               <Button
                 type="button"
                 variant="ghost"
-                size="sm"
+                size="icon-sm"
                 aria-label={`${action.label}: ${name}`}
                 disabled={gesture.pending || reason !== undefined}
                 aria-busy={gesture.pending}
                 onClick={() => run(action)}
               >
                 {gesture.pending ? <Spinner aria-hidden="true" /> : <Icon name={action.icon} />}
-                {action.label}
               </Button>
             ) : (
               <Button
                 variant="ghost"
-                size="sm"
+                size="icon-sm"
                 aria-label={`${action.label}: ${name}`}
                 nativeButton={false}
                 render={<NavigationLink href={href} />}
               >
                 <Icon name={action.icon} />
-                {action.label}
               </Button>
             )}
           </TooltipTrigger>

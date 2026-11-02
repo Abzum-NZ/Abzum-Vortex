@@ -1,8 +1,10 @@
 "use client";
+import { FieldLegend } from "@vortex/ui/components/field";
 import { Alert, AlertDescription } from "@vortex/ui/components/alert";
 import { plainSourceSettingValue, recordsTableBoardFeature } from "@vortex/platform/schema";
 import type { StudioCompiledFields } from "../_lib/studio-data-model";
 import {
+  StudioDialog,
   StudioField,
   StudioInspectorActions,
   StudioInspectorGroup,
@@ -203,6 +205,9 @@ export function ApplicationCompositionEditor(props: Props) {
   // The query sheet answers after the draft changed: it chooses through the latest settings.
   const chooseQuery = useRef<(reference: string) => void>(() => undefined);
   const [wrapSetup, setWrapSetup] = useState<StudioBlockSetupRequest | null>(null);
+  const [dialog, setDialog] = useState<"move" | "wrap" | null>(null);
+  // The optional settings nobody has set go to "More settings", decided once for this block.
+  const moreSettings = useRef<ReadonlySet<string> | null>(null);
 
   if (model.kind !== "available" || layout.value === null)
     return (
@@ -242,8 +247,49 @@ export function ApplicationCompositionEditor(props: Props) {
         ]),
       ),
     );
+  const listed =
+    settingsModel.kind === "available"
+      ? settingsModel.properties.filter(
+          (property) =>
+            property !== featuresProperty &&
+            property.key !== "query_parameters" &&
+            property.key !== "row_actions" &&
+            property.key !== "open_with" &&
+            property.key !== "record_from" &&
+            !(
+              addsFromList &&
+              (property.key === "inline_create" || property.key === "create_page")
+            ) &&
+            !studioOwnsSetting(property.key),
+        )
+      : [];
+  moreSettings.current ??= new Set(
+    listed
+      .filter((property) => {
+        const value = settingsInputs.settings[property.key];
+        return (
+          !property.required &&
+          (value === undefined ||
+            (property.defaultValue !== undefined &&
+              JSON.stringify(plainSourceSettingValue(value)) ===
+                JSON.stringify(
+                  plainSourceSettingValue(
+                    property.defaultValue as Parameters<typeof plainSourceSettingValue>[0],
+                  ),
+                )))
+        );
+      })
+      .map((property) => property.key),
+  );
   const destinations = moveModel.kind === "available" ? moveModel.destinations : [];
   const inputs = layout.value;
+  const widthWord =
+    inputs.width === "fill"
+      ? "Full width"
+      : inputs.width === "content"
+        ? "Fits content"
+        : `${inputs.span} columns`;
+  const layoutSummary = `${breakpoint.charAt(0).toUpperCase()}${breakpoint.slice(1)} · ${widthWord}`;
   const orderEditable = breakpoint === "desktop" || model.responsiveOrder;
   const selectedIndex = model.order.indexOf(model.placementAlias);
   const command = (next: StudioCompositionCommand, merge?: string, done = "Changed."): boolean => {
@@ -412,8 +458,8 @@ export function ApplicationCompositionEditor(props: Props) {
   };
 
   return (
-    <section className="space-y-6" aria-labelledby={titleId}>
-      <header className="flex items-start justify-between gap-2">
+    <section aria-labelledby={titleId}>
+      <header className="flex items-start justify-between gap-2 pb-3">
         <div className="min-w-0">
           <h2 id={titleId} className="flex min-w-0 items-center gap-2 text-base font-semibold">
             <Icon name="blocks" className="size-4 shrink-0" />
@@ -438,6 +484,19 @@ export function ApplicationCompositionEditor(props: Props) {
               onSelect: () => move(1),
             },
             {
+              label: "Move to…",
+              disabled: props.disabled,
+              onSelect: () => setDialog("move"),
+            },
+            {
+              label: "Wrap in container…",
+              disabled:
+                props.disabled ||
+                wrapModel.kind !== "available" ||
+                wrapModel.containers.length === 0,
+              onSelect: () => setDialog("wrap"),
+            },
+            {
               label: "Remove",
               destructive: true,
               disabled: props.disabled || removalModel.kind !== "available",
@@ -448,8 +507,35 @@ export function ApplicationCompositionEditor(props: Props) {
           ]}
         />
       </header>
+      {removalModel.kind !== "available" && (
+        <p
+          role="status"
+          className="text-sm text-muted-foreground"
+          aria-label="Removal restrictions"
+        >
+          {removalModel.kind === "blocked"
+            ? removalModel.reason === "required_slot"
+              ? "This area needs at least this item."
+              : removalModel.reason === "content_outlet"
+                ? "This item holds a content outlet of its layout. Retarget the outlet in the Layout inspector first."
+                : removalModel.reason === "unresolved_target"
+                  ? "Something this item points to cannot be found. It cannot be removed."
+                  : `${studioPlacementReferenceSentence(removalModel)} It cannot be removed.`
+            : removalModel.kind === "invalid"
+              ? "This item could not be read. Reload Studio."
+              : removalModel.reason === "page_kind"
+                ? "Items can only be removed from a layout or from the content of a list, detail, form or dashboard page."
+                : removalModel.reason === "public_page"
+                  ? "This page is published at a public address. Its items cannot be removed."
+                  : removalModel.reason === "has_children"
+                    ? "This item holds other items. Remove or move them first."
+                    : removalModel.reason === "repeating_slot"
+                      ? "This item sits in a repeating area and cannot be removed here."
+                      : "This item no longer matches its page definition. Reload Studio."}
+        </p>
+      )}
       {settingsModel.kind === "available" ? (
-        <StudioInspectorGroup title="Settings">
+        <StudioInspectorGroup title="Settings" hint="A setting you leave unset uses its default.">
           <fieldset className="space-y-4" disabled={props.disabled}>
             {settingsModel.readsQuery && (
               <StudioQueryPicker
@@ -505,19 +591,8 @@ export function ApplicationCompositionEditor(props: Props) {
             )}
             <StudioSettingFields
               idPrefix={settingsId}
-              properties={settingsModel.properties.filter(
-                (property) =>
-                  property !== featuresProperty &&
-                  property.key !== "query_parameters" &&
-                  property.key !== "row_actions" &&
-                  property.key !== "open_with" &&
-                  property.key !== "record_from" &&
-                  !(
-                    addsFromList &&
-                    (property.key === "inline_create" || property.key === "create_page")
-                  ) &&
-                  !studioOwnsSetting(property.key),
-              )}
+              moreKeys={moreSettings.current ?? undefined}
+              properties={listed}
               values={settingsInputs.settings}
               choices={choices}
               disabled={props.disabled}
@@ -545,7 +620,6 @@ export function ApplicationCompositionEditor(props: Props) {
                 />
               ))}
           </fieldset>
-          <StudioHelp hint="A setting you leave unset uses its default." />
           {settings.problem !== "" && problemArea === "settings" && (
             <Alert variant="destructive">
               <AlertDescription>{settings.problem}</AlertDescription>
@@ -630,7 +704,7 @@ export function ApplicationCompositionEditor(props: Props) {
           }
         />
       )}
-      <StudioInspectorGroup title="Behaviour">
+      <StudioInspectorGroup title="Layout" defaultOpen={false} summary={layoutSummary}>
         <StudioField label="Screen size">
           {() => (
             <StudioSegmentedControl
@@ -651,7 +725,19 @@ export function ApplicationCompositionEditor(props: Props) {
           disabled={props.disabled || !orderEditable}
           aria-describedby={hintId}
         >
-          <legend className="text-sm font-medium">Order among its neighbours</legend>
+          <FieldLegend variant="label" className="flex items-center gap-1">
+            Order among its neighbours
+            <StudioHelp
+              id={hintId}
+              hint={
+                breakpoint !== "desktop" && !model.responsiveOrder
+                  ? "This area uses one order at every screen size."
+                  : model.explicitOrder
+                    ? "This order is set for this screen size."
+                    : "This order is inherited from the larger screen size."
+              }
+            />
+          </FieldLegend>
           <ol className="space-y-px">
             {model.order.map((alias, index) => (
               <li
@@ -668,16 +754,6 @@ export function ApplicationCompositionEditor(props: Props) {
               </li>
             ))}
           </ol>
-          <StudioHelp
-            id={hintId}
-            hint={
-              breakpoint !== "desktop" && !model.responsiveOrder
-                ? "This area uses one order at every screen size."
-                : model.explicitOrder
-                  ? "This order is set for this screen size."
-                  : "This order is inherited from the larger screen size."
-            }
-          />
           {breakpoint !== "desktop" && (
             <Button
               type="button"
@@ -694,7 +770,16 @@ export function ApplicationCompositionEditor(props: Props) {
           )}
         </fieldset>
         <fieldset className="space-y-4" disabled={props.disabled}>
-          <legend className="text-sm font-medium">Size</legend>
+          <FieldLegend variant="label" className="flex items-center gap-1">
+            Size
+            <StudioHelp
+              hint={
+                model.explicitLayout
+                  ? "This size is set for this screen size."
+                  : "This size is inherited from the larger screen size."
+              }
+            />
+          </FieldLegend>
           <label className="flex items-center justify-between gap-2 text-sm">
             Shown at this screen size
             <Switch
@@ -793,13 +878,6 @@ export function ApplicationCompositionEditor(props: Props) {
               <AlertDescription>{layout.problem}</AlertDescription>
             </Alert>
           )}
-          <StudioHelp
-            hint={
-              model.explicitLayout
-                ? "This size is set for this screen size."
-                : "This size is inherited from the larger screen size."
-            }
-          />
           {breakpoint !== "desktop" && (
             <Button
               type="button"
@@ -815,10 +893,20 @@ export function ApplicationCompositionEditor(props: Props) {
             </Button>
           )}
         </fieldset>
-        <StudioField
-          label="Move to another area"
-          hint="Moves this item, with what is inside it, to the end of the area you choose in this page or layout. Required content and nesting limits are checked first."
-        >
+      </StudioInspectorGroup>
+      <p role="status" aria-live="polite" className={message === "" ? "sr-only" : "py-2 text-sm"}>
+        {message}
+      </p>
+      <StudioDialog
+        open={dialog === "move"}
+        onOpenChange={(open) => {
+          if (!open) setDialog(null);
+        }}
+        title="Move to another area"
+        description="Moves this item, with what is inside it, to the end of the area you choose in this page or layout. Required content and nesting limits are checked first."
+        closeLabel="Cancel"
+      >
+        <StudioField label="Destination">
           {(control) => (
             <StudioReferencePicker
               {...control}
@@ -833,7 +921,9 @@ export function ApplicationCompositionEditor(props: Props) {
                     : item.label,
               }))}
               onChange={(next) => {
-                if (next !== "") moveTo(next);
+                if (next === "") return;
+                moveTo(next);
+                setDialog(null);
               }}
             />
           )}
@@ -851,11 +941,18 @@ export function ApplicationCompositionEditor(props: Props) {
                 : "There is no other area this item can move to."}
           </p>
         )}
+      </StudioDialog>
+      <StudioDialog
+        open={dialog === "wrap"}
+        onOpenChange={(open) => {
+          if (!open) setDialog(null);
+        }}
+        title="Wrap in container"
+        description="Puts this item into a new container that takes its place. The item keeps its name, settings and order. Containers that cannot hold it say why."
+        closeLabel="Cancel"
+      >
         {wrapModel.kind === "available" && wrapModel.containers.length > 0 && (
-          <StudioField
-            label="Place in a new container"
-            hint="Puts this item into a new container that takes its place. The item keeps its name, settings and order. Containers that cannot hold it say why."
-          >
+          <StudioField label="Container">
             {(control) => (
               <StudioReferencePicker
                 {...control}
@@ -870,43 +967,15 @@ export function ApplicationCompositionEditor(props: Props) {
                       : `${item.name} (not possible: ${item.unavailable})`,
                 }))}
                 onChange={(next) => {
-                  if (next !== "") wrapIn(next);
+                  if (next === "") return;
+                  setDialog(null);
+                  wrapIn(next);
                 }}
               />
             )}
           </StudioField>
         )}
-        {removalModel.kind !== "available" && (
-          <p
-            role="status"
-            className="text-sm text-muted-foreground"
-            aria-label="Removal restrictions"
-          >
-            {removalModel.kind === "blocked"
-              ? removalModel.reason === "required_slot"
-                ? "This area needs at least this item."
-                : removalModel.reason === "content_outlet"
-                  ? "This item holds a content outlet of its layout. Retarget the outlet in the Layout inspector first."
-                  : removalModel.reason === "unresolved_target"
-                    ? "Something this item points to cannot be found. It cannot be removed."
-                    : `${studioPlacementReferenceSentence(removalModel)} It cannot be removed.`
-              : removalModel.kind === "invalid"
-                ? "This item could not be read. Reload Studio."
-                : removalModel.reason === "page_kind"
-                  ? "Items can only be removed from a layout or from the content of a list, detail, form or dashboard page."
-                  : removalModel.reason === "public_page"
-                    ? "This page is published at a public address. Its items cannot be removed."
-                    : removalModel.reason === "has_children"
-                      ? "This item holds other items. Remove or move them first."
-                      : removalModel.reason === "repeating_slot"
-                        ? "This item sits in a repeating area and cannot be removed here."
-                        : "This item no longer matches its page definition. Reload Studio."}
-          </p>
-        )}
-      </StudioInspectorGroup>
-      <p role="status" aria-live="polite">
-        {message}
-      </p>
+      </StudioDialog>
       {confirmDialog}
       <StudioBlockSetupDialog
         request={wrapSetup}

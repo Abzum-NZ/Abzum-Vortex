@@ -1,4 +1,5 @@
 "use client";
+import { StudioHelp } from "./studio-field";
 import { Alert, AlertDescription } from "../components/alert";
 import { useId } from "react";
 import {
@@ -20,7 +21,8 @@ import { Input } from "../components/input";
 import { StudioReferencePicker } from "./studio-reference-picker";
 import { StudioField } from "./studio-field";
 import { StudioRecordReferenceControl } from "./studio-record-reference-control";
-import { StudioOptionControl, type StudioSettingChoices } from "./studio-setting-controls";
+import { StudioOptionControl } from "./studio-setting-basic-controls";
+import type { StudioSettingChoices } from "./studio-setting-model";
 import type { StudioQueryChoice } from "./contextual-palette";
 
 type Value = SourceBlockPropertyValueContract;
@@ -444,7 +446,10 @@ export function StudioQueryBindings({
                 />
               ))}
             {source === "fixed" && input.type?.kind === "date_time" && (
-              <p className="text-xs text-muted-foreground">Date and time in UTC.</p>
+              <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                UTC
+                <StudioHelp hint="Date and time in UTC." />
+              </span>
             )}
             {source === "relative_date" && (
               <>
