@@ -1,4 +1,5 @@
 "use client";
+import { FieldLegend } from "@vortex/ui/components/field";
 import { Alert, AlertDescription } from "@vortex/ui/components/alert";
 import { useState } from "react";
 import {
@@ -154,7 +155,7 @@ export function StudioRecordTypeSearch({
       ) : (
         <>
           <fieldset className="space-y-2">
-            <legend className="text-sm font-semibold">Found by</legend>
+            <FieldLegend variant="label">Found by</FieldLegend>
             {eligible.map((field) => {
               const priority = form.fields[field.key];
               return (

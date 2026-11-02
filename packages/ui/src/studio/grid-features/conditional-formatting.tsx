@@ -298,9 +298,10 @@ export function StudioConditionalFormattingEditor({
                     className="mt-1 size-4 shrink-0 cursor-grab text-muted-foreground"
                   />
                   <ConditionalFormatStyleSwatch style={rule.style} />
-                  <button
+                  <Button
                     type="button"
-                    className="min-w-0 flex-1 text-left text-sm"
+                    variant="ghost"
+                    className="h-auto min-w-0 flex-1 flex-col items-start whitespace-normal p-0 text-left text-sm"
                     aria-expanded={selected === rule.id}
                     onClick={() => setSelected(selected === rule.id ? undefined : rule.id)}
                   >
@@ -314,7 +315,7 @@ export function StudioConditionalFormattingEditor({
                         {issue}
                       </span>
                     )}
-                  </button>
+                  </Button>
                   <Label htmlFor={switchId} className="sr-only">
                     Apply rule {index + 1}
                   </Label>

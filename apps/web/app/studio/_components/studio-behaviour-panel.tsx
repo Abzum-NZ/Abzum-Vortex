@@ -105,8 +105,13 @@ export function StudioBehaviourPanel({
   const canCreate = createChoices.actions.some((entry) => entry.controlAlias === control);
   if (events.length === 0 && !canCreate && target.kind === "page") return null;
   const interactive = source.body.flows.filter((flow) => flow.execution === "interactive");
+  const bound = events.filter((entry) => entry.binding !== null).length;
   return (
-    <StudioInspectorGroup title="Behaviour">
+    <StudioInspectorGroup
+      title="Behaviour"
+      defaultOpen={bound > 0}
+      summary={bound === 0 ? "No flows" : bound === 1 ? "1 flow" : `${bound} flows`}
+    >
       {target.kind === "placement" && (
         <StudioRowActionsBindings
           source={source}

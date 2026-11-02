@@ -105,6 +105,7 @@ export function useStudioAccessTab({
   centre: ReactNode;
   title: string;
   showPages: () => void;
+  showPermissions: () => void;
   showRole: () => void;
 }> {
   useIntentPreload(preloadAccessEditors, "#studio-rail-access");
@@ -257,6 +258,7 @@ export function useStudioAccessTab({
     centre,
     title,
     showPages: () => show("pages"),
+    showPermissions: () => show("permissions"),
     showRole: () => {
       setView("role");
       setFeedback(null);

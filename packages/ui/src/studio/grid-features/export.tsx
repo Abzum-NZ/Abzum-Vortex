@@ -1,4 +1,6 @@
 "use client";
+import { StudioHelp } from "../studio-field";
+import { FieldLegend } from "../../components/field";
 
 import { useId, useState, type ReactElement } from "react";
 import {
@@ -46,7 +48,7 @@ export function StudioExportEditor({
         Download the columns shown, as flat records. Selections above the row limit are refused.
       </p>
       <fieldset className="space-y-2" disabled={disabled}>
-        <legend className="text-sm font-medium">File formats</legend>
+        <FieldLegend variant="label">File formats</FieldLegend>
         {recordsTableExportFormats.map((format) => {
           const checked = selected.some((item) => item.kind === "choice" && item.value === format);
           return (
@@ -70,7 +72,10 @@ export function StudioExportEditor({
           );
         })}
       </fieldset>
-      <Label htmlFor={`${id}-max-rows`}>Most records in one export</Label>
+      <div className="flex items-center gap-1">
+        <Label htmlFor={`${id}-max-rows`}>Most records in one export</Label>
+        <StudioHelp hint={`Up to ${formatCount(RECORDS_TABLE_EXPORT_MAXIMUM_ROWS)} records.`} />
+      </div>
       <Input
         id={`${id}-max-rows`}
         type="number"
@@ -96,9 +101,6 @@ export function StudioExportEditor({
           });
         }}
       />
-      <p className="text-xs text-muted-foreground">
-        Up to {formatCount(RECORDS_TABLE_EXPORT_MAXIMUM_ROWS)} records.
-      </p>
     </div>
   );
 }

@@ -962,6 +962,7 @@ const grant = (
       [
         {
           label: `The start page of ${quoted(role.name)}`,
+          trail: [candidate.body.name, "Access", role.name],
           open: { kind: "role", roleKey: role.key },
         },
       ],
@@ -1008,6 +1009,7 @@ const removeRole = (candidate: Source, roleKey: string): StudioAccessResult => {
       [
         {
           label: `${quoted(role.name)} is offered to whoever installs the application`,
+          trail: [candidate.body.name, "Access", role.name],
           open: { kind: "role", roleKey: role.key },
         },
       ],

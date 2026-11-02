@@ -1,4 +1,10 @@
 "use client";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@vortex/ui/components/dropdown-menu";
 import { useMemo, useState } from "react";
 import { Icon } from "@vortex/ui";
 import { Badge } from "@vortex/ui/components/badge";
@@ -165,35 +171,32 @@ export function StudioDataPanel({
       title="Data"
       hidden={hidden}
       action={
-        <div className="flex shrink-0 items-center gap-1">
+        <DropdownMenu>
           <Tooltip>
             <TooltipTrigger
               render={
-                <Button
-                  type="button"
-                  size="icon-sm"
-                  variant="ghost"
-                  aria-label="New module"
-                  onClick={onCreateModule}
-                  disabled={disabled}
+                <DropdownMenuTrigger
+                  render={
+                    <Button
+                      type="button"
+                      size="icon-sm"
+                      variant="ghost"
+                      aria-label="Add a record type or a module"
+                      disabled={disabled}
+                    />
+                  }
                 />
               }
             >
-              <Icon name="blocks" />
+              <Icon name="plus" />
             </TooltipTrigger>
-            <TooltipContent>New module</TooltipContent>
+            <TooltipContent>Add a record type or a module</TooltipContent>
           </Tooltip>
-          <Button
-            type="button"
-            size="sm"
-            variant="secondary"
-            onClick={onCreate}
-            disabled={disabled}
-          >
-            <Icon name="plus" />
-            Record type
-          </Button>
-        </div>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={onCreate}>Record type</DropdownMenuItem>
+            <DropdownMenuItem onClick={onCreateModule}>Module</DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       }
       search={
         <StudioSearchBox

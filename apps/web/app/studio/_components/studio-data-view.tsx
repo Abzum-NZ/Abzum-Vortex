@@ -1,7 +1,9 @@
 "use client";
 import { NavigationLink } from "@vortex/ui/routing";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
+  StudioAddButton,
+  StudioInspectorActions,
   StudioInspectorGroup,
   StudioOptionControl,
   type StudioDataSelection,
@@ -17,17 +19,11 @@ import {
   type RecordSettingsContext,
   type ModuleExtensionPointUse,
 } from "@vortex/platform/schema";
-import { Icon } from "@vortex/ui";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@vortex/ui/components/dropdown-menu";
 import { Button } from "@vortex/ui/components/button";
 import { Input } from "@vortex/ui/components/input";
 import { useConfirm } from "@vortex/ui/components/confirm-dialog";
-import { StudioPanelShell } from "./studio-frame";
+import { STUDIO_RAIL_BODY_CLASS, StudioPanelShell } from "./studio-frame";
+import { StudioInspectorHeader, StudioInspectorHeaderSlot } from "./studio-inspector";
 import { StudioField } from "./studio-field";
 import { StudioDataPanel } from "./studio-data-panel";
 import { StudioDataCentre, StudioDataEmpty } from "./studio-data-centre";
@@ -35,7 +31,7 @@ import { StudioRecordTypeDialog } from "./studio-record-type-dialog";
 import { StudioModuleDialog } from "./studio-module-dialog";
 import { StudioReferencesAlert, StudioUsedIn } from "./studio-used-in";
 import { studioUseTargetOf } from "../_lib/studio-places";
-import { StudioNewQueryForm, StudioQueryEditor, queryInputTypeLabel } from "./studio-query-editor";
+import { StudioQueryEditor, queryInputTypeLabel } from "./studio-query-editor";
 import { StudioQueryCatalogue } from "./studio-query-catalogue";
 import { StudioQuerySheet } from "./studio-query-sheet";
 import { StudioRecordTypeSearch, StudioSearchOverview } from "./studio-search-settings";
@@ -150,6 +146,7 @@ function ModuleInspector({
   );
   return (
     <div className="space-y-3">
+      <StudioInspectorHeader title={module.name} kind="Module" />
       <StudioField
         label="Module name"
         error={name.problem === "" ? undefined : name.problem}
@@ -190,6 +187,7 @@ function RecordTypeInspector({
   settings,
   name: recordName,
   onAddLink,
+  onNewQuery,
 }: Readonly<{
   source: Source;
   moduleKey: string;
@@ -200,10 +198,10 @@ function RecordTypeInspector({
   settings: RecordSettingsContext;
   name: (qualified: string) => string;
   onAddLink: () => void;
+  /** Opens the new query sheet on this record type. */
+  onNewQuery: () => void;
 }>) {
   const [confirm, confirmDialog] = useConfirm();
-  // A new field, a new relationship (a new link field) or a new query is being added.
-  const [adding, setAdding] = useState(false);
   const record = recordIn(source, moduleKey, recordKey)!;
   const [issues, setIssues] = useState<readonly string[]>([]);
   const [references, setReferences] = useState<readonly ApplicationUsePlace[]>([]);
@@ -262,166 +260,176 @@ function RecordTypeInspector({
       setRefusals((value) => value + 1);
     } else setIssues([studioEditProblem(result) ?? "The record type was not deleted."]);
   };
+  const queries =
+    source.body.modules
+      .find((module) => module.key === moduleKey)
+      ?.queries.filter(
+        (query) =>
+          query.record_type === recordKey || query.record_type === `${moduleKey}:${recordKey}`,
+      ) ?? [];
   return (
     <div className="space-y-4">
-      <StudioInspectorGroup title="General">
-        <StudioField
-          label="Name of one record"
-          error={name.problem === "" ? undefined : name.problem}
-          onUndo={name.reset}
-        >
-          {(control) => (
-            <Input
-              {...control}
-              maxLength={60}
-              value={name.text}
-              disabled={disabled}
-              onChange={(event) => name.change(event.target.value)}
-            />
-          )}
-        </StudioField>
-        <StudioField
-          label="Name of several records"
-          error={plural.problem === "" ? undefined : plural.problem}
-          onUndo={plural.reset}
-        >
-          {(control) => (
-            <Input
-              {...control}
-              maxLength={60}
-              value={plural.text}
-              disabled={disabled}
-              onChange={(event) => plural.change(event.target.value)}
-            />
-          )}
-        </StudioField>
-        <StudioField
-          label="Title field"
-          hint="Names records in pickers and headings, and is always filterable. Changing a published title requires a major version."
-        >
-          {(control) => (
-            <StudioOptionControl
-              {...control}
-              value={record.title_field}
-              disabled={disabled}
-              options={record.fields.filter(recordTitleFieldEligible).map((field) => ({
-                value: field.key,
-                label: `${field.label} (${fieldTypeLabel(field.type)})`,
-              }))}
-              onChange={(value) => {
-                const problem = studioEditProblem(
-                  edit((current) =>
-                    setInlineRecordTitleField(current, {
-                      moduleKey,
-                      recordKey,
-                      fieldKey: value,
-                    }),
-                  ),
-                );
-                setIssues(problem === undefined ? [] : [problem]);
-              }}
-            />
-          )}
-        </StudioField>
-      </StudioInspectorGroup>
-      <StudioRecordStandardActions
-        source={source}
-        moduleKey={moduleKey}
-        recordKey={recordKey}
-        disabled={disabled}
-        edit={edit}
+      <StudioInspectorHeader
+        title={record.name}
+        kind="Record type"
+        actions={
+          <StudioInspectorActions
+            actions={[
+              {
+                label: "Delete record type",
+                destructive: true,
+                disabled,
+                onSelect: () => {
+                  void remove();
+                },
+              },
+            ]}
+          />
+        }
       />
-      <StudioRecordStorageOwnership
-        source={source}
-        moduleKey={moduleKey}
-        recordKey={recordKey}
-        context={settings}
-        name={recordName}
-        disabled={disabled}
-        edit={edit}
-        onAddLink={onAddLink}
-      />
-      <StudioInspectorGroup title="Queries" defaultOpen={false}>
-        <Button
-          type="button"
-          size="sm"
-          variant="outline"
-          disabled={disabled}
-          aria-expanded={adding}
-          onClick={() => setAdding(!adding)}
-        >
-          Add a query
-        </Button>
-        {adding && (
-          <section
-            className="space-y-2 border-t border-border pt-3"
-            aria-label={`New query of ${record.name}`}
+      {(references.length > 0 || issues.length > 0) && (
+        <section className="space-y-2" aria-label="Delete">
+          <StudioReferencesAlert
+            key={refusals}
+            name={record.name}
+            action="deleted"
+            references={references}
+          />
+          <Problems issues={issues} />
+        </section>
+      )}
+      <div>
+        <StudioInspectorGroup title="General">
+          <StudioField
+            label="Name of one record"
+            error={name.problem === "" ? undefined : name.problem}
+            onUndo={name.reset}
           >
-            <h3 className="text-sm font-semibold">New query of {record.plural_name}</h3>
-            <StudioNewQueryForm
-              source={source}
-              moduleKey={moduleKey}
-              recordKey={recordKey}
-              disabled={disabled}
-              edit={edit}
-              onCreated={(queryKey) => onSelect({ kind: "query", moduleKey, queryKey })}
-            />
-          </section>
-        )}
-      </StudioInspectorGroup>
-      <StudioInspectorGroup title="Behaviour" defaultOpen={false}>
-        <StudioModuleEvents
+            {(control) => (
+              <Input
+                {...control}
+                maxLength={60}
+                value={name.text}
+                disabled={disabled}
+                onChange={(event) => name.change(event.target.value)}
+              />
+            )}
+          </StudioField>
+          <StudioField
+            label="Name of several records"
+            error={plural.problem === "" ? undefined : plural.problem}
+            onUndo={plural.reset}
+          >
+            {(control) => (
+              <Input
+                {...control}
+                maxLength={60}
+                value={plural.text}
+                disabled={disabled}
+                onChange={(event) => plural.change(event.target.value)}
+              />
+            )}
+          </StudioField>
+          <StudioField
+            label="Title field"
+            hint="Names records in pickers and headings, and is always filterable. Changing a published title requires a major version."
+          >
+            {(control) => (
+              <StudioOptionControl
+                {...control}
+                value={record.title_field}
+                disabled={disabled}
+                options={record.fields.filter(recordTitleFieldEligible).map((field) => ({
+                  value: field.key,
+                  label: `${field.label} (${fieldTypeLabel(field.type)})`,
+                }))}
+                onChange={(value) => {
+                  const problem = studioEditProblem(
+                    edit((current) =>
+                      setInlineRecordTitleField(current, {
+                        moduleKey,
+                        recordKey,
+                        fieldKey: value,
+                      }),
+                    ),
+                  );
+                  setIssues(problem === undefined ? [] : [problem]);
+                }}
+              />
+            )}
+          </StudioField>
+        </StudioInspectorGroup>
+        <StudioRecordStandardActions
           source={source}
           moduleKey={moduleKey}
           recordKey={recordKey}
           disabled={disabled}
           edit={edit}
         />
-        <StudioModuleActions
+        <StudioRecordStorageOwnership
           source={source}
           moduleKey={moduleKey}
           recordKey={recordKey}
+          context={settings}
+          name={recordName}
           disabled={disabled}
           edit={edit}
+          onAddLink={onAddLink}
         />
-      </StudioInspectorGroup>
-      <DropdownMenu>
-        <DropdownMenuTrigger render={<Button type="button" variant="ghost" size="sm" />}>
-          <Icon name="more-horizontal" />
-          More
-        </DropdownMenuTrigger>
-        <DropdownMenuContent>
-          <DropdownMenuItem
-            variant="destructive"
+        <StudioInspectorGroup
+          title="Queries"
+          defaultOpen={false}
+          summary={queries.length === 1 ? "1 query" : `${queries.length} queries`}
+          action={<StudioAddButton label="New query" disabled={disabled} onClick={onNewQuery} />}
+        >
+          {queries.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No queries yet.</p>
+          ) : (
+            <ul className="space-y-1 text-sm">
+              {queries.map((query) => (
+                <li key={query.key}>
+                  <Button
+                    type="button"
+                    variant="link"
+                    size="xs"
+                    className="h-auto whitespace-normal break-words p-0 text-left text-sm text-foreground"
+                    onClick={() => onSelect({ kind: "query", moduleKey, queryKey: query.key })}
+                  >
+                    {query.label ?? query.key}
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </StudioInspectorGroup>
+        <StudioInspectorGroup title="Events and actions" defaultOpen={false}>
+          <StudioModuleEvents
+            source={source}
+            moduleKey={moduleKey}
+            recordKey={recordKey}
             disabled={disabled}
-            onClick={() => {
-              void remove();
-            }}
-          >
-            Delete record type
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
-      <section className="space-y-2 border-t border-border pt-3" aria-label="Delete">
-        <StudioReferencesAlert
-          key={refusals}
+            edit={edit}
+          />
+          <StudioModuleActions
+            source={source}
+            moduleKey={moduleKey}
+            recordKey={recordKey}
+            disabled={disabled}
+            edit={edit}
+          />
+        </StudioInspectorGroup>
+        <StudioUsedIn
+          source={source}
+          target={{ kind: "record_type", moduleKey, recordKey }}
           name={record.name}
-          action="deleted"
-          references={references}
         />
-        <Problems issues={issues} />
-      </section>
-      <StudioUsedIn
-        source={source}
-        target={{ kind: "record_type", moduleKey, recordKey }}
-        name={record.name}
-      />
-      <StudioInspectorGroup title="Details" defaultOpen={false}>
-        <dl className="text-xs font-mono">
-          <dt>Key</dt>
-          <dd>{record.key}</dd>
-        </dl>
-      </StudioInspectorGroup>
+        <StudioInspectorGroup title="Details" defaultOpen={false}>
+          <dl className="text-xs font-mono">
+            <dt>Key</dt>
+            <dd>{record.key}</dd>
+          </dl>
+        </StudioInspectorGroup>
+      </div>
       {confirmDialog}
     </div>
   );
@@ -717,6 +725,7 @@ export function StudioDataInspectorView({ model }: Readonly<{ model: StudioDataM
     setAdding,
     addField,
     compileProblem,
+    setNewQuery,
   } = model;
   const { source, organizationId, view } = draft;
   const inspectorBody =
@@ -764,12 +773,7 @@ export function StudioDataInspectorView({ model }: Readonly<{ model: StudioDataM
     ) : current.kind === "record_type" ? (
       adding?.scope === scope ? (
         <div className="space-y-4">
-          <div className="flex items-center justify-between gap-2">
-            <h3 className="text-base font-semibold">New field</h3>
-            <Button type="button" variant="ghost" size="sm" onClick={() => setAdding(null)}>
-              Cancel
-            </Button>
-          </div>
+          <StudioInspectorHeader title="New field" kind="Record type" />
           <ModuleFieldsEditor
             key={`${scope}:${adding.type}`}
             source={source}
@@ -781,6 +785,7 @@ export function StudioDataInspectorView({ model }: Readonly<{ model: StudioDataM
             context={fieldContext}
             edit={edit}
             onSelect={select}
+            onCancel={() => setAdding(null)}
             onAdded={(fieldKey) =>
               select({
                 kind: "field",
@@ -803,6 +808,7 @@ export function StudioDataInspectorView({ model }: Readonly<{ model: StudioDataM
           settings={settingsContext}
           name={targetLabel}
           onAddLink={() => addField("link")}
+          onNewQuery={() => setNewQuery(true)}
         />
       )
     ) : (
@@ -825,16 +831,14 @@ export function StudioDataInspectorView({ model }: Readonly<{ model: StudioDataM
         }
       />
     );
-  const hasOwnUsedIn =
-    isOwned &&
-    (current?.kind === "field" || (current?.kind === "record_type" && adding?.scope !== scope));
+  const hasOwnUsedIn = isOwned && (current?.kind === "field" || current?.kind === "record_type");
   const usedIn = hasOwnUsedIn ? null : studioUseTargetOf(current);
   const problemHere =
     compileProblem?.selection != null &&
     current !== null &&
     JSON.stringify(compileProblem.selection) === JSON.stringify(current);
-  return (
-    <StudioPanelShell title="Inspector">
+  const body = (
+    <>
       {compileProblem === null ? null : (
         <div role="alert" className="space-y-2 rounded-md border border-destructive/50 p-3 text-sm">
           <p className="font-semibold text-destructive">
@@ -859,8 +863,48 @@ export function StudioDataInspectorView({ model }: Readonly<{ model: StudioDataM
       {usedIn === null ? null : (
         <StudioUsedIn source={source} target={usedIn} name={describeSelection(modules, current)} />
       )}
-    </StudioPanelShell>
+    </>
   );
+  if (current === null || module === undefined)
+    return <StudioPanelShell title="Inspector">{body}</StudioPanelShell>;
+  return (
+    <div className="flex min-h-0 flex-1 flex-col">
+      <StudioInspectorHeaderSlot>
+        <div className={STUDIO_RAIL_BODY_CLASS} data-studio-rail-body="">
+          {body}
+        </div>
+      </StudioInspectorHeaderSlot>
+    </div>
+  );
+}
+
+/**
+ * How many times a dialog has been opened. A dialog starts fresh at each opening (its key is this
+ * count) and hands focus back to the control that was focused before it opened, when it closes.
+ */
+function useOpenings(open: boolean): number {
+  const [count, setCount] = useState(0);
+  const [was, setWas] = useState(open);
+  if (open !== was) {
+    setWas(open);
+    if (open) setCount(count + 1);
+  }
+  const opener = useRef<HTMLElement | null>(null);
+  useEffect(() => {
+    const track = (event: FocusEvent) => {
+      const target = event.target;
+      if (target instanceof HTMLElement && target.closest('[role="dialog"]') === null)
+        opener.current = target;
+    };
+    document.addEventListener("focusin", track);
+    return () => document.removeEventListener("focusin", track);
+  }, []);
+  const wasOpen = useRef(open);
+  useEffect(() => {
+    if (wasOpen.current && !open) requestAnimationFrame(() => opener.current?.focus());
+    wasOpen.current = open;
+  }, [open]);
+  return count;
 }
 
 /** The Data tab's dialogs: new module, new record type and new query. */
@@ -881,10 +925,13 @@ export function StudioDataDialogs({ model }: Readonly<{ model: StudioDataModel }
     fillHome,
   } = model;
   const { source } = draft;
+  const moduleOpenings = useOpenings(creatingModule);
+  const recordTypeOpenings = useOpenings(creating);
+  const queryOpenings = useOpenings(newQuery);
   return (
     <>
       <StudioModuleDialog
-        key={creatingModule ? "module-open" : "module-closed"}
+        key={`module-${moduleOpenings}`}
         open={creatingModule}
         source={source}
         edit={edit}
@@ -892,7 +939,7 @@ export function StudioDataDialogs({ model }: Readonly<{ model: StudioDataModel }
         onCreated={(moduleKey) => select({ kind: "module", moduleKey })}
       />
       <StudioRecordTypeDialog
-        key={creating ? "open" : "closed"}
+        key={`record-type-${recordTypeOpenings}`}
         open={creating}
         source={source}
         initialModuleKey={isOwned ? current?.moduleKey : undefined}
@@ -905,10 +952,15 @@ export function StudioDataDialogs({ model }: Readonly<{ model: StudioDataModel }
         }}
       />
       <StudioQuerySheet
-        key={newQuery ? "query-open" : "query-closed"}
+        key={`query-${queryOpenings}`}
         open={newQuery}
         draft={draft}
         doneLabel="Done"
+        initialRecordType={
+          isOwned && current?.kind === "record_type"
+            ? `${current.moduleKey}:${current.recordKey}`
+            : undefined
+        }
         onClose={() => setNewQuery(false)}
         onDone={(reference) => {
           setNewQuery(false);

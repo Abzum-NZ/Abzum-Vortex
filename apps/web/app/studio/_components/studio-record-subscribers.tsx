@@ -48,11 +48,9 @@ export function StudioRecordSubscribers({
     ?.record_types.find((entry) => entry.key === recordKey);
   if (record === undefined) return null;
   const subscribers = studioRecordSubscribers(source, moduleKey, recordKey);
-  const open = (flowAlias: string, label: string) =>
-    opener.open({ label, open: { kind: "flow", flowAlias, moduleKey } });
+  const open = (flowAlias: string) => opener.open({ kind: "flow", flowAlias, moduleKey });
   const add = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    const label = name.trim();
     const result = edit((current) => {
       const created = applyStudioFlowCreate(
         current,
@@ -80,7 +78,7 @@ export function StudioRecordSubscribers({
     setAdding(false);
     setName("");
     setProblem("");
-    open(result.flowAlias, label);
+    open(result.flowAlias);
   };
   return (
     <section className="space-y-6" aria-label={`After saving ${record.plural_name}`}>
@@ -159,7 +157,7 @@ export function StudioRecordSubscribers({
                   type="button"
                   size="sm"
                   variant="outline"
-                  onClick={() => open(subscriber.flowAlias, subscriber.name)}
+                  onClick={() => open(subscriber.flowAlias)}
                 >
                   Open
                 </Button>

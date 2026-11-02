@@ -23,6 +23,7 @@ export type {
   StudioConditionValidation,
 } from "./condition-model";
 export {
+  describeCondition,
   studioConditionOperatorsFor,
   createInitialStudioCondition,
   validateStudioCondition,
@@ -78,6 +79,8 @@ export * from "./studio-entry-list";
 export * from "./studio-segmented-control";
 export * from "./studio-field";
 export * from "./studio-inspector-group";
+export * from "./studio-dialog";
+export * from "./studio-icon-buttons";
 export * from "./studio-inspector-actions";
 export * from "./studio-field-type-icon";
 export {

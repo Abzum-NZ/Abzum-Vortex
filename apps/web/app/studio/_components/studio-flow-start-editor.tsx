@@ -1,8 +1,7 @@
 "use client";
+import { FieldLegend } from "@vortex/ui/components/field";
 import { Alert, AlertDescription } from "@vortex/ui/components/alert";
 import { useEffect, useState } from "react";
-import { Icon } from "@vortex/ui";
-import { Button } from "@vortex/ui/components/button";
 import { Checkbox } from "@vortex/ui/components/checkbox";
 import { Input } from "@vortex/ui/components/input";
 import { Label } from "@vortex/ui/components/label";
@@ -12,7 +11,7 @@ import {
   useStudioEntryKeys,
   StudioOptionControl,
   StudioReferencePicker,
-  StudioHelp,
+  StudioAddButton,
   StudioInspectorGroup,
   studioWords,
   studioBindingSentence,
@@ -301,7 +300,9 @@ function InputSettings({
             onChange={(next) => onChange({ ...input, type, recordType: next === "" ? null : next })}
           />
           {type !== input.type && (
-            <StudioHelp hint="Choose a record type to apply this kind of value." />
+            <p role="status" className="text-sm text-muted-foreground">
+              Choose a record type to apply this kind of value.
+            </p>
           )}
         </div>
       )}
@@ -377,9 +378,30 @@ export function StudioFlowStartEditor({
     if (result === true) inputKeys.current = nextKeys;
     return result;
   };
+  const addInput = () => {
+    const taken = new Set(shown.inputs.flatMap((input) => [input.id, input.name]));
+    let n = shown.inputs.length + 1;
+    while (taken.has(`input_${n}`) || taken.has(`+${n}`)) n += 1;
+    // A new input's identity is never a stored name, so it can never read as a rename.
+    setInputs([
+      ...shown.inputs,
+      { id: `+${n}`, name: `input_${n}`, type: "text", required: false, recordType: null },
+    ]);
+  };
   return (
     <section className="space-y-4" aria-label="How it starts">
-      <StudioInspectorGroup title="General">
+      <StudioInspectorGroup
+        title="General"
+        hint={
+          projection.execution === "interactive"
+            ? "Runs while a person uses the application, in their browser and on the server."
+            : projection.execution === "transaction"
+              ? "Runs inside the save of a record, for everyone who saves it."
+              : projection.execution === "background"
+                ? "Runs on the server, without the person waiting."
+                : "Runs as a long-running background process."
+        }
+      >
         <StartText
           id="flow-start-name"
           label="Name"
@@ -388,28 +410,25 @@ export function StudioFlowStartEditor({
           value={shown.name}
           apply={(name) => change({ ...shown, name }, "name")}
         />
-        <StudioHelp
-          hint={
-            projection.execution === "interactive"
-              ? "Runs while a person uses the application, in their browser and on the server."
-              : projection.execution === "transaction"
-                ? "Runs inside the save of a record, for everyone who saves it."
-                : projection.execution === "background"
-                  ? "Runs on the server, without the person waiting."
-                  : "Runs as a long-running background process."
-          }
-        />
       </StudioInspectorGroup>
-      <StudioInspectorGroup title="How it starts">
+      <StudioInspectorGroup
+        title="How it starts"
+        hint="A flow starts from a record change, an event, a button bound to it, or another flow. Bind it to a button with Create workflow in the button's inspector."
+        summary={
+          shown.triggers.length + shown.bindings.length === 0
+            ? "Not started yet"
+            : `${shown.triggers.length + shown.bindings.length} ways`
+        }
+      >
         {shown.triggers.map((trigger, index) => (
           <fieldset key={index} className="space-y-2">
-            <legend className="text-sm font-medium">
+            <FieldLegend variant="label">
               {trigger.kind === "before_save"
                 ? "Before a record is saved"
                 : trigger.kind === "event"
                   ? "After a record changes"
                   : "After an event"}
-            </legend>
+            </FieldLegend>
             <TriggerEditor
               id={`flow-start-trigger-${index}`}
               trigger={trigger}
@@ -430,15 +449,19 @@ export function StudioFlowStartEditor({
           </fieldset>
         ))}
         {shown.bindings.length === 0 && shown.triggers.length === 0 && (
-          <StudioHelp hint="Nothing starts this flow yet. Bind it to a button with Create workflow in the button's inspector, or run it from another flow." />
+          <p role="status" className="text-sm text-muted-foreground">
+            Nothing starts this flow yet.
+          </p>
         )}
         {shown.bindings.map((binding) => (
           <fieldset key={binding.id} className="space-y-2">
-            <legend className="text-sm font-medium">
+            <FieldLegend variant="label">
               {studioBindingSentence(controlLabel(binding.control), binding.event)}
-            </legend>
+            </FieldLegend>
             {shown.inputs.length === 0 && (
-              <StudioHelp hint="The flow declares no inputs, so the control passes nothing." />
+              <p role="status" className="text-sm text-muted-foreground">
+                The flow declares no inputs, so the control passes nothing.
+              </p>
             )}
             {shown.inputs.map((input, inputIndex) => {
               const value = binding.inputs[input.id] ?? { kind: "none" };
@@ -518,8 +541,13 @@ export function StudioFlowStartEditor({
           </fieldset>
         ))}
       </StudioInspectorGroup>
-      <StudioInspectorGroup title="Inputs">
-        <StudioHelp hint="The values the flow is given when it starts. Its steps read them." />
+      <StudioInspectorGroup
+        title="Inputs"
+        defaultOpen={shown.inputs.length > 0}
+        hint="The values the flow is given when it starts. Its steps read them."
+        summary={shown.inputs.length === 1 ? "1 input" : `${shown.inputs.length} inputs`}
+        action={<StudioAddButton label="Add an input" disabled={disabled} onClick={addInput} />}
+      >
         <StudioEntryList
           label="Inputs"
           itemName="input"
@@ -553,46 +581,30 @@ export function StudioFlowStartEditor({
           }))}
           onRemove={(index) => setInputs(shown.inputs.filter((_, at) => at !== index))}
         />
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          disabled={disabled}
-          onClick={() => {
-            const taken = new Set(shown.inputs.flatMap((input) => [input.id, input.name]));
-            let n = shown.inputs.length + 1;
-            while (taken.has(`input_${n}`) || taken.has(`+${n}`)) n += 1;
-            // A new input's identity is never a stored name, so it can never read as a rename.
-            setInputs([
-              ...shown.inputs,
-              { id: `+${n}`, name: `input_${n}`, type: "text", required: false, recordType: null },
-            ]);
-          }}
-        >
-          <Icon name="plus" />
-          Add an input
-        </Button>
+        {projection.execution === "interactive" && (
+          <StudioField
+            label="Runs for"
+            hint="Its steps read the fields of this record, such as its stage, as the person may see them when the flow runs."
+          >
+            {(control) => (
+              <StudioReferencePicker
+                id={control.id}
+                disabled={disabled}
+                value={shown.recordInput ?? ""}
+                unset="No record"
+                options={shown.inputs
+                  .filter((input) => input.type === "record_reference")
+                  .map((input) => ({
+                    value: input.id,
+                    label: `The record in ${studioWords(input.name)}`,
+                    description: recordTypes.find((entry) => entry.key === input.recordType)?.label,
+                  }))}
+                onChange={(next) => change({ ...shown, recordInput: next === "" ? null : next })}
+              />
+            )}
+          </StudioField>
+        )}
       </StudioInspectorGroup>
-      {projection.execution === "interactive" && (
-        <div className="space-y-1.5">
-          <Label htmlFor="flow-start-record">Runs for</Label>
-          <StudioReferencePicker
-            id="flow-start-record"
-            disabled={disabled}
-            value={shown.recordInput ?? ""}
-            unset="No record"
-            options={shown.inputs
-              .filter((input) => input.type === "record_reference")
-              .map((input) => ({
-                value: input.id,
-                label: `The record in ${studioWords(input.name)}`,
-                description: recordTypes.find((entry) => entry.key === input.recordType)?.label,
-              }))}
-            onChange={(next) => change({ ...shown, recordInput: next === "" ? null : next })}
-          />
-          <StudioHelp hint="Its steps read the fields of this record, such as its stage, as the person may see them when the flow runs." />
-        </div>
-      )}
       {problem === "" ? null : (
         <Alert variant="destructive">
           <AlertDescription>{problem}</AlertDescription>
