@@ -53,7 +53,7 @@ export const DEFAULT_PLATFORM_THEME_RELEASE: PlatformThemeRelease =
 
 // The one theme changes in place. Applications pinning older content must be republished.
 const DEFAULT_PLATFORM_THEME_CONTENT_FINGERPRINT =
-  "sha256:44c62cf6e0865b7bbbea64431fa5e70f69ef27b86f34c878015fc0cf6ecca38f";
+  "sha256:ba999f9819be6e90ab7182ecd08d894cb45536cd296c859c9ee19cdbcec4318b";
 
 if (
   DEFAULT_PLATFORM_THEME_RELEASE.contentFingerprint !== DEFAULT_PLATFORM_THEME_CONTENT_FINGERPRINT

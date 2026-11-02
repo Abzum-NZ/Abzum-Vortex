@@ -278,7 +278,7 @@ export function StudioCanvasView({
                     tabIndex={0}
                     role="img"
                     aria-label="How the canvas works"
-                    className="flex size-8 shrink-0 items-center justify-center rounded-md text-muted-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    className="flex size-8 shrink-0 items-center justify-center rounded-md text-muted-foreground"
                   />
                 }
               >

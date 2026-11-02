@@ -255,7 +255,7 @@ const StudioFlowInsertion = memo(function StudioFlowInsertion({
             aria-label={data.title}
             title={actions.disabled ? "This draft is read-only" : data.title}
             disabled={actions.disabled}
-            className="rounded-full bg-card focus-visible:ring-2 focus-visible:ring-primary"
+            className="rounded-full bg-card"
           />
         }
       >

@@ -395,8 +395,9 @@ export function StudioThemePanel({
           {dimension("style").options.map((option) => (
             <div
               key={option.id}
+              data-vortex-focus-group=""
               className={cn(
-                "relative space-y-2 rounded-lg p-2 hover:bg-accent focus-within:ring-2 focus-within:ring-ring",
+                "relative space-y-2 rounded-lg p-2 hover:bg-accent",
                 selection.style === option.id && "ring-2 ring-primary",
                 locked && "opacity-50",
               )}
@@ -405,6 +406,7 @@ export function StudioThemePanel({
                 id={`studio-theme-style-${option.id}`}
                 value={option.id}
                 aria-labelledby={`studio-theme-style-${option.id}-caption`}
+                data-vortex-focus-primary=""
                 className="sr-only"
               />
               <StylePreview style={option.id} />

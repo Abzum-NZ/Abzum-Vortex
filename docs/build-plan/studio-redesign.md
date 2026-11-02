@@ -63,7 +63,7 @@ The ratios below are WCAG 2.x, computed from the catalogue's resolved oklch valu
 
 Tinted status fills use `bg-warning/10`, `bg-destructive/10` and `bg-success/10` with text in the same role. Each stays at 4.5:1 or above because the tint is no more than 10% over the background. Chart colours are never used for status.
 
-**Focus ring (platform-wide, at the root):** the catalogue's contrast gate derives `ring` at 3:1 or better on the background in the same derivation that corrects `primary` (`contrastDerivations`), so every selection, apps included, has a compliant ring. Studio code adds no ring override.
+**Focus ring (platform-wide, at the root):** the catalogue's contrast gate derives `ring` at 3:1 or better on the background, card, popover, muted, accent, secondary and sidebar in the same derivation that corrects `primary` (`contrastDerivations`), so every selection, apps included, has a compliant ring. The platform's solid outline in that colour is the only focus indicator (the style's own translucent ring is switched off centrally), and Studio code adds no ring override.
 
 ### B3. Typography (Geist via `bodyFont: "geist"`; Tailwind scale only)
 

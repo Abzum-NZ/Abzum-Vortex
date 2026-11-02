@@ -199,7 +199,7 @@ export function RecordsCards({
                   ) : (
                     <button
                       type="button"
-                      className="max-w-full truncate text-start font-medium underline-offset-4 hover:underline focus-visible:underline focus-visible:outline-none"
+                      className="max-w-full truncate text-start font-medium underline-offset-4 hover:underline"
                       onClick={() => activate(row.recordId)}
                     >
                       {title}

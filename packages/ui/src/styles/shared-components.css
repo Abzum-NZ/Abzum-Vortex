@@ -7300,8 +7300,7 @@
     }
   }
   &:hover,
-  &[data-separator="active"],
-  &:focus-visible {
+  &[data-separator="active"] {
     background-color: var(--ring);
   }
 }

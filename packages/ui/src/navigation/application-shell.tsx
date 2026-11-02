@@ -623,7 +623,7 @@ export function ApplicationShellRoot({
           id={mainContentId}
           tabIndex={-1}
           data-vortex-application-shell-content=""
-          className="vortex-puck-slot min-w-0 flex-1 focus:outline-none"
+          className="vortex-puck-slot min-w-0 flex-1"
           style={
             { ...contentStyle, "--vortex-content-padding": contentStyle.padding } as CSSProperties
           }
