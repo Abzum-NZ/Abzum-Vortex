@@ -1,4 +1,6 @@
 "use client";
+import { FieldDescription } from "@vortex/ui/components/field";
+import { Alert, AlertDescription } from "@vortex/ui/components/alert";
 import { useState, type FormEvent } from "react";
 import type { ApplicationSourceDocument } from "@vortex/platform/schema";
 import { Icon } from "@vortex/ui";
@@ -91,11 +93,11 @@ export function StudioStandardFieldPolicy({
             onChange={setScope}
           />
         )}
-        <p role="status" className="text-sm text-muted-foreground">
+        <FieldDescription>
           {available.roles.length === 0
             ? "No role holds it yet. Its name comes with the record type."
             : `Every role holding it gets these fields${available.scopeEditable ? " and this record scope" : ""}: ${available.roles.join(", ")}. Its name${available.scopeEditable ? "" : " and scope"} comes with the record type.`}
-        </p>
+        </FieldDescription>
         <div className="flex justify-end gap-3 text-xs text-muted-foreground" aria-hidden="true">
           <span className="w-8 text-center">Read</span>
           {available.changesFields && <span className="w-8 text-center">Change</span>}
@@ -140,10 +142,12 @@ export function StudioStandardFieldPolicy({
           </div>
         ))}
         {staleProduced.length > 0 && (
-          <p className="text-sm text-muted-foreground" role="status">
-            The platform fills {staleProduced.map((field) => field.label).join(", ")}, so saving
-            removes {staleProduced.length === 1 ? "it" : "them"} from the fields people change.
-          </p>
+          <Alert variant="warning" role="status">
+            <AlertDescription>
+              The platform fills {staleProduced.map((field) => field.label).join(", ")}, so saving
+              removes {staleProduced.length === 1 ? "it" : "them"} from the fields people change.
+            </AlertDescription>
+          </Alert>
         )}
       </StudioInspectorGroup>
       <div className="flex items-center gap-2">

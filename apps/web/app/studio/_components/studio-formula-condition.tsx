@@ -1,4 +1,5 @@
 "use client";
+import { FieldSet } from "@vortex/ui/components/field";
 import { useMemo } from "react";
 import type { ModuleField } from "@vortex/platform/schema";
 import {
@@ -59,7 +60,7 @@ export function StudioFormulaCondition({
       </p>
     );
   return (
-    <fieldset disabled={disabled} className="min-w-0">
+    <FieldSet disabled={disabled} className="min-w-0">
       <StudioConditionControls
         label={label}
         context={context}
@@ -75,6 +76,6 @@ export function StudioFormulaCondition({
           );
         }}
       />
-    </fieldset>
+    </FieldSet>
   );
 }

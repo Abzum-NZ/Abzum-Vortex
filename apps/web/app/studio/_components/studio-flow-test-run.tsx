@@ -283,18 +283,20 @@ export function StudioFlowTestRun({
       ) : null}
       {reply === undefined ? null : reply.kind === "ran" ? (
         <div className="space-y-2" aria-label="Step trace">
-          <p className="m-0 text-sm" role="status">
-            {reply.end.kind === "finished"
-              ? reply.end.refusal === undefined
-                ? `Finished: ${reply.end.outcome}.`
-                : `${reply.end.refusal.sentence} (${reply.end.refusal.code})`
-              : reply.end.reason === "refused"
-                ? "The test run was refused."
-                : notRunSentences[reply.end.reason]}{" "}
-            <span className="text-muted-foreground">
-              {reply.totalMs} ms in total. Nothing was saved.
-            </span>
-          </p>
+          <Alert role="status">
+            <AlertDescription>
+              {reply.end.kind === "finished"
+                ? reply.end.refusal === undefined
+                  ? `Finished: ${reply.end.outcome}.`
+                  : `${reply.end.refusal.sentence} (${reply.end.refusal.code})`
+                : reply.end.reason === "refused"
+                  ? "The test run was refused."
+                  : notRunSentences[reply.end.reason]}{" "}
+              <span className="text-muted-foreground">
+                {reply.totalMs} ms in total. Nothing was saved.
+              </span>
+            </AlertDescription>
+          </Alert>
           <ol className="m-0 list-none p-0">
             {reply.steps.map((step, index) => (
               <TraceStep
