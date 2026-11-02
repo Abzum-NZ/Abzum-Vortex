@@ -245,6 +245,19 @@ begin
     ), false) then
     return null;
   end if;
+  -- A system projection has no preview copy: it is the platform's live read model, which a
+  -- preview reads on the live path under the reader's own live access. The preview resolves only
+  -- its query (an authored query added by the draft included), with no preview storage identity.
+  if record_type_item ? 'systemProjection' then
+    return pg_catalog.jsonb_build_object(
+      'moduleReleaseRevision', query_release_revision,
+      'moduleReleaseVersion', query_release_version,
+      'query', query_item,
+      'recordTypeId', record_type_id,
+      'recordTypeModuleRootId', record_type_module_root_id,
+      'recordType', record_type_item
+    );
+  end if;
   release_storage_contract_id_text := record_type_item ->> 'storageContractId';
   release_storage_contract_id := release_storage_contract_id_text::uuid;
   if release_storage_contract_id = nil_uuid then
@@ -338,4 +351,4 @@ revoke all on function vortex_record.resolve_preview_module_query_internal(uuid,
 grant execute on function vortex_record.resolve_preview_module_query_internal(uuid, uuid)
   to vortex_record_adapter;
 comment on function vortex_record.resolve_preview_module_query_internal(uuid, uuid) is
-  'Private preview-only resolver for one query and its exact pinned record type and active preview storage identity; it validates the current human-owned unexpired preview and never falls back to an active installation.';
+  'Private preview-only resolver for one query and its exact pinned record type and active preview storage identity (a system projection resolves its query and record type with no preview storage); it validates the current human-owned unexpired preview and never falls back to an active installation.';

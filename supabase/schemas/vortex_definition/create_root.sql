@@ -38,8 +38,9 @@ declare
 begin
   human_write := vortex_platform.current_context() ->> 'callerKind' = 'human';
   if human_write then
-    -- A person creates an Application root, or an internal Module root owned by an ordinary
-    -- Application they may draft: only that Application's publication creates one.
+    -- A person creates an ordinary Application root, or an internal Module root owned by an
+    -- Application they may draft (a platform system Application needs the system-application
+    -- permission, which the guard below demands): only that Application's publication creates one.
     checked_context := vortex_definition.validated_builder_draft_write_context_internal(
       case when p_kind = 'module' then p_owner_application_root_id end
     );
@@ -80,7 +81,9 @@ begin
       and owner_root.organization_id = (checked_context ->> 'organizationId')::uuid
       and owner_root.kind = 'application';
     if not found
-      or (human_write and owner_origin_kind is distinct from 'ordinary')
+      or (human_write
+        and owner_origin_kind is distinct from 'ordinary'
+        and owner_origin_kind is distinct from 'platform_system_application')
       or not vortex_definition.is_owned_module_source_internal(
         p_owner_application_root_id,
         (checked_context ->> 'organizationId')::uuid,

@@ -14,6 +14,7 @@ declare
   installation jsonb;
   preview_installation jsonb;
   preview_installation_id_value uuid;
+  projection_in_preview boolean := false;
   binding_item jsonb;
   module_content jsonb;
   application_content jsonb;
@@ -135,6 +136,7 @@ begin
     if preview_installation is not null and p_action_kind <> 'read' then
       return pg_catalog.jsonb_build_object('outcome', 'refused');
     end if;
+    projection_in_preview := preview_installation is not null;
     preview_installation_id_value := null;
   end if;
 
@@ -162,7 +164,7 @@ begin
     or (preview_installation_id_value is null and not exists (
       select 1 from vortex_record.release_provisions as provision
       where provision.module_root_id = target_module_root_id
-        and provision.release_revision = target_release_revision
+        and (provision.release_revision = target_release_revision or projection_in_preview)
         and release_storage_contract_id = any (provision.storage_contract_ids)
     )) then
     raise exception using errcode = '55000',
