@@ -568,11 +568,23 @@ const literalProblem = (
     : `${label} can't hold this value`;
 };
 
-export {
-  literalMatchesType,
-  operatorAcceptsOperands,
-  isCollectionElementType,
-} from "@vortex/platform/schema";
+export { literalMatchesType, isCollectionElementType } from "@vortex/platform/schema";
+
+/**
+ * Whether the operator suits these operands, judging a typed value by its shape: a value that does
+ * not fit the field beside it is that value's own problem, never the operator's or the field's.
+ */
+export const operatorFitsOperands = (
+  operator: string,
+  left: OperandInfo,
+  right: OperandInfo | undefined,
+): boolean => {
+  if (operatorAcceptsOperands(operator, left, right)) return true;
+  if (right === undefined || (left.source === "value") === (right.source === "value")) return false;
+  const blank = (info: OperandInfo): OperandInfo =>
+    info.source === "value" ? { ...info, literal: null, semanticType: undefined } : info;
+  return operatorAcceptsOperands(operator, blank(left), blank(right));
+};
 const knownReferenceType = (operand: OperandInfo): ConditionValueType | undefined =>
   operand.source === "reference" ? operand.semanticType : undefined;
 const isValidInstant = (value: unknown): value is string => flowInstantMicros(value) !== undefined;
@@ -852,7 +864,7 @@ export function validateStudioCondition(
       !unaryOperators.has(condition.operator) &&
       left !== undefined &&
       right !== undefined &&
-      !operatorAcceptsOperands(condition.operator, left, right)
+      !operatorFitsOperands(condition.operator, left, right)
     )
       issues.push(
         makeIssue(
@@ -865,12 +877,20 @@ export function validateStudioCondition(
       for (const side of ["left", "right"] as const) {
         const operand = condition[side];
         if (operand?.source !== "value") continue;
-        const problem = literalProblem(
-          operand.value,
-          side === "left" ? condition.right : condition.left,
-          condition.operator,
-          context,
-        );
+        const other = side === "left" ? condition.right : condition.left;
+        const fits =
+          left === undefined ||
+          right === undefined ||
+          operatorAcceptsOperands(condition.operator, left, right);
+        const reference =
+          other?.source === "value"
+            ? undefined
+            : context.allowedOperands.find(
+                (candidate) => permissionKey(candidate) === (other && referenceKey(other)),
+              );
+        const problem =
+          literalProblem(operand.value, other, condition.operator, context) ??
+          (fits ? undefined : `${reference?.label ?? "the field"} can't hold this value`);
         if (problem !== undefined)
           issues.push(makeIssue("invalid_literal", [...path, side], problem));
       }

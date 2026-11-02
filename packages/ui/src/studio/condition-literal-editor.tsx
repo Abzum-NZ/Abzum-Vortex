@@ -1,6 +1,6 @@
 "use client";
 import { useId } from "react";
-import { FieldError, FieldGroup, FieldLegend, FieldSet } from "../components/field";
+import { FieldError, FieldLegend, FieldSet } from "../components/field";
 import { Input } from "@vortex/ui/components/input";
 import { Textarea } from "@vortex/ui/components/textarea";
 import { StudioField, useStudioFieldProblem } from "./studio-field";
@@ -233,45 +233,45 @@ export function LiteralEditor({
     return (
       <FieldSet data-invalid={error === undefined ? undefined : true}>
         <FieldLegend variant="label">{label}</FieldLegend>
-        <FieldGroup>
-          <StudioField label="Local date and time (whole seconds)">
-            {(control) => (
-              <Input
-                {...control}
-                aria-invalid={error !== undefined}
-                aria-describedby={error === undefined ? undefined : errorId}
-                type="datetime-local"
-                step={1}
-                value={localDateTimeInputValue(operand.value, inputTimeZone)}
-                onChange={(event) => {
-                  const next = event.currentTarget.value;
-                  if (next === "") {
-                    onCommit(null);
-                    return;
-                  }
-                  const instant = instantFromLocalDateTimeInput(next, inputTimeZone);
-                  if (instant === undefined) {
-                    onInvalid("Enter a valid date and time");
-                    return;
-                  }
-                  onCommit(instant);
-                }}
-              />
-            )}
-          </StudioField>
-          <StudioField label="Exact instant (ISO 8601 with offset)">
-            {(control) => (
-              <Input
-                {...control}
-                aria-invalid={error !== undefined}
-                aria-describedby={error === undefined ? undefined : errorId}
-                type="text"
-                value={literalInputValue(operand.value)}
-                onChange={(event) => onCommit(event.currentTarget.value)}
-              />
-            )}
-          </StudioField>
-        </FieldGroup>
+
+        <StudioField label="Local date and time (whole seconds)">
+          {(control) => (
+            <Input
+              {...control}
+              aria-invalid={error !== undefined}
+              aria-describedby={error === undefined ? undefined : errorId}
+              type="datetime-local"
+              step={1}
+              value={localDateTimeInputValue(operand.value, inputTimeZone)}
+              onChange={(event) => {
+                const next = event.currentTarget.value;
+                if (next === "") {
+                  onCommit(null);
+                  return;
+                }
+                const instant = instantFromLocalDateTimeInput(next, inputTimeZone);
+                if (instant === undefined) {
+                  onInvalid("Enter a valid date and time");
+                  return;
+                }
+                onCommit(instant);
+              }}
+            />
+          )}
+        </StudioField>
+        <StudioField label="Exact instant (ISO 8601 with offset)">
+          {(control) => (
+            <Input
+              {...control}
+              aria-invalid={error !== undefined}
+              aria-describedby={error === undefined ? undefined : errorId}
+              type="text"
+              value={literalInputValue(operand.value)}
+              onChange={(event) => onCommit(event.currentTarget.value)}
+            />
+          )}
+        </StudioField>
+
         {error && <FieldError id={errorId}>{error}</FieldError>}
       </FieldSet>
     );
@@ -283,36 +283,36 @@ export function LiteralEditor({
     return (
       <FieldSet data-invalid={error === undefined ? undefined : true}>
         <FieldLegend variant="label">{label}</FieldLegend>
-        <FieldGroup>
-          <StudioField label="Amount">
-            {(control) => (
-              <Input
-                {...control}
-                aria-invalid={error !== undefined}
-                aria-describedby={error === undefined ? undefined : errorId}
-                inputMode="decimal"
-                type="text"
-                value={amount}
-                onChange={(event) => onCommit({ amount: event.currentTarget.value, currency })}
-              />
-            )}
-          </StudioField>
-          <StudioField label="Currency">
-            {(control) => (
-              <StudioOptionControl
-                {...control}
-                aria-label="Currency"
-                aria-invalid={error !== undefined}
-                aria-describedby={error === undefined ? undefined : errorId}
-                value={currency}
-                disabled={false}
-                unset="Choose a currency…"
-                options={currencyCodes.map((code) => ({ value: code, label: code }))}
-                onChange={(next) => onCommit({ amount, currency: next })}
-              />
-            )}
-          </StudioField>
-        </FieldGroup>
+
+        <StudioField label="Amount">
+          {(control) => (
+            <Input
+              {...control}
+              aria-invalid={error !== undefined}
+              aria-describedby={error === undefined ? undefined : errorId}
+              inputMode="decimal"
+              type="text"
+              value={amount}
+              onChange={(event) => onCommit({ amount: event.currentTarget.value, currency })}
+            />
+          )}
+        </StudioField>
+        <StudioField label="Currency">
+          {(control) => (
+            <StudioOptionControl
+              {...control}
+              aria-label="Currency"
+              aria-invalid={error !== undefined}
+              aria-describedby={error === undefined ? undefined : errorId}
+              value={currency}
+              disabled={false}
+              unset="Choose a currency…"
+              options={currencyCodes.map((code) => ({ value: code, label: code }))}
+              onChange={(next) => onCommit({ amount, currency: next })}
+            />
+          )}
+        </StudioField>
+
         {error && <FieldError id={errorId}>{error}</FieldError>}
       </FieldSet>
     );

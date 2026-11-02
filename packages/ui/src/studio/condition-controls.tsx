@@ -48,7 +48,7 @@ import {
   makeIssue,
   maximumGroupChildren,
   operandToken,
-  operatorAcceptsOperands,
+  operatorFitsOperands,
   operatorOptions,
   pathEquals,
   pathStartsWith,
@@ -270,7 +270,7 @@ function TreeEditor({
     leftInfo !== undefined &&
     (unaryOperators.has(condition.operator) ||
       (condition.right !== undefined &&
-        operatorAcceptsOperands(
+        operatorFitsOperands(
           condition.operator,
           leftInfo,
           infoForOperand(condition.right, context),
@@ -285,7 +285,7 @@ function TreeEditor({
     return (
       left !== undefined &&
       right !== undefined &&
-      operatorAcceptsOperands(condition.operator, left, right)
+      operatorFitsOperands(condition.operator, left, right)
     );
   };
   const literalChoice = (side: "left" | "right"): ConditionOperand | undefined => {
@@ -498,7 +498,7 @@ function TreeEditor({
     const existingRight = condition.right;
     const candidate =
       existingRight &&
-      operatorAcceptsOperands(
+      operatorFitsOperands(
         operator,
         leftInfo ?? { source: "value", semanticType: undefined, literal: null },
         infoForOperand(existingRight, context),

@@ -1651,11 +1651,8 @@
   }
   &:focus-within {
     border-color: var(--ring);
-    --tw-ring-shadow: var(
-      --vs-c0b1c00a,
-      var(--tw-ring-inset,) 0 0 0 calc(3px + var(--tw-ring-offset-width))
-        var(--tw-ring-color, currentcolor)
-    );
+    --tw-ring-shadow: var(--tw-ring-inset,) 0 0 0
+      calc(var(--vs-c0b1c00a, 3px) + var(--tw-ring-offset-width)) var(--tw-ring-color, currentcolor);
     --tw-ring-color: var(--ring);
     @supports (color: color-mix(in lab, red, red)) {
       --tw-ring-color: var(--vs-c0b1c00b, color-mix(in oklab, var(--ring) 50%, transparent));
@@ -1666,11 +1663,8 @@
   }
   &:has([aria-invalid="true"]) {
     border-color: var(--destructive);
-    --tw-ring-shadow: var(
-      --vs-c0b1c00a,
-      var(--tw-ring-inset,) 0 0 0 calc(3px + var(--tw-ring-offset-width))
-        var(--tw-ring-color, currentcolor)
-    );
+    --tw-ring-shadow: var(--tw-ring-inset,) 0 0 0
+      calc(var(--vs-c0b1c00a, 3px) + var(--tw-ring-offset-width)) var(--tw-ring-color, currentcolor);
     --tw-ring-color: var(--destructive);
     @supports (color: color-mix(in lab, red, red)) {
       --tw-ring-color: color-mix(in oklab, var(--destructive) 20%, transparent);
