@@ -388,6 +388,8 @@ function StudioPuckSync({
   const getPuck = useGetPuck();
   const previewMode = usePuckSelector((state) => state.appState.ui.previewMode);
   const recorded = usePuckSelector((state) => state.history.histories.length);
+  const config = usePuckSelector((state) => state.config);
+  const walked = useRef<typeof config | null>(null);
   // Studio's draft history is the one undo. Puck records its own drags and deletes and answers
   // Ctrl+Z / Ctrl+Y with its older states, which Studio would then take as new edits, so Puck's
   // history is kept at the current state alone and its Undo and Redo have nothing to go back to.
@@ -457,9 +459,16 @@ function StudioPuckSync({
   // The workspace draft changed (an edit, Undo, Redo, a save, Revert or another page): show exactly
   // that draft, with the selection derived again. One Puck action replaces the data; it is draft
   // synchronization, not an entry in Puck's separate history.
+  // Puck finds a block's slots through the config its data was last walked with, and takes a new
+  // config only after this component's effects have run. Data walked under the previous config
+  // (the empty one before the blocks are known) has no nested blocks indexed, so it is walked again
+  // as soon as Puck holds the config the page is drawn with.
   useEffect(() => {
     const { appState, dispatch } = getPuck();
+    const walkedUnder = walked.current;
+    walked.current = config;
     if (
+      walkedUnder !== config ||
       JSON.stringify(appState.data.content) !== JSON.stringify(data.content) ||
       JSON.stringify(appState.data.root) !== JSON.stringify(data.root)
     ) {
@@ -475,7 +484,7 @@ function StudioPuckSync({
     select(wantedRef.current);
     // The draft is shown again every time the canvas comes into view, so nothing Puck held while
     // it was hidden survives.
-  }, [data, resync, canvasShown, area]);
+  }, [data, resync, canvasShown, area, config]);
 
   // A drag keeps the rail tab and the open page where they are (the workspace asks the gate), and
   // what was asked meanwhile is applied once the drop's own animation has finished with the preview.
