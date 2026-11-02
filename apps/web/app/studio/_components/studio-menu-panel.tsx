@@ -18,9 +18,12 @@ import {
   type VortexIconName,
 } from "@vortex/platform/schema";
 import { Icon, IconLibraryProvider } from "@vortex/ui";
+import { resolveVortexIconName } from "@vortex/ui/icons";
 import { Button } from "@vortex/ui/components/button";
 import { useConfirm } from "@vortex/ui/components/confirm-dialog";
 import { Input } from "@vortex/ui/components/input";
+import { ToggleGroup, ToggleGroupItem } from "@vortex/ui/components/toggle-group";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@vortex/ui/components/tooltip";
 import { cn } from "@vortex/ui/lib/utils";
 import {
   studioMenuPageChoices,
@@ -523,6 +526,23 @@ export function StudioMenuPanel({
 }
 
 /** The selected entry's settings, anchored to its row. */
+/** The icon grid has this many columns; the grid class below must say the same number. */
+const iconColumns = 7;
+
+/** Base UI's toggle group moves focus along one row only; Up and Down move it a whole row, so the grid is navigable in both directions. */
+function moveIconRow(event: KeyboardEvent<HTMLElement>) {
+  if (event.key !== "ArrowUp" && event.key !== "ArrowDown") return;
+  const icons = [...event.currentTarget.querySelectorAll<HTMLElement>("button")];
+  const target =
+    icons[
+      icons.findIndex((icon) => icon === document.activeElement) +
+        (event.key === "ArrowDown" ? iconColumns : -iconColumns)
+    ];
+  if (target === undefined) return;
+  event.preventDefault();
+  target.focus();
+}
+
 function StudioMenuEntryEditor({
   source,
   item,
@@ -587,31 +607,35 @@ function StudioMenuEntryEditor({
           Icon
           <StudioHelp hint="Drawn from the application's icon library, chosen in Theme." />
         </FieldLegend>
-        <div role="radiogroup" aria-label="Icon" className="grid grid-cols-7 gap-1">
+        <ToggleGroup
+          value={[item.icon]}
+          spacing={1}
+          disabled={disabled}
+          onValueChange={(next) => {
+            const chosen = next[0] === undefined ? undefined : resolveVortexIconName(next[0]);
+            if (chosen !== undefined && chosen !== item.icon)
+              change({ kind: "change", alias: item.id, changes: { icon: chosen } });
+          }}
+          onKeyDown={moveIconRow}
+          className="grid w-full grid-cols-7"
+        >
           {VORTEX_ICON_NAMES.map((name: VortexIconName) => (
-            <button
-              key={name}
-              type="button"
-              role="radio"
-              aria-checked={item.icon === name}
-              aria-label={name.replaceAll("-", " ")}
-              title={name.replaceAll("-", " ")}
-              disabled={disabled}
-              onClick={() => {
-                if (item.icon !== name)
-                  change({ kind: "change", alias: item.id, changes: { icon: name } });
-              }}
-              className={cn(
-                "flex aspect-square items-center justify-center rounded-md border outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                item.icon === name
-                  ? "border-primary bg-accent"
-                  : "border-transparent hover:bg-accent",
-              )}
-            >
-              <Icon name={name} className="size-4" />
-            </button>
+            <Tooltip key={name}>
+              <TooltipTrigger
+                render={
+                  <ToggleGroupItem
+                    value={name}
+                    aria-label={name.replaceAll("-", " ")}
+                    className="aspect-square h-auto w-full min-w-0 aria-pressed:ring-2 aria-pressed:ring-primary"
+                  />
+                }
+              >
+                <Icon name={name} className="size-4" />
+              </TooltipTrigger>
+              <TooltipContent>{name.replaceAll("-", " ")}</TooltipContent>
+            </Tooltip>
           ))}
-        </div>
+        </ToggleGroup>
       </fieldset>
       {item.type === "page" && (
         <StudioField
