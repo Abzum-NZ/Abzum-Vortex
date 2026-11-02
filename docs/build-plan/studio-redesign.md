@@ -59,11 +59,11 @@ The ratios below are WCAG 2.x, computed from the catalogue's resolved oklch valu
 | `--success` | #166534 | #4ADE80 | Published toast icon, check states | On bg: L 7.13, D 11.4 |
 | `--info` | #1D4ED8 | #60A5FA | Informational inline alerts | On bg: L 6.70, D 7.82 |
 | `--border` / `--input` | 0.92 | white at 10% / 15% | Pane edges, inputs, cards, tables | Decorative. Inputs are also identified by their label and focus ring |
-| `--ring` | oklch(0.705 …) | oklch(0.552 …) | Focus | **Light ring is 2.63:1 and fails 1.4.11** (see below) |
+| `--ring` | oklch(0.705 …) | oklch(0.552 …) | Focus | The outline is `--ring` mixed 15% towards `--foreground` at render time (see below) |
 
 Tinted status fills use `bg-warning/10`, `bg-destructive/10` and `bg-success/10` with text in the same role. Each stays at 4.5:1 or above because the tint is no more than 10% over the background. Chart colours are never used for status.
 
-**Focus ring (platform-wide, at the root):** the catalogue's contrast gate derives `ring` at 3:1 or better on the background, card, popover, muted, accent, secondary and sidebar in the same derivation that corrects `primary` (`contrastDerivations`), so every selection, apps included, has a compliant ring. The platform's solid outline in that colour is the only focus indicator (the style's own translucent ring is switched off centrally), and Studio code adds no ring override.
+**Focus ring (platform-wide, at the root):** the platform's solid outline is the only focus indicator, and the style's own translucent ring and border recolour are switched off. Its colour (`--vortex-focus-color`) is computed in CSS from the stored `--ring` and `--foreground` (`color-mix` at 85% ring), which measures 3:1 or more on the background, card, popover, muted, accent and sidebar surfaces of every shipped theme in light and dark. No stored theme changes and `--ring` stays the token a theme overrides. Studio code adds no ring override.
 
 ### B3. Typography (Geist via `bodyFont: "geist"`; Tailwind scale only)
 
@@ -155,7 +155,7 @@ Numbers in tables and counts use `tabular-nums`. The longest reading line is `ma
 - Tablist semantics and arrow-key handling stay exactly as they are.
 
 **Navigator pane** (the rail panel, `bg-sidebar`):
-- Resizable with a shadcn `ResizableHandle` in a `ResizablePanelGroup`: a 1 px `bg-border` line with a wider hit area, which shows the ring colour on hover and focus. Arrow keys move it 0.5 rem (2 rem with Shift); Home and End take the panel to its smallest and largest width.
+- Resizable with a shadcn `ResizableHandle` in a `ResizablePanelGroup`: a 1 px `bg-border` line with a wider hit area, which shows the ring colour on hover and the focus outline on keyboard focus. Arrow keys move it 0.5 rem (2 rem with Shift); Home and End take the panel to its smallest and largest width.
 - Clamp 15-32 rem. Per-tab stored widths stay.
 - Default widths: structure, outline, flows, access and releases 17; blocks and data 18; menu 20; theme 22.
 

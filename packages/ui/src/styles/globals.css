@@ -40,8 +40,6 @@
       .cn-combobox-chips,
       .cn-native-select
     ):not(
-      :focus-visible,
-      :focus-within,
       [aria-invalid="true"],
       [data-invalid],
       :has([aria-invalid="true"]),
@@ -63,21 +61,13 @@
       .cn-input-group,
       .cn-combobox-chips,
       .cn-native-select
-    ):not(
-      :focus-visible,
-      :focus-within,
-      [aria-invalid="true"],
-      [data-invalid],
-      :has([aria-invalid="true"])
-    ) {
+    ):not([aria-invalid="true"], [data-invalid], :has([aria-invalid="true"])) {
     border-color: var(--vs-21ed8fc5, color-mix(in oklch, var(--input), var(--foreground) 45%));
   }
 
   /* Sera's underline keeps the same 3:1 contrast as a boxed field's border. */
   [data-vortex-style="sera"]
     :is(.cn-input, .cn-textarea, .cn-select-trigger, .cn-combobox-chips, .cn-native-select):not(
-      :focus-visible,
-      :focus-within,
       [aria-invalid="true"],
       [data-invalid],
       :has([aria-invalid="true"])

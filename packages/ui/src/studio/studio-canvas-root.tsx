@@ -1,6 +1,6 @@
 "use client";
 
-import type { PuckContext } from "@puckeditor/core";
+import { createUsePuck, type PuckContext } from "@puckeditor/core";
 import { compiledItemSettings } from "@vortex/platform/schema";
 import { createContext, useContext, useEffect, type ReactNode, type SyntheticEvent } from "react";
 import type { Breakpoint } from "../definition-error";
@@ -32,6 +32,8 @@ type StudioCanvasContext = Readonly<{
   /** The content area holds no block yet: the canvas says how to add one where it is empty. */
   empty: boolean;
 }>;
+
+const usePuckSelector = createUsePuck();
 
 const StudioCanvasFrameContext = createContext<StudioCanvasContext | null>(null);
 
@@ -76,6 +78,13 @@ export function StudioCanvasIframe({
   document: frameDocument,
 }: Readonly<{ children: ReactNode; document?: Document | undefined }>) {
   const studio = useContext(StudioCanvasFrameContext);
+  const previewMode = usePuckSelector((state) => state.appState.ui.previewMode);
+  // While blocks are edited the canvas is a picture of the page, outside Studio's Tab path (blocks
+  // are chosen in the Outline); while grids are arranged its column controls need the keyboard.
+  useEffect(() => {
+    const frame = frameDocument?.defaultView?.frameElement;
+    if (isHtmlElement(frame)) frame.tabIndex = previewMode === "interactive" ? 0 : -1;
+  }, [frameDocument, previewMode]);
   useEffect(() => {
     if (frameDocument === undefined) return;
     const style = frameDocument.createElement("style");

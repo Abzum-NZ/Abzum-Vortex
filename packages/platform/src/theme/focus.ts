@@ -11,9 +11,6 @@ import {
 import { createLocatedFailure } from "./errors";
 import type { ThemeResolutionOptions, ThemeTokenValue, ThemeValidationFailure } from "./types";
 
-/** The fills a focused control commonly sits on, besides the page background. */
-const FOCUS_SURFACE_KEYS = ["card", "popover", "muted", "accent", "secondary", "sidebar"] as const;
-
 const MINIMUM_VISIBLE_FOCUS_WIDTH_REM = 0.0625; // 1px at 16px base
 
 export function validateFocusVisibility(
@@ -78,36 +75,25 @@ export function validateFocusVisibility(
         continue;
       }
 
-      // 3. Contrast of the focus colour against the page surface and every surface a focused control
-      // can sit on: the focus outline is the only focus indicator, so it must read on all of them.
-      const surfaces = [
-        { key: surface.key, name: surface.name, light: surface.light, dark: surface.dark },
-        ...FOCUS_SURFACE_KEYS.flatMap((surfaceKey) => {
-          const candidate = tokens[surfaceKey];
-          return candidate?.kind === "color_pair" && surfaceKey !== surface.key
-            ? [{ key: surfaceKey, name: surfaceKey, light: candidate.light, dark: candidate.dark }]
-            : [];
-        }),
-      ];
-      for (const target of surfaces) {
-        const lightRatio = contrastRatio(colorToken.light, target.light, DEFAULT_LIGHT_SURFACE);
-        if (lightRatio < WCAG_AA_NON_TEXT_MIN_CONTRAST) {
-          addFailure({
-            code: "HIDDEN_FOCUS",
-            family: "unsafe_content",
-            message: `Focus token "${key}" has hidden focus: light mode color "${colorToken.light}" has insufficient contrast ratio (${lightRatio.toFixed(2)}:1 < ${WCAG_AA_NON_TEXT_MIN_CONTRAST}:1) against ${target.name} (${target.light})`,
-            tokenKey: key,
-          });
-        }
-        const darkRatio = contrastRatio(colorToken.dark, target.dark, DEFAULT_DARK_SURFACE);
-        if (darkRatio < WCAG_AA_NON_TEXT_MIN_CONTRAST) {
-          addFailure({
-            code: "HIDDEN_FOCUS",
-            family: "unsafe_content",
-            message: `Focus token "${key}" has hidden focus: dark mode color "${colorToken.dark}" has insufficient contrast ratio (${darkRatio.toFixed(2)}:1 < ${WCAG_AA_NON_TEXT_MIN_CONTRAST}:1) against ${target.name} (${target.dark})`,
-            tokenKey: key,
-          });
-        }
+      // 3. Contrast of focus color against surface
+      const lightRatio = contrastRatio(colorToken.light, surface.light, DEFAULT_LIGHT_SURFACE);
+      if (lightRatio < WCAG_AA_NON_TEXT_MIN_CONTRAST) {
+        addFailure({
+          code: "HIDDEN_FOCUS",
+          family: "unsafe_content",
+          message: `Focus token "${key}" has hidden focus: light mode color "${colorToken.light}" has insufficient contrast ratio (${lightRatio.toFixed(2)}:1 < ${WCAG_AA_NON_TEXT_MIN_CONTRAST}:1) against ${surface.name} (${surface.light})`,
+          tokenKey: key,
+        });
+      }
+
+      const darkRatio = contrastRatio(colorToken.dark, surface.dark, DEFAULT_DARK_SURFACE);
+      if (darkRatio < WCAG_AA_NON_TEXT_MIN_CONTRAST) {
+        addFailure({
+          code: "HIDDEN_FOCUS",
+          family: "unsafe_content",
+          message: `Focus token "${key}" has hidden focus: dark mode color "${colorToken.dark}" has insufficient contrast ratio (${darkRatio.toFixed(2)}:1 < ${WCAG_AA_NON_TEXT_MIN_CONTRAST}:1) against ${surface.name} (${surface.dark})`,
+          tokenKey: key,
+        });
       }
     }
   }

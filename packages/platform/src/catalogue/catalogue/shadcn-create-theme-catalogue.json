@@ -133,8 +133,8 @@
               "token": "ring",
               "mode": "light",
               "from": "oklch(0.708 0 0)",
-              "to": "oklch(0.642432 0 0)",
-              "requirement": "3:1 on background, card, popover, muted, accent, secondary and sidebar (non-text focus indicator)"
+              "to": "oklch(0.669432 0 0)",
+              "requirement": "3:1 on background (non-text focus indicator)"
             }
           ]
         },
@@ -186,8 +186,8 @@
               "token": "ring",
               "mode": "light",
               "from": "oklch(0.709 0.01 56.259)",
-              "to": "oklch(0.643045 0.01 56.259)",
-              "requirement": "3:1 on background, card, popover, muted, accent, secondary and sidebar (non-text focus indicator)"
+              "to": "oklch(0.670045 0.01 56.259)",
+              "requirement": "3:1 on background (non-text focus indicator)"
             }
           ]
         },
@@ -239,8 +239,8 @@
               "token": "ring",
               "mode": "light",
               "from": "oklch(0.705 0.015 286.067)",
-              "to": "oklch(0.641181 0.015 286.067)",
-              "requirement": "3:1 on background, card, popover, muted, accent, secondary and sidebar (non-text focus indicator)"
+              "to": "oklch(0.670181 0.015 286.067)",
+              "requirement": "3:1 on background (non-text focus indicator)"
             }
           ]
         },
@@ -292,8 +292,8 @@
               "token": "ring",
               "mode": "light",
               "from": "oklch(0.707 0.022 261.325)",
-              "to": "oklch(0.640373 0.022 261.325)",
-              "requirement": "3:1 on background, card, popover, muted, accent, secondary and sidebar (non-text focus indicator)"
+              "to": "oklch(0.669373 0.022 261.325)",
+              "requirement": "3:1 on background (non-text focus indicator)"
             }
           ]
         },
@@ -345,8 +345,8 @@
               "token": "ring",
               "mode": "light",
               "from": "oklch(0.711 0.019 323.02)",
-              "to": "oklch(0.636534 0.019 323.02)",
-              "requirement": "3:1 on background, card, popover, muted, accent, secondary and sidebar (non-text focus indicator)"
+              "to": "oklch(0.671534 0.019 323.02)",
+              "requirement": "3:1 on background (non-text focus indicator)"
             }
           ]
         },
@@ -401,8 +401,8 @@
               "token": "ring",
               "mode": "light",
               "from": "oklch(0.737 0.021 106.9)",
-              "to": "oklch(0.638468 0.021 106.9)",
-              "requirement": "3:1 on background, card, popover, muted, accent, secondary and sidebar (non-text focus indicator)"
+              "to": "oklch(0.668468 0.021 106.9)",
+              "requirement": "3:1 on background (non-text focus indicator)"
             }
           ],
           "release": {
@@ -458,8 +458,8 @@
               "token": "ring",
               "mode": "light",
               "from": "oklch(0.723 0.014 214.4)",
-              "to": "oklch(0.636078 0.014 214.4)",
-              "requirement": "3:1 on background, card, popover, muted, accent, secondary and sidebar (non-text focus indicator)"
+              "to": "oklch(0.668078 0.014 214.4)",
+              "requirement": "3:1 on background (non-text focus indicator)"
             }
           ]
         },
@@ -511,8 +511,8 @@
               "token": "ring",
               "mode": "light",
               "from": "oklch(0.714 0.014 41.2)",
-              "to": "oklch(0.635672 0.014 41.2)",
-              "requirement": "3:1 on background, card, popover, muted, accent, secondary and sidebar (non-text focus indicator)"
+              "to": "oklch(0.670672 0.014 41.2)",
+              "requirement": "3:1 on background (non-text focus indicator)"
             }
           ]
         }

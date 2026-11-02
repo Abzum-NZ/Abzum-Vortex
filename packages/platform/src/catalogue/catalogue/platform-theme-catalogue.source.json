@@ -138,7 +138,7 @@
       },
       "ring": {
         "kind": "color_pair",
-        "light": "oklch(0.636078 0.014 214.4)",
+        "light": "oklch(0.668078 0.014 214.4)",
         "dark": "oklch(0.56 0.021 213.5)"
       },
       "chart_1": {
@@ -386,7 +386,7 @@
       },
       "ring": {
         "kind": "color_pair",
-        "light": "oklch(0.641045 0.01 56.259)",
+        "light": "oklch(0.670045 0.01 56.259)",
         "dark": "oklch(0.553 0.013 58.071)"
       },
       "chart_1": {
@@ -634,8 +634,8 @@
       },
       "ring": {
         "kind": "color_pair",
-        "light": "oklch(0.635672 0.014 41.2)",
-        "dark": "oklch(0.551 0.021 43.1)"
+        "light": "oklch(0.670672 0.014 41.2)",
+        "dark": "oklch(0.547 0.021 43.1)"
       },
       "chart_1": {
         "kind": "color_pair",
@@ -882,8 +882,8 @@
       },
       "ring": {
         "kind": "color_pair",
-        "light": "oklch(0.640373 0.022 261.325)",
-        "dark": "oklch(0.553 0.027 264.364)"
+        "light": "oklch(0.669373 0.022 261.325)",
+        "dark": "oklch(0.551 0.027 264.364)"
       },
       "chart_1": {
         "kind": "color_pair",
@@ -1130,7 +1130,7 @@
       },
       "ring": {
         "kind": "color_pair",
-        "light": "oklch(0.638468 0.021 106.9)",
+        "light": "oklch(0.668468 0.021 106.9)",
         "dark": "oklch(0.58 0.031 107.3)"
       },
       "chart_1": {

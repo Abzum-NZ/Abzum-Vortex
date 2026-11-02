@@ -328,7 +328,7 @@ export function GridToolbar({
     <div
       role="group"
       aria-label={`Tools for ${accessibleName}`}
-      className="mb-2 flex h-11 min-w-0 shrink-0 items-center gap-[var(--vortex-space-sm)] overflow-x-auto px-1.5 whitespace-nowrap"
+      className="mb-2 flex h-11 min-w-0 shrink-0 items-center gap-[var(--vortex-space-sm)] -mx-1.5 overflow-x-auto px-1.5 whitespace-nowrap"
     >
       <div
         className={

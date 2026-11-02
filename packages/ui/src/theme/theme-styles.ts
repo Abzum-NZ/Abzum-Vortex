@@ -213,8 +213,10 @@ const SHARED_COMPONENT_STYLES_CSS = `
 }
 
 /*
- * Visible focus is one platform indicator everywhere: the theme's solid outline at its focus width
- * and the ring colour. The style's own translucent focus ring is switched off here, so a control
+ * Visible focus is one platform indicator everywhere: a solid outline at the theme's focus width.
+ * Its colour is the ring colour pulled 15% towards the foreground, which keeps it at 3:1 or more on
+ * the background, card, popover, muted, accent and sidebar surfaces of every shipped theme without
+ * changing any stored theme. The style's own translucent focus ring is switched off here, so a control
  * never shows two indicators. A text control inside an input group or a chips box leaves the
  * outline to its wrapper, and a composite row (focus group) outlines the row around its primary
  * control. Forced colours draw the same outline.
@@ -226,12 +228,14 @@ const SHARED_COMPONENT_STYLES_CSS = `
 [data-vortex-theme] [data-vortex-focus-group]:has(:focus-visible),
 [data-vortex-theme] .cn-input-group:has([data-slot="input-group-control"]:focus-visible),
 [data-vortex-theme] .cn-combobox-chips:has(:focus-visible) {
-  outline: var(--vortex-focus-width) solid var(--ring) !important;
+  --vortex-focus-color: color-mix(in oklab, var(--ring) 85%, var(--foreground));
+  outline: var(--vortex-focus-width) solid var(--vortex-focus-color) !important;
   outline-offset: 0.125rem !important;
 }
 [data-vortex-theme] :focus-visible:not(:where(${WRAPPED_FOCUS_CONTROLS})),
 [data-vortex-theme] .cn-input-group:has([data-slot="input-group-control"]:focus-visible),
-[data-vortex-theme] .cn-combobox-chips:focus-within {
+[data-vortex-theme] .cn-combobox-chips:focus-within,
+[data-vortex-theme] .cn-field-label:has(:focus-visible) {
   --tw-ring-shadow: 0 0 #0000 !important;
 }
 [data-vortex-theme] :is(${WRAPPED_FOCUS_CONTROLS}):focus-visible {

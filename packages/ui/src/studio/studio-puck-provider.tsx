@@ -501,18 +501,5 @@ function StudioPuckSync({
       );
   }, [wanted, select]);
 
-  // The canvas is a picture of the page, not a part of Studio's keyboard path: Tab would otherwise
-  // walk through every control of the previewed application. Blocks are chosen in the outline.
-  useEffect(() => {
-    const skipFrame = () => {
-      for (const frame of document.querySelectorAll("iframe#preview-frame"))
-        if (frame.getAttribute("tabindex") !== "-1") frame.setAttribute("tabindex", "-1");
-    };
-    skipFrame();
-    const observer = new MutationObserver(skipFrame);
-    observer.observe(document.body, { childList: true, subtree: true });
-    return () => observer.disconnect();
-  }, []);
-
   return null;
 }
