@@ -1,6 +1,7 @@
 "use client";
 import type { FormEvent, ReactNode } from "react";
 import { Button } from "../components/button";
+import { FieldGroup } from "../components/field";
 import {
   Dialog,
   DialogClose,
@@ -70,9 +71,11 @@ export function StudioDialog({
             {footer}
           </>
         ) : (
-          <form onSubmit={submit} className="space-y-4">
-            {children}
-            {footer}
+          <form onSubmit={submit}>
+            <FieldGroup>
+              {children}
+              {footer}
+            </FieldGroup>
           </form>
         )}
       </DialogContent>

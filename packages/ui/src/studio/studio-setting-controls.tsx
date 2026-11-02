@@ -543,13 +543,15 @@ function SettingControl(props: ControlProps): ReactElement {
       const fallback =
         property.defaultValue?.kind === "boolean" ? property.defaultValue.value : false;
       return (
-        <Switch
-          id={id}
-          aria-describedby={descriptionId}
-          disabled={disabled}
-          checked={value?.kind === "boolean" ? value.value : fallback}
-          onCheckedChange={(checked) => onChange({ kind: "boolean", value: checked === true })}
-        />
+        <div>
+          <Switch
+            id={id}
+            aria-describedby={descriptionId}
+            disabled={disabled}
+            checked={value?.kind === "boolean" ? value.value : fallback}
+            onCheckedChange={(checked) => onChange({ kind: "boolean", value: checked === true })}
+          />
+        </div>
       );
     }
     case "choice": {
@@ -916,7 +918,7 @@ function GroupControl({
   return (
     <div className="space-y-2">
       {optional && (
-        <label className="flex items-center gap-2 text-sm">
+        <Label className="gap-2">
           <Checkbox
             checked={group !== undefined}
             disabled={disabled}
@@ -925,7 +927,7 @@ function GroupControl({
             }
           />
           Use {property.label.toLowerCase()}
-        </label>
+        </Label>
       )}
       {(group !== undefined || !optional) && (
         <div className="space-y-4">

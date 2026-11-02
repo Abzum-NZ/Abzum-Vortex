@@ -12,6 +12,7 @@ import {
 import { Spinner } from "@vortex/ui/components/spinner";
 import { studioNotice } from "./studio-save-state";
 import { Textarea } from "@vortex/ui/components/textarea";
+import { StudioInspectorFooter } from "./studio-inspector";
 import { StudioField } from "./studio-field";
 import { summarizeSourceChange } from "../_lib/source-change-summary";
 import {
@@ -536,21 +537,6 @@ export function ApplicationSourceImport({ disabled, readSnapshot, onApply }: Pro
           </StudioField>
         </CollapsibleContent>
       </Collapsible>
-      <Button
-        type="button"
-        variant="outline"
-        disabled={disabled || operation !== null || text.length === 0}
-        onClick={() => {
-          void review();
-        }}
-      >
-        {operation !== null && <Spinner />}
-        {operation === "reading"
-          ? "Reading file…"
-          : operation === "reviewing"
-            ? "Checking file…"
-            : "Check the file"}
-      </Button>
       {reviewedCurrent && reviewed !== null && (
         <div className="space-y-2">
           <p>
@@ -587,14 +573,7 @@ export function ApplicationSourceImport({ disabled, readSnapshot, onApply }: Pro
           </ul>
         </div>
       )}
-      <div className="flex flex-wrap gap-2">
-        <Button
-          type="button"
-          disabled={disabled || operation !== null || !reviewedCurrent}
-          onClick={apply}
-        >
-          Replace the draft
-        </Button>
+      <StudioInspectorFooter>
         <Button
           type="button"
           variant="ghost"
@@ -607,7 +586,29 @@ export function ApplicationSourceImport({ disabled, readSnapshot, onApply }: Pro
         >
           Clear
         </Button>
-      </div>
+        <Button
+          type="button"
+          variant="outline"
+          disabled={disabled || operation !== null || text.length === 0}
+          onClick={() => {
+            void review();
+          }}
+        >
+          {operation !== null && <Spinner />}
+          {operation === "reading"
+            ? "Reading file…"
+            : operation === "reviewing"
+              ? "Checking file…"
+              : "Check the file"}
+        </Button>
+        <Button
+          type="button"
+          disabled={disabled || operation !== null || !reviewedCurrent}
+          onClick={apply}
+        >
+          Replace the draft
+        </Button>
+      </StudioInspectorFooter>
       <p role="status" aria-live="polite" className="sr-only">
         {operation === "reading"
           ? "Reading file"

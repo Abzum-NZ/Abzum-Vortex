@@ -13,6 +13,7 @@ import {
   type ModuleField,
 } from "@vortex/platform/schema";
 import { Badge } from "../components/badge";
+import { Button } from "../components/button";
 import { Input } from "../components/input";
 import { Label } from "../components/label";
 import { StudioOptionControl } from "./studio-setting-controls";
@@ -126,10 +127,11 @@ export function ConditionalFormatStyleSwatch({
   style,
 }: Readonly<{ style: ConditionalFormatStyle }>): ReactElement {
   return (
-    <span
+    <Badge
       aria-hidden
+      variant="outline"
       className={cn(
-        "inline-flex h-6 min-w-10 shrink-0 items-center justify-center gap-1 rounded-md border px-1.5 text-xs",
+        "min-w-10 shrink-0 justify-center gap-1",
         style.tint && tokenTints[style.token],
         style.text && tokenTexts[style.token],
         style.bold && "font-semibold",
@@ -138,7 +140,7 @@ export function ConditionalFormatStyleSwatch({
     >
       {style.icon === undefined ? null : <Icon name={iconGlyphs[style.icon]} className="size-3" />}
       Aa
-    </span>
+    </Badge>
   );
 }
 
@@ -269,8 +271,10 @@ export function ConditionalFormatStyleControls({
             {cells.map((field) => (
               <Badge key={field} variant="outline" className="gap-1">
                 {cellLabel(field)}
-                <button
+                <Button
                   type="button"
+                  variant="ghost"
+                  size="icon-xs"
                   aria-label={`Remove ${cellLabel(field)}`}
                   disabled={disabled}
                   onClick={() =>
@@ -283,7 +287,7 @@ export function ConditionalFormatStyleControls({
                   }
                 >
                   <Icon name="close" className="size-3" />
-                </button>
+                </Button>
               </Badge>
             ))}
           </div>

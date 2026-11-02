@@ -7075,3 +7075,25 @@
     }
   }
 }
+
+/* Theme hooks of the shared components that have no style of their own in the generated sheet. */
+.cn-spinner {
+  color: var(--muted-foreground, currentColor);
+}
+
+.cn-collapsible-trigger {
+  border-radius: var(--radius-sm, 0.25rem);
+  cursor: pointer;
+  &:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+}
+
+.cn-notice {
+  text-wrap: pretty;
+}
+
+.cn-confirm-dialog {
+  max-width: min(28rem, calc(100vw - 2rem));
+}

@@ -91,18 +91,20 @@ function SchemaGrid({
                 onClick={choose}
               >
                 <TableCell className="font-medium">
-                  <button
+                  <Button
                     type="button"
+                    variant="link"
+                    size="xs"
                     onClick={(event) => {
                       event.stopPropagation();
                       choose();
                     }}
                     aria-current={field.key === selectedField ? "true" : undefined}
                     aria-label={`Open ${field.label}`}
-                    className="min-h-6 rounded-md text-left focus-visible:outline-2 focus-visible:outline-ring"
+                    className="h-auto min-h-6 p-0 text-left font-medium text-foreground"
                   >
                     {field.label}
-                  </button>
+                  </Button>
                   {field.key === record.titleFieldKey ? (
                     <Badge variant="outline" className="ml-2">
                       Title

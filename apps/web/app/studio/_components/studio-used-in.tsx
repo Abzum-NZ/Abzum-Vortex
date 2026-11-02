@@ -75,17 +75,19 @@ export function StudioPlaceList({
             {trail.map((segment, at) => {
               const text =
                 at === last && place.open.kind !== "none" ? (
-                  <button
+                  <Button
                     type="button"
+                    variant="link"
+                    size="xs"
                     aria-label={`Go to ${trail.join(" › ")}`}
-                    className="text-left text-sm text-foreground underline underline-offset-4 hover:no-underline"
+                    className="h-auto p-0 text-left text-sm text-foreground"
                     onClick={() => {
                       onBeforeOpen?.();
                       opener.open(place.open);
                     }}
                   >
                     {segment}
-                  </button>
+                  </Button>
                 ) : (
                   <span className={at === last ? undefined : "text-muted-foreground"}>
                     {segment}

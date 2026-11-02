@@ -1,6 +1,6 @@
 "use client";
 import { NavigationLink } from "@vortex/ui/routing";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   StudioAddButton,
   StudioInspectorActions,
@@ -390,13 +390,15 @@ function RecordTypeInspector({
             <ul className="space-y-1 text-sm">
               {queries.map((query) => (
                 <li key={query.key}>
-                  <button
+                  <Button
                     type="button"
-                    className="text-left text-sm text-foreground underline underline-offset-4 hover:no-underline"
+                    variant="link"
+                    size="xs"
+                    className="h-auto p-0 text-left text-sm text-foreground"
                     onClick={() => onSelect({ kind: "query", moduleKey, queryKey: query.key })}
                   >
                     {query.label ?? query.key}
-                  </button>
+                  </Button>
                 </li>
               ))}
             </ul>
@@ -881,6 +883,35 @@ export function StudioDataInspectorView({ model }: Readonly<{ model: StudioDataM
   );
 }
 
+/**
+ * How many times a dialog has been opened. A dialog starts fresh at each opening (its key is this
+ * count) and hands focus back to the control that was focused before it opened, when it closes.
+ */
+function useOpenings(open: boolean): number {
+  const [count, setCount] = useState(0);
+  const [was, setWas] = useState(open);
+  if (open !== was) {
+    setWas(open);
+    if (open) setCount(count + 1);
+  }
+  const opener = useRef<HTMLElement | null>(null);
+  useEffect(() => {
+    const track = (event: FocusEvent) => {
+      const target = event.target;
+      if (target instanceof HTMLElement && target.closest('[role="dialog"]') === null)
+        opener.current = target;
+    };
+    document.addEventListener("focusin", track);
+    return () => document.removeEventListener("focusin", track);
+  }, []);
+  const wasOpen = useRef(open);
+  useEffect(() => {
+    if (wasOpen.current && !open) requestAnimationFrame(() => opener.current?.focus());
+    wasOpen.current = open;
+  }, [open]);
+  return count;
+}
+
 /** The Data tab's dialogs: new module, new record type and new query. */
 export function StudioDataDialogs({ model }: Readonly<{ model: StudioDataModel }>) {
   const {
@@ -899,10 +930,12 @@ export function StudioDataDialogs({ model }: Readonly<{ model: StudioDataModel }
     fillHome,
   } = model;
   const { source } = draft;
+  const moduleOpenings = useOpenings(creatingModule);
+  const recordTypeOpenings = useOpenings(creating);
   return (
     <>
       <StudioModuleDialog
-        key={creatingModule ? "module-open" : "module-closed"}
+        key={`module-${moduleOpenings}`}
         open={creatingModule}
         source={source}
         edit={edit}
@@ -910,7 +943,7 @@ export function StudioDataDialogs({ model }: Readonly<{ model: StudioDataModel }
         onCreated={(moduleKey) => select({ kind: "module", moduleKey })}
       />
       <StudioRecordTypeDialog
-        key={creating ? "open" : "closed"}
+        key={`record-type-${recordTypeOpenings}`}
         open={creating}
         source={source}
         initialModuleKey={isOwned ? current?.moduleKey : undefined}

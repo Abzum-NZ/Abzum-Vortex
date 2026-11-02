@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useId, useState, type ReactNode } from "react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "../components/collapsible";
+import { FieldGroup } from "../components/field";
 import { Icon } from "../icons/icon";
 import { StudioHelp } from "./studio-field";
 
@@ -74,7 +75,7 @@ export function StudioInspectorGroup({
         {action}
       </div>
       <CollapsibleContent keepMounted>
-        <div className="space-y-4 pb-3 pt-1">{children}</div>
+        <FieldGroup className="pb-3 pt-1">{children}</FieldGroup>
       </CollapsibleContent>
     </Collapsible>
   );
