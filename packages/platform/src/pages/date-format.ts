@@ -198,6 +198,38 @@ export function formatIsoDateTitle(
   return isCalendarDate(iso) ? undefined : formatIsoDate(iso, options, "full");
 }
 
+const RELATIVE_UNITS: readonly (readonly [Intl.RelativeTimeFormatUnit, number])[] = [
+  ["year", 365 * 86_400],
+  ["month", 30 * 86_400],
+  ["day", 86_400],
+  ["hour", 3_600],
+  ["minute", 60],
+  ["second", 1],
+];
+
+/**
+ * How long ago (or from now) a timestamp is, from the largest whole unit, for example `3 days ago`
+ * or `yesterday`. Undefined when the value cannot be parsed or is a calendar date.
+ */
+export function formatIsoRelative(
+  iso: string,
+  options: DateFormatOptions = {},
+  now: number = Date.now(),
+): string | undefined {
+  const timestamp = Date.parse(iso);
+  if (Number.isNaN(timestamp) || isCalendarDate(iso)) return undefined;
+  const seconds = Math.round((timestamp - now) / 1000);
+  const [unit, size] =
+    RELATIVE_UNITS.find(([, length]) => Math.abs(seconds) >= length) ?? RELATIVE_UNITS[5]!;
+  let formatter: Intl.RelativeTimeFormat;
+  try {
+    formatter = new Intl.RelativeTimeFormat(options.locale ?? DEFAULT_LOCALE, { numeric: "auto" });
+  } catch {
+    formatter = new Intl.RelativeTimeFormat(DEFAULT_LOCALE, { numeric: "auto" });
+  }
+  return formatter.format(Math.trunc(seconds / size), unit);
+}
+
 /** Spreadsheet number-format characters that need no quoting between date and time codes. */
 const EXCEL_PLAIN_LITERAL = /^[ :/-]+$/;
 const ASCII_DIGITS = /^\d+$/;

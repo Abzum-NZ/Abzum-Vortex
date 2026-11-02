@@ -1,6 +1,10 @@
 import "server-only";
 
-import { createBackendRunHistoryReader } from "@vortex/platform/server";
+import {
+  createBackendRunHistoryReader,
+  type BackendRunHistoryCursor,
+  type BackendRunHistoryRequest,
+} from "@vortex/platform/server";
 import {
   applicationRootIdSchema,
   organizationIdSchema,
@@ -21,10 +25,17 @@ export type StudioBackendRun = Readonly<{
   failureCode: string | null;
   createdAt: string;
   finishedAt: string | null;
+  /** Where the page that follows or precedes this run starts. */
+  cursor: BackendRunHistoryCursor;
 }>;
 
 export type StudioBackendRunHistoryResult =
-  | Readonly<{ kind: "available"; runs: readonly StudioBackendRun[] }>
+  | Readonly<{
+      kind: "available";
+      runs: readonly StudioBackendRun[];
+      hasOlder: boolean;
+      hasNewer: boolean;
+    }>
   | Readonly<{ kind: "refused" | "temporarily_unavailable"; reason: string }>;
 
 /** The names of the flows the application's installed release runs, by flow identity. */
@@ -58,6 +69,7 @@ const installedFlowNames = async (
 export const readStudioBackendRunHistory = async (
   candidateOrganizationId: string,
   candidateRootId: string,
+  request: BackendRunHistoryRequest,
 ): Promise<StudioBackendRunHistoryResult> => {
   const organization = organizationIdSchema.safeParse(candidateOrganizationId);
   const root = applicationRootIdSchema.safeParse(candidateRootId);
@@ -69,11 +81,13 @@ export const readStudioBackendRunHistory = async (
     if (resolved.kind !== "active") return { kind: "refused", reason: "session_ended" };
     const result = await createBackendRunHistoryReader({
       requests: humanOrganizationRequests(),
-    }).read(resolved.session, organization.data, root.data);
+    }).read(resolved.session, organization.data, root.data, request);
     if (result.kind === "available") {
       const names = await installedFlowNames(resolved.session, organization.data, root.data);
       return {
         kind: "available",
+        hasOlder: result.hasOlder,
+        hasNewer: result.hasNewer,
         runs: result.runs.map((run) => ({
           backendRunId: run.backendRunId,
           flow:
@@ -85,6 +99,7 @@ export const readStudioBackendRunHistory = async (
           failureCode: run.failureCode,
           createdAt: run.createdAt,
           finishedAt: run.finishedAt,
+          cursor: run.cursor,
         })),
       };
     }

@@ -4,6 +4,8 @@ import {
   applicationSourceDocumentSchema,
   canonicalJson,
   describeFailure,
+  summarizeSourceChange,
+  type SourceChangeRow,
   type ApplicationSourceDocument,
   type PeopleDirectoryOwner,
   type SourceIdentityReservation,
@@ -34,7 +36,6 @@ import type {
   StudioPublishedData,
 } from "../_lib/studio-data-model";
 import { studioViewRequest, type StudioViewRequest } from "../_lib/studio-view-request";
-import { summarizeSourceChange, type SourceChangeRow } from "../_lib/source-change-summary";
 import { conflictMessage, refusalMessage, unavailableMessage } from "./studio-refusal-messages";
 import { useLeaveWarning } from "./use-leave-warning";
 import { useStudioSession } from "./use-studio-session";

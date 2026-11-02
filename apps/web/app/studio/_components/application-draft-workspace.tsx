@@ -349,7 +349,6 @@ function ExistingApplicationWorkspace(props: ExistingProps) {
                 {flows.panel}
                 {menuTheme.themePanel}
                 {access.panel}
-                {releases.panel}
               </>
             }
             inspector={

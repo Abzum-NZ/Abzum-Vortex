@@ -3,10 +3,12 @@ import {
   formatBytes,
   canonicalJson,
   sameId,
+  summarizeSourceChange,
   type ApplicationSourceDocument,
   type DefinitionValidationResult,
 } from "@vortex/platform/schema";
 import { Button } from "@vortex/ui/components/button";
+import { cn } from "@vortex/ui/lib/utils";
 import { StudioInspectorGroup, StudioSourceView } from "@vortex/ui/studio";
 import { Icon } from "@vortex/ui";
 import { Card, CardContent } from "@vortex/ui/components/card";
@@ -27,7 +29,7 @@ import {
   DialogTitle,
 } from "@vortex/ui/components/dialog";
 import { StudioField } from "./studio-field";
-import { summarizeSourceChange } from "../_lib/source-change-summary";
+
 import {
   Table,
   TableBody,
@@ -456,7 +458,7 @@ export function ApplicationSourceImport({
           aria-busy={operation !== null}
         >
           <Card
-            className={`border-2 border-dashed ${dragging ? "border-primary" : ""}`}
+            className={cn("border-2 border-dashed", dragging && "border-primary")}
             onDragOver={(event) => {
               event.preventDefault();
               if (!disabled) setDragging(true);
@@ -498,7 +500,7 @@ export function ApplicationSourceImport({
                 onClick={() => fileInput.current?.click()}
                 className="h-auto w-full flex-col gap-3 p-8 text-center whitespace-normal"
               >
-                <Icon name="arrow-up" className="size-8 text-muted-foreground" />
+                <Icon name="upload" className="size-8 text-muted-foreground" />
                 <span className="font-medium">Drop an application file or browse</span>
                 <span className="text-xs font-normal text-muted-foreground">
                   Up to 2 MiB, same application
@@ -555,7 +557,7 @@ export function ApplicationSourceImport({
                   <li key={`${error.code}:${index}`}>
                     <p className="font-medium">{error.message}</p>
                     <p>{error.guidance}</p>
-                    <StudioInspectorGroup title="Details" defaultOpen={false}>
+                    <StudioInspectorGroup title="Details" defaultOpen={false} persist={false}>
                       <p className="break-all">
                         Where: {error.location?.documentKey ?? diagnostics.snapshot.key}
                         {error.location?.segments.map((segment, segmentIndex) => (
@@ -582,7 +584,7 @@ export function ApplicationSourceImport({
                 : ""}
           </p>
           {reviewedCurrent && reviewed !== null && (
-            <StudioInspectorGroup title="Details" defaultOpen={false}>
+            <StudioInspectorGroup title="Details" defaultOpen={false} persist={false}>
               <p className="break-all">
                 Fingerprint of the file: <code>{reviewed.fingerprint}</code>
               </p>

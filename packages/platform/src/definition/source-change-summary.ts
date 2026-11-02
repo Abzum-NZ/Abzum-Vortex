@@ -1,4 +1,6 @@
-import { canonicalJson, type ApplicationSourceDocument, asRecord } from "@vortex/platform/schema";
+import { asRecord } from "../catalogue/runtime-primitives";
+import { canonicalJson } from "./canonical-json";
+import type { ApplicationSourceDocument } from "./application-source-contracts";
 
 export type SourceChangeRow = Readonly<{
   area: string;
@@ -131,4 +133,27 @@ export const summarizeSourceChange = (
     else rows.push({ area, change: "Changed", item: typeof to === "string" ? to : area });
   }
   return rows;
+};
+
+/** How many items of one area a release added, changed and removed. */
+export type SourceChangeCount = Readonly<{
+  area: string;
+  added: number;
+  changed: number;
+  removed: number;
+}>;
+
+/** The rows of a source change counted by area, in the order the areas first appear. */
+export const countSourceChange = (
+  rows: readonly SourceChangeRow[],
+): readonly SourceChangeCount[] => {
+  const counts = new Map<string, { added: number; changed: number; removed: number }>();
+  for (const row of rows) {
+    const count = counts.get(row.area) ?? { added: 0, changed: 0, removed: 0 };
+    if (row.change === "Added") count.added += 1;
+    else if (row.change === "Removed") count.removed += 1;
+    else count.changed += 1;
+    counts.set(row.area, count);
+  }
+  return [...counts].map(([area, count]) => ({ area, ...count }));
 };

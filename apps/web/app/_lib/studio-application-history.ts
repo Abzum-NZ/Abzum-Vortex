@@ -15,7 +15,12 @@ import {
   fingerprintSchema,
   namespacedKeySchema,
   organizationIdSchema,
-  publishedApplicationReferenceSchema,
+  asRecord,
+  countSourceChange,
+  summarizeSourceChange,
+  type ApplicationSourceDocument,
+  type SourceChangeCount,
+  type SourceChangeRow,
   revisionSchema,
   sameId,
   type DefinitionReleaseMetadata,
@@ -38,7 +43,8 @@ import { humanOrganizationRequests } from "./server-composition";
 import { DefinitionError, classifyDatabaseError } from "@vortex/platform/server";
 import { platformPermissionSource } from "./platform-permission-source";
 
-const pageSize = 20;
+/** Versions per page: the default of the paging rule. */
+const pageSize = 40;
 const snapshotFields = {
   draftRevision: revisionSchema,
   sourceFingerprint: fingerprintSchema,
@@ -54,41 +60,6 @@ const snapshotSchema = z
     correlationId: correlationIdSchema,
   })
   .strict();
-const listRequestSchema = z.discriminatedUnion("kind", [
-  z.object({ kind: z.literal("reload"), rootId: applicationRootIdSchema }).strict(),
-  z
-    .object({
-      kind: z.literal("next"),
-      rootId: applicationRootIdSchema,
-      expected: expectedSnapshotSchema,
-      afterReleaseRevision: revisionSchema,
-    })
-    .strict(),
-]);
-const pageSchema = z
-  .object({
-    anchorReleaseRevision: revisionSchema,
-    entries: z
-      .array(
-        z
-          .object({
-            previousReleaseRevision: revisionSchema.nullable(),
-            release: z
-              .object({
-                publication: publishedApplicationReferenceSchema,
-                releaseNote: z.string(),
-                // The protected producer includes compilation evidence. Only this fingerprint is projected.
-                evidence: z.object({ authoredSourceFingerprint: fingerprintSchema }).passthrough(),
-              })
-              .passthrough(),
-          })
-          .strict(),
-      )
-      .min(1)
-      .max(pageSize),
-    nextAfterReleaseRevision: revisionSchema.nullable(),
-  })
-  .strict();
 
 export type StudioApplicationHistorySnapshot = z.infer<typeof snapshotSchema>;
 export type StudioApplicationHistoryFailure = Readonly<{
@@ -96,13 +67,31 @@ export type StudioApplicationHistoryFailure = Readonly<{
   /** The stable code logged on the server and mapped to a message for the person. */
   reason: string;
 }>;
+/** What a version changed against the one before it, counted by area; the sources stay on the server. */
+export type StudioReleaseChanges =
+  | Readonly<{ kind: "first" }>
+  | Readonly<{ kind: "changed"; counts: readonly SourceChangeCount[] }>
+  /** A version published in an earlier source format cannot be compared. */
+  | Readonly<{ kind: "unavailable" }>;
+export type StudioApplicationReleaseEntry = DefinitionReleaseMetadata &
+  Readonly<{ changes: StudioReleaseChanges }>;
 export type StudioApplicationHistoryPage = Readonly<{
   snapshot: StudioApplicationHistorySnapshot;
-  entries: readonly DefinitionReleaseMetadata[];
+  /** Newest first. */
+  entries: readonly StudioApplicationReleaseEntry[];
   /** The names of the people who published the entries, by lowercase account id, as far as the viewer may see them. */
   publishers: Readonly<Record<string, string>>;
-  nextAfterReleaseRevision: number | null;
+  hasOlder: boolean;
+  hasNewer: boolean;
 }>;
+export type StudioApplicationReleaseChangesResult =
+  | StudioApplicationHistoryFailure
+  | Readonly<{
+      kind: "available";
+      /** True for the first version, which has nothing to compare with. */
+      first: boolean;
+      rows: readonly SourceChangeRow[];
+    }>;
 export type StudioApplicationHistoryListResult =
   | StudioApplicationHistoryFailure
   | Readonly<{ kind: "available"; page: StudioApplicationHistoryPage }>;
@@ -290,68 +279,134 @@ const executeRead = async <Value>(
   }
 };
 
+const listRequestSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("newest"), rootId: applicationRootIdSchema }).strict(),
+  z
+    .object({
+      kind: z.enum(["older", "newer"]),
+      rootId: applicationRootIdSchema,
+      expected: expectedSnapshotSchema,
+      /** The oldest version shown (to read older) or the newest shown (to read newer). */
+      cursorReleaseRevision: revisionSchema,
+    })
+    .strict(),
+]);
+const changesRequestSchema = z
+  .object({
+    rootId: applicationRootIdSchema,
+    expected: expectedSnapshotSchema,
+    releaseRevision: revisionSchema,
+  })
+  .strict();
+
+const sourceEntrySchema = z
+  .object({
+    releaseRevision: revisionSchema,
+    releaseVersion: z.string(),
+    publishedAt: z.string(),
+    publishedBy: z.string(),
+    releaseNote: z.string(),
+    authoredSourceFingerprint: fingerprintSchema,
+    authoredSource: z.unknown(),
+    previousReleaseRevision: revisionSchema.nullable(),
+  })
+  .strict();
+const pageSchema = z
+  .object({
+    anchorReleaseRevision: revisionSchema,
+    entries: z.array(sourceEntrySchema).max(200),
+    predecessor: z
+      .object({ releaseRevision: revisionSchema, authoredSource: z.unknown() })
+      .strict()
+      .nullable(),
+    hasOlder: z.boolean(),
+    hasNewer: z.boolean(),
+  })
+  .strict();
+type PageRows = z.infer<typeof pageSchema>;
+
+/** A stored source is compared by its body; one that has none (an earlier format) cannot be. */
+const comparableSource = (value: unknown): ApplicationSourceDocument | undefined => {
+  const body = asRecord(asRecord(value)?.body);
+  return body === undefined ? undefined : (value as ApplicationSourceDocument);
+};
+
+/** The source of the version an entry follows: another entry of the page, or the one just older. */
+const previousSourceOf = (
+  page: PageRows,
+  entry: PageRows["entries"][number],
+): ApplicationSourceDocument | undefined => {
+  if (entry.previousReleaseRevision === null) return undefined;
+  const inPage = page.entries.find(
+    (candidate) => candidate.releaseRevision === entry.previousReleaseRevision,
+  );
+  if (inPage !== undefined) return comparableSource(inPage.authoredSource);
+  if (page.predecessor?.releaseRevision === entry.previousReleaseRevision)
+    return comparableSource(page.predecessor.authoredSource);
+  throw new HistoryStorageUnavailable();
+};
+
+/** One newest-first page of versions with the sources the change summary compares; the compilation output is never read. */
 const readPage = async (
   transaction: RequestDatabaseTransaction,
   rootId: string,
   anchor: number,
-  after: number | null,
+  cursor: number | null,
+  direction: "older" | "newer",
   size: number,
-): Promise<
-  Readonly<{
-    entries: readonly DefinitionReleaseMetadata[];
-    nextAfterReleaseRevision: number | null;
-  }>
-> => {
+): Promise<PageRows> => {
   const rows = await transaction.query<DatabaseRow>`
-    select vortex_definition.read_publication_history_page(
-      ${rootId}::uuid, ${anchor}::bigint, ${after}::bigint, ${size}::integer
-    ) as publication_history_page
+    select vortex_definition.read_application_release_history_page(
+      ${rootId}::uuid, ${anchor}::bigint, ${cursor}::bigint, ${direction}::text, ${size}::integer
+    ) as release_history_page
   `;
-  const parsed = pageSchema.safeParse(rows[0]?.publication_history_page);
+  const parsed = pageSchema.safeParse(rows[0]?.release_history_page);
   if (
     rows.length !== 1 ||
     !parsed.success ||
     parsed.data.anchorReleaseRevision !== anchor ||
     parsed.data.entries.length > size
-  )
+  ) {
+    console.error(
+      "[studio] release history page was not readable",
+      parsed.success ? "" : describeFailure(parsed.error),
+    );
     throw new HistoryStorageUnavailable();
+  }
   const page = parsed.data;
-  let previous = after;
-  const entries = page.entries.map((entry, index) => {
-    const publication = entry.release.publication;
-    if (after !== null && index === 0 && entry.previousReleaseRevision !== after)
-      throw new HistoryRefused();
-    if (
-      !sameId(publication.rootId, rootId) ||
-      publication.kind !== "application" ||
-      publication.revision <= (previous ?? 0) ||
-      publication.revision > anchor ||
-      entry.previousReleaseRevision !== previous
-    )
+  let previous = Number.POSITIVE_INFINITY;
+  for (const entry of page.entries) {
+    if (entry.releaseRevision >= previous || entry.releaseRevision > anchor)
       throw new HistoryStorageUnavailable();
-    const metadata = definitionReleaseMetadataSchema.safeParse({
-      releaseRevision: publication.revision,
-      releaseVersion: publication.releaseVersion,
-      sourceFingerprint: entry.release.evidence.authoredSourceFingerprint,
-      releaseNote: entry.release.releaseNote,
-      publishedAt: publication.publishedAt,
-      publishedBy: publication.publishedBy,
-      isCurrent: publication.revision === anchor,
-    });
-    if (!metadata.success) throw new HistoryStorageUnavailable();
-    previous = publication.revision;
-    return metadata.data;
+    previous = entry.releaseRevision;
+  }
+  return page;
+};
+
+const entryMetadata = (
+  entry: PageRows["entries"][number],
+  anchor: number,
+): DefinitionReleaseMetadata => {
+  const metadata = definitionReleaseMetadataSchema.safeParse({
+    releaseRevision: entry.releaseRevision,
+    releaseVersion: entry.releaseVersion,
+    sourceFingerprint: entry.authoredSourceFingerprint,
+    releaseNote: entry.releaseNote,
+    publishedAt: entry.publishedAt,
+    publishedBy: entry.publishedBy,
+    isCurrent: entry.releaseRevision === anchor,
   });
-  if (
-    page.nextAfterReleaseRevision === null
-      ? previous !== anchor
-      : page.nextAfterReleaseRevision !== previous ||
-        previous === null ||
-        previous >= anchor ||
-        entries.length !== size
-  )
-    throw new HistoryStorageUnavailable();
-  return { entries, nextAfterReleaseRevision: page.nextAfterReleaseRevision };
+  if (!metadata.success) throw new HistoryStorageUnavailable();
+  return metadata.data;
+};
+
+/** What one version changed against the one before it, counted by area. */
+const changesOf = (page: PageRows, entry: PageRows["entries"][number]): StudioReleaseChanges => {
+  if (entry.previousReleaseRevision === null) return { kind: "first" };
+  const before = previousSourceOf(page, entry);
+  const after = comparableSource(entry.authoredSource);
+  if (before === undefined || after === undefined) return { kind: "unavailable" };
+  return { kind: "changed", counts: countSourceChange(summarizeSourceChange(before, after)) };
 };
 
 export const listStudioApplicationReleaseHistory = async (
@@ -362,37 +417,101 @@ export const listStudioApplicationReleaseHistory = async (
   if (!request.success) return declined({ kind: "refused", reason: "request_invalid" });
   const command = request.data;
   if (
-    command.kind === "next" &&
+    command.kind !== "newest" &&
     (command.expected.anchorReleaseRevision === null ||
-      command.afterReleaseRevision >= command.expected.anchorReleaseRevision)
+      command.cursorReleaseRevision > command.expected.anchorReleaseRevision)
   )
     return declined({ kind: "refused", reason: "request_invalid" });
   const result = await executeRead(
     organizationId,
     command.rootId,
-    command.kind === "next" ? command.expected : undefined,
+    command.kind === "newest" ? undefined : command.expected,
     async (transaction, _draft, snapshot) => {
-      const page =
-        snapshot.anchorReleaseRevision === null
-          ? { entries: [], nextAfterReleaseRevision: null }
+      const anchor = snapshot.anchorReleaseRevision;
+      const page: PageRows | null =
+        anchor === null
+          ? null
           : await readPage(
               transaction,
               snapshot.rootId,
-              snapshot.anchorReleaseRevision,
-              command.kind === "next" ? command.afterReleaseRevision : null,
+              anchor,
+              command.kind === "newest" ? null : command.cursorReleaseRevision,
+              command.kind === "newer" ? "newer" : "older",
               pageSize,
             );
+      const entries: readonly StudioApplicationReleaseEntry[] =
+        page === null || anchor === null
+          ? []
+          : page.entries.map((entry) => ({
+              ...entryMetadata(entry, anchor),
+              changes: changesOf(page, entry),
+            }));
       // Who published each version, read in the same request with the viewer's own directory access.
-      const authors = [...new Set(page.entries.map((entry) => entry.publishedBy.toLowerCase()))];
+      const authors = [...new Set(entries.map((entry) => entry.publishedBy.toLowerCase()))];
       const names =
         authors.length === 0
           ? new Map<string, string>()
           : await readVisiblePersonLabels(transaction, authors);
       return {
-        value: { snapshot, ...page, publishers: Object.fromEntries(names) },
-        metadata: page.entries,
+        value: {
+          snapshot,
+          entries,
+          hasOlder: page?.hasOlder ?? false,
+          hasNewer: page?.hasNewer ?? false,
+          publishers: Object.fromEntries(names),
+        },
+        metadata: entries,
       };
     },
   );
   return result.kind === "available" ? { kind: "available", page: result.value } : result;
+};
+
+/** The rows of what one version changed against the one before it, for the View changes sheet. */
+export const readStudioApplicationReleaseChanges = async (
+  organizationId: string,
+  candidate: unknown,
+): Promise<StudioApplicationReleaseChangesResult> => {
+  const request = changesRequestSchema.safeParse(candidate);
+  if (
+    !request.success ||
+    request.data.expected.anchorReleaseRevision === null ||
+    request.data.releaseRevision > request.data.expected.anchorReleaseRevision
+  )
+    return declined({ kind: "refused", reason: "request_invalid" });
+  const command = request.data;
+  const anchor = command.expected.anchorReleaseRevision;
+  if (anchor === null) return declined({ kind: "refused", reason: "request_invalid" });
+  const result = await executeRead(
+    organizationId,
+    command.rootId,
+    command.expected,
+    async (transaction, _draft, snapshot) => {
+      // The version and the one just older than it: a page of one that ends at the version.
+      const page = await readPage(
+        transaction,
+        snapshot.rootId,
+        anchor,
+        command.releaseRevision + 1,
+        "older",
+        1,
+      );
+      const entry = page.entries[0];
+      if (entry === undefined || entry.releaseRevision !== command.releaseRevision)
+        throw new HistoryRefused();
+      const before = previousSourceOf(page, entry);
+      const after = comparableSource(entry.authoredSource);
+      if (entry.previousReleaseRevision !== null && (before === undefined || after === undefined))
+        throw new HistoryStorageUnavailable();
+      return {
+        value: {
+          first: entry.previousReleaseRevision === null,
+          rows:
+            before === undefined || after === undefined ? [] : summarizeSourceChange(before, after),
+        },
+        metadata: [entryMetadata(entry, anchor)],
+      };
+    },
+  );
+  return result.kind === "available" ? { kind: "available", ...result.value } : result;
 };

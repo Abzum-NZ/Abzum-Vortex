@@ -13,7 +13,7 @@ export const studioRailTabs: readonly StudioRailTab<StudioRailKey>[] = [
   { key: "flows", label: "Flows", icon: "workflow", width: 17, group: "logic" },
   { key: "theme", label: "Theme", icon: "palette", width: 22, group: "look" },
   { key: "access", label: "Access", icon: "shield", width: 17, group: "look" },
-  { key: "releases", label: "Releases", icon: "history", width: 17, group: "releases" },
+  { key: "releases", label: "Releases", icon: "history", panel: false, group: "releases" },
 ];
 
 export const isStudioRailKey = (value: unknown): value is StudioRailKey =>

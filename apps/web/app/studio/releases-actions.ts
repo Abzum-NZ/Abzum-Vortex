@@ -1,5 +1,6 @@
 "use server";
 
+import { z } from "zod";
 import { applicationRootIdSchema, organizationIdSchema } from "@vortex/platform/schema";
 import { resolveIdentitySession } from "../auth/_lib/session-server";
 import {
@@ -9,6 +10,8 @@ import {
 import { loadOrganizationLauncher } from "../_lib/organization-context";
 import {
   listStudioApplicationReleaseHistory,
+  readStudioApplicationReleaseChanges,
+  type StudioApplicationReleaseChangesResult,
   type StudioApplicationHistoryListResult,
 } from "../_lib/studio-application-history";
 import {
@@ -33,12 +36,33 @@ export async function listApplicationReleaseHistory(
   return listStudioApplicationReleaseHistory(organizationId, candidate);
 }
 
-/** The newest back-end runs of the application, for its builders; never their outputs. */
+/** What one version changed against the one before it, as rows by area and item name; never a source. */
+export async function readApplicationReleaseChanges(
+  organizationId: string,
+  candidate: unknown,
+): Promise<StudioApplicationReleaseChangesResult> {
+  return readStudioApplicationReleaseChanges(organizationId, candidate);
+}
+
+const backendRunPageRequestSchema = z.union([
+  z.object({ kind: z.literal("newest") }).strict(),
+  z
+    .object({
+      kind: z.enum(["older", "newer"]),
+      cursor: z.object({ createdAt: z.string().max(64), runId: z.uuid() }).strict(),
+    })
+    .strict(),
+]);
+
+/** One page of the application's back-end runs, newest first, for its builders; never their outputs. */
 export async function readBackendRunHistory(
   organizationId: string,
   rootId: string,
+  candidate: unknown,
 ): Promise<StudioBackendRunHistoryResult> {
-  return readStudioBackendRunHistory(organizationId, rootId);
+  const request = backendRunPageRequestSchema.safeParse(candidate);
+  if (!request.success) return { kind: "refused", reason: "request_invalid" };
+  return readStudioBackendRunHistory(organizationId, rootId, request.data);
 }
 
 /** Restores one published version into the draft as a new saved draft revision; nothing is published or installed. */
