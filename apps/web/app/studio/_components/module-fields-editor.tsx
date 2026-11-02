@@ -33,6 +33,8 @@ import {
   peopleDirectory,
   plainSourceSettingValue,
   qualifiedLinkTarget,
+  RECORD_TYPE_MAXIMUM_SORTABLE_FIELDS,
+  sortableFieldLimitMessage,
   readModuleFieldDefault,
   readModuleFieldSettings,
   settledCalculation,
@@ -855,6 +857,14 @@ export function ModuleFieldsEditor({
     : linkTypes.has(form.type) && form.cardinality === "one_to_one"
       ? "A one-to-one link is always unique"
       : undefined;
+  const sortableInUse = record.fields.filter(
+    (item) => item.sortable && item.key !== existing?.key,
+  ).length;
+  const sortableUsed = sortableInUse + (form.sortable ? 1 : 0);
+  const sortableReason =
+    !form.sortable && sortableInUse >= RECORD_TYPE_MAXIMUM_SORTABLE_FIELDS
+      ? sortableFieldLimitMessage
+      : undefined;
   const privacyEvents =
     existing === undefined || form.personalData === "none"
       ? []
@@ -1068,7 +1078,7 @@ export function ModuleFieldsEditor({
               checked: form.filterable,
               reason: isTitleField ? "The title is always filterable" : undefined,
             },
-            sortable: { checked: form.sortable, reason: undefined },
+            sortable: { checked: form.sortable, reason: sortableReason, used: sortableUsed },
           }}
           onFlag={(key, checked) => change({ [key]: checked })}
           offered={offered}

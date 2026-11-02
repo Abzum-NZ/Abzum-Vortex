@@ -20,6 +20,7 @@ import {
   moduleFieldTypeLabels,
   plainSourceSettingValue,
   type ApplicationSourceDocument,
+  RECORD_TYPE_MAXIMUM_SORTABLE_FIELDS,
   type ApplicationUsePlace,
   type CalculationSettings,
   type FormulaField,
@@ -488,7 +489,7 @@ export function FieldFormsAndListsSection({
   flags: Readonly<{
     unique: Readonly<{ checked: boolean; reason: string | undefined }>;
     filterable: Readonly<{ checked: boolean; reason: string | undefined }>;
-    sortable: Readonly<{ checked: boolean; reason: string | undefined }>;
+    sortable: Readonly<{ checked: boolean; reason: string | undefined; used: number }>;
   }>;
   offered: readonly FieldPlacementOffer[];
   checkedPlaces: ReadonlySet<string>;
@@ -531,7 +532,10 @@ export function FieldFormsAndListsSection({
           [
             ["unique", "Unique value"],
             ["filterable", "Allow filtering"],
-            ["sortable", "Allow sorting"],
+            [
+              "sortable",
+              `Allow sorting · ${flags.sortable.used} of ${RECORD_TYPE_MAXIMUM_SORTABLE_FIELDS} used`,
+            ],
           ] as const
         ).map(([key, text]) => (
           <FieldFlag

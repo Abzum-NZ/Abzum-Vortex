@@ -4,6 +4,7 @@ import { builderKeySchema, namespacedKeySchema } from "./identifiers";
 import { recordsTableFeatureRefusals } from "../definition/application-composition/records-table-features/index";
 import { recordsTableFeatureRefusalCodes } from "../definition/application-composition/records-table-features/shared";
 import { describeFailure } from "./runtime-primitives";
+import { sortableFieldLimitMessage } from "../definition/module-source-contracts";
 
 const definitionValidationCatalogueVersion = "1.4.0" as const;
 
@@ -186,8 +187,8 @@ const definitionValidationErrorCatalogueSource = {
   },
   definition_sortable_field_limit: {
     order: 65,
-    message: "A record type may declare at most eight sortable fields.",
-    guidance: "Choose up to eight sortable fields for this record type, then publish again.",
+    message: sortableFieldLimitMessage,
+    guidance: "Turn sorting off on another field of this record type, then publish again.",
   },
   definition_duplicate_key: {
     order: 70,

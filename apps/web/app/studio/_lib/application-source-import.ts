@@ -7,6 +7,7 @@ import {
   organizationIdSchema,
   revisionSchema,
   canonicalJson,
+  sortableFieldLimitMessage,
   type ApplicationSourceDocument,
 } from "@vortex/platform/schema";
 
@@ -181,6 +182,7 @@ const describeSourceImportIssue = (input: unknown, issue: z.core.$ZodIssue): str
     return `This file is source contract ${typeof found === "string" ? found : "unknown"}, and Studio reads ${current}. Export the application again from a current Studio, or change what the newer contract changed in the file and set source_contract_version to ${current}.`;
   }
   const where = describeIssuePlace(input, issue.path);
+  if (issue.message === sortableFieldLimitMessage) return `In ${where}: ${issue.message}`;
   if (issue.code === "unrecognized_keys") {
     const keys = issue.keys.map((key) => `"${key}"`).join(", ");
     if (issue.keys.includes("tasks") && issue.path.at(-2) === "actions")

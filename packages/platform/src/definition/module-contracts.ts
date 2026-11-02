@@ -46,7 +46,11 @@ import {
   moduleDependencySchema,
   relationshipDefinitionSchema,
 } from "./module-foundation-contracts";
-import { isWritableSystemProjection } from "./module-source-contracts";
+import {
+  firstFieldOverSortableLimit,
+  isWritableSystemProjection,
+  sortableFieldLimitMessage,
+} from "./module-source-contracts";
 export { isWritableSystemProjection };
 import { permissionDeclarationSchema } from "../access/permissions";
 import { protectedOperationReferenceSchema } from "./application-flow-bindings";
@@ -1068,11 +1072,12 @@ export const recordTypeDefinitionSchema = z
     }
   })
   .superRefine((value, context) => {
-    if (value.fields.filter((field) => field.sortable).length > 8)
+    const overSortableLimit = firstFieldOverSortableLimit(value.fields);
+    if (overSortableLimit !== undefined)
       context.addIssue({
         code: "custom",
-        path: ["fields"],
-        message: "A record type may declare at most eight sortable fields",
+        path: ["fields", overSortableLimit],
+        message: sortableFieldLimitMessage,
       });
     if ((value.ownershipMode === "inherited") !== (value.ownershipRelationshipId !== undefined))
       context.addIssue({

@@ -505,11 +505,12 @@ const moduleSourceRecordTypeSchema = z
           message: problem.message,
         });
     }
-    if (value.fields.filter((field) => field.sortable).length > 8)
+    const overSortableLimit = firstFieldOverSortableLimit(value.fields);
+    if (overSortableLimit !== undefined)
       context.addIssue({
         code: "custom",
-        path: ["fields"],
-        message: "A record type may declare at most eight sortable fields",
+        path: ["fields", overSortableLimit],
+        message: sortableFieldLimitMessage,
       });
     if ((value.ownership_mode === "inherited") !== (value.ownership_relationship !== undefined))
       context.addIssue({
@@ -820,6 +821,20 @@ const moduleSourceQueryAggregateSchema = z
 /** The most totals one query holds and the most queries one Module holds. */
 export const MODULE_QUERY_MAXIMUM_TOTALS = 20;
 export const MODULE_MAXIMUM_QUERIES = 100;
+
+/** The most sortable fields one record type declares: the one source of this limit. */
+export const RECORD_TYPE_MAXIMUM_SORTABLE_FIELDS = 8;
+export const sortableFieldLimitMessage = `A record type can have up to ${RECORD_TYPE_MAXIMUM_SORTABLE_FIELDS} sortable fields. Turn sorting off on another field first.`;
+
+/** The index of the first field that takes a record type past the sortable limit, if any. */
+export const firstFieldOverSortableLimit = (
+  fields: readonly Readonly<{ sortable: boolean }>[],
+): number | undefined => {
+  let seen = 0;
+  for (const [index, field] of fields.entries())
+    if (field.sortable && ++seen > RECORD_TYPE_MAXIMUM_SORTABLE_FIELDS) return index;
+  return undefined;
+};
 
 /**
  * One authored Module-owned query. It names a local or dependency-qualified record type,
