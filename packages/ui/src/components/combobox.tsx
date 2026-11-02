@@ -236,7 +236,7 @@ function ComboboxChipsInput({ className, onKeyDown, ...props }: ComboboxPrimitiv
   return (
     <ComboboxPrimitive.Input
       data-slot="combobox-chip-input"
-      className={cn("cn-combobox-chip-input", className)}
+      className={cn("cn-combobox-chip-input outline-none", className)}
       onKeyDown={(event) => {
         handOffClosedEscape(event);
         onKeyDown?.(event);

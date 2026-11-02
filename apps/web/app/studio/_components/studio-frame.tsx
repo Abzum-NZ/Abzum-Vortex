@@ -233,7 +233,7 @@ function StudioRail<Key extends string>({
                 aria-expanded={!collapsed}
                 aria-controls={controls}
                 onClick={onToggleCollapsed}
-                className="mb-1 flex size-9 shrink-0 items-center justify-center rounded-lg text-muted-foreground outline-none hover:bg-sidebar-accent/60 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+                className="mb-1 flex size-9 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-sidebar-accent/60 hover:text-foreground"
               />
             }
           >
@@ -845,7 +845,7 @@ export function StudioPanelShell({
                   <button
                     type="button"
                     aria-label={`About ${title.toLowerCase()}`}
-                    className="flex size-6 items-center justify-center rounded-md text-muted-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    className="flex size-6 items-center justify-center rounded-md text-muted-foreground"
                   />
                 }
               >
@@ -929,7 +929,7 @@ export function StudioSection({
       className="space-y-2"
     >
       <div className="flex items-center justify-between gap-2">
-        <CollapsibleTrigger className="flex min-h-8 items-center gap-2 rounded-md text-sm font-medium outline-none focus-visible:ring-2 focus-visible:ring-ring">
+        <CollapsibleTrigger className="flex min-h-8 items-center gap-2 rounded-md text-sm font-medium">
           <Icon name={open ? "chevron-down" : "chevron-right"} className="size-4" />
           {heading}
         </CollapsibleTrigger>

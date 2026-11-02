@@ -549,7 +549,7 @@ export function ApplicationFrameHeader({
       <a
         href={`#${mainContentId}`}
         onClick={skipToPageContent}
-        className="sr-only bg-background px-[var(--vortex-space-md)] py-[var(--vortex-space-sm)] text-sm font-medium text-foreground focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-50 focus:ring-2 focus:ring-ring"
+        className="sr-only bg-background px-[var(--vortex-space-md)] py-[var(--vortex-space-sm)] text-sm font-medium text-foreground focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-50"
       >
         Skip to main content
       </a>

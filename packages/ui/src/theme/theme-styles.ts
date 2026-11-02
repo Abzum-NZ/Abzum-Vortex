@@ -1,6 +1,35 @@
 import { LAYOUT_ONLY_STYLES_CSS } from "../layout-styles";
 
 /**
+ * The controls that draw their own focus indicator: the border colour and ring of the shared
+ * component sheet, or the inset ring of a grid cell. The platform outline leaves them alone, so a
+ * control never shows two indicators.
+ */
+const STYLE_FOCUS_CONTROLS = [
+  ".cn-button",
+  ".cn-badge",
+  ".cn-checkbox",
+  ".cn-combobox-chip-input",
+  ".cn-input",
+  ".cn-item",
+  ".cn-native-select",
+  ".cn-radio-group-item",
+  ".cn-select-trigger",
+  ".cn-sidebar-group-label",
+  ".cn-sidebar-menu-button",
+  ".cn-sidebar-menu-sub-button",
+  ".cn-switch",
+  ".cn-tabs-trigger",
+  ".cn-textarea",
+  "[data-grid-cell]",
+  "[data-inline-edit]",
+].join(", ");
+
+/** The text controls inside an input group or a chips box, whose wrapper draws the focus. */
+const WRAPPED_FOCUS_CONTROLS =
+  ".cn-input-group-input, .cn-input-group-textarea, .cn-combobox-chip-input";
+
+/**
  * Platform stylesheet for every shared component state. It reads only the fixed
  * variables from `generateThemeCssVariables`; text is always painted on the surface or fill
  * theme validation checked it against, and hover/pressed feedback uses the element's own validated
@@ -208,8 +237,13 @@ const SHARED_COMPONENT_STYLES_CSS = `
   }
 }
 
-/* Visible focus is a platform safeguard. Composite rows place the outline around all controls. */
-[data-vortex-theme] :focus-visible:not([data-vortex-focus-group] [data-vortex-focus-primary]),
+/*
+ * Visible focus is a platform safeguard with one indicator per control. A control whose style draws
+ * its own focus (border colour and ring) keeps that; every other focusable element, such as a
+ * link or a custom trigger, gets the theme's outline. Composite rows place the outline around all
+ * controls.
+ */
+[data-vortex-theme] :focus-visible:not([data-vortex-focus-group] [data-vortex-focus-primary], ${STYLE_FOCUS_CONTROLS}),
 [data-vortex-theme] [data-vortex-focus-group]:has(:focus-visible) {
   outline: var(--vortex-focus-width) solid var(--ring) !important;
   outline-offset: 0.125rem !important;
@@ -217,6 +251,18 @@ const SHARED_COMPONENT_STYLES_CSS = `
 /* Keep row outlines inside collapsible and scroll boundaries. */
 [data-vortex-theme] [data-vortex-focus-group]:has(:focus-visible) {
   outline-offset: calc(-1 * var(--vortex-focus-width)) !important;
+}
+/*
+ * Forced colours remove the ring shadow, so the outline stands in for it: on the control, or on the
+ * wrapper of a control that sits inside an input group or a chips box.
+ */
+@media (forced-colors: active) {
+  [data-vortex-theme] :is(${STYLE_FOCUS_CONTROLS}):focus-visible:not(${WRAPPED_FOCUS_CONTROLS}),
+  [data-vortex-theme] .cn-input-group:has([data-slot="input-group-control"]:focus-visible),
+  [data-vortex-theme] .cn-combobox-chips:focus-within {
+    outline: var(--vortex-focus-width) solid var(--ring) !important;
+    outline-offset: 0.125rem !important;
+  }
 }
 `.trim();
 
