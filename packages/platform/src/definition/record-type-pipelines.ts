@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { definitionLimits } from "./definition-limits";
 import { labelSchema } from "../catalogue/common";
 import { builderKeySchema, fieldIdSchema, pipelineIdSchema } from "../catalogue/identifiers";
 
@@ -27,10 +28,6 @@ export const pipelineStageTones = [
 export const pipelineStageToneSchema = z.enum(pipelineStageTones);
 export type PipelineStageTone = z.infer<typeof pipelineStageToneSchema>;
 
-export const maximumRecordTypePipelines = 10;
-export const maximumPipelineStages = 200;
-export const maximumPipelineTransitions = 1_000;
-
 const optionValueSchema = z.string().min(1).max(120);
 
 /** One stage of a pipeline: an option of its stage field. The option carries the colour role. */
@@ -45,8 +42,8 @@ export const recordTypePipelineSchema = z
     key: builderKeySchema,
     name: labelSchema,
     stageFieldId: fieldIdSchema,
-    stages: z.array(pipelineStageSchema).min(1).max(maximumPipelineStages),
-    transitions: z.array(pipelineTransitionSchema).max(maximumPipelineTransitions),
+    stages: z.array(pipelineStageSchema).min(1).max(definitionLimits.pipelineStages),
+    transitions: z.array(pipelineTransitionSchema).max(definitionLimits.pipelineTransitions),
   })
   .strict();
 export type RecordTypePipeline = z.infer<typeof recordTypePipelineSchema>;

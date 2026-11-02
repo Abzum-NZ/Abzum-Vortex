@@ -15,6 +15,11 @@ import {
   type SourceBlockPropertyValueContract,
   type SourceItem,
 } from "@vortex/platform/schema";
+import {
+  definitionLimitMessage,
+  definitionLimitReached,
+  definitionLimits,
+} from "@vortex/platform/schema";
 import { studioStarterSlots } from "./composition-starters";
 import { studioPageAreaLabel } from "./application-page-layout";
 import { createStudioDiscoveryAdapter } from "./discovery-adapter";
@@ -52,6 +57,7 @@ import {
   object,
   validContext,
   regions,
+  regionHostLevels,
   releaseFor,
   itemSlots,
   closedPlain,
@@ -161,7 +167,37 @@ export const addPlaces = (
     }
   }
   const places: AddPlace[] = [];
+  const countBlocks = (items: readonly SourceItem[]): number =>
+    items.reduce(
+      (total, item) =>
+        total +
+        1 +
+        [...itemSlots(catalogue, item).values()].reduce(
+          (inner, child) => inner + countBlocks(child.items),
+          0,
+        ),
+      0,
+    );
+  // The composition limit counts every block of the application: its pages and its layouts.
+  const placed = regions(source).reduce((total, each) => total + countBlocks(each.zone.items), 0);
   for (const { region, area, label, admitted } of areas) {
+    const hostLevels = regionHostLevels(catalogue, source, region);
+    // A place that would take a block past the composition limits offers every block as unavailable.
+    const limited = (
+      depth: number,
+      choices: readonly StudioPaletteChoice[],
+    ): readonly StudioPaletteChoice[] => {
+      const reason = definitionLimitReached("compositionPlacements", placed)
+        ? definitionLimitMessage("compositionPlacements")
+        : depth >= definitionLimits.compositionDepth
+          ? definitionLimitMessage("compositionDepth")
+          : undefined;
+      return reason === undefined
+        ? choices
+        : choices.map((choice) =>
+            Object.freeze({ ...choice, unavailable: reason, unavailableWhenFilled: reason }),
+          );
+    };
     places.push({
       region,
       steps: [],
@@ -170,8 +206,9 @@ export const addPlaces = (
         area,
         destination: { kind: "root" },
         label,
-        depth: 0,
-        choices: studioPaletteChoices(catalogue, admitted()),
+        depth: hostLevels,
+        placed,
+        choices: limited(hostLevels, studioPaletteChoices(catalogue, admitted())),
       }),
     });
     // A form takes no other form: inside one, the form choice is offered as unavailable.
@@ -212,21 +249,25 @@ export const addPlaces = (
               area,
               destination: { kind: "child", parentAlias, slotKey: declaration.key },
               label: `${release.name} ${parentAlias}: ${declaration.label}${outlet === undefined ? "" : ` (page content: ${outlet})`}`,
-              depth: childSteps.length,
+              depth: hostLevels + childSteps.length,
+              placed,
               choices:
                 outlet === undefined
-                  ? formChoices(
-                      childInForm,
-                      studioPaletteChoices(
-                        catalogue,
-                        discovery.getPlacementChoices({
-                          kind: "slot",
-                          parent: {
-                            blockId: release.blockId,
-                            releaseVersion: release.releaseVersion,
-                          },
-                          slotKey: declaration.key,
-                        }),
+                  ? limited(
+                      hostLevels + childSteps.length,
+                      formChoices(
+                        childInForm,
+                        studioPaletteChoices(
+                          catalogue,
+                          discovery.getPlacementChoices({
+                            kind: "slot",
+                            parent: {
+                              blockId: release.blockId,
+                              releaseVersion: release.releaseVersion,
+                            },
+                            slotKey: declaration.key,
+                          }),
+                        ),
                       ),
                     )
                   : [],

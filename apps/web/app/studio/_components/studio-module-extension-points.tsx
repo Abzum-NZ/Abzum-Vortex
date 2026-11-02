@@ -1,4 +1,5 @@
 "use client";
+import { StudioLimitNote, StudioReasoned, studioLimitReason } from "@vortex/ui/studio";
 import { Spinner } from "@vortex/ui/components/spinner";
 import { Alert, AlertDescription } from "@vortex/ui/components/alert";
 import { useId, useState, type FormEvent } from "react";
@@ -291,16 +292,27 @@ export function StudioModuleExtensionPoints({
           close={() => setExpanded(null)}
         />
       ) : (
-        <Button
-          type="button"
-          size="sm"
-          variant="outline"
-          disabled={locked || module.record_types.length === 0}
-          onClick={() => setExpanded("new")}
-        >
-          <Icon name="plus" />
-          Add extension
-        </Button>
+        <>
+          <StudioReasoned
+            reason={studioLimitReason("extensionPointsPerModule", module.extension_points.length)}
+          >
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              disabled={locked || module.record_types.length === 0}
+              onClick={() => setExpanded("new")}
+            >
+              <Icon name="plus" />
+              Add extension
+            </Button>
+          </StudioReasoned>
+          <StudioLimitNote
+            limit="extensionPointsPerModule"
+            used={module.extension_points.length}
+            label="Extensions"
+          />
+        </>
       )}
       {uses === null ? (
         <div role="status" className="flex items-center gap-2 text-sm text-muted-foreground">

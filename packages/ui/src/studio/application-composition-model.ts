@@ -85,6 +85,8 @@ export type StudioCompositionAddTarget = Readonly<{
   label: string;
   /** How many blocks deep the place is; the top of a content area is 0. */
   depth: number;
+  /** How many blocks the content area holds now, against the composition limit. */
+  placed: number;
   /** The blocks the catalogue admits here. */
   choices: readonly StudioPaletteChoice[];
 }>;

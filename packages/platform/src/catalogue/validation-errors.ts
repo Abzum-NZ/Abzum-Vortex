@@ -4,6 +4,7 @@ import { builderKeySchema, namespacedKeySchema } from "./identifiers";
 import { recordsTableFeatureRefusals } from "../definition/application-composition/records-table-features/index";
 import { recordsTableFeatureRefusalCodes } from "../definition/application-composition/records-table-features/shared";
 import { describeFailure } from "./runtime-primitives";
+import { definitionLimitMessage } from "../definition/definition-limits";
 
 const definitionValidationCatalogueVersion = "1.4.0" as const;
 
@@ -61,6 +62,7 @@ const definitionValidationErrorCodes = [
   "definition_records_table_visible_columns",
   "definition_records_table_auto_size",
   "definition_query_binding",
+  "definition_query_sort",
   "definition_runtime_not_supported",
   "definition_query_binding_choice",
   "definition_form_field_dependency",
@@ -69,6 +71,8 @@ const definitionValidationErrorCodes = [
   "definition_too_few_items",
   "definition_too_many_items",
   "definition_sortable_field_limit",
+  "definition_composition_placement_limit",
+  "definition_composition_depth_limit",
   "definition_duplicate_key",
   "definition_broken_reference",
   "definition_unresolved_reference",
@@ -147,6 +151,12 @@ const definitionValidationErrorCatalogueSource = {
     guidance:
       "Open the block's Query inputs and choose a source of the input's type for each input.",
   },
+  // The sentence names the query and the field.
+  definition_query_sort: {
+    order: 39,
+    message: "A query sorts by a field that does not allow sorting.",
+    guidance: "Turn sorting on for the field, or change the sorting of the query.",
+  },
   definition_runtime_not_supported: {
     order: 39,
     message: "This declaration has no runtime support yet.",
@@ -186,9 +196,20 @@ const definitionValidationErrorCatalogueSource = {
   },
   definition_sortable_field_limit: {
     order: 65,
-    message: "A record type may declare at most eight sortable fields.",
-    guidance: "Choose up to eight sortable fields for this record type, then publish again.",
+    message: definitionLimitMessage("sortableFieldsPerRecordType"),
+    guidance: "Turn sorting off on another field of this record type, then publish again.",
   },
+  definition_composition_placement_limit: {
+    order: 66,
+    message: definitionLimitMessage("compositionPlacements"),
+    guidance: "Remove blocks from a page or a layout, then validate the definition again.",
+  },
+  definition_composition_depth_limit: {
+    order: 67,
+    message: definitionLimitMessage("compositionDepth"),
+    guidance: "Move blocks out of their containers, then validate the definition again.",
+  },
+
   definition_duplicate_key: {
     order: 70,
     message: "A key is used more than once in the same scope.",

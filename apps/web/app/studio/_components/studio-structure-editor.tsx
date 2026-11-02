@@ -25,7 +25,12 @@ import {
   DialogDescription,
 } from "@vortex/ui/components/dialog";
 import { studioNotice } from "./studio-save-state";
-import type { StudioSemanticSelection } from "@vortex/ui/studio";
+import {
+  StudioLimitNote,
+  StudioReasoned,
+  studioLimitReason,
+  type StudioSemanticSelection,
+} from "@vortex/ui/studio";
 import {
   studioStructureDefaultShell,
   studioStructureShellChoices,
@@ -141,8 +146,12 @@ export function StudioStructureEditor({
     setShellChoice(studioStructureDefaultShell(source) ?? "");
     // Opening a form starts a fresh command, independent of later draft changes.
   }, [form]);
+  const newLimit = form === "page" ? "pagesPerApplication" : "layoutsPerApplication";
+  const newUsed = form === "page" ? source.body.pages.length : source.body.shells.length;
+  const newLimitReason = studioLimitReason(newLimit, newUsed);
   const submitNew = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (newLimitReason !== undefined) return;
     const applied =
       form === "page"
         ? run({
@@ -284,18 +293,25 @@ export function StudioStructureEditor({
               </Label>
             </>
           )}
+          <StudioLimitNote
+            limit={newLimit}
+            used={newUsed}
+            label={form === "page" ? "Pages" : "Layouts"}
+          />
           <div className="flex gap-2">
-            <Button
-              type="submit"
-              size="sm"
-              disabled={
-                disabled ||
-                newName.trim().length === 0 ||
-                (form === "page" && pageKind === "form" && recordType === "")
-              }
-            >
-              {form === "page" ? "Add page" : "Add layout"}
-            </Button>
+            <StudioReasoned reason={newLimitReason}>
+              <Button
+                type="submit"
+                size="sm"
+                disabled={
+                  disabled ||
+                  newName.trim().length === 0 ||
+                  (form === "page" && pageKind === "form" && recordType === "")
+                }
+              >
+                {form === "page" ? "Add page" : "Add layout"}
+              </Button>
+            </StudioReasoned>
             <Button type="button" size="sm" variant="ghost" onClick={() => setForm("none")}>
               Cancel
             </Button>

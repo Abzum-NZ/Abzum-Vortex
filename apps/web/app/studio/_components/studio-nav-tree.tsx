@@ -419,7 +419,7 @@ export function StudioNavTree({
             <ul
               id={groupId}
               role="group"
-              className={cn("m-0 list-none space-y-1", depth === 0 ? "pl-4" : "pl-0")}
+              className={cn("m-0 list-none space-y-1", depth < 8 ? "pl-3" : "pl-0")}
             >
               {rows(node.children ?? [], depth + 1)}
             </ul>

@@ -104,6 +104,7 @@ export function useStudioDataTab({
   draft,
   applications,
   initialModule,
+  initialRecordType,
   hidden,
   compositionContext,
   readRecords,
@@ -113,6 +114,8 @@ export function useStudioDataTab({
   applications: readonly StudioModuleOwnerApplication[];
   /** The module the Studio address opens first, if any. */
   initialModule: string | null;
+  /** The record type of that module the address opens, if any. */
+  initialRecordType: string | null;
   hidden: boolean;
   /** The composition context the "Also show it on" placements are made through. */
   compositionContext: StudioCompositionContext;
@@ -131,6 +134,8 @@ export function useStudioDataTab({
   const [newQuery, setNewQuery] = useState(false);
   const [creatingModule, setCreatingModule] = useState(false);
   const [section, setSection] = useState("fields");
+  // The record type whose field list shows only its sortable fields (the limit row's "Show me").
+  const [sortableScope, setSortableScope] = useState<string | null>(null);
   const [adding, setAdding] = useState<Readonly<{ scope: string; type: "text" | "link" }> | null>(
     null,
   );
@@ -146,8 +151,16 @@ export function useStudioDataTab({
   useEffect(() => {
     if (opened.current || initialModule === null) return;
     opened.current = true;
-    draft.select({ kind: "module", moduleKey: initialModule });
-  }, [initialModule, draft]);
+    // A record type the module does not hold falls back to the module.
+    const holds = draft.source.body.modules
+      .find((module) => module.key === initialModule)
+      ?.record_types.some((record) => record.key === initialRecordType);
+    draft.select(
+      initialRecordType !== null && holds === true
+        ? { kind: "record_type", moduleKey: initialModule, recordKey: initialRecordType }
+        : { kind: "module", moduleKey: initialModule },
+    );
+  }, [initialModule, initialRecordType, draft]);
   /** The Data tab's one edit path: a platform command over the current draft source, as one edit of the draft. */
   const edit: StudioDataEdit = studioDataEdit(draft);
   const saved = useMemo(() => draft.parsed(draft.saved.source), [draft, draft.saved.source]);
@@ -293,6 +306,8 @@ export function useStudioDataTab({
     },
     section,
     setSection,
+    sortableOnly: sortableScope !== null && sortableScope === scope,
+    setSortableOnly: (on: boolean) => setSortableScope(on ? scope : null),
     unsaved,
     isOwned,
     module,
