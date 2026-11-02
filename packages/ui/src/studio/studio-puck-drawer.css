@@ -1,0 +1,9 @@
+/*
+ * Puck's own stylesheet is not in a cascade layer, so a rule that overrides it cannot sit in the
+ * layered Studio chrome sheet. Studio's headings are in sentence case: Puck's category headers
+ * (its own buttons) are upper case.
+ */
+[data-vortex-studio-palette] [aria-controls^="puck-drawer-category-"] {
+  text-transform: none;
+  letter-spacing: normal;
+}

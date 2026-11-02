@@ -5,6 +5,7 @@ import {
   createUsePuck,
   useGetPuck,
   type AppState,
+  type Config,
   type Data,
   type PuckAction,
 } from "@puckeditor/core";
@@ -32,14 +33,15 @@ import type { PlatformThemeTokens } from "../theme";
 import type { StudioCompileFailure } from "./compile-failure";
 import type {
   StudioCompositionAddTargetsModel,
+  StudioCompositionDestination,
   StudioCompositionOwner,
 } from "./application-composition-commands";
 import type { StudioCanvasFrame } from "./studio-canvas-projection";
 import { applyStudioCanvasChange } from "./studio-canvas-change";
 import {
   destinationOfZone,
-  holdsDroppedBlock,
   itemsHold,
+  puckItemsHold,
   puckSelectedAlias,
   withoutEmptyPuckZones,
   type StudioCanvasCompiledSlot,
@@ -48,19 +50,35 @@ import {
 import { studioCanvasOverrides } from "./studio-canvas-actions";
 import type { StudioCanvasGridChange, StudioCanvasGridRead } from "./studio-canvas-grid";
 import { useStudioCanvasModel, type StudioCanvasModel } from "./studio-canvas-model";
+import {
+  studioInitialBreakpoint,
+  studioInitialUi,
+  studioScreenOfWidth,
+  studioViewports,
+} from "./studio-canvas-screen";
 import type { StudioCanvasMetadata, StudioCanvasViewer } from "./studio-canvas-metadata";
-import type { StudioCanvasAddRequest } from "./studio-block-palette";
+import { StudioDrawerItem } from "./studio-puck-drawer";
+import { studioPuckWords } from "./studio-puck-words";
 import type { StudioCanvasRecordsReader } from "./use-studio-canvas-records";
 import { useStudioCanvasMetadata } from "./use-studio-canvas-metadata";
 
-export type { Breakpoint as StudioCanvasBreakpoint } from "../definition-error";
+export { studioScreens, useStudioScreen } from "./studio-canvas-screen";
 export type { StudioCanvasFrame } from "./studio-canvas-projection";
 export type { StudioCanvasViewer } from "./studio-canvas-metadata";
-export type { StudioCanvasAddRequest } from "./studio-block-palette";
 export type {
   StudioCanvasRecordsRead,
   StudioCanvasRecordsReader,
 } from "./use-studio-canvas-records";
+
+/** A new block for one place on the page, from a drop on the canvas or the drawer's Add button. */
+export type StudioCanvasAddRequest = Readonly<{
+  area: string;
+  destination: StudioCompositionDestination;
+  /** The position in the slot; a position past its end adds the block last. */
+  index: number;
+  /** The Puck component the person dragged or chose: the block's renderer key. */
+  rendererKey: string;
+}>;
 
 /** Studio's block palette: where a new block can go and how Studio adds it. */
 export type StudioCanvasPalette = Readonly<{
@@ -70,7 +88,8 @@ export type StudioCanvasPalette = Readonly<{
   owner: StudioCompositionOwner["kind"];
   message: string;
   /** Adds a block through Studio's one add command; `false` when nothing was added yet. */
-  onAdd: (request: StudioCanvasAddRequest) => boolean;
+  /** `true` when the block was added, `false` when nothing was added yet (its setup is asked), or why it was refused. */
+  onAdd: (request: StudioCanvasAddRequest) => true | false | string;
 }>;
 
 export type StudioPuckInput = Readonly<{
@@ -85,6 +104,8 @@ export type StudioPuckInput = Readonly<{
   /** The compiled items of each content area of this page, keyed by page slot address key. */
   compiledSlots?: Readonly<Record<string, StudioCanvasCompiledSlot>> | undefined;
   disabled: boolean;
+  /** Why the draft takes no change now (a conflict, a publication), when `disabled` says it does not. */
+  disabledReason?: string | undefined;
   /** Why the saved draft would not compile; the page stays open so the cause can be corrected. */
   compileFailure?: StudioCompileFailure | null | undefined;
   onChange: (expectedSource: ApplicationSourceDocument, source: ApplicationSourceDocument) => void;
@@ -94,8 +115,6 @@ export type StudioPuckInput = Readonly<{
   onSelectPlacement: (alias: string | null) => Promise<boolean>;
   /** Whether the open rail tab shows the canvas. Elsewhere nothing is selected and nothing can change. */
   canvasShown: boolean;
-  /** The screen size the canvas shows; Studio's canvas toolbar chooses it and keeps it while pages change. */
-  breakpoint: Breakpoint;
   appearance: "light" | "dark";
   /** The application frame the page is drawn inside, when the draft compiled. */
   frame?: StudioCanvasFrame | undefined;
@@ -159,6 +178,9 @@ const usePuckSelector = createUsePuck();
 export const useStudioCanvasDragging = (): boolean =>
   usePuckSelector((state) => state.appState.ui.isDragging);
 
+/** Puck compares overrides by identity: one object, with the drawer's block row and the canvas's. */
+const OVERRIDES = { ...studioCanvasOverrides, drawerItem: StudioDrawerItem } as const;
+
 /** The Puck iframe the canvas draws the page in; its styles come from the host. */
 const IFRAME = { enabled: true, waitForStyles: true, syncHostStyles: true } as const;
 
@@ -195,13 +217,18 @@ export function StudioPuckProvider({
   dragGate: RefObject<StudioDragGate>;
   children: ReactNode;
 }>) {
-  const model = useStudioCanvasModel(input);
+  // The screen is kept by Puck (`ui.viewports.current`); `onAction` reports its breakpoint
+  // here, because the model and the metadata that depend on it are made outside the editor.
+  const [breakpoint, setBreakpoint] = useState<Breakpoint>(studioInitialBreakpoint);
+  const model = useStudioCanvasModel(input, breakpoint);
   const [refused, setRefused] = useState<Readonly<{ area: string; message: string }> | null>(null);
   const [resync, setResync] = useState(0);
   // Puck's callbacks run while Studio shows its own data or selection: they must not echo back.
   const synchronizing = useRef(false);
   const deriving = useRef(false);
   const showSelection = useRef<((alias: string | null) => void) | null>(null);
+  // The name of the interim block Puck holds between an insert from the drawer and Studio's add.
+  const inserted = useRef<Set<string>>(new Set());
   const permitted = model.editable && input.canvasShown;
   const latest = useRef({ input, model, permitted });
   latest.current = { input, model, permitted };
@@ -218,8 +245,8 @@ export function StudioPuckProvider({
       return;
     }
     if (now.pageAlias === undefined || shown.at === undefined) return;
-    // A block dropped from the palette is added by Studio's add command, not by this edit.
-    if (holdsDroppedBlock(candidate.content as unknown[])) return;
+    // A block inserted from the drawer is added by Studio's add command, not by this edit.
+    for (const id of inserted.current) if (puckItemsHold(candidate.content, id)) return;
     const result = applyStudioCanvasChange(
       shown.catalogue,
       now.source,
@@ -239,11 +266,20 @@ export function StudioPuckProvider({
   }, []);
 
   const onAction = useCallback((action: PuckAction, state: AppState, previous: AppState) => {
+    // The screen changed: the model and metadata follow in the same render as Puck's own state.
+    if (
+      action.type === "setUi" &&
+      state.ui.viewports.current.width !== previous.ui.viewports.current.width
+    )
+      setBreakpoint(studioScreenOfWidth(state.ui.viewports.current.width).breakpoint);
     if (synchronizing.current || deriving.current) return;
     const { input: now, model: shown } = latest.current;
-    // A drop from the palette: Puck has put a bare block in its own data; Studio adds the real one.
+    // A drop or an Add from the drawer: Puck has put an interim block (the release defaults) in its
+    // own data; Studio adds the real one.
     if (action.type === "insert") {
       if (shown.at === undefined) return;
+      const id = action.id;
+      if (id !== undefined) inserted.current.add(id);
       const request: StudioCanvasAddRequest = {
         area: shown.at.key,
         destination: destinationOfZone(action.destinationZone),
@@ -252,8 +288,13 @@ export function StudioPuckProvider({
       };
       // After Puck finishes its own insert: show the stored draft again unless the add went through.
       setTimeout(() => {
-        if (!latest.current.permitted || latest.current.input.palette?.onAdd(request) !== true)
-          setResync((generation) => generation + 1);
+        const { input: current, model: open, permitted: allowed } = latest.current;
+        const outcome = allowed ? current.palette?.onAdd(request) : undefined;
+        if (outcome !== true) setResync((generation) => generation + 1);
+        // A refused add is said where a refused canvas change is: in the canvas strip.
+        if (typeof outcome === "string") setRefused({ area: open.area, message: outcome });
+        else if (outcome === true) setRefused(null);
+        if (id !== undefined) inserted.current.delete(id);
       }, 0);
       return;
     }
@@ -276,11 +317,11 @@ export function StudioPuckProvider({
   const canvasMetadata = useStudioCanvasMetadata(input, model);
   const metadata = useMemo(
     (): StudioCanvasMetadata => ({
-      breakpoint: input.breakpoint,
+      breakpoint,
       readSettings: compiledItemSettings,
       ...canvasMetadata,
     }),
-    [input.breakpoint, canvasMetadata],
+    [breakpoint, canvasMetadata],
   );
   // The application holds every block it may: Duplicate and every other insert are off.
   const placed =
@@ -294,9 +335,10 @@ export function StudioPuckProvider({
       duplicate: permitted && !full,
       delete: permitted,
       edit: false,
-      insert: false,
+      // The drawer's blocks drag onto the canvas; a layout's blocks are added with Add.
+      insert: permitted && !full && input.palette?.owner !== "layout",
     }),
-    [permitted, full],
+    [permitted, full, input.palette?.owner],
   );
   const empty = useMemo(
     (): Data => ({ root: { props: model.rootProps }, content: [] }),
@@ -318,13 +360,17 @@ export function StudioPuckProvider({
         onChange={change}
         onAction={onAction}
         iframe={IFRAME}
+        viewports={studioViewports}
+        ui={studioInitialUi}
         // Puck's own wrapper fills the workspace, so the canvas has the height of its well.
         height="100%"
-        overrides={studioCanvasOverrides}
+        overrides={OVERRIDES}
         metadata={metadata}
         permissions={permissions}
+        dictionary={studioPuckWords}
       >
         <StudioPuckSync
+          config={model.config}
           data={shown}
           resync={resync}
           area={model.area}
@@ -352,6 +398,7 @@ export function StudioPuckProvider({
  * its preview mode follows the toolbar. Where the canvas is not on show nothing is selected.
  */
 function StudioPuckSync({
+  config,
   data,
   resync,
   area,
@@ -366,6 +413,8 @@ function StudioPuckSync({
   deriving,
   showSelection,
 }: Readonly<{
+  /** The config the page on the canvas is drawn with. */
+  config: Config;
   data: Data;
   /** The page and content area on the canvas. */
   area: string;
@@ -388,6 +437,12 @@ function StudioPuckSync({
   const getPuck = useGetPuck();
   const previewMode = usePuckSelector((state) => state.appState.ui.previewMode);
   const recorded = usePuckSelector((state) => state.history.histories.length);
+  // The config Puck holds: it takes the page's config a moment after this component sees it.
+  const held = usePuckSelector((state) => state.config);
+  // The config Puck's data was last walked under; Puck walked its first data under `held`.
+  const walked = useRef(held);
+  const latestData = useRef(data);
+  latestData.current = data;
   // Studio's draft history is the one undo. Puck records its own drags and deletes and answers
   // Ctrl+Z / Ctrl+Y with its older states, which Studio would then take as new edits, so Puck's
   // history is kept at the current state alone and its Undo and Redo have nothing to go back to.
@@ -454,32 +509,51 @@ function StudioPuckSync({
     return () => onArrangeableGrids?.(false);
   }, [arrangeable, onArrangeableGrids]);
 
-  // The workspace draft changed (an edit, Undo, Redo, a save, Revert or another page): show exactly
-  // that draft, with the selection derived again. One Puck action replaces the data; it is draft
-  // synchronization, not an entry in Puck's separate history.
-  useEffect(() => {
-    const { appState, dispatch } = getPuck();
-    if (
-      JSON.stringify(appState.data.content) !== JSON.stringify(data.content) ||
-      JSON.stringify(appState.data.root) !== JSON.stringify(data.root)
-    ) {
+  // Puck finds a block's slots through the config its data was last walked under, and takes a new
+  // config only after this component's effects have run. Data walked under the previous config (the
+  // empty one before the blocks are known) has no nested blocks indexed, so it is walked again once
+  // Puck holds the config the page is drawn with. A walk replaces every node's data, so one that
+  // only follows a config change waits for a drag in progress to drop.
+  const walk = useCallback(
+    (shownData: Data) => {
+      walked.current = held;
       synchronizing.current = true;
       try {
-        // One walk of the data per outside draft change; the function form is the same action
-        // without Puck's warning about the object form.
-        dispatch({ type: "setData", data: () => data, recordHistory: false });
+        // One walk per outside draft change and one per config Puck takes; the function form is the
+        // same action without Puck's warning about the object form.
+        getPuck().dispatch({ type: "setData", data: () => shownData, recordHistory: false });
       } finally {
         synchronizing.current = false;
       }
-    }
+    },
+    [getPuck, held, synchronizing],
+  );
+  // The workspace draft changed (an edit, Undo, Redo, a save, Revert, another page, or the config
+  // the page is drawn with): show exactly that draft, with the selection derived again. One Puck
+  // action replaces the data; it is draft synchronization, not an entry in Puck's separate history.
+  useEffect(() => {
+    // Puck does not hold the page's config yet; this runs again once it does.
+    if (held !== config) return;
+    const { appState } = getPuck();
+    const changed =
+      JSON.stringify(appState.data.content) !== JSON.stringify(data.content) ||
+      JSON.stringify(appState.data.root) !== JSON.stringify(data.root);
+    if (changed || (walked.current !== held && !appState.ui.isDragging)) walk(data);
     select(wantedRef.current);
     // The draft is shown again every time the canvas comes into view, so nothing Puck held while
     // it was hidden survives.
-  }, [data, resync, canvasShown, area]);
+  }, [data, resync, canvasShown, area, held, config]);
 
   // A drag keeps the rail tab and the open page where they are (the workspace asks the gate), and
   // what was asked meanwhile is applied once the drop's own animation has finished with the preview.
   const dragging = usePuckSelector((state) => state.appState.ui.isDragging);
+  useEffect(() => {
+    // The config walk that waited for the drop.
+    if (!dragging && held === config && walked.current !== held) {
+      walk(latestData.current);
+      select(wantedRef.current);
+    }
+  }, [dragging]);
   useEffect(() => {
     dragGate.current.dragging = dragging;
     if (dragging) return;

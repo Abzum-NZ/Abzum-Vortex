@@ -218,7 +218,9 @@ export function useStudioReleasesTab({
         return { kind: "temporarily_unavailable" };
       },
     );
-    if (next.kind !== "available") console.error(`[studio] page adoption comparison ${next.kind}`);
+    // A refusal is the expected answer for a platform application; only an outage is an error.
+    if (next.kind === "temporarily_unavailable")
+      console.error(`[studio] page adoption comparison ${next.kind}`);
     if (latest.current.isActive()) setAdoption(next);
   }, [organizationId, rootId]);
   // The comparison is of the saved draft, so a saved edit reads it again.

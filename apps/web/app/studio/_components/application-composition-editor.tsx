@@ -13,6 +13,7 @@ import {
   StudioSegmentedControl,
 } from "@vortex/ui/studio";
 import { Icon } from "@vortex/ui";
+import { studioScreens, useStudioScreen } from "@vortex/ui/studio/puck-provider";
 import { Switch } from "@vortex/ui/components/switch";
 import { Button } from "@vortex/ui/components/button";
 import { Input } from "@vortex/ui/components/input";
@@ -45,7 +46,6 @@ import {
   studioOwnsSetting,
   studioCanvasGridKey,
   type StudioCanvasGridArrangement,
-  type StudioCompositionBreakpoint,
   type StudioCompositionCommand,
   type StudioCompositionContext,
   type StudioCompositionLayout,
@@ -163,7 +163,8 @@ const outcomeText = (result: StudioCompositionOutcome, fallback: string): string
  */
 export function ApplicationCompositionEditor(props: Props) {
   const [confirm, confirmDialog] = useConfirm();
-  const [breakpoint, setBreakpoint] = useState<StudioCompositionBreakpoint>("desktop");
+  // The screen is the canvas screen: one state, kept by Puck.
+  const { breakpoint, choose: chooseScreen } = useStudioScreen();
   const names = useMemo(() => studioPlacementLabels(props.context), [props.context]);
   const model = useMemo(
     () => describeStudioCompositionEdit(props.context, props.selection, breakpoint),
@@ -711,12 +712,12 @@ export function ApplicationCompositionEditor(props: Props) {
               label="Screen size"
               value={breakpoint}
               disabled={props.disabled}
-              onChange={setBreakpoint}
-              options={[
-                { value: "desktop", label: "Desktop", icon: <Icon name="monitor" /> },
-                { value: "tablet", label: "Tablet", icon: <Icon name="tablet" /> },
-                { value: "phone", label: "Phone", icon: <Icon name="smartphone" /> },
-              ]}
+              onChange={chooseScreen}
+              options={studioScreens.map((screen) => ({
+                value: screen.breakpoint,
+                label: screen.label,
+                icon: <Icon name={screen.icon} />,
+              }))}
             />
           )}
         </StudioField>

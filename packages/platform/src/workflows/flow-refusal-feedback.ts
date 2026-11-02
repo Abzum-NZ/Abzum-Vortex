@@ -29,6 +29,9 @@ export const flowRefusalFeedbackCodeSchema = z.enum([
   "application_input_invalid",
   "application_publication_no_change",
   "application_publication_blocked",
+  "application_publication_platform",
+  "application_publication_permission",
+  "application_publication_dependency",
   "definition_drafts_manage_required",
   "applications_manage_required",
   "installation_delegation_required",
@@ -81,6 +84,11 @@ export const flowRefusalFeedbackSentences: Readonly<Record<FlowRefusalFeedbackCo
     "Nothing has changed since the last version, so there is nothing to publish.",
   application_publication_blocked:
     "The draft has a problem that blocks publishing. Open it in Studio, check its pages and flows, and try again.",
+  application_publication_platform:
+    "Publishing a platform application from Studio is not available yet.",
+  application_publication_permission: "You need permission to publish versions of applications.",
+  application_publication_dependency:
+    "A module or platform part this application uses is not available, so it cannot be published yet.",
   definition_drafts_manage_required:
     "Creating an application needs the Manage definition drafts permission. An organisation steward can give you a role that has it.",
   application_name_mismatch:

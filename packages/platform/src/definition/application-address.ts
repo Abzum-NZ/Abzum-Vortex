@@ -24,6 +24,7 @@ import {
   type IdentityAuthorityId,
 } from "../catalogue/identifiers";
 import { sameId, logRefusal } from "../catalogue/runtime-primitives";
+import { DefinitionError } from "./definition-error";
 import { applicationShellSchema } from "./application-composition/page-composition";
 import { compiledPageShellId } from "./application-composition/compiled-item-tree";
 import { applicationThemeSchema } from "./application-composition/theme";
@@ -1060,7 +1061,14 @@ const readAddressedActiveApplicationIdentity = async (
           transaction,
           previewInstallationId,
         ).catch((error: unknown) => {
-          logRefusal("application-address", "preview identity", "PREVIEW_ADDRESS_REFUSED", error);
+          // Opening someone else's preview is an expected refusal: information, not an error.
+          if (
+            error instanceof DefinitionError &&
+            error.code === "PREVIEW_INSTALLATION_AUTHORITY_REFUSED"
+          )
+            logRefusal("application-address", "preview identity", "PREVIEW_ADDRESS_REFUSED");
+          else
+            logRefusal("application-address", "preview identity", "PREVIEW_ADDRESS_REFUSED", error);
           return undefined;
         });
         if (preview === undefined || !sameId(preview.organizationId, organizationId.data))

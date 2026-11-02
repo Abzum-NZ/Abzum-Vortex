@@ -45,10 +45,10 @@ import {
 import { Button } from "@vortex/ui/components/button";
 import { Badge } from "@vortex/ui/components/badge";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@vortex/ui/components/tooltip";
-import { StudioCanvasPalette, StudioCanvasView } from "@vortex/ui/studio/canvas-view";
+import { StudioCanvasView } from "@vortex/ui/studio/canvas-view";
+import { StudioBlocksPanel } from "@vortex/ui/studio/puck-drawer";
 import type {
   StudioCanvasAddRequest,
-  StudioCanvasBreakpoint,
   StudioCanvasFrame,
   StudioPuckInput,
 } from "@vortex/ui/studio/puck-provider";
@@ -182,7 +182,6 @@ export function useStudioCanvasTab({
     use: (reference: string) => void;
   }> | null>(null);
   const [canvasZoom, setCanvasZoom] = useState<StudioCanvasZoom>("fit");
-  const [breakpoint, setBreakpoint] = useState<StudioCanvasBreakpoint>("desktop");
   // The canvas previews the application in light or dark; the running application keeps its own toggle.
   const [appearance, setAppearance] = useState<"light" | "dark">("light");
   // "Who can see this": the role the canvas and its menu are previewed as; null is the builder's view.
@@ -464,7 +463,7 @@ export function useStudioCanvasTab({
     [compositionContext, canvasPage?.id, addOwnerKey],
   );
   // A block for one place: added at once, or after its setup when it needs settings or data.
-  const addBlock = (request: StudioCanvasAddRequest): boolean => {
+  const addBlock = (request: StudioCanvasAddRequest): true | false | string => {
     const owner = addOwnerRef.current;
     if (owner === undefined || addTargets?.kind !== "available") return false;
     const target = addTargets.targets.find(
@@ -517,7 +516,7 @@ export function useStudioCanvasTab({
     }
     const outcome = runAdd({ ...command, settings: {}, query: null });
     setPaletteMessage(outcome === true ? `${release.name} added.` : outcome);
-    return outcome === true;
+    return outcome;
   };
 
   // A drag on the canvas: the canvas edits the draft it was drawn from, so any change in between makes it stale.
@@ -855,7 +854,7 @@ export function useStudioCanvasTab({
         hidden={tab !== "blocks"}
       >
         {/* Drawn inside the workspace's Puck editor, so its blocks drag with the canvas's own drag and drop. */}
-        <StudioCanvasPalette />
+        <StudioBlocksPanel />
         {canvasPage === undefined && (
           <Empty>
             <EmptyHeader>
@@ -1046,7 +1045,7 @@ export function useStudioCanvasTab({
       className={
         canvasPage !== undefined
           ? "flex min-h-0 flex-1 flex-col gap-3"
-          : "space-y-3 rounded-xl border border-border bg-card p-4 text-card-foreground"
+          : "flex min-h-0 flex-1 flex-col gap-3 overflow-auto p-4"
       }
       aria-label="Selected item"
     >
@@ -1060,7 +1059,7 @@ export function useStudioCanvasTab({
         <p>This block is part of a layout. Change it in the inspector.</p>
       )}
       {canvasPage === undefined && selected?.kind !== "flow" && selected?.kind !== "placement" && (
-        <Empty className="min-h-64">
+        <Empty className="min-h-64 flex-1">
           <EmptyHeader>
             <EmptyMedia variant="icon">
               <Icon name="blocks" />
@@ -1121,8 +1120,6 @@ export function useStudioCanvasTab({
   ) => (
     <StudioCanvasToolbar
       title={centreTitle}
-      breakpoint={breakpoint}
-      onBreakpoint={setBreakpoint}
       zoom={canvasZoom}
       fitZoom={fitZoom}
       onZoom={setCanvasZoom}
@@ -1223,9 +1220,9 @@ export function useStudioCanvasTab({
       selectedPlacementAlias,
       onSelectPlacement,
       canvasShown,
-      breakpoint,
       appearance,
       disabled: draft.locked,
+      disabledReason: draft.locked ? draft.blockedReason() : undefined,
       compileFailure: view.failure,
       onChange: onPageEdit,
       readRecords: readCanvasRecords,
@@ -1250,7 +1247,6 @@ export function useStudioCanvasTab({
       selectedPlacementAlias,
       onSelectPlacement,
       canvasShown,
-      breakpoint,
       appearance,
       draft.locked,
       view.failure,

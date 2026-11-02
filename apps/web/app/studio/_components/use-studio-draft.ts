@@ -215,9 +215,11 @@ const viewOf = (
   previous: StudioCompiledView,
 ): StudioCompiledView => ({
   request: loaded.request,
-  catalogue: loaded.catalogue.releases.length === 0 ? previous.catalogue : loaded.catalogue,
+  // Both are constants of the server for the whole visit: once held, a read never replaces them, so
+  // the canvas config (and Puck's walk of the page under it) changes once per visit, not per read.
+  catalogue: previous.catalogue.releases.length > 0 ? previous.catalogue : loaded.catalogue,
   themeOptions: loaded.themeOptions ?? previous.themeOptions,
-  fieldInputControlReleases: loaded.fieldInputControlReleases ?? previous.fieldInputControlReleases,
+  fieldInputControlReleases: previous.fieldInputControlReleases ?? loaded.fieldInputControlReleases,
   platformThemeTokens: loaded.platformThemeTokens,
   source: draft.source,
   draftRevision: draft.draftRevision,
