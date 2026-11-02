@@ -60,9 +60,10 @@ class RequestOwnedBridge extends Duplex {
 
   override on(...arguments_: Parameters<Duplex["on"]>): this {
     super.on(...arguments_);
-    // Postgres.js createSocket attaches error/close/drain BEFORE socket assignment. Its
-    // connected() attaches data AFTER assignment. Wait until that synchronous stack returns,
-    // so its subsequent startup-message construction cannot encounter a cleared socket.
+    // Postgres.js attaches its data, drain, error and close listeners as one synchronous step when
+    // the factory result resolves, and hands its own close callback over one microtask later. Node
+    // emits a destroy error on a later tick, so a terminal state retained before assignment is
+    // delivered only once the driver can receive it.
     if (arguments_[0] === "data") this.scheduleAssignment();
     return this;
   }
