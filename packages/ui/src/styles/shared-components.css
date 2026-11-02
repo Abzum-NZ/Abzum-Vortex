@@ -7180,7 +7180,11 @@
       translate: 0 -50%;
     }
     & > .cn-resizable-handle-grip {
-      rotate: 90deg;
+      height: calc(var(--spacing, 0.25rem) * 3);
+      width: calc(var(--spacing, 0.25rem) * 6);
+      & svg {
+        rotate: 90deg;
+      }
     }
   }
   &:hover,

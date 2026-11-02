@@ -38,7 +38,7 @@ function ResizableHandle({
       {...props}
     >
       {withHandle && (
-        <div className="cn-resizable-handle-grip z-10 flex items-center justify-center">
+        <div className="cn-resizable-handle-grip z-10 flex shrink-0 items-center justify-center">
           <Icon name="grip-vertical" className="size-2.5" />
         </div>
       )}
