@@ -75,7 +75,15 @@ export async function proxy(request: NextRequest) {
   try {
     const configuration = getIdentityJourneyConfiguration();
     if (!requestMatchesConfiguredSite(request.headers, request.nextUrl, configuration.siteUrl))
-      return privateResponse(response);
+      return privateResponse(
+        new NextResponse(
+          `Use the configured site origin: ${new URL(configuration.siteUrl).origin}`,
+          {
+            status: 400,
+            headers: { "Content-Type": "text/plain; charset=utf-8" },
+          },
+        ),
+      );
     boundary = createIdentitySessionClient(
       request.cookies.getAll().map(({ name, value }) => ({ name, value })),
     );
