@@ -1,9 +1,9 @@
 "use client";
-import { Label } from "../components/label";
 import { useId } from "react";
-import { FieldError, FieldLegend } from "../components/field";
+import { FieldError, FieldGroup, FieldLegend, FieldSet } from "../components/field";
 import { Input } from "@vortex/ui/components/input";
 import { Textarea } from "@vortex/ui/components/textarea";
+import { StudioField, useStudioFieldProblem } from "./studio-field";
 import { StudioOptionControl } from "./studio-setting-basic-controls";
 import { useDateFormatOptions } from "../display/date-format-context";
 import {
@@ -99,6 +99,12 @@ export function LiteralEditor({
   // One zone both shows and reads the local date and time, so an edit keeps the instant it names.
   const inputTimeZone = timeZone ?? "UTC";
   const error = errorForPath(validation, path);
+  // The grouped literals (date and time, money) report as a whole; every other literal reports
+  // through its own StudioField.
+  useStudioFieldProblem(
+    errorId,
+    semanticType === "date_time" || semanticType === "money" ? error : undefined,
+  );
   const label =
     collectionElementType && collectionElementType !== "text"
       ? `Values (list of ${collectionTypeLabel(collectionElementType)})`
@@ -110,165 +116,164 @@ export function LiteralEditor({
 
   if (collectionElementType && collectionElementType !== "text")
     return (
-      <Label className="flex flex-col items-stretch gap-2">
-        {label}
-        <Textarea
-          key={JSON.stringify(operand.value)}
-          aria-invalid={error !== undefined}
-          aria-describedby={error === undefined ? undefined : errorId}
-          defaultValue={JSON.stringify(Array.isArray(operand.value) ? operand.value : [], null, 2)}
-          onBlur={(event) => {
-            try {
-              const parsed = jsonValueSchema.safeParse(JSON.parse(event.currentTarget.value));
-              if (
-                !parsed.success ||
-                !Array.isArray(parsed.data) ||
-                !parsed.data.every((value) => literalMatchesType(value, collectionElementType))
-              )
-                throw new Error(collectionMessage);
-              event.currentTarget.setCustomValidity("");
-              onCommit(parsed.data);
-            } catch {
-              const message = collectionMessage;
-              event.currentTarget.setCustomValidity(message);
-              event.currentTarget.reportValidity();
-              onInvalid(message);
-            }
-          }}
-        />
-        {error && <FieldError id={errorId}>{error}</FieldError>}
-      </Label>
-    );
-  if (semanticType === "yes_no")
-    return (
-      <Label className="flex flex-col items-stretch gap-2">
-        {label}
-        <StudioOptionControl
-          aria-label={label}
-          aria-invalid={error !== undefined}
-          aria-describedby={error === undefined ? undefined : errorId}
-          value={operand.value === true ? "true" : "false"}
-          disabled={false}
-          options={[
-            { value: "true", label: "Yes" },
-            { value: "false", label: "No" },
-          ]}
-          onChange={(next) => onCommit(next === "true")}
-        />
-        {error && <FieldError id={errorId}>{error}</FieldError>}
-      </Label>
-    );
-
-  if (semanticType === "whole_number")
-    return (
-      <Label className="flex flex-col items-stretch gap-2">
-        {label}
-        <Input
-          key={JSON.stringify(operand.value)}
-          aria-invalid={error !== undefined}
-          aria-describedby={error === undefined ? undefined : errorId}
-          type="text"
-          inputMode={semanticType === "whole_number" ? "numeric" : "decimal"}
-          defaultValue={typeof operand.value === "number" ? String(operand.value) : ""}
-          onBlur={(event) => {
-            const next = event.currentTarget.value;
-            if (next === "") {
-              event.currentTarget.setCustomValidity("");
-              onCommit(null);
-            } else {
-              const numericValue = Number(next);
-              const valid =
-                Number.isFinite(numericValue) &&
-                (semanticType !== "whole_number" || Number.isSafeInteger(numericValue));
-              if (valid) {
+      <StudioField label={label} error={error}>
+        {(control) => (
+          <Textarea
+            {...control}
+            key={JSON.stringify(operand.value)}
+            defaultValue={JSON.stringify(
+              Array.isArray(operand.value) ? operand.value : [],
+              null,
+              2,
+            )}
+            onBlur={(event) => {
+              try {
+                const parsed = jsonValueSchema.safeParse(JSON.parse(event.currentTarget.value));
+                if (
+                  !parsed.success ||
+                  !Array.isArray(parsed.data) ||
+                  !parsed.data.every((value) => literalMatchesType(value, collectionElementType))
+                )
+                  throw new Error(collectionMessage);
                 event.currentTarget.setCustomValidity("");
-                onCommit(numericValue);
-              } else {
-                const message =
-                  semanticType === "whole_number"
-                    ? "Enter a whole number"
-                    : "Enter a finite number";
+                onCommit(parsed.data);
+              } catch {
+                const message = collectionMessage;
                 event.currentTarget.setCustomValidity(message);
                 event.currentTarget.reportValidity();
                 onInvalid(message);
               }
-            }
-          }}
-        />
-        {error && <FieldError id={errorId}>{error}</FieldError>}
-      </Label>
+            }}
+          />
+        )}
+      </StudioField>
+    );
+  if (semanticType === "yes_no")
+    return (
+      <StudioField label={label} error={error}>
+        {(control) => (
+          <StudioOptionControl
+            {...control}
+            aria-label={label}
+            value={operand.value === true ? "true" : "false"}
+            disabled={false}
+            options={[
+              { value: "true", label: "Yes" },
+              { value: "false", label: "No" },
+            ]}
+            onChange={(next) => onCommit(next === "true")}
+          />
+        )}
+      </StudioField>
+    );
+
+  if (semanticType === "whole_number")
+    return (
+      <StudioField label={label} error={error}>
+        {(control) => (
+          <Input
+            {...control}
+            key={JSON.stringify(operand.value)}
+            type="text"
+            inputMode="numeric"
+            defaultValue={typeof operand.value === "number" ? String(operand.value) : ""}
+            onBlur={(event) => {
+              const next = event.currentTarget.value;
+              if (next === "") {
+                event.currentTarget.setCustomValidity("");
+                onCommit(null);
+              } else {
+                const numericValue = Number(next);
+                if (Number.isFinite(numericValue) && Number.isSafeInteger(numericValue)) {
+                  event.currentTarget.setCustomValidity("");
+                  onCommit(numericValue);
+                } else {
+                  const message = "Enter a whole number";
+                  event.currentTarget.setCustomValidity(message);
+                  event.currentTarget.reportValidity();
+                  onInvalid(message);
+                }
+              }
+            }}
+          />
+        )}
+      </StudioField>
     );
 
   if (semanticType === "decimal_number")
     return (
-      <Label className="flex flex-col items-stretch gap-2">
-        {label}
-        <Input
-          aria-invalid={error !== undefined}
-          aria-describedby={error === undefined ? undefined : errorId}
-          inputMode="decimal"
-          type="text"
-          value={literalInputValue(operand.value)}
-          onChange={(event) => onCommit(event.currentTarget.value)}
-        />
-        {error && <FieldError id={errorId}>{error}</FieldError>}
-      </Label>
-    );
-
-  if (semanticType === "date")
-    return (
-      <Label className="flex flex-col items-stretch gap-2">
-        {label}
-        <Input
-          aria-invalid={error !== undefined}
-          aria-describedby={error === undefined ? undefined : errorId}
-          type="date"
-          value={typeof operand.value === "string" ? operand.value : ""}
-          onChange={(event) => onCommit(event.currentTarget.value)}
-        />
-        {error && <FieldError id={errorId}>{error}</FieldError>}
-      </Label>
-    );
-
-  if (semanticType === "date_time")
-    return (
-      <fieldset className="space-y-4">
-        <FieldLegend variant="label">{label}</FieldLegend>
-        <Label className="flex flex-col items-stretch gap-2">
-          Local date and time (whole seconds)
+      <StudioField label={label} error={error}>
+        {(control) => (
           <Input
-            aria-invalid={error !== undefined}
-            aria-describedby={error === undefined ? undefined : errorId}
-            type="datetime-local"
-            step={1}
-            value={localDateTimeInputValue(operand.value, inputTimeZone)}
-            onChange={(event) => {
-              const next = event.currentTarget.value;
-              if (next === "") {
-                onCommit(null);
-                return;
-              }
-              const instant = instantFromLocalDateTimeInput(next, inputTimeZone);
-              if (instant === undefined) {
-                onInvalid("Enter a valid date and time");
-                return;
-              }
-              onCommit(instant);
-            }}
-          />
-        </Label>
-        <Label className="flex flex-col items-stretch gap-2">
-          Exact instant (ISO 8601 with offset)
-          <Input
-            aria-invalid={error !== undefined}
-            aria-describedby={error === undefined ? undefined : errorId}
+            {...control}
+            inputMode="decimal"
             type="text"
             value={literalInputValue(operand.value)}
             onChange={(event) => onCommit(event.currentTarget.value)}
           />
-        </Label>
+        )}
+      </StudioField>
+    );
+
+  if (semanticType === "date")
+    return (
+      <StudioField label={label} error={error}>
+        {(control) => (
+          <Input
+            {...control}
+            type="date"
+            value={typeof operand.value === "string" ? operand.value : ""}
+            onChange={(event) => onCommit(event.currentTarget.value)}
+          />
+        )}
+      </StudioField>
+    );
+
+  if (semanticType === "date_time")
+    return (
+      <FieldSet data-invalid={error === undefined ? undefined : true}>
+        <FieldLegend variant="label">{label}</FieldLegend>
+        <FieldGroup>
+          <StudioField label="Local date and time (whole seconds)">
+            {(control) => (
+              <Input
+                {...control}
+                aria-invalid={error !== undefined}
+                aria-describedby={error === undefined ? undefined : errorId}
+                type="datetime-local"
+                step={1}
+                value={localDateTimeInputValue(operand.value, inputTimeZone)}
+                onChange={(event) => {
+                  const next = event.currentTarget.value;
+                  if (next === "") {
+                    onCommit(null);
+                    return;
+                  }
+                  const instant = instantFromLocalDateTimeInput(next, inputTimeZone);
+                  if (instant === undefined) {
+                    onInvalid("Enter a valid date and time");
+                    return;
+                  }
+                  onCommit(instant);
+                }}
+              />
+            )}
+          </StudioField>
+          <StudioField label="Exact instant (ISO 8601 with offset)">
+            {(control) => (
+              <Input
+                {...control}
+                aria-invalid={error !== undefined}
+                aria-describedby={error === undefined ? undefined : errorId}
+                type="text"
+                value={literalInputValue(operand.value)}
+                onChange={(event) => onCommit(event.currentTarget.value)}
+              />
+            )}
+          </StudioField>
+        </FieldGroup>
         {error && <FieldError id={errorId}>{error}</FieldError>}
-      </fieldset>
+      </FieldSet>
     );
 
   if (semanticType === "money") {
@@ -276,49 +281,54 @@ export function LiteralEditor({
     const amount = typeof current.amount === "string" ? current.amount : "";
     const currency = typeof current.currency === "string" ? current.currency : "";
     return (
-      <fieldset className="space-y-4">
+      <FieldSet data-invalid={error === undefined ? undefined : true}>
         <FieldLegend variant="label">{label}</FieldLegend>
-        <Label className="flex flex-col items-stretch gap-2">
-          Amount
-          <Input
-            aria-invalid={error !== undefined}
-            aria-describedby={error === undefined ? undefined : errorId}
-            inputMode="decimal"
-            type="text"
-            value={amount}
-            onChange={(event) => onCommit({ amount: event.currentTarget.value, currency })}
-          />
-        </Label>
-        <Label className="flex flex-col items-stretch gap-2">
-          Currency
-          <StudioOptionControl
-            aria-label="Currency"
-            aria-invalid={error !== undefined}
-            aria-describedby={error === undefined ? undefined : errorId}
-            value={currency}
-            disabled={false}
-            unset="Choose a currency…"
-            options={currencyCodes.map((code) => ({ value: code, label: code }))}
-            onChange={(next) => onCommit({ amount, currency: next })}
-          />
-        </Label>
+        <FieldGroup>
+          <StudioField label="Amount">
+            {(control) => (
+              <Input
+                {...control}
+                aria-invalid={error !== undefined}
+                aria-describedby={error === undefined ? undefined : errorId}
+                inputMode="decimal"
+                type="text"
+                value={amount}
+                onChange={(event) => onCommit({ amount: event.currentTarget.value, currency })}
+              />
+            )}
+          </StudioField>
+          <StudioField label="Currency">
+            {(control) => (
+              <StudioOptionControl
+                {...control}
+                aria-label="Currency"
+                aria-invalid={error !== undefined}
+                aria-describedby={error === undefined ? undefined : errorId}
+                value={currency}
+                disabled={false}
+                unset="Choose a currency…"
+                options={currencyCodes.map((code) => ({ value: code, label: code }))}
+                onChange={(next) => onCommit({ amount, currency: next })}
+              />
+            )}
+          </StudioField>
+        </FieldGroup>
         {error && <FieldError id={errorId}>{error}</FieldError>}
-      </fieldset>
+      </FieldSet>
     );
   }
 
   if (semanticType === "text_collection")
     return (
-      <Label className="flex flex-col items-stretch gap-2">
-        {label} (one item per line)
-        <Textarea
-          aria-invalid={error !== undefined}
-          aria-describedby={error === undefined ? undefined : errorId}
-          value={Array.isArray(operand.value) ? operand.value.map(String).join("\n") : ""}
-          onChange={(event) => onCommit(event.currentTarget.value.split("\n"))}
-        />
-        {error && <FieldError id={errorId}>{error}</FieldError>}
-      </Label>
+      <StudioField label={`${label} (one item per line)`} error={error}>
+        {(control) => (
+          <Textarea
+            {...control}
+            value={Array.isArray(operand.value) ? operand.value.map(String).join("\n") : ""}
+            onChange={(event) => onCommit(event.currentTarget.value.split("\n"))}
+          />
+        )}
+      </StudioField>
     );
 
   if (
@@ -327,42 +337,40 @@ export function LiteralEditor({
     semanticType === "organization_account_reference"
   )
     return (
-      <Label className="flex flex-col items-stretch gap-2">
-        {label} (JSON value)
-        <Textarea
-          key={JSON.stringify(operand.value)}
-          aria-invalid={error !== undefined}
-          aria-describedby={error === undefined ? undefined : errorId}
-          defaultValue={JSON.stringify(operand.value)}
-          onBlur={(event) => {
-            try {
-              const parsed = jsonValueSchema.safeParse(JSON.parse(event.currentTarget.value));
-              if (!parsed.success) throw new Error("Enter a valid JSON value");
-              event.currentTarget.setCustomValidity("");
-              onCommit(parsed.data);
-            } catch {
-              const message = "Enter a valid JSON value";
-              event.currentTarget.setCustomValidity(message);
-              event.currentTarget.reportValidity();
-              onInvalid(message);
-            }
-          }}
-        />
-        {error && <FieldError id={errorId}>{error}</FieldError>}
-      </Label>
+      <StudioField label={`${label} (JSON value)`} error={error}>
+        {(control) => (
+          <Textarea
+            {...control}
+            key={JSON.stringify(operand.value)}
+            defaultValue={JSON.stringify(operand.value)}
+            onBlur={(event) => {
+              try {
+                const parsed = jsonValueSchema.safeParse(JSON.parse(event.currentTarget.value));
+                if (!parsed.success) throw new Error("Enter a valid JSON value");
+                event.currentTarget.setCustomValidity("");
+                onCommit(parsed.data);
+              } catch {
+                const message = "Enter a valid JSON value";
+                event.currentTarget.setCustomValidity(message);
+                event.currentTarget.reportValidity();
+                onInvalid(message);
+              }
+            }}
+          />
+        )}
+      </StudioField>
     );
 
   return (
-    <Label className="flex flex-col items-stretch gap-2">
-      {label}
-      <Input
-        aria-invalid={error !== undefined}
-        aria-describedby={error === undefined ? undefined : errorId}
-        type="text"
-        value={typeof operand.value === "string" ? operand.value : ""}
-        onChange={(event) => onCommit(event.currentTarget.value)}
-      />
-      {error && <FieldError id={errorId}>{error}</FieldError>}
-    </Label>
+    <StudioField label={label} error={error}>
+      {(control) => (
+        <Input
+          {...control}
+          type="text"
+          value={typeof operand.value === "string" ? operand.value : ""}
+          onChange={(event) => onCommit(event.currentTarget.value)}
+        />
+      )}
+    </StudioField>
   );
 }
