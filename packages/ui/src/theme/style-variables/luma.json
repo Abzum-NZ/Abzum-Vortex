@@ -254,5 +254,20 @@
   "--vs-b2092e6d": "calc(var(--spacing, 0.25rem) * 2)",
   "--vs-7b7acfb8": "var(--font-weight-medium, 500)",
   "--vs-e09fa815": "calc(var(--spacing, 0.25rem) * 9)",
-  "--vs-987304d0": "color-mix(in oklab, var(--input) 50%, transparent)"
+  "--vs-987304d0": "color-mix(in oklab, var(--input) 50%, transparent)",
+  "--vs-c0b1c001": "calc(var(--spacing, 0.25rem) * 9)",
+  "--vs-c0b1c002": "calc(var(--spacing, 0.25rem) * 1.5)",
+  "--vs-c0b1c003": "calc(var(--spacing, 0.25rem) * 3)",
+  "--vs-c0b1c004": "calc(var(--spacing, 0.25rem) * 1.5)",
+  "--vs-c0b1c005": "calc(var(--spacing, 0.25rem) * 1.5)",
+  "--vs-c0b1c008": "color-mix(in oklab, var(--input) 50%, transparent)",
+  "--vs-c0b1c009": "color-mix(in oklab, var(--input) 50%, transparent)",
+  "--vs-c0b1c00b": "color-mix(in oklab, var(--ring) 30%, transparent)",
+  "--vs-c0b1c00c": "calc(var(--spacing, 0.25rem) * 5.5)",
+  "--vs-c0b1c00d": "calc(var(--radius) * 2.2)",
+  "--vs-c0b1c00e": "calc(var(--spacing, 0.25rem) * 2)",
+  "--vs-c0b1c00f": "var(--input)",
+  "--vs-c0b1c010": "color-mix(in oklab, var(--input) 60%, transparent)",
+  "--vs-c0b1c014": "calc(var(--spacing, 0.25rem) * 3)",
+  "--vs-c0b1c015": "calc(var(--spacing, 0.25rem) * 2.5)"
 }

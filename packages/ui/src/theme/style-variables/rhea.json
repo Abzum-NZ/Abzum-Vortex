@@ -188,5 +188,15 @@
   "--vs-202e8209": "var(--radius-xl)",
   "--vs-c2606a71": "var(--radius-2xl)",
   "--vs-97c9cb90": "calc(var(--spacing, 0.25rem) * 7)",
-  "--vs-987304d0": "color-mix(in oklab, var(--input) 50%, transparent)"
+  "--vs-987304d0": "color-mix(in oklab, var(--input) 50%, transparent)",
+  "--vs-c0b1c005": "calc(var(--spacing, 0.25rem) * 1)",
+  "--vs-c0b1c004": "calc(var(--spacing, 0.25rem) * 1)",
+  "--vs-c0b1c008": "color-mix(in oklab, var(--input) 50%, transparent)",
+  "--vs-c0b1c009": "color-mix(in oklab, var(--input) 50%, transparent)",
+  "--vs-c0b1c00b": "color-mix(in oklab, var(--ring) 30%, transparent)",
+  "--vs-c0b1c00d": "calc(var(--radius) * 1.8)",
+  "--vs-c0b1c00f": "var(--input)",
+  "--vs-c0b1c010": "color-mix(in oklab, var(--input) 60%, transparent)",
+  "--vs-c0b1c011": "calc(var(--spacing, 0.25rem) * 0.5)",
+  "--vs-c0b1c012": "calc(var(--spacing, 0.25rem) * -0.5)"
 }

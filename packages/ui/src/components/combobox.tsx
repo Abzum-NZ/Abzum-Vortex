@@ -6,36 +6,41 @@ import { Icon } from "../icons/icon";
 import { Button } from "./button";
 import { InputGroupButton, InputGroupInput } from "./input-group";
 import { cn } from "../lib/utils";
+import { Tooltip, TooltipContent, TooltipTrigger } from "./tooltip";
 import { useVortexStylePortalRoot } from "../theme/vortex-style-root";
 
 const Combobox = ComboboxPrimitive.Root;
 
-/** The combobox's text input, drawn as the shadcn input group's control. */
 /** The popups a combobox may sit in: Escape on a closed list belongs to the one that holds it. */
 const ESCAPE_HOLDERS =
   '[data-slot="popover-content"], [data-slot="dialog-content"], [data-slot="sheet-content"], [role="dialog"]';
 
+/**
+ * A closed list would keep Escape (and clear its choice). Hand the key to the popover, dialog or
+ * sheet around it, so Escape closes that and the choice stays. Both text inputs share this.
+ */
+function handOffClosedEscape(
+  event: Parameters<NonNullable<ComboboxPrimitive.Input.Props["onKeyDown"]>>[0],
+) {
+  if (event.key !== "Escape" || event.currentTarget.getAttribute("aria-expanded") === "true")
+    return;
+  event.preventBaseUIHandler();
+  const holder = event.currentTarget.closest<HTMLElement>(ESCAPE_HOLDERS);
+  if (holder === null) return;
+  event.preventDefault();
+  holder.focus();
+  holder.dispatchEvent(
+    new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }),
+  );
+}
+
+/** The combobox's text input, drawn as the shadcn input group's control. */
 function ComboboxInput({ onKeyDown, ...props }: ComboboxPrimitive.Input.Props) {
   return (
     <ComboboxPrimitive.Input
       render={<InputGroupInput />}
       onKeyDown={(event) => {
-        // A closed list would keep Escape (and clear its choice). Hand the key to the popover, dialog
-        // or sheet around it, so Escape closes that and the choice stays.
-        if (
-          event.key === "Escape" &&
-          event.currentTarget.getAttribute("aria-expanded") !== "true"
-        ) {
-          event.preventBaseUIHandler();
-          const holder = event.currentTarget.closest<HTMLElement>(ESCAPE_HOLDERS);
-          if (holder !== null) {
-            event.preventDefault();
-            holder.focus();
-            holder.dispatchEvent(
-              new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }),
-            );
-          }
-        }
+        handOffClosedEscape(event);
         onKeyDown?.(event);
       }}
       {...props}
@@ -155,7 +160,9 @@ function ComboboxEmpty({ className, ...props }: ComboboxPrimitive.Empty.Props) {
   );
 }
 
-const ComboboxValue = ComboboxPrimitive.Value;
+function ComboboxValue(props: ComboboxPrimitive.Value.Props) {
+  return <ComboboxPrimitive.Value data-slot="combobox-value" {...props} />;
+}
 
 function ComboboxGroup({ className, ...props }: ComboboxPrimitive.Group.Props) {
   return (
@@ -177,7 +184,9 @@ function ComboboxLabel({ className, ...props }: ComboboxPrimitive.GroupLabel.Pro
   );
 }
 
-const ComboboxCollection = ComboboxPrimitive.Collection;
+function ComboboxCollection(props: ComboboxPrimitive.Collection.Props) {
+  return <ComboboxPrimitive.Collection data-slot="combobox-collection" {...props} />;
+}
 
 /** The selected values of a multiple combobox, drawn as removable chips beside the text input. */
 function ComboboxChips({ className, ...props }: ComboboxPrimitive.Chips.Props) {
@@ -190,7 +199,13 @@ function ComboboxChips({ className, ...props }: ComboboxPrimitive.Chips.Props) {
   );
 }
 
-function ComboboxChip({ className, children, ...props }: ComboboxPrimitive.Chip.Props) {
+/** One chosen value; its remove button is named and given a tooltip by `removeLabel`. */
+function ComboboxChip({
+  className,
+  children,
+  removeLabel,
+  ...props
+}: ComboboxPrimitive.Chip.Props & { removeLabel: string }) {
   return (
     <ComboboxPrimitive.Chip
       data-slot="combobox-chip"
@@ -198,23 +213,34 @@ function ComboboxChip({ className, children, ...props }: ComboboxPrimitive.Chip.
       {...props}
     >
       {children}
-      <ComboboxPrimitive.ChipRemove
-        data-slot="combobox-chip-remove"
-        render={<Button variant="ghost" size="icon-xs" />}
-        className="cn-combobox-chip-remove"
-        aria-label="Remove"
-      >
-        <Icon name="close" className="pointer-events-none" />
-      </ComboboxPrimitive.ChipRemove>
+      <Tooltip>
+        <TooltipTrigger
+          render={
+            <ComboboxPrimitive.ChipRemove
+              data-slot="combobox-chip-remove"
+              render={<Button variant="ghost" size="icon-xs" />}
+              className="cn-combobox-chip-remove"
+              aria-label={removeLabel}
+            />
+          }
+        >
+          <Icon name="close" className="pointer-events-none" />
+        </TooltipTrigger>
+        <TooltipContent>{removeLabel}</TooltipContent>
+      </Tooltip>
     </ComboboxPrimitive.Chip>
   );
 }
 
-function ComboboxChipsInput({ className, ...props }: ComboboxPrimitive.Input.Props) {
+function ComboboxChipsInput({ className, onKeyDown, ...props }: ComboboxPrimitive.Input.Props) {
   return (
     <ComboboxPrimitive.Input
       data-slot="combobox-chip-input"
       className={cn("cn-combobox-chip-input", className)}
+      onKeyDown={(event) => {
+        handOffClosedEscape(event);
+        onKeyDown?.(event);
+      }}
       {...props}
     />
   );

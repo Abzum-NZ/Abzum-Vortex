@@ -2,7 +2,7 @@
 
 import type { JsonValue } from "@vortex/platform/schema";
 import { Badge } from "../components/badge";
-import { Button } from "../components/button";
+import { StudioRemoveButton } from "./studio-icon-buttons";
 import {
   Combobox,
   ComboboxChip,
@@ -52,20 +52,15 @@ export function StudioOptionsControl({
           <Badge variant="destructive" className="max-w-full whitespace-normal">
             Unknown option (removed)
           </Badge>
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            aria-label="Remove unknown option"
+          <StudioRemoveButton
+            label="Remove unknown option"
             onClick={() =>
               commit(
                 selected.map((option) => option.value),
                 index,
               )
             }
-          >
-            Remove
-          </Button>
+          />
         </div>
       ))}
       <Combobox
@@ -82,7 +77,9 @@ export function StudioOptionsControl({
             {(chosen: Option[]) => (
               <>
                 {chosen.map((option) => (
-                  <ComboboxChip key={option.value}>{option.label}</ComboboxChip>
+                  <ComboboxChip key={option.value} removeLabel={`Remove ${option.label}`}>
+                    {option.label}
+                  </ComboboxChip>
                 ))}
                 <ComboboxChipsInput
                   id={id}

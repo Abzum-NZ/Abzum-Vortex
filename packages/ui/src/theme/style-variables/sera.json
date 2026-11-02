@@ -308,5 +308,20 @@
   "--vs-51e3d374": "calc(var(--spacing, 0.25rem) * 3.5)",
   "--vs-e09fa815": "var(--vs-cc2eec68, calc(var(--spacing, 0.25rem) * 8))",
   "--vs-987304d0": "transparent",
-  "--vs-12593fff": "calc(var(--spacing, 0.25rem) * 3)"
+  "--vs-12593fff": "calc(var(--spacing, 0.25rem) * 3)",
+  "--vs-c0b1c001": "calc(var(--spacing, 0.25rem) * 10)",
+  "--vs-c0b1c002": "calc(var(--spacing, 0.25rem) * 1.5)",
+  "--vs-c0b1c003": "0px",
+  "--vs-c0b1c004": "calc(var(--spacing, 0.25rem) * 1.5)",
+  "--vs-c0b1c005": "0px",
+  "--vs-c0b1c009": "transparent",
+  "--vs-c0b1c00a": "var(--tw-ring-inset,) 0 0 0 calc(0px + var(--tw-ring-offset-width)) var(--tw-ring-color, currentcolor)",
+  "--vs-c0b1c00c": "calc(var(--spacing, 0.25rem) * 5.5)",
+  "--vs-c0b1c00d": "0px",
+  "--vs-c0b1c00e": "calc(var(--spacing, 0.25rem) * 2)",
+  "--vs-c0b1c014": "calc(var(--spacing, 0.25rem) * 3)",
+  "--vs-c0b1c015": "calc(var(--spacing, 0.25rem) * 2)",
+  "--vs-c0b1c016": "var(--font-weight-semibold, 600)",
+  "--vs-c0b1c017": "var(--tracking-wider, 0.05em)",
+  "--vs-c0b1c018": "uppercase"
 }

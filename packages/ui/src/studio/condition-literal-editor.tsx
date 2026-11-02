@@ -3,7 +3,7 @@ import { useId } from "react";
 import { FieldError, FieldGroup, FieldLegend, FieldSet } from "../components/field";
 import { Input } from "@vortex/ui/components/input";
 import { Textarea } from "@vortex/ui/components/textarea";
-import { StudioField } from "./studio-field";
+import { StudioField, useStudioFieldProblem } from "./studio-field";
 import { StudioOptionControl } from "./studio-setting-basic-controls";
 import { useDateFormatOptions } from "../display/date-format-context";
 import {
@@ -99,6 +99,12 @@ export function LiteralEditor({
   // One zone both shows and reads the local date and time, so an edit keeps the instant it names.
   const inputTimeZone = timeZone ?? "UTC";
   const error = errorForPath(validation, path);
+  // The grouped literals (date and time, money) report as a whole; every other literal reports
+  // through its own StudioField.
+  useStudioFieldProblem(
+    errorId,
+    semanticType === "date_time" || semanticType === "money" ? error : undefined,
+  );
   const label =
     collectionElementType && collectionElementType !== "text"
       ? `Values (list of ${collectionTypeLabel(collectionElementType)})`
@@ -225,7 +231,7 @@ export function LiteralEditor({
 
   if (semanticType === "date_time")
     return (
-      <FieldSet>
+      <FieldSet data-invalid={error === undefined ? undefined : true}>
         <FieldLegend variant="label">{label}</FieldLegend>
         <FieldGroup>
           <StudioField label="Local date and time (whole seconds)">
@@ -275,7 +281,7 @@ export function LiteralEditor({
     const amount = typeof current.amount === "string" ? current.amount : "";
     const currency = typeof current.currency === "string" ? current.currency : "";
     return (
-      <FieldSet>
+      <FieldSet data-invalid={error === undefined ? undefined : true}>
         <FieldLegend variant="label">{label}</FieldLegend>
         <FieldGroup>
           <StudioField label="Amount">

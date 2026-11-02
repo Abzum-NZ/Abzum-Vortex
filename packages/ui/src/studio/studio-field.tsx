@@ -82,6 +82,19 @@ export function StudioHelp({ hint, id }: Readonly<{ hint: string; id?: string }>
   );
 }
 
+/** Report one control's problem (or none) to the Studio problems list, and withdraw it on unmount. */
+export function useStudioFieldProblem(
+  id: string,
+  error: string | undefined,
+  onUndo?: (() => void) | undefined,
+) {
+  const report = useStudioFieldProblems()?.report;
+  useEffect(() => {
+    report?.(id, error === "" ? undefined : error, onUndo);
+    return () => report?.(id, undefined);
+  }, [id, error, onUndo, report]);
+}
+
 export function StudioField({
   label,
   hint,
@@ -100,11 +113,7 @@ export function StudioField({
   ) => ReactNode;
 }>) {
   const id = useId();
-  const report = useStudioFieldProblems()?.report;
-  useEffect(() => {
-    report?.(id, error === "" ? undefined : error, onUndo);
-    return () => report?.(id, undefined);
-  }, [id, error, onUndo, report]);
+  useStudioFieldProblem(id, error, onUndo);
   const description = [
     hint === undefined ? undefined : id + "-hint",
     error === undefined ? undefined : id + "-error",

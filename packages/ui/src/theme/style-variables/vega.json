@@ -119,5 +119,10 @@
   "--vs-216e2534": "calc(var(--spacing, 0.25rem) * 3)",
   "--vs-82ab5b45": "calc(var(--radius) * 0.8)",
   "--vs-fb0ecd91": "calc(var(--spacing, 0.25rem) * 3.5)",
-  "--vs-f6f51c7c": "calc(var(--spacing, 0.25rem) * 8)"
+  "--vs-f6f51c7c": "calc(var(--spacing, 0.25rem) * 8)",
+  "--vs-c0b1c001": "calc(var(--spacing, 0.25rem) * 9)",
+  "--vs-c0b1c002": "calc(var(--spacing, 0.25rem) * 1.5)",
+  "--vs-c0b1c004": "calc(var(--spacing, 0.25rem) * 1.5)",
+  "--vs-c0b1c005": "calc(var(--spacing, 0.25rem) * 1.5)",
+  "--vs-c0b1c00c": "calc(var(--spacing, 0.25rem) * 5.5)"
 }
