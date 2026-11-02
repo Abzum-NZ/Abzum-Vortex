@@ -5,6 +5,7 @@ import {
   recordsTableSavedViewsFeature,
   type SourceBlockPropertyValueContract,
 } from "@vortex/platform/schema";
+import { Alert, AlertDescription } from "../../components/alert";
 import { Button } from "../../components/button";
 import { RotateCcw, Trash2 } from "lucide-react";
 import { Input } from "../../components/input";
@@ -208,10 +209,12 @@ export function StudioSavedViewsEditor({
         </div>
       ))}
       {canvasStale && (
-        <p role="status" className="text-sm text-muted-foreground">
-          The table's source, query or columns changed after the canvas was arranged, so that
-          arrangement is no longer captured. Arrange the grid again to capture it.
-        </p>
+        <Alert role="status">
+          <AlertDescription>
+            The table's source, query or columns changed after the canvas was arranged, so that
+            arrangement is no longer captured. Arrange the grid again to capture it.
+          </AlertDescription>
+        </Alert>
       )}
       {canvasArrangement !== undefined && (
         <p className="text-sm">On the canvas now: {arrangementSummary(canvasArrangement)}</p>

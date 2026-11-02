@@ -2,6 +2,11 @@
 import { Alert, AlertDescription } from "@vortex/ui/components/alert";
 import { useState } from "react";
 import { Button } from "@vortex/ui/components/button";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@vortex/ui/components/collapsible";
 import { Input } from "@vortex/ui/components/input";
 import { Label } from "@vortex/ui/components/label";
 import type {
@@ -314,11 +319,12 @@ function BindingSettings({
   const defaults = defaultFlowBindingSettings(event);
   const changed = JSON.stringify(settings) !== JSON.stringify(defaults);
   return (
-    <details className="text-sm">
-      <summary className="cursor-pointer text-xs text-muted-foreground">
+    <Collapsible className="text-sm">
+      <CollapsibleTrigger render={<Button type="button" variant="ghost" size="xs" />}>
+        <Icon name="chevron-down" />
         Run settings{changed ? " (changed)" : ""}
-      </summary>
-      <div className="mt-2 space-y-2">
+      </CollapsibleTrigger>
+      <CollapsibleContent keepMounted className="mt-2 space-y-2">
         <div className="space-y-1">
           <Label className="text-xs" htmlFor={`condition-${event}`}>
             Start only when
@@ -447,7 +453,7 @@ function BindingSettings({
             Use the usual settings
           </Button>
         )}
-      </div>
-    </details>
+      </CollapsibleContent>
+    </Collapsible>
   );
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import type { ReactElement } from "react";
+import { Alert, AlertDescription } from "../components/alert";
 import { Button } from "../components/button";
 import { Plus } from "lucide-react";
 import {
@@ -85,11 +86,13 @@ export function StudioQueryPicker({
         ]}
       />
       {queries.length === 0 && recordQueries.length === 0 && (
-        <p role="status" className="text-sm">
-          {onNewQuery === undefined
-            ? "Add a query in the Data tab first."
-            : "Add a query with New query."}
-        </p>
+        <Alert role="status">
+          <AlertDescription>
+            {onNewQuery === undefined
+              ? "Add a query in the Data tab first."
+              : "Add a query with New query."}
+          </AlertDescription>
+        </Alert>
       )}
     </div>
   );

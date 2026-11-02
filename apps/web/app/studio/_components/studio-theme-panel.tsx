@@ -1,4 +1,5 @@
 "use client";
+import { Alert, AlertDescription } from "@vortex/ui/components/alert";
 import { useState } from "react";
 import type { SourceApplicationThemeSelection } from "@vortex/platform/schema";
 import { createVortexStyleRootProps, Icon, VORTEX_STYLES } from "@vortex/ui";
@@ -361,9 +362,9 @@ export function StudioThemePanel({
         </div>
       )}
       {pending && (
-        <p role="status" className="text-sm text-muted-foreground">
-          Checking the theme…
-        </p>
+        <Alert role="status">
+          <AlertDescription>Checking the theme…</AlertDescription>
+        </Alert>
       )}
       <StudioInspectorGroup title="Themes">
         <ToggleGroup

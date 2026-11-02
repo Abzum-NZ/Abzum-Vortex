@@ -1,5 +1,5 @@
 "use client";
-import { FieldLegend } from "@vortex/ui/components/field";
+import { FieldLegend, FieldSet } from "@vortex/ui/components/field";
 import { Alert, AlertDescription } from "@vortex/ui/components/alert";
 import {
   Suspense,
@@ -463,9 +463,9 @@ export function StudioMenuPanel({
         {/* A newly chosen icon library loads before its icons draw; only this list waits for it, not Studio. */}
         <Suspense
           fallback={
-            <p role="status" className="text-sm text-muted-foreground">
-              Loading the icon library…
-            </p>
+            <Alert role="status">
+              <AlertDescription>Loading the icon library…</AlertDescription>
+            </Alert>
           }
         >
           {source.body.navigation.length === 0 ? (
@@ -602,7 +602,7 @@ function StudioMenuEntryEditor({
           />
         )}
       </StudioField>
-      <fieldset className="space-y-1">
+      <FieldSet className="gap-1">
         <FieldLegend variant="label">
           Icon
           <StudioHelp hint="Drawn from the application's icon library, chosen in Theme." />
@@ -636,7 +636,7 @@ function StudioMenuEntryEditor({
             </Tooltip>
           ))}
         </ToggleGroup>
-      </fieldset>
+      </FieldSet>
       {item.type === "page" && (
         <StudioField
           label="Opens the page"

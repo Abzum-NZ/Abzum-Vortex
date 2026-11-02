@@ -19,6 +19,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@vortex/ui/components/
 import { Alert, AlertDescription, AlertTitle } from "@vortex/ui/components/alert";
 import { StudioPlaceList } from "./studio-used-in";
 import { Badge } from "@vortex/ui/components/badge";
+import { Spinner } from "@vortex/ui/components/spinner";
 import { Button } from "@vortex/ui/components/button";
 import { Label } from "@vortex/ui/components/label";
 import {
@@ -250,7 +251,7 @@ function SummaryResults({
   const totalColumns = result.totals.map((total) => ({ alias: total.alias, label: total.label }));
   return (
     <div className="space-y-3">
-      <p role="status" className="text-sm">
+      <p aria-live="polite" className="text-sm">
         {result.totalRowCount} {result.totalRowCount === 1 ? "record" : "records"} in all.
       </p>
       <Totals totals={result.totals} />
@@ -302,7 +303,7 @@ function SummaryResults({
       )}
       {result.groupColumns.length === 0 ? null : (
         <div className="flex items-center justify-between gap-2">
-          <p role="status" className="text-sm text-muted-foreground">
+          <p aria-live="polite" className="text-sm text-muted-foreground">
             {result.groups.length} {result.groups.length === 1 ? "group" : "groups"} on this page
           </p>
           <div className="flex gap-2">
@@ -453,13 +454,14 @@ function PreviewResults({
         </div>
       </div>
       {current === null ? (
-        <p role="status" className="text-sm text-muted-foreground">
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <Spinner />
           Reading records…
-        </p>
+        </div>
       ) : problem !== undefined ? (
-        <p role="status" className="text-sm">
-          {problem}
-        </p>
+        <Alert role="status">
+          <AlertDescription>{problem}</AlertDescription>
+        </Alert>
       ) : current.kind === "summary" ? (
         <SummaryResults result={current} onPage={setPage} />
       ) : (
@@ -499,7 +501,7 @@ function PreviewResults({
               </Table>
             </div>
             <div className="flex items-center justify-between gap-2">
-              <p role="status" className="text-sm text-muted-foreground">
+              <p aria-live="polite" className="text-sm text-muted-foreground">
                 {current.rows.length} {current.rows.length === 1 ? "record" : "records"} on this
                 page
               </p>
@@ -631,9 +633,9 @@ export function StudioDataCentre({
       <StudioDataEmpty title="Item removed" description="Choose another record type in Data." />
     );
   const results = unsaved ? (
-    <p role="status" className="text-sm">
-      Records will appear when this draft is saved.
-    </p>
+    <Alert role="status">
+      <AlertDescription>Records will appear when this draft is saved.</AlertDescription>
+    </Alert>
   ) : (
     <PreviewResults
       organizationId={organizationId}

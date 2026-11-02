@@ -9,6 +9,7 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from "@vortex/ui/components/empty";
+import { Alert, AlertDescription } from "@vortex/ui/components/alert";
 import { Button } from "@vortex/ui/components/button";
 import { useConfirm } from "@vortex/ui/components/confirm-dialog";
 import {
@@ -248,13 +249,17 @@ export function StudioRelationshipsSection({
         />
       )}
       {issues.length === 0 ? null : (
-        <ul role="alert" className="space-y-1 text-sm text-destructive">
-          {issues.map((issue, index) => (
-            <li key={index} className="break-words">
-              {issue}
-            </li>
-          ))}
-        </ul>
+        <Alert variant="destructive">
+          <AlertDescription>
+            <ul className="space-y-1">
+              {issues.map((issue, index) => (
+                <li key={index} className="break-words">
+                  {issue}
+                </li>
+              ))}
+            </ul>
+          </AlertDescription>
+        </Alert>
       )}
       {confirmDialog}
     </section>

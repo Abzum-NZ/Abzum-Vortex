@@ -1,5 +1,5 @@
 "use client";
-import { FieldLegend } from "@vortex/ui/components/field";
+import { FieldLegend, FieldSet } from "@vortex/ui/components/field";
 import { Alert, AlertDescription } from "@vortex/ui/components/alert";
 import { useState } from "react";
 import { Button } from "@vortex/ui/components/button";
@@ -95,7 +95,7 @@ function EntryRows({
     onChange(source === null ? others : [...others, { name, source }]);
   };
   return (
-    <fieldset className="space-y-2">
+    <FieldSet className="gap-2">
       <FieldLegend variant="label">{label}</FieldLegend>
       {named.map((entry) => (
         <StudioFlowValueControl
@@ -182,7 +182,7 @@ function EntryRows({
           Add an entry
         </Button>
       </StudioEntryList>
-    </fieldset>
+    </FieldSet>
   );
 }
 
@@ -215,7 +215,7 @@ function MessageActions({
   const change = (index: number, patch: Partial<StudioFlowActionDraft>) =>
     commit(actions.map((action, at) => (at === index ? { ...action, ...patch } : action)));
   return (
-    <fieldset className="space-y-2">
+    <FieldSet className="gap-2">
       <FieldLegend variant="label">
         {field.label}
         {field.help === undefined ? null : <StudioHelp hint={field.help} />}
@@ -295,7 +295,7 @@ function MessageActions({
             : "Add an action"}
         </Button>
       </StudioEntryList>
-    </fieldset>
+    </FieldSet>
   );
 }
 
@@ -370,7 +370,7 @@ function FieldValues({
     (candidate) => !entries.some((entry) => entry.field === candidate.key),
   );
   return (
-    <fieldset className="space-y-2">
+    <FieldSet className="gap-2">
       <FieldLegend variant="label">
         {field.label}
         {!field.required && <span className="text-xs text-muted-foreground"> Optional</span>}
@@ -429,9 +429,9 @@ function FieldValues({
             </Alert>
           )}
           {entries.length === 0 && fields.length > 0 && (
-            <p role="status" className="text-sm text-muted-foreground">
-              No field is set yet.
-            </p>
+            <Alert role="status">
+              <AlertDescription>No field is set yet.</AlertDescription>
+            </Alert>
           )}
           <StudioEntryList
             label={field.label}
@@ -505,7 +505,7 @@ function FieldValues({
           )}
         </>
       )}
-    </fieldset>
+    </FieldSet>
   );
 }
 
@@ -807,14 +807,16 @@ function ConditionControl({
     }
   };
   return (
-    <fieldset className="space-y-2" id={id} disabled={disabled}>
+    <FieldSet className="gap-2" id={id} disabled={disabled}>
       <FieldLegend variant="label" className="flex items-center gap-1">
         Condition
       </FieldLegend>
       {tree === undefined && (
-        <p role="status" className="text-sm text-muted-foreground">
-          Set a condition. The step keeps its saved condition until this is complete.
-        </p>
+        <Alert role="status">
+          <AlertDescription>
+            Set a condition. The step keeps its saved condition until this is complete.
+          </AlertDescription>
+        </Alert>
       )}
       <StudioConditionControls
         {...(tree === undefined ? {} : { value: tree })}
@@ -822,7 +824,7 @@ function ConditionControl({
         label="Condition"
         onChange={change}
       />
-    </fieldset>
+    </FieldSet>
   );
 }
 
@@ -1012,9 +1014,11 @@ function ControlForm({
       );
     case "none":
       return (
-        <p role="status" className="text-sm text-muted-foreground">
-          This step only groups the steps of its branches; add steps to them on the canvas.
-        </p>
+        <Alert role="status">
+          <AlertDescription>
+            This step only groups the steps of its branches; add steps to them on the canvas.
+          </AlertDescription>
+        </Alert>
       );
   }
 }

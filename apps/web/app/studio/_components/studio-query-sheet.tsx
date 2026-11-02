@@ -1,4 +1,5 @@
 "use client";
+import { Alert, AlertDescription } from "@vortex/ui/components/alert";
 import { useMemo, useState } from "react";
 import { StudioReferencePicker } from "@vortex/ui/studio";
 import { Button } from "@vortex/ui/components/button";
@@ -103,9 +104,11 @@ export function StudioQuerySheet({
         <div className="space-y-4 px-4">
           {step.kind === "name" ? (
             owned.length === 0 ? (
-              <p role="status" className="text-sm">
-                This application has no record types yet. Add one in the Data tab first.
-              </p>
+              <Alert role="status">
+                <AlertDescription>
+                  This application has no record types yet. Add one in the Data tab first.
+                </AlertDescription>
+              </Alert>
             ) : (
               <>
                 <div className="space-y-2">

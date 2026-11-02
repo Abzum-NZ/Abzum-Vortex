@@ -1,6 +1,7 @@
 "use client";
 import { useIntentPreload } from "../_lib/use-intent-preload";
 import dynamic from "next/dynamic";
+import { Spinner } from "@vortex/ui/components/spinner";
 import {
   applicationSourceDocumentSchema,
   canonicalJson,
@@ -20,7 +21,14 @@ import type { useStudioDraftTheme } from "./use-studio-draft-theme";
 
 const StudioThemePanel = dynamic(
   () => import("./studio-theme-panel").then((module) => module.StudioThemePanel),
-  { loading: () => <p role="status">Loading the theme editor…</p> },
+  {
+    loading: () => (
+      <div className="flex items-center gap-2 text-sm">
+        <Spinner />
+        Loading the theme editor…
+      </div>
+    ),
+  },
 );
 const preloadThemePanel = () => import("./studio-theme-panel");
 

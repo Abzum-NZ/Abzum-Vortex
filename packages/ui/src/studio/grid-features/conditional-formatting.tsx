@@ -21,6 +21,7 @@ import {
   type SourceBlockPropertyValueContract,
 } from "@vortex/platform/schema";
 import { Button } from "../../components/button";
+import { FieldSet } from "../../components/field";
 import { Label } from "../../components/label";
 import { Switch } from "../../components/switch";
 import { ToggleGroup, ToggleGroupItem } from "../../components/toggle-group";
@@ -538,7 +539,7 @@ function RuleEditor({
             : "Save the draft to edit this condition using its saved fields."}
         </p>
       ) : (
-        <fieldset disabled={disabled} className="min-w-0">
+        <FieldSet disabled={disabled} className="min-w-0">
           <StudioConditionControls
             label="Rule condition"
             context={context}
@@ -558,7 +559,7 @@ function RuleEditor({
               onChange({ condition: { kind: "condition", condition: written as never } });
             }}
           />
-        </fieldset>
+        </FieldSet>
       )}
       <ConditionalFormatStyleControls
         idPrefix={idPrefix}

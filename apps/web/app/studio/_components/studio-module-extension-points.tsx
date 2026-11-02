@@ -302,9 +302,9 @@ export function StudioModuleExtensionPoints({
         </Button>
       )}
       {uses === null ? (
-        <p role="status" className="text-sm text-muted-foreground">
-          Loading extension uses…
-        </p>
+        <Alert role="status">
+          <AlertDescription>Loading extension uses…</AlertDescription>
+        </Alert>
       ) : null}
       {confirmDialog}
     </StudioInspectorGroup>

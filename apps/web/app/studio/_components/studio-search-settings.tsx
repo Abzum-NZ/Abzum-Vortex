@@ -1,5 +1,5 @@
 "use client";
-import { FieldLegend } from "@vortex/ui/components/field";
+import { FieldLegend, FieldSet } from "@vortex/ui/components/field";
 import { Alert, AlertDescription } from "@vortex/ui/components/alert";
 import { useState } from "react";
 import {
@@ -154,7 +154,7 @@ export function StudioRecordTypeSearch({
         </p>
       ) : (
         <>
-          <fieldset className="space-y-2">
+          <FieldSet className="gap-2">
             <FieldLegend variant="label">Found by</FieldLegend>
             {eligible.map((field) => {
               const priority = form.fields[field.key];
@@ -202,7 +202,7 @@ export function StudioRecordTypeSearch({
                 </div>
               );
             })}
-          </fieldset>
+          </FieldSet>
           <div className="space-y-2">
             <Label htmlFor={`search-${reference}-title`} className="text-sm">
               A result is named by
@@ -254,13 +254,17 @@ export function StudioRecordTypeSearch({
         </p>
       ) : null}
       {issues.length === 0 ? null : (
-        <ul role="alert" className="space-y-1 text-sm text-destructive">
-          {issues.map((issue, index) => (
-            <li key={index} className="break-words">
-              {issue}
-            </li>
-          ))}
-        </ul>
+        <Alert variant="destructive">
+          <AlertDescription>
+            <ul className="space-y-1">
+              {issues.map((issue, index) => (
+                <li key={index} className="break-words">
+                  {issue}
+                </li>
+              ))}
+            </ul>
+          </AlertDescription>
+        </Alert>
       )}
     </section>
   );

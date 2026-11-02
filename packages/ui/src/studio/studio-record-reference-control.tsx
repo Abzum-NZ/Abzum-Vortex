@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, type ReactElement } from "react";
+import { Alert, AlertDescription } from "../components/alert";
 import { Button } from "../components/button";
 import { ChevronsDown, RotateCcw } from "lucide-react";
 import { useRecordChoicePager } from "../controls/use-record-choice-pager";
@@ -98,9 +99,9 @@ export function StudioRecordReferenceControl({
       />
       {recordType !== "" &&
         (read === null ? (
-          <p role="status" className="text-sm text-muted-foreground">
-            Records can&apos;t be read here.
-          </p>
+          <Alert role="status">
+            <AlertDescription>Records can&apos;t be read here.</AlertDescription>
+          </Alert>
         ) : (
           <StudioRecordChoices
             key={recordType}
@@ -206,9 +207,9 @@ function StudioRecordChoicesPage({
         onChange={onPick}
       />
       {note !== undefined && (
-        <p role="status" className="text-sm text-muted-foreground">
-          {note}
-        </p>
+        <Alert role="status">
+          <AlertDescription>{note}</AlertDescription>
+        </Alert>
       )}
       <div className="flex flex-wrap gap-1">
         {pager.next !== undefined && (

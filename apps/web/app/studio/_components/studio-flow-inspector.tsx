@@ -304,9 +304,11 @@ export function StudioFlowInspector({
           <AlertDescription>{problem}</AlertDescription>
         </Alert>
       )}
-      <p role="status" className="text-sm">
-        {status}
-      </p>
+      {status === "" ? null : (
+        <Alert role="status">
+          <AlertDescription>{status}</AlertDescription>
+        </Alert>
+      )}
     </>
   );
 
@@ -343,9 +345,9 @@ export function StudioFlowInspector({
           }}
         />
         {ownerNote === undefined ? null : (
-          <p role="status" className="text-sm text-muted-foreground">
-            {ownerNote}
-          </p>
+          <Alert role="status">
+            <AlertDescription>{ownerNote}</AlertDescription>
+          </Alert>
         )}
         {messages}
         {confirmDialog}
