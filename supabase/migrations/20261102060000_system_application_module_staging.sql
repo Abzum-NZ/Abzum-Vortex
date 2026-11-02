@@ -2,16 +2,21 @@ set role vortex_owner;
 
 -- FIX-SYSTEM-APP-STAGING: choosing a platform system Application's record type as a Data grid
 -- source in Studio adds a query to its inline Module, so the preview stages that Module and draws
--- it. (1) A person who may edit a platform system Application (the draft guard demands
--- platform.organization.system_applications.manage for it) stages its inline Module like an
--- ordinary Application's: stage_owned_module_source relies on that guard alone. create_root is
--- unchanged (the flow never creates a Module root). (2) The preview resolves a query over a system
--- projection (the platform's live read model, with no preview copy) from the preview's own Module
--- release, so a query the draft just added resolves, over the INSTALLED record type: a draft whose
--- record type differs is refused. The installed-release fallback in prepare_module_query_internal
--- and read_module_query_inputs is removed. (3) The record action context of a system projection
--- read from a preview takes its record type, fields, permissions and storage proof from the
--- active installation's release, never the draft's.
+-- it.
+-- (1) stage_owned_module_source relies on the draft guard alone: a person who may edit a platform
+-- system Application (the guard demands platform.organization.system_applications.manage for it)
+-- stages its inline Module like an ordinary Application's. Its refusal carries the hint
+-- module_source_not_owned. create_root is unchanged.
+-- (2) A preview resolves a query over a system projection (the platform's live read model, with no
+-- preview copy) from the preview's own Module release, but over the INSTALLED release's record type
+-- and the permissions that apply to it (the Module's and the Application's): the new
+-- read_installed_projection_internal reads them from the stored releases and returns null when the
+-- draft's record type or permissions differ, or when the previewed Application has no active
+-- installation binding the Module. The installed-release fallback in prepare_module_query_internal
+-- and read_module_query_inputs is removed.
+-- (3) resolve_record_action_context_internal takes a projection read from a preview from that same
+-- evidence (installed record type, permissions, release revision and storage proof) and refuses
+-- cleanly when it is null.
 -- No earlier migration rewrites any of these functions in place (the regprocedures were
 -- searched): the bodies below are the whole definitions and equal the canonical files in
 -- supabase/schemas.
@@ -92,7 +97,8 @@ begin
       module_row.owner_application_root_id, module_row.organization_id, p_source
     ) then
     raise exception using errcode = '22023',
-      message = 'A Module source must be an inline Module of its owning Application';
+      message = 'A Module source must be an inline Module of its owning Application',
+      hint = 'module_source_not_owned';
   end if;
 
   update vortex_definition.drafts as draft
@@ -154,6 +160,173 @@ reset role;
 
 set role vortex_record_adapter;
 
+create or replace function vortex_record.record_type_permissions_internal(
+  p_content jsonb,
+  p_record_type_id uuid
+)
+returns jsonb
+language sql
+immutable
+security invoker
+set search_path = ''
+as $function$
+  select coalesce(
+    pg_catalog.jsonb_agg(
+      item.value
+      order by item.value ->> 'permissionId', item.value ->> 'actionKind', item.value::text
+    ),
+    '[]'::jsonb
+  )
+  from pg_catalog.jsonb_array_elements(
+    case when pg_catalog.jsonb_typeof(p_content -> 'permissions') = 'array'
+      then p_content -> 'permissions' else '[]'::jsonb end
+  ) as item(value)
+  where pg_catalog.lower(item.value ->> 'recordTypeId') = p_record_type_id::text
+$function$;
+
+alter function vortex_record.record_type_permissions_internal(jsonb, uuid)
+  owner to vortex_record_adapter;
+
+revoke all on function vortex_record.record_type_permissions_internal(jsonb, uuid)
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
+grant execute on function vortex_record.record_type_permissions_internal(jsonb, uuid)
+  to vortex_record_adapter;
+
+comment on function vortex_record.record_type_permissions_internal(jsonb, uuid) is
+  'Private: the permissions a release content declares for one record type, in a canonical order, for comparing a preview with the installed release.';
+
+create or replace function vortex_record.read_installed_projection_internal(
+  p_preview_installation jsonb,
+  p_module_root_id uuid,
+  p_record_type_id uuid
+)
+returns jsonb
+language plpgsql
+stable
+security invoker
+set search_path = ''
+as $function$
+declare
+  organization_id_value uuid;
+  application_root_id_value uuid;
+  active_installation jsonb;
+  installed_module_revision bigint;
+  preview_module_revision bigint;
+  installed_application_revision bigint;
+  preview_application_revision bigint;
+  installed_content jsonb;
+  installed_record_content jsonb;
+  preview_content jsonb;
+  preview_record_content jsonb;
+  installed_application_content jsonb;
+  installed_application_record_content jsonb;
+  preview_application_content jsonb;
+  preview_application_record_content jsonb;
+  installed_type jsonb;
+  preview_type jsonb;
+  installed_record_type jsonb;
+  preview_record_type jsonb;
+begin
+  organization_id_value := (p_preview_installation ->> 'organizationId')::uuid;
+  application_root_id_value := (p_preview_installation ->> 'applicationRootId')::uuid;
+  -- No active installation of the previewed Application that binds the Module: nothing installed
+  -- to read, so the preview is refused cleanly.
+  if not exists (
+    select 1
+    from vortex_definition.installation_bindings as binding
+    where binding.organization_id = organization_id_value
+      and binding.application_root_id = application_root_id_value
+      and binding.module_root_id = p_module_root_id
+      and binding.state = 'active'
+  ) then
+    return null;
+  end if;
+  active_installation := vortex_definition.read_active_installation_for_scope_internal(
+    organization_id_value, application_root_id_value
+  );
+  select (item.value ->> 'moduleReleaseRevision')::bigint
+  into installed_module_revision
+  from pg_catalog.jsonb_array_elements(active_installation -> 'moduleBindings') as item(value)
+  where pg_catalog.lower(item.value ->> 'moduleRootId') = p_module_root_id::text;
+  select (item.value ->> 'moduleReleaseRevision')::bigint
+  into preview_module_revision
+  from pg_catalog.jsonb_array_elements(p_preview_installation -> 'moduleBindings') as item(value)
+  where pg_catalog.lower(item.value ->> 'moduleRootId') = p_module_root_id::text;
+  installed_application_revision := (active_installation ->> 'applicationReleaseRevision')::bigint;
+  preview_application_revision := (p_preview_installation ->> 'applicationReleaseRevision')::bigint;
+  if installed_module_revision is null or preview_module_revision is null
+    or installed_application_revision is null or preview_application_revision is null then
+    return null;
+  end if;
+
+  -- The installed release is read from the stored releases only; the preview's is the rehearsed one.
+  select release.compilation_output #> '{canonical,content}', release.record_content
+  into installed_content, installed_record_content
+  from vortex_definition.releases as release
+  where release.root_id = p_module_root_id and release.release_revision = installed_module_revision;
+  select release.compilation_output #> '{canonical,content}', release.record_content
+  into preview_content, preview_record_content
+  from vortex_definition.runtime_releases as release
+  where release.root_id = p_module_root_id and release.release_revision = preview_module_revision;
+  select release.compilation_output #> '{canonical,content}', release.record_content
+  into installed_application_content, installed_application_record_content
+  from vortex_definition.releases as release
+  where release.root_id = application_root_id_value
+    and release.release_revision = installed_application_revision;
+  select release.compilation_output #> '{canonical,content}', release.record_content
+  into preview_application_content, preview_application_record_content
+  from vortex_definition.runtime_releases as release
+  where release.root_id = application_root_id_value
+    and release.release_revision = preview_application_revision;
+
+  select item.value into installed_type
+  from pg_catalog.jsonb_array_elements(installed_content -> 'recordTypes') as item(value)
+  where pg_catalog.lower(item.value ->> 'recordTypeId') = p_record_type_id::text;
+  select item.value into preview_type
+  from pg_catalog.jsonb_array_elements(preview_content -> 'recordTypes') as item(value)
+  where pg_catalog.lower(item.value ->> 'recordTypeId') = p_record_type_id::text;
+  select item.value into installed_record_type
+  from pg_catalog.jsonb_array_elements(installed_record_content -> 'recordTypes') as item(value)
+  where pg_catalog.lower(item.value ->> 'recordTypeId') = p_record_type_id::text;
+  select item.value into preview_record_type
+  from pg_catalog.jsonb_array_elements(preview_record_content -> 'recordTypes') as item(value)
+  where pg_catalog.lower(item.value ->> 'recordTypeId') = p_record_type_id::text;
+
+  -- The draft contributes only its query: its record type and the permissions that apply to the
+  -- projection (the Module's and the Application's) must equal the installed release's.
+  if installed_type is null or installed_type is distinct from preview_type
+    or installed_record_type is null or installed_record_type is distinct from preview_record_type
+    or vortex_record.record_type_permissions_internal(installed_content, p_record_type_id)
+      is distinct from vortex_record.record_type_permissions_internal(preview_content, p_record_type_id)
+    or vortex_record.record_type_permissions_internal(installed_record_content, p_record_type_id)
+      is distinct from vortex_record.record_type_permissions_internal(preview_record_content, p_record_type_id)
+    or vortex_record.record_type_permissions_internal(installed_application_content, p_record_type_id)
+      is distinct from vortex_record.record_type_permissions_internal(preview_application_content, p_record_type_id)
+    or vortex_record.record_type_permissions_internal(installed_application_record_content, p_record_type_id)
+      is distinct from vortex_record.record_type_permissions_internal(preview_application_record_content, p_record_type_id) then
+    return null;
+  end if;
+
+  return pg_catalog.jsonb_build_object(
+    'installation', active_installation,
+    'moduleReleaseRevision', installed_module_revision,
+    'recordType', installed_type,
+    'recordContent', installed_record_content
+  );
+end
+$function$;
+
+alter function vortex_record.read_installed_projection_internal(jsonb, uuid, uuid)
+  owner to vortex_record_adapter;
+
+revoke all on function vortex_record.read_installed_projection_internal(jsonb, uuid, uuid)
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
+grant execute on function vortex_record.read_installed_projection_internal(jsonb, uuid, uuid)
+  to vortex_record_adapter;
+
+comment on function vortex_record.read_installed_projection_internal(jsonb, uuid, uuid) is
+  'Private: for a system projection read from a preview, the installed Module release''s record type and record content when the preview''s record type and the permissions that apply to it (the Module''s and the Application''s) equal the installed ones, else null; null too when the previewed Application has no active installation binding the Module.';
+
 create or replace function vortex_record.resolve_preview_module_query_internal(
   p_module_root_id uuid,
   p_query_id uuid
@@ -168,7 +341,6 @@ declare
   nil_uuid constant uuid := '00000000-0000-0000-0000-000000000000'::uuid;
   installation jsonb;
   installed jsonb;
-  installed_release_revision bigint;
   module_bindings jsonb;
   storage_identities jsonb;
   preview_installation_id uuid;
@@ -406,26 +578,12 @@ begin
   -- A system projection has no preview copy: it is the platform's live read model, which a
   -- preview reads on the live path under the reader's own live access. Its record type, fields and
   -- permissions are the installed release's, never the draft's: the draft contributes only its
-  -- query, and a draft whose record type differs from the installed one is refused.
+  -- query, and a draft whose record type or permissions differ from the installed ones is refused.
   if record_type_item ? 'systemProjection' then
-    select (item.value ->> 'moduleReleaseRevision')::bigint
-    into installed_release_revision
-    from pg_catalog.jsonb_array_elements(
-      vortex_definition.read_active_installation_for_scope_internal(
-        (installation ->> 'organizationId')::uuid, (installation ->> 'applicationRootId')::uuid
-      ) -> 'moduleBindings'
-    ) as item(value)
-    where pg_catalog.lower(item.value ->> 'moduleRootId') = record_type_module_root_id::text;
-    select item.value
-    into installed
-    from vortex_definition.releases as release
-    cross join lateral pg_catalog.jsonb_array_elements(
-      release.compilation_output #> '{canonical,content,recordTypes}'
-    ) as item(value)
-    where release.root_id = record_type_module_root_id
-      and release.release_revision = installed_release_revision
-      and pg_catalog.lower(item.value ->> 'recordTypeId') = record_type_id::text;
-    if installed is null or installed is distinct from record_type_item then
+    installed := vortex_record.read_installed_projection_internal(
+      installation, record_type_module_root_id, record_type_id
+    );
+    if installed is null or installed -> 'recordType' is distinct from record_type_item then
       return null;
     end if;
     return pg_catalog.jsonb_build_object(
@@ -434,7 +592,7 @@ begin
       'query', query_item,
       'recordTypeId', record_type_id,
       'recordTypeModuleRootId', record_type_module_root_id,
-      'recordType', installed
+      'recordType', installed -> 'recordType'
     );
   end if;
   release_storage_contract_id_text := record_type_item ->> 'storageContractId';
@@ -530,7 +688,7 @@ revoke all on function vortex_record.resolve_preview_module_query_internal(uuid,
 grant execute on function vortex_record.resolve_preview_module_query_internal(uuid, uuid)
   to vortex_record_adapter;
 comment on function vortex_record.resolve_preview_module_query_internal(uuid, uuid) is
-  'Private preview-only resolver for one query and its exact pinned record type and active preview storage identity (a system projection resolves the draft''s query over the installed record type, with no preview storage); it validates the current human-owned unexpired preview and never falls back to an active installation.';
+  'Private preview-only resolver for one query and its exact pinned record type and active preview storage identity (a system projection resolves the draft''s query over the installed record type, refusing a draft whose record type or permissions differ, with no preview storage); it validates the current human-owned unexpired preview and never falls back to an active installation.';
 
 create or replace function vortex_record.read_module_query_inputs(
   p_module_root_id uuid,
@@ -1387,7 +1545,7 @@ declare
   preview_installation jsonb;
   preview_installation_id_value uuid;
   target_content jsonb;
-  installed_release_revision bigint;
+  projection_evidence jsonb;
   binding_item jsonb;
   module_content jsonb;
   application_content jsonb;
@@ -1495,37 +1653,24 @@ begin
     end if;
     if preview_installation is not null then
       -- Its record type, fields and permissions are the installed release's, never the draft's: a
-      -- preview whose record type differs from the installed one is refused.
-      -- A preview request never reaches the live installation through the current-installation
-      -- reader, so the active installation of the previewed Application is read by its scope.
-      installation := vortex_definition.read_active_installation_for_scope_internal(
-        (preview_installation ->> 'organizationId')::uuid,
-        (preview_installation ->> 'applicationRootId')::uuid
+      -- preview whose record type or permissions differ from the installed ones, or whose
+      -- Application has no active installation of the Module, is refused.
+      projection_evidence := vortex_record.read_installed_projection_internal(
+        preview_installation, target_module_root_id, p_record_type_id
       );
-      select (item.value ->> 'moduleReleaseRevision')::bigint
-      into installed_release_revision
-      from pg_catalog.jsonb_array_elements(installation -> 'moduleBindings') as item(value)
-      where (item.value ->> 'moduleRootId')::uuid = target_module_root_id;
-      if installed_release_revision is null then
+      if projection_evidence is null then
         return pg_catalog.jsonb_build_object('outcome', 'refused');
       end if;
-      select release.record_content into strict target_content
-      from vortex_definition.runtime_releases as release
-      where release.root_id = target_module_root_id
-        and release.release_revision = installed_release_revision;
-      select item.value into candidate_record_type_value
-      from pg_catalog.jsonb_array_elements(target_content -> 'recordTypes') as item(value)
-      where (item.value ->> 'recordTypeId')::uuid = p_record_type_id;
-      if not found or candidate_record_type_value is distinct from record_type_value then
-        return pg_catalog.jsonb_build_object('outcome', 'refused');
-      end if;
+      installation := projection_evidence -> 'installation';
       target_content := vortex_record.with_installed_record_contributions_internal(
-        target_content, (context_value ->> 'organizationId')::uuid, target_module_root_id
+        projection_evidence -> 'recordContent',
+        (context_value ->> 'organizationId')::uuid,
+        target_module_root_id
       );
       select item.value into strict record_type_value
       from pg_catalog.jsonb_array_elements(target_content -> 'recordTypes') as item(value)
       where (item.value ->> 'recordTypeId')::uuid = p_record_type_id;
-      target_release_revision := installed_release_revision;
+      target_release_revision := (projection_evidence ->> 'moduleReleaseRevision')::bigint;
       release_storage_contract_id := (record_type_value ->> 'storageContractId')::uuid;
       target_storage_contract_id := release_storage_contract_id;
     end if;

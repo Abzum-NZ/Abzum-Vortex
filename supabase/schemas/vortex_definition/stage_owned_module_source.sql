@@ -74,7 +74,8 @@ begin
       module_row.owner_application_root_id, module_row.organization_id, p_source
     ) then
     raise exception using errcode = '22023',
-      message = 'A Module source must be an inline Module of its owning Application';
+      message = 'A Module source must be an inline Module of its owning Application',
+      hint = 'module_source_not_owned';
   end if;
 
   update vortex_definition.drafts as draft

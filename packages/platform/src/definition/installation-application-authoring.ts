@@ -23,7 +23,10 @@ import {
   describeSourceChange,
   summarizeSourceChange,
 } from "./source-change-summary";
-import type { FlowRefusalFeedback } from "../workflows/flow-refusal-feedback";
+import {
+  flowRefusalFeedbackSentences,
+  type FlowRefusalFeedback,
+} from "../workflows/flow-refusal-feedback";
 import { minimumApplicationSource } from "./application-authoring/new-application-source";
 import { readApplicationDefinitionDraft } from "./definition-draft-read";
 import { definitionPublicationConfirmationSchema } from "./definition-store-contracts";
@@ -85,6 +88,11 @@ const problemOf = (
     return {
       status: "no_change",
       problem: "Nothing has changed since the last version, so there is nothing to publish.",
+    };
+  if (failure.reason === "application_root_not_ordinary")
+    return {
+      status: "blocked",
+      problem: flowRefusalFeedbackSentences.application_publication_platform,
     };
   if (failure.reason === "release_permission_missing")
     return {
@@ -319,7 +327,11 @@ export const createApplicationAuthoringService = (environment: ApplicationAuthor
       if (published.kind === "temporarily_unavailable") return { kind: "temporarily_unavailable" };
       if (published.reason === "recent_authentication_required")
         return { kind: "unavailable", code: "recent_authentication_required" };
-      return refuse("application_publication_blocked");
+      return refuse(
+        published.reason === "application_root_not_ordinary"
+          ? "application_publication_platform"
+          : "application_publication_blocked",
+      );
     },
   };
 };

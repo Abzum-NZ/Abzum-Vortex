@@ -147,7 +147,12 @@ const failure = (error: unknown, reported = false): PreviewFailure => {
       if (!reported) console.error("[studio] preview refused by the database", error);
       return { kind: "refused", reason: "permission_refused" };
     }
-    if (sqlstate === "22023") {
+    // Only the staging refusal (it carries its own hint) is a problem with the person's saved
+    // change; any other 22023 is a platform fault and is retried as unavailable.
+    if (
+      sqlstate === "22023" &&
+      (current as { readonly hint?: unknown }).hint === "module_source_not_owned"
+    ) {
       if (!reported) console.error("[studio] preview refused by the database", error);
       return {
         kind: "not_runnable",

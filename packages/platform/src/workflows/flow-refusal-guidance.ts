@@ -22,6 +22,7 @@ const platformGuidanceCodes: ReadonlySet<string> = new Set<FlowRefusalFeedbackCo
   "application_input_invalid",
   "application_publication_no_change",
   "application_publication_blocked",
+  "application_publication_platform",
   "definition_drafts_manage_required",
   "applications_manage_required",
   "installation_delegation_required",

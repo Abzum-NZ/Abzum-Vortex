@@ -15,7 +15,7 @@ declare
   preview_installation jsonb;
   preview_installation_id_value uuid;
   target_content jsonb;
-  installed_release_revision bigint;
+  projection_evidence jsonb;
   binding_item jsonb;
   module_content jsonb;
   application_content jsonb;
@@ -123,37 +123,24 @@ begin
     end if;
     if preview_installation is not null then
       -- Its record type, fields and permissions are the installed release's, never the draft's: a
-      -- preview whose record type differs from the installed one is refused.
-      -- A preview request never reaches the live installation through the current-installation
-      -- reader, so the active installation of the previewed Application is read by its scope.
-      installation := vortex_definition.read_active_installation_for_scope_internal(
-        (preview_installation ->> 'organizationId')::uuid,
-        (preview_installation ->> 'applicationRootId')::uuid
+      -- preview whose record type or permissions differ from the installed ones, or whose
+      -- Application has no active installation of the Module, is refused.
+      projection_evidence := vortex_record.read_installed_projection_internal(
+        preview_installation, target_module_root_id, p_record_type_id
       );
-      select (item.value ->> 'moduleReleaseRevision')::bigint
-      into installed_release_revision
-      from pg_catalog.jsonb_array_elements(installation -> 'moduleBindings') as item(value)
-      where (item.value ->> 'moduleRootId')::uuid = target_module_root_id;
-      if installed_release_revision is null then
+      if projection_evidence is null then
         return pg_catalog.jsonb_build_object('outcome', 'refused');
       end if;
-      select release.record_content into strict target_content
-      from vortex_definition.runtime_releases as release
-      where release.root_id = target_module_root_id
-        and release.release_revision = installed_release_revision;
-      select item.value into candidate_record_type_value
-      from pg_catalog.jsonb_array_elements(target_content -> 'recordTypes') as item(value)
-      where (item.value ->> 'recordTypeId')::uuid = p_record_type_id;
-      if not found or candidate_record_type_value is distinct from record_type_value then
-        return pg_catalog.jsonb_build_object('outcome', 'refused');
-      end if;
+      installation := projection_evidence -> 'installation';
       target_content := vortex_record.with_installed_record_contributions_internal(
-        target_content, (context_value ->> 'organizationId')::uuid, target_module_root_id
+        projection_evidence -> 'recordContent',
+        (context_value ->> 'organizationId')::uuid,
+        target_module_root_id
       );
       select item.value into strict record_type_value
       from pg_catalog.jsonb_array_elements(target_content -> 'recordTypes') as item(value)
       where (item.value ->> 'recordTypeId')::uuid = p_record_type_id;
-      target_release_revision := installed_release_revision;
+      target_release_revision := (projection_evidence ->> 'moduleReleaseRevision')::bigint;
       release_storage_contract_id := (record_type_value ->> 'storageContractId')::uuid;
       target_storage_contract_id := release_storage_contract_id;
     end if;
