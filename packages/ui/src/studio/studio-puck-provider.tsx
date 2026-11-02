@@ -61,6 +61,7 @@ import { StudioDrawerItem } from "./studio-puck-drawer";
 import { studioPuckWords } from "./studio-puck-words";
 import type { StudioCanvasRecordsReader } from "./use-studio-canvas-records";
 import { useStudioCanvasMetadata } from "./use-studio-canvas-metadata";
+import { studioCanvasReferences, type StudioCanvasReferences } from "./studio-canvas-permissions";
 
 export { studioScreens, useStudioScreen } from "./studio-canvas-screen";
 export type { StudioCanvasFrame } from "./studio-canvas-projection";
@@ -221,6 +222,37 @@ export function StudioPuckProvider({
   // here, because the model and the metadata that depend on it are made outside the editor.
   const [breakpoint, setBreakpoint] = useState<Breakpoint>(studioInitialBreakpoint);
   const model = useStudioCanvasModel(input, breakpoint);
+  const references = useMemo(
+    () => studioCanvasReferences(input.source, model.catalogue),
+    [input.source, model.catalogue],
+  );
+  const referencesRef = useRef(references);
+  referencesRef.current = references;
+  // The config remains stable while its permission resolver reads the current draft's map.
+  const config = useMemo(
+    (): Config =>
+      ({
+        ...model.config,
+        components: Object.fromEntries(
+          Object.entries(model.config.components).map(([type, component]) => [
+            type,
+            {
+              ...component,
+              resolvePermissions: (data: { props: { id: string } }) => {
+                const reasons = referencesRef.current[data.props.id];
+                return {
+                  ...(component.permissions?.insert === false ? { insert: false } : {}),
+                  ...(reasons?.delete === undefined ? {} : { delete: false }),
+                  ...(reasons?.drag === undefined ? {} : { drag: false }),
+                  ...(reasons?.duplicate === undefined ? {} : { duplicate: false }),
+                };
+              },
+            },
+          ]),
+        ),
+      }) as Config,
+    [model.config],
+  );
   const [refused, setRefused] = useState<Readonly<{ area: string; message: string }> | null>(null);
   const [resync, setResync] = useState(0);
   // Puck's callbacks run while Studio shows its own data or selection: they must not echo back.
@@ -318,10 +350,11 @@ export function StudioPuckProvider({
   const metadata = useMemo(
     (): StudioCanvasMetadata => ({
       breakpoint,
+      references,
       readSettings: compiledItemSettings,
       ...canvasMetadata,
     }),
-    [breakpoint, canvasMetadata],
+    [breakpoint, canvasMetadata, references],
   );
   // The application holds every block it may: Duplicate and every other insert are off.
   const placed =
@@ -355,7 +388,7 @@ export function StudioPuckProvider({
   return (
     <StudioCanvasContext.Provider value={value}>
       <Puck
-        config={model.config}
+        config={config}
         data={initial}
         onChange={change}
         onAction={onAction}
@@ -370,7 +403,8 @@ export function StudioPuckProvider({
         dictionary={studioPuckWords}
       >
         <StudioPuckSync
-          config={model.config}
+          config={config}
+          references={references}
           data={shown}
           resync={resync}
           area={model.area}
@@ -399,6 +433,7 @@ export function StudioPuckProvider({
  */
 function StudioPuckSync({
   config,
+  references,
   data,
   resync,
   area,
@@ -415,6 +450,7 @@ function StudioPuckSync({
 }: Readonly<{
   /** The config the page on the canvas is drawn with. */
   config: Config;
+  references: StudioCanvasReferences;
   data: Data;
   /** The page and content area on the canvas. */
   area: string;
@@ -439,6 +475,9 @@ function StudioPuckSync({
   const recorded = usePuckSelector((state) => state.history.histories.length);
   // The config Puck holds: it takes the page's config a moment after this component sees it.
   const held = usePuckSelector((state) => state.config);
+  useEffect(() => {
+    getPuck().refreshPermissions();
+  }, [getPuck, held, references]);
   // The config Puck's data was last walked under; Puck walked its first data under `held`.
   const walked = useRef(held);
   const latestData = useRef(data);

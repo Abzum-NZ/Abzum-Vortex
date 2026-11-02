@@ -87,6 +87,8 @@ export type ApplicationUseTarget =
   | Readonly<{ kind: "page"; pageAlias: string }>
   /** A value a page declares: its flows, displays and conditions read or set it. */
   | Readonly<{ kind: "page_value"; pageAlias: string; name: string }>
+  /** A block used as the source of another block's query input. */
+  | Readonly<{ kind: "placement"; placementAlias: string }>
   /** A component a message is sent to (a Notice slot, or a form or section a message sits under). */
   | Readonly<{ kind: "message_target"; placementAlias: string }>
   | Readonly<{ kind: "navigation"; navigationItemAlias: string }>
@@ -526,6 +528,8 @@ const applicationUseTargetKey = (target: ApplicationUseTarget): string => {
       return `page_value:${target.pageAlias}:${target.name}`;
     case "message_target":
       return `message_target:${target.placementAlias}`;
+    case "placement":
+      return `placement:${target.placementAlias}`;
     case "navigation":
       return `navigation:${target.navigationItemAlias}`;
     case "choice_option":
@@ -1331,6 +1335,16 @@ const messageTargetUses = (source: Source, index: UseIndex, placementAlias: stri
     })
     .map(({ path }) => ({ path, label: flowName(source, path)! }));
 
+/** Query bindings name the control whose value supplies an input. */
+const placementUses = (source: Source, index: UseIndex, alias: string): Use[] =>
+  occurrences(index, alias)
+    .filter(({ path, key }) => {
+      if (key !== "control_placement" || path.at(-3) !== "query_parameters") return false;
+      const binding = at(source, path.slice(0, -1));
+      return isObject(binding) && binding.source === "control";
+    })
+    .map(({ path }) => ({ path }));
+
 /**
  * Where the application is entered or offered: its home page, each public address, the role a
  * first install offers by default and every top-level menu entry.
@@ -1384,6 +1398,8 @@ const usesOf = (source: Source, index: UseIndex, target: ApplicationUseTarget): 
       return pageValueUses(source, index, target.pageAlias, target.name);
     case "message_target":
       return messageTargetUses(source, index, target.placementAlias);
+    case "placement":
+      return placementUses(source, index, target.placementAlias);
     case "navigation":
       return navigationUses(index, target.navigationItemAlias);
     case "choice_option":

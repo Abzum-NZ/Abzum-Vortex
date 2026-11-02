@@ -12,7 +12,6 @@ import { Label } from "../components/label";
 import { Icon } from "../icons";
 import { studioPageAreaLabel } from "./application-page-layout";
 import type { StudioCompileFailure } from "./compile-failure";
-import { StudioCanvasActions } from "./studio-canvas-actions";
 import { useStudioScreen } from "./studio-canvas-screen";
 import { StudioReferencePicker } from "./studio-reference-picker";
 import { useStudioCanvas } from "./studio-puck-provider";
@@ -174,9 +173,7 @@ export function StudioCanvasView({
               arrangeable={model.arrangeable}
               onDone={() => onArrangeGrid?.(false)}
             />
-          ) : (
-            <StudioCanvasActions />
-          )}
+          ) : null}
         </div>
         {compileFailure == null ? null : <CompileFailureNotice failure={compileFailure} />}
         {refusal.length === 0 ? null : (

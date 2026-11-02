@@ -1,6 +1,8 @@
 import type { Data } from "@puckeditor/core";
 import {
   applicationSourceDocumentSchema,
+  applicationUses,
+  describeApplicationUsers,
   definitionLimitMessage,
   definitionLimits,
   removeFlowBindingsOf,
@@ -91,6 +93,16 @@ export const applyStudioCanvasChange = (
       throw new TypeError("The selected page is unavailable.");
     const kept = storedZoneAliases(editedSlot);
     const removed = new Set([...storedZoneAliases(targetSlot)].filter((alias) => !kept.has(alias)));
+    for (const alias of removed) {
+      const users = applicationUses(current, { kind: "placement", placementAlias: alias }).filter(
+        (place) => place.open.kind !== "placement" || !removed.has(place.open.placementAlias),
+      );
+      if (users.length > 0)
+        return {
+          kind: "refused",
+          message: `This block is used by ${describeApplicationUsers(users)}. Change that reference first.`,
+        };
+    }
     // Deleting and dragging keep every form whole, by the same rule as Remove and Move.
     const broken = studioFormChangeRefusal(catalogue, current, targetSlot.items, editedSlot.items);
     if (broken !== undefined)
