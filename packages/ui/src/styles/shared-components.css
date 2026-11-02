@@ -7097,6 +7097,233 @@
   text-wrap: pretty;
 }
 
+.cn-notice-link {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  border-radius: var(--radius-sm);
+  &:hover {
+    color: var(--foreground);
+  }
+}
+
+.cn-notice-actions {
+  margin-top: calc(var(--spacing, 0.25rem) * 2);
+  gap: var(--spacing, 0.25rem);
+}
+
+.cn-collapsible-content {
+  overflow: hidden;
+}
+
 .cn-confirm-dialog {
   text-wrap: pretty;
+}
+
+.cn-skeleton {
+  border-radius: var(--vs-e5ca406c, var(--radius-md));
+  background-color: var(--muted);
+}
+
+.cn-scroll-area-scrollbar {
+  padding: 1px;
+  transition-property: color, background-color, border-color;
+  transition-duration: var(--tw-duration, var(--default-transition-duration, 150ms));
+  &[data-orientation="vertical"] {
+    height: 100%;
+    width: calc(var(--spacing, 0.25rem) * 2.5);
+    border-left: 1px solid transparent;
+  }
+  &[data-orientation="horizontal"] {
+    height: calc(var(--spacing, 0.25rem) * 2.5);
+    border-top: 1px solid transparent;
+  }
+}
+
+.cn-scroll-area-thumb {
+  border-radius: var(--vs-87094479, calc(infinity * 1px));
+  background-color: var(--border);
+}
+
+.cn-resizable-handle {
+  background-color: var(--border);
+  &[aria-orientation="vertical"] {
+    width: 1px;
+    &::after {
+      content: "";
+      position: absolute;
+      inset-block: 0;
+      left: 50%;
+      width: var(--spacing, 0.25rem);
+      translate: -50% 0;
+    }
+  }
+  &[aria-orientation="horizontal"] {
+    height: 1px;
+    width: 100%;
+    &::after {
+      content: "";
+      position: absolute;
+      inset-inline: 0;
+      top: 50%;
+      height: var(--spacing, 0.25rem);
+      translate: 0 -50%;
+    }
+    & > .cn-resizable-handle-grip {
+      rotate: 90deg;
+    }
+  }
+  &:hover,
+  &[data-separator="active"],
+  &:focus-visible {
+    background-color: var(--ring);
+  }
+  &:focus-visible {
+    outline: 1px solid var(--ring);
+  }
+}
+
+.cn-resizable-handle-grip {
+  height: calc(var(--spacing, 0.25rem) * 6);
+  width: var(--spacing, 0.25rem);
+  border-radius: var(--vs-61d3a854, var(--radius-lg));
+  background-color: var(--border);
+}
+
+.cn-command {
+  border-radius: var(--vs-8a405698, var(--radius-xl));
+  background-color: var(--popover);
+  padding: var(--vs-0906e100, calc(var(--spacing, 0.25rem) * 1));
+  color: var(--popover-foreground);
+}
+
+.cn-command-dialog {
+  border-radius: var(--vs-8a405698, var(--radius-xl));
+}
+
+.cn-command-input-wrapper {
+  padding: var(--vs-fb0d59da, calc(var(--spacing, 0.25rem) * 1));
+  padding-bottom: var(--vs-293f3442, 0);
+  border-bottom-style: solid;
+  border-bottom-width: var(--vs-ad0e0efa, 0);
+  border-bottom-color: var(--border);
+}
+
+/* The extra classes outrank the input group's own per-style rules, which sit later in the layer. */
+.cn-command .cn-command-input-wrapper .cn-command-input-group {
+  height: var(--vs-e09fa815, calc(var(--spacing, 0.25rem) * 8));
+  background-color: var(--vs-987304d0, color-mix(in oklab, var(--input) 30%, transparent));
+  padding-inline: var(--vs-12593fff, 0);
+}
+
+:is(.dark, [data-vortex-theme-mode="dark"])
+  .cn-command
+  .cn-command-input-wrapper
+  .cn-command-input-group {
+  background-color: var(
+    --vs-077f2520,
+    var(--vs-987304d0, color-mix(in oklab, var(--input) 30%, transparent))
+  );
+}
+
+.cn-command-input {
+  background-color: transparent;
+  font-size: var(--vs-0cc84def, var(--text-sm, 0.875rem));
+  line-height: var(
+    --vs-77640fc4,
+    var(--tw-leading, var(--text-sm--line-height, calc(1.25 / 0.875)))
+  );
+  padding-inline: var(--vs-555d35a4, 0);
+  &:disabled {
+    opacity: 0.5;
+  }
+}
+
+.cn-command-input-icon {
+  width: var(--vs-8920dd15, calc(var(--spacing, 0.25rem) * 4));
+  height: var(--vs-8920dd15, calc(var(--spacing, 0.25rem) * 4));
+  opacity: 0.5;
+}
+
+.cn-command-list {
+  max-height: calc(var(--spacing, 0.25rem) * 72);
+  scroll-padding-block: var(--vs-ab5fce0a, calc(var(--spacing, 0.25rem) * 1));
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+.cn-command-empty {
+  padding-block: calc(var(--spacing, 0.25rem) * 6);
+  font-size: var(--vs-0cc84def, var(--text-sm, 0.875rem));
+  line-height: var(
+    --vs-77640fc4,
+    var(--tw-leading, var(--text-sm--line-height, calc(1.25 / 0.875)))
+  );
+}
+
+.cn-command-group {
+  padding: var(--vs-add5d5b1, calc(var(--spacing, 0.25rem) * 1));
+  color: var(--foreground);
+  & [cmdk-group-heading] {
+    padding: var(--vs-9e153e7c, calc(var(--spacing, 0.25rem) * 1.5))
+      var(--vs-15d66a9d, calc(var(--spacing, 0.25rem) * 2));
+    font-size: var(--text-xs, 0.75rem);
+    line-height: var(--tw-leading, var(--text-xs--line-height, calc(1 / 0.75)));
+    font-weight: var(--vs-a2cbb7fa, var(--font-weight-medium, 500));
+    letter-spacing: var(--vs-a191c60c, normal);
+    text-transform: var(--vs-5e99cd4a, none);
+    color: var(--muted-foreground);
+  }
+}
+
+.cn-command-separator {
+  margin-inline: var(--vs-251f77f7, calc(var(--spacing, 0.25rem) * -1));
+  margin-block: var(--vs-03e41499, 0);
+  height: 1px;
+  background-color: var(--vs-c01744dc, var(--border));
+}
+
+.cn-command-item {
+  gap: calc(var(--spacing, 0.25rem) * 2);
+  min-height: var(--vs-97c9cb90, auto);
+  border-radius: var(--vs-202e8209, var(--radius-sm));
+  padding: var(--vs-b2092e6d, calc(var(--spacing, 0.25rem) * 1.5))
+    var(--vs-7c5fb50a, calc(var(--spacing, 0.25rem) * 2));
+  font-size: var(--vs-0cc84def, var(--text-sm, 0.875rem));
+  line-height: var(
+    --vs-77640fc4,
+    var(--tw-leading, var(--text-sm--line-height, calc(1.25 / 0.875)))
+  );
+  font-weight: var(--vs-7b7acfb8, inherit);
+  outline: none;
+  &[data-disabled="true"] {
+    opacity: 0.5;
+  }
+  &[data-selected="true"] {
+    background-color: var(--muted);
+    color: var(--foreground);
+    & > svg {
+      color: var(--foreground);
+    }
+  }
+  & svg:not([class*="size-"]) {
+    width: var(--vs-51e3d374, calc(var(--spacing, 0.25rem) * 4));
+    height: var(--vs-51e3d374, calc(var(--spacing, 0.25rem) * 4));
+  }
+}
+
+.cn-command-dialog .cn-command-item {
+  border-radius: var(--vs-c2606a71, var(--radius-lg));
+}
+
+.cn-command-shortcut {
+  font-size: var(--vs-2302d7cb, var(--text-xs, 0.75rem));
+  line-height: var(--vs-7e709d9b, var(--tw-leading, var(--text-xs--line-height, calc(1 / 0.75))));
+  letter-spacing: var(--tracking-widest, 0.1em);
+  color: var(--muted-foreground);
+}
+
+.cn-command-item[data-selected="true"] .cn-command-shortcut {
+  color: var(--foreground);
 }
