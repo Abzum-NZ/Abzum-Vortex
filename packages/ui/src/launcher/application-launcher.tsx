@@ -94,7 +94,7 @@ export function ApplicationLauncher(props: LauncherRenderProps): ReactElement {
                           className={cn(
                             "group relative flex w-full flex-col justify-between overflow-hidden border-border bg-card text-card-foreground transition-all duration-200",
                             openable &&
-                              "cursor-pointer hover:border-primary/50 hover:bg-accent/30 hover:shadow-md focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2",
+                              "cursor-pointer hover:border-primary/50 hover:bg-accent/30 hover:shadow-md",
                           )}
                           // A click anywhere on the tile runs its action; keyboard and assistive
                           // technology reach the one button below, so no control nests in another.

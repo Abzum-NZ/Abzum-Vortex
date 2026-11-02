@@ -1054,7 +1054,6 @@ export function useStudioCanvasTab({
           <AlertDescription>{notice}</AlertDescription>
         </Alert>
       )}
-      {selected?.kind === "application" && <p>{source.body.description}</p>}
       {selected?.kind === "placement" && canvasPage === undefined && (
         <p>This block is part of a layout. Change it in the inspector.</p>
       )}

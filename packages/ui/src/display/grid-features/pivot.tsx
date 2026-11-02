@@ -217,7 +217,7 @@ function PivotBody({ context }: GridFeaturePointProps): ReactElement | null {
     axis.drill !== undefined && drill !== undefined ? (
       <button
         type="button"
-        className="text-left font-medium underline-offset-4 hover:underline focus-visible:underline focus-visible:outline-none"
+        className="text-left font-medium underline-offset-4 hover:underline"
         aria-label={`${axis.label}${recordCount === undefined ? "" : `, ${recordCount} records`}`}
         aria-description="Open records"
         onClick={open2(filters)}
@@ -272,7 +272,7 @@ function PivotBody({ context }: GridFeaturePointProps): ReactElement | null {
                     {both !== undefined && cell !== null && drill !== undefined ? (
                       <button
                         type="button"
-                        className="w-full text-right underline-offset-4 hover:underline focus-visible:underline focus-visible:outline-none"
+                        className="w-full text-right underline-offset-4 hover:underline"
                         aria-label={`${cell.kind === "unavailable" ? "Mixed currencies" : cellValueToText(cell, dateFormat)}, ${row.label}, ${column.label}`}
                         aria-description="Open records"
                         onClick={open2(both)}

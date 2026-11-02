@@ -549,7 +549,7 @@ export function ApplicationFrameHeader({
       <a
         href={`#${mainContentId}`}
         onClick={skipToPageContent}
-        className="sr-only bg-background px-[var(--vortex-space-md)] py-[var(--vortex-space-sm)] text-sm font-medium text-foreground focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-50 focus:ring-2 focus:ring-ring"
+        className="sr-only bg-background px-[var(--vortex-space-md)] py-[var(--vortex-space-sm)] text-sm font-medium text-foreground focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-50"
       >
         Skip to main content
       </a>
@@ -623,7 +623,7 @@ export function ApplicationShellRoot({
           id={mainContentId}
           tabIndex={-1}
           data-vortex-application-shell-content=""
-          className="vortex-puck-slot min-w-0 flex-1 focus:outline-none"
+          className="vortex-puck-slot min-w-0 flex-1"
           style={
             { ...contentStyle, "--vortex-content-padding": contentStyle.padding } as CSSProperties
           }

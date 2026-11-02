@@ -3528,28 +3528,6 @@
 }
 
 @scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
-  :scope .cn-field-label {
-    &:has(> [data-slot="field"]) {
-      &:has(*:is(:focus-visible)) {
-        --tw-ring-shadow: var(--tw-ring-inset,) 0 0 0 calc(2px + var(--tw-ring-offset-width))
-          var(--tw-ring-color, currentcolor);
-        box-shadow:
-          var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow),
-          var(--tw-ring-shadow), var(--tw-shadow);
-      }
-    }
-    &:has(> [data-slot="field"]) {
-      &:has(*:is(:focus-visible)) {
-        --tw-ring-color: var(--ring);
-        @supports (color: color-mix(in lab, red, red)) {
-          --tw-ring-color: color-mix(in oklab, var(--ring) 30%, transparent);
-        }
-      }
-    }
-  }
-}
-
-@scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
   @media (prefers-color-scheme: dark) {
   }
 }
@@ -3889,9 +3867,6 @@
 @scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
   :scope .cn-input {
     border-bottom-color: var(--input);
-    &:focus-visible {
-      border-bottom-color: var(--ring);
-    }
     &[aria-invalid="true"] {
       border-bottom-color: var(--destructive);
     }
@@ -4432,9 +4407,6 @@
 @scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
   :scope .cn-native-select {
     border-bottom-color: var(--input);
-    &:focus-visible {
-      border-bottom-color: var(--ring);
-    }
     &[aria-invalid="true"] {
       border-bottom-color: var(--destructive);
     }
@@ -4941,9 +4913,6 @@
   :scope .cn-select-trigger {
     border-bottom-color: var(--input);
     padding-inline: 0px;
-    &:focus-visible {
-      border-bottom-color: var(--ring);
-    }
     &[aria-invalid="true"] {
       border-bottom-color: var(--destructive);
     }
@@ -5594,9 +5563,6 @@
   :scope .cn-textarea {
     resize: none;
     border-bottom-color: var(--input);
-    &:focus-visible {
-      border-bottom-color: var(--ring);
-    }
     &[aria-invalid="true"] {
       border-bottom-color: var(--destructive);
     }
@@ -6171,9 +6137,6 @@
     }
     &:has(*[data-align="block-start"]) {
       border-radius: 0;
-    }
-    &:has(*:is([data-slot="input-group-control"]:focus-visible)) {
-      border-bottom-color: var(--ring);
     }
     &:has(*:is([data-slot][aria-invalid="true"])) {
       border-bottom-color: var(--destructive);
@@ -6863,10 +6826,6 @@
   :scope .cn-combobox-chips {
     border-color: transparent;
     border-bottom-color: var(--input);
-    &:focus-within {
-      border-color: transparent;
-      border-bottom-color: var(--ring);
-    }
     &:has([aria-invalid="true"]) {
       border-color: transparent;
       border-bottom-color: var(--destructive);

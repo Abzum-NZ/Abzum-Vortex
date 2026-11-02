@@ -1,5 +1,9 @@
 import { LAYOUT_ONLY_STYLES_CSS } from "../layout-styles";
 
+/** The text controls inside an input group or a chips box: their wrapper carries the focus. */
+const WRAPPED_FOCUS_CONTROLS =
+  ".cn-input-group-input, .cn-input-group-textarea, .cn-combobox-chip-input";
+
 /**
  * Platform stylesheet for every shared component state. It reads only the fixed
  * variables from `generateThemeCssVariables`; text is always painted on the surface or fill
@@ -208,14 +212,39 @@ const SHARED_COMPONENT_STYLES_CSS = `
   }
 }
 
-/* Visible focus is a platform safeguard. Composite rows place the outline around all controls. */
-[data-vortex-theme] :focus-visible:not([data-vortex-focus-group] [data-vortex-focus-primary]),
-[data-vortex-theme] [data-vortex-focus-group]:has(:focus-visible) {
-  outline: var(--vortex-focus-width) solid var(--ring) !important;
+/*
+ * Visible focus is one platform indicator everywhere: a solid outline at the theme's focus width.
+ * Its colour is the ring colour pulled 15% towards the foreground, which keeps it at 3:1 or more on
+ * the background, card, popover, muted, accent and sidebar surfaces of every shipped theme without
+ * changing any stored theme. The style's own translucent focus ring is switched off here, so a control
+ * never shows two indicators. A text control inside an input group or a chips box leaves the
+ * outline to its wrapper, and a composite row (focus group) outlines the row around its primary
+ * control. Forced colours draw the same outline.
+ */
+[data-vortex-theme] :focus-visible:not(:where(
+  [data-vortex-focus-group] [data-vortex-focus-primary],
+  ${WRAPPED_FOCUS_CONTROLS}
+)),
+[data-vortex-theme] [data-vortex-focus-group]:has(:focus-visible),
+[data-vortex-theme] .cn-input-group:has([data-slot="input-group-control"]:focus-visible),
+[data-vortex-theme] .cn-combobox-chips:has(:focus-visible) {
+  --vortex-focus-color: color-mix(in oklab, var(--ring) 85%, var(--foreground));
+  outline: var(--vortex-focus-width) solid var(--vortex-focus-color) !important;
   outline-offset: 0.125rem !important;
 }
-/* Keep row outlines inside collapsible and scroll boundaries. */
-[data-vortex-theme] [data-vortex-focus-group]:has(:focus-visible) {
+[data-vortex-theme] :focus-visible:not(:where(${WRAPPED_FOCUS_CONTROLS})),
+[data-vortex-theme] .cn-input-group:has([data-slot="input-group-control"]:focus-visible),
+[data-vortex-theme] .cn-combobox-chips:focus-within,
+[data-vortex-theme] .cn-field-label:has(:focus-visible) {
+  --tw-ring-shadow: 0 0 #0000 !important;
+}
+[data-vortex-theme] :is(${WRAPPED_FOCUS_CONTROLS}):focus-visible {
+  outline: none !important;
+}
+/* Keep row, cell and disclosure-trigger outlines inside collapsible and scroll boundaries. */
+[data-vortex-theme] [data-vortex-focus-group]:has(:focus-visible),
+[data-vortex-theme] [data-grid-cell]:focus-visible,
+[data-vortex-theme] [data-slot="collapsible-trigger"]:focus-visible {
   outline-offset: calc(-1 * var(--vortex-focus-width)) !important;
 }
 `.trim();
