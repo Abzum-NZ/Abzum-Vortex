@@ -14,6 +14,8 @@ const compositionDepth = 32;
  * block bound: the two can never disagree.
  */
 const sourceNestingDepth = compositionDepth * 3 + 16;
+/** A provenance path names a place in a document, so it is as long as the document is deep, plus the compiler's own wrappers. */
+const provenancePathSegments = sourceNestingDepth + 16;
 
 export const definitionLimits = Object.freeze({
   fieldsPerRecordType: 500,
@@ -51,6 +53,7 @@ export const definitionLimits = Object.freeze({
   compositionDepth,
   sourceImportBytes: 2 * 1024 * 1024,
   sourceNestingDepth,
+  provenancePathSegments,
   sourceContainerMembers: 1_000,
   sourceDocumentNodes: 50_000,
   sourceStringLength: 1_000_000,
@@ -62,6 +65,7 @@ export type CountedLimit = Exclude<
   DefinitionLimit,
   | "sourceImportBytes"
   | "sourceNestingDepth"
+  | "provenancePathSegments"
   | "sourceContainerMembers"
   | "sourceDocumentNodes"
   | "sourceStringLength"
