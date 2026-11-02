@@ -133,7 +133,7 @@ export function LinkTiles(props: LinkTilesRenderProps): ReactElement {
                     >
                       <Card
                         size="sm"
-                        className="group relative flex w-full flex-col justify-between overflow-hidden border-border bg-card text-card-foreground transition-all duration-200 hover:border-primary/50 hover:bg-accent/30 hover:shadow-md focus-within:ring-2 focus-within:ring-ring"
+                        className="group relative flex w-full flex-col justify-between overflow-hidden border-border bg-card text-card-foreground transition-all duration-200 hover:border-primary/50 hover:bg-accent/30 hover:shadow-md"
                       >
                         <CardHeader>
                           <CardTitle>

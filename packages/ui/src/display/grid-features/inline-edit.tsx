@@ -386,7 +386,7 @@ function EditableCell({
             aria-busy={phase === "saving" ? true : undefined}
             aria-describedby={describedBy}
             data-inline-edit={field}
-            className="block w-full min-w-0 cursor-text truncate [text-align:inherit] outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+            className="block w-full min-w-0 cursor-text truncate [text-align:inherit]"
             onClick={(event) => {
               event.stopPropagation();
               start();

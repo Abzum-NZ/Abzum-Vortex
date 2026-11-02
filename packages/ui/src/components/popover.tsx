@@ -42,7 +42,7 @@ function PopoverContent({
         <PopoverPrimitive.Popup
           data-slot="popover-content"
           className={cn(
-            "cn-popover-content cn-popover-content-logical z-50 w-72 origin-(--transform-origin) outline-hidden",
+            "cn-popover-content cn-popover-content-logical z-50 w-72 origin-(--transform-origin) outline-none",
             className,
           )}
           {...props}

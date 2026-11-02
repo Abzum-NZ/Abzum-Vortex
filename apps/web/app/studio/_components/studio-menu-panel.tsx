@@ -624,7 +624,7 @@ function StudioMenuEntryEditor({
                   <ToggleGroupItem
                     value={name}
                     aria-label={name.replaceAll("-", " ")}
-                    className="aspect-square h-auto w-full min-w-0 aria-pressed:ring-2 aria-pressed:ring-primary"
+                    className="aspect-square h-auto w-full min-w-0 aria-pressed:inset-ring-2 aria-pressed:inset-ring-primary"
                   />
                 }
               >
