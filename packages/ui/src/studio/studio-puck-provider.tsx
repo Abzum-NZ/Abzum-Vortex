@@ -5,6 +5,7 @@ import {
   createUsePuck,
   useGetPuck,
   type AppState,
+  type Config,
   type Data,
   type PuckAction,
 } from "@puckeditor/core";
@@ -340,6 +341,7 @@ export function StudioPuckProvider({
         permissions={permissions}
       >
         <StudioPuckSync
+          config={model.config}
           data={shown}
           resync={resync}
           area={model.area}
@@ -367,6 +369,7 @@ export function StudioPuckProvider({
  * its preview mode follows the toolbar. Where the canvas is not on show nothing is selected.
  */
 function StudioPuckSync({
+  config,
   data,
   resync,
   area,
@@ -381,6 +384,8 @@ function StudioPuckSync({
   deriving,
   showSelection,
 }: Readonly<{
+  /** The config the page on the canvas is drawn with. */
+  config: Config;
   data: Data;
   /** The page and content area on the canvas. */
   area: string;
@@ -403,8 +408,12 @@ function StudioPuckSync({
   const getPuck = useGetPuck();
   const previewMode = usePuckSelector((state) => state.appState.ui.previewMode);
   const recorded = usePuckSelector((state) => state.history.histories.length);
-  const config = usePuckSelector((state) => state.config);
-  const walked = useRef<typeof config | null>(null);
+  // The config Puck holds: it takes the page's config a moment after this component sees it.
+  const held = usePuckSelector((state) => state.config);
+  // The config Puck's data was last walked under; Puck walked its first data under `held`.
+  const walked = useRef(held);
+  const latestData = useRef(data);
+  latestData.current = data;
   // Studio's draft history is the one undo. Puck records its own drags and deletes and answers
   // Ctrl+Z / Ctrl+Y with its older states, which Studio would then take as new edits, so Puck's
   // history is kept at the current state alone and its Undo and Redo have nothing to go back to.
@@ -471,39 +480,51 @@ function StudioPuckSync({
     return () => onArrangeableGrids?.(false);
   }, [arrangeable, onArrangeableGrids]);
 
-  // The workspace draft changed (an edit, Undo, Redo, a save, Revert or another page): show exactly
-  // that draft, with the selection derived again. One Puck action replaces the data; it is draft
-  // synchronization, not an entry in Puck's separate history.
-  // Puck finds a block's slots through the config its data was last walked with, and takes a new
-  // config only after this component's effects have run. Data walked under the previous config
-  // (the empty one before the blocks are known) has no nested blocks indexed, so it is walked again
-  // as soon as Puck holds the config the page is drawn with.
-  useEffect(() => {
-    const { appState, dispatch } = getPuck();
-    const walkedUnder = walked.current;
-    walked.current = config;
-    if (
-      walkedUnder !== config ||
-      JSON.stringify(appState.data.content) !== JSON.stringify(data.content) ||
-      JSON.stringify(appState.data.root) !== JSON.stringify(data.root)
-    ) {
+  // Puck finds a block's slots through the config its data was last walked under, and takes a new
+  // config only after this component's effects have run. Data walked under the previous config (the
+  // empty one before the blocks are known) has no nested blocks indexed, so it is walked again once
+  // Puck holds the config the page is drawn with. A walk replaces every node's data, so one that
+  // only follows a config change waits for a drag in progress to drop.
+  const walk = useCallback(
+    (shownData: Data) => {
+      walked.current = held;
       synchronizing.current = true;
       try {
-        // One walk of the data per outside draft change; the function form is the same action
-        // without Puck's warning about the object form.
-        dispatch({ type: "setData", data: () => data, recordHistory: false });
+        // One walk per outside draft change and one per config Puck takes; the function form is the
+        // same action without Puck's warning about the object form.
+        getPuck().dispatch({ type: "setData", data: () => shownData, recordHistory: false });
       } finally {
         synchronizing.current = false;
       }
-    }
+    },
+    [getPuck, held, synchronizing],
+  );
+  // The workspace draft changed (an edit, Undo, Redo, a save, Revert, another page, or the config
+  // the page is drawn with): show exactly that draft, with the selection derived again. One Puck
+  // action replaces the data; it is draft synchronization, not an entry in Puck's separate history.
+  useEffect(() => {
+    // Puck does not hold the page's config yet; this runs again once it does.
+    if (held !== config) return;
+    const { appState } = getPuck();
+    const changed =
+      JSON.stringify(appState.data.content) !== JSON.stringify(data.content) ||
+      JSON.stringify(appState.data.root) !== JSON.stringify(data.root);
+    if (changed || (walked.current !== held && !appState.ui.isDragging)) walk(data);
     select(wantedRef.current);
     // The draft is shown again every time the canvas comes into view, so nothing Puck held while
     // it was hidden survives.
-  }, [data, resync, canvasShown, area, config]);
+  }, [data, resync, canvasShown, area, held, config]);
 
   // A drag keeps the rail tab and the open page where they are (the workspace asks the gate), and
   // what was asked meanwhile is applied once the drop's own animation has finished with the preview.
   const dragging = usePuckSelector((state) => state.appState.ui.isDragging);
+  useEffect(() => {
+    // The config walk that waited for the drop.
+    if (!dragging && held === config && walked.current !== held) {
+      walk(latestData.current);
+      select(wantedRef.current);
+    }
+  }, [dragging]);
   useEffect(() => {
     dragGate.current.dragging = dragging;
     if (dragging) return;
