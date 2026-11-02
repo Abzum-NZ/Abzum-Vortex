@@ -11,6 +11,7 @@ import type { ApplicationRootId, IdentitySession, OrganizationId } from "@vortex
 import { describeFailure } from "@vortex/platform/schema";
 import { applicationPageAddressPath } from "./address-paths";
 import { pageSubjectParameter } from "./application-page/placement-helpers";
+import { pageRunParameter, type AppStoreActionToken } from "./page-run-parameter";
 import { applicationStoreService } from "./application-store-service";
 import { humanOrganizationRequests } from "./server-composition";
 import { platformPermissionSource } from "./platform-permission-source";
@@ -35,6 +36,19 @@ export const appStoreApplicationHref = (
   applicationRootId: string,
 ): string =>
   `${applicationPageAddressPath(tenantShortName, organizationShortName, appStoreKey, appStoreApplicationPageKey)}?${pageSubjectParameter}=${encodeURIComponent(applicationRootId)}`;
+
+/**
+ * The App Store's page for one application with one of its action flows started: that flow's
+ * first dialog opens when the page does, so each action is the page's one flow wherever it starts.
+ */
+export const appStoreActionHref = (
+  tenantShortName: string,
+  organizationShortName: string,
+  appStoreKey: string,
+  applicationRootId: string,
+  action: AppStoreActionToken,
+): string =>
+  `${appStoreApplicationHref(tenantShortName, organizationShortName, appStoreKey, applicationRootId)}&${pageRunParameter}=${action}`;
 
 /** A newer published release waiting for this organisation, offered to a person who may install. */
 export type ApplicationReleaseOffer = Readonly<{

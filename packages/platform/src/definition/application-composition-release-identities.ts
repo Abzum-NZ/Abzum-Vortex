@@ -53,7 +53,7 @@ export const PLATFORM_BLOCK_RELEASE_IDENTITIES = Object.freeze({
     key: "platform.display.table",
     rendererKey: "platform.renderer.table",
     releaseVersion: "2.0.0",
-    contentFingerprint: "sha256:1f0f492f63ffe32ce34a9e768687efaeb1329605e9df6160b579ef7d022e0ad7",
+    contentFingerprint: "sha256:75ecc6459303f5d3686066a52732d62efe557b3de08b81444d1d4bb6549ad16a",
   },
   RECORD_DETAIL_BLOCK_RELEASE: {
     blockId: "e2569df0-2f10-4b20-b41d-177b66cd136c",
@@ -123,7 +123,7 @@ export const PLATFORM_BLOCK_RELEASE_IDENTITIES = Object.freeze({
     key: "platform.action.button",
     rendererKey: "platform.renderer.button",
     releaseVersion: "1.0.0",
-    contentFingerprint: "sha256:91c38cb06dcd25b984e0ee9be8c74953a7797ef097b89916463cbcc11733a30e",
+    contentFingerprint: "sha256:8872e927d45a91ae26ca33d91cc4c01d75ef551c6fbc5a108c435f9fc52a2d73",
   },
   TABS_BLOCK_RELEASE: {
     blockId: "a3b7065b-47ef-4c92-93d1-59300f8b059c",

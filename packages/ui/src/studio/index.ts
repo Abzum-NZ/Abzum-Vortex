@@ -49,6 +49,9 @@ export * from "./module-action-condition";
 export * from "./application-reaction-condition-commands";
 export type { StudioCompileFailure, StudioPreviewNotRunnable } from "./compile-failure";
 export * from "./studio-setting-controls";
+export * from "./studio-setting-model";
+export * from "./studio-setting-basic-controls";
+export * from "./studio-query-picker";
 export * from "./studio-grid-features";
 export * from "./grid-features";
 export * from "./grouped-table-preset";
@@ -59,16 +62,8 @@ export {
 } from "./grid-features/row-actions";
 export * from "./studio-record-reference-control";
 export * from "./theme-preset";
-export {
-  removeFlowBindingsOf,
-  StoredCompositionRefusal,
-  syncStoredBlockDependencies,
-  validateStoredShell,
-  validateStoredZone,
-} from "./stored-composition";
 export * from "./application-structure-commands";
 export { studioPageLayoutPlan, type StudioPageLayoutPlan } from "./application-page-layout";
-export * from "./application-menu-commands";
 export * from "./application-access-commands";
 export {
   studioRecordPageChoices,
@@ -76,10 +71,8 @@ export {
   type StudioRecordPageCommand,
   type StudioRecordPageKind,
 } from "./application-record-page-kinds";
-export * from "./application-record-page-checks";
 export * from "./application-home-dashboard";
 export * from "./application-item-labels";
-export { tokenName } from "./studio-words";
 export * from "./studio-reference-picker";
 export * from "./studio-entry-list";
 export * from "./studio-segmented-control";

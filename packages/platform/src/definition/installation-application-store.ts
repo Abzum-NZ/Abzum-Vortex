@@ -35,6 +35,14 @@ import {
   resumeFirstInstallRoles,
 } from "./installation-first-install-roles";
 import { releaseMemberRole, type ApplicationRoleChange } from "./installation-role-templates";
+import {
+  ApplicationPurgeRefused,
+  type ApplicationPurgeImpact,
+  purgeApplication,
+  readApplicationPurge,
+  requireApplicationChangeStepUp,
+} from "./installation-purge";
+import { createApplicationAuthoringService } from "./installation-application-authoring";
 import { readApplicationRemoval, removeApplication } from "./installation-removal";
 import {
   readUpgradeAuthorizedState,
@@ -459,6 +467,68 @@ const review = async (
 
 const yes = (value: unknown): boolean => value === true;
 
+/**
+ * Removes an application and everything it holds after the typed name matches: a removed or
+ * installed application is purged, and deleting refuses an installed one.
+ */
+const purgeJourney = async (
+  environment: ApplicationStoreEnvironment,
+  deleteOnly: boolean,
+  session: IdentitySession,
+  selection: OrganizationSelectionCandidate,
+  inputs: Readonly<Record<string, unknown>>,
+  receipt?: StoreReceiptCompletion,
+): Promise<ApplicationStoreResult> => {
+  const rootId = applicationRootInput(inputs.application_root_id);
+  const confirmedName = z.string().min(1).max(200).safeParse(inputs.confirm_name);
+  if (!rootId.success || !confirmedName.success) return { kind: "unavailable" };
+  try {
+    return {
+      kind: "available",
+      value: await purgeApplication(
+        environment,
+        session,
+        organizationOf(selection),
+        rootId.data,
+        confirmedName.data,
+        deleteOnly,
+        receipt,
+      ),
+    };
+  } catch (error) {
+    return purgeFailure(error);
+  }
+};
+
+const plural = (count: number, one: string, many: string): string =>
+  `${count} ${count === 1 ? one : many}`;
+
+/** The impact of a purge as the short lines the confirmation lists, and the facts behind them. */
+const purgeReview = (impact: ApplicationPurgeImpact): Outputs => {
+  const lines = [
+    `${plural(impact.roles, "role", "roles")} and ${plural(impact.role_assignments, "person or group assignment", "person and group assignments")}`,
+    plural(impact.permission_entries, "permission entry", "permission entries"),
+    `${plural(impact.records, "record", "records")} in ${plural(impact.record_tables, "record table", "record tables")}`,
+    plural(impact.releases, "published version", "published versions"),
+    ...(impact.external_links === 0
+      ? []
+      : [
+          `${plural(impact.external_links, "link", "links")} from records of other applications into it`,
+        ]),
+  ];
+  return { ...impact, impact_lines: lines };
+};
+
+/** A purge's refusal the person is told by name, or the shared mapping of any other failure. */
+const purgeFailure = (error: unknown): ApplicationStoreResult =>
+  error instanceof ApplicationPurgeRefused
+    ? {
+        kind: "confirmed_failure",
+        outcome: "refused",
+        diagnostic: { code: error.code },
+      }
+    : commandFailureOf(error);
+
 const firstInstallExpectedSchema = z
   .object({ selected: z.object({ releaseRevision: z.number().int().positive() }).passthrough() })
   .passthrough();
@@ -687,6 +757,33 @@ const upgrade = async (
 
 /** The application catalogue's journeys, bound to the application's installation environment. */
 export const createApplicationStoreService = (environment: ApplicationStoreEnvironment) => ({
+  ...createApplicationAuthoringService(environment),
+  /**
+   * The sign-in an install, upgrade or removal needs, asked for before its review is shown: the
+   * person signs in again in the dialog, not after filling it. Undefined when the sign-in is
+   * recent enough.
+   */
+  requireStepUp: async (
+    session: IdentitySession,
+    selection: OrganizationSelectionCandidate,
+    inputs: Readonly<Record<string, unknown>>,
+    change: "install_or_upgrade" | "uninstall",
+  ): Promise<ApplicationStoreResult | undefined> => {
+    const rootId = applicationRootInput(inputs.application_root_id);
+    if (!rootId.success) return { kind: "unavailable" };
+    try {
+      await requireApplicationChangeStepUp(
+        environment,
+        session,
+        organizationOf(selection),
+        rootId.data,
+        change,
+      );
+      return undefined;
+    } catch (error) {
+      return reviewFailure(error);
+    }
+  },
   reviewRemoval: async (
     session: IdentitySession,
     selection: OrganizationSelectionCandidate,
@@ -714,6 +811,42 @@ export const createApplicationStoreService = (environment: ApplicationStoreEnvir
       return result === "conflict" ? { kind: "unavailable" } : result;
     }
   },
+  reviewPurge: async (
+    session: IdentitySession,
+    selection: OrganizationSelectionCandidate,
+    inputs: Readonly<Record<string, unknown>>,
+  ): Promise<ApplicationStoreResult> => {
+    const rootId = applicationRootInput(inputs.application_root_id);
+    if (!rootId.success) return { kind: "unavailable" };
+    try {
+      return {
+        kind: "available",
+        value: purgeReview(
+          await readApplicationPurge(
+            environment,
+            session,
+            organizationOf(selection),
+            rootId.data,
+            yes(inputs.delete_only),
+          ),
+        ),
+      };
+    } catch (error) {
+      return purgeFailure(error);
+    }
+  },
+  purge: (
+    session: IdentitySession,
+    selection: OrganizationSelectionCandidate,
+    inputs: Readonly<Record<string, unknown>>,
+    receipt?: StoreReceiptCompletion,
+  ) => purgeJourney(environment, false, session, selection, inputs, receipt),
+  delete: (
+    session: IdentitySession,
+    selection: OrganizationSelectionCandidate,
+    inputs: Readonly<Record<string, unknown>>,
+    receipt?: StoreReceiptCompletion,
+  ) => purgeJourney(environment, true, session, selection, inputs, receipt),
   remove: async (
     session: IdentitySession,
     selection: OrganizationSelectionCandidate,

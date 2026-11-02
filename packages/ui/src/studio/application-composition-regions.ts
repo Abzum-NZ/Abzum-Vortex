@@ -19,7 +19,11 @@ import {
   type SourcePageZone,
   type SourceSlotOrder,
 } from "@vortex/platform/schema";
-import { storedItemRelease, validateStoredShell, validateStoredZone } from "./stored-composition";
+import {
+  storedItemRelease,
+  validateStoredShell,
+  validateStoredZone,
+} from "@vortex/platform/schema";
 import { resolveStudioSelectionInspectorContext } from "./selection-inspector";
 import type { StudioSemanticSelection } from "./semantic-selection";
 import type {

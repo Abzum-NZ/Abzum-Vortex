@@ -4,16 +4,11 @@ import { Alert, AlertDescription } from "../components/alert";
 import { useEffect, useRef, useState, type ReactElement } from "react";
 import {
   canonicalJson,
-  recordsTableColumnProblems,
   componentSettingApplies,
   plainSettingValue,
   plainSourceSettingValue,
   typedSourceSettingValue,
-  validateComponentSettings,
-  queryTotalReferenceProblem,
-  type ApplicationSourceDocument,
   type BlockPropertySchemaContract,
-  type ComponentSettingFailure,
   type SourceBlockPropertyValueContract,
 } from "@vortex/platform/schema";
 import { followFieldLabels } from "./follow-field-labels";
@@ -30,41 +25,28 @@ import {
   InputGroupInput,
 } from "../components/input-group";
 import { Plus } from "lucide-react";
-import {
-  StudioReferencePicker,
-  studioBorrowedGroup,
-  type StudioReferencePickerOption,
-} from "./studio-reference-picker";
+import { StudioReferencePicker } from "./studio-reference-picker";
 import { StudioField } from "./studio-field";
 import { StudioEntryList, useStudioEntryKeys } from "./studio-entry-list";
 import { useConfirm } from "../components/confirm-dialog";
 import { StudioInspectorGroup } from "./studio-inspector-group";
-import { Label } from "../components/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "../components/select";
 import { Textarea } from "../components/textarea";
+import { StudioRecordReferenceControl } from "./studio-record-reference-control";
 import {
-  studioActionChoices,
-  studioQueryChoices,
-  studioRecordDataChoices,
-  studioRelationshipChoices,
-  studioSourceFields,
-  studioSourceRecordTypes,
-  type StudioActionChoice,
-  type StudioBorrowedChoices,
-  type StudioQueryChoice,
-  type StudioQueryField,
-  type StudioRelationshipChoice,
-} from "./contextual-palette";
+  type SettingValue,
+  type StudioSettingValues,
+  type StudioSettingChoices,
+  initialValue,
+  studioFittingFields,
+  conditionalRequiredMessage,
+  type ControlProps,
+} from "./studio-setting-model";
 import {
-  StudioRecordReferenceControl,
-  type StudioRecordReader,
-} from "./studio-record-reference-control";
+  NumberControl,
+  RichTextControl,
+  StudioOptionControl,
+} from "./studio-setting-basic-controls";
+import { borrowableOption } from "./studio-query-picker";
 
 /**
  * Studio's one set of typed setting controls: one control per declared block property, chosen by
@@ -72,387 +54,6 @@ import {
  * draw their settings with these controls, and both hand the typed values to the composition
  * commands, which judge them as stored data.
  */
-
-/** A typed authored setting value, or `undefined` for a setting left unset (its default applies). */
-type SettingValue = SourceBlockPropertyValueContract | undefined;
-export type StudioSettingValues = Readonly<Record<string, SourceBlockPropertyValueContract>>;
-
-/**
- * What reference settings can point at, all read from the draft being edited: the fields of the
- * block's data (or every field of its record types), its queries, pages, record types, module
- * actions and relationships. Records are not part of a draft: `records` reads them from
- * the builder's preview of the saved draft with their preview access, or is null where none can be read.
- */
-export type StudioSettingChoices = Readonly<{
-  fields: readonly StudioQueryField[];
-  queries: readonly StudioQueryChoice[];
-  recordQueries?: readonly StudioQueryChoice[];
-  totals: StudioQueryChoice["totals"];
-  pages: readonly Readonly<{ key: string; label: string }>[];
-  recordTypes: readonly Readonly<{ key: string; label: string }>[];
-  actions: readonly StudioActionChoice[];
-  relationships: readonly StudioRelationshipChoice[];
-  roles: readonly Readonly<{ key: string; label: string }>[];
-  records: StudioRecordReader | null;
-  /** The values the page of the selected block declares, which a display can show. */
-  pageValues: readonly Readonly<{ key: string; label: string; currency?: string }>[];
-}>;
-
-/**
- * The one source of every reference picker: the draft being edited, never the installed release.
- * Its own Modules' queries, fields, record types, actions and relationships, its pages, and what the Modules it uses offer (read from their releases, as nothing of theirs is
- * in this draft).
- */
-export const studioDraftChoices = (
-  source: ApplicationSourceDocument,
-  borrowed: StudioBorrowedChoices | null,
-  records: StudioRecordReader | null,
-  /** The business name of the application with this key, which borrowed choices are grouped by. */
-  applicationName: (key: string) => string,
-): StudioSettingChoices => {
-  const named = <T extends Readonly<{ borrowedFrom?: string }>>(choice: T): T =>
-    choice.borrowedFrom === undefined
-      ? choice
-      : { ...choice, borrowedFrom: applicationName(choice.borrowedFrom) };
-  return {
-    queries: studioQueryChoices(source, borrowed).map(named),
-    recordQueries: studioRecordDataChoices(source),
-    totals: [],
-    fields: studioSourceFields(source),
-    pages: source.body.pages.map((page) => ({ key: page.key, label: page.name })),
-    recordTypes: studioSourceRecordTypes(source),
-    actions: studioActionChoices(source, borrowed).map(named),
-    relationships: studioRelationshipChoices(source, borrowed).map(named),
-    roles: source.body.roles.map((role) => ({ key: role.key, label: role.name })),
-    records,
-    pageValues: [],
-  };
-};
-
-/**
- * The choices of one block: a block that reads a query picks only that query's fields, and only
- * the relationships of the record type that query reads.
- */
-export const studioBlockChoices = (
-  draft: StudioSettingChoices,
-  query: string | null,
-): StudioSettingChoices => {
-  const chosen =
-    query === null
-      ? undefined
-      : [...draft.queries, ...(draft.recordQueries ?? [])].find(
-          (candidate) => candidate.reference === query,
-        );
-  return query === null
-    ? draft
-    : {
-        ...draft,
-        fields: chosen?.fields ?? [],
-        totals: chosen?.totals ?? [],
-        relationships: draft.relationships.filter(
-          (relationship) => relationship.recordType === chosen?.recordType,
-        ),
-      };
-};
-
-const familyText: Readonly<Record<ComponentSettingFailure["family"], string>> = {
-  required_value: "needs a value",
-  invalid_value: "is not valid",
-  unsupported_choice: "has a choice this block does not offer",
-  unknown_property: "is not a setting of this block",
-  too_few_items: "needs more entries",
-  too_many_items: "has too many entries",
-  unsafe_content: "holds content that is not allowed",
-};
-
-/** The label path of a failure: each setting's label, and the entry number inside a list. */
-const failurePlace = (
-  properties: readonly BlockPropertySchemaContract[],
-  path: readonly (string | number)[],
-  family?: ComponentSettingFailure["family"],
-): string => {
-  const parts: string[] = [];
-  let declarations: readonly BlockPropertySchemaContract[] | undefined = properties;
-  let current: BlockPropertySchemaContract | undefined;
-  for (const segment of path) {
-    if (typeof segment === "number") {
-      parts.push(`entry ${segment + 1}`);
-      current = current?.kind === "list" ? current.item : undefined;
-      declarations = current?.kind === "group" ? current.properties : undefined;
-      continue;
-    }
-    current = declarations?.find((property) => property.key === segment);
-    parts.push(current?.label ?? segment);
-    declarations = current?.kind === "group" ? current.properties : undefined;
-  }
-  if (family === undefined) return parts.join(", ");
-  if (family !== "required_value" || current?.showWhen === undefined)
-    return `${parts.join(", ")} ${familyText[family]}.`;
-  // A nested entry keeps its place, so the pre-check names which column needs the value.
-  const owner = parts.slice(0, -1).join(", ");
-  return owner === ""
-    ? conditionalRequiredMessage(current)
-    : `${owner}: ${conditionalRequiredMessage(current)}`;
-};
-
-/** A setting required by a selected choice asks for its value beside the control. */
-const conditionalRequiredMessage = (property: BlockPropertySchemaContract): string =>
-  `Choose ${property.label.charAt(0).toLowerCase()}${property.label.slice(1)}.`;
-
-/**
- * The fields a field reference may name: the block's fields, narrowed to the field types its
- * declaration allows. Publication refuses any other, so the picker never offers one.
- */
-const studioFittingFields = (
-  property: BlockPropertySchemaContract,
-  fields: readonly StudioQueryField[],
-): readonly StudioQueryField[] =>
-  property.kind === "field_reference" && property.fieldTypes !== undefined
-    ? fields.filter((field) => (property.fieldTypes as readonly string[]).includes(field.type))
-    : fields;
-
-/** Why these settings would be refused, in words, one line per problem; empty when they pass. */
-export const studioSettingProblems = (
-  values: StudioSettingValues,
-  properties: readonly BlockPropertySchemaContract[],
-  choices?: Pick<StudioSettingChoices, "fields" | "totals">,
-): readonly string[] => {
-  const problems = validateComponentSettings(values, properties).map((failure) =>
-    failurePlace(properties, failure.path, failure.family),
-  );
-  if (choices !== undefined) {
-    const visit = (
-      property: BlockPropertySchemaContract,
-      value: SettingValue,
-      path: readonly (string | number)[],
-    ) => {
-      // Binding fields belong to the page subject or parent row, and a row's related columns to
-      // the related records query; their own checks judge them, not the block's data.
-      if (property.key === "query_parameters" || property.key === "child_columns") return;
-      if (property.kind === "total_reference" && value?.kind === "total_reference") {
-        const problem = queryTotalReferenceProblem(property.label, value.value, choices.totals);
-        if (problem !== undefined) problems.push(problem);
-      }
-      if (
-        property.kind === "field_reference" &&
-        value?.kind === "field_reference" &&
-        !studioFittingFields(property, choices.fields).some(
-          (field) => field.reference === value.field,
-        )
-      )
-        problems.push(
-          `${failurePlace(properties, path)} is not offered by the chosen data. Choose another field or remove this entry.`,
-        );
-      else if (property.kind === "group" && value?.kind === "group")
-        for (const child of property.properties)
-          visit(child, value.properties[child.key], [...path, child.key]);
-      else if (property.kind === "list" && value?.kind === "list")
-        value.items.forEach((item, index) => visit(property.item, item, [...path, index]));
-    };
-    // The shared binding check validates binding fields' scope and type in Studio and publication.
-    for (const property of properties) visit(property, values[property.key], [property.key]);
-  }
-  // Only Records table columns declare field references and default visibility. A Table data
-  // field also has a columns list, but its entries declare typed stored values instead.
-  const columns = properties.find((property) => property.key === "columns");
-  if (
-    columns?.kind === "list" &&
-    columns.item.kind === "group" &&
-    columns.item.properties.some(
-      (property) => property.key === "field" && property.kind === "field_reference",
-    ) &&
-    columns.item.properties.some(
-      (property) => property.key === "visible" && property.kind === "boolean",
-    )
-  )
-    problems.push(
-      ...recordsTableColumnProblems(values["columns"]).map((problem) => problem.reason),
-    );
-  return [...new Set(problems)];
-};
-
-/** The value a new list entry starts with. */
-const initialValue = (
-  property: BlockPropertySchemaContract,
-  choices: StudioSettingChoices,
-): SettingValue => {
-  switch (property.kind) {
-    case "total_reference":
-      return choices.totals[0] === undefined
-        ? undefined
-        : { kind: "total_reference", value: choices.totals[0].alias };
-    case "group":
-      return { kind: "group", properties: {} };
-    case "list":
-      return { kind: "list", items: [] };
-    case "text":
-      return { kind: "text", value: "" };
-    case "url":
-      return { kind: "url", value: "" };
-    case "number":
-      return { kind: "number", value: property.minimum ?? 0 };
-    case "boolean":
-      return { kind: "boolean", value: false };
-    case "choice":
-      return property.options[0] === undefined
-        ? undefined
-        : { kind: "choice", value: property.options[0].key };
-    case "field_reference": {
-      const first = studioFittingFields(property, choices.fields)[0];
-      return first === undefined ? undefined : { kind: "field_reference", field: first.reference };
-    }
-    case "query_reference":
-      return choices.queries[0] === undefined
-        ? undefined
-        : { kind: "query_reference", query: choices.queries[0].reference };
-    case "page_reference":
-      return choices.pages[0] === undefined
-        ? undefined
-        : { kind: "page_reference", page: choices.pages[0].key };
-    case "record_type_reference":
-      return choices.recordTypes[0] === undefined
-        ? undefined
-        : { kind: "record_type_reference", record_type: choices.recordTypes[0].key };
-    case "action_reference":
-      return choices.actions[0] === undefined
-        ? undefined
-        : { kind: "action_reference", action: choices.actions[0].reference };
-    case "relationship_reference":
-      return choices.relationships[0] === undefined
-        ? undefined
-        : { kind: "relationship_reference", relationship: choices.relationships[0].reference };
-    // A new entry of these starts only once the person writes its text or picks its record.
-    case "rich_text":
-    case "icon":
-    case "record_reference":
-    case "asset_reference":
-      return undefined;
-  }
-};
-
-type ControlProps = Readonly<{
-  id: string;
-  descriptionId?: string | undefined;
-  property: BlockPropertySchemaContract;
-  value: SettingValue;
-  onChange: (value: SettingValue) => void;
-  choices: StudioSettingChoices;
-  disabled: boolean;
-}>;
-
-/** A number typed as text: the draft is kept while it is not a number, and only a number is reported. */
-function NumberControl({
-  id,
-  property,
-  value,
-  onChange,
-  disabled,
-  descriptionId,
-}: ControlProps): ReactElement {
-  const current = value?.kind === "number" ? String(value.value) : "";
-  const [draft, setDraft] = useState(current);
-  const [seen, setSeen] = useState(current);
-  if (current !== seen) {
-    setSeen(current);
-    setDraft(current);
-  }
-  const integer = property.kind === "number" && property.integer;
-  return (
-    <Input
-      id={id}
-      aria-describedby={descriptionId}
-      type="text"
-      inputMode={integer ? "numeric" : "decimal"}
-      disabled={disabled}
-      value={draft}
-      aria-invalid={draft.trim() !== "" && !Number.isFinite(Number(draft))}
-      onChange={(event) => {
-        const text = event.target.value;
-        setDraft(text);
-        if (text.trim() === "") onChange(undefined);
-        else if (
-          /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?$/i.test(text.trim()) &&
-          Number.isFinite(Number(text))
-        )
-          onChange({ kind: "number", value: Number(text) });
-      }}
-    />
-  );
-}
-
-/**
- * A closed choice among labelled options, with the unset state named by what it means (none when
- * a value is always chosen). Short lists open as a styled list; longer ones are searchable.
- */
-export function StudioOptionControl({
-  id,
-  value,
-  options,
-  unset,
-  disabled,
-  onChange,
-  "aria-describedby": describedBy,
-  "aria-label": label,
-  "aria-invalid": invalid,
-}: Readonly<{
-  id?: string | undefined;
-  value: string;
-  options: readonly Readonly<{ value: string; label: string; disabled?: boolean | undefined }>[];
-  "aria-describedby"?: string | undefined;
-  "aria-label"?: string | undefined;
-  "aria-invalid"?: boolean | undefined;
-  unset?: string | undefined;
-  disabled: boolean;
-  onChange: (value: string) => void;
-}>): ReactElement {
-  const known = value === "" || options.some((option) => option.value === value);
-  if (options.length > 8)
-    return (
-      <StudioReferencePicker
-        id={id}
-        value={value}
-        options={options}
-        unset={unset}
-        disabled={disabled}
-        onChange={onChange}
-        aria-describedby={describedBy}
-        aria-label={label}
-        aria-invalid={invalid}
-      />
-    );
-  const entries = [
-    ...(unset === undefined ? [] : [{ value: "", label: unset, disabled: false }]),
-    ...(known ? [] : [{ value, label: "A removed item", disabled: true }]),
-    ...options,
-  ];
-  return (
-    <Select
-      items={entries.map((entry) => ({ value: entry.value, label: entry.label }))}
-      value={value}
-      disabled={disabled}
-      onValueChange={(next) => {
-        if (typeof next === "string") onChange(next);
-      }}
-    >
-      <SelectTrigger
-        id={id}
-        aria-label={label}
-        aria-describedby={describedBy}
-        aria-invalid={invalid === true || !known}
-        disabled={disabled}
-      >
-        <SelectValue placeholder={unset ?? "Choose…"} />
-      </SelectTrigger>
-      <SelectContent>
-        {entries.map((entry) => (
-          <SelectItem key={entry.value} value={entry.value} disabled={entry.disabled}>
-            {entry.label}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
-  );
-}
 
 const unsetLabel = (
   property: BlockPropertySchemaContract,
@@ -572,7 +173,11 @@ function SettingControl(props: ControlProps): ReactElement {
             }}
           >
             {property.options.map((option) => (
-              <ToggleGroupItem key={option.key} value={option.key} className="flex-1">
+              <ToggleGroupItem
+                key={option.key}
+                value={option.key}
+                className="h-auto min-w-0 flex-1 whitespace-normal px-2 py-1.5 text-center"
+              >
                 {option.label}
               </ToggleGroupItem>
             ))}
@@ -781,71 +386,6 @@ function SettingControl(props: ControlProps): ReactElement {
   }
 }
 
-type RichTextDocument = Extract<SourceBlockPropertyValueContract, { kind: "rich_text" }>["value"];
-type RichTextInline = Extract<
-  RichTextDocument["blocks"][number],
-  { kind: "paragraph" }
->["children"][number];
-
-const inlineWords = (inline: RichTextInline): string =>
-  inline.kind === "text" ? inline.text : inline.children.map(inlineWords).join("");
-
-/** The plain words of a rich-text document, one line per paragraph, heading or list item. */
-const richTextWords = (document: RichTextDocument): string =>
-  document.blocks
-    .map((block) =>
-      block.kind === "paragraph" || block.kind === "heading"
-        ? block.children.map(inlineWords).join("")
-        : block.items.map((item) => item.map(inlineWords).join("")).join("\n"),
-    )
-    .join("\n");
-
-/**
- * Formatted text written as plain paragraphs. The stored document is kept as it is until the
- * person changes the words; an edit stores one paragraph per non-blank line.
- */
-function RichTextControl({ id, value, onChange, disabled }: ControlProps): ReactElement {
-  const current = value?.kind === "rich_text" ? richTextWords(value.value) : "";
-  const [draft, setDraft] = useState(current);
-  const [seen, setSeen] = useState(current);
-  if (current !== seen) {
-    setSeen(current);
-    setDraft(current);
-  }
-  return (
-    <Textarea
-      id={id}
-      disabled={disabled}
-      value={draft}
-      onChange={(event) => {
-        const text = event.target.value;
-        setDraft(text);
-        const paragraphs = text
-          .split(/\r?\n/u)
-          .map((line) => line.trim())
-          .filter((line) => line.length > 0);
-        onChange(
-          paragraphs.length === 0
-            ? undefined
-            : {
-                kind: "rich_text",
-                value: {
-                  blocks: paragraphs.map((line) => ({
-                    kind: "paragraph" as const,
-                    children: [{ kind: "text" as const, text: line }],
-                  })),
-                },
-              },
-        );
-      }}
-    />
-  );
-}
-
-/**
- * A reference to something of this application or of a Module it uses: its own first, then the
- * borrowed ones, which are chosen as they are and changed in their own application.
- */
 function BorrowableReferenceControl({
   id,
   value,
@@ -878,18 +418,6 @@ function BorrowableReferenceControl({
 }
 
 /** A choice of this application or, grouped under its owner's name, of an application it uses. */
-const borrowableOption = (
-  choice: Readonly<{ reference: string; label: string; borrowedFrom?: string | undefined }>,
-): StudioReferencePickerOption => ({
-  value: choice.reference,
-  label: choice.label,
-  group:
-    choice.borrowedFrom === undefined
-      ? "This application"
-      : studioBorrowedGroup(choice.borrowedFrom),
-  readOnly: choice.borrowedFrom !== undefined,
-});
-
 function GroupControl({
   id,
   property,
@@ -1152,82 +680,6 @@ function ListControl({
 }
 
 /** What a query asks for, in a picker row: its inputs by name, or nothing when it asks for none. */
-const queryInputsDescription = (query: StudioQueryChoice): string | undefined =>
-  query.inputs.length === 0
-    ? undefined
-    : `Asks for ${query.inputs.map((input) => (input.required ? input.label : `${input.label} (optional)`)).join(", ")}`;
-
-/**
- * The data a block reads: one of the application's own queries or an exposed query of a Module it
- * uses, which is chosen as it is. `onNewQuery` opens the query sheet, which creates a query in one
- * of the application's own Modules and comes back with it chosen.
- */
-export function StudioQueryPicker({
-  id,
-  queries,
-  recordQueries = [],
-  value,
-  onChange,
-  onNewQuery,
-  disabled,
-}: Readonly<{
-  id: string;
-  queries: readonly StudioQueryChoice[];
-  recordQueries?: readonly StudioQueryChoice[] | undefined;
-  value: string;
-  onChange: (reference: string) => void;
-  onNewQuery?: (() => void) | undefined;
-  disabled: boolean;
-}>): ReactElement {
-  return (
-    <div className="space-y-2" data-vortex-setting="query">
-      <div className="flex items-center justify-between gap-2">
-        <Label htmlFor={id}>Data</Label>
-        {onNewQuery === undefined ? null : (
-          <Button type="button" size="xs" variant="ghost" disabled={disabled} onClick={onNewQuery}>
-            <Plus />
-            New query
-          </Button>
-        )}
-      </div>
-      <StudioReferencePicker
-        id={id}
-        value={value}
-        disabled={disabled}
-        unset="Choose data"
-        onChange={onChange}
-        options={[
-          ...recordQueries.map((query) => ({
-            value: query.reference,
-            label: query.label,
-            group: "Record types",
-            description: `Show all ${query.label.toLowerCase()}`,
-          })),
-          ...queries.map((query) => ({
-            ...borrowableOption(query),
-            description: queryInputsDescription(query),
-          })),
-        ]}
-      />
-      {queries.length === 0 && recordQueries.length === 0 && (
-        <p role="status" className="text-sm">
-          {onNewQuery === undefined
-            ? "Add a query in the Data tab first."
-            : "Add a query with New query."}
-        </p>
-      )}
-      <p className="text-sm text-muted-foreground">
-        Choose a record type to show all its records, or use an existing query.
-      </p>
-    </div>
-  );
-}
-
-/**
- * The typed controls of a set of declared settings, each with its label, whether it is required,
- * its help and its default. `values` holds the settings that are set; a setting left out takes
- * its default.
- */
 type SettingFieldsProps = Readonly<{
   idPrefix: string;
   properties: readonly BlockPropertySchemaContract[];

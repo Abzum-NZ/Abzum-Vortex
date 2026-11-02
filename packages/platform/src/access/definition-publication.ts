@@ -262,7 +262,11 @@ export const createHumanDefinitionPublisher = (
           targetFacts,
           permissions: dependencies.catalogue.permissions,
         });
-        await requireBuilderAuthority(authority, { kind: "publication", rootId: command.rootId });
+        await requireBuilderAuthority(authority, {
+          kind: "publication",
+          rootId: command.rootId,
+          stepUp: true,
+        });
         const readDraftAtRevision = () =>
           readApplicationDefinitionDraft(transaction, scope, {
             rootId: root.data,

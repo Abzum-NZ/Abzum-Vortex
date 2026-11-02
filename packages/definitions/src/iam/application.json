@@ -4985,14 +4985,14 @@
                                     "kind": "literal",
                                     "literal": {
                                       "type": "text",
-                                      "value": "vortex.app.app_store"
+                                      "value": "vortex.app.studio"
                                     }
                                   },
                                   "page_key": {
                                     "kind": "literal",
                                     "literal": {
                                       "type": "text",
-                                      "value": "app_store_catalogue"
+                                      "value": "app_store"
                                     }
                                   }
                                 }
@@ -5385,14 +5385,14 @@
                                     "kind": "literal",
                                     "literal": {
                                       "type": "text",
-                                      "value": "vortex.app.app_store"
+                                      "value": "vortex.app.studio"
                                     }
                                   },
                                   "page_key": {
                                     "kind": "literal",
                                     "literal": {
                                       "type": "text",
-                                      "value": "app_store_catalogue"
+                                      "value": "app_store"
                                     }
                                   }
                                 }

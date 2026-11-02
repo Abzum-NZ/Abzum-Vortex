@@ -94,6 +94,12 @@ export const PLATFORM_SERVICE_OPERATIONS = deepFreeze({
   upgrade_application: entry(sources.upgrade_application),
   review_application_removal: entry(sources.review_application_removal),
   remove_application: entry(sources.remove_application),
+  review_application_purge: entry(sources.review_application_purge),
+  purge_application: entry(sources.purge_application),
+  delete_application: entry(sources.delete_application),
+  create_application: entry(sources.create_application),
+  review_application_publication: entry(sources.review_application_publication),
+  publish_application: entry(sources.publish_application),
 });
 
 /** Every registered release, in registration order, for the publication catalogue. */

@@ -10,7 +10,7 @@ import {
   applyStudioMenuCommand,
   type StudioMenuCommand,
   type StudioMenuResult,
-} from "@vortex/ui/studio";
+} from "@vortex/platform/schema";
 import type { StudioThemeOptions, StudioThemePreset } from "../_lib/studio-theme-options";
 import { StudioMenuPanel } from "./studio-menu-panel";
 import type { StudioThemeChangeOutcome } from "./studio-theme-panel";
