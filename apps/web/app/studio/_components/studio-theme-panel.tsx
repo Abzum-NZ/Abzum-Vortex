@@ -105,7 +105,7 @@ function ThemePresetItem({ preset }: Readonly<{ preset: StudioThemePreset }>) {
   return (
     <ToggleGroupItem
       value={preset.key}
-      className="h-auto flex-col items-stretch justify-start gap-2 p-2 text-left whitespace-normal aria-pressed:ring-2 aria-pressed:ring-primary"
+      className="h-auto flex-col items-stretch justify-start gap-2 p-2 text-left whitespace-normal aria-pressed:inset-ring-2 aria-pressed:inset-ring-primary"
     >
       <span className="block text-sm font-medium">{preset.label}</span>
       <span className="block text-xs font-normal text-muted-foreground">{preset.description}</span>
@@ -147,8 +147,7 @@ function Swatch({
                   aria-label={option.label}
                   className={cn(
                     "size-7 overflow-hidden rounded-full [&_[data-slot=radio-group-indicator]]:hidden",
-                    value === option.id &&
-                      "ring-2 ring-primary ring-offset-2 ring-offset-background",
+                    value === option.id && "inset-ring-2 inset-ring-primary",
                   )}
                   style={
                     option.swatch === undefined
@@ -395,8 +394,9 @@ export function StudioThemePanel({
           {dimension("style").options.map((option) => (
             <div
               key={option.id}
+              data-vortex-focus-group=""
               className={cn(
-                "relative space-y-2 rounded-lg p-2 hover:bg-accent focus-within:ring-2 focus-within:ring-ring",
+                "relative space-y-2 rounded-lg p-2 hover:bg-accent",
                 selection.style === option.id && "ring-2 ring-primary",
                 locked && "opacity-50",
               )}
@@ -405,6 +405,7 @@ export function StudioThemePanel({
                 id={`studio-theme-style-${option.id}`}
                 value={option.id}
                 aria-labelledby={`studio-theme-style-${option.id}-caption`}
+                data-vortex-focus-primary=""
                 className="sr-only"
               />
               <StylePreview style={option.id} />

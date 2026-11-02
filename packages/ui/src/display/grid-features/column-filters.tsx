@@ -294,7 +294,7 @@ function RangeEditor({
           id={`${id}-${suffix}`}
           inputMode="decimal"
           value={value}
-          className="border-0 shadow-none focus-visible:ring-0"
+          className="border-0 shadow-none"
           onChange={(event) => set(event.currentTarget.value)}
           onKeyDown={(event) => {
             event.stopPropagation();

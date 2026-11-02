@@ -240,10 +240,7 @@ export function StudioAccessPermissionList({
                       <Tooltip>
                         <TooltipTrigger
                           render={
-                            <span
-                              tabIndex={0}
-                              className="block truncate rounded-md font-medium outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                            />
+                            <span tabIndex={0} className="block truncate rounded-md font-medium" />
                           }
                         >
                           {permission.label}
@@ -339,7 +336,7 @@ export function StudioAccessPermissionList({
                                 <span
                                   tabIndex={0}
                                   aria-label={`${permission.label} comes with its record type`}
-                                  className="flex size-6 items-center justify-center rounded-md text-muted-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                  className="flex size-6 items-center justify-center rounded-md text-muted-foreground"
                                 />
                               }
                             >

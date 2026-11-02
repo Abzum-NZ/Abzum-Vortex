@@ -252,7 +252,7 @@ function RelatedRecords({ context, row, memory }: GridFeatureRowProps): ReactEle
                     ) : (
                       <NavigationLink
                         href={related.href}
-                        className="underline-offset-4 hover:underline focus-visible:underline focus-visible:outline-none"
+                        className="underline-offset-4 hover:underline"
                       >
                         {cellValueToText(titleValue) || "Open"}
                       </NavigationLink>
@@ -302,7 +302,7 @@ function RelatedRecords({ context, row, memory }: GridFeatureRowProps): ReactEle
                     {index === 0 && related.href !== undefined ? (
                       <NavigationLink
                         href={related.href}
-                        className="font-medium underline-offset-4 hover:underline focus-visible:underline focus-visible:outline-none"
+                        className="font-medium underline-offset-4 hover:underline"
                       >
                         {cellValueToText(cell) || "Open"}
                       </NavigationLink>
