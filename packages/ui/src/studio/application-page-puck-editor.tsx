@@ -19,6 +19,7 @@ import {
   type PageSlotAddress,
   type ImmutablePlatformBlockCatalogue,
   compiledItemSettings,
+  definitionLimits,
 } from "@vortex/platform/schema";
 import type { CompiledItem, SourceItem, SourcePageZone } from "@vortex/platform/schema";
 import type { FieldInputControlReleaseMap } from "../registry";
@@ -442,7 +443,10 @@ function ApplicationPageSlotPuckEditor({
   const catalogue = useMemo(
     () =>
       immutablePlatformBlockCatalogueSchema.parse({
-        compositionPolicy: { maximumDepth: 32, maximumPlacements: 512 },
+        compositionPolicy: {
+          maximumDepth: definitionLimits.compositionDepth,
+          maximumPlacements: definitionLimits.compositionPlacements,
+        },
         releases: [...registry.getReleases()].sort(
           (first, second) =>
             first.blockId.localeCompare(second.blockId) ||

@@ -1,5 +1,12 @@
 "use client";
-import { FieldLegend } from "@vortex/ui/components/field";
+import {
+  Field,
+  FieldContent,
+  FieldDescription,
+  FieldLabel,
+  FieldLegend,
+} from "@vortex/ui/components/field";
+import { Switch } from "@vortex/ui/components/switch";
 
 import { Alert, AlertDescription, AlertTitle } from "@vortex/ui/components/alert";
 import { Button } from "@vortex/ui/components/button";
@@ -8,7 +15,6 @@ import { Input } from "@vortex/ui/components/input";
 import { Label } from "@vortex/ui/components/label";
 import { Textarea } from "@vortex/ui/components/textarea";
 import {
-  StudioHelp,
   StudioInspectorGroup,
   StudioOptionControl,
   StudioSettingFields,
@@ -20,7 +26,7 @@ import {
   moduleFieldTypeLabels,
   plainSourceSettingValue,
   type ApplicationSourceDocument,
-  RECORD_TYPE_MAXIMUM_SORTABLE_FIELDS,
+  definitionLimitUsage,
   type ApplicationUsePlace,
   type CalculationSettings,
   type FormulaField,
@@ -31,6 +37,7 @@ import {
   type TotalSettings,
 } from "@vortex/platform/schema";
 import { StudioField } from "./studio-field";
+import { StudioLimitReason } from "./studio-limit";
 import { StudioPlaceList } from "./studio-used-in";
 import { StudioCalculationEditor } from "./studio-calculation-editor";
 import { StudioTotalEditor } from "./studio-total-editor";
@@ -151,30 +158,53 @@ function FieldFlag({
   checked,
   disabled,
   reason,
+  description,
+  action,
   onChange,
 }: Readonly<{
   name: string;
   text: string;
   checked: boolean;
   disabled: boolean;
-  /** Why the setting cannot be changed, shown behind an info icon. */
+  /** Why the setting cannot be changed, shown on hover and focus. */
   reason?: string | undefined;
+  /** What the setting counts against, such as `5 of 8 used`. */
+  description?: string | undefined;
+  /** A follow-up beside the description, such as listing what uses up the limit. */
+  action?: Readonly<{ label: string; onSelect: () => void }> | undefined;
   onChange: (checked: boolean) => void;
 }>) {
   const id = `module-field-${name}`;
   return (
-    <div className="flex items-center gap-2">
-      <Checkbox
-        id={id}
-        checked={checked}
-        disabled={disabled}
-        onCheckedChange={(next) => onChange(next === true)}
-      />
-      <Label htmlFor={id} className="font-normal">
-        {text}
-      </Label>
-      {reason !== undefined && <StudioHelp hint={reason} />}
-    </div>
+    <Field orientation="horizontal">
+      <StudioLimitReason reason={reason}>
+        <Switch id={id} checked={checked} disabled={disabled} onCheckedChange={onChange} />
+      </StudioLimitReason>
+      <FieldContent>
+        <FieldLabel htmlFor={id} className="font-normal">
+          {text}
+        </FieldLabel>
+        {description === undefined ? null : (
+          <FieldDescription>
+            {description}
+            {action === undefined ? null : (
+              <>
+                {" "}
+                <Button
+                  type="button"
+                  variant="link"
+                  size="xs"
+                  className="h-auto p-0"
+                  onClick={action.onSelect}
+                >
+                  {action.label}
+                </Button>
+              </>
+            )}
+          </FieldDescription>
+        )}
+      </FieldContent>
+    </Field>
   );
 }
 
@@ -489,7 +519,12 @@ export function FieldFormsAndListsSection({
   flags: Readonly<{
     unique: Readonly<{ checked: boolean; reason: string | undefined }>;
     filterable: Readonly<{ checked: boolean; reason: string | undefined }>;
-    sortable: Readonly<{ checked: boolean; reason: string | undefined; used: number }>;
+    sortable: Readonly<{
+      checked: boolean;
+      reason: string | undefined;
+      used: number;
+      showMe: (() => void) | undefined;
+    }>;
   }>;
   offered: readonly FieldPlacementOffer[];
   checkedPlaces: ReadonlySet<string>;
@@ -532,10 +567,7 @@ export function FieldFormsAndListsSection({
           [
             ["unique", "Unique value"],
             ["filterable", "Allow filtering"],
-            [
-              "sortable",
-              `Allow sorting · ${flags.sortable.used} of ${RECORD_TYPE_MAXIMUM_SORTABLE_FIELDS} used`,
-            ],
+            ["sortable", "Allow sorting"],
           ] as const
         ).map(([key, text]) => (
           <FieldFlag
@@ -545,6 +577,16 @@ export function FieldFormsAndListsSection({
             checked={flags[key].checked}
             disabled={disabled || flags[key].reason !== undefined}
             reason={flags[key].reason}
+            description={
+              key === "sortable"
+                ? definitionLimitUsage("sortableFieldsPerRecordType", flags.sortable.used)
+                : undefined
+            }
+            action={
+              key === "sortable" && flags.sortable.showMe !== undefined
+                ? { label: "Show me", onSelect: flags.sortable.showMe }
+                : undefined
+            }
             onChange={(checked) => onFlag(key, checked)}
           />
         ))}

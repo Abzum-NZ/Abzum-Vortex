@@ -1,9 +1,12 @@
 "use client";
-import { FieldLegend } from "@vortex/ui/components/field";
+import { FieldDescription, FieldLegend } from "@vortex/ui/components/field";
+import { StudioLimitReason, studioLimitReason } from "./studio-limit";
 import { Alert, AlertDescription } from "@vortex/ui/components/alert";
 import { useMemo, useState, type FormEvent } from "react";
 import {
   applicationUses,
+  definitionLimitReached,
+  definitionLimitUsage,
   deleteInlineModuleAction,
   saveInlineModuleAction,
   type ApplicationSourceDocument,
@@ -345,16 +348,21 @@ export function StudioModuleActions({
     >
       <div className="flex items-center justify-between gap-2">
         <h3 className="text-sm font-semibold">Actions</h3>
-        <Button
-          type="button"
-          size="sm"
-          variant="outline"
-          disabled={disabled}
-          onClick={() => setEditing("new")}
-        >
-          Add an action
-        </Button>
+        <StudioLimitReason reason={studioLimitReason("actionsPerModule", module.actions.length)}>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            disabled={disabled || definitionLimitReached("actionsPerModule", module.actions.length)}
+            onClick={() => setEditing("new")}
+          >
+            Add an action
+          </Button>
+        </StudioLimitReason>
       </div>
+      <FieldDescription>
+        Actions in {module.name}: {definitionLimitUsage("actionsPerModule", module.actions.length)}
+      </FieldDescription>
       {actions.length === 0 && (
         <p className="text-sm text-muted-foreground">No named actions yet, such as Mark won.</p>
       )}

@@ -33,8 +33,8 @@ import {
   peopleDirectory,
   plainSourceSettingValue,
   qualifiedLinkTarget,
-  RECORD_TYPE_MAXIMUM_SORTABLE_FIELDS,
-  sortableFieldLimitMessage,
+  definitionLimitMessage,
+  definitionLimitReached,
   readModuleFieldDefault,
   readModuleFieldSettings,
   settledCalculation,
@@ -138,6 +138,7 @@ export function ModuleFieldsEditor({
   onAdded,
   onRemoved,
   onCancel,
+  onShowSortable,
 }: Readonly<{
   source: Source;
   moduleKey: string;
@@ -156,6 +157,8 @@ export function ModuleFieldsEditor({
   onRemoved?: () => void;
   /** Called when the builder gives up adding the field. */
   onCancel?: () => void;
+  /** Lists the record type's sortable fields, from the sorting limit's "Show me". */
+  onShowSortable?: () => void;
 }>) {
   const [confirm, confirmDialog] = useConfirm();
   const placeOpener = useStudioPlaceOpener();
@@ -862,8 +865,8 @@ export function ModuleFieldsEditor({
   ).length;
   const sortableUsed = sortableInUse + (form.sortable ? 1 : 0);
   const sortableReason =
-    !form.sortable && sortableInUse >= RECORD_TYPE_MAXIMUM_SORTABLE_FIELDS
-      ? sortableFieldLimitMessage
+    !form.sortable && definitionLimitReached("sortableFieldsPerRecordType", sortableInUse)
+      ? definitionLimitMessage("sortableFieldsPerRecordType")
       : undefined;
   const privacyEvents =
     existing === undefined || form.personalData === "none"
@@ -1078,7 +1081,12 @@ export function ModuleFieldsEditor({
               checked: form.filterable,
               reason: isTitleField ? "The title is always filterable" : undefined,
             },
-            sortable: { checked: form.sortable, reason: sortableReason, used: sortableUsed },
+            sortable: {
+              checked: form.sortable,
+              reason: sortableReason,
+              used: sortableUsed,
+              showMe: sortableReason === undefined ? undefined : onShowSortable,
+            },
           }}
           onFlag={(key, checked) => change({ [key]: checked })}
           offered={offered}

@@ -1,7 +1,7 @@
 "use client";
 
 import { Alert, AlertDescription } from "../components/alert";
-import { FieldGroup } from "../components/field";
+import { FieldDescription, FieldGroup } from "../components/field";
 import { useEffect, useRef, useState, type ReactElement } from "react";
 import {
   canonicalJson,
@@ -663,6 +663,13 @@ function ListControl({
           </Button>
         )}
       </StudioEntryList>
+      {named === undefined ? null : (
+        <FieldDescription>
+          {full
+            ? `${items.length} of ${property.maximumItems} used. You can have up to ${property.maximumItems} ${itemName}s here. Remove one first.`
+            : `${items.length} of ${property.maximumItems} used`}
+        </FieldDescription>
+      )}
       {confirmDialog}
     </>
   );

@@ -32,9 +32,9 @@ import {
 import { useConfirm } from "@vortex/ui/components/confirm-dialog";
 
 import { useEffect, useRef, useState } from "react";
+import { definitionLimits } from "@vortex/platform/schema";
 import { reviewStudioApplicationSource } from "../actions";
 import {
-  maximumApplicationSourceImportBytes,
   readStudioApplicationSourceImport,
   sameStudioApplicationSourceImportSnapshot,
   studioApplicationSourceReviewResultSchema,
@@ -167,7 +167,7 @@ export function ApplicationSourceImport({ disabled, readSnapshot, onApply }: Pro
     setDiagnostics(null);
     busy.current = null;
     setOperation(null);
-    if (file.size > maximumApplicationSourceImportBytes) {
+    if (file.size > definitionLimits.sourceImportBytes) {
       studioNotice(
         "The JSON source must be at most 2 MiB. Your existing input is preserved.",
         "error",
@@ -187,8 +187,8 @@ export function ApplicationSourceImport({ disabled, readSnapshot, onApply }: Pro
         return;
       }
       if (
-        value.length > maximumApplicationSourceImportBytes ||
-        new TextEncoder().encode(value).byteLength > maximumApplicationSourceImportBytes
+        value.length > definitionLimits.sourceImportBytes ||
+        new TextEncoder().encode(value).byteLength > definitionLimits.sourceImportBytes
       ) {
         studioNotice(
           "The JSON source must be at most 2 MiB. Your previous input is preserved.",

@@ -4,6 +4,7 @@ import type { StudioSemanticOutline, StudioSemanticOutlineNode } from "@vortex/u
 import { StudioPanelShell, StudioSearchBox, StudioSection } from "./studio-frame";
 import { StudioNavEmpty } from "./studio-nav-tree";
 import { StudioOutline } from "./studio-outline";
+import { StudioLimitRow } from "./studio-limit";
 
 /**
  * The rail panels drawn from the one semantic outline of the draft: Structure (the application, its
@@ -43,6 +44,22 @@ const filterNodes = (
     const children = filterNodes(node.children, needle);
     return children.length === 0 ? [] : [{ ...node, children }];
   });
+};
+
+/** How many blocks a page or layout holds and how deeply they nest, against the composition limits. */
+const measureBlocks = (
+  nodes: readonly StudioSemanticOutlineNode[],
+  depth = 0,
+): Readonly<{ count: number; deepest: number }> => {
+  let count = 0;
+  let deepest = depth;
+  for (const node of nodes) {
+    const placed = node.kind === "placement";
+    const inner = measureBlocks(node.children, placed ? depth + 1 : depth);
+    count += (placed ? 1 : 0) + inner.count;
+    deepest = Math.max(deepest, placed ? depth + 1 : depth, inner.deepest);
+  }
+  return { count, deepest };
 };
 
 const withoutChildren = (node: StudioSemanticOutlineNode): StudioSemanticOutlineNode => ({
@@ -168,6 +185,7 @@ export function StudioBlockOutlinePanel({
   const [query, setQuery] = useState("");
   const owner = ownerKey === undefined ? undefined : findNode(outline, ownerKey);
   const blocks = useMemo(() => filterNodes(owner?.children ?? [], query), [owner, query]);
+  const usage = useMemo(() => measureBlocks(outline.children), [outline]);
   return (
     <StudioPanelShell
       title="Outline"
@@ -200,6 +218,14 @@ export function StudioBlockOutlinePanel({
               empty={query.length > 0 ? "No block matches." : "This has no blocks yet."}
             />
           </StudioSection>
+          <div className="space-y-1 px-1 pt-2" aria-label="Page limits">
+            <StudioLimitRow
+              label="Blocks in the application"
+              limit="compositionPlacements"
+              used={usage.count}
+            />
+            <StudioLimitRow label="Nesting" limit="compositionDepth" used={usage.deepest} />
+          </div>
         </>
       )}
     </StudioPanelShell>

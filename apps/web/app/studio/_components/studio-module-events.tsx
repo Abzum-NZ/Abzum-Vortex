@@ -1,8 +1,14 @@
 "use client";
-import { FieldLegend } from "@vortex/ui/components/field";
+import { FieldDescription, FieldLegend } from "@vortex/ui/components/field";
+import { StudioLimitReason, studioLimitReason } from "./studio-limit";
 import { Alert, AlertDescription } from "@vortex/ui/components/alert";
 import { useState, type FormEvent } from "react";
-import { saveInlineModuleEvent, type ApplicationSourceDocument } from "@vortex/platform/schema";
+import {
+  definitionLimitReached,
+  definitionLimitUsage,
+  saveInlineModuleEvent,
+  type ApplicationSourceDocument,
+} from "@vortex/platform/schema";
 import { Icon } from "@vortex/ui";
 import { Button } from "@vortex/ui/components/button";
 import { Checkbox } from "@vortex/ui/components/checkbox";
@@ -180,16 +186,21 @@ export function StudioModuleEvents({
     <section className="space-y-2" aria-label="Named events">
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-semibold">Named events</h3>
-        <Button
-          type="button"
-          size="sm"
-          variant="outline"
-          disabled={disabled}
-          onClick={() => setEditing("new")}
-        >
-          Declare event
-        </Button>
+        <StudioLimitReason reason={studioLimitReason("eventsPerModule", module.events.length)}>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            disabled={disabled || definitionLimitReached("eventsPerModule", module.events.length)}
+            onClick={() => setEditing("new")}
+          >
+            Declare event
+          </Button>
+        </StudioLimitReason>
       </div>
+      <FieldDescription>
+        Events in {module.name}: {definitionLimitUsage("eventsPerModule", module.events.length)}
+      </FieldDescription>
       {events.map((event) => (
         <div key={event.id} className="flex items-center gap-2 rounded-md py-2 hover:bg-muted/50">
           <p className="mr-auto break-all text-sm">

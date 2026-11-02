@@ -1,3 +1,4 @@
+import { definitionLimits } from "./definition-limits";
 import type { fieldTypeKeys } from "../catalogue/catalogues";
 import {
   plainSourceSettingValue,
@@ -279,7 +280,14 @@ const tableColumnItem = (permissions: ModuleFieldSettingsContext["permissions"])
       isoDate("earliest", "Earliest date (date)"),
       isoDate("latest", "Latest date (date)"),
       choice("display_time_zone", "Time zone shown (date and time)", true, timeZones),
-      list("options", "Options (choice)", false, 0, 200, optionItem(permissions)),
+      list(
+        "options",
+        "Options (choice)",
+        false,
+        0,
+        definitionLimits.choiceOptions,
+        optionItem(permissions),
+      ),
     ].map((property): Declaration => {
       if (["key", "required", "type"].includes(property.key)) return property;
       return {
@@ -435,7 +443,7 @@ export const moduleFieldSettingDeclarations = (
           "Options",
           true,
           1,
-          200,
+          definitionLimits.choiceOptions,
           optionItem(
             context.permissions,
             context.fields.some((field) => field.type === "choice"),
@@ -451,13 +459,13 @@ export const moduleFieldSettingDeclarations = (
           "Options",
           true,
           1,
-          200,
+          definitionLimits.choiceOptions,
           optionItem(context.permissions),
           "Add, rename and reorder the options people choose from.",
         ),
         number("maximum_selections", "Most options a person may choose", false, {
           minimum: 1,
-          maximum: 200,
+          maximum: definitionLimits.choiceOptions,
         }),
       ];
     case "reference_number":

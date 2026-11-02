@@ -1,8 +1,11 @@
 "use client";
 import { FieldLegend } from "@vortex/ui/components/field";
 import { useState, type FormEvent } from "react";
+import { StudioLimitReason, studioLimitReason } from "./studio-limit";
 import {
   applicationUses,
+  definitionLimitReached,
+  definitionLimitUsage,
   deleteInlinePipeline,
   inlineActionSetsOption,
   inlineOptionOwner,
@@ -680,16 +683,29 @@ export function StudioRecordPipelines({
   return (
     <section className="space-y-6" aria-label={`Pipelines of ${record.plural_name}`}>
       <div className="flex items-center justify-between gap-2">
-        <h3 className="text-base font-semibold">Pipelines</h3>
-        <Button
-          type="button"
-          size="sm"
-          variant="outline"
-          disabled={disabled || !free}
-          onClick={() => setEditing("new")}
+        <h3 className="text-base font-semibold">
+          Pipelines{" "}
+          <span className="text-sm font-normal text-muted-foreground">
+            {definitionLimitUsage("pipelinesPerRecordType", record.pipelines.length)}
+          </span>
+        </h3>
+        <StudioLimitReason
+          reason={studioLimitReason("pipelinesPerRecordType", record.pipelines.length)}
         >
-          Add a pipeline
-        </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            disabled={
+              disabled ||
+              !free ||
+              definitionLimitReached("pipelinesPerRecordType", record.pipelines.length)
+            }
+            onClick={() => setEditing("new")}
+          >
+            Add a pipeline
+          </Button>
+        </StudioLimitReason>
       </div>
       {record.pipelines.length === 0 && (
         <Empty>

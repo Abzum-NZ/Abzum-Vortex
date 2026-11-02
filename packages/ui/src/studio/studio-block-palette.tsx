@@ -9,6 +9,8 @@ import { Button } from "../components/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../components/tooltip";
 import { Input } from "../components/input";
 import { Label } from "../components/label";
+import { FieldDescription } from "../components/field";
+import { definitionLimitUsage } from "@vortex/platform/schema";
 import { StudioOptionControl } from "./studio-setting-basic-controls";
 import type {
   StudioCompositionAddTarget,
@@ -114,6 +116,10 @@ export function StudioBlockPalette({
           ? "Use Add to put a block into the layout."
           : "Drag onto the page or use Add."}
       </p>
+      <FieldDescription>
+        Blocks in the application: {definitionLimitUsage("compositionPlacements", target.placed)}.
+        Nesting: {definitionLimitUsage("compositionDepth", target.depth)}.
+      </FieldDescription>
       {message.length === 0 ? null : (
         <p role="status" aria-live="polite" className="text-sm">
           {message}

@@ -131,6 +131,8 @@ export function useStudioDataTab({
   const [newQuery, setNewQuery] = useState(false);
   const [creatingModule, setCreatingModule] = useState(false);
   const [section, setSection] = useState("fields");
+  // The record type whose field list shows only its sortable fields (the limit row's "Show me").
+  const [sortableScope, setSortableScope] = useState<string | null>(null);
   const [adding, setAdding] = useState<Readonly<{ scope: string; type: "text" | "link" }> | null>(
     null,
   );
@@ -293,6 +295,8 @@ export function useStudioDataTab({
     },
     section,
     setSection,
+    sortableOnly: sortableScope !== null && sortableScope === scope,
+    setSortableOnly: (on: boolean) => setSortableScope(on ? scope : null),
     unsaved,
     isOwned,
     module,

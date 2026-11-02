@@ -1,3 +1,4 @@
+import { definitionLimitMessage, definitionLimits } from "./definition-limits";
 import { definitionContractVersion } from "./application-contract-versions";
 import { z } from "zod";
 import {
@@ -39,9 +40,6 @@ import { recordTitleFieldEligible } from "./record-title-field";
 import { moduleSourceActionInputSchema } from "./module-source-action-inputs";
 import { moduleQueryExposureSchema } from "./module-query-exposure";
 import {
-  maximumPipelineStages,
-  maximumPipelineTransitions,
-  maximumRecordTypePipelines,
   pipelineShapeProblems,
   pipelineStageSchema,
   pipelineTransitionSchema,
@@ -95,8 +93,6 @@ export const isWritableSystemProjection = (protectedView: string): boolean =>
   writableSystemProjectionViews.includes(protectedView);
 
 const maximumSourceDocumentNodes = 50_000;
-const maximumSourceNestingDepth = 32;
-const maximumSourceContainerItems = 1_000;
 const maximumSourceStringLength = 1_000_000;
 
 const inspectSourceBounds = (value: unknown, context: z.RefinementCtx) => {
@@ -123,7 +119,7 @@ const inspectSourceBounds = (value: unknown, context: z.RefinementCtx) => {
       });
       return z.NEVER;
     }
-    if (entry.depth > maximumSourceNestingDepth) {
+    if (entry.depth > definitionLimits.sourceNestingDepth) {
       context.addIssue({
         code: "custom",
         path: entry.path,
@@ -148,7 +144,10 @@ const inspectSourceBounds = (value: unknown, context: z.RefinementCtx) => {
       });
       return z.NEVER;
     }
-    if (Array.isArray(entry.value) && entry.value.length > maximumSourceContainerItems) {
+    if (
+      Array.isArray(entry.value) &&
+      entry.value.length > definitionLimits.sourceContainerMembers
+    ) {
       context.addIssue({
         code: "custom",
         path: entry.path,
@@ -161,10 +160,10 @@ const inspectSourceBounds = (value: unknown, context: z.RefinementCtx) => {
       for (const key in entry.value) {
         if (!Object.prototype.hasOwnProperty.call(entry.value, key)) continue;
         keys.push(key);
-        if (keys.length > maximumSourceContainerItems) break;
+        if (keys.length > definitionLimits.sourceContainerMembers) break;
       }
     }
-    if (keys !== undefined && keys.length > maximumSourceContainerItems) {
+    if (keys !== undefined && keys.length > definitionLimits.sourceContainerMembers) {
       context.addIssue({
         code: "custom",
         path: entry.path,
@@ -269,10 +268,14 @@ export const moduleSourcePermissionRecordScopeSchema =
 export const sourcePermissionFieldPolicySchema = z
   .object({
     readable_fields: sourceProvenanceUnchanged(
-      z.array(sourceProvenanceTarget(builderKeySchema, ["readableFieldIds/#"])).max(500),
+      z
+        .array(sourceProvenanceTarget(builderKeySchema, ["readableFieldIds/#"]))
+        .max(definitionLimits.fieldsPerRecordType),
     ),
     changeable_fields: sourceProvenanceUnchanged(
-      z.array(sourceProvenanceTarget(builderKeySchema, ["changeableFieldIds/#"])).max(500),
+      z
+        .array(sourceProvenanceTarget(builderKeySchema, ["changeableFieldIds/#"]))
+        .max(definitionLimits.fieldsPerRecordType),
     ),
   })
   .strict()
@@ -339,10 +342,14 @@ const moduleSourceSystemProjectionSchema = z
         .optional(),
     ),
     filterable_fields: sourceProvenanceUnchanged(
-      z.array(sourceProvenanceTarget(builderKeySchema, ["filterableFieldIds/#"])).max(500),
+      z
+        .array(sourceProvenanceTarget(builderKeySchema, ["filterableFieldIds/#"]))
+        .max(definitionLimits.fieldsPerRecordType),
     ),
     sortable_fields: sourceProvenanceUnchanged(
-      z.array(sourceProvenanceTarget(builderKeySchema, ["sortableFieldIds/#"])).max(500),
+      z
+        .array(sourceProvenanceTarget(builderKeySchema, ["sortableFieldIds/#"]))
+        .max(definitionLimits.fieldsPerRecordType),
     ),
   })
   .strict()
@@ -411,7 +418,9 @@ const moduleSourceRecordTypeSchema = z
     before_save_rules: sourceProvenanceUnchanged(
       z.array(sourceProvenanceTarget(sourceAliasSchema, ["beforeSaveFlowIds/#"])).max(100),
     ),
-    fields: sourceProvenanceUnchanged(z.array(moduleSourceFieldSchema).min(1).max(500)),
+    fields: sourceProvenanceUnchanged(
+      z.array(moduleSourceFieldSchema).min(1).max(definitionLimits.fieldsPerRecordType),
+    ),
     relationships: sourceProvenanceUnchanged(
       z
         .array(
@@ -455,17 +464,17 @@ const moduleSourceRecordTypeSchema = z
               name: sourceProvenanceUnchanged(labelSchema),
               stage_field: sourceProvenanceTarget(builderKeySchema, ["stageFieldId"]),
               stages: sourceProvenanceUnchanged(
-                z.array(pipelineStageSchema).min(1).max(maximumPipelineStages),
+                z.array(pipelineStageSchema).min(1).max(definitionLimits.pipelineStages),
                 true,
               ),
               transitions: sourceProvenanceUnchanged(
-                z.array(pipelineTransitionSchema).max(maximumPipelineTransitions),
+                z.array(pipelineTransitionSchema).max(definitionLimits.pipelineTransitions),
                 true,
               ),
             })
             .strict(),
         )
-        .max(maximumRecordTypePipelines),
+        .max(definitionLimits.pipelinesPerRecordType),
     ),
   })
   .strict()
@@ -510,7 +519,7 @@ const moduleSourceRecordTypeSchema = z
       context.addIssue({
         code: "custom",
         path: ["fields", overSortableLimit],
-        message: sortableFieldLimitMessage,
+        message: definitionLimitMessage("sortableFieldsPerRecordType"),
       });
     if ((value.ownership_mode === "inherited") !== (value.ownership_relationship !== undefined))
       context.addIssue({
@@ -660,7 +669,9 @@ const moduleSourceActionSchema = z
       z.array(namespacedKeySchema).min(2).optional(),
     ),
     shareable: sourceProvenanceTarget(z.boolean(), ["sharing"]),
-    inputs: sourceProvenanceUnchanged(z.array(moduleSourceActionInputSchema).max(50)),
+    inputs: sourceProvenanceUnchanged(
+      z.array(moduleSourceActionInputSchema).max(definitionLimits.actionInputs),
+    ),
     precondition: sourceProvenanceUnchanged(sourceConditionSchema.optional()),
     flow: sourceProvenanceTarget(flowAliasSchema.optional(), ["flowId"]),
     sets_choice_field: sourceProvenanceTarget(builderKeySchema.optional(), ["setsChoiceFieldId"]),
@@ -775,7 +786,9 @@ const moduleSourceSharingConditionSchema = z
     parameters: sourceProvenanceUnchanged(z.array(moduleSourceSharingParameterSchema).max(100)),
     condition: sourceProvenanceUnchanged(sourceConditionSchema),
     declared_fields: sourceProvenanceUnchanged(
-      z.array(sourceProvenanceTarget(builderKeySchema, ["declaredFieldIds/#"])).max(500),
+      z
+        .array(sourceProvenanceTarget(builderKeySchema, ["declaredFieldIds/#"]))
+        .max(definitionLimits.fieldsPerRecordType),
     ),
     publication_tests: sourceProvenanceUnchanged(
       z.array(moduleSourceSharingPublicationTestSchema).min(1).max(100),
@@ -818,21 +831,13 @@ const moduleSourceQueryAggregateSchema = z
   })
   .strict();
 
-/** The most totals one query holds and the most queries one Module holds. */
-export const MODULE_QUERY_MAXIMUM_TOTALS = 20;
-export const MODULE_MAXIMUM_QUERIES = 100;
-
-/** The most sortable fields one record type declares: the one source of this limit. */
-export const RECORD_TYPE_MAXIMUM_SORTABLE_FIELDS = 8;
-export const sortableFieldLimitMessage = `A record type can have up to ${RECORD_TYPE_MAXIMUM_SORTABLE_FIELDS} sortable fields. Turn sorting off on another field first.`;
-
 /** The index of the first field that takes a record type past the sortable limit, if any. */
 export const firstFieldOverSortableLimit = (
   fields: readonly Readonly<{ sortable: boolean }>[],
 ): number | undefined => {
   let seen = 0;
   for (const [index, field] of fields.entries())
-    if (field.sortable && ++seen > RECORD_TYPE_MAXIMUM_SORTABLE_FIELDS) return index;
+    if (field.sortable && ++seen > definitionLimits.sortableFieldsPerRecordType) return index;
   return undefined;
 };
 
@@ -854,7 +859,9 @@ const moduleSourceQuerySchema = z
       z.union([builderKeySchema, sourceQualifiedRecordTypeSchema]),
       ["recordType/**"],
     ),
-    inputs: sourceProvenanceUnchanged(z.array(moduleSourceActionInputSchema).max(50)),
+    inputs: sourceProvenanceUnchanged(
+      z.array(moduleSourceActionInputSchema).max(definitionLimits.actionInputs),
+    ),
     select: sourceProvenanceUnchanged(
       z
         .array(sourceProvenanceTarget(builderKeySchema, ["selectedFieldIds/#"]))
@@ -866,10 +873,14 @@ const moduleSourceQuerySchema = z
       z.array(sourceProvenanceTarget(builderKeySchema, ["groupByFieldIds/#"])).max(10),
     ),
     aggregates: sourceProvenanceUnchanged(
-      z.array(moduleSourceQueryAggregateSchema).max(MODULE_QUERY_MAXIMUM_TOTALS),
+      z.array(moduleSourceQueryAggregateSchema).max(definitionLimits.queryTotals),
     ),
-    sort: sourceProvenanceUnchanged(z.array(moduleSourceQuerySortSchema).min(1).max(20)),
-    page_size: sourceProvenanceUnchanged(z.number().int().min(1).max(200)),
+    sort: sourceProvenanceUnchanged(
+      z.array(moduleSourceQuerySortSchema).min(1).max(definitionLimits.querySortKeys),
+    ),
+    page_size: sourceProvenanceUnchanged(
+      z.number().int().min(1).max(definitionLimits.queryPageSize),
+    ),
     relationship_hops: sourceProvenanceUnchanged(z.number().int().min(0).max(2)),
   })
   .strict();
@@ -916,7 +927,9 @@ const moduleSourceContributionSchema = z.discriminatedUnion("kind", [
 const moduleSourceBodyFields = {
   name: sourceProvenanceUnchanged(z.string().min(1).max(120)),
   description: sourceProvenanceUnchanged(z.string().min(1).max(1_000)),
-  record_types: sourceProvenanceUnchanged(z.array(moduleSourceRecordTypeSchema).max(100)),
+  record_types: sourceProvenanceUnchanged(
+    z.array(moduleSourceRecordTypeSchema).max(definitionLimits.recordTypesPerModule),
+  ),
   permissions: sourceProvenanceUnchanged(
     z
       .array(
@@ -959,7 +972,9 @@ const moduleSourceBodyFields = {
       )
       .max(100),
   ),
-  actions: sourceProvenanceUnchanged(z.array(moduleSourceActionSchema).max(100)),
+  actions: sourceProvenanceUnchanged(
+    z.array(moduleSourceActionSchema).max(definitionLimits.actionsPerModule),
+  ),
   events: sourceProvenanceUnchanged(
     z
       .array(
@@ -1007,7 +1022,7 @@ const moduleSourceBodyFields = {
     z.array(moduleSourceSharingConditionSchema).max(100),
   ),
   queries: sourceProvenanceUnchanged(
-    z.array(moduleSourceQuerySchema).max(MODULE_MAXIMUM_QUERIES).default([]),
+    z.array(moduleSourceQuerySchema).max(definitionLimits.queriesPerModule).default([]),
   ),
 };
 

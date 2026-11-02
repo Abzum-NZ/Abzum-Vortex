@@ -3,6 +3,7 @@ import { useState, type FormEvent } from "react";
 import {
   createInlineRecordType,
   deriveOwnedModuleKey,
+  definitionLimitUsage,
   deriveRecordTypeKey,
   type ApplicationSourceDocument,
   type ModuleFieldPublication,
@@ -17,7 +18,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@vortex/ui/components/dialog";
-import { FieldGroup, FieldLegend, FieldSet } from "@vortex/ui/components/field";
+import { FieldDescription, FieldGroup, FieldLegend, FieldSet } from "@vortex/ui/components/field";
 import { Input } from "@vortex/ui/components/input";
 import {
   StudioInspectorGroup,
@@ -26,6 +27,7 @@ import {
   StudioSegmentedControl,
 } from "@vortex/ui/studio";
 import { StudioField } from "./studio-field";
+import { StudioLimitReason, studioLimitReason } from "./studio-limit";
 import { recordOwnershipLabels, recordStorageLabels } from "./studio-record-storage-ownership";
 import { studioEditProblem, type StudioDataEdit } from "../_lib/studio-data-model";
 
@@ -97,6 +99,10 @@ export function StudioRecordTypeDialog({
   const effectiveKey = key ?? derivedKey;
   const effectivePlural = plural ?? pluralOf(name);
   const firstModule = modules.length === 0;
+  const recordTypeLimitReason = studioLimitReason(
+    "recordTypesPerModule",
+    target?.record_types.length ?? 0,
+  );
 
   const reset = () => {
     setName("");
@@ -320,6 +326,11 @@ export function StudioRecordTypeDialog({
                 </StudioField>
               )
             )}
+            {target === undefined ? null : (
+              <FieldDescription>
+                {`Record types in ${target.name}: ${definitionLimitUsage("recordTypesPerModule", target.record_types.length)}`}
+              </FieldDescription>
+            )}
             {issues.length === 0 ? null : (
               <ul
                 role="alert"
@@ -344,9 +355,15 @@ export function StudioRecordTypeDialog({
           >
             Cancel
           </Button>
-          <Button type="submit" form="studio-record-type-form">
-            Add record type
-          </Button>
+          <StudioLimitReason reason={recordTypeLimitReason}>
+            <Button
+              type="submit"
+              form="studio-record-type-form"
+              disabled={recordTypeLimitReason !== undefined}
+            >
+              Add record type
+            </Button>
+          </StudioLimitReason>
         </DialogFooter>
       </DialogContent>
     </Dialog>

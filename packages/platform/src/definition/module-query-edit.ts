@@ -1,3 +1,4 @@
+import { definitionLimits } from "./definition-limits";
 import { builderKeySchema } from "../catalogue/identifiers";
 import type { ModuleQueryExposure } from "./module-query-exposure";
 import { readTimeCalculations } from "./module-field-formulas";
@@ -29,7 +30,6 @@ export type InlineQuerySort = InlineQuery["sort"][number];
 
 /** A list page holds 40 records unless its query says otherwise, and never more than 200. */
 export const defaultQueryPageSize = 40;
-export const maximumQueryPageSize = 200;
 
 /** Field types a query can group by: the database groups exactly these. */
 export const queryGroupFieldTypes: ReadonlySet<string> = new Set([
@@ -329,10 +329,10 @@ const inlineQueryProblems = (record: RecordType, query: InlineQuery): string[] =
   }
   if (
     query.page_size < 1 ||
-    query.page_size > maximumQueryPageSize ||
+    query.page_size > definitionLimits.queryPageSize ||
     !Number.isInteger(query.page_size)
   )
-    problems.push(`Page size: enter a whole number from 1 to ${maximumQueryPageSize}.`);
+    problems.push(`Page size: enter a whole number from 1 to ${definitionLimits.queryPageSize}.`);
   const inputSeen = new Set<string>();
   for (const [index, input] of query.inputs.entries()) {
     if (inputSeen.has(input.key))

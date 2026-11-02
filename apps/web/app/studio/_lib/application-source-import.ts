@@ -7,11 +7,10 @@ import {
   organizationIdSchema,
   revisionSchema,
   canonicalJson,
-  sortableFieldLimitMessage,
+  definitionLimitMessage,
+  definitionLimits,
   type ApplicationSourceDocument,
 } from "@vortex/platform/schema";
-
-export const maximumApplicationSourceImportBytes = 2 * 1024 * 1024;
 
 export const studioApplicationSourceReviewRequestSchema = z
   .object({
@@ -90,8 +89,11 @@ export const sameStudioApplicationSourceImportSnapshot = (
   expected.localLifetime === current.localLifetime &&
   canonicalJson(expected.source) === canonicalJson(current.source);
 
-/** Inspect raw member names before JSON.parse can silently discard a duplicate. */
-function hasUnambiguousMembers(text: string): boolean {
+/**
+ * Inspect raw member names before JSON.parse can silently discard a duplicate. Returns what is
+ * wrong in a builder's words, or nothing when the text is unambiguous.
+ */
+function ambiguousMembers(text: string): string | undefined {
   const containers: (Set<string> | null)[] = [];
   for (let index = 0; index < text.length; index += 1) {
     const character = text[index];
@@ -105,22 +107,26 @@ function hasUnambiguousMembers(text: string): boolean {
         if (text[index] === "\\") index += 1;
         index += 1;
       }
-      if (index >= text.length) return false;
+      if (index >= text.length) return "The JSON source ends inside a text value.";
       let next = index + 1;
       while (next < text.length && /\s/.test(text[next]!)) next += 1;
       if (text[next] === ":") {
         const members = containers[containers.length - 1];
-        if (members === undefined || members === null) return false;
+        if (members === undefined || members === null)
+          return "The JSON source has a member name outside an object.";
         const name: unknown = JSON.parse(text.slice(start, index + 1));
-        if (typeof name !== "string" || members.has(name)) return false;
+        if (typeof name !== "string" || members.has(name))
+          return `The JSON source names "${String(name)}" twice in one object. Remove the duplicate.`;
         members.add(name);
-        if (members.size > 1_000) return false;
+        if (members.size > definitionLimits.sourceContainerMembers)
+          return `An object in the JSON source has more than ${definitionLimits.sourceContainerMembers} members, the most one may have. Remove some.`;
       }
     }
     // The existing body bound is 32; the envelope adds the root and body containers.
-    if (containers.length > 34) return false;
+    if (containers.length > definitionLimits.sourceNestingDepth + 2)
+      return `The JSON source nests objects and lists more than ${definitionLimits.sourceNestingDepth} levels deep, the most it may. Flatten the deepest part.`;
   }
-  return true;
+  return undefined;
 }
 
 const itemKinds: Readonly<Record<string, string>> = {
@@ -171,6 +177,35 @@ const describeIssuePlace = (input: unknown, path: readonly PropertyKey[]): strin
   return places.length === 0 ? "the file" : places.reverse().join(" of ");
 };
 
+/** What each list of a source is called in a builder's words. */
+const listNames: Readonly<Record<string, string>> = {
+  fields: "fields",
+  record_types: "record types",
+  queries: "queries",
+  actions: "actions",
+  events: "events",
+  flows: "flows",
+  inputs: "inputs",
+  aggregates: "totals",
+  sort: "sort fields",
+  options: "options",
+  stages: "stages",
+  transitions: "transitions",
+  pipelines: "pipelines",
+};
+
+/** A value past a limit the schemas declare: where it is, what is limited and by how much. */
+const describeSourceLimit = (where: string, issue: z.core.$ZodIssueTooBig): string => {
+  const property = issue.path.at(-1);
+  const name = typeof property === "string" ? property.replaceAll("_", " ") : "value";
+  const limit = String(issue.maximum);
+  if (issue.origin === "array")
+    return `In ${where}: at most ${limit} ${typeof property === "string" ? (listNames[property] ?? name) : "items"} are allowed, and the file has more. Remove some and check the file again.`;
+  if (issue.origin === "string")
+    return `In ${where}, "${name}" can be at most ${limit} characters long. Shorten it and check the file again.`;
+  return `In ${where}, "${name}" can be at most ${limit}. Lower it and check the file again.`;
+};
+
 /**
  * The sentence for a source that does not read as the current contract: what is wrong, where, and
  * what to change. A file of an older contract is told to be exported again.
@@ -182,7 +217,9 @@ const describeSourceImportIssue = (input: unknown, issue: z.core.$ZodIssue): str
     return `This file is source contract ${typeof found === "string" ? found : "unknown"}, and Studio reads ${current}. Export the application again from a current Studio, or change what the newer contract changed in the file and set source_contract_version to ${current}.`;
   }
   const where = describeIssuePlace(input, issue.path);
-  if (issue.message === sortableFieldLimitMessage) return `In ${where}: ${issue.message}`;
+  if (issue.message === definitionLimitMessage("sortableFieldsPerRecordType"))
+    return `In ${where}: ${issue.message}`;
+  if (issue.code === "too_big") return describeSourceLimit(where, issue);
   if (issue.code === "unrecognized_keys") {
     const keys = issue.keys.map((key) => `"${key}"`).join(", ");
     if (issue.keys.includes("tasks") && issue.path.at(-2) === "actions")
@@ -202,16 +239,13 @@ export function readStudioApplicationSourceImport(
   | Readonly<{ kind: "valid"; source: ApplicationSourceDocument }>
   | Readonly<{ kind: "invalid"; message: string }> {
   if (
-    text.length > maximumApplicationSourceImportBytes ||
-    new TextEncoder().encode(text).byteLength > maximumApplicationSourceImportBytes
+    text.length > definitionLimits.sourceImportBytes ||
+    new TextEncoder().encode(text).byteLength > definitionLimits.sourceImportBytes
   )
     return { kind: "invalid", message: "The JSON source must be at most 2 MiB." };
   try {
-    if (!hasUnambiguousMembers(text))
-      return {
-        kind: "invalid",
-        message: "The JSON source has duplicate members or exceeds its nesting limit.",
-      };
+    const ambiguity = ambiguousMembers(text);
+    if (ambiguity !== undefined) return { kind: "invalid", message: ambiguity };
     const input: unknown = JSON.parse(text);
     const parsed = applicationSourceDocumentSchema.safeParse(input);
     if (!parsed.success) {

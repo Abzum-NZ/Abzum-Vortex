@@ -44,9 +44,4 @@ export * from "./definition/module-links";
 
 export * from "./definition/application-composition/records-table-features/query-facts";
 
-export {
-  MODULE_QUERY_MAXIMUM_TOTALS,
-  MODULE_MAXIMUM_QUERIES,
-  RECORD_TYPE_MAXIMUM_SORTABLE_FIELDS,
-  sortableFieldLimitMessage,
-} from "./definition/module-source-contracts";
+export * from "./definition/definition-limits";
