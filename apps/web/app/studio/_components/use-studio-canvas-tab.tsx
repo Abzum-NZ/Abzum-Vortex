@@ -1010,22 +1010,30 @@ export function useStudioCanvasTab({
       </>
     ) : undefined;
   // The role the canvas previews says so in the canvas strip, where it cannot move the canvas.
+  const viewAsSentence =
+    canvasPage !== undefined && viewAsRole !== undefined && viewDecisions !== null
+      ? `${
+          holdsPermission(viewDecisions, canvasPage.permission)
+            ? `Blocks ${viewAsRole.name} cannot see are hidden.`
+            : `${viewAsRole.name} cannot open this page; it is shown so you can keep working on it.`
+        } Records are from your preview.${
+          draft.updatingCanvas ? " Your latest change shows once the canvas is updated." : ""
+        }`
+      : undefined;
   const viewAsNote =
-    canvasPage !== undefined && viewAsRole !== undefined && viewDecisions !== null ? (
-      <Tooltip>
-        <TooltipTrigger render={<Badge variant="secondary" className="shrink-0" role="status" />}>
-          {`As ${viewAsRole.name}`}
-        </TooltipTrigger>
-        <TooltipContent>
-          {holdsPermission(viewDecisions, canvasPage.permission)
-            ? `Showing what ${viewAsRole.name} sees`
-            : `${viewAsRole.name} cannot open this page; it is shown so you can keep working on it`}
-          {draft.updatingCanvas
-            ? ", as the saved draft grants it. Your latest change shows once the canvas is updated."
-            : "."}
-        </TooltipContent>
-      </Tooltip>
-    ) : undefined;
+    viewAsSentence === undefined || viewAsRole === undefined ? undefined : (
+      <>
+        <Tooltip>
+          <TooltipTrigger render={<Badge variant="outline" tabIndex={0} className="shrink-0" />}>
+            {`As ${viewAsRole.name}`}
+          </TooltipTrigger>
+          <TooltipContent>{viewAsSentence}</TooltipContent>
+        </Tooltip>
+        <span role="status" className="sr-only">
+          {viewAsSentence}
+        </span>
+      </>
+    );
   const shown = canvasPage !== undefined && (inspector.status === "resolved" || selected === null);
   const centre = (
     <section

@@ -41,6 +41,17 @@ type HeldRead = StudioCanvasRecordsRead & {
 
 const LOADING: StudioCanvasRecords["state"] = "loading";
 const NO_VALUES: Readonly<Record<string, string>> = Object.freeze({});
+/**
+ * The keys of the data blocks as a plain object that keeps its identity while they are unchanged,
+ * so an edit that touches no data block leaves the canvas metadata, and every block, as it was.
+ */
+const useStableKeys = (keys: ReadonlyMap<string, string>): Readonly<Record<string, string>> => {
+  const held = useRef<{ text: string; value: Readonly<Record<string, string>> } | null>(null);
+  const text = canonicalJson([...keys]);
+  if (held.current?.text !== text) held.current = { text, value: Object.fromEntries(keys) };
+  return held.current.value;
+};
+
 const NO_VALUES_READ: StudioCanvasRecords["records"] = Object.freeze({});
 
 /**
@@ -172,19 +183,23 @@ export const useStudioCanvasRecords = ({
     [...savedKeys].every(([id, key]) => read.keys?.get(id) === key);
   // Plain data only: Puck copies every object in a block's props, so a Map or the saved source
   // would arrive broken or copied once per block.
+  const saved = useStableKeys(savedKeys);
+  const current = useStableKeys(
+    useMemo(() => recordKeys(catalogue, slot?.items ?? []), [catalogue, slot]),
+  );
   const records = useMemo((): StudioCanvasRecords => {
     const shown = read.source === compiledSource || carried ? read : undefined;
     const refusal = compileFailure ?? shown?.refusal;
     return {
       state: shown?.state ?? LOADING,
       records: shown?.records ?? NO_VALUES_READ,
-      saved: Object.fromEntries(savedKeys),
-      current: Object.fromEntries(recordKeys(catalogue, slot?.items ?? [])),
+      saved,
+      current,
       updating,
       ...(shown?.sentence === undefined ? {} : { sentence: shown.sentence }),
       ...(refusal === undefined ? {} : { refusal }),
       ...(shown?.sample === undefined ? {} : { sample: shown.sample }),
     };
-  }, [read, compiledSource, carried, catalogue, savedKeys, slot, updating, compileFailure]);
+  }, [read, compiledSource, carried, saved, current, updating, compileFailure]);
   return { records, controls: chooseControlValue, grid };
 };

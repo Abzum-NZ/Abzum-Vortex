@@ -16,7 +16,6 @@ import {
   type ResponsivePlacement,
 } from "@vortex/platform/schema";
 import type { FieldInputControlReleaseMap, PlatformComponentRegistry } from "../registry";
-import { studioReleaseReadsQuery } from "./contextual-palette";
 import { useStudioCanvasGridEvents } from "./studio-canvas-grid";
 import { studioCanvasMetadata, type StudioCanvasRecords } from "./studio-canvas-metadata";
 import { StudioCanvasRoot } from "./studio-canvas-root";
@@ -211,6 +210,9 @@ function CanvasBlock({
   const id = typeof props.id === "string" ? props.id : "";
   const dragRef = dragRefOf(props);
   const release = releaseOf(registry, props);
+  // One rule for "this block has records": the records read for it (a query or a record detail),
+  // whatever its palette group. Launchers and link tiles are given theirs like a grid.
+  const readsRecords = Object.hasOwn(records.saved, id) || Object.hasOwn(records.current, id);
   const current = Object.hasOwn(compiled, id) && records.saved[id] === records.current[id];
   const gridEvents = useStudioCanvasGridEvents(
     grid,
@@ -255,10 +257,7 @@ function CanvasBlock({
   const refusal = records.refusal;
   if (
     refusal !== undefined &&
-    (refusal.blockAlias === id ||
-      (refusal.blockAlias === undefined &&
-        release !== undefined &&
-        studioReleaseReadsQuery(release)))
+    (refusal.blockAlias === id || (refusal.blockAlias === undefined && readsRecords))
   )
     return (
       <CanvasPlaceholder dragRef={dragRef} props={props}>
@@ -279,7 +278,7 @@ function CanvasBlock({
         </Item>
       </CanvasPlaceholder>
     );
-  if (records.state === "not_runnable" && release !== undefined && studioReleaseReadsQuery(release))
+  if (records.state === "not_runnable" && release !== undefined && readsRecords)
     return (
       <CanvasPlaceholder dragRef={dragRef} props={props}>
         <Item variant="outline" data-vortex-canvas-records-note={id}>
@@ -296,7 +295,7 @@ function CanvasBlock({
   if (
     release !== undefined &&
     !current &&
-    (findFieldInputBinding(release.properties) !== undefined || studioReleaseReadsQuery(release))
+    (findFieldInputBinding(release.properties) !== undefined || readsRecords)
   )
     return (
       <CanvasPlaceholder dragRef={dragRef} props={props}>
@@ -316,9 +315,7 @@ function CanvasBlock({
     props,
     release,
     Object.hasOwn(compiled, id) ? compiled[id] : undefined,
-    current &&
-      release !== undefined &&
-      (studioReleaseReadsQuery(release) || release.paletteGroup === "record"),
+    current && release !== undefined && readsRecords,
   );
   // A control that publishes a page parameter reports its chosen value, so the blocks bound to it
   // are read again for that value, exactly as the running page reads them for its address.
@@ -349,11 +346,7 @@ function CanvasBlock({
     });
   }
   // A block of the page's own record (a Record detail) draws that record as its saved version read it.
-  if (
-    release === undefined ||
-    !(studioReleaseReadsQuery(release) || (release.paletteGroup === "record" && current))
-  )
-    return render(drawn);
+  if (release === undefined || !readsRecords) return render(drawn);
   // A data block draws the records its saved version reads, and says so when it has none to show.
   const note = recordsNote(records, id);
   const puck = (props.puck ?? {}) as { metadata?: Record<string, unknown> };

@@ -2,7 +2,7 @@
 
 import type { PuckContext } from "@puckeditor/core";
 import { compiledItemSettings } from "@vortex/platform/schema";
-import { useEffect, type ReactNode, type SyntheticEvent } from "react";
+import { useEffect, useMemo, type ReactNode, type SyntheticEvent } from "react";
 import { isElement, isHtmlElement } from "../lib/dom";
 import { PagePuckRenderer } from "../page-puck-renderer";
 import { RootSlotGapProvider } from "../puck-config";
@@ -11,6 +11,8 @@ import type { FieldInputControlReleaseMap, PlatformComponentRegistry } from "../
 import { createAppearanceRootProps, createThemeRootProps, VortexStyleRoot } from "../theme";
 import { studioCanvasMetadata } from "./studio-canvas-metadata";
 import { studioPuckIframeCss } from "./studio-puck-style";
+
+const resolvePageHref = () => "#";
 
 /**
  * The canvas root's render, inside Puck's preview, in every Puck mode. It draws the application's
@@ -52,6 +54,20 @@ export function StudioCanvasRoot({
     </div>
   );
   const frame = studio.frame;
+  const applicationName = frame?.applicationName ?? "";
+  const pageName = frame?.pageName ?? "";
+  // Stable while the application and page are: the shell below is not drawn again for other changes.
+  const applicationSwitcherSource = useMemo(
+    () => async () => ({
+      state: "available" as const,
+      applications: [{ key: applicationName, name: applicationName, href: "#" }],
+    }),
+    [applicationName],
+  );
+  const applicationShellRuntime = useMemo(
+    () => ({ applicationName, applicationHref: "#", organizationName: "", pageName }),
+    [applicationName, pageName],
+  );
   const shellId = frame?.frame.shellId;
   const shell =
     frame === undefined || shellId === undefined
@@ -79,19 +95,11 @@ export function StudioCanvasRoot({
           {...(shell === undefined ? {} : { shell })}
           theme={frame.theme}
           projectedNavigation={frame.navigation}
-          resolvePageHref={() => "#"}
+          resolvePageHref={resolvePageHref}
           currentPageId={frame.pageId}
           // The switcher names only the application being designed.
-          applicationSwitcherSource={async () => ({
-            state: "available",
-            applications: [{ key: frame.applicationName, name: frame.applicationName, href: "#" }],
-          })}
-          applicationShellRuntime={{
-            applicationName: frame.applicationName,
-            applicationHref: "#",
-            organizationName: "",
-            pageName: frame.pageName,
-          }}
+          applicationSwitcherSource={applicationSwitcherSource}
+          applicationShellRuntime={applicationShellRuntime}
           outlet={{ location: frame.frame.outlet, content }}
         />
       )}

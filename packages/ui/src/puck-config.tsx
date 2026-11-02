@@ -745,17 +745,25 @@ function createVortexPuckConfig(
   } as unknown as Config;
 }
 
-const configs = new WeakMap<PlatformComponentRegistry, Config>();
+const configs = new WeakMap<
+  PlatformComponentRegistry,
+  WeakMap<FieldInputControlReleases, Config>
+>();
 
-/** The registry's Puck config, built once per registry. */
+/** The Puck config of a registry and its field-input controls, built once per pair. */
 export function getVortexPuckConfig(
   registry: PlatformComponentRegistry,
   fieldInputControlReleases: FieldInputControlReleases,
 ): Config {
-  let config = configs.get(registry);
+  let byControls = configs.get(registry);
+  if (byControls === undefined) {
+    byControls = new WeakMap();
+    configs.set(registry, byControls);
+  }
+  let config = byControls.get(fieldInputControlReleases);
   if (config === undefined) {
     config = createVortexPuckConfig(registry, fieldInputControlReleases);
-    configs.set(registry, config);
+    byControls.set(fieldInputControlReleases, config);
   }
   return config;
 }

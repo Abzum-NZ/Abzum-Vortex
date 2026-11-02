@@ -1,8 +1,17 @@
-import { useMemo } from "react";
+import { useMemo, useRef } from "react";
+import { canonicalJson } from "@vortex/platform/schema";
 import type { StudioCanvasModel } from "./studio-canvas-model";
 import type { StudioCanvasMetadata, StudioCanvasFrameMetadata } from "./studio-canvas-metadata";
 import type { StudioPuckInput } from "./studio-puck-provider";
 import { useStudioCanvasRecords } from "./use-studio-canvas-records";
+
+/** The value from an earlier render while its canonical spelling is the same. */
+const useStableValue = <T>(value: T): T => {
+  const held = useRef<{ text: string; value: T } | null>(null);
+  const text = value === undefined ? "" : canonicalJson(value);
+  if (held.current?.text !== text) held.current = { text, value };
+  return held.current.value;
+};
 
 const NO_COMPILED_SETTINGS: StudioCanvasMetadata["compiled"] = Object.freeze({});
 
@@ -44,7 +53,10 @@ export const useStudioCanvasMetadata = (
     updating: input.updating === true,
     compileFailure: input.compileFailure,
   });
-  const { platformThemeTokens, frame, appearance } = input;
+  const { platformThemeTokens, appearance } = input;
+  // The frame is derived from the whole draft (its menu follows the pages), so it is a new object
+  // after every edit; it is only a change to the canvas when its content is.
+  const frame = useStableValue(input.frame);
   const empty = model.slot?.items.length === 0;
   const frameMetadata = useMemo(
     (): StudioCanvasFrameMetadata | null =>
