@@ -66,6 +66,15 @@ begin
       limit p_page_size + 1
     ) as page
     order by page.created_at desc, page.backend_run_id desc;
+  elsif p_cursor_created_at is null then
+    return query
+    select run.backend_run_id, run.flow_id, run.origin_kind, run.source_key, run.state,
+      run.failure_code, run.created_at, run.finished_at, run.created_at::text
+    from vortex_platform.backend_runs as run
+    where run.organization_id = (checked_context ->> 'organizationId')::uuid
+      and run.application_root_id = p_application_root_id
+    order by run.created_at desc, run.backend_run_id desc
+    limit p_page_size + 1;
   else
     return query
     select run.backend_run_id, run.flow_id, run.origin_kind, run.source_key, run.state,
@@ -73,9 +82,7 @@ begin
     from vortex_platform.backend_runs as run
     where run.organization_id = (checked_context ->> 'organizationId')::uuid
       and run.application_root_id = p_application_root_id
-      and (run.created_at, run.backend_run_id) < (
-        coalesce(p_cursor_created_at, 'infinity'::timestamptz),
-        coalesce(p_cursor_run_id, 'ffffffff-ffff-ffff-ffff-ffffffffffff'::uuid))
+      and (run.created_at, run.backend_run_id) < (p_cursor_created_at, p_cursor_run_id)
     order by run.created_at desc, run.backend_run_id desc
     limit p_page_size + 1;
   end if;
