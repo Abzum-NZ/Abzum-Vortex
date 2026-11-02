@@ -6843,8 +6843,9 @@
 }
 
 @scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
-  :scope .cn-command-input-group {
-    border-color: transparent;
-    border-bottom-color: var(--input);
+  /* The field contrast rule in globals.css keeps the border transparent; this outranks it. */
+  :scope
+    [data-slot="input-group"].cn-command-input-group:not(:focus-within, [aria-invalid="true"]) {
+    border-bottom-color: color-mix(in oklch, var(--input), var(--foreground) 45%);
   }
 }

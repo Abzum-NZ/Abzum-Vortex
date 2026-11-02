@@ -7104,10 +7104,6 @@
   &:hover {
     color: var(--foreground);
   }
-  &:focus-visible {
-    outline: 2px solid var(--ring);
-    outline-offset: 2px;
-  }
 }
 
 .cn-notice-actions {
@@ -7126,15 +7122,6 @@
 .cn-skeleton {
   border-radius: var(--vs-e5ca406c, var(--radius-md));
   background-color: var(--muted);
-}
-
-.cn-scroll-area-viewport {
-  transition-property: color, box-shadow;
-  transition-duration: var(--tw-duration, var(--default-transition-duration, 150ms));
-  &:focus-visible {
-    outline: 1px solid var(--ring);
-    box-shadow: 0 0 0 3px color-mix(in oklab, var(--ring) 50%, transparent);
-  }
 }
 
 .cn-scroll-area-scrollbar {
