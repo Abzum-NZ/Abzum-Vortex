@@ -15,22 +15,26 @@ export function StudioHistoryTab({
   organizationId,
   rootId,
   savedRevision,
-  installationMessage,
+  appStoreHref,
   restoreBlocked,
   hold,
   onRestored,
+  onPublish,
 }: Readonly<{
   organizationId: string;
   rootId: string;
   /** Changes when the draft is saved, so the list is read again against the new saved state. */
   savedRevision: number;
-  installationMessage: string | undefined;
+  /** The App Store page that shows the application, when the standing names one. */
+  appStoreHref: string | undefined;
   /** Why a version cannot be restored into the draft now, or nothing. */
   restoreBlocked: string | undefined;
   /** Holds the workspace's draft while a restore runs. */
   hold: (on: boolean) => void;
   /** Loads the restored saved draft into the workspace, saying what happened. */
   onRestored: (message: string) => void;
+  /** Starts Publish, offered where nothing is published yet. */
+  onPublish: () => void;
 }>) {
   const [load, setLoad] = useState<HistoryLoad>({ kind: "loading" });
   useEffect(() => {
@@ -62,10 +66,11 @@ export function StudioHistoryTab({
     <ApplicationReleaseHistory
       key={`${snapshot.organizationId}:${snapshot.rootId}:${snapshot.draftRevision}:${snapshot.sourceFingerprint}:${snapshot.anchorReleaseRevision}`}
       initialPage={load.page}
-      installationMessage={installationMessage}
+      appStoreHref={appStoreHref}
       restoreBlocked={restoreBlocked}
       hold={hold}
       onRestored={onRestored}
+      onPublish={onPublish}
     />
   );
 }

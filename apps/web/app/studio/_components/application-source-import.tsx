@@ -18,7 +18,14 @@ import {
 import { Spinner } from "@vortex/ui/components/spinner";
 import { studioNotice } from "./studio-save-state";
 import { Textarea } from "@vortex/ui/components/textarea";
-import { StudioInspectorFooter } from "./studio-inspector";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@vortex/ui/components/dialog";
 import { StudioField } from "./studio-field";
 import { summarizeSourceChange } from "../_lib/source-change-summary";
 import {
@@ -57,6 +64,8 @@ type SourceDiagnostics = Readonly<{
 }>;
 
 type Props = Readonly<{
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
   disabled: boolean;
   readSnapshot: () => StudioApplicationSourceImportSnapshot | null;
   onApply: (
@@ -107,7 +116,13 @@ function SourceChangeTable({
   );
 }
 
-export function ApplicationSourceImport({ disabled, readSnapshot, onApply }: Props) {
+export function ApplicationSourceImport({
+  open,
+  onOpenChange,
+  disabled,
+  readSnapshot,
+  onApply,
+}: Props) {
   const [confirm, confirmDialog] = useConfirm();
   const [text, setText] = useState("");
   const [operation, setOperation] = useState<"reading" | "reviewing" | null>(null);
@@ -417,6 +432,7 @@ export function ApplicationSourceImport({ disabled, readSnapshot, onApply }: Pro
     const result = onApply(candidate.snapshot, candidate.source);
     if (result === "applied") {
       replaceText("");
+      onOpenChange(false);
       studioNotice("Imported. Your draft is the imported file now.", "success");
     } else
       studioNotice(
@@ -427,209 +443,192 @@ export function ApplicationSourceImport({ disabled, readSnapshot, onApply }: Pro
   };
 
   return (
-    <section
-      className="min-w-0 space-y-6 text-sm"
-      aria-label="Import an application file"
-      aria-busy={operation !== null}
-    >
-      <header className="flex flex-wrap items-start justify-between gap-4">
-        <div className="space-y-2">
-          <h2 className="text-xl font-semibold tracking-tight">Import from source</h2>
-          <p className="max-w-prose text-sm text-muted-foreground">
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="flex max-h-[90vh] flex-col gap-4 sm:max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>Replace draft from a file</DialogTitle>
+          <DialogDescription>
             Check an application file, review the changes, then replace your draft.
-          </p>
-        </div>
-        <Button
-          type="button"
-          variant="outline"
-          disabled={disabled || operation !== null}
-          onClick={() => {
-            const snapshot = readSnapshot();
-            if (snapshot === null) return;
-            const url = URL.createObjectURL(
-              new Blob([JSON.stringify(snapshot.source, null, 2)], { type: "application/json" }),
-            );
-            const link = document.createElement("a");
-            link.href = url;
-            link.download = `${snapshot.key}.json`;
-            link.click();
-            setTimeout(() => URL.revokeObjectURL(url), 0);
-          }}
+          </DialogDescription>
+        </DialogHeader>
+        <div
+          className="min-h-0 min-w-0 flex-1 space-y-6 overflow-y-auto text-sm"
+          aria-busy={operation !== null}
         >
-          Export source
-        </Button>
-      </header>
-      <Card
-        className={`border-2 border-dashed ${dragging ? "border-primary" : ""}`}
-        onDragOver={(event) => {
-          event.preventDefault();
-          if (!disabled) setDragging(true);
-        }}
-        onDragLeave={(event) => {
-          if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDragging(false);
-        }}
-        onDrop={(event) => {
-          event.preventDefault();
-          setDragging(false);
-          if (disabled) return;
-          if (event.dataTransfer.files.length !== 1) {
-            studioNotice("Choose one application file at a time.", "error");
-            return;
-          }
-          void readFile(event.dataTransfer.files[0]);
-        }}
-      >
-        <CardContent>
-          {/* shadcn-exempt: hidden file input; the Button below opens it */}
-          <input
-            ref={fileInput}
-            type="file"
-            accept=".json,application/json"
-            hidden
-            disabled={disabled}
-            aria-label="Application file"
-            onChange={(event) => {
-              const file = event.target.files?.[0];
-              event.target.value = "";
-              void readFile(file);
+          <Card
+            className={`border-2 border-dashed ${dragging ? "border-primary" : ""}`}
+            onDragOver={(event) => {
+              event.preventDefault();
+              if (!disabled) setDragging(true);
             }}
-          />
+            onDragLeave={(event) => {
+              if (!event.currentTarget.contains(event.relatedTarget as Node | null))
+                setDragging(false);
+            }}
+            onDrop={(event) => {
+              event.preventDefault();
+              setDragging(false);
+              if (disabled) return;
+              if (event.dataTransfer.files.length !== 1) {
+                studioNotice("Choose one application file at a time.", "error");
+                return;
+              }
+              void readFile(event.dataTransfer.files[0]);
+            }}
+          >
+            <CardContent>
+              {/* shadcn-exempt: hidden file input; the Button below opens it */}
+              <input
+                ref={fileInput}
+                type="file"
+                accept=".json,application/json"
+                hidden
+                disabled={disabled}
+                aria-label="Application file"
+                onChange={(event) => {
+                  const file = event.target.files?.[0];
+                  event.target.value = "";
+                  void readFile(file);
+                }}
+              />
+              <Button
+                type="button"
+                variant="ghost"
+                disabled={disabled}
+                onClick={() => fileInput.current?.click()}
+                className="h-auto w-full flex-col gap-3 p-8 text-center whitespace-normal"
+              >
+                <Icon name="arrow-up" className="size-8 text-muted-foreground" />
+                <span className="font-medium">Drop an application file or browse</span>
+                <span className="text-xs font-normal text-muted-foreground">
+                  Up to 2 MiB, same application
+                </span>
+              </Button>
+            </CardContent>
+          </Card>
+          {text !== "" && (
+            <p className="text-sm text-muted-foreground">
+              Source ready · {formatBytes(new TextEncoder().encode(text).byteLength)}
+            </p>
+          )}
+          <Collapsible open={pasteOpen} onOpenChange={setPasteOpen}>
+            <CollapsibleTrigger render={<Button variant="ghost" />}>
+              <Icon name="chevron-down" />
+              Paste instead
+            </CollapsibleTrigger>
+            <CollapsibleContent className="pt-3">
+              <StudioField
+                label="Application source"
+                hint="Keep each component's original id when changing its name."
+              >
+                {(control) => (
+                  <div className="font-mono">
+                    <Textarea
+                      {...control}
+                      className="min-h-48"
+                      value={text}
+                      disabled={disabled}
+                      onChange={(event) => {
+                        if (disabled || readSnapshot() === null) return;
+                        replaceText(event.target.value);
+                      }}
+                    />
+                  </div>
+                )}
+              </StudioField>
+            </CollapsibleContent>
+          </Collapsible>
+          {reviewedCurrent && reviewed !== null && (
+            <div className="space-y-2">
+              <p>
+                Replacing the draft replaces everything in it, including permissions, access groups,
+                pages and flows. Checking the file does not decide whether it can be published.
+              </p>
+              <SourceChangeTable current={reviewed.snapshot.source} next={reviewed.source} />
+            </div>
+          )}
+          {diagnosticsCurrent && diagnostics !== null && (
+            <div role="status" aria-live="polite" className="space-y-2">
+              <h3 className="font-semibold">Problems found in the file</h3>
+              <ul className="space-y-3">
+                {diagnostics.validation.errors.map((error, index) => (
+                  <li key={`${error.code}:${index}`}>
+                    <p className="font-medium">{error.message}</p>
+                    <p>{error.guidance}</p>
+                    <StudioInspectorGroup title="Details" defaultOpen={false}>
+                      <p className="break-all">
+                        Where: {error.location?.documentKey ?? diagnostics.snapshot.key}
+                        {error.location?.segments.map((segment, segmentIndex) => (
+                          <span key={segmentIndex}>
+                            {" "}
+                            · {segment.kind}: {segment.key}
+                          </span>
+                        ))}
+                      </p>
+                      <p>
+                        Code: <code>{error.code}</code>
+                      </p>
+                    </StudioInspectorGroup>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          <p role="status" aria-live="polite" className="sr-only">
+            {operation === "reading"
+              ? "Reading file"
+              : operation === "reviewing"
+                ? "Checking file"
+                : ""}
+          </p>
+          {reviewedCurrent && reviewed !== null && (
+            <StudioInspectorGroup title="Details" defaultOpen={false}>
+              <p className="break-all">
+                Fingerprint of the file: <code>{reviewed.fingerprint}</code>
+              </p>
+              <StudioSourceView value={reviewed.snapshot.source} title="Current draft" />
+              <StudioSourceView value={reviewed.source} title="Imported file" />
+            </StudioInspectorGroup>
+          )}
+        </div>
+        <DialogFooter>
           <Button
             type="button"
             variant="ghost"
-            disabled={disabled}
-            onClick={() => fileInput.current?.click()}
-            className="h-auto w-full flex-col gap-3 p-8 text-center whitespace-normal"
+            disabled={text.length === 0 && operation === null}
+            onClick={() => {
+              replaceText("");
+              if (fileInput.current !== null) fileInput.current.value = "";
+              studioNotice("Cleared. Your draft is unchanged.");
+            }}
           >
-            <Icon name="arrow-up" className="size-8 text-muted-foreground" />
-            <span className="font-medium">Drop an application file or browse</span>
-            <span className="text-xs font-normal text-muted-foreground">
-              Up to 2 MiB, same application
-            </span>
+            Clear
           </Button>
-        </CardContent>
-      </Card>
-      {text !== "" && (
-        <p className="text-sm text-muted-foreground">
-          Source ready · {formatBytes(new TextEncoder().encode(text).byteLength)}
-        </p>
-      )}
-      <Collapsible open={pasteOpen} onOpenChange={setPasteOpen}>
-        <CollapsibleTrigger render={<Button variant="ghost" />}>
-          <Icon name="chevron-down" />
-          Or paste contents
-        </CollapsibleTrigger>
-        <CollapsibleContent className="pt-3">
-          <StudioField
-            label="Application source"
-            hint="Keep each component's original id when changing its name."
+          <Button
+            type="button"
+            variant="outline"
+            disabled={disabled || operation !== null || text.length === 0}
+            onClick={() => {
+              void review();
+            }}
           >
-            {(control) => (
-              <div className="font-mono">
-                <Textarea
-                  {...control}
-                  className="min-h-48"
-                  value={text}
-                  disabled={disabled}
-                  onChange={(event) => {
-                    if (disabled || readSnapshot() === null) return;
-                    replaceText(event.target.value);
-                  }}
-                />
-              </div>
-            )}
-          </StudioField>
-        </CollapsibleContent>
-      </Collapsible>
-      {reviewedCurrent && reviewed !== null && (
-        <div className="space-y-2">
-          <p>
-            Replacing the draft replaces everything in it, including permissions, access groups,
-            pages and flows. Checking the file does not decide whether it can be published.
-          </p>
-          <SourceChangeTable current={reviewed.snapshot.source} next={reviewed.source} />
-        </div>
-      )}
-      {diagnosticsCurrent && diagnostics !== null && (
-        <div role="status" aria-live="polite" className="space-y-2">
-          <h3 className="font-semibold">Problems found in the file</h3>
-          <ul className="space-y-3">
-            {diagnostics.validation.errors.map((error, index) => (
-              <li key={`${error.code}:${index}`}>
-                <p className="font-medium">{error.message}</p>
-                <p>{error.guidance}</p>
-                <StudioInspectorGroup title="Details" defaultOpen={false}>
-                  <p className="break-all">
-                    Where: {error.location?.documentKey ?? diagnostics.snapshot.key}
-                    {error.location?.segments.map((segment, segmentIndex) => (
-                      <span key={segmentIndex}>
-                        {" "}
-                        · {segment.kind}: {segment.key}
-                      </span>
-                    ))}
-                  </p>
-                  <p>
-                    Code: <code>{error.code}</code>
-                  </p>
-                </StudioInspectorGroup>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-      <p role="status" aria-live="polite" className="sr-only">
-        {operation === "reading"
-          ? "Reading file"
-          : operation === "reviewing"
-            ? "Checking file"
-            : ""}
-      </p>
-      {reviewedCurrent && reviewed !== null && (
-        <StudioInspectorGroup title="Details" defaultOpen={false}>
-          <p className="break-all">
-            Fingerprint of the file: <code>{reviewed.fingerprint}</code>
-          </p>
-          <StudioSourceView value={reviewed.snapshot.source} title="Current draft" />
-          <StudioSourceView value={reviewed.source} title="Imported file" />
-        </StudioInspectorGroup>
-      )}
-      {confirmDialog}
-      <StudioInspectorFooter className="-bottom-6 -mx-8 -mb-6 px-8">
-        <Button
-          type="button"
-          variant="ghost"
-          disabled={text.length === 0 && operation === null}
-          onClick={() => {
-            replaceText("");
-            if (fileInput.current !== null) fileInput.current.value = "";
-            studioNotice("Cleared. Your draft is unchanged.");
-          }}
-        >
-          Clear
-        </Button>
-        <Button
-          type="button"
-          variant="outline"
-          disabled={disabled || operation !== null || text.length === 0}
-          onClick={() => {
-            void review();
-          }}
-        >
-          {operation !== null && <Spinner />}
-          {operation === "reading"
-            ? "Reading file…"
-            : operation === "reviewing"
-              ? "Checking file…"
-              : "Check the file"}
-        </Button>
-        <Button
-          type="button"
-          disabled={disabled || operation !== null || !reviewedCurrent}
-          onClick={apply}
-        >
-          Replace the draft
-        </Button>
-      </StudioInspectorFooter>
-    </section>
+            {operation !== null && <Spinner />}
+            {operation === "reading"
+              ? "Reading file…"
+              : operation === "reviewing"
+                ? "Checking file…"
+                : "Check the file"}
+          </Button>
+          <Button
+            type="button"
+            disabled={disabled || operation !== null || !reviewedCurrent}
+            onClick={apply}
+          >
+            Replace the draft
+          </Button>
+        </DialogFooter>
+        {confirmDialog}
+      </DialogContent>
+    </Dialog>
   );
 }

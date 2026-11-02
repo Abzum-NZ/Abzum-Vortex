@@ -1,14 +1,40 @@
 "use client";
+import { Alert, AlertAction, AlertDescription } from "@vortex/ui/components/alert";
+import { Badge } from "@vortex/ui/components/badge";
 import { Button } from "@vortex/ui/components/button";
 import { useConfirm } from "@vortex/ui/components/confirm-dialog";
-import { StudioInspectorGroup, StudioEntryList, StudioIconButton } from "@vortex/ui/studio";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@vortex/ui/components/dropdown-menu";
 import {
   Empty,
+  EmptyContent,
   EmptyHeader,
   EmptyMedia,
   EmptyTitle,
   EmptyDescription,
 } from "@vortex/ui/components/empty";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@vortex/ui/components/sheet";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@vortex/ui/components/table";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@vortex/ui/components/tooltip";
+import { NavigationLink } from "@vortex/ui/routing";
+import { StudioInspectorGroup } from "@vortex/ui/studio";
 import { studioNotice } from "./studio-save-state";
 
 import { useEffect, useRef, useState } from "react";
@@ -60,26 +86,30 @@ const restoreFailureMessage = (
           : "Restoring is temporarily unavailable, so nothing was restored. Try again in a moment.";
 
 /**
- * The Releases tab's published versions, oldest first: each with when and by whom it was published
- * and what changed, and a way to restore it into the draft. Restoring replaces the saved draft with
- * that version's source as a new draft revision, through the platform's one restore operation; it
- * never publishes or installs anything.
+ * The Releases tab's published versions: each with when and by whom it was published and what
+ * changed, and a way to view it, restore it into the draft or open the application in the App
+ * Store. Restoring replaces the saved draft with that version's source as a new draft revision,
+ * through the platform's one restore operation; it never publishes or installs anything.
  */
 export function ApplicationReleaseHistory({
   initialPage,
-  installationMessage,
+  appStoreHref,
   restoreBlocked,
   hold,
   onRestored,
+  onPublish,
 }: {
   initialPage: StudioApplicationHistoryPage;
-  installationMessage: string | undefined;
+  /** The App Store page that shows the application, when the standing names one. */
+  appStoreHref: string | undefined;
   /** Why restoring cannot start now (unsaved or pending edits in the workspace), or nothing. */
   restoreBlocked: string | undefined;
   /** Holds the workspace's draft while a restore writes the saved draft, so nothing else edits it. */
   hold: (on: boolean) => void;
   /** Loads the restored saved draft into the workspace and says what happened. */
   onRestored: (message: string) => void;
+  /** Starts Publish, offered where nothing is published yet. */
+  onPublish: () => void;
 }) {
   const [confirm, confirmDialog] = useConfirm();
   const currentRestoreBlocked = useRef(restoreBlocked);
@@ -88,6 +118,7 @@ export function ApplicationReleaseHistory({
   const [pending, setPending] = useState<Pending | null>(null);
   const [failure, setFailure] = useState<Failure | null>(null);
   const [message, setMessage] = useState("Versions loaded.");
+  const [viewing, setViewing] = useState<DefinitionReleaseMetadata | null>(null);
   const mounted = useRef(false);
   const generation = useRef(0);
   const pendingRef = useRef<Pending | null>(null);
@@ -249,42 +280,35 @@ export function ApplicationReleaseHistory({
   const author = (entry: DefinitionReleaseMetadata) =>
     page?.publishers[entry.publishedBy.toLowerCase()] ?? "someone you cannot see in the directory";
   return (
-    <section aria-label="Release history" className="space-y-6">
-      <header className="space-y-2">
-        <h2 className="text-xl font-semibold tracking-tight">Published versions</h2>
-        <p className="text-sm text-muted-foreground">
-          Oldest first, 20 at a time.
-          {installationMessage === undefined ? "" : ` ${installationMessage}`}
-        </p>
-      </header>
-      <div className="flex flex-wrap gap-3">
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          disabled={pending !== null}
-          onClick={() => void load("reload")}
-        >
-          Reload versions
-        </Button>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          disabled={blocked || page?.nextAfterReleaseRevision == null}
-          onClick={() => void load("next")}
-        >
-          Next 20 versions
-        </Button>
-      </div>
+    <section aria-label="Release history" className="space-y-4">
       <p role="status" aria-live="polite" aria-atomic="true" className="sr-only">
         {message}
       </p>
-      {restoreBlocked !== undefined && page !== null && page.entries.length > 0 && (
-        <p className="text-sm text-muted-foreground">{restoreBlocked}</p>
+      {failure !== null && (
+        <Alert variant="destructive">
+          <AlertDescription>
+            {failureMessage(failure)}
+            {page !== null && failure === "temporarily_unavailable"
+              ? " These details are from the last successful load."
+              : ""}
+          </AlertDescription>
+          <AlertAction>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={pending !== null}
+              onClick={() => void load("reload")}
+            >
+              Reload
+            </Button>
+          </AlertAction>
+        </Alert>
       )}
-      {page !== null && failure === "temporarily_unavailable" && (
-        <p>These details are from the last successful load.</p>
+      {restoreBlocked !== undefined && page !== null && page.entries.length > 0 && (
+        <Alert variant="info">
+          <AlertDescription>{restoreBlocked}</AlertDescription>
+        </Alert>
       )}
       {page !== null &&
         (page.entries.length === 0 ? (
@@ -293,62 +317,147 @@ export function ApplicationReleaseHistory({
               <EmptyMedia variant="icon">
                 <Icon name="history" />
               </EmptyMedia>
-              <EmptyTitle>No versions yet</EmptyTitle>
-              <EmptyDescription>Publish to create version 1.</EmptyDescription>
+              <EmptyTitle>Not published yet</EmptyTitle>
+              <EmptyDescription>
+                A release is a numbered copy of your application that your organisation can install.
+                Publish to create version 1.
+              </EmptyDescription>
             </EmptyHeader>
+            <EmptyContent>
+              <Button type="button" onClick={onPublish}>
+                <Icon name="package-plus" />
+                Publish
+              </Button>
+            </EmptyContent>
           </Empty>
         ) : (
           <div aria-busy={pending !== null}>
-            <StudioEntryList
-              label="Published versions"
-              itemName="version"
-              items={page.entries.map((entry) => ({
-                key: String(entry.releaseRevision),
-                title: `Version ${entry.releaseVersion}${entry.isCurrent ? " (current version)" : ""}`,
-                summary: entry.releaseNote,
-                content: (
-                  <div className="space-y-4">
-                    <p className="text-sm text-muted-foreground">
-                      Published <FormattedTime iso={entry.publishedAt} /> by {author(entry)}
-                    </p>
-                    <div>
-                      <p className="text-sm font-medium">What changed</p>
-                      <p className="whitespace-pre-wrap break-words text-sm">{entry.releaseNote}</p>
-                    </div>
-                    <StudioIconButton
-                      label={`Restore version ${entry.releaseVersion} into the draft`}
-                      disabled={blocked || restoreBlocked !== undefined}
-                      onClick={() => void restore(entry)}
-                    >
-                      <Icon name="history" />
-                    </StudioIconButton>
-                    <StudioInspectorGroup title="Details" defaultOpen={false}>
-                      <dl className="space-y-3 font-mono text-xs">
-                        <div>
-                          <dt className="font-semibold">Release revision</dt>
-                          <dd>{entry.releaseRevision}</dd>
-                        </div>
-                        <div>
-                          <dt className="font-semibold">Published by (account id)</dt>
-                          <dd className="break-all">{entry.publishedBy}</dd>
-                        </div>
-                        <div>
-                          <dt className="font-semibold">Source fingerprint</dt>
-                          <dd className="break-all">
-                            <code>{entry.sourceFingerprint}</code>
-                          </dd>
-                        </div>
-                      </dl>
-                    </StudioInspectorGroup>
-                  </div>
-                ),
-              }))}
-            />
+            <Table aria-label="Published versions">
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Version</TableHead>
+                  <TableHead>Published</TableHead>
+                  <TableHead className="hidden md:table-cell">By</TableHead>
+                  <TableHead className="hidden lg:table-cell">What changed</TableHead>
+                  <TableHead className="w-10">
+                    <span className="sr-only">Actions</span>
+                  </TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {page.entries.map((entry) => (
+                  <TableRow key={entry.releaseRevision}>
+                    <TableCell className="font-medium">
+                      <span className="flex items-center gap-2">
+                        {entry.releaseVersion}
+                        {entry.isCurrent && <Badge variant="secondary">Current</Badge>}
+                      </span>
+                    </TableCell>
+                    <TableCell>
+                      <FormattedTime iso={entry.publishedAt} />
+                    </TableCell>
+                    <TableCell className="hidden md:table-cell">{author(entry)}</TableCell>
+                    <TableCell className="hidden max-w-80 truncate lg:table-cell">
+                      {entry.releaseNote}
+                    </TableCell>
+                    <TableCell>
+                      <DropdownMenu>
+                        <Tooltip>
+                          <TooltipTrigger
+                            render={
+                              <DropdownMenuTrigger
+                                render={
+                                  <Button
+                                    type="button"
+                                    size="icon-sm"
+                                    variant="ghost"
+                                    aria-label={`Actions for version ${entry.releaseVersion}`}
+                                  />
+                                }
+                              />
+                            }
+                          >
+                            <Icon name="more-horizontal" />
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            Actions for version {entry.releaseVersion}
+                          </TooltipContent>
+                        </Tooltip>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={() => setViewing(entry)}>
+                            <Icon name="eye" />
+                            View changes
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            disabled={blocked || restoreBlocked !== undefined}
+                            onClick={() => void restore(entry)}
+                          >
+                            <Icon name="history" />
+                            Restore into draft
+                          </DropdownMenuItem>
+                          {entry.isCurrent && appStoreHref !== undefined && (
+                            <DropdownMenuItem render={<NavigationLink href={appStoreHref} />}>
+                              <Icon name="app-window" />
+                              Open in App Store
+                            </DropdownMenuItem>
+                          )}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+            {page.nextAfterReleaseRevision != null && (
+              <div className="flex justify-center pt-3">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={blocked}
+                  onClick={() => void load("next")}
+                >
+                  Next 20 versions
+                </Button>
+              </div>
+            )}
           </div>
         ))}
-      {page !== null && page.entries.length > 0 && page.nextAfterReleaseRevision === null && (
-        <p className="text-sm text-muted-foreground">End of release history.</p>
-      )}
+      <Sheet open={viewing !== null} onOpenChange={(open) => !open && setViewing(null)}>
+        <SheetContent className="w-full overflow-y-auto sm:max-w-md">
+          {viewing !== null && (
+            <>
+              <SheetHeader>
+                <SheetTitle>Version {viewing.releaseVersion}</SheetTitle>
+                <SheetDescription>
+                  Published <FormattedTime iso={viewing.publishedAt} /> by {author(viewing)}
+                </SheetDescription>
+              </SheetHeader>
+              <div className="space-y-4 px-4 pb-4">
+                <p className="text-sm whitespace-pre-wrap break-words">{viewing.releaseNote}</p>
+                <StudioInspectorGroup title="Details" defaultOpen={false}>
+                  <dl className="space-y-3 font-mono text-xs">
+                    <div>
+                      <dt className="font-semibold">Release revision</dt>
+                      <dd>{viewing.releaseRevision}</dd>
+                    </div>
+                    <div>
+                      <dt className="font-semibold">Published by (account id)</dt>
+                      <dd className="break-all">{viewing.publishedBy}</dd>
+                    </div>
+                    <div>
+                      <dt className="font-semibold">Source fingerprint</dt>
+                      <dd className="break-all">
+                        <code>{viewing.sourceFingerprint}</code>
+                      </dd>
+                    </div>
+                  </dl>
+                </StudioInspectorGroup>
+              </div>
+            </>
+          )}
+        </SheetContent>
+      </Sheet>
       {confirmDialog}
     </section>
   );

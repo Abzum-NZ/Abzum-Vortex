@@ -1,8 +1,18 @@
 "use client";
 import { useEffect, useState } from "react";
-import { FormattedTime } from "@vortex/ui";
+import { FormattedTime, Icon } from "@vortex/ui";
+import { Alert, AlertAction, AlertDescription } from "@vortex/ui/components/alert";
 import { Badge } from "@vortex/ui/components/badge";
 import { Button } from "@vortex/ui/components/button";
+import {
+  Empty,
+  EmptyContent,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from "@vortex/ui/components/empty";
+import { Skeleton } from "@vortex/ui/components/skeleton";
 import {
   Table,
   TableBody,
@@ -61,53 +71,87 @@ export function StudioBackendRuns({
       current = false;
     };
   }, [organizationId, rootId, savedRevision, generation]);
-  if (load.kind === "loading") return <p role="status">Loading the back-end runs…</p>;
-  if (load.kind === "unavailable") return <p role="status">{load.message}</p>;
+  const reload = (
+    <Button type="button" variant="outline" size="sm" onClick={() => setGeneration((n) => n + 1)}>
+      Reload
+    </Button>
+  );
+  if (load.kind === "loading")
+    return (
+      <div className="space-y-2" role="status" aria-label="Loading the back-end runs">
+        <Skeleton className="h-8 w-full" />
+        <Skeleton className="h-8 w-full" />
+        <Skeleton className="h-8 w-full" />
+      </div>
+    );
+  if (load.kind === "unavailable")
+    return (
+      <Alert variant="destructive">
+        <AlertDescription>{load.message}</AlertDescription>
+        <AlertAction>{reload}</AlertAction>
+      </Alert>
+    );
   return (
     <section aria-label="Back-end runs" className="space-y-3">
-      <div className="flex items-center justify-between">
-        <h2 className="m-0 text-lg font-semibold">Back-end runs</h2>
-        <Button type="button" variant="link" size="xs" onClick={() => setGeneration((n) => n + 1)}>
-          Reload
-        </Button>
-      </div>
       {load.runs.length === 0 ? (
-        <p role="status">Nothing has run on the back end yet.</p>
+        <Empty>
+          <EmptyHeader>
+            <EmptyMedia variant="icon">
+              <Icon name="workflow" />
+            </EmptyMedia>
+            <EmptyTitle>Nothing has run yet</EmptyTitle>
+            <EmptyDescription>
+              Runs appear here when a saved record or a back end step starts a flow.
+            </EmptyDescription>
+          </EmptyHeader>
+          <EmptyContent>{reload}</EmptyContent>
+        </Empty>
       ) : (
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Flow</TableHead>
-              <TableHead>Started by</TableHead>
-              <TableHead>State</TableHead>
-              <TableHead>Failure reason</TableHead>
-              <TableHead>Started</TableHead>
-              <TableHead>Finished</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {load.runs.map((run) => (
-              <TableRow key={run.backendRunId}>
-                <TableCell>{run.flow ?? "Subscribers did not run"}</TableCell>
-                <TableCell>
-                  {run.origin === "event" ? "A saved record" : "Run on back end step"}
-                </TableCell>
-                <TableCell>
-                  <Badge variant={run.state === "succeeded" ? "outline" : "secondary"}>
-                    {stateLabels[run.state]}
-                  </Badge>
-                </TableCell>
-                <TableCell>{run.failureCode ?? ""}</TableCell>
-                <TableCell>
-                  <FormattedTime iso={run.createdAt} />
-                </TableCell>
-                <TableCell>
-                  {run.finishedAt === null ? "" : <FormattedTime iso={run.finishedAt} />}
-                </TableCell>
+        <>
+          <Table aria-label="Back-end runs">
+            <TableHeader>
+              <TableRow>
+                <TableHead>Flow</TableHead>
+                <TableHead>Started by</TableHead>
+                <TableHead>State</TableHead>
+                <TableHead className="hidden md:table-cell">Failure reason</TableHead>
+                <TableHead>Started</TableHead>
+                <TableHead className="hidden lg:table-cell">Finished</TableHead>
               </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+            </TableHeader>
+            <TableBody>
+              {load.runs.map((run) => (
+                <TableRow key={run.backendRunId}>
+                  <TableCell>{run.flow ?? "Subscribers did not run"}</TableCell>
+                  <TableCell>
+                    {run.origin === "event" ? "A saved record" : "Run on back end step"}
+                  </TableCell>
+                  <TableCell>
+                    <Badge
+                      variant={
+                        run.state === "succeeded"
+                          ? "outline"
+                          : run.state === "failed" || run.state === "refused"
+                            ? "destructive"
+                            : "secondary"
+                      }
+                    >
+                      {stateLabels[run.state]}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="hidden md:table-cell">{run.failureCode ?? ""}</TableCell>
+                  <TableCell>
+                    <FormattedTime iso={run.createdAt} />
+                  </TableCell>
+                  <TableCell className="hidden lg:table-cell">
+                    {run.finishedAt === null ? "" : <FormattedTime iso={run.finishedAt} />}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+          <div className="flex justify-end">{reload}</div>
+        </>
       )}
     </section>
   );
