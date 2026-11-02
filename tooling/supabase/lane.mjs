@@ -142,7 +142,12 @@ const runCli = (lane, arguments_, capture = false) => {
   );
   if (result.error !== undefined) throw result.error;
   if (result.status !== 0) {
-    if (capture && result.stderr) process.stderr.write(result.stderr);
+    if (capture && result.stderr)
+      process.stderr.write(
+        result.stderr
+          .replace(/\b(sb_secret_|eyJ)[A-Za-z0-9_.-]+/g, "[redacted]")
+          .replace(/(postgres(?:ql)?:\/\/[^:\s/]+:)[^@\s]+@/gi, "$1[redacted]@"),
+      );
     fail(
       `supabase ${arguments_.join(" ")} failed for lane ${lane} (${result.status ?? "terminated"}).`,
     );
@@ -158,6 +163,12 @@ const laneAuthConfig = (source, lane) => {
       /^(additional_redirect_urls\s*=).*$/m,
       `$1 ["${site}", "${site}/auth/confirm", "${site}/auth/update-password"]`,
     );
+};
+const updateLaneAuthConfig = async (lane) => {
+  const configPath = path.join(laneSupabaseDirectory(lane), "config.toml");
+  const current = await readFile(configPath, "utf8");
+  const updated = laneAuthConfig(current, lane);
+  if (updated !== current) await writeFile(configPath, updated);
 };
 
 /**
@@ -199,9 +210,7 @@ const sync = async (lane, worktreePath) => {
   const sourceDirectory = path.join(path.resolve(worktreePath), "supabase");
   if (!existsSync(path.join(sourceDirectory, "migrations")))
     fail(`${sourceDirectory} has no migrations directory.`);
-  const configPath = path.join(laneSupabaseDirectory(lane), "config.toml");
-  const current = await readFile(configPath, "utf8");
-  await writeFile(configPath, laneAuthConfig(current, lane));
+  await updateLaneAuthConfig(lane);
   const target = laneSupabaseDirectory(lane);
   for (const name of copiedDirectories) {
     await rm(path.join(target, name), { recursive: true, force: true });
@@ -324,6 +333,7 @@ try {
     case "start": {
       requireInitialized(lane);
       const lease = await requireLeaseHolder(lane, worktree);
+      await updateLaneAuthConfig(lane);
       await ensureLocalSigningKey(
         path.join(laneSupabaseDirectory(lane), ".temp", "signing-keys.json"),
       );
