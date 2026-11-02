@@ -1,8 +1,12 @@
 "use client";
 
 import type { ReactElement } from "react";
-import { formatCount, recordsPhrase } from "./date-format";
-import { recordsTableAggregateLabels, type RecordsTableTotal } from "@vortex/platform/schema";
+import {
+  formatCount,
+  recordsPhrase,
+  recordsTableAggregateLabels,
+  type RecordsTableTotal,
+} from "@vortex/platform/schema";
 
 const totalText = (total: RecordsTableTotal): string => {
   switch (total.state) {

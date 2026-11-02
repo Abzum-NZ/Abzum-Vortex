@@ -533,6 +533,8 @@ export function StudioGridFeatures({
               {enabled && key === recordsTableExportFeature.key ? (
                 <StudioExportEditor
                   value={current}
+                  facts={facts}
+                  columns={tableColumnFields(tableSettings)}
                   disabled={disabled}
                   onChange={(next) => write(key, next)}
                 />

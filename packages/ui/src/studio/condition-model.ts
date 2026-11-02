@@ -19,8 +19,8 @@ import {
   type JsonValue,
   type ModuleField,
   isRecord,
+  formatIsoDate,
 } from "@vortex/platform/schema";
-import { formatIsoDate } from "../display/date-format";
 
 type ComparisonCondition = Extract<ConditionNode, { kind: "comparison" }>;
 export type ConditionOperand = ComparisonCondition["left"];

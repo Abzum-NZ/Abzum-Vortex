@@ -14,7 +14,7 @@ import {
   formatIsoDateTitle,
   INVALID_DATE_TEXT,
   type DateFormatOptions,
-} from "./date-format";
+} from "@vortex/platform/schema";
 
 const DateFormatContext = createContext<DateFormatOptions>({});
 

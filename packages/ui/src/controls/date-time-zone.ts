@@ -3,7 +3,7 @@
  * Shared by the date-time input and the grid's cell editor so both read and write the same instant;
  * the zone-part extraction itself is the one in `display/date-format.ts`.
  */
-import { zonedDateTimeParts, type ZonedDateTimeParts } from "../display/date-format";
+import { zonedDateTimeParts, type ZonedDateTimeParts } from "@vortex/platform/schema";
 
 type DateTimeParts = ZonedDateTimeParts;
 

@@ -5,21 +5,25 @@ allowBuilds:
   esbuild: false
 catalog:
   "@eslint/js": 10.0.1
-  eslint: 10.13.0
+  eslint: 10.14.0
   prettier: 3.9.10
   turbo: 2.11.10
-  typescript-eslint: 8.72.0
+  typescript-eslint: 8.72.1
   react-dom: 19.3.1
   next: 16.4.3
   zod: 4.6.7
   server-only: 0.0.1
   "@types/react-dom": 19.3.0
-  "@tabler/icons-react": 3.49.0
-  lucide-react: 1.61.0
-  motion: 14.6.0
+  "@tabler/icons-react": 3.50.0
+  lucide-react: 1.66.0
+  motion: 14.9.0
   "@base-ui/react": 1.9.0
-  "@types/node": 26.6.5
-  typescript: 6.0.3
+  "@types/node": 26.6.6
+  # TypeScript 7 ships no compiler API yet. typescript is the 6.0 compatibility package: typescript-eslint,
+  # Next.js and the guard import its API. @typescript/native is TypeScript 7 and provides tsc. Remove the
+  # alias once typescript-eslint and Next.js accept TypeScript 7.1.
+  typescript: npm:@typescript/typescript6@6.0.2
+  "@typescript/native": npm:typescript@7.0.2
   "@js-temporal/polyfill": 0.5.1
   "@puckeditor/core": 0.23.0
   "@supabase/ssr": 0.12.7
@@ -28,21 +32,21 @@ catalog:
   "@types/semver": 7.8.0
   "@types/react": 19.3.0
   "@types/ws": 8.18.2
-  postgres: 3.4.9
+  postgres: 4.0.0
   react: 19.3.1
   react-day-picker: 10.0.2
   semver: 7.8.5
   supabase: 2.122.0
   tailwindcss: 4.3.3
   tsx: 4.23.15
-  ws: 8.22.0
+  ws: 8.22.1
   sonner: 2.0.8
-  knip: 6.43.0
+  knip: 6.44.1
   re2js: 2.9.1
   "@xyflow/react": 12.12.0
   "@tanstack/react-table": 9.3.1
-  "@tanstack/react-virtual": 3.14.23
-  file-type: 22.2.0
+  "@tanstack/react-virtual": 3.14.24
+  file-type: 22.3.0
   exceljs: 4.4.0
   "@noble/hashes": 2.4.0
 
@@ -51,17 +55,12 @@ catalogMode: strict
 saveExact: true
 strictPeerDependencies: true
 
-# motion's own packages float on caret ranges; hold them to the pinned motion release.
 overrides:
   "exceljs>uuid": 11.1.1
-  framer-motion: 14.6.0
-  motion-dom: 14.6.0
-  motion-utils: 14.6.0
   happy-dom: 21.0.4
+  # GHSA-g3hv-75wg-m249: eslint and typescript-eslint pull 10.x; 11 keeps the named exports they use.
+  # exceljs reaches 3.x and 5.x through glob 7, which needs minimatch 3 internals, so they stay.
+  "minimatch@10": 11.0.3
 
-# Reject writes queued after socket closure until the driver ships the fix.
-# https://github.com/porsager/postgres/pull/1209
-patchedDependencies:
-  postgres@3.4.9: patches/postgres@3.4.9.patch
 minimumReleaseAgeExclude:
   - re2js@2.9.1

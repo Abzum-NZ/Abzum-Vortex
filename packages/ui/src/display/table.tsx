@@ -11,13 +11,17 @@ import {
   useState,
   type ReactElement,
 } from "react";
-import { recordsTableContractOrLog, type RecordsTableContract } from "@vortex/platform/schema";
+import {
+  recordsTableContractOrLog,
+  type RecordsTableContract,
+  cellValueToText,
+} from "@vortex/platform/schema";
 import { Alert, AlertDescription } from "../components/alert";
 import { Button } from "../components/button";
 import { Empty, EmptyContent, EmptyHeader, EmptyTitle } from "../components/empty";
 import { cn } from "../lib/utils";
 import { useAgentGrid } from "./agent-grid";
-import { cellValueToText, DisplayCellView } from "./cell";
+import { DisplayCellView } from "./cell";
 import { addLabelOf } from "./add-label";
 import {
   DisplayHeader,

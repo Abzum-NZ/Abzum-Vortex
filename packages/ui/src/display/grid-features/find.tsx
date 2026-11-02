@@ -1,11 +1,11 @@
 "use client";
 
+import { cellValueToText } from "@vortex/platform/schema";
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type ReactElement } from "react";
 import { Button } from "../../components/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../../components/dialog";
 import { Input } from "../../components/input";
 import { Icon } from "../../icons/icon";
-import { cellValueToText } from "../cell";
 import { useDateFormatOptions } from "../date-format-context";
 import { GRID_ROOT } from "../table-interaction";
 import type { GridFeatureInteractionProps } from "./registry";

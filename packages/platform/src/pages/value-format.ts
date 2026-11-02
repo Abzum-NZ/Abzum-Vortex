@@ -49,6 +49,34 @@ export const formatMoney = (money: Readonly<{ currency: string; amount: string }
     .join("");
 };
 
+/**
+ * The text a money display puts before and after its number, and the fraction digits it shows,
+ * from the same currency format as `formatMoney`, so a spreadsheet number format can reproduce it.
+ */
+export const moneyDisplayShape = (
+  money: Readonly<{ currency: string; amount: string }>,
+): Readonly<{ prefix: string; suffix: string; fractionDigits: number }> => {
+  const fraction = money.amount.split(".")[1] ?? "";
+  const format = moneyFormat(money.currency, fraction.length > 0);
+  const minor = format.resolvedOptions().minimumFractionDigits ?? 0;
+  const parts = format.formatToParts(1234.5);
+  const first = parts.findIndex((part) => part.type === "integer");
+  const last = parts
+    .map((part) => part.type === "integer" || part.type === "fraction")
+    .lastIndexOf(true);
+  return {
+    prefix: parts
+      .slice(0, first)
+      .map((part) => part.value)
+      .join(""),
+    suffix: parts
+      .slice(last + 1)
+      .map((part) => part.value)
+      .join(""),
+    fractionDigits: Math.max(minor, fraction.length),
+  };
+};
+
 /** The formatter names and units a definition may select. */
 export const formatterCatalogue = ["number", "money", "percent", "unit"] as const;
 export const unitCatalogue = {
