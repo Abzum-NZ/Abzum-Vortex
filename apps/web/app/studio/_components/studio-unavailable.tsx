@@ -28,7 +28,7 @@ export function StudioUnavailable({
           {subject} {titles[result.kind]}
         </AlertTitle>
         <AlertDescription>
-          <p role="status">{unavailableMessage(result.kind, result.reason)}</p>
+          <p>{unavailableMessage(result.kind, result.reason)}</p>
           {result.reason === undefined ? null : <p className="text-xs">Reason: {result.reason}</p>}
         </AlertDescription>
       </Alert>

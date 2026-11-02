@@ -1,5 +1,5 @@
 "use client";
-import { FieldDescription, FieldLegend } from "@vortex/ui/components/field";
+import { FieldDescription, FieldLegend, FieldSet } from "@vortex/ui/components/field";
 import { StudioLimitReason, studioLimitReason } from "./studio-limit";
 import { Alert, AlertDescription } from "@vortex/ui/components/alert";
 import { useState, type FormEvent } from "react";
@@ -109,8 +109,8 @@ function EventDialog({
               />
             )}
           </StudioField>
-          <fieldset
-            className="space-y-2"
+          <FieldSet
+            className="gap-2"
             aria-describedby={
               problemField === "carries" && problem !== undefined
                 ? "event-carries-problem"
@@ -144,7 +144,7 @@ function EventDialog({
                 <AlertDescription>{problem}</AlertDescription>
               </Alert>
             ) : null}
-          </fieldset>
+          </FieldSet>
           <p className="text-sm text-muted-foreground">
             Only fields without personal or sensitive data can be carried.
           </p>

@@ -9,6 +9,7 @@ import {
   type ModuleFieldPublication,
   type RecordStorageScope,
 } from "@vortex/platform/schema";
+import { Alert, AlertDescription } from "@vortex/ui/components/alert";
 import { Button } from "@vortex/ui/components/button";
 import {
   Dialog,
@@ -332,15 +333,15 @@ export function StudioRecordTypeDialog({
               </FieldDescription>
             )}
             {issues.length === 0 ? null : (
-              <ul
-                role="alert"
-                className="space-y-1 text-sm text-destructive"
-                aria-label="Why the record type was not added"
-              >
-                {issues.map((issue, index) => (
-                  <li key={index}>{issue}</li>
-                ))}
-              </ul>
+              <Alert variant="destructive" aria-label="Why the record type was not added">
+                <AlertDescription>
+                  <ul className="space-y-1">
+                    {issues.map((issue, index) => (
+                      <li key={index}>{issue}</li>
+                    ))}
+                  </ul>
+                </AlertDescription>
+              </Alert>
             )}
           </FieldGroup>
         </form>

@@ -1,4 +1,5 @@
 "use client";
+import { Alert, AlertDescription } from "@vortex/ui/components/alert";
 import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import type { ApplicationSourceDocument, ApplicationUsePlace } from "@vortex/platform/schema";
 import { Button } from "@vortex/ui/components/button";
@@ -61,14 +62,12 @@ function AccessFeedback({ feedback }: Readonly<{ feedback: Feedback | null }>) {
       />
     );
   return (
-    <p
+    <Alert
+      variant={feedback.kind === "refused" ? "destructive" : "default"}
       role={feedback.kind === "refused" ? "alert" : "status"}
-      className={
-        feedback.kind === "refused" ? "text-sm text-destructive" : "text-sm text-muted-foreground"
-      }
     >
-      {feedback.message}
-    </p>
+      <AlertDescription>{feedback.message}</AlertDescription>
+    </Alert>
   );
 }
 

@@ -177,7 +177,7 @@ export function StudioReferencesAlert({
   const [showing, setShowing] = useState(false);
   if (references.length === 0) return null;
   return (
-    <Alert variant="destructive" role="alert">
+    <Alert variant="destructive">
       <AlertTitle>{title ?? `${name} cannot be ${action ?? "changed"}`}</AlertTitle>
       <AlertDescription className="space-y-2">
         <p>

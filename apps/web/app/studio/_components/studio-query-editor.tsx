@@ -1,4 +1,5 @@
 "use client";
+import { StudioDataEmpty } from "./studio-data-centre";
 import { Alert, AlertDescription } from "@vortex/ui/components/alert";
 import { useMemo, useState, type FormEvent, type ReactNode } from "react";
 import {
@@ -353,11 +354,7 @@ export function StudioQueryEditor({
   });
 
   if (module === undefined || query === undefined)
-    return (
-      <p role="status" className="text-sm">
-        This query is not in the draft any more. Choose another item in the Data panel.
-      </p>
-    );
+    return <StudioDataEmpty title="Item removed" description="Choose another item in Data." />;
   if (record === undefined)
     return (
       <p role="note" className="text-sm">
@@ -1033,11 +1030,6 @@ export function StudioQueryEditor({
                 ]}
                 onChange={(recordType) => setNewInput({ ...newInput, recordType })}
               />
-              {newInput.recordType === "" && (
-                <p role="status" className="text-sm text-destructive">
-                  Choose the record type.
-                </p>
-              )}
             </div>
           )}
           <Button
@@ -1056,17 +1048,17 @@ export function StudioQueryEditor({
       </Section>
 
       {issues.length === 0 ? null : (
-        <ul
-          className="space-y-1 text-sm text-destructive"
-          aria-label="Why the query was not changed"
-          role="alert"
-        >
-          {issues.map((issue, index) => (
-            <li key={index} className="break-words">
-              {issue}
-            </li>
-          ))}
-        </ul>
+        <Alert variant="destructive" aria-label="Why the query was not changed">
+          <AlertDescription>
+            <ul className="space-y-1">
+              {issues.map((issue, index) => (
+                <li key={index} className="break-words">
+                  {issue}
+                </li>
+              ))}
+            </ul>
+          </AlertDescription>
+        </Alert>
       )}
       <section className="space-y-2 border-t border-border pt-3" aria-label="Delete">
         <Button
@@ -1161,13 +1153,17 @@ export function StudioNewQueryForm({
         {definitionLimitUsage("queriesPerModule", module?.queries.length ?? 0)}
       </FieldDescription>
       {issues.length === 0 ? null : (
-        <ul role="alert" className="space-y-1 text-sm text-destructive">
-          {issues.map((issue, index) => (
-            <li key={index} className="break-words">
-              {issue}
-            </li>
-          ))}
-        </ul>
+        <Alert variant="destructive">
+          <AlertDescription>
+            <ul className="space-y-1">
+              {issues.map((issue, index) => (
+                <li key={index} className="break-words">
+                  {issue}
+                </li>
+              ))}
+            </ul>
+          </AlertDescription>
+        </Alert>
       )}
     </form>
   );

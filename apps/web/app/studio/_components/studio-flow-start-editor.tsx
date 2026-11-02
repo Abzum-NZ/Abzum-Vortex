@@ -1,5 +1,6 @@
 "use client";
-import { FieldLegend } from "@vortex/ui/components/field";
+import { Empty, EmptyDescription, EmptyHeader } from "@vortex/ui/components/empty";
+import { FieldLegend, FieldSet, FieldDescription } from "@vortex/ui/components/field";
 import { Alert, AlertDescription } from "@vortex/ui/components/alert";
 import { useEffect, useState } from "react";
 import { Checkbox } from "@vortex/ui/components/checkbox";
@@ -300,9 +301,7 @@ function InputSettings({
             onChange={(next) => onChange({ ...input, type, recordType: next === "" ? null : next })}
           />
           {type !== input.type && (
-            <p role="status" className="text-sm text-muted-foreground">
-              Choose a record type to apply this kind of value.
-            </p>
+            <FieldDescription>Choose a record type to apply this kind of value.</FieldDescription>
           )}
         </div>
       )}
@@ -421,7 +420,7 @@ export function StudioFlowStartEditor({
         }
       >
         {shown.triggers.map((trigger, index) => (
-          <fieldset key={index} className="space-y-2">
+          <FieldSet key={index} className="gap-2">
             <FieldLegend variant="label">
               {trigger.kind === "before_save"
                 ? "Before a record is saved"
@@ -446,22 +445,24 @@ export function StudioFlowStartEditor({
                 )
               }
             />
-          </fieldset>
+          </FieldSet>
         ))}
         {shown.bindings.length === 0 && shown.triggers.length === 0 && (
-          <p role="status" className="text-sm text-muted-foreground">
-            Nothing starts this flow yet.
-          </p>
+          <Empty className="border-0 p-2">
+            <EmptyHeader>
+              <EmptyDescription>Nothing starts this flow yet.</EmptyDescription>
+            </EmptyHeader>
+          </Empty>
         )}
         {shown.bindings.map((binding) => (
-          <fieldset key={binding.id} className="space-y-2">
+          <FieldSet key={binding.id} className="gap-2">
             <FieldLegend variant="label">
               {studioBindingSentence(controlLabel(binding.control), binding.event)}
             </FieldLegend>
             {shown.inputs.length === 0 && (
-              <p role="status" className="text-sm text-muted-foreground">
+              <FieldDescription>
                 The flow declares no inputs, so the control passes nothing.
-              </p>
+              </FieldDescription>
             )}
             {shown.inputs.map((input, inputIndex) => {
               const value = binding.inputs[input.id] ?? { kind: "none" };
@@ -538,7 +539,7 @@ export function StudioFlowStartEditor({
                 </div>
               );
             })}
-          </fieldset>
+          </FieldSet>
         ))}
       </StudioInspectorGroup>
       <StudioInspectorGroup

@@ -1,5 +1,6 @@
 "use client";
 
+import { FieldDescription } from "../components/field";
 import type { ReactElement } from "react";
 import { Button } from "../components/button";
 import { Plus } from "lucide-react";
@@ -85,11 +86,11 @@ export function StudioQueryPicker({
         ]}
       />
       {queries.length === 0 && recordQueries.length === 0 && (
-        <p role="status" className="text-sm">
+        <FieldDescription>
           {onNewQuery === undefined
             ? "Add a query in the Data tab first."
             : "Add a query with New query."}
-        </p>
+        </FieldDescription>
       )}
     </div>
   );

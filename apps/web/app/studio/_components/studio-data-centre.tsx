@@ -23,6 +23,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@vortex/ui/components/
 import { Alert, AlertDescription, AlertTitle } from "@vortex/ui/components/alert";
 import { StudioPlaceList } from "./studio-used-in";
 import { Badge } from "@vortex/ui/components/badge";
+import { Spinner } from "@vortex/ui/components/spinner";
 import { Button } from "@vortex/ui/components/button";
 import { Label } from "@vortex/ui/components/label";
 import {
@@ -457,13 +458,14 @@ function PreviewResults({
         </div>
       </div>
       {current === null ? (
-        <p role="status" className="text-sm text-muted-foreground">
+        <div role="status" className="flex items-center gap-2 text-sm text-muted-foreground">
+          <Spinner aria-hidden="true" />
           Reading records…
-        </p>
+        </div>
       ) : problem !== undefined ? (
-        <p role="status" className="text-sm">
-          {problem}
-        </p>
+        <Alert role="status">
+          <AlertDescription>{problem}</AlertDescription>
+        </Alert>
       ) : current.kind === "summary" ? (
         <SummaryResults result={current} onPage={setPage} />
       ) : (
@@ -642,9 +644,11 @@ export function StudioDataCentre({
   const sortableCount = sortableFields.length;
   const fieldLimitReason = studioLimitReason("fieldsPerRecordType", record.fields.length);
   const results = unsaved ? (
-    <p role="status" className="text-sm">
-      Records will appear when this draft is saved.
-    </p>
+    <Empty className="border-0">
+      <EmptyHeader>
+        <EmptyDescription>Records will appear when this draft is saved.</EmptyDescription>
+      </EmptyHeader>
+    </Empty>
   ) : (
     <PreviewResults
       organizationId={organizationId}

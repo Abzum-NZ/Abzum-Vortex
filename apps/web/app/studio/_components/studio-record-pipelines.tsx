@@ -1,5 +1,5 @@
 "use client";
-import { FieldLegend } from "@vortex/ui/components/field";
+import { FieldLegend, FieldSet } from "@vortex/ui/components/field";
 import { useState, type FormEvent } from "react";
 import { StudioLimitReason, studioLimitReason } from "./studio-limit";
 import {
@@ -115,13 +115,17 @@ const gatesOf = (module: Module, record: RecordType, fieldKey: string): Record<s
 
 function Problems({ issues }: Readonly<{ issues: readonly string[] }>) {
   return issues.length === 0 ? null : (
-    <ul role="alert" className="space-y-1 text-sm text-destructive">
-      {issues.map((issue, index) => (
-        <li key={index} className="break-words">
-          {issue}
-        </li>
-      ))}
-    </ul>
+    <Alert variant="destructive">
+      <AlertDescription>
+        <ul className="space-y-1">
+          {issues.map((issue, index) => (
+            <li key={index} className="break-words">
+              {issue}
+            </li>
+          ))}
+        </ul>
+      </AlertDescription>
+    </Alert>
   );
 }
 
@@ -428,7 +432,7 @@ function PipelineDialog({
             </p>
           </div>
 
-          <fieldset className="space-y-2">
+          <FieldSet className="gap-2">
             <FieldLegend variant="label">Stages, in board order</FieldLegend>
             <ul className="space-y-2">
               {stages.map((stage, index) => (
@@ -524,9 +528,9 @@ function PipelineDialog({
               step. Only people whose access groups hold the action&apos;s permission can move a
               record there.
             </p>
-          </fieldset>
+          </FieldSet>
 
-          <fieldset className="space-y-2">
+          <FieldSet className="gap-2">
             <FieldLegend variant="label">Allowed moves</FieldLegend>
             <p className="text-sm text-muted-foreground">
               Tick each move a record may make. Any other move between two stages is refused. A new
@@ -578,7 +582,7 @@ function PipelineDialog({
                 </TableBody>
               </Table>
             </div>
-          </fieldset>
+          </FieldSet>
 
           <Problems issues={issues} />
           {where === undefined ? null : (
