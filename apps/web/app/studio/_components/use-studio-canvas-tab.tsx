@@ -79,7 +79,7 @@ import { StudioLayoutOutlets, StudioLayoutOutletUses } from "./studio-layout-out
 import type { StudioStructureCommandRunner } from "./use-studio-structure-tab";
 import { StudioUsedIn } from "./studio-used-in";
 import type { StudioModuleOwnerApplication } from "./module-fields-editor";
-import { StudioBlockOutlinePanel } from "./studio-outline-panels";
+import { StudioOutlinePanel } from "./studio-outline-panels";
 import { railShowsCanvas, type StudioRailKey } from "./studio-rail-tabs";
 import type { StudioDraft, StudioDraftStep } from "./use-studio-draft";
 import { StudioPageValuesPanel } from "./studio-page-values-panel";
@@ -811,10 +811,6 @@ export function useStudioCanvasTab({
       : ownerShellKey === undefined
         ? undefined
         : labels.get(ownerShellKey);
-  const outlineOwnerKey =
-    canvasPage !== undefined && ownerShellKey === undefined
-      ? studioSemanticSelectionKey({ kind: "page", pageAlias: canvasPage.id })
-      : ownerShellKey;
   const selectedName = selected === null ? undefined : labels.get(selectionKey);
   const usedIn = studioUseTargetOf(selected);
   const title =
@@ -823,21 +819,12 @@ export function useStudioCanvasTab({
       : inspector.status === "resolved"
         ? (selectedName ?? inspector.descriptor.label)
         : "Select an item";
-  const outlinePanelProps = {
-    outline,
-    selectedKey: selectionKey,
-    disabled: draft.isHeld("publication"),
-    choose: (node: { selection: StudioSemanticSelection | null }) => {
-      if (node.selection !== null) draft.select(node.selection);
-    },
-  };
-
   const panels = (
     <>
-      <StudioBlockOutlinePanel
-        {...outlinePanelProps}
+      <StudioOutlinePanel
         hidden={tab !== "outline"}
-        ownerKey={outlineOwnerKey}
+        pageOpen={canvasPage !== undefined}
+        outline={outline}
         levels={
           canvasPage === undefined
             ? undefined

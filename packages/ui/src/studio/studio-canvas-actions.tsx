@@ -2,6 +2,7 @@
 
 import { createUsePuck, useGetPuck, type Overrides } from "@puckeditor/core";
 import { StudioCanvasIframe } from "./studio-canvas-root";
+import { StudioOutlineRegion } from "./studio-puck-outline";
 import { Copy, Trash2 } from "lucide-react";
 import { Button } from "../components/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../components/tooltip";
@@ -123,8 +124,12 @@ export function StudioCanvasActions() {
   );
 }
 
-/** Replaces Puck's floating action bar with StudioCanvasActions, and draws the frame in the iframe. */
+/**
+ * Replaces Puck's floating action bar with StudioCanvasActions, draws the frame in the iframe, and
+ * gives the outline the labelled keyboard region Puck lacks.
+ */
 export const studioCanvasOverrides: Partial<Overrides> = {
   actionBar: () => <></>,
   iframe: StudioCanvasIframe,
+  outline: StudioOutlineRegion,
 };

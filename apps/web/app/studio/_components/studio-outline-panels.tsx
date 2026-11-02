@@ -1,36 +1,25 @@
 "use client";
-import { useMemo, useState, type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import type { StudioSemanticOutline, StudioSemanticOutlineNode } from "@vortex/ui/studio";
+import { StudioPuckOutline } from "@vortex/ui/studio";
 import { StudioPanelShell, StudioSearchBox, StudioSection } from "./studio-frame";
-import { StudioNavEmpty } from "./studio-nav-tree";
 import { StudioOutline } from "./studio-outline";
 import { StudioLimitRow } from "./studio-limit";
 
 /**
  * The rail panels drawn from the one semantic outline of the draft: Structure (the application, its
- * layouts and pages) and Outline (the blocks of what the canvas shows). Each is a view of
- * the same tree, so a selection made in any of them is the workspace's one selection.
+ * layouts and pages) is Studio's, because Puck knows only the page on the canvas; the Outline tab is
+ * Puck's own outline of that data. A selection made in any of them is the workspace's one selection.
  */
 
 type Choose = (node: StudioSemanticOutlineNode) => void;
+
 
 const sectionOf = (
   outline: StudioSemanticOutline,
   section: string,
 ): StudioSemanticOutlineNode | undefined =>
   outline.children.find((child) => child.key === JSON.stringify([outline.key, "section", section]));
-
-const findNode = (
-  node: StudioSemanticOutlineNode,
-  key: string,
-): StudioSemanticOutlineNode | undefined => {
-  if (node.key === key) return node;
-  for (const child of node.children) {
-    const found = findNode(child, key);
-    if (found !== undefined) return found;
-  }
-  return undefined;
-};
 
 /** Keeps the nodes whose label matches, with the branches that lead to them. */
 const filterNodes = (
@@ -46,7 +35,7 @@ const filterNodes = (
   });
 };
 
-/** How many blocks the nodes hold, against the composition limit. */
+/** How many blocks the draft holds, against the composition limit. */
 const countBlocks = (nodes: readonly StudioSemanticOutlineNode[]): number =>
   nodes.reduce(
     (total, node) => total + (node.kind === "placement" ? 1 : 0) + countBlocks(node.children),
@@ -57,26 +46,6 @@ const withoutChildren = (node: StudioSemanticOutlineNode): StudioSemanticOutline
   ...node,
   children: [],
 });
-
-function OutlineList({
-  nodes,
-  selectedKey,
-  choose,
-  disabled,
-  empty,
-}: Readonly<{
-  nodes: readonly StudioSemanticOutlineNode[];
-  selectedKey: string;
-  choose: Choose;
-  disabled: boolean;
-  empty: string;
-}>) {
-  if (nodes.length === 0)
-    return <StudioNavEmpty title="No blocks" description={empty} icon="blocks" />;
-  return (
-    <StudioOutline nodes={nodes} selectedKey={selectedKey} choose={choose} disabled={disabled} />
-  );
-}
 
 type PanelProps = Readonly<{
   outline: StudioSemanticOutline;
@@ -161,69 +130,33 @@ export function StudioStructurePanel({
   );
 }
 
-export function StudioBlockOutlinePanel({
-  outline,
-  selectedKey,
-  choose,
-  disabled,
+export function StudioOutlinePanel({
   hidden,
-  ownerKey,
+  pageOpen,
+  outline,
   levels,
-}: PanelProps &
-  Readonly<{
-    /** The levels of nested blocks the open page uses, its layout's included. */
-    levels: number | undefined;
-    /** The page or layout the canvas shows, whose blocks are listed. */
-    ownerKey: string | undefined;
-  }>) {
-  const [query, setQuery] = useState("");
-  const owner = ownerKey === undefined ? undefined : findNode(outline, ownerKey);
-  const blocks = useMemo(() => filterNodes(owner?.children ?? [], query), [owner, query]);
-  // Blocks are counted across the application.
-  const placed = useMemo(() => countBlocks(outline.children), [outline]);
+}: Readonly<{
+  hidden: boolean;
+  /** Whether the canvas holds a page: Puck's outline lists the blocks of the data it holds. */
+  pageOpen: boolean;
+  outline: StudioSemanticOutline;
+  /** The levels of nested blocks the open page uses, its layout's included. */
+  levels: number | undefined;
+}>) {
   return (
-    <StudioPanelShell
-      title="Outline"
-      hidden={hidden}
-      search={
-        owner === undefined ? undefined : (
-          <StudioSearchBox
-            value={query}
-            onChange={setQuery}
-            placeholder="Find a block"
-            label="Find a block"
+    <StudioPanelShell title="Outline" hidden={hidden}>
+      <StudioPuckOutline open={pageOpen} />
+      {pageOpen && (
+        <section className="space-y-1 px-1 pt-2" aria-label="Application limits">
+          <StudioLimitRow
+            label="Blocks in the application"
+            limit="compositionPlacements"
+            used={countBlocks(outline.children)}
           />
-        )
-      }
-    >
-      {owner === undefined ? (
-        <StudioNavEmpty
-          title="No page open"
-          description="Choose a page or layout in Structure to see its blocks."
-          icon="list-tree"
-        />
-      ) : (
-        <>
-          <StudioSection title={owner.label} count={blocks.length}>
-            <OutlineList
-              nodes={blocks}
-              selectedKey={selectedKey}
-              choose={choose}
-              disabled={disabled}
-              empty={query.length > 0 ? "No block matches." : "This has no blocks yet."}
-            />
-          </StudioSection>
-          <section className="space-y-1 px-1 pt-2" aria-label="Application limits">
-            <StudioLimitRow
-              label="Blocks in the application"
-              limit="compositionPlacements"
-              used={placed}
-            />
-            {levels === undefined ? null : (
-              <StudioLimitRow label="Levels on this page" limit="compositionDepth" used={levels} />
-            )}
-          </section>
-        </>
+          {levels === undefined ? null : (
+            <StudioLimitRow label="Levels on this page" limit="compositionDepth" used={levels} />
+          )}
+        </section>
       )}
     </StudioPanelShell>
   );
