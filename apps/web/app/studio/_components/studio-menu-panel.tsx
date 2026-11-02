@@ -30,7 +30,7 @@ import {
   type StudioMenuItem,
   type StudioMenuResult,
 } from "@vortex/ui/studio";
-import { studioAccessGateChoices } from "@vortex/ui/studio";
+import { StudioHelp, studioAccessGateChoices } from "@vortex/ui/studio";
 import { StudioNavTree, type StudioNavNode } from "./studio-nav-tree";
 import { StudioPanelShell, StudioSection } from "./studio-frame";
 import { StudioField } from "./studio-field";
