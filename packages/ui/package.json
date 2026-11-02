@@ -20,6 +20,7 @@
     "./studio": "./src/studio/index.ts",
     "./studio/puck-provider": "./src/studio/studio-puck-provider.tsx",
     "./studio/canvas-view": "./src/studio/studio-canvas-view.tsx",
+    "./studio/puck-drawer": "./src/studio/studio-puck-drawer.tsx",
     "./studio/flow-canvas": "./src/studio/studio-flow-canvas.tsx",
     "./components/*": "./src/components/*.tsx",
     "./lib/*": "./src/lib/*.ts",

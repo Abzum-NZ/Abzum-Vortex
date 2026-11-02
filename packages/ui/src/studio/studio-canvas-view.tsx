@@ -12,7 +12,6 @@ import { Label } from "../components/label";
 import { Icon } from "../icons";
 import { studioPageAreaLabel } from "./application-page-layout";
 import type { StudioCompileFailure } from "./compile-failure";
-import { StudioBlockPalette } from "./studio-block-palette";
 import { StudioCanvasActions } from "./studio-canvas-actions";
 import { useStudioScreen } from "./studio-canvas-screen";
 import { StudioReferencePicker } from "./studio-reference-picker";
@@ -29,50 +28,6 @@ function CanvasEmpty({ title, description }: Readonly<{ title: string; descripti
         <EmptyDescription>{description}</EmptyDescription>
       </EmptyHeader>
     </Empty>
-  );
-}
-
-/**
- * Studio's Blocks panel: the places and blocks of the open page, drawn inside the workspace's
- * Puck editor so a block is dragged with Puck's own drag and drop. Every block is a Puck drawer
- * item; its Add button reaches the same add command.
- */
-export function StudioCanvasPalette() {
-  const { input, model } = useStudioCanvas();
-  const palette = input.palette;
-  // No page is open: the panel says so itself.
-  if (palette === undefined || model.at === undefined || model.slot === undefined) return null;
-  if (model.shown === undefined)
-    return (
-      <CanvasEmpty
-        title="Blocks unavailable"
-        description="Blocks can be added once this page has a compiled version, which follows shortly after your latest change is saved."
-      />
-    );
-  if (palette.targets.kind !== "available")
-    return (
-      <CanvasEmpty
-        title="Blocks unavailable"
-        description={
-          palette.targets.kind === "unsupported"
-            ? "Blocks can't be added to this kind of page in Studio yet."
-            : "This page is not in the current draft."
-        }
-      />
-    );
-  const at = model.at;
-  return (
-    <StudioBlockPalette
-      targets={palette.targets.targets.filter(
-        (target) => palette.owner === "layout" || target.area === at.key,
-      )}
-      editable={model.editable}
-      owner={palette.owner}
-      message={palette.message}
-      onAdd={(request) => {
-        palette.onAdd(request);
-      }}
-    />
   );
 }
 
