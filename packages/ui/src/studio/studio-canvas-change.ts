@@ -1,6 +1,8 @@
 import type { Data } from "@puckeditor/core";
 import {
   applicationSourceDocumentSchema,
+  definitionLimitMessage,
+  definitionLimits,
   removeFlowBindingsOf,
   setSourcePageSlot,
   sourceItemTree,
@@ -14,8 +16,9 @@ import {
   type ApplicationSourceDocument,
   type ImmutablePlatformBlockCatalogue,
   type PageSlotAddress,
+  type SourceItem,
 } from "@vortex/platform/schema";
-import { regions } from "./application-composition-regions";
+import { itemSlots, regions } from "./application-composition-regions";
 import {
   studioFormChangeRefusal,
   studioFormChangeRefusalSentence,
@@ -33,6 +36,38 @@ export type StudioCanvasChange =
   | Readonly<{ kind: "applied"; source: ApplicationSourceDocument }>
   /** The change breaks a rule of the definition; `message` says which, and the draft stays as it was. */
   | Readonly<{ kind: "refused"; message: string }>;
+
+/** How deep a list of blocks nests: a block of the list is level one. */
+const nestingOf = (
+  catalogue: ImmutablePlatformBlockCatalogue,
+  items: readonly SourceItem[],
+): number =>
+  items.reduce(
+    (deepest, item) =>
+      Math.max(
+        deepest,
+        1 +
+          [...itemSlots(catalogue, item).values()].reduce(
+            (inner, child) => Math.max(inner, nestingOf(catalogue, child.items)),
+            0,
+          ),
+      ),
+    0,
+  );
+
+/** The plain sentence for a change that takes the application past a composition limit. */
+const compositionLimitRefusal = (
+  catalogue: ImmutablePlatformBlockCatalogue,
+  source: ApplicationSourceDocument,
+): string | undefined => {
+  const zones = regions(source).map((region) => region.zone.items);
+  const placed = zones.reduce((total, items) => total + sourceItemTree(items).length, 0);
+  if (placed > definitionLimits.compositionPlacements)
+    return definitionLimitMessage("compositionPlacements");
+  if (zones.some((items) => nestingOf(catalogue, items) > definitionLimits.compositionDepth))
+    return definitionLimitMessage("compositionDepth");
+  return undefined;
+};
 
 /**
  * Every canvas change goes back through the definition: Puck's data is converted to the authored
@@ -93,6 +128,10 @@ export const applyStudioCanvasChange = (
     const parsed = applicationSourceDocumentSchema.safeParse(next);
     if (!parsed.success) throw parsed.error;
     validateStoredApplicationOutlets(catalogue, parsed.data);
+    // Duplicate, paste and every other insert go through the limits the platform validator holds
+    // the whole application to, so the person sees the plain sentence now, not a refused save.
+    const overLimit = compositionLimitRefusal(catalogue, parsed.data);
+    if (overLimit !== undefined) return { kind: "refused", message: overLimit };
     return { kind: "applied", source: parsed.data };
   } catch (error: unknown) {
     console.error("Failed to apply Puck page changes", error);

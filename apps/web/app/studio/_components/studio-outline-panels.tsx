@@ -185,7 +185,9 @@ export function StudioBlockOutlinePanel({
   const [query, setQuery] = useState("");
   const owner = ownerKey === undefined ? undefined : findNode(outline, ownerKey);
   const blocks = useMemo(() => filterNodes(owner?.children ?? [], query), [owner, query]);
-  const usage = useMemo(() => measureBlocks(outline.children), [outline]);
+  // Blocks are counted across the application; nesting is read for the page or layout open here.
+  const placed = useMemo(() => measureBlocks(outline.children).count, [outline]);
+  const nested = useMemo(() => measureBlocks(owner?.children ?? []).deepest, [owner]);
   return (
     <StudioPanelShell
       title="Outline"
@@ -218,14 +220,14 @@ export function StudioBlockOutlinePanel({
               empty={query.length > 0 ? "No block matches." : "This has no blocks yet."}
             />
           </StudioSection>
-          <div className="space-y-1 px-1 pt-2" aria-label="Page limits">
+          <section className="space-y-1 px-1 pt-2" aria-label="Application limits">
             <StudioLimitRow
               label="Blocks in the application"
               limit="compositionPlacements"
-              used={usage.count}
+              used={placed}
             />
-            <StudioLimitRow label="Nesting" limit="compositionDepth" used={usage.deepest} />
-          </div>
+            <StudioLimitRow label="Nesting in this page" limit="compositionDepth" used={nested} />
+          </section>
         </>
       )}
     </StudioPanelShell>

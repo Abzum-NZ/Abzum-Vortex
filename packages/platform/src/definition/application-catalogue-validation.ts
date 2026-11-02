@@ -36,6 +36,7 @@ import {
 import { canonicalJson } from "./canonical-json";
 import type { ApplicationSourceDocument } from "./definition-source";
 import { applicationModuleKeys } from "./application-module-sources";
+import { definitionLimitMessage } from "./definition-limits";
 import { sourceAliasSchema } from "./definition-source-common";
 import { IMMUTABLE_PLATFORM_BLOCK_CATALOGUE } from "./application-composition-catalogue";
 
@@ -583,13 +584,23 @@ export function validateApplicationSourceCatalogue(
       const placement = item.props.vortex;
       const location = [...options.scope, ...keySegment("block", alias)];
       placementCount += 1;
-      if (
-        !limitReported &&
-        (placementCount > catalogue.compositionPolicy.maximumPlacements ||
-          options.depth > catalogue.compositionPolicy.maximumDepth)
-      ) {
-        limitReported = true;
-        report("vortex.definition.application_layout_complete", "too_many_items", location);
+      if (!limitReported) {
+        const limit =
+          placementCount > catalogue.compositionPolicy.maximumPlacements
+            ? "compositionPlacements"
+            : options.depth > catalogue.compositionPolicy.maximumDepth
+              ? "compositionDepth"
+              : undefined;
+        if (limit !== undefined) {
+          limitReported = true;
+          report(
+            "vortex.definition.application_layout_complete",
+            "too_many_items",
+            location,
+            undefined,
+            definitionLimitMessage(limit),
+          );
+        }
       }
 
       const blockId = String(placement.block.block_id);

@@ -81,6 +81,7 @@ export * from "./studio-field";
 export * from "./studio-inspector-group";
 export * from "./studio-dialog";
 export * from "./studio-icon-buttons";
+export * from "./studio-limit";
 export * from "./studio-inspector-actions";
 export * from "./studio-field-type-icon";
 export {

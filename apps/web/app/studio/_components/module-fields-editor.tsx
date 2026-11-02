@@ -861,6 +861,21 @@ export function ModuleFieldsEditor({
     (item) => item.sortable && item.key !== existing?.key,
   ).length;
   const sortableUsed = sortableInUse + (form.sortable ? 1 : 0);
+  const filterableInUse = record.fields.filter(
+    (item) => item.filterable && item.key !== existing?.key,
+  ).length;
+  const searchableInUse = record.fields.filter(
+    (item) => item.search_priority !== undefined && item.key !== existing?.key,
+  ).length;
+  const filterableLimitReason =
+    !form.filterable && definitionLimitReached("filterableFieldsPerRecordType", filterableInUse)
+      ? definitionLimitMessage("filterableFieldsPerRecordType")
+      : undefined;
+  const searchableLimitReason =
+    form.searchPriority === null &&
+    definitionLimitReached("searchableFieldsPerRecordType", searchableInUse)
+      ? definitionLimitMessage("searchableFieldsPerRecordType")
+      : undefined;
   const sortableReason =
     !form.sortable && definitionLimitReached("sortableFieldsPerRecordType", sortableInUse)
       ? definitionLimitMessage("sortableFieldsPerRecordType")
@@ -1079,11 +1094,14 @@ export function ModuleFieldsEditor({
             unique: { checked: form.unique, reason: uniqueReason },
             filterable: {
               checked: form.filterable,
-              reason: isTitleField ? "The title is always filterable" : undefined,
+              reason: isTitleField ? "The title is always filterable" : filterableLimitReason,
+              limit: "filterableFieldsPerRecordType",
+              used: filterableInUse + (form.filterable ? 1 : 0),
             },
             sortable: {
               checked: form.sortable,
               reason: sortableReason,
+              limit: "sortableFieldsPerRecordType",
               used: sortableUsed,
               showMe: sortableReason === undefined ? undefined : onShowSortable,
             },
@@ -1103,6 +1121,7 @@ export function ModuleFieldsEditor({
         <FieldSearchSection
           value={form.searchPriority}
           disabled={disabled}
+          limitReason={searchableLimitReason}
           onChange={(searchPriority) => change({ searchPriority })}
         />
         <FieldPrivacySection

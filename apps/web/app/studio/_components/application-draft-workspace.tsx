@@ -69,6 +69,7 @@ type WorkspaceProps = Readonly<{
   initialTab?: string | undefined;
   initialSection?: string | undefined;
   initialModule?: string | undefined;
+  initialRecordType?: string | undefined;
   applications: readonly StudioModuleOwnerApplication[];
   initialView: Parameters<typeof useStudioDraft>[0]["initialView"];
 }>;
@@ -267,6 +268,7 @@ function ExistingApplicationWorkspace(props: ExistingProps) {
     draft,
     applications,
     initialModule: props.initialModule ?? null,
+    initialRecordType: props.initialRecordType ?? null,
     hidden: tab !== "data",
     compositionContext: canvas.compositionContext,
     readRecords: canvas.readRecordChoices,

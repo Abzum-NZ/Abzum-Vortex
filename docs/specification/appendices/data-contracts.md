@@ -716,7 +716,7 @@ The message is sent only through a private, authorised channel and is not proof 
 | Relationship hops              | 2                                                  |
 | Board columns                  | 12                                                 |
 | Guided-form steps              | 2–20                                               |
-| Blocks per page                | 1–200                                              |
+| Blocks per application         | 512 across its pages and layouts                   |
 | Blocks per guided-form step    | 1–40                                               |
 | Steps in one flow              | 1-100                              |
 | Flow nesting depth             | 5                                  |
@@ -725,11 +725,52 @@ The message is sent only through a private, authorised channel and is not proof 
 | Server seconds per run         | 10                                 |
 | Set-based For each items       | 200                                |
 | Other For each items           | 100                                |
-| Default interactive query page | 50 records                                         |
+| Default interactive query page | 40 records                                         |
 | Maximum interactive query page | 200 records                                        |
 | Summary candidate rows         | 100,000; a larger candidate set is refused without partial groups or totals |
 
 These are safety and product-shape limits, not performance release gates. Changing one requires an explicit contract change and code review of affected consumers.
+
+## Definition limits
+
+Every numeric limit of a definition that a builder can reach is declared once, in `packages/platform/src/definition/definition-limits.ts` (`definitionLimits`). The source and compiled schemas refuse past it, the catalogue validator and the import dialog word the refusal with the same sentence (`definitionLimitMessage`), and Studio states it at the control it applies to as "N of M used" (from 80 percent of the limit, and always in the Limits group of the owner's inspector) and disables the control with that reason once it is reached. The database mirrors some of them in `supabase/schemas`; those are listed in the last column and change in the same pull request.
+
+| Limit                            | Value        | Scope                          | Database mirror                                                  |
+| -------------------------------- | ------------ | ------------------------------ | ---------------------------------------------------------------- |
+| Fields                           | 500          | record type                    |                                                                  |
+| Filterable fields                | 200          | record type                    | `prepare_module_query_internal` (declared filterable fields)     |
+| Searchable fields                | 200          | record type                    | `module_summary_plan_internal` (declared searchable fields)      |
+| Sortable fields                  | 8            | record type                    | `provision_exact_module_storage`                                 |
+| Relationships                    | 500          | record type                    |                                                                  |
+| Pipelines                        | 10           | record type                    |                                                                  |
+| Pipeline stages                  | 200          | pipeline                       |                                                                  |
+| Pipeline transitions             | 1,000        | pipeline                       |                                                                  |
+| Choice options                   | 200          | choice field                   |                                                                  |
+| Record types                     | 100          | module                         |                                                                  |
+| Queries                          | 100          | module                         |                                                                  |
+| Actions                          | 100          | module                         |                                                                  |
+| Events                           | 100          | module                         |                                                                  |
+| Extension points                 | 100          | module                         |                                                                  |
+| Flows                            | 100          | module or application          |                                                                  |
+| Flow triggers                    | 10           | flow                           |                                                                  |
+| Action inputs                    | 50           | action                         |                                                                  |
+| Carried fields                   | 30           | event                          |                                                                  |
+| Query columns                    | 200          | query                          |                                                                  |
+| Query grouping fields            | 10           | query                          |                                                                  |
+| Query totals                     | 20           | query                          |                                                                  |
+| Query sort fields                | 20           | query                          | `module_query_open_internal` (a query sorts only by sortable fields, so the editor reaches 8) |
+| Query page size                  | 200          | query                          | the list paging rule                                             |
+| Pages                            | 100          | application                    |                                                                  |
+| Layouts                          | 100          | application                    |                                                                  |
+| Menu items                       | 100          | application                    |                                                                  |
+| Modules and used modules         | 100 each     | application                    |                                                                  |
+| Guided-form steps                | 20           | guided form                    |                                                                  |
+| Search fields; search record types | 100; 20    | application search             |                                                                  |
+| Blocks                           | 512          | application (pages and layouts together) |                                                        |
+| Block nesting depth              | 32 levels    | any content area               |                                                                  |
+| Source JSON nesting              | 112 levels   | source file                    | derived from the block depth: 3 per block level plus 16         |
+| Source members per object        | 1,000        | source file                    |                                                                  |
+| Source import size               | 2 MiB        | source file                    |                                                                  |
 
 ## File contract
 

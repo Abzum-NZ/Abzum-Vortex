@@ -11,6 +11,7 @@ import {
 import "@puckeditor/core/no-external.css";
 import {
   compiledItemSettings,
+  definitionLimitReached,
   type ApplicationSourceDocument,
   type ImmutablePlatformBlockCatalogue,
 } from "@vortex/platform/schema";
@@ -275,15 +276,21 @@ export function StudioPuckProvider({
     () => ({ breakpoint: input.breakpoint, readSettings: compiledItemSettings }),
     [input.breakpoint],
   );
+  // The application holds every block it may: Duplicate and every other insert are off.
+  const placed =
+    input.palette?.targets.kind === "available"
+      ? (input.palette.targets.targets[0]?.placed ?? 0)
+      : 0;
+  const full = definitionLimitReached("compositionPlacements", placed);
   const permissions = useMemo(
     () => ({
       drag: permitted,
-      duplicate: permitted,
+      duplicate: permitted && !full,
       delete: permitted,
       edit: false,
       insert: false,
     }),
-    [permitted],
+    [permitted, full],
   );
   const empty = useMemo(
     (): Data => ({ root: { props: model.rootProps }, content: [] }),

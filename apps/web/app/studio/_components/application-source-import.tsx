@@ -42,7 +42,7 @@ import {
 import { useConfirm } from "@vortex/ui/components/confirm-dialog";
 
 import { useEffect, useRef, useState } from "react";
-import { definitionLimits } from "@vortex/platform/schema";
+import { definitionLimitImportSize, definitionLimits } from "@vortex/platform/schema";
 import { reviewStudioApplicationSource } from "../actions";
 import {
   readStudioApplicationSourceImport,
@@ -54,11 +54,15 @@ import {
 // The import's notices replace one another: a refusal does not stay on screen through a later
 // successful check or the replace.
 let lastImportNotice: string | undefined;
-const importNotice = (message: string, kind?: "success" | "error" | "info"): void => {
+const importNotice = (
+  message: string,
+  kind?: "success" | "error" | "info",
+  link?: Readonly<{ label: string; href: string }>,
+): void => {
   if (lastImportNotice !== undefined) toast.dismiss(lastImportNotice);
   const id = `studio-source-import-${crypto.randomUUID()}`;
   lastImportNotice = id;
-  studioNotice(message, kind, undefined, { id });
+  studioNotice(message, kind, link, { id });
 };
 
 type ReviewedSource = Readonly<{
@@ -197,7 +201,7 @@ export function ApplicationSourceImport({
     setOperation(null);
     if (file.size > definitionLimits.sourceImportBytes) {
       importNotice(
-        "The JSON source must be at most 2 MiB. Your existing input is preserved.",
+        `The JSON source must be at most ${definitionLimitImportSize}. Your existing input is preserved.`,
         "error",
       );
       return;
@@ -219,7 +223,7 @@ export function ApplicationSourceImport({
         new TextEncoder().encode(value).byteLength > definitionLimits.sourceImportBytes
       ) {
         importNotice(
-          "The JSON source must be at most 2 MiB. Your previous input is preserved.",
+          `The JSON source must be at most ${definitionLimitImportSize}. Your previous input is preserved.`,
           "error",
         );
         return;
@@ -256,7 +260,16 @@ export function ApplicationSourceImport({
       snapshot.rootAlias,
     );
     if (candidate.kind !== "valid") {
-      importNotice(candidate.message, "error");
+      importNotice(
+        candidate.message,
+        "error",
+        candidate.showMe === undefined
+          ? undefined
+          : {
+              label: "Show me",
+              href: `/studio/${encodeURIComponent(snapshot.organizationId)}/${encodeURIComponent(snapshot.rootId)}?tab=data&module=${encodeURIComponent(candidate.showMe.moduleKey)}${candidate.showMe.recordKey === undefined ? "" : `&record=${encodeURIComponent(candidate.showMe.recordKey)}`}`,
+            },
+      );
       return;
     }
     busy.current = "reviewing";
@@ -514,7 +527,7 @@ export function ApplicationSourceImport({
                 <Icon name="upload" className="size-8 text-muted-foreground" />
                 <span className="font-medium">Drop an application file or browse</span>
                 <span className="text-xs font-normal text-muted-foreground">
-                  Up to 2 MiB, same application
+                  Up to {definitionLimitImportSize}, same application
                 </span>
               </Button>
             </CardContent>

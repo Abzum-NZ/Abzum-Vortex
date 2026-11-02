@@ -1,11 +1,10 @@
 "use client";
-import { FieldDescription, FieldLegend, FieldSet } from "@vortex/ui/components/field";
-import { StudioLimitReason, studioLimitReason } from "./studio-limit";
+import { StudioLimitNote, StudioReasoned, studioLimitReason } from "@vortex/ui/studio";
+import { FieldLegend, FieldSet } from "@vortex/ui/components/field";
 import { Alert, AlertDescription } from "@vortex/ui/components/alert";
 import { useState, type FormEvent } from "react";
 import {
   definitionLimitReached,
-  definitionLimitUsage,
   saveInlineModuleEvent,
   type ApplicationSourceDocument,
 } from "@vortex/platform/schema";
@@ -118,11 +117,16 @@ function EventDialog({
             }
           >
             <FieldLegend variant="label">Carried fields</FieldLegend>
+            <StudioLimitNote limit="eventCarriedFields" used={carries.length} />
             {record.fields.map((field) => (
               <div key={field.key} className="flex items-center gap-2">
                 <Checkbox
                   id={`event-carries-${field.key}`}
-                  disabled={field.personal_data !== "none"}
+                  disabled={
+                    field.personal_data !== "none" ||
+                    (!carries.includes(field.key) &&
+                      definitionLimitReached("eventCarriedFields", carries.length))
+                  }
                   checked={carries.includes(field.key)}
                   onCheckedChange={(checked) => {
                     setCarries(
@@ -186,21 +190,23 @@ export function StudioModuleEvents({
     <section className="space-y-2" aria-label="Named events">
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-semibold">Named events</h3>
-        <StudioLimitReason reason={studioLimitReason("eventsPerModule", module.events.length)}>
+        <StudioReasoned reason={studioLimitReason("eventsPerModule", module.events.length)}>
           <Button
             type="button"
             size="sm"
             variant="outline"
-            disabled={disabled || definitionLimitReached("eventsPerModule", module.events.length)}
+            disabled={disabled}
             onClick={() => setEditing("new")}
           >
             Declare event
           </Button>
-        </StudioLimitReason>
+        </StudioReasoned>
       </div>
-      <FieldDescription>
-        Events in {module.name}: {definitionLimitUsage("eventsPerModule", module.events.length)}
-      </FieldDescription>
+      <StudioLimitNote
+        limit="eventsPerModule"
+        used={module.events.length}
+        label={`Events in ${module.name}`}
+      />
       {events.map((event) => (
         <div key={event.id} className="flex items-center gap-2 rounded-md py-2 hover:bg-muted/50">
           <p className="mr-auto break-all text-sm">

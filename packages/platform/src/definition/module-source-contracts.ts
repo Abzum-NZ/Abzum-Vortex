@@ -1,4 +1,4 @@
-import { definitionLimitMessage, definitionLimits } from "./definition-limits";
+import { definitionLimitMessage, definitionLimits, type CountedLimit } from "./definition-limits";
 import { definitionContractVersion } from "./application-contract-versions";
 import { z } from "zod";
 import {
@@ -92,10 +92,8 @@ export type ModulePlatformPermissionDeclaration = z.infer<
 export const isWritableSystemProjection = (protectedView: string): boolean =>
   writableSystemProjectionViews.includes(protectedView);
 
-const maximumSourceDocumentNodes = 50_000;
-const maximumSourceStringLength = 1_000_000;
-
-const inspectSourceBounds = (value: unknown, context: z.RefinementCtx) => {
+/** The one reader of source bounds: every authored document parses through it. */
+export const inspectSourceBounds = (value: unknown, context: z.RefinementCtx) => {
   const pending: {
     value: unknown;
     path: (string | number)[];
@@ -111,7 +109,7 @@ const inspectSourceBounds = (value: unknown, context: z.RefinementCtx) => {
       continue;
     }
     visited += 1;
-    if (visited > maximumSourceDocumentNodes) {
+    if (visited > definitionLimits.sourceDocumentNodes) {
       context.addIssue({
         code: "custom",
         path: entry.path,
@@ -127,7 +125,10 @@ const inspectSourceBounds = (value: unknown, context: z.RefinementCtx) => {
       });
       return z.NEVER;
     }
-    if (typeof entry.value === "string" && entry.value.length > maximumSourceStringLength) {
+    if (
+      typeof entry.value === "string" &&
+      entry.value.length > definitionLimits.sourceStringLength
+    ) {
       context.addIssue({
         code: "custom",
         path: entry.path,
@@ -451,7 +452,7 @@ const moduleSourceRecordTypeSchema = z
               { message: "Declare one target or a polymorphic target list" },
             ),
         )
-        .max(500),
+        .max(definitionLimits.relationshipsPerRecordType),
     ),
     /** The lifecycles of its choice fields: stage order, colours and the moves a save accepts. */
     pipelines: sourceProvenanceUnchanged(
@@ -514,12 +515,15 @@ const moduleSourceRecordTypeSchema = z
           message: problem.message,
         });
     }
-    const overSortableLimit = firstFieldOverSortableLimit(value.fields);
-    if (overSortableLimit !== undefined)
+    for (const { index, limit } of fieldFlagLimitIssues(value.fields, {
+      sortable: (field) => field.sortable,
+      filterable: (field) => field.filterable,
+      searchable: (field) => field.search_priority !== undefined,
+    }))
       context.addIssue({
         code: "custom",
-        path: ["fields", overSortableLimit],
-        message: definitionLimitMessage("sortableFieldsPerRecordType"),
+        path: ["fields", index],
+        message: definitionLimitMessage(limit),
       });
     if ((value.ownership_mode === "inherited") !== (value.ownership_relationship !== undefined))
       context.addIssue({
@@ -831,14 +835,28 @@ const moduleSourceQueryAggregateSchema = z
   })
   .strict();
 
-/** The index of the first field that takes a record type past the sortable limit, if any. */
-export const firstFieldOverSortableLimit = (
-  fields: readonly Readonly<{ sortable: boolean }>[],
-): number | undefined => {
-  let seen = 0;
-  for (const [index, field] of fields.entries())
-    if (field.sortable && ++seen > definitionLimits.sortableFieldsPerRecordType) return index;
-  return undefined;
+/**
+ * The fields that take a record type past a per-flag limit: the first field past the limit of each
+ * flag (sortable, filterable, searchable), by index. The source and the compiled contract share it.
+ */
+export const fieldFlagLimitIssues = <Field>(
+  fields: readonly Field[],
+  flags: Readonly<{
+    sortable: (field: Field) => boolean;
+    filterable: (field: Field) => boolean;
+    searchable: (field: Field) => boolean;
+  }>,
+): readonly Readonly<{ index: number; limit: CountedLimit }>[] => {
+  const checks = [
+    ["sortableFieldsPerRecordType", flags.sortable],
+    ["filterableFieldsPerRecordType", flags.filterable],
+    ["searchableFieldsPerRecordType", flags.searchable],
+  ] as const;
+  return checks.flatMap(([limit, counts]) => {
+    let seen = 0;
+    const index = fields.findIndex((field) => counts(field) && ++seen > definitionLimits[limit]);
+    return index < 0 ? [] : [{ index, limit }];
+  });
 };
 
 /**
@@ -866,11 +884,13 @@ const moduleSourceQuerySchema = z
       z
         .array(sourceProvenanceTarget(builderKeySchema, ["selectedFieldIds/#"]))
         .min(1)
-        .max(200),
+        .max(definitionLimits.queryColumns),
     ),
     filter: sourceProvenanceUnchanged(z.union([z.null(), sourceConditionSchema])),
     group_by: sourceProvenanceUnchanged(
-      z.array(sourceProvenanceTarget(builderKeySchema, ["groupByFieldIds/#"])).max(10),
+      z
+        .array(sourceProvenanceTarget(builderKeySchema, ["groupByFieldIds/#"]))
+        .max(definitionLimits.queryGroupFields),
     ),
     aggregates: sourceProvenanceUnchanged(
       z.array(moduleSourceQueryAggregateSchema).max(definitionLimits.queryTotals),
@@ -985,13 +1005,15 @@ const moduleSourceBodyFields = {
             label: sourceProvenanceUnchanged(labelSchema),
             record_type: sourceProvenanceTarget(builderKeySchema, ["recordTypeId"]),
             carries: sourceProvenanceUnchanged(
-              z.array(sourceProvenanceTarget(builderKeySchema, ["carriedFieldIds/#"])).max(30),
+              z
+                .array(sourceProvenanceTarget(builderKeySchema, ["carriedFieldIds/#"]))
+                .max(definitionLimits.eventCarriedFields),
             ),
             personal_or_sensitive_values_allowed: sourceProvenanceUnchanged(z.literal(false)),
           })
           .strict(),
       )
-      .max(100),
+      .max(definitionLimits.eventsPerModule),
   ),
   /**
    * The flows this Module owns (architecture decision 1): its save rules are flows with a
@@ -1013,7 +1035,7 @@ const moduleSourceBodyFields = {
           })
           .strict(),
       )
-      .max(100),
+      .max(definitionLimits.extensionPointsPerModule),
   ),
   contributions: sourceProvenanceUnchanged(
     z.array(moduleSourceContributionSchema).max(100).optional(),
@@ -1073,6 +1095,21 @@ const refineModuleSourceBody = (value: ModuleSourceBodyFields, context: z.Refine
         path: ["actions", index, "flow"],
         message: "A system projection record type action targets a registered protected operation",
       });
+  }
+  // A query sorts only by fields the record type allows sorting by (or by its own groups), so
+  // import, the agent and the API cannot reach a sort the Studio editor refuses.
+  for (const [queryIndex, query] of value.queries.entries()) {
+    const fields = recordTypes.get(query.record_type)?.fields;
+    if (fields === undefined) continue;
+    for (const [sortIndex, sort] of query.sort.entries()) {
+      const field = fields.find((candidate) => candidate.key === sort.field);
+      if (field !== undefined && !field.sortable && !query.group_by.includes(sort.field))
+        context.addIssue({
+          code: "custom",
+          path: ["queries", queryIndex, "sort", sortIndex, "field"],
+          message: `A query can sort only by a field its record type allows sorting by: turn sorting on for ${field.label} first`,
+        });
+    }
   }
 };
 

@@ -8,8 +8,11 @@ import {
   revisionSchema,
   canonicalJson,
   definitionLimitMessage,
+  countedDefinitionLimits,
+  definitionLimitImportSize,
   definitionLimits,
   type ApplicationSourceDocument,
+  type CountedLimit,
 } from "@vortex/platform/schema";
 
 export const studioApplicationSourceReviewRequestSchema = z
@@ -177,58 +180,152 @@ const describeIssuePlace = (input: unknown, path: readonly PropertyKey[]): strin
   return places.length === 0 ? "the file" : places.reverse().join(" of ");
 };
 
-/** What each list of a source is called in a builder's words. */
-const listNames: Readonly<Record<string, string>> = {
-  fields: "fields",
-  record_types: "record types",
-  queries: "queries",
-  actions: "actions",
-  events: "events",
-  flows: "flows",
-  inputs: "inputs",
-  aggregates: "totals",
-  sort: "sort fields",
-  options: "options",
-  stages: "stages",
-  transitions: "transitions",
-  pipelines: "pipelines",
+/** The limit a list of the source is held to, by the list's name and where it sits. */
+const limitOfList = (path: readonly PropertyKey[]): CountedLimit | undefined => {
+  const list = path.at(-1);
+  const inSearch = path.includes("search");
+  switch (list) {
+    case "fields":
+      return inSearch ? "searchFieldsPerRecordType" : "fieldsPerRecordType";
+    case "record_types":
+      return inSearch ? "searchRecordTypes" : "recordTypesPerModule";
+    case "queries":
+      return "queriesPerModule";
+    case "actions":
+      return "actionsPerModule";
+    case "events":
+      return "eventsPerModule";
+    case "extension_points":
+      return "extensionPointsPerModule";
+    case "flows":
+      return "flowsPerOwner";
+    case "triggers":
+      return "flowTriggers";
+    case "inputs":
+      return "actionInputs";
+    case "carries":
+      return "eventCarriedFields";
+    case "select":
+      return "queryColumns";
+    case "group_by":
+      return "queryGroupFields";
+    case "aggregates":
+      return "queryTotals";
+    case "sort":
+      return "querySortKeys";
+    case "options":
+      return "choiceOptions";
+    case "stages":
+      return "pipelineStages";
+    case "transitions":
+      return "pipelineTransitions";
+    case "pipelines":
+      return "pipelinesPerRecordType";
+    case "relationships":
+      return "relationshipsPerRecordType";
+    case "pages":
+      return "pagesPerApplication";
+    case "shells":
+      return "layoutsPerApplication";
+    case "navigation":
+    case "children":
+      return "navigationItems";
+    case "modules":
+      return "modulesPerApplication";
+    case "uses":
+      return "usedModulesPerApplication";
+    case "steps":
+      return "guidedFormSteps";
+    default:
+      return undefined;
+  }
 };
 
-/** A value past a limit the schemas declare: where it is, what is limited and by how much. */
-const describeSourceLimit = (where: string, issue: z.core.$ZodIssueTooBig): string => {
+/** A value past a limit no list names: where it is and by how much. */
+const describeSourceBound = (where: string, issue: z.core.$ZodIssueTooBig): string => {
   const property = issue.path.at(-1);
   const name = typeof property === "string" ? property.replaceAll("_", " ") : "value";
   const limit = String(issue.maximum);
-  if (issue.origin === "array")
-    return `In ${where}: at most ${limit} ${typeof property === "string" ? (listNames[property] ?? name) : "items"} are allowed, and the file has more. Remove some and check the file again.`;
   if (issue.origin === "string")
     return `In ${where}, "${name}" can be at most ${limit} characters long. Shorten it and check the file again.`;
   return `In ${where}, "${name}" can be at most ${limit}. Lower it and check the file again.`;
 };
 
+/** Where in the draft a refusal points: the module, and the record type when the file names one. */
+export type StudioSourceImportShowMe = Readonly<{ moduleKey: string; recordKey?: string }>;
+
+type SourceImportIssue = Readonly<{ message: string; showMe?: StudioSourceImportShowMe }>;
+
+const limitMessages: ReadonlySet<string> = new Set(
+  countedDefinitionLimits.map((limit) => definitionLimitMessage(limit)),
+);
+
+/** The module and record type an issue sits in, read from the file. */
+const placeOfIssue = (
+  input: unknown,
+  path: readonly PropertyKey[],
+): StudioSourceImportShowMe | undefined => {
+  const keyAt = (end: number): string | undefined => {
+    let current: unknown = input;
+    for (const segment of path.slice(0, end)) {
+      current =
+        isObject(current) || Array.isArray(current)
+          ? (current as Record<PropertyKey, unknown>)[segment]
+          : undefined;
+    }
+    return isObject(current) && typeof current.key === "string" ? current.key : undefined;
+  };
+  const moduleAt = path.indexOf("modules");
+  if (moduleAt < 0 || typeof path[moduleAt + 1] !== "number") return undefined;
+  const moduleKey = keyAt(moduleAt + 2);
+  if (moduleKey === undefined) return undefined;
+  const recordAt = path.indexOf("record_types");
+  const recordKey =
+    recordAt > moduleAt && typeof path[recordAt + 1] === "number" ? keyAt(recordAt + 2) : undefined;
+  return recordKey === undefined ? { moduleKey } : { moduleKey, recordKey };
+};
+
 /**
  * The sentence for a source that does not read as the current contract: what is wrong, where, and
- * what to change. A file of an older contract is told to be exported again.
+ * what to change. A limit is worded exactly as Studio words it at its control. A file of an older
+ * contract is told to be exported again.
  */
-const describeSourceImportIssue = (input: unknown, issue: z.core.$ZodIssue): string => {
+const describeSourceImportIssue = (input: unknown, issue: z.core.$ZodIssue): SourceImportIssue => {
   const current = applicationSourceDocumentSchema.shape.source_contract_version.value;
   if (issue.path[0] === "source_contract_version") {
     const found = isObject(input) ? input.source_contract_version : undefined;
-    return `This file is source contract ${typeof found === "string" ? found : "unknown"}, and Studio reads ${current}. Export the application again from a current Studio, or change what the newer contract changed in the file and set source_contract_version to ${current}.`;
+    return {
+      message: `This file is source contract ${typeof found === "string" ? found : "unknown"}, and Studio reads ${current}. Export the application again from a current Studio, or change what the newer contract changed in the file and set source_contract_version to ${current}.`,
+    };
   }
   const where = describeIssuePlace(input, issue.path);
-  if (issue.message === definitionLimitMessage("sortableFieldsPerRecordType"))
-    return `In ${where}: ${issue.message}`;
-  if (issue.code === "too_big") return describeSourceLimit(where, issue);
+  const showMe = placeOfIssue(input, issue.path);
+  const found =
+    issue.code === "too_big" && issue.origin === "array" ? limitOfList(issue.path) : undefined;
+  if (found !== undefined)
+    return {
+      message: `In ${where}: ${definitionLimitMessage(found)}`,
+      ...(showMe ? { showMe } : {}),
+    };
+  if (limitMessages.has(issue.message))
+    return { message: `In ${where}: ${issue.message}`, ...(showMe ? { showMe } : {}) };
+  if (issue.code === "too_big")
+    return { message: describeSourceBound(where, issue), ...(showMe ? { showMe } : {}) };
   if (issue.code === "unrecognized_keys") {
     const keys = issue.keys.map((key) => `"${key}"`).join(", ");
     if (issue.keys.includes("tasks") && issue.path.at(-2) === "actions")
-      return `In ${where}, ${keys} is not used any more: put its steps in a Module flow and name that flow in the action's "flow".`;
-    return `In ${where}, ${keys} ${issue.keys.length === 1 ? "is" : "are"} not part of source contract ${current}. Remove ${issue.keys.length === 1 ? "it" : "them"}.`;
+      return {
+        message: `In ${where}, ${keys} is not used any more: put its steps in a Module flow and name that flow in the action's "flow".`,
+      };
+    return {
+      message: `In ${where}, ${keys} ${issue.keys.length === 1 ? "is" : "are"} not part of source contract ${current}. Remove ${issue.keys.length === 1 ? "it" : "them"}.`,
+    };
   }
   const property = issue.path.at(-1);
   const last = typeof property === "string" ? ` "${property}"` : "";
-  return `In ${where}, the property${last} is not valid: ${issue.message}. Change it to match source contract ${current}.`;
+  return {
+    message: `In ${where}, the property${last} is not valid: ${issue.message}. Change it to match source contract ${current}.`,
+  };
 };
 
 export function readStudioApplicationSourceImport(
@@ -237,12 +334,15 @@ export function readStudioApplicationSourceImport(
   rootAlias: string,
 ):
   | Readonly<{ kind: "valid"; source: ApplicationSourceDocument }>
-  | Readonly<{ kind: "invalid"; message: string }> {
+  | Readonly<{ kind: "invalid"; message: string; showMe?: StudioSourceImportShowMe }> {
   if (
     text.length > definitionLimits.sourceImportBytes ||
     new TextEncoder().encode(text).byteLength > definitionLimits.sourceImportBytes
   )
-    return { kind: "invalid", message: "The JSON source must be at most 2 MiB." };
+    return {
+      kind: "invalid",
+      message: `The JSON source must be at most ${definitionLimitImportSize}.`,
+    };
   try {
     const ambiguity = ambiguousMembers(text);
     if (ambiguity !== undefined) return { kind: "invalid", message: ambiguity };
@@ -250,10 +350,7 @@ export function readStudioApplicationSourceImport(
     const parsed = applicationSourceDocumentSchema.safeParse(input);
     if (!parsed.success) {
       const issue = parsed.error.issues[0]!;
-      return {
-        kind: "invalid",
-        message: describeSourceImportIssue(input, issue),
-      };
+      return { kind: "invalid", ...describeSourceImportIssue(input, issue) };
     }
     if (parsed.data.key !== key || parsed.data.root_alias !== rootAlias)
       return {

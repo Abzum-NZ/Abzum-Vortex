@@ -47,7 +47,7 @@ import {
   moduleDependencySchema,
   relationshipDefinitionSchema,
 } from "./module-foundation-contracts";
-import { firstFieldOverSortableLimit, isWritableSystemProjection } from "./module-source-contracts";
+import { fieldFlagLimitIssues, isWritableSystemProjection } from "./module-source-contracts";
 export { isWritableSystemProjection };
 import { permissionDeclarationSchema } from "../access/permissions";
 import { protectedOperationReferenceSchema } from "./application-flow-bindings";
@@ -1070,12 +1070,15 @@ export const recordTypeDefinitionSchema = z
     }
   })
   .superRefine((value, context) => {
-    const overSortableLimit = firstFieldOverSortableLimit(value.fields);
-    if (overSortableLimit !== undefined)
+    for (const { index, limit } of fieldFlagLimitIssues(value.fields, {
+      sortable: (field) => field.sortable,
+      filterable: (field) => field.filterable,
+      searchable: (field) => field.searchPriority !== undefined,
+    }))
       context.addIssue({
         code: "custom",
-        path: ["fields", overSortableLimit],
-        message: definitionLimitMessage("sortableFieldsPerRecordType"),
+        path: ["fields", index],
+        message: definitionLimitMessage(limit),
       });
     if ((value.ownershipMode === "inherited") !== (value.ownershipRelationshipId !== undefined))
       context.addIssue({
@@ -1357,8 +1360,8 @@ export const moduleContentSchema = z
     dependencies: z.array(moduleDependencySchema),
     recordTypes: z.array(recordTypeDefinitionSchema).max(definitionLimits.recordTypesPerModule),
     permissions: z.array(permissionDeclarationSchema),
-    actions: z.array(actionDefinitionSchema),
-    events: z.array(eventDefinitionSchema),
+    actions: z.array(actionDefinitionSchema).max(definitionLimits.actionsPerModule),
+    events: z.array(eventDefinitionSchema).max(definitionLimits.eventsPerModule),
     sharingConditions: z.array(savedSharingConditionSchema),
     extensionPoints: z.array(
       z
@@ -1370,7 +1373,7 @@ export const moduleContentSchema = z
         })
         .strict(),
     ),
-    flows: z.array(flowSchema).max(definitionLimits.flowsPerModule),
+    flows: z.array(flowSchema).max(definitionLimits.flowsPerOwner),
     queries: z
       .array(moduleQueryDefinitionSchema)
       .max(definitionLimits.queriesPerModule)

@@ -1,4 +1,5 @@
 "use client";
+import { StudioReasoned } from "@vortex/ui/studio";
 import {
   Field,
   FieldContent,
@@ -27,7 +28,9 @@ import {
   moduleFieldTypeLabels,
   plainSourceSettingValue,
   type ApplicationSourceDocument,
+  definitionLimitNear,
   definitionLimitUsage,
+  type CountedLimit,
   type ApplicationUsePlace,
   type CalculationSettings,
   type FormulaField,
@@ -38,7 +41,6 @@ import {
   type TotalSettings,
 } from "@vortex/platform/schema";
 import { StudioField } from "./studio-field";
-import { StudioLimitReason } from "./studio-limit";
 import { StudioPlaceList } from "./studio-used-in";
 import { StudioCalculationEditor } from "./studio-calculation-editor";
 import { StudioTotalEditor } from "./studio-total-editor";
@@ -51,6 +53,16 @@ import { StudioTotalEditor } from "./studio-total-editor";
 type SourceField =
   ApplicationSourceDocument["body"]["modules"][number]["record_types"][number]["fields"][number];
 export type Plain = Readonly<Record<string, unknown>>;
+
+/** One flag of a field: its value, why it cannot change, and the limit it counts against. */
+export type FieldFlagState = Readonly<{
+  checked: boolean;
+  reason: string | undefined;
+  limit?: CountedLimit;
+  /** How many fields of the record type hold the flag, this one included. */
+  used?: number;
+  showMe?: (() => void) | undefined;
+}>;
 
 export type FieldFormState = Readonly<{
   label: string;
@@ -178,9 +190,6 @@ function FieldFlag({
   const id = `module-field-${name}`;
   return (
     <Field orientation="horizontal">
-      <StudioLimitReason reason={reason}>
-        <Switch id={id} checked={checked} disabled={disabled} onCheckedChange={onChange} />
-      </StudioLimitReason>
       <FieldContent>
         <FieldLabel htmlFor={id} className="font-normal">
           {text}
@@ -191,13 +200,7 @@ function FieldFlag({
             {action === undefined ? null : (
               <>
                 {" "}
-                <Button
-                  type="button"
-                  variant="link"
-                  size="xs"
-                  className="h-auto p-0"
-                  onClick={action.onSelect}
-                >
+                <Button type="button" variant="link" size="xs" onClick={action.onSelect}>
                   {action.label}
                 </Button>
               </>
@@ -205,6 +208,9 @@ function FieldFlag({
           </FieldDescription>
         )}
       </FieldContent>
+      <StudioReasoned reason={reason}>
+        <Switch id={id} checked={checked} disabled={disabled} onCheckedChange={onChange} />
+      </StudioReasoned>
     </Field>
   );
 }
@@ -518,14 +524,9 @@ export function FieldFormsAndListsSection({
   onHelpText: (next: string) => void;
   disabled: boolean;
   flags: Readonly<{
-    unique: Readonly<{ checked: boolean; reason: string | undefined }>;
-    filterable: Readonly<{ checked: boolean; reason: string | undefined }>;
-    sortable: Readonly<{
-      checked: boolean;
-      reason: string | undefined;
-      used: number;
-      showMe: (() => void) | undefined;
-    }>;
+    unique: FieldFlagState;
+    filterable: FieldFlagState;
+    sortable: FieldFlagState;
   }>;
   offered: readonly FieldPlacementOffer[];
   checkedPlaces: ReadonlySet<string>;
@@ -576,17 +577,18 @@ export function FieldFormsAndListsSection({
             name={key}
             text={text}
             checked={flags[key].checked}
-            disabled={disabled || flags[key].reason !== undefined}
+            disabled={disabled}
             reason={flags[key].reason}
             description={
-              key === "sortable"
-                ? definitionLimitUsage("sortableFieldsPerRecordType", flags.sortable.used)
+              flags[key].limit !== undefined &&
+              definitionLimitNear(flags[key].limit, flags[key].used ?? 0)
+                ? definitionLimitUsage(flags[key].limit, flags[key].used ?? 0)
                 : undefined
             }
             action={
-              key === "sortable" && flags.sortable.showMe !== undefined
-                ? { label: "Show me", onSelect: flags.sortable.showMe }
-                : undefined
+              flags[key].showMe === undefined
+                ? undefined
+                : { label: "Show me", onSelect: flags[key].showMe }
             }
             onChange={(checked) => onFlag(key, checked)}
           />
@@ -640,10 +642,13 @@ export function FieldFormsAndListsSection({
 export function FieldSearchSection({
   value,
   disabled,
+  limitReason,
   onChange,
 }: Readonly<{
   value: FieldFormState["searchPriority"];
   disabled: boolean;
+  /** Why the field cannot be indexed: the record type indexes as many fields as it may. */
+  limitReason: string | undefined;
   onChange: (value: FieldFormState["searchPriority"]) => void;
 }>) {
   const labels = { first: "Found first", normal: "Normal", last: "Found last" } as const;
@@ -655,14 +660,17 @@ export function FieldSearchSection({
     >
       <StudioField
         label="Search index priority"
-        hint="Rank this field when it is indexed. Field type and privacy rules still decide which values enter search. Choose application result fields in the record type's Search tab."
+        hint={
+          limitReason ??
+          "Rank this field when it is indexed. Field type and privacy rules still decide which values enter search. Choose application result fields in the record type's Search tab."
+        }
       >
         {(control) => (
           <StudioOptionControl
             {...control}
             value={value ?? ""}
             unset="Not indexed"
-            disabled={disabled}
+            disabled={disabled || limitReason !== undefined}
             options={Object.entries(labels).map(([key, label]) => ({ value: key, label }))}
             onChange={(next) => onChange(next === "" ? null : (next as typeof value))}
           />

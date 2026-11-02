@@ -130,12 +130,12 @@ const boundItems = (
       if (count > catalogue.compositionPolicy.maximumPlacements)
         refuse(
           at,
-          `has more than ${definitionLimits.compositionPlacements} blocks, the most an application may hold`,
+          `has more than ${definitionLimits.compositionPlacements} blocks, more than any application may hold`,
         );
       if (depth > catalogue.compositionPolicy.maximumDepth)
         refuse(
           at,
-          `nests blocks more than ${definitionLimits.compositionDepth} levels deep, the most an application may hold`,
+          `nests blocks more than ${definitionLimits.compositionDepth} levels deep, more than any page may hold`,
         );
       if (!plainObject(raw) || !plainObject(raw.props))
         return refuse([...at, index], "is not a block");

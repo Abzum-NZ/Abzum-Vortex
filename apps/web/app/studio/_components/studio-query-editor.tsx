@@ -1,4 +1,5 @@
 "use client";
+import { StudioLimitNote, StudioReasoned, studioLimitReason } from "@vortex/ui/studio";
 import { StudioDataEmpty } from "./studio-data-centre";
 import { Alert, AlertDescription } from "@vortex/ui/components/alert";
 import { useMemo, useState, type FormEvent, type ReactNode } from "react";
@@ -11,7 +12,6 @@ import {
   deriveQueryTotalAlias,
   inlineQueryRecordType,
   definitionLimitReached,
-  definitionLimitUsage,
   definitionLimits,
   queryGroupFieldTypes,
   queryDistinctFieldAccepts,
@@ -45,8 +45,6 @@ import { Label } from "@vortex/ui/components/label";
 import { Textarea } from "@vortex/ui/components/textarea";
 import { Icon } from "@vortex/ui";
 import { StudioField } from "./studio-field";
-import { StudioLimitReason, studioLimitReason } from "./studio-limit";
-import { FieldDescription } from "@vortex/ui/components/field";
 import { StudioInputType } from "./studio-input-type";
 import { StudioQueryInputChoices } from "./studio-query-input-choices";
 import { StudioReferencesAlert } from "./studio-used-in";
@@ -553,11 +551,12 @@ export function StudioQueryEditor({
         ) : (
           <>
             <ScreenReaderLabel id={`query-${queryKey}-add-column`}>Add a column</ScreenReaderLabel>
+            <StudioLimitNote limit="queryColumns" used={query.select.length} label="Columns" />
             <StudioOptionControl
               id={`query-${queryKey}-add-column`}
               value=""
               unset="Add a column…"
-              disabled={disabled}
+              disabled={disabled || definitionLimitReached("queryColumns", query.select.length)}
               options={fieldOptions(unselected)}
               onChange={(key) => {
                 if (key !== "") change({ select: [...query.select, key] });
@@ -653,24 +652,19 @@ export function StudioQueryEditor({
         0 ? null : (
           <>
             <ScreenReaderLabel id={`query-${queryKey}-add-sort`}>Add a sort</ScreenReaderLabel>
-            <StudioLimitReason reason={studioLimitReason("querySortKeys", query.sort.length)}>
-              <StudioOptionControl
-                id={`query-${queryKey}-add-sort`}
-                value=""
-                unset="Add a sort…"
-                disabled={disabled || definitionLimitReached("querySortKeys", query.sort.length)}
-                options={fieldOptions(
-                  sortable.filter((key) => !query.sort.some((sort) => sort.field === key)),
-                )}
-                onChange={(key) => {
-                  if (key !== "")
-                    change({ sort: [...query.sort, { field: key, direction: "ascending" }] });
-                }}
-              />
-            </StudioLimitReason>
-            <FieldDescription>
-              Sort fields: {definitionLimitUsage("querySortKeys", query.sort.length)}
-            </FieldDescription>
+            <StudioOptionControl
+              id={`query-${queryKey}-add-sort`}
+              value=""
+              unset="Add a sort…"
+              disabled={disabled}
+              options={fieldOptions(
+                sortable.filter((key) => !query.sort.some((sort) => sort.field === key)),
+              )}
+              onChange={(key) => {
+                if (key !== "")
+                  change({ sort: [...query.sort, { field: key, direction: "ascending" }] });
+              }}
+            />
           </>
         )}
       </Section>
@@ -702,11 +696,18 @@ export function StudioQueryEditor({
         {groupable.length === 0 ? null : (
           <>
             <ScreenReaderLabel id={`query-${queryKey}-add-group`}>Group by</ScreenReaderLabel>
+            <StudioLimitNote
+              limit="queryGroupFields"
+              used={query.group_by.length}
+              label="Grouping fields"
+            />
             <StudioOptionControl
               id={`query-${queryKey}-add-group`}
               value=""
               unset="Group by…"
-              disabled={disabled}
+              disabled={
+                disabled || definitionLimitReached("queryGroupFields", query.group_by.length)
+              }
               options={fieldOptions(groupable)}
               onChange={(key) => {
                 if (key === "") return;
@@ -815,12 +816,12 @@ export function StudioQueryEditor({
             </Entry>
           ))}
         </ol>
-        <StudioLimitReason reason={studioLimitReason("queryTotals", query.aggregates.length)}>
+        <StudioReasoned reason={studioLimitReason("queryTotals", query.aggregates.length)}>
           <Button
             type="button"
             size="sm"
             variant="outline"
-            disabled={disabled || definitionLimitReached("queryTotals", query.aggregates.length)}
+            disabled={disabled}
             onClick={() =>
               change({
                 aggregates: [
@@ -836,10 +837,8 @@ export function StudioQueryEditor({
             <Icon name="plus" />
             Add a total
           </Button>
-        </StudioLimitReason>
-        <FieldDescription>
-          Totals: {definitionLimitUsage("queryTotals", query.aggregates.length)}
-        </FieldDescription>
+        </StudioReasoned>
+        <StudioLimitNote limit="queryTotals" used={query.aggregates.length} label="Totals" />
       </Section>
 
       <Section
@@ -1107,6 +1106,7 @@ export function StudioNewQueryForm({
   const queryLimitReason = studioLimitReason("queriesPerModule", module?.queries.length ?? 0);
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (queryLimitReason !== undefined) return;
     const result = edit((current) =>
       createInlineQuery(current, { moduleKey, recordKey, label, key: key ?? "" }),
     );
@@ -1139,19 +1139,16 @@ export function StudioNewQueryForm({
           />
         )}
       </StudioField>
-      <StudioLimitReason reason={queryLimitReason}>
-        <Button
-          type="submit"
-          size="sm"
-          disabled={disabled || label.trim() === "" || queryLimitReason !== undefined}
-        >
+      <StudioReasoned reason={queryLimitReason}>
+        <Button type="submit" size="sm" disabled={disabled || label.trim() === ""}>
           Add query
         </Button>
-      </StudioLimitReason>
-      <FieldDescription>
-        Queries in {module?.name ?? "this module"}:{" "}
-        {definitionLimitUsage("queriesPerModule", module?.queries.length ?? 0)}
-      </FieldDescription>
+      </StudioReasoned>
+      <StudioLimitNote
+        limit="queriesPerModule"
+        used={module?.queries.length ?? 0}
+        label={`Queries in ${module?.name ?? "this module"}`}
+      />
       {issues.length === 0 ? null : (
         <Alert variant="destructive">
           <AlertDescription>

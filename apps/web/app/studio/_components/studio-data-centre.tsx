@@ -1,14 +1,15 @@
 "use client";
+import { StudioReasoned, studioLimitReason } from "@vortex/ui/studio";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   applicationUses,
+  definitionLimitNear,
   definitionLimitUsage,
   definitionLimits,
   type ApplicationSourceDocument,
   describeFailure,
 } from "@vortex/platform/schema";
 import { ToggleGroup, ToggleGroupItem } from "@vortex/ui/components/toggle-group";
-import { StudioLimitReason, studioLimitReason } from "./studio-limit";
 import { Icon } from "@vortex/ui";
 import {
   Empty,
@@ -708,7 +709,9 @@ export function StudioDataCentre({
               <h3 className="text-base font-semibold">
                 Fields{" "}
                 <span className="text-sm font-normal text-muted-foreground">
-                  {definitionLimitUsage("fieldsPerRecordType", record.fields.length)}
+                  {definitionLimitNear("fieldsPerRecordType", record.fields.length)
+                    ? definitionLimitUsage("fieldsPerRecordType", record.fields.length)
+                    : null}
                 </span>
               </h3>
               <div className="flex items-center gap-2">
@@ -724,16 +727,12 @@ export function StudioDataCentre({
                   </ToggleGroupItem>
                 </ToggleGroup>
                 {onAddField === undefined ? null : (
-                  <StudioLimitReason reason={fieldLimitReason}>
-                    <Button
-                      type="button"
-                      onClick={onAddField}
-                      disabled={fieldLimitReason !== undefined}
-                    >
+                  <StudioReasoned reason={fieldLimitReason}>
+                    <Button type="button" onClick={onAddField}>
                       <Icon name="plus" />
                       Field
                     </Button>
-                  </StudioLimitReason>
+                  </StudioReasoned>
                 )}
               </div>
             </div>

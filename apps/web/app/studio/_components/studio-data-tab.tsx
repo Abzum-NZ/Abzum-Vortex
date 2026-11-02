@@ -104,6 +104,7 @@ export function useStudioDataTab({
   draft,
   applications,
   initialModule,
+  initialRecordType,
   hidden,
   compositionContext,
   readRecords,
@@ -113,6 +114,8 @@ export function useStudioDataTab({
   applications: readonly StudioModuleOwnerApplication[];
   /** The module the Studio address opens first, if any. */
   initialModule: string | null;
+  /** The record type of that module the address opens, if any. */
+  initialRecordType: string | null;
   hidden: boolean;
   /** The composition context the "Also show it on" placements are made through. */
   compositionContext: StudioCompositionContext;
@@ -148,8 +151,12 @@ export function useStudioDataTab({
   useEffect(() => {
     if (opened.current || initialModule === null) return;
     opened.current = true;
-    draft.select({ kind: "module", moduleKey: initialModule });
-  }, [initialModule, draft]);
+    draft.select(
+      initialRecordType === null
+        ? { kind: "module", moduleKey: initialModule }
+        : { kind: "record_type", moduleKey: initialModule, recordKey: initialRecordType },
+    );
+  }, [initialModule, initialRecordType, draft]);
   /** The Data tab's one edit path: a platform command over the current draft source, as one edit of the draft. */
   const edit: StudioDataEdit = studioDataEdit(draft);
   const saved = useMemo(() => draft.parsed(draft.saved.source), [draft, draft.saved.source]);

@@ -28,7 +28,7 @@ export type InlineQueryInput = InlineQuery["inputs"][number];
 export type InlineQueryAggregate = InlineQuery["aggregates"][number];
 export type InlineQuerySort = InlineQuery["sort"][number];
 
-/** A list page holds 40 records unless its query says otherwise, and never more than 200. */
+/** A list page holds 40 records unless its query says otherwise, and never more than `definitionLimits.queryPageSize`. */
 export const defaultQueryPageSize = 40;
 
 /** Field types a query can group by: the database groups exactly these. */

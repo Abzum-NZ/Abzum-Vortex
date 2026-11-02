@@ -18,7 +18,14 @@ import { Input } from "@vortex/ui/components/input";
 import { InputGroup, InputGroupAddon } from "@vortex/ui/components/input-group";
 import { Label } from "@vortex/ui/components/label";
 import { StudioInputType } from "./studio-input-type";
-import { StudioEntryList, StudioInspectorGroup, useStudioEntryKeys } from "@vortex/ui/studio";
+import {
+  StudioEntryList,
+  StudioInspectorGroup,
+  StudioLimitNote,
+  StudioReasoned,
+  studioLimitReason,
+  useStudioEntryKeys,
+} from "@vortex/ui/studio";
 
 type Inputs = ApplicationSourceDocument["body"]["modules"][number]["actions"][number]["inputs"];
 const typeLabels = {
@@ -206,23 +213,25 @@ export function StudioActionInputs({
           };
         })}
       >
-        <Button
-          type="button"
-          size="sm"
-          variant="ghost"
-          disabled={inputs.length >= 50}
-          onClick={() => {
-            let n = inputs.length + 1;
-            while (inputs.some((input) => input.key === `input_${n}`)) n += 1;
-            keys.current.push(newKey());
-            onChange([
-              ...inputs,
-              { key: `input_${n}`, label: `Input ${n}`, type: "text", required: true },
-            ]);
-          }}
-        >
-          <Icon name="plus" /> Add input
-        </Button>
+        <StudioReasoned reason={studioLimitReason("actionInputs", inputs.length)}>
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            onClick={() => {
+              let n = inputs.length + 1;
+              while (inputs.some((input) => input.key === `input_${n}`)) n += 1;
+              keys.current.push(newKey());
+              onChange([
+                ...inputs,
+                { key: `input_${n}`, label: `Input ${n}`, type: "text", required: true },
+              ]);
+            }}
+          >
+            <Icon name="plus" /> Add input
+          </Button>
+        </StudioReasoned>
+        <StudioLimitNote limit="actionInputs" used={inputs.length} label="Inputs" />
       </StudioEntryList>
     </FieldSet>
   );
