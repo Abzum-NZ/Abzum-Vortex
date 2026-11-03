@@ -111,7 +111,9 @@ begin
         and pg_catalog.jsonb_typeof(result -> 'type') = 'string'
         and pg_catalog.jsonb_typeof(result -> 'props') = 'object' then
         result := pg_catalog.jsonb_set(result, '{props}', (result -> 'props') - array[
-          'title', 'label', 'text', 'description', 'placeholder', 'helpText', 'heading'
+          'title', 'label', 'text', 'description', 'placeholder', 'help_text', 'heading',
+          'empty_message', 'refused_message', 'error_message', 'row_action_label', 'action_label',
+          'studio_link_label', 'upgrade_link_label'
         ]);
       end if;
       return result;

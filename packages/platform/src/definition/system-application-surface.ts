@@ -18,9 +18,11 @@ import { DefinitionError } from "./definition-error";
  * of its confirmation, verification and guided steps are the platform's: only the text of a result
  * message is free. A binding is protected when it starts a protected flow or sits on a control
  * that does (the page runs the first binding of an event). A page is the steward's when it holds
- * the control of a protected binding: it is compared as it is, apart from the text of its blocks outside a protected control (the text of the control that starts a protected action, and of everything inside it, is the platform's). Content nested
- * deeper than the comparison bounds is refused. A number beyond 2^53 cannot be told apart from its
- * neighbour once parsed; the database comparison, which is the gate, refuses that change.
+ * the control of a protected binding: it is compared as it is, apart from the text of its blocks
+ * outside a protected control (the text of the control that starts a protected action, and of
+ * everything inside it, is the platform's). Content nested deeper than the comparison bounds is
+ * refused. A number beyond 2^53 cannot be told apart from its neighbour once parsed; the database
+ * comparison, which is the gate, refuses that change.
  * `vortex_definition.system_application_surface_violation` makes the same comparison, with the
  * same sentences, inside the publish transaction.
  */
@@ -152,9 +154,27 @@ const stripFlow = (flow: Record<string, Json>): Json => {
   return stripped;
 };
 
-const pageText = ["title", "label", "text", "description", "placeholder", "helpText", "heading"];
+const pageText = [
+  "title",
+  "label",
+  "text",
+  "description",
+  "placeholder",
+  "help_text",
+  "heading",
+  "empty_message",
+  "refused_message",
+  "error_message",
+  "row_action_label",
+  "action_label",
+  "studio_link_label",
+  "upgrade_link_label",
+];
 
-/** A page or shell composition without the text properties of its typed blocks, except a protected control. */
+/**
+ * A page or shell composition without the text properties of its typed blocks outside a protected
+ * control (a protected control and every block inside it keep their text).
+ */
 const stripPageText = (
   value: Json,
   depth: number,
