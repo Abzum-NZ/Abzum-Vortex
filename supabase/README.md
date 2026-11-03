@@ -1,108 +1,43 @@
 # Supabase database project
 
-## Operational reference
-
-This is the repository's official Supabase CLI project. It is operational
-configuration, migrations, canonical functions and synthetic seed data, not a
-workspace package and not an application data model.
+This is the repository's official Supabase CLI project: configuration, migrations, canonical functions and synthetic seed data. It is not a workspace package and not an application data model.
 
 | Path | Purpose |
 |---|---|
 | `config.toml` | Local Supabase services and ports. It contains no credential. |
 | `migrations/` | Immutable timestamped changes created with `pnpm db:new <name>`. |
-| `schemas/` | One canonical source file per function, under `<schema>/<function>.sql`. |
-| `seed.sql` | Synthetic Local and Testing data only. Production never applies it. |
+| `schemas/` | One canonical source file per function, under `<schema>/<function>.sql`. The migration and canonical-function rule is in [schemas/README.md](schemas/README.md). |
+| `seed.sql` | Synthetic local data only. |
 
-## Canonical database-function source
-
-The complete migration and canonical-function rule is in [schemas/README.md](schemas/README.md).
+Never place customer data, a database address or a credential in this directory. Never edit a migration that has been applied; correct it with a later migration.
 
 ## Local database operations
 
-Use `pnpm db:start`, `pnpm db:stop` and `pnpm db:reset` for interactive development with the Local
-Supabase stack. Lanes are the normal path for worker databases: they carry every port of
-`config.toml` shifted per lane, and their rules live in [AGENTS.md](../AGENTS.md).
+Use `pnpm db:start`, `pnpm db:stop` and `pnpm db:reset` with the local Supabase stack.
 
-`pnpm db:start` first prepares a Local-only P-256 `ES256` signing key through the pinned Supabase
-CLI. The key is generated once per checkout and reused: it is kept in the ignored `supabase/.temp`
-file that `config.toml` reads, and for a linked worktree the shared copy is resolved from the main
-checkout and copied in, so a reset in any worktree keeps the same key id for the shared Local stack.
-No hosted signing key is downloaded or committed, and no private key is ever committed. After
-changing signing-key settings, restart the Local stack with `pnpm db:stop` followed by
-`pnpm db:start`.
+`pnpm db:start` first prepares a local-only P-256 `ES256` signing key through `tooling/supabase/ensure-local-signing-key.mjs`. The key is generated once per checkout and kept in the ignored `supabase/.temp` file that `config.toml` reads. No hosted signing key is downloaded and no private key is ever committed. After changing signing-key settings, restart the local stack with `pnpm db:stop` then `pnpm db:start`.
 
-Identity-session delivery adds a narrow runtime-only, non-mutating projection read. Session bootstrap
-may call the existing idempotent ensure operation once; ordinary protected resolution must use the
-read operation so a missing projection is never recreated as a side effect of checking liveness.
-Supabase Auth remains the durable session store and Vortex adds no database session relation.
+Supabase Auth remains the durable session store and Vortex adds no database session relation. Ordinary protected resolution uses the non-mutating projection read; only session bootstrap may call the idempotent ensure operation, so a missing projection is never recreated as a side effect of checking liveness.
 
-The database baseline covers `public`, and the private `vortex_platform`, `vortex_identity`,
-`vortex_definition`, `vortex_access` and `vortex_record` schemas, plus the generated `record_data`
-schema.
+The database baseline covers `public`, the private `vortex_platform`, `vortex_identity`, `vortex_definition`, `vortex_access` and `vortex_record` schemas, and the generated `record_data` schema. Schema, role and ownership rules are in the [target architecture](../docs/architecture/target-architecture.md#4-database).
 
-## Roles and request context
+## Generated business storage
 
-### Platform migrations and generated business storage
+Migrations install or change platform schemas, including the generic [Record provisioner](../docs/specification/17-runtime-storage-and-caching.md#record-storage-provisioning). That closed operation creates and evolves business storage from exact published definitions during application installation, with no per-customer migration. `supabase_migrations.schema_migrations` is the platform delivery ledger; the private Record catalogue records domain storage mappings and provision state.
 
-Reviewed timestamped migrations install or change platform schemas, including the
-generic [Record provisioner](../docs/specification/17-runtime-storage-and-caching.md#record-storage-provisioning).
-That closed operation creates/evolves business storage from exact immutable
-published definitions during application installation. It does not require a
-per-customer repository migration or write a second platform migration history.
-`supabase_migrations.schema_migrations` remains the platform delivery ledger;
-the private Record catalogue records domain storage mappings and provision state.
+The generated Record objects have a narrowly privileged non-login owner. Only the fixed Module coordinator is callable by the request role; the internal DDL helper is private. No runtime or login role inherits the object owner or receives DDL rights. A new owner role needs its own default-privilege revocations in addition to explicit grants and revokes on each generated object; the `postgres` baseline below does not apply to another owner. Generated record adapters remain subject to row policies and field bounds.
 
-The generated Record objects have a narrowly privileged non-login owner. Only
-the fixed Module coordinator is callable by the request role; the internal DDL
-helper is private. No runtime/login role inherits the object owner or receives
-DDL rights. New owner roles require their own default-privilege revocations in
-addition to explicit grants/revokes on each generated object; the `postgres`
-default-privilege baseline below does not automatically apply to another owner.
-Generated record adapters remain subject to row policies and field bounds.
+## Request connection
 
-### Request connection
+The server runtime connects as the restricted `vortex_runtime` login. Inside one explicit transaction, that role establishes one transaction-local context through its private initializer, which stores the validated context in the owner-only `vortex_platform.request_contexts` row for the current backend and transaction and refuses re-establishment. A value written into any session setting is ignored, and neither login role can read or write the table. The same statement then enters the non-login `vortex_request` role with a transaction-local `set_config('role', 'vortex_request', true)` before protected work. Only `vortex_runtime` may execute the initializer; only `vortex_request` may execute the read-only context accessors used by policies and service SQL. The context row is bound to its transaction identifier, so no later transaction on a pooled connection can read it.
 
-The server runtime connects as the restricted `vortex_runtime` login.
-Inside one explicit transaction, that role establishes one complete
-transaction-local context through its private initializer, which stores the
-validated context in the owner-only `vortex_platform.request_contexts` row for the
-current backend and transaction and refuses re-establishment; a value written
-into any session setting is ignored, and neither login role can read or write the
-table. The same statement then enters the non-login `vortex_request` role with a
-transaction-local `set_config('role', 'vortex_request', true)` before protected work.
-Only `vortex_runtime` may execute the initializer; only `vortex_request` may
-execute the read-only context accessors used by policies and service SQL.
-Commit or rollback ends the transaction-local role. The context row outlives the
-transaction but is bound to its identifier, so no later transaction on a pooled
-connection can read it; each must establish its own.
+For a human organisation request, the browser supplies only one untrusted organisation identifier. The Identity service resolves the exact active identity, tenant, organisation and organisation account; Access composes that scope with its current version. Resolution, context initialisation, the role switch, live validation and protected work happen in the same transaction, and shared locks keep the resolved Identity and Access rows stable until it finishes. `vortex_request` has no Identity-schema access and receives only the exact Access validator needed to confirm the live scope.
 
-For a human organisation request, the browser supplies only one untrusted
-organisation identifier. The Identity service resolves the exact active identity,
-tenant, organisation and organisation account; Access composes that scope with
-its current version. Resolution, context initialisation, the request-role switch, live
-validation and protected work remain in the same transaction. Shared locks keep
-the resolved Identity and Access rows stable until that work finishes. The
-`vortex_request` role has no Identity-schema access and receives only the exact
-Access validator needed to confirm the live scope. Rich account-list and
-standalone Access-version reads are not runtime grants.
+The private Definition entry points accept only a validated system context. They derive tenant, organisation, actor and time from trusted state, allocate identifiers inside PostgreSQL and expose no underlying table permission. Source owner and alias rows are append-only.
 
-The private Definition entry points accept only a validated system context.
-They derive tenant, organisation, actor, and time from trusted context/database state,
-allocate root and contained-component identifiers inside PostgreSQL, and expose no underlying table
-permission. The trusted Definition service supplies parsed authored source, source-derived identity
-requirements, and an expected draft revision, but no permanent identifier, organisation, actor,
-timestamp, or stored publication evidence comes from its caller. Source owner and alias rows are
-append-only. Nested components use a stable parent-owner scope alongside their current key-based
-compiler lookup scope, so a parent-key rename preserves child identifiers and retains every historical
-alias. Each draft also stores its exact current source-derived requirements, so publication preparation
-returns only current aliases while immutable earlier releases keep their own resolution snapshots.
+## Private service-schema pattern
 
-### Private service-schema pattern
-
-Every migration that introduces a private service schema applies this pattern,
-replacing `<service_schema>` with its neutral schema name. Default privileges
-protect future objects only, so the same migration must also revoke and grant
-the exact privileges for every object it creates.
+Every migration that introduces a private service schema applies this pattern, replacing `<service_schema>` with its neutral schema name. Default privileges protect future objects only, so the same migration must also revoke and grant the exact privileges for every object it creates.
 
 ```sql
 create schema <service_schema> authorization postgres;
@@ -123,54 +58,8 @@ alter default privileges for role postgres
   revoke execute on functions from public, anon, authenticated, service_role;
 ```
 
-PostgreSQL's built-in function default grants `EXECUTE` to `PUBLIC`. A
-schema-limited revoke cannot subtract that global default, so each callable
-function receives its exact execution grant only after this owner-wide baseline.
+PostgreSQL's built-in function default grants `EXECUTE` to `PUBLIC`, and a schema-limited revoke cannot subtract that global default, so each callable function receives its exact execution grant only after this baseline. Temporary relations stay on the Supabase-managed `PUBLIC` default: they are session-local and never service storage or authority.
 
-PostgreSQL grants temporary-relation capability through the database-wide
-`PUBLIC` role by default. This baseline leaves that Supabase-managed default
-unchanged: temporary relations are session-local, never service storage or
-authority, and are outside the persistent ownership restriction.
+## Credentials
 
-Supabase Auth sends verification and recovery messages through its configured
-SMTP provider. The commented `[auth.email.smtp]` template in `config.toml` names
-`env(VORTEX_AUTH_SMTP_HOST)`, `env(VORTEX_AUTH_SMTP_USER)`,
-`env(VORTEX_AUTH_SMTP_PASSWORD)`, and `env(VORTEX_AUTH_SMTP_FROM_ADDRESS)` for
-environment-specific Auth configuration; it commits no credential values.
-Supply them from an environment-scoped Doppler configuration consumed only by
-the matching Supabase Auth project, separate from the Vercel-synchronised roots
-and the Operations environment. In particular, the SMTP password never enters
-a Vercel-synchronised config. The Supabase Auth/email operator owns provider
-credential rotation, updates that environment's Auth configuration, and
-verifies delivery before retiring the prior credential. Local Auth continues
-to use Mailpit.
-
-Vercel runtime traffic uses Supabase's shared transaction pooler on port 6543
-with prepared statements disabled and verifies the certificate and hostname.
-`VORTEX_RUNTIME_DATABASE_URL` and `VORTEX_RUNTIME_DATABASE_SSL_ROOT_CERT` live
-in the Doppler `stg` and `prd` root configs; `VORTEX_MIGRATION_DATABASE_URL`,
-`VORTEX_MIGRATION_DATABASE_PASSWORD`, and `VORTEX_DATABASE_SSL_ROOT_CERT` live
-only in the unsynced `ops_stg` and `ops_prd` configs of the separate Doppler
-`Operations` environment.
-The migration URL never embeds a password; the separate raw password supports
-reserved characters without URL-encoding ambiguity.
-
-Migrations deliberately create `vortex_runtime` without a password. Hosted
-provisioning generates a different high-entropy password for each environment,
-assigns it through the Supabase administrative path, and stores it only inside
-that environment's complete `VORTEX_RUNTIME_DATABASE_URL`. The database
-operator owns rotation of each environment's `vortex_runtime` password and its
-matching Vercel-synchronised Doppler root config. After the exact
-Doppler-to-Vercel sync and redeployment, the operated proof must verify a real
-protected request. Never copy the project-owner password, a migration variable,
-a general `DATABASE_*` variable, an SMTP credential, or a service credential into
-a Vercel-synchronised config.
-
-The database operations operator owns the separate project-owner and migration
-credentials in the unsynced `Operations` environment. Rotation updates only the
-matching `ops_stg` or `ops_prd` config and the reviewed migration path; those
-credentials are never copied into Vercel or exchanged for a runtime password.
-
-Never edit a migration after it has reached Testing or Production. Correct it
-with a later migration. Never place customer data, a database address, or a
-credential in this directory.
+Migrations create `vortex_runtime` without a password. Each environment assigns its own high-entropy password and stores it only in that environment's runtime database URL. The project-owner password, migration credentials, general `DATABASE_*` variables, SMTP credentials and service credentials never enter a runtime configuration. Auth SMTP settings are supplied per environment through the `env(...)` references in the commented `[auth.email.smtp]` template in `config.toml`; local Auth uses Mailpit.
