@@ -1,8 +1,9 @@
 "use client";
 import { useMemo, useState, type ReactNode } from "react";
 import type { StudioSemanticOutline, StudioSemanticOutlineNode } from "@vortex/ui/studio";
-import { StudioPuckOutline } from "@vortex/ui/studio";
+import { StudioPuckOutline, studioShownByFlowsKey } from "@vortex/ui/studio";
 import { Button } from "@vortex/ui/components/button";
+import { Empty, EmptyDescription, EmptyHeader } from "@vortex/ui/components/empty";
 import { StudioPanelShell, StudioSearchBox, StudioSection } from "./studio-frame";
 import { StudioOutline } from "./studio-outline";
 import { StudioLimitRow } from "./studio-limit";
@@ -198,9 +199,10 @@ export function StudioOutlinePanel({
   }, [blocks]);
   const searching = needle.length > 0;
   // Forms a flow shows are hidden on the page, so the page lists them apart to keep them in reach.
-  const shownByFlows = owner?.children.find(
-    (child) => child.kind === "slot" && child.key.endsWith(JSON.stringify("shown_by_flows") + "]"),
-  );
+  const shownByFlows =
+    owner === undefined
+      ? undefined
+      : owner.children.find((child) => child.key === studioShownByFlowsKey(owner.key));
   return (
     <StudioPanelShell
       hidden={hidden}
@@ -216,7 +218,7 @@ export function StudioOutlinePanel({
       }
     >
       <div className="flex h-full min-h-0 flex-col gap-3">
-        {searching && (
+        {searching && matches.length > 0 && (
           <ul className="min-h-0 flex-1 space-y-1 overflow-y-auto" aria-label="Matching blocks">
             {matches.slice(0, SEARCH_RESULTS).map((block) => (
               <li key={block.key}>
@@ -239,16 +241,20 @@ export function StudioOutlinePanel({
                 </Button>
               </li>
             ))}
-            {matches.length === 0 && (
-              <li className="text-sm text-muted-foreground">No block matches.</li>
-            )}
-            {matches.length > SEARCH_RESULTS && (
-              <li className="text-sm text-muted-foreground">
-                Showing the first {SEARCH_RESULTS} of {matches.length}. Search for more of the name
-                to narrow it.
-              </li>
-            )}
           </ul>
+        )}
+        {searching && matches.length === 0 && (
+          <Empty>
+            <EmptyHeader>
+              <EmptyDescription>No block matches.</EmptyDescription>
+            </EmptyHeader>
+          </Empty>
+        )}
+        {searching && matches.length > SEARCH_RESULTS && (
+          <p className="text-sm text-muted-foreground">
+            Showing the first {SEARCH_RESULTS} of {matches.length}. Search for more of the name to
+            narrow it.
+          </p>
         )}
         {/* Kept drawn while searching: Puck's rows take a moment to draw again on a long page. */}
         <div className={searching ? "hidden" : "flex min-h-0 flex-1 flex-col"}>
