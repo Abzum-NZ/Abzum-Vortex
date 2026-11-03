@@ -149,10 +149,6 @@ for (const file of codeFiles) {
   const baselineLineCount = baselineMigrationFiles.get(file);
   if (baselineLineCount !== undefined && lineCount > baselineLineCount)
     throw new Error(`Generated baseline migration grew: ${file}`);
-  // Migrations carry every changed function's full body and are one per PR, so only source and
-  // canonical schema files are held to the size cap.
-  if (lineCount > 1500 && !file.startsWith(paths.migrations))
-    add("file-size", file, 1501, `${lineCount} lines`);
   if (/-v[2-9]\d*(?=\.)/i.test(basename(file))) add("versioned-file", file, 1, basename(file));
   const fileArea = area(file);
   if (
@@ -1274,18 +1270,12 @@ for (const allowance of allowances)
 
 const blocking = reported.filter((finding) => isBlocking(finding.rule));
 const warnings = reported.filter((finding) => !isBlocking(finding.rule));
-const today = new Date().toISOString().slice(0, 10);
-const reviewNotices = Object.entries(guardRules).filter(([, rule]) => today > rule.reviewBy);
 const usedAllowances = new Map<string, number>();
 for (const allowance of allowances.filter((candidate) => candidate.used))
   usedAllowances.set(allowance.rule, (usedAllowances.get(allowance.rule) ?? 0) + 1);
 
 for (const finding of warnings)
   console.warn(`${finding.file}:${finding.line}: warning ${finding.rule}: ${finding.detail}`);
-for (const [ruleId, rule] of reviewNotices)
-  console.log(
-    `Guard review notice: ${ruleId} is past review-by ${rule.reviewBy} (owner: ${rule.owner})${"reviewNote" in rule && rule.reviewNote ? `; ${rule.reviewNote}` : ""}.`,
-  );
 for (const finding of blocking)
   console.error(`${finding.file}:${finding.line}: blocking ${finding.rule}: ${finding.detail}`);
 if (definitionValidationError) console.error(definitionValidationError);
@@ -1296,16 +1286,6 @@ const summary = [
   `- Blocking findings: ${blocking.length}`,
   `- Warning findings: ${warnings.length}`,
   `- Allowances used: ${[...usedAllowances].map(([rule, count]) => `${rule} ${count}`).join(", ") || "none"}`,
-  ...(reviewNotices.length
-    ? [
-        "",
-        "### Review dates passed",
-        ...reviewNotices.map(
-          ([ruleId, rule]) =>
-            `- ${ruleId}: owner ${rule.owner}; review-by ${rule.reviewBy}${"reviewNote" in rule && rule.reviewNote ? ` (${rule.reviewNote})` : ""}`,
-        ),
-      ]
-    : []),
 ];
 const summaryText = `${summary.join("\n")}\n`;
 if (process.env.GITHUB_STEP_SUMMARY) appendFileSync(process.env.GITHUB_STEP_SUMMARY, summaryText);

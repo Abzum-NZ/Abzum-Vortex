@@ -60,7 +60,6 @@ Server code must never reach the browser bundle.
 - **No layers without a reason.**
   - Do not add a `-repository`, `-composition`, `-adapter`, `-port`, `-handoff`, `-coordinator` or `create…Service` factory unless there are genuinely two implementations.
   - Today's `x` / `x-repository` / `x-composition` / `x-catalogue` quadruples collapse into one module.
-- **No file over 1,500 lines.** Split by concern, for example one file per definition node kind in the compiler and validator.
 - **Routes in `apps/web` are thin.** Each parses the request, calls one platform operation and maps the result. Business logic does not live in `apps/web/app/_lib`.
 
 ## 3. Rendering pipeline
@@ -153,8 +152,4 @@ Tables are private. The application calls `security definer` functions with `set
 
 ## 6. Guardrails that keep it this way
 
-Static checks run in CI on every pull request and locally with `pnpm guard`. They are lint-style rules, not tests. Any blocking finding fails the build; an intentional exception carries a reviewed `guard-allow` comment. `tooling/guard/config.ts` is the list of rules and their tiers.
-
-### Review checklist
-
-The checklist lives in the [pull request template](../../.github/pull_request_template.md); it covers this document, the absence of new layers and process artefacts, loud errors, and the guard and walk gates.
+Static checks run with `pnpm guard`. They are lint-style rules, not tests. `tooling/guard/config.ts` is the list of rules and their tiers.

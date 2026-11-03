@@ -2,7 +2,7 @@
 
 The [target architecture](../architecture/target-architecture.md) records the current architecture,
 and the [architecture decisions](../architecture/decisions.md) govern the one flow definition, engine
-and protected operations. Working instructions are in [AGENTS.md](../../AGENTS.md).
+and protected operations.
 
 This is the approved product contract for the current build scope. Every chapter and appendix states
 current behaviour.
