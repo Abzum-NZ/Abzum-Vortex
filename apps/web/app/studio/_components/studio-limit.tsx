@@ -16,7 +16,7 @@ export function StudioLimitRow({
 }>) {
   return (
     <div className="flex items-center justify-between gap-3 text-sm">
-      <span className="min-w-0">{label}</span>
+      <span className="min-w-0 truncate">{label}</span>
       <span className="flex shrink-0 items-center gap-2 whitespace-nowrap tabular-nums text-muted-foreground">
         {definitionLimitUsage(limit, used)}
         {action === undefined ? null : (

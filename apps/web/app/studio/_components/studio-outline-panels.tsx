@@ -197,6 +197,10 @@ export function StudioOutlinePanel({
     return repeated;
   }, [blocks]);
   const searching = needle.length > 0;
+  // Forms a flow shows are hidden on the page, so the page lists them apart to keep them in reach.
+  const shownByFlows = owner?.children.find(
+    (child) => child.kind === "slot" && child.key.endsWith(JSON.stringify("shown_by_flows") + "]"),
+  );
   return (
     <StudioPanelShell
       hidden={hidden}
@@ -249,6 +253,25 @@ export function StudioOutlinePanel({
       <div hidden={searching}>
         <StudioPuckOutline open={pageOpen} />
       </div>
+      {!searching && shownByFlows !== undefined && (
+        <StudioSection title={shownByFlows.label} count={shownByFlows.children.length}>
+          <ul className="space-y-1" aria-label={shownByFlows.label}>
+            {shownByFlows.children.map((block) => (
+              <li key={block.key}>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="w-full justify-start"
+                  aria-current={block.key === selectedKey ? true : undefined}
+                  onClick={() => choose(block)}
+                >
+                  <span className="truncate">{block.label}</span>
+                </Button>
+              </li>
+            ))}
+          </ul>
+        </StudioSection>
+      )}
       {pageOpen && (
         <section className="space-y-1" aria-label="Application limits">
           <StudioLimitRow

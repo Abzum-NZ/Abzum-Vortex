@@ -66,6 +66,34 @@ export function StudioOutlineRegion({ children }: Readonly<{ children: ReactNode
   useEffect(() => {
     const root = region.current;
     if (root === null) return;
+    // WAI tree semantics for the rows Puck draws as a nested list: the lists, and each row's level,
+    // state and name. The focus stays on the row's own button, which the arrows move.
+    const annotate = (row: HTMLElement) => {
+      let level = 1;
+      for (
+        let up = row.parentElement?.closest<HTMLElement>(ROW) ?? null;
+        up !== null;
+        up = up.parentElement?.closest<HTMLElement>(ROW) ?? null
+      )
+        level++;
+      row.setAttribute("role", "treeitem");
+      row.setAttribute("aria-level", String(level));
+      row.setAttribute("aria-selected", String(hasPart(row, "Layer--isSelected")));
+      if (hasPart(row, "Layer--containsZone"))
+        row.setAttribute("aria-expanded", String(hasPart(row, "Layer--isExpanded")));
+      else row.removeAttribute("aria-expanded");
+      const name = selectButton(row)?.textContent;
+      if (name) row.setAttribute("aria-label", name);
+      const list = row.parentElement;
+      if (list !== null && list.tagName === "UL") {
+        list.setAttribute("role", level === 1 ? "tree" : "group");
+        if (level === 1) list.setAttribute("aria-label", "Blocks on the canvas");
+      }
+    };
+    const annotateAll = (scope: HTMLElement) => {
+      if (scope.matches(ROW)) annotate(scope);
+      for (const row of scope.querySelectorAll<HTMLElement>(ROW)) annotate(row);
+    };
     const take = (scope: ParentNode) => {
       for (const element of scope.querySelectorAll<HTMLElement>(ROW_STOPS))
         if (element !== stop.current) element.setAttribute("tabindex", "-1");
@@ -76,6 +104,7 @@ export function StudioOutlineRegion({ children }: Readonly<{ children: ReactNode
       moveStop(root.querySelector<HTMLElement>(ROW));
     };
     take(root);
+    annotateAll(root);
     settle();
     // Rows Puck draws later (a row expanded, a page loaded) join the same one tab stop.
     const observer = new MutationObserver((records) => {
@@ -89,8 +118,16 @@ export function StudioOutlineRegion({ children }: Readonly<{ children: ReactNode
           record.target.getAttribute("tabindex") !== "-1"
         )
           record.target.setAttribute("tabindex", "-1");
+        if (
+          record.type === "attributes" &&
+          record.attributeName === "class" &&
+          record.target instanceof HTMLElement &&
+          record.target.matches(ROW)
+        )
+          annotate(record.target);
         for (const added of record.addedNodes) {
           if (!(added instanceof HTMLElement)) continue;
+          annotateAll(added);
           if (added.matches(ROW_STOPS) && added !== stop.current)
             added.setAttribute("tabindex", "-1");
           take(added);
@@ -102,7 +139,7 @@ export function StudioOutlineRegion({ children }: Readonly<{ children: ReactNode
       childList: true,
       subtree: true,
       attributes: true,
-      attributeFilter: ["tabindex"],
+      attributeFilter: ["tabindex", "class"],
     });
     return () => observer.disconnect();
   }, [moveStop]);
