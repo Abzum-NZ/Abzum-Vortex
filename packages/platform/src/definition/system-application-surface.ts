@@ -2,13 +2,21 @@ import { canonicalJson } from "./canonical-json";
 import { DefinitionError } from "./definition-error";
 
 /**
- * The part of a platform system application that people holding `system_applications.manage` can
- * never change (architecture decision 11): the protected platform operations and everything that
- * feeds or triggers them, the shape of its system projections, the permissions and roles it gives,
- * and the pages and navigation through which the organisation's steward keeps a working way to
- * manage access. A release is compared with the release it follows;
- * `vortex_definition.system_application_surface_violation` makes the same comparison, with the same
- * sentences, inside the publish transaction. Labels, descriptions and messages stay free.
+ * What a person holding `system_applications.manage` may change in a platform system application
+ * (architecture decision 11), as an allow-list. A release is compared with the release it follows.
+ * Everything is compared as it is, ids by their lower-case form, except:
+ *
+ * - free: the application's name, description, icon and theme, a module's name and description,
+ *   flows, bindings and actions that are not protected, and the cosmetic positions named below
+ *   (labels, descriptions, message and title text of interface steps, page and field labels);
+ * - additive: pages, menu entries, queries, events and platform block dependencies may be added,
+ *   never removed or changed.
+ *
+ * A flow is protected when it calls a protected operation, or names a protected flow (a run, a
+ * message action or a back-end run), to a fixpoint. A binding is protected when it starts one. A
+ * page is the steward's when it holds the control of a protected binding: it is compared as it
+ * is, apart from its text. `vortex_definition.system_application_surface_violation` makes the same
+ * comparison, with the same sentences, inside the publish transaction.
  */
 
 type Json = unknown;
@@ -16,130 +24,322 @@ type SurfaceKind =
   | "flow"
   | "flow_binding"
   | "action_operation"
-  | "system_projection"
+  | "record_type"
   | "permission"
   | "role"
   | "page"
-  | "navigation";
+  | "page_content"
+  | "navigation"
+  | "query"
+  | "event"
+  | "block_dependency"
+  | "setting"
+  | "module_setting"
+  | "module_binding";
 type SurfaceEntry = Readonly<{ kind: SurfaceKind; ident: string; block: string; detail: Json }>;
+
+/** The kinds that may be added to; every other kind is compared as it is. */
+const additiveKinds: ReadonlySet<SurfaceKind> = new Set([
+  "page",
+  "navigation",
+  "query",
+  "event",
+  "block_dependency",
+]);
+
+const maximumDepth = 64;
+const deepMarker = "__too_deeply_nested__";
 
 const isRecord = (value: Json): value is Record<string, Json> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 const records = (value: Json): Record<string, Json>[] =>
   Array.isArray(value) ? value.filter(isRecord) : [];
 const text = (value: Json): string => (typeof value === "string" ? value : "");
+const lower = (value: Json): string => text(value).toLowerCase();
+const named = (value: string): string => (value === "" ? "(unnamed)" : value);
+const order = (left: string, right: string) => (left < right ? -1 : left > right ? 1 : 0);
 
-/** Whether a flow, nested task lists included, has a task that calls a protected operation. */
+const without = (value: Json, ...keys: string[]): Json =>
+  isRecord(value)
+    ? Object.fromEntries(Object.entries(value).filter(([key]) => !keys.includes(key)))
+    : value;
+
+/** An array of objects as a set: its elements in one fixed order, so a reorder is no change. */
+const asSet = (value: Json): Json =>
+  Array.isArray(value) && value.every(isRecord)
+    ? [...value].sort((left, right) => order(canonicalJson(left), canonicalJson(right)))
+    : value;
+
 const callsProtectedOperation = (value: Json): boolean =>
   Array.isArray(value)
     ? value.some(callsProtectedOperation)
     : isRecord(value) &&
       (value.type === "operation.call" || Object.values(value).some(callsProtectedOperation));
 
-/** The value without the named presentation keys and, when asked, without interface steps. */
-const strip = (value: Json, keys: readonly string[], dropInterface: boolean): Json => {
-  if (Array.isArray(value))
-    return value
-      .filter(
-        (item) => !(dropInterface && isRecord(item) && text(item.type).startsWith("interface.")),
-      )
-      .map((item) => strip(item, keys, dropInterface));
+const interfaceText = [
+  "title",
+  "message",
+  "details",
+  "choice",
+  "confirm_label",
+  "submit_label",
+  "cancel_label",
+  "working",
+  "steps",
+  "step",
+  "summary",
+];
+
+/** A task without its text: an interface step's text properties and its message actions' labels. */
+const stripTask = (task: Json, depth: number): Json => {
+  if (depth > maximumDepth) return deepMarker;
+  if (!isRecord(task)) return task;
+  const stripped: Record<string, Json> = Object.fromEntries(
+    Object.entries(task).filter(([key]) => key !== "description"),
+  );
+  if (text(task.type).startsWith("interface.") && isRecord(task.properties)) {
+    const properties = Object.fromEntries(
+      Object.entries(task.properties).filter(([key]) => !interfaceText.includes(key)),
+    );
+    if (Array.isArray(properties.actions))
+      properties.actions = properties.actions.map((action) => without(action, "label"));
+    stripped.properties = properties;
+  }
+  for (const key of ["then", "else", "default", "tasks"])
+    if (Array.isArray(stripped[key]))
+      stripped[key] = (stripped[key] as Json[]).map((child) => stripTask(child, depth + 1));
+  if (Array.isArray(stripped.cases))
+    stripped.cases = (stripped.cases as Json[]).map((entry) =>
+      isRecord(entry) && Array.isArray(entry.tasks)
+        ? { ...entry, tasks: entry.tasks.map((child) => stripTask(child, depth + 1)) }
+        : entry,
+    );
+  return stripped;
+};
+
+const stripFlow = (flow: Record<string, Json>): Json => {
+  const stripped: Record<string, Json> = Object.fromEntries(
+    Object.entries(flow).filter(
+      ([key]) => !["labels", "description", "refusal_feedback"].includes(key),
+    ),
+  );
+  for (const key of ["tasks", "errors", "finally"])
+    if (Array.isArray(stripped[key]))
+      stripped[key] = (stripped[key] as Json[]).map((task) => stripTask(task, 1));
+  return stripped;
+};
+
+const pageText = ["title", "label", "text", "description", "placeholder", "helpText", "heading"];
+
+/** A page or shell composition without its text properties, at any depth. */
+const stripPageText = (value: Json, depth: number): Json => {
+  if (depth > maximumDepth) return deepMarker;
+  if (Array.isArray(value)) return value.map((item) => stripPageText(item, depth + 1));
   if (!isRecord(value)) return value;
   return Object.fromEntries(
     Object.entries(value)
-      .filter(([key]) => !keys.includes(key))
-      .map(([key, item]) => [key, strip(item, keys, dropInterface)]),
+      .filter(([key]) => !pageText.includes(key))
+      .map(([key, item]) => [key, stripPageText(item, depth + 1)]),
   );
 };
 
-const flowPresentation = ["labels", "description", "refusal_feedback"] as const;
-const namePresentation = [
-  "label",
-  "labels",
-  "description",
-  "singularLabel",
-  "pluralLabel",
-] as const;
+const stripRecordType = (recordType: Record<string, Json>): Json => {
+  const stripped: Record<string, Json> = Object.fromEntries(
+    Object.entries(recordType).filter(
+      ([key]) => !["singularLabel", "pluralLabel", "description"].includes(key),
+    ),
+  );
+  if (Array.isArray(stripped.fields))
+    stripped.fields = (stripped.fields as Json[]).map((field) =>
+      without(field, "label", "description"),
+    );
+  return stripped;
+};
 
-/** Every page-type navigation entry, headings' children included. */
-const navigationPages = (value: Json): Record<string, Json>[] =>
+/** Every page-type menu entry and heading, with the heading each sits under ("root" at the top). */
+const navigationEntries = (
+  value: Json,
+  parent: string,
+): { item: Record<string, Json>; parent: string }[] =>
   records(value).flatMap((item) => [
-    ...(item.type === "page" ? [item] : []),
-    ...navigationPages(item.children),
+    ...(item.type === "page" || item.type === "heading" ? [{ item, parent }] : []),
+    ...navigationEntries(item.children, text(item.id) === "" ? parent : text(item.id)),
   ]);
 
-const surfaceOf = (content: Json, withScreens: boolean): SurfaceEntry[] => {
+/** The ids (lower case) of the flows that are protected, to a fixpoint. */
+const protectedFlowIds = (flows: Record<string, Json>[]): Set<string> => {
+  const entries = flows.map((flow) => ({
+    flow,
+    id: lower(flow.id),
+    text: JSON.stringify(flow).toLowerCase(),
+  }));
+  const found = new Set(
+    entries.filter((entry) => callsProtectedOperation(entry.flow)).map((entry) => entry.id),
+  );
+  for (let changed = true; changed;) {
+    changed = false;
+    for (const entry of entries)
+      if (
+        !found.has(entry.id) &&
+        [...found].some((id) => id !== "" && id !== entry.id && entry.text.includes(id))
+      ) {
+        found.add(entry.id);
+        changed = true;
+      }
+  }
+  return found;
+};
+
+const applicationFree = ["name", "description", "icon", "theme"];
+const applicationHandled = [
+  "flows",
+  "flowBindings",
+  "actions",
+  "pages",
+  "navigation",
+  "queries",
+  "events",
+  "platformBlockDependencies",
+  "permissions",
+  "roles",
+  "moduleBindings",
+];
+const moduleFree = ["name", "description"];
+const moduleHandled = ["recordTypes", "permissions", "actions", "flows", "queries", "events"];
+
+const surfaceOf = (content: Json, kind: "application" | "module"): SurfaceEntry[] => {
   const body = isRecord(content) ? content : {};
   const entries: SurfaceEntry[] = [];
-  const protectedFlows = records(body.flows).filter(callsProtectedOperation);
-  const protectedFlowIds = new Set(protectedFlows.map((flow) => text(flow.id)));
+  const add = (entry: SurfaceEntry) => entries.push({ ...entry, block: named(entry.block) });
+  const flows = records(body.flows);
+  const protectedIds = protectedFlowIds(flows);
+  const protectedFlows = flows.filter((flow) => protectedIds.has(lower(flow.id)));
+  const flowKeys = new Map(flows.map((flow) => [lower(flow.id), text(flow.key)]));
   for (const flow of protectedFlows)
-    entries.push({
-      kind: "flow",
-      ident: text(flow.id),
-      block: text(flow.key),
-      detail: strip(flow, flowPresentation, true),
-    });
-  for (const binding of records(body.flowBindings))
-    if (isRecord(binding.flow) && protectedFlowIds.has(text(binding.flow.flowId)))
-      entries.push({
-        kind: "flow_binding",
-        ident: text(binding.bindingId),
-        block: text(binding.bindingId),
-        detail: binding,
-      });
+    add({ kind: "flow", ident: lower(flow.id), block: text(flow.key), detail: stripFlow(flow) });
   for (const action of records(body.actions))
     if (action.protectedOperation !== undefined)
-      entries.push({
+      add({
         kind: "action_operation",
-        ident: text(action.key),
+        ident: lower(action.key),
         block: text(action.key),
-        detail: strip(action, namePresentation, false),
-      });
-  for (const recordType of records(body.recordTypes))
-    if (recordType.systemProjection !== undefined)
-      entries.push({
-        kind: "system_projection",
-        ident: text(recordType.key),
-        block: text(recordType.key),
-        detail: strip(recordType, namePresentation, false),
+        detail: without(action, "label", "labels", "description"),
       });
   for (const permission of records(body.permissions))
-    entries.push({
+    add({
       kind: "permission",
-      ident: text(permission.key),
+      ident: lower(permission.key),
       block: text(permission.key),
-      detail: strip(permission, ["label", "description"], false),
+      detail: without(permission, "label", "description"),
     });
-  for (const role of records(body.roles))
-    entries.push({
-      kind: "role",
-      ident: text(role.key),
-      block: text(role.key),
-      detail: strip(role, ["name"], false),
+  for (const query of records(body.queries))
+    add({
+      kind: "query",
+      ident: lower(query.queryId ?? query.id ?? query.key),
+      block: text(query.key ?? query.name),
+      detail: without(query, "name", "label", "description"),
     });
-  // The steward's screens: where the release before has something protected, no page or page
-  // entry of the menu goes away or changes the permission that opens it.
-  if (withScreens) {
-    for (const page of records(body.pages))
-      entries.push({
-        kind: "page",
-        ident: text(page.pageId),
-        block: text(page.key),
-        detail: {
-          pageId: page.pageId,
-          key: page.key,
-          accessPermissionKey: page.accessPermissionKey,
-        },
+  for (const event of records(body.events))
+    add({
+      kind: "event",
+      ident: lower(event.eventId ?? event.id ?? event.key),
+      block: text(event.key ?? event.name),
+      detail: without(event, "name", "label", "description"),
+    });
+  const settings = (free: string[], handled: string[], settingKind: SurfaceKind) => {
+    for (const [key, value] of Object.entries(body))
+      if (!free.includes(key) && !handled.includes(key))
+        add({
+          kind: settingKind,
+          ident: key,
+          block: key,
+          detail: key === "shells" ? asSet(stripPageText(value, 1)) : asSet(value),
+        });
+  };
+  if (kind === "module") {
+    for (const recordType of records(body.recordTypes))
+      add({
+        kind: "record_type",
+        ident: lower(recordType.recordTypeId),
+        block: text(recordType.key),
+        detail: stripRecordType(recordType),
       });
-    for (const item of navigationPages(body.navigation))
-      entries.push({
-        kind: "navigation",
-        ident: text(item.id),
-        block: text(item.id),
-        detail: { id: item.id, pageId: item.pageId, permissionKey: item.permissionKey },
+    settings(moduleFree, moduleHandled, "module_setting");
+    return entries;
+  }
+  const bindings = records(body.flowBindings).filter(
+    (binding) => isRecord(binding.flow) && protectedIds.has(lower(binding.flow.flowId)),
+  );
+  for (const binding of bindings) {
+    const flow = isRecord(binding.flow) ? binding.flow : {};
+    add({
+      kind: "flow_binding",
+      ident: lower(binding.bindingId),
+      block: `${named(flowKeys.get(lower(flow.flowId)) ?? "")} (${text(binding.event)})`,
+      detail: binding,
+    });
+  }
+  const controls = bindings.map((binding) => lower(binding.controlId)).filter((id) => id !== "");
+  const pages = records(body.pages);
+  const pageKeys = new Map(pages.map((page) => [lower(page.pageId), text(page.key)]));
+  for (const page of pages) {
+    add({
+      kind: "page",
+      ident: lower(page.pageId),
+      block: text(page.key),
+      detail: {
+        pageId: page.pageId ?? null,
+        key: page.key ?? null,
+        accessPermissionKey: page.accessPermissionKey ?? null,
+      },
+    });
+    const serialized = JSON.stringify(page).toLowerCase();
+    if (controls.some((control) => serialized.includes(control)))
+      add({
+        kind: "page_content",
+        ident: lower(page.pageId),
+        block: text(page.key),
+        detail: stripPageText(without(page, "name"), 1),
       });
   }
+  for (const { item, parent } of navigationEntries(body.navigation, "root"))
+    add({
+      kind: "navigation",
+      ident: lower(item.id),
+      block: item.type === "heading" ? text(item.label) : text(pageKeys.get(lower(item.pageId))),
+      detail: {
+        id: item.id ?? null,
+        type: item.type,
+        pageId: item.pageId ?? null,
+        permissionKey: item.permissionKey ?? null,
+        parent,
+      },
+    });
+  for (const role of records(body.roles))
+    add({
+      kind: "role",
+      ident: lower(role.key),
+      block: text(role.key),
+      detail: without(role, "name"),
+    });
+  for (const moduleBinding of records(body.moduleBindings))
+    add({
+      kind: "module_binding",
+      ident: lower(moduleBinding.moduleRootId),
+      block: text(moduleBinding.key),
+      detail: moduleBinding,
+    });
+  for (const dependency of Array.isArray(body.platformBlockDependencies)
+    ? body.platformBlockDependencies
+    : []) {
+    add({
+      kind: "block_dependency",
+      ident: canonicalJson(dependency).toLowerCase(),
+      block: "",
+      detail: dependency,
+    });
+  }
+  settings(applicationFree, applicationHandled, "setting");
   return entries;
 };
 
@@ -147,11 +347,18 @@ const noun: Record<SurfaceKind, string> = {
   flow: "The protected flow",
   flow_binding: "The flow binding",
   action_operation: "The action",
-  system_projection: "The platform data view",
+  record_type: "The record type",
   permission: "The permission",
   role: "The role",
   page: "The page",
+  page_content: "The page",
   navigation: "The menu entry",
+  query: "The query",
+  event: "The event",
+  block_dependency: "The platform block",
+  setting: "The application setting",
+  module_setting: "The module setting",
+  module_binding: "The module binding",
 };
 
 const tail = (kind: SurfaceKind): string => {
@@ -159,36 +366,57 @@ const tail = (kind: SurfaceKind): string => {
     case "flow":
     case "flow_binding":
     case "action_operation":
-      return "A platform application keeps the protected operations the platform gave it, with what feeds and triggers them, so undo this change before publishing.";
-    case "system_projection":
-      return "A platform data view stays exactly as the platform defines it, so undo this change before publishing.";
+      return "A platform application keeps its protected operations, and what feeds or starts them, as the platform gave them. Undo this change before publishing.";
+    case "record_type":
+    case "module_setting":
+    case "query":
+    case "event":
+    case "block_dependency":
+      return "A platform application's data definitions stay as the platform defines them. Undo this change before publishing.";
     default:
-      return "The organisation's steward must always keep a working way to manage access, so a platform application keeps the permissions, roles, pages and menu entries the platform gave it. Undo this change before publishing.";
+      return "The steward must always keep a working way to manage access, so these stay as the platform gave them. Undo this change before publishing.";
   }
 };
 
-/**
- * The first change a release makes to the protected surface of the release it follows, worded for
- * the person publishing and naming the block or binding it is about, or null when it makes none.
- * Without a previous release every protected entry is an addition.
- */
-const systemApplicationSurfaceViolation = (previous: Json, next: Json): string | null => {
-  const protectedPresent = surfaceOf(previous, false).some((entry) =>
-    ["flow", "action_operation", "system_projection"].includes(entry.kind),
-  );
-  const previousEntries = surfaceOf(previous, protectedPresent);
-  const id = (entry: SurfaceEntry) => `${entry.kind}\u0000${entry.ident}`;
-  const before = new Map(previousEntries.map((entry) => [id(entry), entry]));
-  const after = new Map(surfaceOf(next, protectedPresent).map((entry) => [id(entry), entry]));
-  const problems: { entry: SurfaceEntry; state: "removed" | "added" | "changed" }[] = [];
+type Problem = Readonly<{ entry: SurfaceEntry; change: "removed" | "added" | "changed" | "twice" }>;
+
+const problemsOf = (previous: SurfaceEntry[], next: SurfaceEntry[]): Problem[] => {
+  const problems: Problem[] = [];
+  const index = (entries: SurfaceEntry[]) => {
+    const map = new Map<string, SurfaceEntry>();
+    for (const entry of entries) {
+      const key = `${entry.kind}\u0000${entry.ident}`;
+      if (map.has(key)) problems.push({ entry, change: "twice" });
+      else map.set(key, entry);
+    }
+    return map;
+  };
+  const before = index(previous);
+  const after = index(next);
   for (const [key, entry] of before) {
     const other = after.get(key);
-    if (other === undefined) problems.push({ entry, state: "removed" });
+    if (other === undefined) problems.push({ entry, change: "removed" });
     else if (canonicalJson(other.detail) !== canonicalJson(entry.detail))
-      problems.push({ entry, state: "changed" });
+      problems.push({ entry, change: "changed" });
   }
-  for (const [key, entry] of after) if (!before.has(key)) problems.push({ entry, state: "added" });
-  const order = (left: string, right: string) => (left < right ? -1 : left > right ? 1 : 0);
+  for (const [key, entry] of after)
+    if (!before.has(key) && !additiveKinds.has(entry.kind))
+      problems.push({ entry, change: "added" });
+  return problems;
+};
+
+/**
+ * The first change a release makes that is not on the allow-list, worded for the person publishing
+ * and naming the block it is about, or null when it makes none. Without a previous release every
+ * protected entry is an addition.
+ */
+const systemApplicationSurfaceViolation = (
+  previous: Json,
+  next: Json,
+  kind: "application" | "module",
+): string | null => {
+  if (canonicalJson(previous ?? null) === canonicalJson(next ?? null)) return null;
+  const problems = problemsOf(surfaceOf(previous, kind), surfaceOf(next, kind));
   problems.sort(
     (left, right) =>
       order(left.entry.kind, right.entry.kind) ||
@@ -196,14 +424,21 @@ const systemApplicationSurfaceViolation = (previous: Json, next: Json): string |
       order(left.entry.ident, right.entry.ident),
   );
   const first = problems[0];
-  return first === undefined
-    ? null
-    : `${noun[first.entry.kind]} "${first.entry.block}" would ${first.state === "removed" ? "be removed" : first.state === "added" ? "be added" : "change"}. ${tail(first.entry.kind)}`;
+  if (first === undefined) return null;
+  const verb =
+    first.change === "twice"
+      ? "appears twice"
+      : `would ${first.change === "removed" ? "be removed" : first.change === "added" ? "be added" : first.entry.kind === "page_content" ? "change what it shows" : "change"}`;
+  return `${noun[first.entry.kind]} "${first.entry.block}" ${verb}. ${tail(first.entry.kind)}`;
 };
 
-/** Refuses a release of a platform system application that changes its protected surface. */
-export const assertSystemApplicationSurfaceUnchanged = (previous: Json, next: Json): void => {
-  const sentence = systemApplicationSurfaceViolation(previous, next);
+/** Refuses a release of a platform system application that changes more than the allow-list. */
+export const assertSystemApplicationSurfaceUnchanged = (
+  previous: Json,
+  next: Json,
+  kind: "application" | "module",
+): void => {
+  const sentence = systemApplicationSurfaceViolation(previous, next, kind);
   if (sentence !== null)
     throw new DefinitionError("DEFINITION_SYSTEM_SURFACE_CHANGED", { sentence });
 };

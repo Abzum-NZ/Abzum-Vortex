@@ -277,7 +277,8 @@ begin
         from vortex_definition.releases as previous_release
         where previous_release.root_id = p_root_id
           and previous_release.release_revision = root_row.current_release_revision),
-      compilation_output_value #> '{canonical,content}'
+      compilation_output_value #> '{canonical,content}',
+      root_row.kind
     ) into surface_violation;
     if surface_violation is not null then
       raise exception using errcode = '23514', hint = 'system_surface_changed',

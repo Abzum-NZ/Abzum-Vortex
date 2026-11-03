@@ -50,6 +50,13 @@ export type ApplicationAuthoringEnvironment = Readonly<{
   permissions: PlatformPermissionSource;
 }>;
 
+/** A platform-produced sentence within the rule message's bound: cut at a sentence end, never mid-word. */
+const ruleSentence = (sentence: string): string =>
+  sentence.length <= 300
+    ? sentence
+    : (sentence.slice(0, 300).match(/^.*[.!?](?=\s|$)/s)?.[0] ??
+      sentence.slice(0, 300).replace(/\s+\S*$/, ""));
+
 const refuse = (
   code: FlowRefusalFeedback["code"],
   ruleRefusal?: NonNullable<FlowRefusalFeedback["ruleRefusal"]>,
@@ -349,7 +356,7 @@ export const createApplicationAuthoringService = (environment: ApplicationAuthor
         ? // Only an invalid-command refusal carries a rule's own sentence to the person.
           refuse("invalid_command", {
             code: "publication_refused",
-            message: problem.sentence.slice(0, 300),
+            message: ruleSentence(problem.sentence),
           })
         : refuse(problem.code);
     },

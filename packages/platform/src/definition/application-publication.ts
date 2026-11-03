@@ -460,10 +460,12 @@ export const planApplicationPublication = async (
         assertSystemApplicationSurfaceUnchanged(
           module.candidate.releaseHistory.latestRelease?.content,
           module.output.canonical.content,
+          "module",
         );
     assertSystemApplicationSurfaceUnchanged(
       candidate.releaseHistory.latestRelease?.content,
       application.output.canonical.content,
+      "application",
     );
   }
   const confirmation = definitionPublicationConfirmationSchema.parse({
