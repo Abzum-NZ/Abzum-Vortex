@@ -22,8 +22,10 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useLayoutEffect,
   useRef,
   useState,
+  useSyncExternalStore,
   type ReactNode,
   type RefObject,
 } from "react";
@@ -58,6 +60,7 @@ import {
 } from "./studio-canvas-screen";
 import type { StudioCanvasMetadata, StudioCanvasViewer } from "./studio-canvas-metadata";
 import { StudioDrawerItem } from "./studio-puck-drawer";
+import { studioPuckStyle } from "./studio-puck-style";
 import { studioPuckWords } from "./studio-puck-words";
 import type { StudioCanvasRecordsReader } from "./use-studio-canvas-records";
 import { useStudioCanvasMetadata } from "./use-studio-canvas-metadata";
@@ -205,6 +208,28 @@ const notSelectionActions: ReadonlySet<PuckAction["type"]> = new Set([
 ]);
 
 /**
+ * Puck decides once, at its first mount, whether its stylesheet is already applied, and injects its
+ * own default styles (which import a third-party font the page's policy refuses) when it is not.
+ * The stylesheet is imported above. On a client navigation into the editor React puts the stylesheet
+ * in the document in the same commit that first renders Puck, so Puck looks too early. The editor
+ * therefore opens one commit after it is mounted by navigation. During hydration the document's head
+ * already holds the stylesheet, and the server render draws the editor, so neither waits.
+ */
+const noSubscription = () => () => {};
+function useStylesheetApplied(): boolean {
+  const hydrating = useSyncExternalStore(
+    noSubscription,
+    () => false,
+    () => true,
+  );
+  const [committed, setCommitted] = useState(false);
+  useLayoutEffect(() => {
+    setCommitted(true);
+  }, []);
+  return hydrating || committed;
+}
+
+/**
  * The one Puck editor of the workspace. Puck holds the page on the canvas as a projection of
  * Studio's draft and is never the source of truth: Studio's draft history is the one undo, its
  * selection store the one selection, and every canvas change goes back through the definition
@@ -222,6 +247,7 @@ export function StudioPuckProvider({
 }>) {
   // The screen is kept by Puck (`ui.viewports.current`); `onAction` reports its breakpoint
   // here, because the model and the metadata that depend on it are made outside the editor.
+  const stylesheetApplied = useStylesheetApplied();
   const [breakpoint, setBreakpoint] = useState<Breakpoint>(studioInitialBreakpoint);
   const model = useStudioCanvasModel(input, breakpoint);
   const references = useMemo(
@@ -387,42 +413,46 @@ export function StudioPuckProvider({
     (): StudioCanvasContextValue => ({ input, model, references, refusal }),
     [input, model, references, refusal],
   );
+  if (!stylesheetApplied) return null;
   return (
     <StudioCanvasContext.Provider value={value}>
-      <Puck
-        config={config}
-        data={initial}
-        onChange={change}
-        onAction={onAction}
-        iframe={IFRAME}
-        viewports={studioViewports}
-        ui={studioInitialUi}
-        // Puck's own wrapper fills the workspace, so the canvas has the height of its well.
-        height="100%"
-        overrides={OVERRIDES}
-        metadata={metadata}
-        permissions={permissions}
-        dictionary={studioPuckWords}
-      >
-        <StudioPuckSync
+      {/* Puck's own wrapper reads its font and spacing from the tokens too, so the map sits above it. */}
+      <div className="contents" style={studioPuckStyle}>
+        <Puck
           config={config}
-          references={references}
-          data={shown}
-          resync={resync}
-          area={model.area}
-          dragGate={dragGate}
-          canvasShown={input.canvasShown}
-          arrangeGrid={input.arrangeGrid === true}
-          onArrangeGrid={input.onArrangeGrid}
-          onArrangeableGrids={input.onArrangeableGrids}
-          arrangeable={model.arrangeable}
-          selectedAlias={input.selectedPlacementAlias}
-          synchronizing={synchronizing}
-          deriving={deriving}
-          showSelection={showSelection}
-        />
-        <div className="flex h-full min-h-0 flex-col">{children}</div>
-      </Puck>
+          data={initial}
+          onChange={change}
+          onAction={onAction}
+          iframe={IFRAME}
+          viewports={studioViewports}
+          ui={studioInitialUi}
+          // Puck's own wrapper fills the workspace, so the canvas has the height of its well.
+          height="100%"
+          overrides={OVERRIDES}
+          metadata={metadata}
+          permissions={permissions}
+          dictionary={studioPuckWords}
+        >
+          <StudioPuckSync
+            config={config}
+            references={references}
+            data={shown}
+            resync={resync}
+            area={model.area}
+            dragGate={dragGate}
+            canvasShown={input.canvasShown}
+            arrangeGrid={input.arrangeGrid === true}
+            onArrangeGrid={input.onArrangeGrid}
+            onArrangeableGrids={input.onArrangeableGrids}
+            arrangeable={model.arrangeable}
+            selectedAlias={input.selectedPlacementAlias}
+            synchronizing={synchronizing}
+            deriving={deriving}
+            showSelection={showSelection}
+          />
+          <div className="flex h-full min-h-0 flex-col">{children}</div>
+        </Puck>
+      </div>
     </StudioCanvasContext.Provider>
   );
 }

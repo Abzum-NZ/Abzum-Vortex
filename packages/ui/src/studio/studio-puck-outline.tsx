@@ -6,7 +6,6 @@ import { cn } from "../lib/utils";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "../components/empty";
 import { Spinner } from "../components/spinner";
 import { Icon } from "../icons";
-import { studioPuckStyle } from "./studio-puck-style";
 import { useStudioCanvas } from "./studio-puck-provider";
 
 /**
@@ -25,7 +24,6 @@ export function StudioOutlineRegion({ children }: Readonly<{ children: ReactNode
       role="region"
       aria-label="Outline of the canvas blocks"
       inert={inert}
-      style={studioPuckStyle}
       className={cn("flex min-h-0 min-w-0 flex-1 flex-col", inert && "opacity-60")}
     >
       {children}
