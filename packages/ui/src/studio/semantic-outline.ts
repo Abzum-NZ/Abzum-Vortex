@@ -82,6 +82,10 @@ const formsShownByFlows = (source: ApplicationSourceDocument): Set<string> => {
   return shown;
 };
 
+/** The key of a page's "Shown by flows" group. */
+export const studioShownByFlowsKey = (pageKey: string): string =>
+  JSON.stringify([pageKey, "slot", "shown_by_flows"]);
+
 /**
  * A page lists the forms its flows show apart from its content, under "Shown by flows": they are
  * hidden on the page, so the group keeps them in reach for editing.
@@ -105,7 +109,7 @@ const groupShownForms = (page: MutableOutlineNode, shown: ReadonlySet<string>): 
   take(page);
   if (moved.length > 0)
     page.children.push({
-      key: JSON.stringify([page.key, "slot", "shown_by_flows"]),
+      key: studioShownByFlowsKey(page.key),
       kind: "slot",
       label: "Shown by flows",
       icon: "list-tree",
