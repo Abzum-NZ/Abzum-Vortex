@@ -6,6 +6,7 @@ import { useEffect, useId, useMemo, useState, type FormEvent } from "react";
 import type { ApplicationSourceDocument } from "@vortex/platform/schema";
 import { Button } from "@vortex/ui/components/button";
 import { Checkbox } from "@vortex/ui/components/checkbox";
+import { Empty, EmptyContent, EmptyDescription, EmptyHeader } from "@vortex/ui/components/empty";
 import { Input } from "@vortex/ui/components/input";
 import { Item, ItemDescription, ItemGroup } from "@vortex/ui/components/item";
 import {
@@ -111,16 +112,18 @@ export function StudioRecordPageForm({
 
   if (recordTypes.length === 0)
     return (
-      <Card size="sm">
-        <CardContent className="space-y-2">
-          <p className="text-sm text-muted-foreground">
+      <Empty>
+        <EmptyHeader>
+          <EmptyDescription>
             This application owns no record types yet. Add one in Data, then come back.
-          </p>
+          </EmptyDescription>
+        </EmptyHeader>
+        <EmptyContent>
           <Button type="button" size="sm" variant="ghost" onClick={onClose}>
             Close
           </Button>
-        </CardContent>
-      </Card>
+        </EmptyContent>
+      </Empty>
     );
 
   return (
@@ -226,7 +229,7 @@ export function StudioRecordPageForm({
             ) : (
               <ItemGroup className="gap-1">
                 {current.details.map((detail, index) => (
-                  <Item key={index} size="xs" role="listitem" className="px-0 py-0">
+                  <Item key={index} size="xs" role="listitem" className="p-0">
                     <ItemDescription>{detail}</ItemDescription>
                   </Item>
                 ))}

@@ -131,7 +131,7 @@ function Entry({
   children: ReactNode;
 }>) {
   return (
-    <Item size="xs" role="listitem" variant="outline" className="flex flex-wrap items-center gap-1">
+    <Item size="xs" role="listitem" variant="outline">
       <div className="min-w-0 flex-1 space-y-1">{children}</div>
       <Button
         type="button"
@@ -978,7 +978,7 @@ export function StudioQueryEditor({
                     }}
                   />
                 )}
-                <div className="flex items-center gap-2">
+                <Field orientation="horizontal">
                   <Checkbox
                     id={`query-${queryKey}-input-${index}-required`}
                     checked={input.required}
@@ -987,13 +987,13 @@ export function StudioQueryEditor({
                       change({ inputs: setInput(index, { required: checked === true }) })
                     }
                   />
-                  <Label
+                  <FieldLabel
                     htmlFor={`query-${queryKey}-input-${index}-required`}
                     className="font-normal"
                   >
                     The query needs it
-                  </Label>
-                </div>
+                  </FieldLabel>
+                </Field>
               </ItemContent>
             </Item>
           ))}

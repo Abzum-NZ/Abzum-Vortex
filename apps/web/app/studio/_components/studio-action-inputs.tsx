@@ -1,5 +1,5 @@
 "use client";
-import { Field, FieldLabel, FieldLegend, FieldSet } from "@vortex/ui/components/field";
+import { Field, FieldGroup, FieldLabel, FieldLegend, FieldSet } from "@vortex/ui/components/field";
 import { useRef } from "react";
 import { deriveFieldKey, type ApplicationSourceDocument } from "@vortex/platform/schema";
 import { Icon } from "@vortex/ui";
@@ -16,7 +16,6 @@ import {
 } from "@vortex/ui/components/combobox";
 import { Input } from "@vortex/ui/components/input";
 import { InputGroup, InputGroupAddon } from "@vortex/ui/components/input-group";
-import { Label } from "@vortex/ui/components/label";
 import { StudioInputType } from "./studio-input-type";
 import {
   StudioEntryList,
@@ -120,7 +119,7 @@ export function StudioActionInputs({
                     }}
                   />
                 </Field>
-                <Field>
+                <FieldGroup>
                   <FieldLabel htmlFor={`${id}-type`}>Value type</FieldLabel>
                   <StudioInputType
                     id={`${id}-type`}
@@ -187,8 +186,8 @@ export function StudioActionInputs({
                       </Field>
                     )}
                   </StudioInputType>
-                </Field>
-                <div className="flex items-center gap-2">
+                </FieldGroup>
+                <Field orientation="horizontal">
                   <Checkbox
                     id={`${id}-required`}
                     checked={input.required}
@@ -196,8 +195,8 @@ export function StudioActionInputs({
                       replace(index, { ...input, required: checked === true })
                     }
                   />
-                  <Label htmlFor={`${id}-required`}>Required</Label>
-                </div>
+                  <FieldLabel htmlFor={`${id}-required`}>Required</FieldLabel>
+                </Field>
                 <StudioInspectorGroup title="Details" defaultOpen={false}>
                   <div className="space-y-1 text-sm">
                     <p>

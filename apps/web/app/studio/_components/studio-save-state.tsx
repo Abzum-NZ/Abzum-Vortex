@@ -2,9 +2,9 @@
 
 import { Alert, AlertDescription } from "@vortex/ui/components/alert";
 import { Card } from "@vortex/ui/components/card";
-import { Item, ItemContent, ItemGroup } from "@vortex/ui/components/item";
+import { Item, ItemContent, ItemGroup, ItemSeparator } from "@vortex/ui/components/item";
 import { useStudioFieldProblems } from "@vortex/ui/studio";
-import { useState, type ReactNode } from "react";
+import { Fragment, useState, type ReactNode } from "react";
 import { FormattedTime, Icon } from "@vortex/ui";
 import { Badge } from "@vortex/ui/components/badge";
 import { Button } from "@vortex/ui/components/button";
@@ -234,18 +234,24 @@ export function StudioSaveState({ draft }: Readonly<{ draft: StudioDraft }>) {
           </AlertDialogHeader>
           {status.kind === "conflict" && status.changes.length > 0 && (
             <Card size="sm" className="gap-0 py-0">
-              <ItemGroup>
+              <ItemGroup className="gap-0">
                 {status.changes.slice(0, 6).map((row, index) => (
-                  <Item key={index} size="xs" role="listitem">
-                    <ItemContent>
-                      {row.area}: {row.change.toLowerCase()} {row.item}
-                    </ItemContent>
-                  </Item>
+                  <Fragment key={index}>
+                    {index === 0 ? null : <ItemSeparator />}
+                    <Item size="xs" role="listitem">
+                      <ItemContent>
+                        {row.area}: {row.change.toLowerCase()} {row.item}
+                      </ItemContent>
+                    </Item>
+                  </Fragment>
                 ))}
                 {status.changes.length > 6 && (
-                  <Item size="xs" role="listitem">
-                    <ItemContent>+ {status.changes.length - 6} more</ItemContent>
-                  </Item>
+                  <>
+                    <ItemSeparator />
+                    <Item size="xs" role="listitem">
+                      <ItemContent>+ {status.changes.length - 6} more</ItemContent>
+                    </Item>
+                  </>
                 )}
               </ItemGroup>
             </Card>

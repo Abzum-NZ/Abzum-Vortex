@@ -365,6 +365,7 @@ export function StudioNavTree({
       const open = branch && isOpen(node);
       const groupId = `${id}-${encodeURIComponent(node.key)}`;
       return (
+        // shadcn-only: the navigation tree has no shadcn equivalent (ARIA tree with roving focus)
         <li role="none" key={node.key}>
           <StudioNavItem
             {...node.props}

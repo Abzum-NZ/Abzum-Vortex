@@ -1,5 +1,4 @@
 "use client";
-import { Item, ItemContent, ItemGroup } from "@vortex/ui/components/item";
 import { FieldLegend } from "@vortex/ui/components/field";
 import { Alert, AlertDescription } from "@vortex/ui/components/alert";
 import { plainSourceSettingValue, recordsTableBoardFeature } from "@vortex/platform/schema";
@@ -740,11 +739,9 @@ export function ApplicationCompositionEditor(props: Props) {
               }
             />
           </FieldLegend>
-          <ItemGroup className="gap-px">
+          <ol className="space-y-px">
             {model.order.map((alias, index) => (
-              <Item
-                size="xs"
-                role="listitem"
+              <li
                 key={alias}
                 aria-current={alias === model.placementAlias ? "true" : undefined}
                 className={
@@ -753,15 +750,11 @@ export function ApplicationCompositionEditor(props: Props) {
                     : "flex items-center gap-2 rounded-md px-2 py-1 text-sm"
                 }
               >
-                <ItemContent>
-                  <span className="w-4 text-xs text-muted-foreground tabular-nums">
-                    {index + 1}
-                  </span>
-                  <span className="truncate">{names.get(alias) ?? "Item"}</span>
-                </ItemContent>
-              </Item>
+                <span className="w-4 text-xs text-muted-foreground tabular-nums">{index + 1}</span>
+                <span className="truncate">{names.get(alias) ?? "Item"}</span>
+              </li>
             ))}
-          </ItemGroup>
+          </ol>
           {breakpoint !== "desktop" && (
             <Button
               type="button"

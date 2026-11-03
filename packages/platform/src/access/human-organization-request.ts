@@ -450,8 +450,8 @@ export const createHumanOrganizationRequestService = (
       // neither is logged as an error. Every other cause, a missing privilege too, is logged in full.
       const abandoned =
         error instanceof Error &&
-        error.name === "VortexDatabaseError" &&
-        error.message === "DATABASE_REQUEST_STOPPED";
+        ((error.name === "VortexDatabaseError" && error.message === "DATABASE_REQUEST_STOPPED") ||
+          error.name === "AbortError");
       const alreadyLogged =
         error instanceof DefinitionError &&
         error.code === "DEFINITION_PUBLICATION_FAILED" &&

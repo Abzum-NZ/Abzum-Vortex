@@ -753,12 +753,7 @@ export function StudioAccessRoleEditor({
             >
               <ItemGroup className="gap-1">
                 {elsewhere.map((key) => (
-                  <Item
-                    size="xs"
-                    role="listitem"
-                    key={key}
-                    className="flex items-center justify-between gap-2 text-sm"
-                  >
+                  <Item size="xs" role="listitem" key={key} className="justify-between text-sm">
                     <code className="break-all">{key}</code>
                     <StudioIconButton
                       label={`Remove ${key} from ${role.name}`}

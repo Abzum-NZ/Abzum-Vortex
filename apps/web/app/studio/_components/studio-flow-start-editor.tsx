@@ -487,14 +487,14 @@ export function StudioFlowStartEditor({
                   setting,
                 );
               return (
-                <div key={inputKeys.current[inputIndex]} className="space-y-1.5">
-                  <Label htmlFor={id}>
+                <Field key={inputKeys.current[inputIndex]}>
+                  <FieldLabel htmlFor={id}>
                     {studioWords(input.name)}
                     {!input.required && (
                       <span className="text-xs text-muted-foreground"> Optional</span>
                     )}{" "}
                     comes from
-                  </Label>
+                  </FieldLabel>
                   <StudioReferencePicker
                     id={id}
                     disabled={disabled}
@@ -542,7 +542,7 @@ export function StudioFlowStartEditor({
                       }
                     />
                   )}
-                </div>
+                </Field>
               );
             })}
           </FieldSet>

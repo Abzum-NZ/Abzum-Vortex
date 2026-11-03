@@ -76,8 +76,12 @@ export async function proxy(request: NextRequest) {
     const configuration = getIdentityJourneyConfiguration();
     if (!requestMatchesConfiguredSite(request.headers, request.nextUrl, configuration.siteUrl)) {
       // A configuration refusal, not an outage: it is final for the request and never retried.
+      // The host header is client-controlled, so only a plain host is written to the log.
+      const host = request.headers.get("host");
+      const requestHost =
+        host !== null && /^[A-Za-z0-9.\-:[\]]{1,255}$/.test(host) ? host : "(invalid host)";
       console.error(
-        `[session] request origin ${request.headers.get("host") ?? "(no host)"} does not match the configured site origin ${new URL(configuration.siteUrl).origin}; open the application at the configured address or correct VORTEX_SITE_URL`,
+        `[session] request origin ${requestHost} does not match the configured site origin ${new URL(configuration.siteUrl).origin}; open the application at the configured address or correct VORTEX_SITE_URL`,
       );
       return privateResponse(response);
     }

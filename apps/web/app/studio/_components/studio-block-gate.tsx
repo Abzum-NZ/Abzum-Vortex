@@ -147,12 +147,7 @@ export function StudioBlockVisibility({
       ) : (
         <ItemGroup className="gap-2" aria-label="Conditions">
           {studioReactionSlots.map((entry) => (
-            <Item
-              size="xs"
-              role="listitem"
-              key={entry.slot}
-              className="flex items-center justify-between gap-2"
-            >
+            <Item size="xs" role="listitem" key={entry.slot} className="justify-between">
               <span className="min-w-0">
                 <span className="block text-sm">{entry.title}</span>
                 <span

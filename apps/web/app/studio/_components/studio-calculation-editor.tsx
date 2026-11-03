@@ -15,7 +15,6 @@ import {
 } from "@vortex/platform/schema";
 import { StudioOptionControl, studioFieldValueType, studioWords } from "@vortex/ui/studio";
 import { Input } from "@vortex/ui/components/input";
-import { Label } from "@vortex/ui/components/label";
 import { StudioFormulaEditor } from "./studio-formula-editor";
 
 export function StudioCalculationEditor({
@@ -57,17 +56,19 @@ export function StudioCalculationEditor({
   });
   return (
     <div className="space-y-4">
-      <Label htmlFor={idPrefix}>Formula</Label>
-      <StudioFormulaEditor
-        id={idPrefix}
-        value={settings.expression}
-        references={references}
-        disabled={disabled}
-        onChange={(expression) => {
-          if (expression === undefined) onChange(settings, false);
-          else set({ expression });
-        }}
-      />
+      <Field>
+        <FieldLabel htmlFor={idPrefix}>Formula</FieldLabel>
+        <StudioFormulaEditor
+          id={idPrefix}
+          value={settings.expression}
+          references={references}
+          disabled={disabled}
+          onChange={(expression) => {
+            if (expression === undefined) onChange(settings, false);
+            else set({ expression });
+          }}
+        />
+      </Field>
       <Field>
         <FieldLabel htmlFor={`${idPrefix}-result`}>Result</FieldLabel>
         <StudioOptionControl

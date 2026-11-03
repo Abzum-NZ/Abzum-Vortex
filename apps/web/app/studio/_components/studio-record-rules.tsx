@@ -289,7 +289,7 @@ export function StudioRecordRules({
               {rule.effects.length === 0 ? null : (
                 <ItemGroup className="gap-0.5">
                   {rule.effects.map((effect, index) => (
-                    <Item key={index} size="xs" role="listitem" className="px-0 py-0">
+                    <Item key={index} size="xs" role="listitem" className="p-0">
                       <ItemDescription className="break-words">{effect}</ItemDescription>
                     </Item>
                   ))}

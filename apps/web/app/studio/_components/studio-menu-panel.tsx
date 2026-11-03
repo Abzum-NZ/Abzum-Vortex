@@ -1,5 +1,6 @@
 "use client";
 import { Card, CardContent } from "@vortex/ui/components/card";
+import { Item } from "@vortex/ui/components/item";
 import { Spinner } from "@vortex/ui/components/spinner";
 import { FieldLegend, FieldSet } from "@vortex/ui/components/field";
 import { Alert, AlertDescription } from "@vortex/ui/components/alert";
@@ -498,7 +499,9 @@ export function StudioMenuPanel({
             </StudioSection>
           )}
           {dragging !== null && (
-            <div
+            <Item
+              variant="outline"
+              size="xs"
               onDragOver={(event) => {
                 event.preventDefault();
                 setDropTarget("__end");
@@ -506,12 +509,12 @@ export function StudioMenuPanel({
               onDragLeave={() => setDropTarget(null)}
               onDrop={(event) => drop(event, null)}
               className={cn(
-                "rounded-md border border-dashed border-border p-2 text-center text-xs text-muted-foreground",
+                "justify-center border-dashed text-center text-xs text-muted-foreground",
                 dropTarget === "__end" && "border-primary text-foreground",
               )}
             >
               Drop here to move it to the end of the menu
-            </div>
+            </Item>
           )}
           {feedback !== null && (
             <Alert

@@ -175,7 +175,7 @@ const StudioFlowNode = memo(function StudioFlowNode({
   return (
     <Card
       className={cn(
-        "group/node relative min-h-24 w-64 gap-2 rounded-xl border bg-card px-3 py-2.5 text-card-foreground shadow-xs hover:border-foreground/20",
+        "group/node relative min-h-24 w-64 gap-2 px-3 py-2.5 hover:border-foreground/20",
         data.kind !== "start" && "h-24",
         selected && "ring-2 ring-primary shadow-lg",
       )}

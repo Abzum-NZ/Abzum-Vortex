@@ -15,7 +15,6 @@ import {
 import { InputGroup } from "../components/input-group";
 import { StudioReferencePicker } from "./studio-reference-picker";
 import { Plus } from "lucide-react";
-import { Label } from "../components/label";
 import { StudioHelp } from "./studio-field";
 import { Textarea } from "../components/textarea";
 import { Input } from "../components/input";
@@ -185,8 +184,8 @@ export function StudioFlowStepPicker({
         </p>
       )}
       {choices.map((choice) => (
-        <div key={choice.property} className="space-y-1">
-          <Label htmlFor={`${id}-${choice.property}`}>{choice.label}</Label>
+        <Field key={choice.property}>
+          <FieldLabel htmlFor={`${id}-${choice.property}`}>{choice.label}</FieldLabel>
           <StudioReferencePicker
             id={`${id}-${choice.property}`}
             disabled={disabled}
@@ -195,7 +194,7 @@ export function StudioFlowStepPicker({
             options={choice.options}
             onChange={(next) => setPicks({ ...picks, [choice.property]: next })}
           />
-        </div>
+        </Field>
       ))}
       {needsCondition && (
         <StudioConditionControls

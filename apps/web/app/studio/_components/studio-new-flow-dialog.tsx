@@ -301,11 +301,11 @@ export function StudioNewFlowDialog({
           )}
           {existingFlow !== undefined &&
             Object.entries(existingFlow.inputs).map(([input, declaration]) => (
-              <div key={input} className="space-y-1.5">
-                <Label htmlFor={`new-flow-input-${input}`}>
+              <Field key={input}>
+                <FieldLabel htmlFor={`new-flow-input-${input}`}>
                   {input.replaceAll("_", " ")}
                   {declaration.required ? " (required)" : ""}
-                </Label>
+                </FieldLabel>
                 <StudioOptionControl
                   id={`new-flow-input-${input}`}
                   value={suppliedFor(input)}
@@ -317,7 +317,7 @@ export function StudioNewFlowDialog({
                   }))}
                   onChange={(value) => setMapping({ ...mapping, [input]: value })}
                 />
-              </div>
+              </Field>
             ))}
           {problem === "" ? null : (
             <Alert variant="destructive">

@@ -1,5 +1,5 @@
 "use client";
-import { Item, ItemContent, ItemGroup } from "@vortex/ui/components/item";
+import { Item, ItemContent, ItemDescription, ItemGroup } from "@vortex/ui/components/item";
 import { NavigationLink } from "@vortex/ui/routing";
 import { useMemo, useState } from "react";
 import { Button } from "@vortex/ui/components/button";
@@ -147,27 +147,24 @@ export function StudioFlowsPanel({
             {source.body.uses.map((use) => {
               const owner = applications.find((application) => application.key === use.application);
               return (
-                <Item
-                  size="xs"
-                  role="listitem"
-                  key={use.module}
-                  className="text-sm text-muted-foreground"
-                >
+                <Item size="xs" role="listitem" key={use.module} className="p-0">
                   <ItemContent>
-                    The flows of {use.module.split(".").pop()?.replace(/_/g, " ")} belong to{" "}
-                    {owner?.name ?? "the application that owns it"}. They run here as published and
-                    are changed in the owner&apos;s Studio.
-                    {owner === undefined ? null : (
-                      <>
-                        {" "}
-                        <NavigationLink
-                          className="underline underline-offset-4"
-                          href={`/studio/${encodeURIComponent(organizationId)}/${encodeURIComponent(owner.rootId)}?tab=flows`}
-                        >
-                          Open {owner.name} in Studio
-                        </NavigationLink>
-                      </>
-                    )}
+                    <ItemDescription>
+                      The flows of {use.module.split(".").pop()?.replace(/_/g, " ")} belong to{" "}
+                      {owner?.name ?? "the application that owns it"}. They run here as published
+                      and are changed in the owner&apos;s Studio.
+                      {owner === undefined ? null : (
+                        <>
+                          {" "}
+                          <NavigationLink
+                            className="underline underline-offset-4"
+                            href={`/studio/${encodeURIComponent(organizationId)}/${encodeURIComponent(owner.rootId)}?tab=flows`}
+                          >
+                            Open {owner.name} in Studio
+                          </NavigationLink>
+                        </>
+                      )}
+                    </ItemDescription>
                   </ItemContent>
                 </Item>
               );

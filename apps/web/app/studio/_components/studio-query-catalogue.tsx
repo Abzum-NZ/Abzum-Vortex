@@ -47,10 +47,12 @@ function Inputs({ inputs }: Readonly<{ inputs: readonly StudioQueryInput[] }>) {
       {inputs.map((input) => (
         <Item size="xs" role="listitem" key={input.key} className="p-0">
           <ItemContent>
-            {input.label}{" "}
-            <span className="text-muted-foreground">
-              {queryInputTypeLabel(input.type)}, {input.required ? "required" : "optional"}
-            </span>
+            <p className="m-0">
+              {input.label}{" "}
+              <span className="text-muted-foreground">
+                {queryInputTypeLabel(input.type)}, {input.required ? "required" : "optional"}
+              </span>
+            </p>
           </ItemContent>
         </Item>
       ))}

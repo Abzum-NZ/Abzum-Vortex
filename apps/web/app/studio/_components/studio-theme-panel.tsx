@@ -355,7 +355,7 @@ export function StudioThemePanel({
           {feedback.problems !== undefined && (
             <ItemGroup className="gap-0.5">
               {feedback.problems.map((problem) => (
-                <Item key={problem} size="xs" role="listitem" className="px-0 py-0">
+                <Item key={problem} size="xs" role="listitem" className="p-0">
                   <ItemContent>{problem}</ItemContent>
                 </Item>
               ))}

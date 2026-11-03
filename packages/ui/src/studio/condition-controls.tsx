@@ -643,7 +643,9 @@ export function StudioConditionControls({
               className="p-0"
             >
               <ItemContent>
-                <strong>{issuePlace(issue.path)}:</strong> {issue.message}
+                <p className="m-0">
+                  <strong>{issuePlace(issue.path)}:</strong> {issue.message}
+                </p>
               </ItemContent>
             </Item>
           ))}

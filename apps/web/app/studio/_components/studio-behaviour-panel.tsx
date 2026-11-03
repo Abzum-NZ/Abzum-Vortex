@@ -2,7 +2,7 @@
 import { Field, FieldLabel } from "@vortex/ui/components/field";
 import { Card, CardContent } from "@vortex/ui/components/card";
 import { Alert, AlertDescription } from "@vortex/ui/components/alert";
-import { useState } from "react";
+import { useId, useState } from "react";
 import { Button } from "@vortex/ui/components/button";
 import {
   Collapsible,
@@ -10,7 +10,6 @@ import {
   CollapsibleTrigger,
 } from "@vortex/ui/components/collapsible";
 import { Input } from "@vortex/ui/components/input";
-import { Label } from "@vortex/ui/components/label";
 import type {
   ApplicationSourceDocument,
   FlowBindingSettings,
@@ -188,6 +187,7 @@ function BehaviourEvent({
   onEdit: StudioBehaviourEdit;
   onCreate: () => void;
 }>) {
+  const fieldId = useId();
   const [problem, setProblem] = useState("");
   const binding = entry.binding;
   const flow =
@@ -230,9 +230,10 @@ function BehaviourEvent({
           <>
             {others.length > 0 && (
               <>
-                <Label className="flex flex-col items-start gap-1 text-xs">
-                  Run another flow
+                <Field>
+                  <FieldLabel htmlFor={`${fieldId}-1`}>Run another flow</FieldLabel>
                   <StudioOptionControl
+                    id={`${fieldId}-1`}
                     value=""
                     unset="Choose a flow…"
                     disabled={disabled}
@@ -245,10 +246,11 @@ function BehaviourEvent({
                         run((current) => applyStudioRebind(current, binding.id, value));
                     }}
                   />
-                </Label>
-                <Label className="flex flex-col items-start gap-1 text-xs">
-                  Combine with another flow
+                </Field>
+                <Field>
+                  <FieldLabel htmlFor={`${fieldId}-2`}>Combine with another flow</FieldLabel>
                   <StudioOptionControl
+                    id={`${fieldId}-2`}
                     value=""
                     unset="Choose a flow…"
                     disabled={disabled}
@@ -261,7 +263,7 @@ function BehaviourEvent({
                         run((current) => applyStudioFlowCombine(current, binding.id, value));
                     }}
                   />
-                </Label>
+                </Field>
               </>
             )}
             <Button
@@ -320,6 +322,7 @@ function BindingSettings({
   references: readonly FormulaReferenceChoice[];
   onChange: (settings: FlowBindingSettings) => void;
 }>) {
+  const fieldId = useId();
   const defaults = defaultFlowBindingSettings(event);
   const changed = JSON.stringify(settings) !== JSON.stringify(defaults);
   return (
@@ -372,9 +375,12 @@ function BindingSettings({
             </>
           )}
         </Field>
-        <Label className="flex flex-col items-start gap-1 text-xs">
-          Wait before starting (milliseconds, at most 250)
+        <Field>
+          <FieldLabel htmlFor={`${fieldId}-3`}>
+            Wait before starting (milliseconds, at most 250)
+          </FieldLabel>
           <Input
+            id={`${fieldId}-3`}
             type="number"
             min={0}
             max={250}
@@ -387,10 +393,13 @@ function BindingSettings({
                 onChange({ ...settings, debounceMs: value });
             }}
           />
-        </Label>
-        <Label className="flex flex-col items-start gap-1 text-xs">
-          When it happens again while the flow runs
+        </Field>
+        <Field>
+          <FieldLabel htmlFor={`${fieldId}-4`}>
+            When it happens again while the flow runs
+          </FieldLabel>
           <StudioOptionControl
+            id={`${fieldId}-4`}
             value={settings.concurrency}
             disabled={disabled}
             options={flowBindingConcurrencySchema.options.map((option) => ({
@@ -402,10 +411,11 @@ function BindingSettings({
               if (parsed.success) onChange({ ...settings, concurrency: parsed.data });
             }}
           />
-        </Label>
-        <Label className="flex flex-col items-start gap-1 text-xs">
-          While it runs
+        </Field>
+        <Field>
+          <FieldLabel htmlFor={`${fieldId}-5`}>While it runs</FieldLabel>
           <StudioOptionControl
+            id={`${fieldId}-5`}
             value={settings.exclusive}
             disabled={disabled}
             options={flowBindingExclusiveScopeSchema.options.map((option) => ({
@@ -425,10 +435,13 @@ function BindingSettings({
               });
             }}
           />
-        </Label>
-        <Label className="flex flex-col items-start gap-1 text-xs">
-          Give up after (seconds{settings.exclusive === "none" ? ", optional" : ", required"})
+        </Field>
+        <Field>
+          <FieldLabel htmlFor={`${fieldId}-6`}>
+            Give up after (seconds{settings.exclusive === "none" ? ", optional" : ", required"})
+          </FieldLabel>
           <Input
+            id={`${fieldId}-6`}
             type="number"
             min={1}
             max={flowBindingMaximumTimeoutMs / 1000}
@@ -445,7 +458,7 @@ function BindingSettings({
                 onChange({ ...settings, timeoutMs: Math.round(seconds * 1000) });
             }}
           />
-        </Label>
+        </Field>
         {changed && (
           <Button
             type="button"

@@ -9,6 +9,7 @@ import {
 import type { CorrelationId } from "../catalogue/common";
 import type { RequestDatabaseTransaction } from "../db/request-transaction";
 import { describeFailure } from "../catalogue/runtime-primitives";
+import { databaseErrorCode } from "../definition/definition-error";
 import {
   IdentityVerificationError,
   type IdentityVerificationRefusalCode,
@@ -16,12 +17,21 @@ import {
 import type { IdentityVerifier } from "./identity-verifier";
 import { ensureIdentityProjection, readIdentityProjection } from "./organization-accounts";
 
-// A refusal that says the authority could not be reached is transient: the read that met it is
-// repeated once before the failure is mapped and logged. A read inside a request transaction is
-// never repeated: a failed statement leaves that transaction aborted.
+// Transient failures are read once more before the failure is mapped and logged: a refusal that
+// says the authority could not be reached, and a database serialization failure, deadlock, admin
+// shutdown or connection exception (SQLSTATE 40001, 40P01, 57P01, class 08). Nothing else is
+// repeated. A read inside a request transaction (a failed statement leaves it aborted) and a read
+// bounded by an execution deadline (a passed deadline never recovers) is never repeated.
 const isTransientVerification = (error: unknown): boolean =>
   error instanceof IdentityVerificationError &&
   error.refusalCode === "vortex.identity.authority_unavailable";
+
+const isTransientRead = (error: unknown): boolean => {
+  const code = databaseErrorCode(error);
+  return (
+    code === "40001" || code === "40P01" || code === "57P01" || code?.startsWith("08") === true
+  );
+};
 
 const closed = (result: IdentitySessionResolution): IdentitySessionResolution =>
   identitySessionResolutionSchema.parse(result);
@@ -111,7 +121,12 @@ export const createIdentitySessionService = (verifier: IdentityVerifier) => {
         return { ok: true, identity };
       } catch (error) {
         failure = error;
-        if (transaction !== undefined || !isTransientVerification(error)) break;
+        if (
+          transaction !== undefined ||
+          verifier.checkpoint !== undefined ||
+          !isTransientVerification(error)
+        )
+          break;
       }
     }
     return { ok: false, result: verificationFailure(failure) };
@@ -135,7 +150,12 @@ export const createIdentitySessionService = (verifier: IdentityVerifier) => {
           : { resolution };
       } catch (error) {
         failure = error;
-        if (transaction !== undefined) break;
+        if (
+          transaction !== undefined ||
+          verifier.checkpoint !== undefined ||
+          !isTransientRead(error)
+        )
+          break;
       }
     }
     return { resolution: projectionFailure(failure) };

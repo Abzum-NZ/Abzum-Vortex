@@ -1,13 +1,13 @@
 "use client";
-import { Item, ItemContent, ItemGroup } from "@vortex/ui/components/item";
+import { Field, FieldLabel } from "@vortex/ui/components/field";
+import { Item, ItemContent, ItemGroup, ItemSeparator } from "@vortex/ui/components/item";
 import { StudioHelp } from "@vortex/ui/studio";
 import { Alert, AlertDescription } from "@vortex/ui/components/alert";
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import { Badge } from "@vortex/ui/components/badge";
 import { Button } from "@vortex/ui/components/button";
 import { Checkbox } from "@vortex/ui/components/checkbox";
 import { Input } from "@vortex/ui/components/input";
-import { Label } from "@vortex/ui/components/label";
 import { StudioOptionControl } from "@vortex/ui/studio";
 import {
   describeFailure,
@@ -71,7 +71,7 @@ const parsedInput = (declaration: Declaration, raw: string | boolean): JsonValue
 function TraceStep({ step, flowKey }: Readonly<{ step: Step; flowKey: string }>) {
   const ended = step.outcome === "refused" || step.outcome === "failed";
   return (
-    <Item size="xs" role="listitem" className="space-y-1 border-b py-2 text-sm last:border-b-0 p-0">
+    <Item size="xs" role="listitem" className="px-0 py-2 text-sm">
       <ItemContent>
         <div className="flex flex-wrap items-center gap-2">
           <span className="font-medium">{titleOf(step.taskType)}</span>
@@ -221,11 +221,11 @@ export function StudioFlowTestRun({
         <StudioHelp hint="Runs the saved flow on the preview's records as you. Nothing is saved, sent or announced." />
       </h3>
       {inputs.map(([name, declaration]) => (
-        <div key={name} className="space-y-1">
-          <Label htmlFor={`test-run-${name}`}>
+        <Field key={name}>
+          <FieldLabel htmlFor={`test-run-${name}`}>
             {name}
             {declaration.required ? " (required)" : ""}
-          </Label>
+          </FieldLabel>
           {declaration.recordTypeIds !== undefined && declaration.recordTypeIds.length > 0 ? (
             <div className="flex items-center gap-2">
               <StudioOptionControl
@@ -265,7 +265,7 @@ export function StudioFlowTestRun({
               onChange={(event) => setValues((held) => ({ ...held, [name]: event.target.value }))}
             />
           )}
-        </div>
+        </Field>
       ))}
       <div className="flex items-center gap-3">
         <Button
@@ -300,13 +300,12 @@ export function StudioFlowTestRun({
               </span>
             </AlertDescription>
           </Alert>
-          <ItemGroup>
+          <ItemGroup className="gap-0">
             {reply.steps.map((step, index) => (
-              <TraceStep
-                key={`${step.taskId}:${step.iteration}:${index}`}
-                step={step}
-                flowKey={flow.key}
-              />
+              <Fragment key={`${step.taskId}:${step.iteration}:${index}`}>
+                {index === 0 ? null : <ItemSeparator />}
+                <TraceStep step={step} flowKey={flow.key} />
+              </Fragment>
             ))}
           </ItemGroup>
         </div>

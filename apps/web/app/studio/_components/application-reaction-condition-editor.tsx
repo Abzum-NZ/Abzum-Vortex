@@ -1,5 +1,6 @@
 "use client";
 import { FieldSet } from "@vortex/ui/components/field";
+import { Item, ItemContent, ItemGroup } from "@vortex/ui/components/item";
 import { Alert, AlertDescription } from "@vortex/ui/components/alert";
 import { Button } from "@vortex/ui/components/button";
 
@@ -261,11 +262,17 @@ export function ApplicationReactionConditionEditor(props: Props) {
       {held !== null && held.validation.issues.length > 0 && (
         <Alert variant="destructive" role="alert">
           <AlertDescription>
-            {held.validation.issues.map((issue, index) => (
-              <p key={`${issue.pointer}:${index}`}>
-                {slotInfo.title}: {issue.message}
-              </p>
-            ))}
+            <ItemGroup className="gap-1">
+              {held.validation.issues.map((issue, index) => (
+                <Item key={`${issue.pointer}:${index}`} size="xs" role="listitem" className="p-0">
+                  <ItemContent>
+                    <p className="m-0">
+                      {slotInfo.title}: {issue.message}
+                    </p>
+                  </ItemContent>
+                </Item>
+              ))}
+            </ItemGroup>
           </AlertDescription>
         </Alert>
       )}
