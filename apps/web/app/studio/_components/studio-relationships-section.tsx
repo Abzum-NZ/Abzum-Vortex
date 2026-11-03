@@ -1,5 +1,5 @@
 "use client";
-import { StudioLimitNote, StudioReasoned, studioLimitReason } from "@vortex/ui/studio";
+import { StudioLimitNote, Reasoned, studioLimitReason } from "@vortex/ui/studio";
 import { Icon } from "@vortex/ui";
 import { useState } from "react";
 import { Badge } from "@vortex/ui/components/badge";
@@ -134,7 +134,7 @@ export function StudioRelationshipsSection({
     <section className="space-y-6" aria-label="Relationships">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h3 className="text-base font-semibold">Relationships</h3>
-        <StudioReasoned
+        <Reasoned
           reason={studioLimitReason("relationshipsPerRecordType", record.relationships.length)}
         >
           <Button
@@ -147,7 +147,7 @@ export function StudioRelationshipsSection({
           >
             Add a relationship
           </Button>
-        </StudioReasoned>
+        </Reasoned>
       </div>
       <StudioLimitNote
         limit="relationshipsPerRecordType"

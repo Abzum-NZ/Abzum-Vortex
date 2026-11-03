@@ -19,7 +19,8 @@ import { Button } from "../components/button";
 import { ButtonGroup, ButtonGroupSeparator, ButtonGroupText } from "../components/button-group";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../components/tooltip";
 import { Icon } from "../icons";
-import { StudioReasoned, studioLimitReason, type ReasonedTooltipProps } from "./studio-limit";
+import { Reasoned, type ReasonedTooltipProps } from "../components/reasoned";
+import { studioLimitReason } from "./studio-limit";
 import { studioCanvasPermissionReason } from "./studio-canvas-permissions";
 import { puckSelectedAlias, puckSelectorOf } from "./studio-canvas-data";
 import { studioCanvasVisible, useStudioCanvasView } from "./studio-canvas-scale";
@@ -58,9 +59,9 @@ function BarAction({ label, reason, onAct, tooltip, stop, onStop, children }: Ba
   );
   if (reason !== undefined)
     return (
-      <StudioReasoned reason={reason} contentProps={tooltip}>
+      <Reasoned reason={reason} contentProps={tooltip}>
         {cloneElement(button, undefined, children)}
-      </StudioReasoned>
+      </Reasoned>
     );
   return (
     <Tooltip>

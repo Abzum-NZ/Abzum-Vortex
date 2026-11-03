@@ -1,7 +1,7 @@
 "use client";
 import { Field, FieldLabel } from "@vortex/ui/components/field";
 import { Card } from "@vortex/ui/components/card";
-import { StudioReasoned, studioLimitReason } from "@vortex/ui/studio";
+import { Reasoned, studioLimitReason } from "@vortex/ui/studio";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   applicationUses,
@@ -726,12 +726,12 @@ export function StudioDataCentre({
                   </ToggleGroupItem>
                 </ToggleGroup>
                 {onAddField === undefined ? null : (
-                  <StudioReasoned reason={fieldLimitReason}>
+                  <Reasoned reason={fieldLimitReason}>
                     <Button type="button" onClick={onAddField}>
                       <Icon name="plus" />
                       Field
                     </Button>
-                  </StudioReasoned>
+                  </Reasoned>
                 )}
               </div>
             </div>

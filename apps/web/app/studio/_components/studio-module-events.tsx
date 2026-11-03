@@ -1,5 +1,5 @@
 "use client";
-import { StudioLimitNote, StudioReasoned, studioLimitReason } from "@vortex/ui/studio";
+import { StudioLimitNote, Reasoned, studioLimitReason } from "@vortex/ui/studio";
 import { FieldLegend, FieldSet } from "@vortex/ui/components/field";
 import { Alert, AlertDescription } from "@vortex/ui/components/alert";
 import { useState, type FormEvent } from "react";
@@ -190,7 +190,7 @@ export function StudioModuleEvents({
     <section className="space-y-2" aria-label="Named events">
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-semibold">Named events</h3>
-        <StudioReasoned reason={studioLimitReason("eventsPerModule", module.events.length)}>
+        <Reasoned reason={studioLimitReason("eventsPerModule", module.events.length)}>
           <Button
             type="button"
             size="sm"
@@ -200,7 +200,7 @@ export function StudioModuleEvents({
           >
             Declare event
           </Button>
-        </StudioReasoned>
+        </Reasoned>
       </div>
       <StudioLimitNote
         limit="eventsPerModule"

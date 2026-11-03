@@ -10,6 +10,7 @@ import {
   applicationHomePathByRoot,
   type ApplicationHomePath,
 } from "../../../_lib/application-home";
+import { loadOrganizationAppStoreKey } from "../../../_lib/applications-page";
 import { loadStudioCreateAccess } from "../../../_lib/studio-application-draft";
 import { matchesLiteralSearchText, splitSearchFilters } from "@vortex/platform/server";
 
@@ -119,6 +120,12 @@ export async function readApplicationSwitcherAction(
     // Studio is an ordinary switcher row when the one access check says this person may build here.
     const studio =
       read.kind === "available" ? await loadStudioCreateAccess(read.organizationId) : undefined;
+    // The organisation's configured App Store is Studio's own application: when this person's
+    // list already holds it, the synthetic Studio row would repeat it.
+    const appStoreKey =
+      studio?.kind === "available"
+        ? await loadOrganizationAppStoreKey(resolution.session, studio.organizationId)
+        : undefined;
     return {
       state:
         read.kind === "available"
@@ -135,7 +142,9 @@ export async function readApplicationSwitcherAction(
                 icon: candidate.icon,
                 href: `/${encodeURIComponent(tenantShortName)}/${encodeURIComponent(organizationShortName)}/${encodeURIComponent(candidate.key)}/${encodeURIComponent(candidate.homePageKey)}`,
               })),
-              ...(studio?.kind === "available" && studio.organizationId === read.organizationId
+              ...(studio?.kind === "available" &&
+              studio.organizationId === read.organizationId &&
+              !read.applications.some((candidate) => candidate.key === appStoreKey)
                 ? [
                     {
                       key: "studio",

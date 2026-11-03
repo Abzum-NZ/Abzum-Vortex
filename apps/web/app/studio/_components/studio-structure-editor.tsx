@@ -27,7 +27,7 @@ import {
 import { studioNotice } from "./studio-save-state";
 import {
   StudioLimitNote,
-  StudioReasoned,
+  Reasoned,
   studioLimitReason,
   type StudioSemanticSelection,
 } from "@vortex/ui/studio";
@@ -299,7 +299,7 @@ export function StudioStructureEditor({
             label={form === "page" ? "Pages" : "Layouts"}
           />
           <div className="flex gap-2">
-            <StudioReasoned reason={newLimitReason}>
+            <Reasoned reason={newLimitReason}>
               <Button
                 type="submit"
                 size="sm"
@@ -311,7 +311,7 @@ export function StudioStructureEditor({
               >
                 {form === "page" ? "Add page" : "Add layout"}
               </Button>
-            </StudioReasoned>
+            </Reasoned>
             <Button type="button" size="sm" variant="ghost" onClick={() => setForm("none")}>
               Cancel
             </Button>

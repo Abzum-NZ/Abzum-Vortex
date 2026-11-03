@@ -155,3 +155,17 @@ export const kindWords: Readonly<Record<StudioRecordPageKind, string>> = {
   form_edit: "edit form",
   guided: "guided create form",
 };
+
+/**
+ * Whether a field is what a system projection is addressed by (its organisation or revision field):
+ * not information a person reads, so no default column shows it.
+ */
+export const isProjectionAddressField = (
+  record: Readonly<{
+    system_projection?:
+      Readonly<{ organization_field?: string; revision_field?: string }> | undefined;
+  }>,
+  fieldKey: string,
+): boolean =>
+  record.system_projection?.organization_field === fieldKey ||
+  record.system_projection?.revision_field === fieldKey;

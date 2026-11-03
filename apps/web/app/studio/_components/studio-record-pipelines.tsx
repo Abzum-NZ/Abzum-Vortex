@@ -1,6 +1,6 @@
 "use client";
 import { Card } from "@vortex/ui/components/card";
-import { StudioLimitNote, StudioReasoned, studioLimitReason } from "@vortex/ui/studio";
+import { StudioLimitNote, Reasoned, studioLimitReason } from "@vortex/ui/studio";
 import { Field, FieldLabel, FieldLegend, FieldSet } from "@vortex/ui/components/field";
 import { useState, type FormEvent } from "react";
 import {
@@ -702,9 +702,7 @@ export function StudioRecordPipelines({
             </span>
           )}
         </h3>
-        <StudioReasoned
-          reason={studioLimitReason("pipelinesPerRecordType", record.pipelines.length)}
-        >
+        <Reasoned reason={studioLimitReason("pipelinesPerRecordType", record.pipelines.length)}>
           <Button
             type="button"
             size="sm"
@@ -714,7 +712,7 @@ export function StudioRecordPipelines({
           >
             Add a pipeline
           </Button>
-        </StudioReasoned>
+        </Reasoned>
       </div>
       {record.pipelines.length === 0 && (
         <Empty>
