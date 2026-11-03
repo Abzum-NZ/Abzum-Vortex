@@ -114,6 +114,9 @@ export function StudioCanvasRoot({
       {...createAppearanceRootProps(studio.appearance)}
       className="min-h-full bg-background text-foreground"
     >
+      {/* Puck's overlay sits in the iframe's body, outside this root: its Studio colours (light and
+          dark pairs) follow the appearance the canvas previews, not the browser's. */}
+      <style data-vortex-studio-appearance="">{`body{color-scheme:${studio.appearance}}`}</style>
       {frame === undefined ? (
         // No frame yet (a page the compiled frames do not list): blocks still get their own style
         // root, so their popovers open inside the iframe and not in Studio's document.
@@ -162,8 +165,19 @@ export function StudioCanvasIframe({
     if (frameDocument === undefined) return;
     const style = frameDocument.createElement("style");
     style.dataset.vortexStudioPuck = "";
-    style.textContent = studioPuckIframeCss;
+    // Studio's own values, read from the host document that Studio's theme styles.
+    const copyStudioValues = () => {
+      style.textContent = studioPuckIframeCss(getComputedStyle(document.documentElement));
+    };
+    copyStudioValues();
     frameDocument.head.append(style);
+    // Studio's document root can change its variables while the canvas is open (the theme is applied
+    // again after a navigation); the copy follows.
+    const themeObserver = new MutationObserver(copyStudioValues);
+    themeObserver.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["style", "class"],
+    });
     // Keys pressed while focus is inside the iframe reach only its own document. Studio's shortcuts
     // (Undo, Redo, the inspector, the panel) listen on the host window, so they are passed on there,
     // as Puck passes on pointer moves. Typing in a field is left alone.
@@ -193,6 +207,7 @@ export function StudioCanvasIframe({
     };
     frameDocument.addEventListener("keydown", forward);
     return () => {
+      themeObserver.disconnect();
       style.remove();
       frameDocument.removeEventListener("keydown", forward);
     };
