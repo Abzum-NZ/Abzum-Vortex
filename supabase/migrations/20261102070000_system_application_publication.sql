@@ -6,34 +6,37 @@ set role vortex_owner;
 -- (0) system_application_surface_violation is an allow-list comparison of a release with the one it
 -- follows (an Application or a Module it owns). Free: name, description, icon, theme; flows,
 -- bindings and actions that are not protected; cosmetic text at named positions (the text of a
--- result message, message action labels, descriptions, the text properties of typed blocks, field
--- and record type labels). Additive: pages, menu entries, queries, events and platform block
--- dependencies. Everything else must be equal, ids compared in lower case: protected flows (they
--- call a protected operation or name a protected flow) with their names and confirmations, every
--- binding on a protected control, protected actions, record types, permissions, roles, module
--- bindings, settings, the pages that hold a protected control, menu entries; content nested too
--- deeply to compare is refused. Helpers: system_application_as_set, _strip_text, _strip_task,
--- _strip_flow.
+-- result message, message action labels, descriptions, the text properties of typed blocks that
+-- are not protected controls, field and record type labels). Additive: pages, menu entries,
+-- queries, events and platform block dependencies. Everything else must be equal, ids compared in
+-- lower case: protected flows (they call a protected operation or name a protected flow) with
+-- their names and confirmations, every binding on a protected control, the label of a protected
+-- control, protected actions, record types, permissions, roles, module bindings, settings, the
+-- pages that hold a protected control, menu entries; content nested too deeply to compare is
+-- refused. Helpers: system_application_as_set, _strip_text, _strip_task, _strip_flow.
 -- (1) append_release accepts a human publication of a platform system Application and of the
 -- Modules it owns, and then also demands system_applications.manage (at the start and again at the
 -- end of the transaction) and a recent two-step verification (require_system_application_step_up_
 -- internal). It refuses, inside the publish transaction, a release that the comparison refuses,
--- with errcode 23514 and hint system_surface_changed. The baseline is the current release when it
--- is of the new definition contract, otherwise the latest release the platform published at it.
+-- with errcode 23514 and hint system_surface_changed. The baseline is the current release; one of
+-- an earlier definition contract is refused with a sentence naming the platform refresh.
 -- (2) restore_release_draft and read_release_for_restore no longer refuse a platform system
 -- Application: the draft guard they already call demands both permissions for it, and a restore
 -- also demands the two-step verification.
 -- (3) read_application_latest_release reads a platform system Application's latest version too, for
 -- the upgrade review.
--- (4) detach_application_installation refuses a platform system Application unless a replacing
--- release of it is named (an upgrade); lock_application_installation_authority takes the recent
--- authentication the operation needs, and purge_application asks for a recent sign-in.
+-- (4) detach_application_installation refuses a platform system Application unless a newer release
+-- of it is named (an upgrade), and the deferred constraint trigger system_application_stays_installed
+-- proves at commit that it still has an active binding; lock_application_installation_authority
+-- takes the recent authentication the operation needs, and purge_application asks for a recent
+-- sign-in.
 -- (5) stage_owned_module_source looks the Module up inside the caller's organisation first.
 -- No earlier migration rewrites any of these functions in place (the regprocedures were
 -- searched): the bodies below are the whole definitions and equal the canonical files in
 -- supabase/schemas.
 
 drop function if exists vortex_definition.detach_application_installation(uuid, bigint, jsonb);
+drop function if exists vortex_definition.system_application_strip_text(jsonb, integer);
 drop function if exists vortex_access.lock_application_installation_authority();
 
 create or replace function vortex_definition.system_application_as_set(p_value jsonb)
@@ -68,7 +71,8 @@ comment on function vortex_definition.system_application_as_set(jsonb) is
 
 create or replace function vortex_definition.system_application_strip_text(
   p_value jsonb,
-  p_depth integer
+  p_depth integer,
+  p_controls text[]
 )
 returns jsonb
 language plpgsql
@@ -86,13 +90,15 @@ begin
     when 'object' then
       result := coalesce((
         select pg_catalog.jsonb_object_agg(
-          entry.key, vortex_definition.system_application_strip_text(entry.value, p_depth + 1)
+          entry.key, vortex_definition.system_application_strip_text(entry.value, p_depth + 1, p_controls)
         )
         from pg_catalog.jsonb_each(p_value) as entry(key, value)
       ), '{}'::jsonb);
-      -- The text of a block is at known positions only: the properties of a typed block.
+      -- The text of a block is at known positions only: the properties of a typed block that is not
+      -- a protected control (the label of the control that starts a protected action is the platform's).
       if pg_catalog.jsonb_typeof(result -> 'type') = 'string'
-        and pg_catalog.jsonb_typeof(result -> 'props') = 'object' then
+        and pg_catalog.jsonb_typeof(result -> 'props') = 'object'
+        and not (pg_catalog.lower(coalesce(result #>> '{props,id}', '')) = any (p_controls)) then
         result := pg_catalog.jsonb_set(result, '{props}', (result -> 'props') - array[
           'title', 'label', 'text', 'description', 'placeholder', 'helpText', 'heading'
         ]);
@@ -101,7 +107,7 @@ begin
     when 'array' then
       return coalesce((
         select pg_catalog.jsonb_agg(
-          vortex_definition.system_application_strip_text(item.value, p_depth + 1)
+          vortex_definition.system_application_strip_text(item.value, p_depth + 1, p_controls)
           order by item.position
         )
         from pg_catalog.jsonb_array_elements(p_value) with ordinality as item(value, position)
@@ -112,16 +118,16 @@ begin
 end
 $function$;
 
-alter function vortex_definition.system_application_strip_text(jsonb, integer)
+alter function vortex_definition.system_application_strip_text(jsonb, integer, text[])
   owner to vortex_owner;
 
-revoke all on function vortex_definition.system_application_strip_text(jsonb, integer)
+revoke all on function vortex_definition.system_application_strip_text(jsonb, integer, text[])
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
-grant execute on function vortex_definition.system_application_strip_text(jsonb, integer)
+grant execute on function vortex_definition.system_application_strip_text(jsonb, integer, text[])
   to postgres;
 
-comment on function vortex_definition.system_application_strip_text(jsonb, integer) is
-  'Private helper of the system Application surface comparison: a page or shell composition without the text properties of its typed blocks (bounded depth).';
+comment on function vortex_definition.system_application_strip_text(jsonb, integer, text[]) is
+  'Private helper of the system Application surface comparison: a page or shell composition without the text properties of its typed blocks, except a protected control (bounded depth).';
 
 create or replace function vortex_definition.system_application_strip_task(
   p_task jsonb,
@@ -442,7 +448,10 @@ begin
       union all
       select 'page_content', pg_catalog.lower(coalesce(page.value ->> 'pageId', '')),
         coalesce(page.value ->> 'key', ''),
-        vortex_definition.system_application_strip_text(page.value - 'name', 1)
+        vortex_definition.system_application_strip_text(
+          page.value - 'name', 1,
+          coalesce((select pg_catalog.array_agg(controls.control) from controls
+            where controls.side = sides.side), '{}'::text[]))
       from pg_catalog.jsonb_array_elements(sides.pages_a) as page(value)
       where p_kind = 'application' and pg_catalog.jsonb_typeof(page.value) = 'object'
         and exists (
@@ -498,7 +507,10 @@ begin
         setting.key, setting.key,
         case when setting.key = 'shells'
           then vortex_definition.system_application_as_set(
-            vortex_definition.system_application_strip_text(setting.value, 1))
+            vortex_definition.system_application_strip_text(
+              setting.value, 1,
+              coalesce((select pg_catalog.array_agg(controls.control) from controls
+                where controls.side = sides.side), '{}'::text[])))
           else vortex_definition.system_application_as_set(setting.value) end
       from pg_catalog.jsonb_each(case when pg_catalog.jsonb_typeof(sides.content) = 'object'
         then sides.content else '{}'::jsonb end) as setting(key, value)
@@ -653,6 +665,10 @@ begin
   -- discarding a change to it needs a recent two-step verification, as the role and group
   -- changes do.
   if decision.outcome is distinct from 'eligible'
+    or decision.operation_key is distinct from 'platform.organization.system_applications.manage'
+    or decision.target_kind is distinct from 'organization'
+    or decision.target_application_root_id is not null
+    or decision.access_version is distinct from (context_value ->> 'accessVersion')::bigint
     or decision.organization_id is distinct from (context_value ->> 'organizationId')::uuid
     or decision.organization_account_id
       is distinct from (context_value ->> 'organizationAccountId')::uuid
@@ -706,6 +722,7 @@ declare
   system_publication boolean := false;
   surface_violation text;
   baseline_content jsonb;
+  baseline_contract text;
   permission_id uuid;
   permission_decision record;
   checked_at timestamptz;
@@ -954,20 +971,14 @@ begin
   -- permissions and roles stay the platform's: the release may not change them, so the
   -- organisation's steward always keeps a working way to manage access.
   if human_publication and system_publication then
-    -- The baseline is the current release when it is of this definition contract; after a contract
-    -- bump it is the latest release the platform itself published at the new contract.
-    select baseline.compilation_output #> '{canonical,content}' into baseline_content
+    -- The baseline is the current release. One of an earlier definition contract cannot be compared:
+    -- the platform's refresh publishes the application again at the current contract first.
+    select baseline.compilation_output #> '{canonical,content}', baseline.validation_contract_version
+    into baseline_content, baseline_contract
     from vortex_definition.releases as baseline
     where baseline.root_id = p_root_id
-      and baseline.validation_contract_version = validation_contract_version_value
-      and (baseline.release_revision = root_row.current_release_revision
-        or not exists (
-          select 1 from vortex_identity.organization_accounts as account
-          where account.organization_account_id = baseline.published_by))
-    order by (baseline.release_revision = root_row.current_release_revision) desc,
-      baseline.release_revision desc
-    limit 1;
-    if not found and root_row.current_release_revision is not null then
+      and baseline.release_revision = root_row.current_release_revision;
+    if found and baseline_contract is distinct from validation_contract_version_value then
       raise exception using errcode = '23514', hint = 'system_surface_changed',
         message = 'This platform application has not been refreshed for the current definition format yet. Publish it again after the platform refresh.';
     end if;
@@ -3009,6 +3020,46 @@ GRANT ALL ON FUNCTION vortex_access.lock_application_installation_authority(json
 
 grant execute on function vortex_access.lock_application_installation_authority(jsonb) to postgres;
 
+create or replace function vortex_definition.require_system_application_stays_installed_internal()
+returns trigger
+language plpgsql
+volatile
+security definer
+set search_path = ''
+as $function$
+begin
+  -- A platform system Application is never uninstalled (architecture decision 11): detaching its
+  -- bindings is allowed only inside a transaction that activates a replacing release, so at
+  -- commit it still has an active binding.
+  if exists (
+      select 1
+      from vortex_definition.roots as root
+      where root.root_id = new.application_root_id
+        and root.application_origin_kind = 'platform_system_application'
+    )
+    and not exists (
+      select 1
+      from vortex_module.installation_bindings as binding
+      where binding.organization_id = new.organization_id
+        and binding.application_root_id = new.application_root_id
+        and binding.state = 'active'
+    ) then
+    raise exception using errcode = '42501',
+      message = 'A platform application cannot be uninstalled';
+  end if;
+  return null;
+end
+$function$;
+
+alter function vortex_definition.require_system_application_stays_installed_internal()
+  owner to vortex_owner;
+
+revoke all on function vortex_definition.require_system_application_stays_installed_internal()
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
+
+comment on function vortex_definition.require_system_application_stays_installed_internal() is
+  'Deferred constraint trigger function: a transaction that detaches a platform system Application''s bindings must leave it with an active binding.';
+
 create or replace function vortex_definition.detach_application_installation(
   p_application_root_id uuid,
   p_application_release_revision bigint,
@@ -3091,16 +3142,21 @@ begin
       and root.application_origin_kind = 'platform_system_application'
   ) and (
     p_replacement_release_revision is null
-    or p_replacement_release_revision = p_application_release_revision
+    or p_replacement_release_revision <= p_application_release_revision
     or not exists (
       select 1 from vortex_definition.releases as replacement
       where replacement.root_id = p_application_root_id
         and replacement.release_revision = p_replacement_release_revision
+        and replacement.compilation_output #>> '{kind}' = 'application'
+        and replacement.compilation_output #>> '{canonical,envelope,rootId}' = p_application_root_id::text
     )
   ) then
     raise exception using errcode = '42501',
       message = 'A platform application cannot be uninstalled';
   end if;
+  -- The replacement is proved at commit: the deferred trigger
+  -- system_application_stays_installed refuses a transaction that leaves a platform system
+  -- Application without an active binding.
 
   select pg_catalog.count(*)::integer into pin_count
   from vortex_definition.reachable_module_dependency_edges(
@@ -3375,3 +3431,9 @@ comment on function vortex_definition.purge_application(uuid, boolean, boolean, 
 alter function vortex_definition.purge_application(uuid, boolean, boolean, text) owner to vortex_owner;
 
 reset role;
+
+create constraint trigger system_application_stays_installed
+  after update of state on vortex_module.installation_bindings
+  deferrable initially deferred
+  for each row when (new.state = 'detached')
+  execute function vortex_definition.require_system_application_stays_installed_internal();

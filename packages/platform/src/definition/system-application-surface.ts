@@ -18,7 +18,7 @@ import { DefinitionError } from "./definition-error";
  * of its confirmation, verification and guided steps are the platform's: only the text of a result
  * message is free. A binding is protected when it starts a protected flow or sits on a control
  * that does (the page runs the first binding of an event). A page is the steward's when it holds
- * the control of a protected binding: it is compared as it is, apart from its text. Content nested
+ * the control of a protected binding: it is compared as it is, apart from the text of its blocks that are not protected controls (the label of the control that starts a protected action is the platform's). Content nested
  * deeper than the comparison bounds is refused. A number beyond 2^53 cannot be told apart from its
  * neighbour once parsed; the database comparison, which is the gate, refuses that change.
  * `vortex_definition.system_application_surface_violation` makes the same comparison, with the
