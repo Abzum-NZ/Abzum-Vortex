@@ -47,27 +47,25 @@ under `VORTEX_LANES_ROOT` (default `A:/Apps/vortex-lanes`), each with every port
 `supabase/config.toml` shifted per lane. `node tooling/supabase/lane.mjs` lists the lanes this
 host supports and their ports. Use only the lane you were given.
 
-Lanes are disposable. Each lane has one holder. Reset only a lane you hold (`lane.mjs reset`,
-`pnpm db:reset` or `pnpm demo:setup`, which always resets its target database); never reset
-another agent's lane. When `main` moves, forward migrate the lane or reset it. To set up without a
+Lanes are disposable. Each lane has one holder. Reset only a lane you hold with `lane.mjs reset`; never reset another agent's lane. When `main` moves, forward migrate the lane or reset it. To set up without a
 reset, run `pnpm demo:owner` and then `pnpm setup:local --
 --local-development --first-owner-identity-id <uuid>` with the printed identity.
 
 ```
 node tooling/supabase/lane.mjs init <n>     # once: generate the lane config
-node tooling/supabase/lane.mjs start <n>    # start the lane (stop <n> stops only that lane)
+node tooling/supabase/lane.mjs start <n> .  # claim and start; stop <n> . releases it
 node tooling/supabase/lane.mjs env <n>      # lines for apps/web/.env.development.local
-node tooling/supabase/lane.mjs sync <n> .   # mirror this worktree's migrations and seed, no reset
+node tooling/supabase/lane.mjs sync <n> .   # mirror migrations and seed and update the lane's auth origin, no reset
 node node_modules/supabase/dist/supabase.js migration up --include-all --local --workdir <lane directory>  # forward migrate
 node tooling/supabase/lane.mjs reset <n> .  # destructive: mirror migrations and seed, then reset (your lane only)
-VORTEX_SUPABASE_WORKDIR=<lane directory> pnpm demo:setup  # destructive: resets, then seeds (your lane only)
+VORTEX_SUPABASE_WORKDIR=<lane directory> pnpm demo:setup  # provision without resetting
 ```
 
 `env` prints `VORTEX_SUPABASE_URL`, `VORTEX_SUPABASE_PUBLISHABLE_KEY`,
-`VORTEX_RUNTIME_DATABASE_URL`, `VORTEX_DEV_SERVICE_ROLE_KEY` and `VORTEX_SUPABASE_WORKDIR`; put them in the worktree's ignored
+`VORTEX_RUNTIME_DATABASE_URL`, `VORTEX_DEV_SERVICE_ROLE_KEY`, `VORTEX_SESSION_COOKIE_NAME` and `VORTEX_SUPABASE_WORKDIR`; put them in the worktree's ignored
 `apps/web/.env.development.local`, never in a tracked file or a log. With
 `VORTEX_SUPABASE_WORKDIR` set, the demo and development setup scripts pass `--workdir` to every
-Supabase CLI call. `status <n>` shows the lane's URLs and keys.
+Supabase CLI call. `status` lists running lanes and holders; `free` prints an available batch lane. Lane 3 cannot be reset.
 
 ## Rules
 

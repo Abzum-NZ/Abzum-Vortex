@@ -1,5 +1,5 @@
-import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { basename, dirname, join, resolve } from "node:path";
 import { z } from "zod";
 
 /**
@@ -90,9 +90,6 @@ const publishedReleaseSchema = z
   })
   .strict();
 const databaseSystemIdSchema = z.string().regex(/^\d+$/);
-const setupStateEnvelopeSchema = z
-  .object({ organizationId: z.uuid(), databaseSystemId: databaseSystemIdSchema })
-  .passthrough();
 const setupStateDocumentSchema = z
   .object({
     organizationId: z.uuid(),
@@ -153,32 +150,41 @@ const readSetupStateDocument = (): unknown | undefined => {
   }
 };
 
-const requiredStateEnvelope = (value: unknown) => {
-  if (
-    typeof value === "object" &&
-    value !== null &&
-    !Array.isArray(value) &&
-    !("databaseSystemId" in value)
-  )
-    throw new Error(
-      `Development setup state ${stateFile()} has no databaseSystemId. If the database has not been reset since the state was written, query pg_control_system() and add its system_identifier as a JSON string; otherwise delete this state file and reset the local database. See README.md for the steps.`,
-    );
-  const parsed = setupStateEnvelopeSchema.safeParse(value);
-  if (!parsed.success)
-    throw stateFailure(
-      "Development setup state has a malformed organisation or database identity.",
-      parsed.error,
-    );
-  return parsed.data;
-};
+type StoredSetupState = z.infer<typeof setupStateDocumentSchema>;
+let preparedEntries: Record<string, StoredSetupState> | undefined;
 
-/** A reset creates a new local database cluster; its predecessor's setup state no longer applies. */
-export const prepareSetupState = (databaseSystemId: string): void => {
+/** Validate all stored organisations before provisioning anything into this database. */
+export const prepareSetupState = async (
+  databaseSystemId: string,
+  organizationExists: (organizationId: string) => Promise<boolean>,
+): Promise<void> => {
   databaseSystemIdSchema.parse(databaseSystemId);
   const document = readSetupStateDocument();
-  if (document === undefined) return;
-  const envelope = requiredStateEnvelope(document);
-  if (envelope.databaseSystemId !== databaseSystemId) unlinkSync(stateFile());
+  const parsed = z.record(z.uuid(), setupStateDocumentSchema).safeParse(document ?? {});
+  const lane = process.env.VORTEX_SUPABASE_WORKDIR ?? findRepositoryRoot();
+  const number = /^db(3|4|5|7|8)$/.exec(basename(lane))?.[1];
+  const reset =
+    number === "3"
+      ? "inspect the shared lane state"
+      : number
+        ? `node tooling/supabase/lane.mjs reset ${number} .`
+        : "reset the selected local database explicitly";
+  if (!parsed.success)
+    throw stateFailure(
+      `Development setup state for ${lane} is old or malformed. Reset with ${reset}.`,
+      parsed.error,
+    );
+  for (const [id, entry] of Object.entries(parsed.data)) {
+    if (
+      id.toLowerCase() !== entry.organizationId.toLowerCase() ||
+      entry.databaseSystemId !== databaseSystemId ||
+      !(await organizationExists(id))
+    )
+      throw new Error(
+        `Development setup state for ${lane} is mismatched or orphaned. Reset with ${reset}.`,
+      );
+  }
+  preparedEntries = parsed.data;
 };
 
 export const loadSetupState = (
@@ -204,22 +210,9 @@ export const loadSetupState = (
   let defaultApplicationInitializationAttempted = false;
   let defaultApplicationInitializationAttemptRevision: number | null = null;
   let defaultApplicationInitializationCompleted = false;
-  const document = readSetupStateDocument();
-  if (document !== undefined) {
-    const envelope = requiredStateEnvelope(document);
-    if (envelope.databaseSystemId !== databaseSystemId)
-      throw new Error("The local database changed while development setup was running.");
-    if (envelope.organizationId.toLowerCase() !== organizationId.toLowerCase())
-      throw new Error(
-        `Development setup state belongs to organisation ${envelope.organizationId}, but the database returned organisation ${organizationId}.`,
-      );
-    const parsed = setupStateDocumentSchema.safeParse(document);
-    if (!parsed.success)
-      throw stateFailure(
-        "Development setup state does not match the current schema.",
-        parsed.error,
-      );
-    const stored = parsed.data;
+  if (preparedEntries === undefined) throw new Error("Development setup state was not prepared.");
+  const stored = preparedEntries[organizationId];
+  if (stored !== undefined) {
     if (initialMetadata === undefined) metadata = stored.metadata;
     releases = stored.releases;
     drafts = stored.drafts;
@@ -246,29 +239,21 @@ export const loadSetupState = (
     defaultApplicationInitializationCompleted,
     save() {
       mkdirSync(dirname(stateFile()), { recursive: true });
-      writeFileSync(
-        stateFile(),
-        `${JSON.stringify(
-          {
-            organizationId: state.organizationId,
-            databaseSystemId,
-            metadata: state.metadata,
-            drafts: state.drafts,
-            releases: state.releases,
-            installerRoleGranted: state.installerRoleGranted,
-            definitionRoleGranted: state.definitionRoleGranted,
-            setupCompleted: state.setupCompleted,
-            defaultApplicationInitializationAttempted:
-              state.defaultApplicationInitializationAttempted,
-            defaultApplicationInitializationAttemptRevision:
-              state.defaultApplicationInitializationAttemptRevision,
-            defaultApplicationInitializationCompleted:
-              state.defaultApplicationInitializationCompleted,
-          },
-          null,
-          2,
-        )}\n`,
-      );
+      preparedEntries![organizationId] = {
+        organizationId: state.organizationId,
+        databaseSystemId,
+        metadata: state.metadata,
+        drafts: state.drafts,
+        releases: state.releases,
+        installerRoleGranted: state.installerRoleGranted,
+        definitionRoleGranted: state.definitionRoleGranted,
+        setupCompleted: state.setupCompleted,
+        defaultApplicationInitializationAttempted: state.defaultApplicationInitializationAttempted,
+        defaultApplicationInitializationAttemptRevision:
+          state.defaultApplicationInitializationAttemptRevision,
+        defaultApplicationInitializationCompleted: state.defaultApplicationInitializationCompleted,
+      };
+      writeFileSync(stateFile(), `${JSON.stringify(preparedEntries, null, 2)}\n`);
     },
   };
   return state;
