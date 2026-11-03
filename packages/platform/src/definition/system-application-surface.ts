@@ -18,7 +18,7 @@ import { DefinitionError } from "./definition-error";
  * of its confirmation, verification and guided steps are the platform's: only the text of a result
  * message is free. A binding is protected when it starts a protected flow or sits on a control
  * that does (the page runs the first binding of an event). A page is the steward's when it holds
- * the control of a protected binding: it is compared as it is, apart from the text of its blocks that are not protected controls (the label of the control that starts a protected action is the platform's). Content nested
+ * the control of a protected binding: it is compared as it is, apart from the text of its blocks outside a protected control (the text of the control that starts a protected action, and of everything inside it, is the platform's). Content nested
  * deeper than the comparison bounds is refused. A number beyond 2^53 cannot be told apart from its
  * neighbour once parsed; the database comparison, which is the gate, refuses that change.
  * `vortex_definition.system_application_surface_violation` makes the same comparison, with the
@@ -155,20 +155,29 @@ const stripFlow = (flow: Record<string, Json>): Json => {
 const pageText = ["title", "label", "text", "description", "placeholder", "helpText", "heading"];
 
 /** A page or shell composition without the text properties of its typed blocks, except a protected control. */
-const stripPageText = (value: Json, depth: number, controls: readonly string[]): Json => {
+const stripPageText = (
+  value: Json,
+  depth: number,
+  controls: readonly string[],
+  inside: boolean,
+): Json => {
   if (depth > maximumDepth) return deepMarker;
-  if (Array.isArray(value)) return value.map((item) => stripPageText(item, depth + 1, controls));
+  if (Array.isArray(value))
+    return value.map((item) => stripPageText(item, depth + 1, controls, inside));
   if (!isRecord(value)) return value;
+  // A protected control, and every block inside it, keeps its text.
+  const typed = typeof value.type === "string" && isRecord(value.props);
+  const kept =
+    inside || (typed && controls.includes(lower((value.props as Record<string, Json>).id)));
   const stripped: Record<string, Json> = Object.fromEntries(
-    Object.entries(value).map(([key, item]) => [key, stripPageText(item, depth + 1, controls)]),
+    Object.entries(value).map(([key, item]) => [
+      key,
+      stripPageText(item, depth + 1, controls, kept),
+    ]),
   );
-  // The text of a block is at known positions only: the properties of a typed block.
-  if (
-    typeof stripped.type === "string" &&
-    isRecord(stripped.props) &&
-    !controls.includes(lower(stripped.props.id))
-  )
-    stripped.props = without(stripped.props, ...pageText);
+  // The text of a block is at known positions only: the properties of a typed block outside a
+  // protected control.
+  if (typed && !kept) stripped.props = without(stripped.props, ...pageText);
   return stripped;
 };
 
@@ -307,7 +316,9 @@ const surfaceOf = (content: Json, kind: "application" | "module"): SurfaceEntry[
           ident: key,
           block: key,
           detail:
-            key === "shells" ? asSet(stripPageText(value, 1, protectedControls)) : asSet(value),
+            key === "shells"
+              ? asSet(stripPageText(value, 1, protectedControls, false))
+              : asSet(value),
         });
   };
   if (kind === "module") {
@@ -357,7 +368,7 @@ const surfaceOf = (content: Json, kind: "application" | "module"): SurfaceEntry[
         kind: "page_content",
         ident: lower(page.pageId),
         block: text(page.key),
-        detail: stripPageText(without(page, "name"), 1, controls),
+        detail: stripPageText(without(page, "name"), 1, controls, false),
       });
   }
   for (const { item, parent } of navigationEntries(body.navigation, "root"))

@@ -325,9 +325,8 @@ one installation, no separate copy. Publishing or discarding asks for a recent t
 release cannot add, remove or retarget a protected-operation binding or what feeds or starts it, and
 cannot change the permissions, roles and screens the steward manages access through. Each release is
 compared with the release it follows, in the application and in the publication transaction. After a
-platform refresh the platform's release is the baseline of the next one; Studio's compare, keep and adopt
-controls for standard pages (#721) handle a page the platform improved, and every other customisation is
-re-applied to the refreshed release. The organisation always keeps a working way for its steward
+platform refresh the platform's release is the baseline of the next one and a customisation is re-applied to
+it; merging customisations over a refresh is not built. The organisation always keeps a working way for its steward
 to manage access.
 
 ## Decision 12 — shadcn/ui on Base UI is the component base

@@ -6,12 +6,12 @@ set role vortex_owner;
 -- (0) system_application_surface_violation is an allow-list comparison of a release with the one it
 -- follows (an Application or a Module it owns). Free: name, description, icon, theme; flows,
 -- bindings and actions that are not protected; cosmetic text at named positions (the text of a
--- result message, message action labels, descriptions, the text properties of typed blocks that
--- are not protected controls, field and record type labels). Additive: pages, menu entries,
+-- result message, message action labels, descriptions, the text properties of typed blocks outside
+-- a protected control, field and record type labels). Additive: pages, menu entries,
 -- queries, events and platform block dependencies. Everything else must be equal, ids compared in
 -- lower case: protected flows (they call a protected operation or name a protected flow) with
--- their names and confirmations, every binding on a protected control, the label of a protected
--- control, protected actions, record types, permissions, roles, module bindings, settings, the
+-- their names and confirmations, every binding on a protected control, the text of a protected control and of
+-- everything inside it, protected actions, record types, permissions, roles, module bindings, settings, the
 -- pages that hold a protected control, menu entries; content nested too deeply to compare is
 -- refused. Helpers: system_application_as_set, _strip_text, _strip_task, _strip_flow.
 -- (1) append_release accepts a human publication of a platform system Application and of the
@@ -37,6 +37,7 @@ set role vortex_owner;
 
 drop function if exists vortex_definition.detach_application_installation(uuid, bigint, jsonb);
 drop function if exists vortex_definition.system_application_strip_text(jsonb, integer);
+drop function if exists vortex_definition.system_application_strip_text(jsonb, integer, text[]);
 drop function if exists vortex_access.lock_application_installation_authority();
 
 create or replace function vortex_definition.system_application_as_set(p_value jsonb)
@@ -72,7 +73,8 @@ comment on function vortex_definition.system_application_as_set(jsonb) is
 create or replace function vortex_definition.system_application_strip_text(
   p_value jsonb,
   p_depth integer,
-  p_controls text[]
+  p_controls text[],
+  p_inside boolean
 )
 returns jsonb
 language plpgsql
@@ -82,23 +84,32 @@ set search_path = ''
 as $function$
 declare
   result jsonb;
+  kept boolean;
 begin
   if p_depth > 64 then
     return '"__too_deeply_nested__"'::jsonb;
   end if;
   case pg_catalog.jsonb_typeof(p_value)
     when 'object' then
+      -- A protected control, and every block inside it, keeps its text.
+      kept := p_inside or (
+        pg_catalog.jsonb_typeof(p_value -> 'type') = 'string'
+        and pg_catalog.jsonb_typeof(p_value -> 'props') = 'object'
+        and pg_catalog.lower(coalesce(p_value #>> '{props,id}', '')) = any (p_controls)
+      );
       result := coalesce((
         select pg_catalog.jsonb_object_agg(
-          entry.key, vortex_definition.system_application_strip_text(entry.value, p_depth + 1, p_controls)
+          entry.key,
+          vortex_definition.system_application_strip_text(entry.value, p_depth + 1, p_controls, kept)
         )
         from pg_catalog.jsonb_each(p_value) as entry(key, value)
       ), '{}'::jsonb);
-      -- The text of a block is at known positions only: the properties of a typed block that is not
-      -- a protected control (the label of the control that starts a protected action is the platform's).
-      if pg_catalog.jsonb_typeof(result -> 'type') = 'string'
-        and pg_catalog.jsonb_typeof(result -> 'props') = 'object'
-        and not (pg_catalog.lower(coalesce(result #>> '{props,id}', '')) = any (p_controls)) then
+      -- The text of a block is at known positions only: the properties of a typed block outside a
+      -- protected control (the text of the control that starts a protected action, and of everything
+      -- inside it, is the platform's).
+      if not kept
+        and pg_catalog.jsonb_typeof(result -> 'type') = 'string'
+        and pg_catalog.jsonb_typeof(result -> 'props') = 'object' then
         result := pg_catalog.jsonb_set(result, '{props}', (result -> 'props') - array[
           'title', 'label', 'text', 'description', 'placeholder', 'helpText', 'heading'
         ]);
@@ -107,7 +118,7 @@ begin
     when 'array' then
       return coalesce((
         select pg_catalog.jsonb_agg(
-          vortex_definition.system_application_strip_text(item.value, p_depth + 1, p_controls)
+          vortex_definition.system_application_strip_text(item.value, p_depth + 1, p_controls, p_inside)
           order by item.position
         )
         from pg_catalog.jsonb_array_elements(p_value) with ordinality as item(value, position)
@@ -118,16 +129,16 @@ begin
 end
 $function$;
 
-alter function vortex_definition.system_application_strip_text(jsonb, integer, text[])
+alter function vortex_definition.system_application_strip_text(jsonb, integer, text[], boolean)
   owner to vortex_owner;
 
-revoke all on function vortex_definition.system_application_strip_text(jsonb, integer, text[])
+revoke all on function vortex_definition.system_application_strip_text(jsonb, integer, text[], boolean)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
-grant execute on function vortex_definition.system_application_strip_text(jsonb, integer, text[])
+grant execute on function vortex_definition.system_application_strip_text(jsonb, integer, text[], boolean)
   to postgres;
 
-comment on function vortex_definition.system_application_strip_text(jsonb, integer, text[]) is
-  'Private helper of the system Application surface comparison: a page or shell composition without the text properties of its typed blocks, except a protected control (bounded depth).';
+comment on function vortex_definition.system_application_strip_text(jsonb, integer, text[], boolean) is
+  'Private helper of the system Application surface comparison: a page or shell composition without the text properties of its typed blocks, outside a protected control (bounded depth).';
 
 create or replace function vortex_definition.system_application_strip_task(
   p_task jsonb,
@@ -451,7 +462,7 @@ begin
         vortex_definition.system_application_strip_text(
           page.value - 'name', 1,
           coalesce((select pg_catalog.array_agg(controls.control) from controls
-            where controls.side = sides.side), '{}'::text[]))
+            where controls.side = sides.side), '{}'::text[]), false)
       from pg_catalog.jsonb_array_elements(sides.pages_a) as page(value)
       where p_kind = 'application' and pg_catalog.jsonb_typeof(page.value) = 'object'
         and exists (
@@ -510,7 +521,7 @@ begin
             vortex_definition.system_application_strip_text(
               setting.value, 1,
               coalesce((select pg_catalog.array_agg(controls.control) from controls
-                where controls.side = sides.side), '{}'::text[])))
+                where controls.side = sides.side), '{}'::text[]), false))
           else vortex_definition.system_application_as_set(setting.value) end
       from pg_catalog.jsonb_each(case when pg_catalog.jsonb_typeof(sides.content) = 'object'
         then sides.content else '{}'::jsonb end) as setting(key, value)
@@ -3430,6 +3441,7 @@ comment on function vortex_definition.purge_application(uuid, boolean, boolean, 
 
 alter function vortex_definition.purge_application(uuid, boolean, boolean, text) owner to vortex_owner;
 
+drop trigger if exists system_application_stays_installed on vortex_definition.installation_bindings;
 create constraint trigger system_application_stays_installed
   after update of state on vortex_definition.installation_bindings
   deferrable initially deferred
