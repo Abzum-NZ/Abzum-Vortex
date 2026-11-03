@@ -2,7 +2,7 @@ import "server-only";
 
 import { cache, type CSSProperties } from "react";
 import { headers } from "next/headers";
-import { DEFAULT_APPLICATION_THEME_SELECTION } from "@vortex/platform/schema";
+import { DEFAULT_APPLICATION_THEME_SELECTION, organizationIdSchema } from "@vortex/platform/schema";
 import {
   applyOrganizationTheme,
   DEFAULT_PLATFORM_THEME_RELEASE,
@@ -72,8 +72,6 @@ export const STUDIO_ROOT_CSS = variablesRule(
   studioDocumentStyle,
 );
 
-const organizationIdPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
 /**
  * Studio's theme for the organisation its address names (`/studio/<organisation>/...`): Studio's
  * platform theme with that organisation's theme applied, or undefined where Studio keeps its own
@@ -83,7 +81,7 @@ const organizationIdPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-
  */
 const loadStudioOrganizationTheme = cache(
   async (organizationId: string | undefined): Promise<ApplicationTheme | undefined> => {
-    if (organizationId === undefined || !organizationIdPattern.test(organizationId))
+    if (organizationId === undefined || !organizationIdSchema.safeParse(organizationId).success)
       return undefined;
     const resolution = await resolveIdentitySession();
     if (resolution.kind !== "active") return undefined;
@@ -96,14 +94,11 @@ const loadStudioOrganizationTheme = cache(
   },
 );
 
-/** The root props Studio draws with for the request's organisation: Studio's own, or the organisation's. */
-export async function loadStudioDocumentTheme(): Promise<typeof STUDIO_DOCUMENT_THEME> {
-  const address = (await headers()).get(requestAddressHeader);
-  const [tenant, organization] =
-    address === null
-      ? []
-      : new URL(address, "http://address.invalid").pathname.split("/").filter(Boolean);
-  const theme = tenant === "studio" ? await loadStudioOrganizationTheme(organization) : undefined;
+/** The root props Studio draws with for one organisation: Studio's own, or the organisation's. */
+export async function loadStudioDocumentTheme(
+  organizationId: string,
+): Promise<typeof STUDIO_DOCUMENT_THEME> {
+  const theme = await loadStudioOrganizationTheme(organizationId);
   return theme === undefined ? STUDIO_DOCUMENT_THEME : studioDocumentThemeOf(theme);
 }
 

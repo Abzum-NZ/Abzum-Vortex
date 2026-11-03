@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import type { SourceApplicationThemeSelection } from "@vortex/platform/schema";
 import { Icon } from "@vortex/ui/icons";
 import { NavigationLink } from "@vortex/ui/routing";
-import { Alert, AlertDescription } from "@vortex/ui/components/alert";
 import { Badge } from "@vortex/ui/components/badge";
 import { Button } from "@vortex/ui/components/button";
 import {
@@ -20,6 +19,7 @@ import { Input } from "@vortex/ui/components/input";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@vortex/ui/components/tooltip";
 import { saveStudioOrganizationTheme } from "../actions";
 import type { StudioThemeOptions } from "../_lib/studio-theme-options";
+import { studioNotice } from "./studio-save-state";
 import { StudioThemePanel, type StudioThemeChangeOutcome } from "./studio-theme-panel";
 
 type Outcome = StudioThemeChangeOutcome & Readonly<{ problems?: readonly string[] }>;
@@ -88,13 +88,14 @@ export function StudioOrganizationTheme({
           kind: "applied",
           message: `${what}. Every application that has not chosen its own follows.`,
         };
-      case "conflict":
+      case "conflict": {
+        // The page remounts with the stored theme, so the explanation goes to the toast region.
+        const message =
+          "The organisation theme was changed by someone else. This page now shows the current theme; make your change again.";
+        studioNotice(message, "error");
         router.refresh();
-        return {
-          kind: "refused",
-          message:
-            "The organisation theme was changed by someone else. This page now shows the current theme; make your change again.",
-        };
+        return { kind: "refused", message };
+      }
       case "invalid":
         return {
           kind: "refused",
@@ -137,19 +138,14 @@ export function StudioOrganizationTheme({
       </header>
       <div className="grid min-h-0 flex-1 grid-cols-1 md:grid-cols-[minmax(20rem,28rem)_1fr]">
         <div className="flex min-h-0 flex-col border-b md:border-r md:border-b-0">
-          {!canChange && (
-            <div className="shrink-0 px-4 pt-4">
-              <Alert>
-                <AlertDescription>
-                  You can see the organisation theme. Changing it needs permission to manage the
-                  organisation&apos;s settings.
-                </AlertDescription>
-              </Alert>
-            </div>
-          )}
           <StudioThemePanel
             title="Organisation theme"
-            description="How Studio and every application of this organisation look. An application that chose its own setting keeps it; changes save automatically."
+            description={
+              canChange
+                ? "How Studio and every application of this organisation look; an application's own choices win."
+                : "Read only: changing the organisation theme needs the Manage organisation display settings permission."
+            }
+            shuffle={false}
             selection={current}
             options={options}
             disabled={!canChange}

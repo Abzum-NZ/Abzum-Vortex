@@ -2,8 +2,14 @@
 import { Spinner } from "@vortex/ui/components/spinner";
 import { Item, ItemContent, ItemGroup } from "@vortex/ui/components/item";
 import { useState } from "react";
-import type { SourceApplicationThemeSelection } from "@vortex/platform/schema";
+import {
+  authoredApplicationThemeSelection,
+  canonicalApplicationThemeSelection,
+  effectiveThemeSelection,
+  type SourceApplicationThemeSelection,
+} from "@vortex/platform/schema";
 import { createVortexStyleRootProps, Icon, VORTEX_STYLES } from "@vortex/ui";
+import { Badge } from "@vortex/ui/components/badge";
 import { Button } from "@vortex/ui/components/button";
 import { FieldLabel } from "@vortex/ui/components/field";
 import { Input } from "@vortex/ui/components/input";
@@ -191,7 +197,10 @@ export function StudioThemePanel({
   onChange,
   onPreset,
   organizationThemeHref,
+  shuffle: offerShuffle = true,
 }: Readonly<{
+  /** Whether Shuffle is offered; the organisation editor turns it off (one click would re-theme every application). */
+  shuffle?: boolean;
   /** Where the organisation theme is edited; offered by an application's Theme tab, not by the editor itself. */
   organizationThemeHref?: string;
   title?: string;
@@ -218,6 +227,28 @@ export function StudioThemePanel({
   const locked = disabled || pending;
   const dimension = (key: StudioThemeDimensionKey) =>
     options.dimensions.find((entry) => entry.key === key)!;
+  // What is drawn: a setting the application left at the platform default follows the organisation.
+  const shown = authoredApplicationThemeSelection(
+    effectiveThemeSelection(canonicalApplicationThemeSelection(selection), options.organization),
+  );
+  const follows = (...keys: StudioThemeDimensionKey[]) =>
+    keys.filter((key) => shown[key] !== selection[key]);
+  /** The marker of a group whose settings follow the organisation, with what they follow. */
+  const followMarker = (...keys: StudioThemeDimensionKey[]) => {
+    const following = follows(...keys);
+    if (following.length === 0) return undefined;
+    const names = following
+      .map((key) => studioThemeOptionLabel(options, key, shown[key]))
+      .join(", ");
+    return (
+      <Tooltip>
+        <TooltipTrigger render={<Badge variant="outline" />}>Organisation</TooltipTrigger>
+        <TooltipContent>
+          Follows the organisation theme ({names}). Choose another value to override.
+        </TooltipContent>
+      </Tooltip>
+    );
+  };
   let current = "";
   try {
     current = encodeStudioThemePreset(selection);
@@ -317,7 +348,7 @@ export function StudioThemePanel({
       {(control) => (
         <StudioOptionControl
           {...control}
-          value={selection[entry.key]}
+          value={shown[entry.key]}
           options={entry.options.map((option) => ({ value: option.id, label: option.label }))}
           disabled={locked}
           onChange={(id) => pick(entry.key, id)}
@@ -329,7 +360,7 @@ export function StudioThemePanel({
     <ToggleGroup
       aria-label={entry.label}
       variant="outline"
-      value={[selection[entry.key]]}
+      value={[shown[entry.key]]}
       disabled={locked}
       className="max-w-full flex-wrap"
       onValueChange={(next) => {
@@ -354,9 +385,37 @@ export function StudioThemePanel({
       hidden={hidden}
       description={description}
       action={
-        <StudioIconButton label="Shuffle theme" disabled={locked} onClick={() => void shuffle()}>
-          <Icon name="redo" />
-        </StudioIconButton>
+        <div className="flex items-center gap-1">
+          {organizationThemeHref !== undefined && (
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <Button
+                    variant="ghost"
+                    size="icon-xs"
+                    nativeButton={false}
+                    aria-label="Open the organisation theme"
+                    render={<NavigationLink href={organizationThemeHref} />}
+                  />
+                }
+              >
+                <Icon name="palette" />
+              </TooltipTrigger>
+              <TooltipContent>
+                Settings left at the platform default follow the organisation theme. Open it.
+              </TooltipContent>
+            </Tooltip>
+          )}
+          {offerShuffle && (
+            <StudioIconButton
+              label="Shuffle theme"
+              disabled={locked}
+              onClick={() => void shuffle()}
+            >
+              <Icon name="redo" />
+            </StudioIconButton>
+          )}
+        </div>
       }
     >
       {feedback !== null && (
@@ -401,10 +460,10 @@ export function StudioThemePanel({
           </ToggleGroup>
         </StudioInspectorGroup>
       )}
-      <StudioInspectorGroup title="Style">
+      <StudioInspectorGroup title="Style" action={followMarker("style")}>
         <RadioGroup
           aria-label="Style"
-          value={selection.style}
+          value={shown.style}
           disabled={locked}
           onValueChange={(next) => pick("style", String(next))}
           className="grid grid-cols-2 gap-3"
@@ -415,7 +474,7 @@ export function StudioThemePanel({
               data-vortex-focus-group=""
               className={cn(
                 "relative space-y-2 rounded-lg p-2 hover:bg-accent",
-                selection.style === option.id && "ring-2 ring-primary",
+                shown.style === option.id && "ring-2 ring-primary",
                 locked && "opacity-50",
               )}
             >
@@ -447,22 +506,26 @@ export function StudioThemePanel({
         </RadioGroup>
       </StudioInspectorGroup>
       {(["base_color", "theme", "chart_color"] as const).map((key) => (
-        <StudioInspectorGroup key={key} title={dimension(key).label}>
+        <StudioInspectorGroup key={key} title={dimension(key).label} action={followMarker(key)}>
           <Swatch
             dimension={dimension(key)}
-            value={selection[key]}
+            value={shown[key]}
             disabled={locked}
             onPick={(id) => pick(key, id)}
           />
         </StudioInspectorGroup>
       ))}
-      <StudioInspectorGroup title="Radius">{segmented(dimension("radius"))}</StudioInspectorGroup>
-      <StudioInspectorGroup title="Fonts">
+      <StudioInspectorGroup title="Radius" action={followMarker("radius")}>
+        {segmented(dimension("radius"))}
+      </StudioInspectorGroup>
+      <StudioInspectorGroup title="Fonts" action={followMarker("body_font", "heading_font")}>
         {select(dimension("body_font"))}
         {select(dimension("heading_font"))}
       </StudioInspectorGroup>
-      <StudioInspectorGroup title="Icons">{select(dimension("icon_library"))}</StudioInspectorGroup>
-      <StudioInspectorGroup title="Menu">
+      <StudioInspectorGroup title="Icons" action={followMarker("icon_library")}>
+        {select(dimension("icon_library"))}
+      </StudioInspectorGroup>
+      <StudioInspectorGroup title="Menu" action={followMarker("menu_color", "menu_accent")}>
         <div className="space-y-2">
           <p className="text-sm font-medium">Colour</p>
           {segmented(dimension("menu_color"))}
@@ -472,21 +535,6 @@ export function StudioThemePanel({
           {segmented(dimension("menu_accent"))}
         </div>
       </StudioInspectorGroup>
-      {organizationThemeHref !== undefined && (
-        <StudioInspectorGroup title="Organisation theme" defaultOpen={false}>
-          <p className="text-sm text-muted-foreground">
-            A setting left at the platform default follows the organisation theme.
-          </p>
-          <Button
-            variant="outline"
-            size="sm"
-            nativeButton={false}
-            render={<NavigationLink href={organizationThemeHref} />}
-          >
-            Open the organisation theme
-          </Button>
-        </StudioInspectorGroup>
-      )}
       <StudioInspectorGroup title="Preset code" defaultOpen={false}>
         <InputGroup>
           <InputGroupInput

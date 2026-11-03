@@ -1,4 +1,8 @@
-import type { ApplicationContent, SourceApplicationThemeSelection } from "@vortex/platform/schema";
+import type {
+  ApplicationContent,
+  OrganizationThemeSelection,
+  SourceApplicationThemeSelection,
+} from "@vortex/platform/schema";
 
 /** A candidate theme resolved as publication resolves it: the complete theme, or why it is refused. */
 export type StudioThemeResolution =
@@ -67,6 +71,8 @@ export type StudioThemeOptions = Readonly<{
   dimensions: readonly StudioThemeDimension[];
   /** The platform theme set, from the checked-in catalogue releases. */
   presets: readonly StudioThemePreset[];
+  /** The organisation's theme (canonical keys) for an application's Theme tab; absent in the organisation editor. */
+  organization?: OrganizationThemeSelection;
 }>;
 
 /** Whether every setting of a selection is an option the Theme tab offers; the first one that is not is named. */
