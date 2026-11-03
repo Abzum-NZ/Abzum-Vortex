@@ -66,10 +66,14 @@ export const laneOfWorkdir = (workdir: string): { lane: number; shared: boolean 
     { encoding: "utf8" },
   );
   if (result.error) throw result.error;
-  if (result.status === 1) return undefined;
   if (result.status !== 0)
     throw new Error("lane.mjs which failed: " + String(result.stderr).trim());
-  return z.object({ lane: z.number().int(), shared: z.boolean() }).parse(JSON.parse(result.stdout));
+  // `null` is the answer for a directory that is not a lane; any failure above is an error.
+  return z
+    .object({ lane: z.number().int(), shared: z.boolean() })
+    .nullable()
+    .transform((answer) => answer ?? undefined)
+    .parse(JSON.parse(result.stdout));
 };
 
 const stateFile = (): string =>

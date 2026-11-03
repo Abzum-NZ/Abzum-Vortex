@@ -33,7 +33,7 @@ pnpm install
 pnpm db:start      # local Supabase
 pnpm db:reset      # apply migrations and seed (destructive: a fresh clone only)
 pnpm setup:local   # provision the development organisation and install modules
-pnpm dev
+pnpm dev          # the main local stack only; on a lane start the server with lane.mjs serve (below)
 ```
 
 Environment variables are described in `README.md` and `apps/web/.env.example`.
@@ -44,8 +44,8 @@ Environment variables are described in `README.md` and `apps/web/.env.example`.
 
 Local development runs on lanes: lighter Local Supabase stacks (no Studio, logs or edge runtime)
 under `VORTEX_LANES_ROOT` (default `A:/Apps/vortex-lanes`), each with every port of
-`supabase/config.toml` shifted per lane. `node tooling/supabase/lane.mjs` lists the lanes this
-host supports and their ports. Use only the lane you were given.
+`supabase/config.toml` shifted per lane. `node tooling/supabase/lane.mjs` lists the lanes and their
+ports; `status` shows which are blocked on this host. Use only the lane you were given.
 
 Lanes are disposable. Each lane has one holder. Reset only a lane you hold with `lane.mjs reset`; never reset another agent's lane. When `main` moves, forward migrate the lane or reset it. To set up without a
 reset, run `pnpm demo:owner` and then `pnpm setup:local --
@@ -53,7 +53,7 @@ reset, run `pnpm demo:owner` and then `pnpm setup:local --
 
 ```
 node tooling/supabase/lane.mjs init <n>     # once: generate the lane config
-node tooling/supabase/lane.mjs start <n> .  # claim and start; stop <n> . releases it
+node tooling/supabase/lane.mjs start <n> .  # claim and start the database; stop <n> . releases it
 node tooling/supabase/lane.mjs env <n>      # lines for apps/web/.env.development.local
 node tooling/supabase/lane.mjs sync <n> .   # mirror migrations and seed and update the lane's auth origin, no reset
 node node_modules/supabase/dist/supabase.js migration up --include-all --local --workdir <lane directory>  # forward migrate
@@ -64,19 +64,31 @@ VORTEX_SUPABASE_WORKDIR=<lane directory> pnpm demo:setup  # provision without re
 ```
 
 `env` prints `VORTEX_SUPABASE_URL`, `VORTEX_SUPABASE_PUBLISHABLE_KEY`,
-`VORTEX_RUNTIME_DATABASE_URL`, `VORTEX_DEV_SERVICE_ROLE_KEY`, `VORTEX_SESSION_COOKIE_NAME` and `VORTEX_SUPABASE_WORKDIR`; put them in the worktree's ignored
+`VORTEX_RUNTIME_DATABASE_URL`, `VORTEX_DEV_SERVICE_ROLE_KEY`, `VORTEX_QUERY_CONTINUATION_KEY`, `VORTEX_SESSION_COOKIE_NAME` and `VORTEX_SUPABASE_WORKDIR`; put them in the worktree's ignored
 `apps/web/.env.development.local`, never in a tracked file or a log. With
 `VORTEX_SUPABASE_WORKDIR` set, the demo and development setup scripts pass `--workdir` to every
 Supabase CLI call. `status` lists every lane with its ports, holder, recorded servers and the free RAM; `free` prints an available batch lane
-(not blocked by a Windows excluded port range, and starting it must leave 3 GB of RAM free) and the RAM reading. The lane
-numbers exist once, in the lane table of `lane.mjs`; add a lane there only.
+(not blocked by a Windows excluded port range) and the RAM reading. The lane numbers exist once, in the lane table of `lane.mjs`; add a lane there only.
 
-Lanes are shared by dev servers, not by databases. `serve` starts a server on the lane's one database: the holder on the
-lane's own port, any other worktree as a guest on the `--port` it names (lane 3: 3631 and up). A guest is refused when its
-branch adds a migration relative to `origin/main` ("a branch with a migration needs its own lane"), or when the port is
-taken or excluded. `stop` and `reset` refuse while guests run. `serve` records each server's process ID in the lane's
-`servers.json`; `stop` and `unserve` end only those process trees, never by image name or command line, and never the
-supervised demo server on 3630. Several agents walking the same branch use the same server. Lane 3 cannot be reset.
+**RAM.** 3 GB must remain free after a start. `start` of a lane stack needs at least 5.5 GB free (it costs about 2.5 GB), and `serve` of a dev
+server at least 4.5 GB (about 1.5 GB). Both print the reading and refuse below it. Builds and walks need at least 2 GB free.
+
+**Dev servers on a lane.** On a lane, start every dev server with `lane.mjs serve <n> .`, never `pnpm dev` or `next dev`:
+a server started any other way is unrecorded, so `stop` cannot refuse for it and nothing can end it safely. A lane has one database and
+several dev servers may share it. The holder serves the lane's own port. Any other worktree is a guest on the `--port` it names, inside the
+guest window (lane 3: 3631 to 3649; other lanes: 3670 to 3699). A guest is refused when its branch changes `supabase/migrations` or
+`supabase/schemas` relative to `origin/main` (renames, edits and deletions included), or when the lane's mirrored migrations hold any
+file `origin/main` lacks or has with other content ("a branch with a migration needs its own lane"), or when the port is taken or excluded.
+The primary checkout never serves on any lane but lane 3, where its supervised server runs. A guest has its own session cookie
+(`vortex-lane-<n>-<port>-session`), and a worktree runs one dev server at a time. A guest's server also delivers the lane's queued events:
+a branch that changes event or workflow delivery takes its own lane. `stop` and `reset` refuse while guests run.
+
+`serve` records each server's process ID and creation time in the lane's `servers.json` (not in the lease: guest servers outlive a lease
+that is cleared once its worktree is gone). `stop` and `unserve <n> .` end only those recorded process trees, by process ID, never by image
+name or command line, and never the supervised demo server on 3630. A recorded server whose process is gone but whose port is still served
+stays in the record and in `status` until it is ended by hand. Several agents walking the same branch use the same server. Lane 3 cannot be
+reset, and only the primary checkout runs `start`, `stop` and `sync` on it. `status` marks a lane that runs without a lease (started by an
+older `lane.mjs`): its worktree merges `origin/main` and runs `start`.
 
 ## Rules
 

@@ -5,7 +5,7 @@ A scripted tour of the local demo: the core applications `pnpm demo:setup` insta
 ## Before you start
 
 1. Start the local database and run `pnpm demo:setup` (it resets the database and installs every core application).
-2. Run `pnpm dev` and open the site URL printed by the setup.
+2. Run `pnpm dev` (on a database lane: `node tooling/supabase/lane.mjs serve <n> .`) and open the site URL printed by the setup.
 3. Pages live under `/<tenant>/<organisation>/<application>/<page>`. The setup uses `abzum/abzum`.
 
 The setup installs IAM, Landing Zone, Operations, Organisation Administration, Tenant Administration and the App Store, with the first owner holding the application roles.

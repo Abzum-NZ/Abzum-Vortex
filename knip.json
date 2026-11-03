@@ -5,7 +5,7 @@
   "workspaces": {
     ".": {
       "includeEntryExports": false,
-      "ignoreBinaries": ["netsh"],
+      "ignoreBinaries": ["netsh", "netstat"],
       "entry": ["tooling/supabase/lane.mjs", "tooling/theme/off-theme-detector.js"],
       "project": ["tooling/**/*.{js,mjs,ts}"]
     },
