@@ -39,6 +39,21 @@ export const studioPuckStyle = {
   "--puck-color-interactive-soft-hover": "color-mix(in oklab, var(--primary) 10%, transparent)",
   "--puck-color-selection-bg": "color-mix(in oklab, var(--primary) 10%, transparent)",
   "--puck-font-family": "var(--font-sans)",
+  // The outline: Puck's default row colours are its own azure palette. Text is the theme's foreground
+  // on a hover or selected fill (at least 13:1 in every shadcn base and theme colour, light and dark),
+  // and the selected border and the drop line are the foreground, which keeps 3:1 against the
+  // background and both fills where the primary or ring colour of some themes does not.
+  "--puck-color-text-primary": "var(--foreground)",
+  "--puck-outline-color-text": "var(--foreground)",
+  "--puck-outline-color-text-hover": "var(--foreground)",
+  "--puck-outline-color-text-helper": "var(--muted-foreground)",
+  "--puck-outline-zone-color-text": "var(--muted-foreground)",
+  "--puck-outline-color-icon": "var(--muted-foreground)",
+  "--puck-outline-color-bg-hover": "var(--accent)",
+  "--puck-outline-color-bg-selected": "color-mix(in oklab, var(--primary) 12%, var(--background))",
+  "--puck-outline-color-border-hover": "var(--accent)",
+  "--puck-outline-color-border-selected": "var(--foreground)",
+  "--puck-outline-color-drop-indicator": "var(--foreground)",
   // The drawer's category headers (Puck's own buttons) are Studio headings: its size, colours and gap.
   "--puck-drawer-category-font-size": "var(--text-sm, 0.875rem)",
   "--puck-drawer-category-color-text": "var(--muted-foreground)",

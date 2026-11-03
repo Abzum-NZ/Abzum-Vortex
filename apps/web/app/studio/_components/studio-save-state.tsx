@@ -173,7 +173,8 @@ export function StudioSaveState({ draft }: Readonly<{ draft: StudioDraft }>) {
                   variant="outline"
                   size="sm"
                   disabled={
-                    (hasFieldProblems ? !fields?.canUndo : !draft.state.canUndo) || draft.locked
+                    (hasFieldProblems ? !fields?.canUndo : !draft.state.canUndo) ||
+                    draft.historyBlocked
                   }
                   onClick={hasFieldProblems ? fields?.undo : draft.undo}
                 >
@@ -282,7 +283,7 @@ export function StudioSaveState({ draft }: Readonly<{ draft: StudioDraft }>) {
           <AlertDialogFooter>
             <Button
               variant="outline"
-              disabled={!draft.state.canUndo || draft.locked}
+              disabled={!draft.state.canUndo || draft.historyBlocked}
               onClick={() => {
                 draft.session.cancel();
                 void draft.flush().then(() => draft.undo());
