@@ -336,6 +336,10 @@ export function StudioPuckProvider({
         );
         refusedRemoval.current = removed;
         setResync((generation) => generation + 1);
+        setRefused({
+          area: shown.area,
+          message: "That block was not deleted: the selection changed. Select it and try again.",
+        });
         return;
       }
     }

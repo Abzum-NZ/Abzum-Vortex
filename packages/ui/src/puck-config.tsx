@@ -422,9 +422,9 @@ const declaredSlots = (
 
 /**
  * How an empty slot is presented in the editor, in one place (the rules are in the layout styles).
- * A required slot, or the one that holds its block's content, keeps its placeholder. An optional one draws nothing at rest, shows its drop
- * target while a block is dragged and a small hint while its own block is selected, each labelled
- * with the slot's name. A live page has no such presentation.
+ * A required slot, or the one that holds its block's content, keeps its placeholder. An optional
+ * one draws nothing at rest, shows its drop target while a block is dragged and a small hint while
+ * its own block is selected, each labelled with the slot's name. A live page has none of this.
  */
 const slotClassName = (editing: boolean, required: boolean, selected: boolean): string =>
   !editing
@@ -508,11 +508,16 @@ const sameShallow = (left: object, right: object): boolean => {
  */
 const PlacementBlock = memo(
   PlacementBlockContent,
-  (previous: PlacementBlockProps, next: PlacementBlockProps) =>
-    previous.registry === next.registry &&
-    previous.fieldInputControlReleases === next.fieldInputControlReleases &&
-    sameShallow(previous.componentProps, next.componentProps) &&
-    sameShallow(previous.componentProps.puck, next.componentProps.puck),
+  (previous: PlacementBlockProps, next: PlacementBlockProps) => {
+    const { puck: previousPuck, ...previousRest } = previous.componentProps;
+    const { puck: nextPuck, ...nextRest } = next.componentProps;
+    return (
+      previous.registry === next.registry &&
+      previous.fieldInputControlReleases === next.fieldInputControlReleases &&
+      sameShallow(previousRest, nextRest) &&
+      sameShallow(previousPuck, nextPuck)
+    );
+  },
 );
 
 function PlacementBlockContent(props: PlacementBlockProps): ReactElement {

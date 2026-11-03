@@ -67,11 +67,14 @@ export function StudioCanvasRoot({
   const { empty } = studio;
   // A layout's blocks are added with Add; only a page's blocks drop onto the canvas.
   const canDrop = usePuckSelector((state) => state.getPermissions().insert);
+  // Studio's own mark of a drag in progress, from Puck's public state, for the empty-slot rules.
+  const dragging = usePuckSelector((state) => state.appState.ui.isDragging);
   const content = (
     <div
       data-vortex-studio-canvas=""
       data-vortex-shell-outlet=""
       data-vortex-editing=""
+      {...(dragging ? { "data-vortex-dragging": "" } : {})}
       {...(breakpoint === "desktop" ? {} : { "data-vortex-view-only": "" })}
       aria-label={empty ? "Empty content area" : undefined}
       className={empty ? "relative min-h-48" : "min-h-24"}

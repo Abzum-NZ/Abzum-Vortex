@@ -349,13 +349,11 @@ export const LAYOUT_ONLY_STYLES_CSS = `
   .vortex-puck-slot--optional.vortex-puck-slot--selected:empty::after {
   content: var(--vortex-slot-label) " (empty)";
 }
-[data-puck-entry][data-puck-dragging] [data-vortex-studio-canvas] .vortex-puck-slot--optional:empty {
+[data-vortex-studio-canvas][data-vortex-dragging] .vortex-puck-slot--optional:empty {
   display: flex;
   min-height: calc(2.5rem / var(--vortex-canvas-scale, 1));
 }
-[data-puck-entry][data-puck-dragging]
-  [data-vortex-studio-canvas]
-  .vortex-puck-slot--optional:empty::after {
+[data-vortex-studio-canvas][data-vortex-dragging] .vortex-puck-slot--optional:empty::after {
   content: var(--vortex-slot-label);
 }
 /* A screen the canvas shows view-only takes no drop, so an empty slot draws no box at all. */

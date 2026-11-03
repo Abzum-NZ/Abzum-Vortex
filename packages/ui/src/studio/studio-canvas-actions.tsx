@@ -1,12 +1,13 @@
 "use client";
 
-import { createUsePuck, useGetPuck, type Overrides } from "@puckeditor/core";
+import { ActionBar, createUsePuck, useGetPuck, type Overrides } from "@puckeditor/core";
 import { sourceItemTree } from "@vortex/platform/schema";
 import { StudioOutlineRegion } from "./studio-puck-outline";
 import { Copy, Trash2 } from "lucide-react";
 import {
   Children,
   cloneElement,
+  isValidElement,
   useEffect,
   useLayoutEffect,
   useRef,
@@ -30,8 +31,8 @@ import { useStudioCanvas } from "./studio-puck-provider";
 
 const usePuckSelector = createUsePuck();
 
-/** Set by an action taken from the bar: the next bar to appear takes the keyboard focus. */
-let focusNextBar = false;
+/** The block whose bar an action chose: that bar takes the keyboard focus when it appears. */
+let focusBarOf: string | null = null;
 
 type BarActionProps = Readonly<{
   label: string;
@@ -88,8 +89,10 @@ function StudioActionBar({ id, type }: Readonly<{ id: string; type: string }>) {
   const { input, model, references } = useStudioCanvas();
   const { breakpoint, label: screenLabel } = useStudioScreen();
   const view = useStudioCanvasView();
-  // The overlay is not clickable by itself; while a block is dragged the bar lets the pointer through.
+  // While a block is dragged the bar lets the pointer through.
   const dragging = usePuckSelector((state) => state.appState.ui.isDragging);
+  // The page changed (an Undo, an insert above): a block may have moved without a new size.
+  const data = usePuckSelector((state) => state.appState.data);
   const anchor = useRef<HTMLDivElement | null>(null);
   const [stopped, setStopped] = useState(0);
   const [shift, setShift] = useState(0);
@@ -132,7 +135,7 @@ function StudioActionBar({ id, type }: Readonly<{ id: string; type: string }>) {
     puck.config.components[type]?.label ??
     type;
   // Why a forbidden action is unavailable when the draft itself names no reason.
-  const unavailable =
+  const knownCause =
     breakpoint !== "desktop"
       ? `This is the ${screenLabel.toLowerCase()} view. Change blocks on Desktop.`
       : model.readOnlyCause !== undefined
@@ -141,7 +144,14 @@ function StudioActionBar({ id, type }: Readonly<{ id: string; type: string }>) {
           ? "The canvas is not on show."
           : input.disabled
             ? (input.disabledReason ?? "Studio is busy; try again in a moment.")
-            : "This isn't available for this block.";
+            : undefined;
+  const unavailable = knownCause ?? "This isn't available for this block.";
+  // A denial no cause above explains is a defect to find and word, so it is logged, once per block.
+  const unexplained = knownCause === undefined && (!permissions.duplicate || !permissions.delete);
+  useEffect(() => {
+    if (unexplained)
+      console.error("[studio] an action is unavailable for no known reason", { id, permissions });
+  }, [unexplained, id]);
   const reasonFor = (reference: string | undefined, allowed: boolean) =>
     reference ?? (allowed ? undefined : unavailable);
   // A full application cannot take another block: Duplicate says so instead of failing on save.
@@ -179,7 +189,8 @@ function StudioActionBar({ id, type }: Readonly<{ id: string; type: string }>) {
   // Place the bar on its block: counter-scaled, inside the visible part of the page frame.
   useLayoutEffect(() => {
     const bar = anchor.current;
-    const block = bar?.parentElement;
+    // Studio's own element around the bar, as big as the block (it fills Puck's overlay of it).
+    const block = bar?.closest("[data-vortex-canvas-overlay]");
     const shown = studioCanvasVisible(view);
     if (bar == null || block == null || shown === undefined) return;
     const box = bar.getBoundingClientRect();
@@ -194,31 +205,38 @@ function StudioActionBar({ id, type }: Readonly<{ id: string; type: string }>) {
     if (rounded !== shift) setShift(rounded);
     const flip = blockBox.top - box.height < shown.top;
     if (flip !== below) setBelow(flip);
-  }, [id, view, scrolled, name, shift, below]);
-  // The block resizes (a drag, a setting): the bar follows its edges.
+  }, [id, view, scrolled, name, shift, below, data]);
+  // The block resizes (a drag, a setting), or the page does (content above it arrives and moves it
+  // down): the bar follows its edges.
   useEffect(() => {
-    const block = anchor.current?.parentElement;
+    const block = anchor.current?.closest("[data-vortex-canvas-overlay]");
     if (block == null) return;
     const observer = new ResizeObserver(() => setScrolled((count) => count + 1));
     observer.observe(block);
+    observer.observe(block.ownerDocument.body);
     return () => observer.disconnect();
   }, [id]);
 
   const buttons = () => [...(anchor.current?.querySelectorAll("button") ?? [])];
-  // Alt+F10 moves focus to the selected block's bar, as the toolbar convention has it.
+  // Alt+F10 moves focus to the selected block's bar, as the toolbar convention has it. A key
+  // pressed while focus is inside the canvas frame reaches only its document, so both are heard.
   useEffect(() => {
+    const own = anchor.current?.ownerDocument;
+    const documents = own === undefined || own === document ? [document] : [document, own];
     const onKey = (event: globalThis.KeyboardEvent) => {
       if (!event.altKey || event.key !== "F10") return;
       event.preventDefault();
       buttons()[stopped]?.focus();
     };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    for (const target of documents) target.addEventListener("keydown", onKey);
+    return () => {
+      for (const target of documents) target.removeEventListener("keydown", onKey);
+    };
   }, [stopped]);
   // The bar of the block an action chose takes the focus, so the keyboard does not start over.
   useEffect(() => {
-    if (!focusNextBar) return;
-    focusNextBar = false;
+    if (focusBarOf !== id) return;
+    focusBarOf = null;
     buttons()[0]?.focus({ preventScroll: true });
   }, [id]);
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
@@ -245,20 +263,17 @@ function StudioActionBar({ id, type }: Readonly<{ id: string; type: string }>) {
     const current = getPuck();
     const content = current.appState.data.content;
     const selector = puckSelectorOf(content, id);
-    if (
-      selector === undefined ||
-      puckSelectedAlias(content, selector) !== id ||
-      current.getItemBySelector(selector)?.props.id !== id
-    ) {
+    if (selector === undefined || current.getItemBySelector(selector)?.props.id !== id) {
       console.info(`[studio] the action bar of '${id}' found the block moved; nothing was changed`);
       return;
     }
-    focusNextBar = true;
     if (action === "parent") {
       const parentSelector =
         parent === undefined ? undefined : puckSelectorOf(content, parent.props.id);
-      if (parentSelector !== undefined)
+      if (parent !== undefined && parentSelector !== undefined) {
+        focusBarOf = parent.props.id;
         current.dispatch({ type: "setUi", ui: { itemSelector: parentSelector } });
+      }
       return;
     }
     const item = current.getItemBySelector(selector);
@@ -270,9 +285,12 @@ function StudioActionBar({ id, type }: Readonly<{ id: string; type: string }>) {
         sourceIndex: selector.index,
         sourceZone: selector.zone,
       });
+      // Puck selects the copy; its bar takes the focus.
+      const copy = getPuck();
+      focusBarOf = puckSelectedAlias(copy.appState.data.content, copy.appState.ui.itemSelector);
       return;
     }
-    // After a delete the selection goes to the next block beside it, or the one before, or the parent.
+    // After a delete the selection goes to the next block, the one before, or the parent.
     const zone = { zone: selector.zone };
     const neighbour =
       current.getItemBySelector({ ...zone, index: selector.index + 1 }) ??
@@ -284,8 +302,10 @@ function StudioActionBar({ id, type }: Readonly<{ id: string; type: string }>) {
       neighbour === undefined
         ? undefined
         : puckSelectorOf(after.appState.data.content, neighbour.props.id);
-    if (nextSelector !== undefined)
+    if (neighbour !== undefined && nextSelector !== undefined) {
+      focusBarOf = neighbour.props.id;
       after.dispatch({ type: "setUi", ui: { itemSelector: nextSelector } });
+    }
   };
   const stop = (index: number) => ({ stop: stopped === index, onStop: () => setStopped(index) });
   const style: CSSProperties = {
@@ -366,7 +386,11 @@ function StudioComponentOverlay({
   return (
     <>
       {children}
-      {isSelected ? <StudioActionBar id={componentId} type={componentType} /> : null}
+      {isSelected ? (
+        <div data-vortex-canvas-overlay="" className="pointer-events-none absolute inset-0">
+          <StudioActionBar id={componentId} type={componentType} />
+        </div>
+      ) : null}
     </>
   );
 }
@@ -378,12 +402,15 @@ function StudioComponentOverlay({
  */
 let reportedBarContent = false;
 function StudioPuckActionBar({ children }: Readonly<{ children?: ReactNode }>) {
-  const extra = Children.toArray(children).length > 2;
+  // Puck's own children are its Duplicate and Delete actions; anything else is content not drawn.
+  const extra = Children.toArray(children).some(
+    (child) => !isValidElement(child) || child.type !== ActionBar.Action,
+  );
   useEffect(() => {
     if (!extra || reportedBarContent) return;
     reportedBarContent = true;
     console.error(
-      "[studio] Puck's action bar holds more than Duplicate and Delete; its other actions are not drawn",
+      "[studio] Puck's action bar holds content other than its Duplicate and Delete; it is not drawn",
     );
   }, [extra]);
   return <></>;

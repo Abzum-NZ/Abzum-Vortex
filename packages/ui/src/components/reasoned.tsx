@@ -34,7 +34,7 @@ export function Reasoned({
   onRefused?: (() => void) | undefined;
   /** The id of an element on the page that already says the reason (one Alert for many controls). */
   describedBy?: string | undefined;
-  /** How the tooltip is drawn where the control is shown scaled or clipped (the canvas's action bar). */
+  /** How the tooltip is drawn where the control is scaled or clipped (the canvas's action bar). */
   contentProps?: ReasonedTooltipProps | undefined;
   children: ReactElement<ReasonedProps>;
 }>) {
