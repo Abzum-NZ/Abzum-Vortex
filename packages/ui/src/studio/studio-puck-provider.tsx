@@ -76,7 +76,7 @@ import { studioPuckStyle } from "./studio-puck-style";
 import { studioPuckWords } from "./studio-puck-words";
 import type { StudioCanvasRecordsReader } from "./use-studio-canvas-records";
 import { useStudioCanvasChannelValue } from "./use-studio-canvas-channel";
-import { studioCanvasReferences, type StudioCanvasReferences } from "./studio-canvas-permissions";
+import { studioCanvasReferences } from "./studio-canvas-permissions";
 import { sameCompositionValue } from "./composition-references";
 
 export { studioScreens, useStudioScreen } from "./studio-canvas-screen";
@@ -224,11 +224,13 @@ const IFRAME = { enabled: true, waitForStyles: true, syncHostStyles: true } as c
 
 /** Whether a document has an animation with an end that is still running. */
 const animating = (target: Document | null): boolean =>
-  target?.getAnimations().some(
-    (animation) =>
-      animation.playState === "running" &&
-      animation.effect?.getComputedTiming().endTime !== Number.POSITIVE_INFINITY,
-  ) === true;
+  target
+    ?.getAnimations()
+    .some(
+      (animation) =>
+        animation.playState === "running" &&
+        animation.effect?.getComputedTiming().endTime !== Number.POSITIVE_INFINITY,
+    ) === true;
 
 const sameSelector = (
   left: StudioPuckSelector | null | undefined,

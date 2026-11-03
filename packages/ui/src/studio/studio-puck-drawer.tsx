@@ -477,7 +477,6 @@ function StudioBlocksDrawer({
       ) : (
         <DrawerContext.Provider value={context}>
           <StudioBlockList lists={lists} />
-
         </DrawerContext.Provider>
       )}
     </div>
