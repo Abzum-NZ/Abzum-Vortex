@@ -72,7 +72,7 @@ export function StudioPlaceList({
         const trail = trailOf(place, opener);
         const last = trail.length - 1;
         return (
-          <Item size="xs" role="listitem" key={index} className="break-words">
+          <Item size="xs" role="listitem" key={index} className="break-words p-0">
             <ItemContent>
               {trail.map((segment, at) => {
                 const text =

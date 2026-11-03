@@ -122,7 +122,7 @@ function Problems({ issues }: Readonly<{ issues: readonly string[] }>) {
       <AlertDescription>
         <ItemGroup className="gap-1">
           {issues.map((issue, index) => (
-            <Item size="xs" role="listitem" key={index} className="break-words">
+            <Item size="xs" role="listitem" key={index} className="break-words p-0">
               <ItemContent>{issue}</ItemContent>
             </Item>
           ))}

@@ -45,7 +45,7 @@ function Inputs({ inputs }: Readonly<{ inputs: readonly StudioQueryInput[] }>) {
   return (
     <ItemGroup className="gap-1">
       {inputs.map((input) => (
-        <Item size="xs" role="listitem" key={input.key}>
+        <Item size="xs" role="listitem" key={input.key} className="p-0">
           <ItemContent>
             {input.label}{" "}
             <span className="text-muted-foreground">

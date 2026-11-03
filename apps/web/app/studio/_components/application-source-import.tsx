@@ -591,7 +591,7 @@ export function ApplicationSourceImport({
               <h3 className="font-semibold">Problems found in the file</h3>
               <ItemGroup className="gap-3">
                 {diagnostics.validation.errors.map((error, index) => (
-                  <Item size="xs" role="listitem" key={`${error.code}:${index}`}>
+                  <Item size="xs" role="listitem" key={`${error.code}:${index}`} className="p-0">
                     <ItemContent>
                       <p className="font-medium">{error.message}</p>
                       <p>{error.guidance}</p>

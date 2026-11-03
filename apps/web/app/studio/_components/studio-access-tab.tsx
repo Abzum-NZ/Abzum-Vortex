@@ -193,7 +193,7 @@ export function useStudioAccessTab({
       <StudioSection title="Roles" count={roles.length}>
         <ItemGroup className="gap-1">
           {roles.map((entry) => (
-            <Item size="xs" role="listitem" key={entry.key}>
+            <Item size="xs" role="listitem" key={entry.key} className="p-0">
               <ItemContent>
                 <StudioNavItem
                   label={entry.name}

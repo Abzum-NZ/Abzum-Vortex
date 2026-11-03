@@ -123,7 +123,7 @@ export function StudioFlowsPanel({
               {group.flows.map((entry) => {
                 const key = studioSemanticSelectionKey(entry.selection);
                 return (
-                  <Item size="xs" role="listitem" key={key}>
+                  <Item size="xs" role="listitem" key={key} className="p-0">
                     <ItemContent>
                       <StudioNavItem
                         label={entry.label}

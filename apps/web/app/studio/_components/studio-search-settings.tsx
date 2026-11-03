@@ -259,7 +259,7 @@ export function StudioRecordTypeSearch({
           <AlertDescription>
             <ItemGroup className="gap-1">
               {issues.map((issue, index) => (
-                <Item size="xs" role="listitem" key={index} className="break-words">
+                <Item size="xs" role="listitem" key={index} className="break-words p-0">
                   <ItemContent>{issue}</ItemContent>
                 </Item>
               ))}
@@ -324,7 +324,7 @@ export function StudioSearchOverview({
           </div>
           <ItemGroup className="gap-2" aria-label="Found in search">
             {found.map(({ reference, module, record }) => (
-              <Item size="xs" role="listitem" key={reference}>
+              <Item size="xs" role="listitem" key={reference} className="p-0">
                 <ItemContent>
                   {module === undefined || record === undefined ? (
                     <span className="text-sm">{reference}</span>

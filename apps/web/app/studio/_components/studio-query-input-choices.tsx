@@ -110,7 +110,12 @@ export function StudioQueryInputChoices({
         <>
           <ItemGroup className="gap-1" aria-label={`Choices of ${inputLabel}`}>
             {list.map((choice, index) => (
-              <Item size="xs" role="listitem" key={choice.value} className="flex items-start gap-1">
+              <Item
+                size="xs"
+                role="listitem"
+                key={choice.value}
+                className="flex items-start gap-1 p-0"
+              >
                 <ChoiceLabel
                   label={choice.label}
                   name={`Name of choice ${choice.label}`}

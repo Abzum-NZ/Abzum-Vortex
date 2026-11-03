@@ -120,7 +120,7 @@ function Problems({ issues }: Readonly<{ issues: readonly string[] }>) {
       <AlertDescription>
         <ItemGroup className="gap-1">
           {issues.map((issue, index) => (
-            <Item size="xs" role="listitem" key={index} className="break-words">
+            <Item size="xs" role="listitem" key={index} className="break-words p-0">
               <ItemContent>{issue}</ItemContent>
             </Item>
           ))}
@@ -407,7 +407,7 @@ function RecordTypeInspector({
           ) : (
             <ItemGroup className="gap-1 text-sm">
               {queries.map((query) => (
-                <Item size="xs" role="listitem" key={query.key}>
+                <Item size="xs" role="listitem" key={query.key} className="p-0">
                   <ItemContent>
                     <Button
                       type="button"

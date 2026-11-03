@@ -71,7 +71,7 @@ const parsedInput = (declaration: Declaration, raw: string | boolean): JsonValue
 function TraceStep({ step, flowKey }: Readonly<{ step: Step; flowKey: string }>) {
   const ended = step.outcome === "refused" || step.outcome === "failed";
   return (
-    <Item size="xs" role="listitem" className="space-y-1 border-b py-2 text-sm last:border-b-0">
+    <Item size="xs" role="listitem" className="space-y-1 border-b py-2 text-sm last:border-b-0 p-0">
       <ItemContent>
         <div className="flex flex-wrap items-center gap-2">
           <span className="font-medium">{titleOf(step.taskType)}</span>
