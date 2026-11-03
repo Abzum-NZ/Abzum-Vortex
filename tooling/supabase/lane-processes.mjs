@@ -81,8 +81,8 @@ const endProcesses = (pids, port) => {
   for (const pid of pids) {
     const result = spawnSync("taskkill", ["/PID", String(pid), "/F"], { encoding: "utf8" });
     if (result.error) throw result.error;
-    // 128: the process was already gone.
-    if (result.status !== 0 && result.status !== 128)
+    // A process can exit by itself once its child is ended; it is a failure only if it still runs.
+    if (result.status !== 0 && processSnapshot().has(pid))
       throw new Error(
         `taskkill could not end process ${pid} of the server on port ${port}: ${`${result.stderr}${result.stdout}`.trim()}`,
       );
