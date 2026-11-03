@@ -28,6 +28,10 @@ begin
   -- discarding a change to it needs a recent two-step verification, as the role and group
   -- changes do.
   if decision.outcome is distinct from 'eligible'
+    or decision.operation_key is distinct from 'platform.organization.system_applications.manage'
+    or decision.target_kind is distinct from 'organization'
+    or decision.target_application_root_id is not null
+    or decision.access_version is distinct from (context_value ->> 'accessVersion')::bigint
     or decision.organization_id is distinct from (context_value ->> 'organizationId')::uuid
     or decision.organization_account_id
       is distinct from (context_value ->> 'organizationAccountId')::uuid

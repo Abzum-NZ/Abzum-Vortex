@@ -193,7 +193,10 @@ begin
       union all
       select 'page_content', pg_catalog.lower(coalesce(page.value ->> 'pageId', '')),
         coalesce(page.value ->> 'key', ''),
-        vortex_definition.system_application_strip_text(page.value - 'name', 1)
+        vortex_definition.system_application_strip_text(
+          page.value - 'name', 1,
+          coalesce((select pg_catalog.array_agg(controls.control) from controls
+            where controls.side = sides.side), '{}'::text[]))
       from pg_catalog.jsonb_array_elements(sides.pages_a) as page(value)
       where p_kind = 'application' and pg_catalog.jsonb_typeof(page.value) = 'object'
         and exists (
@@ -249,7 +252,10 @@ begin
         setting.key, setting.key,
         case when setting.key = 'shells'
           then vortex_definition.system_application_as_set(
-            vortex_definition.system_application_strip_text(setting.value, 1))
+            vortex_definition.system_application_strip_text(
+              setting.value, 1,
+              coalesce((select pg_catalog.array_agg(controls.control) from controls
+                where controls.side = sides.side), '{}'::text[])))
           else vortex_definition.system_application_as_set(setting.value) end
       from pg_catalog.jsonb_each(case when pg_catalog.jsonb_typeof(sides.content) = 'object'
         then sides.content else '{}'::jsonb end) as setting(key, value)

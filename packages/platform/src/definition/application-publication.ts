@@ -7,7 +7,7 @@ import {
   type ExactDefinitionDependency,
   type PrepareDefinitionPublicationCommand,
 } from "./definition-store-contracts";
-import { assertSystemApplicationSurfaceUnchanged } from "./system-application-surface";
+import { assertSystemApplicationBaseline } from "./system-application-surface";
 import { definitionContractChangedReason, nextDefinitionVersion } from "./version-impact";
 import type { VersionImpact, VersionImpactReason } from "./version-impact";
 import { definitionContractVersion } from "./application-contract-versions";
@@ -454,22 +454,22 @@ export const planApplicationPublication = async (
     refuse("DEFINITION_VERSION_REFUSED");
   // A platform system application's protected surface is the platform's: its Application and each
   // Module released with it may not change it (architecture decision 11).
-  // A release of an earlier definition contract has no content to compare with: the database
-  // compares with the platform's own release of the current contract, which is the authority.
+  // A release is compared with the release it follows; one of an earlier definition contract has
+  // no content to compare with, and the platform's refresh publishes it again first. A first
+  // release is compared with nothing, as the database does.
   if (systemApplication) {
     for (const module of modules)
-      if (module.released && module.candidate.releaseHistory.latestRelease !== null)
-        assertSystemApplicationSurfaceUnchanged(
-          module.candidate.releaseHistory.latestRelease.content,
+      if (module.released)
+        assertSystemApplicationBaseline(
+          module.candidate.releaseHistory,
           module.output.canonical.content,
           "module",
         );
-    if (candidate.releaseHistory.latestRelease !== null)
-      assertSystemApplicationSurfaceUnchanged(
-        candidate.releaseHistory.latestRelease.content,
-        application.output.canonical.content,
-        "application",
-      );
+    assertSystemApplicationBaseline(
+      candidate.releaseHistory,
+      application.output.canonical.content,
+      "application",
+    );
   }
   const confirmation = definitionPublicationConfirmationSchema.parse({
     outcome: latestVersion === undefined ? "initial_release" : "release_required",

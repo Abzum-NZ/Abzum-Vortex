@@ -154,16 +154,20 @@ const stripFlow = (flow: Record<string, Json>): Json => {
 
 const pageText = ["title", "label", "text", "description", "placeholder", "helpText", "heading"];
 
-/** A page or shell composition without the text properties of its typed blocks. */
-const stripPageText = (value: Json, depth: number): Json => {
+/** A page or shell composition without the text properties of its typed blocks, except a protected control. */
+const stripPageText = (value: Json, depth: number, controls: readonly string[]): Json => {
   if (depth > maximumDepth) return deepMarker;
-  if (Array.isArray(value)) return value.map((item) => stripPageText(item, depth + 1));
+  if (Array.isArray(value)) return value.map((item) => stripPageText(item, depth + 1, controls));
   if (!isRecord(value)) return value;
   const stripped: Record<string, Json> = Object.fromEntries(
-    Object.entries(value).map(([key, item]) => [key, stripPageText(item, depth + 1)]),
+    Object.entries(value).map(([key, item]) => [key, stripPageText(item, depth + 1, controls)]),
   );
   // The text of a block is at known positions only: the properties of a typed block.
-  if (typeof stripped.type === "string" && isRecord(stripped.props))
+  if (
+    typeof stripped.type === "string" &&
+    isRecord(stripped.props) &&
+    !controls.includes(lower(stripped.props.id))
+  )
     stripped.props = without(stripped.props, ...pageText);
   return stripped;
 };
@@ -290,14 +294,20 @@ const surfaceOf = (content: Json, kind: "application" | "module"): SurfaceEntry[
       block: text(event.key ?? event.name),
       detail: without(event, "name", "label", "description"),
     });
-  const settings = (free: string[], handled: string[], settingKind: SurfaceKind) => {
+  const settings = (
+    free: string[],
+    handled: string[],
+    settingKind: SurfaceKind,
+    protectedControls: readonly string[],
+  ) => {
     for (const [key, value] of Object.entries(body))
       if (!free.includes(key) && !handled.includes(key))
         add({
           kind: settingKind,
           ident: key,
           block: key,
-          detail: key === "shells" ? asSet(stripPageText(value, 1)) : asSet(value),
+          detail:
+            key === "shells" ? asSet(stripPageText(value, 1, protectedControls)) : asSet(value),
         });
   };
   if (kind === "module") {
@@ -308,7 +318,7 @@ const surfaceOf = (content: Json, kind: "application" | "module"): SurfaceEntry[
         block: text(recordType.key),
         detail: stripRecordType(recordType),
       });
-    settings(moduleFree, moduleHandled, "module_setting");
+    settings(moduleFree, moduleHandled, "module_setting", []);
     return entries;
   }
   const flowBound = records(body.flowBindings).filter(
@@ -347,7 +357,7 @@ const surfaceOf = (content: Json, kind: "application" | "module"): SurfaceEntry[
         kind: "page_content",
         ident: lower(page.pageId),
         block: text(page.key),
-        detail: stripPageText(without(page, "name"), 1),
+        detail: stripPageText(without(page, "name"), 1, controls),
       });
   }
   for (const { item, parent } of navigationEntries(body.navigation, "root"))
@@ -388,7 +398,7 @@ const surfaceOf = (content: Json, kind: "application" | "module"): SurfaceEntry[
       detail: dependency,
     });
   }
-  settings(applicationFree, applicationHandled, "setting");
+  settings(applicationFree, applicationHandled, "setting", controls);
   return entries;
 };
 
@@ -505,8 +515,28 @@ const systemApplicationSurfaceViolation = (
   return `${noun[first.entry.kind]} "${first.entry.block}" ${verb}. ${tail(first.entry.kind)}`;
 };
 
+/** The history of one definition the comparison reads: its latest release and whether it was of an earlier contract. */
+type BaselineHistory = Readonly<{
+  latestRelease: Readonly<{ content: unknown }> | null;
+  supersededReleaseVersion: string | null;
+}>;
+
+/** Compares a release with the one it follows; a release of an earlier definition contract is refused with the refresh sentence. */
+export const assertSystemApplicationBaseline = (
+  history: BaselineHistory,
+  next: Json,
+  kind: "application" | "module",
+): void => {
+  if (history.supersededReleaseVersion !== null)
+    throw new DefinitionError("DEFINITION_SYSTEM_SURFACE_CHANGED", {
+      sentence:
+        "This platform application has not been refreshed for the current definition format yet. Publish it again after the platform refresh.",
+    });
+  assertSystemApplicationSurfaceUnchanged(history.latestRelease?.content ?? null, next, kind);
+};
+
 /** Refuses a release of a platform system application that changes more than the allow-list. */
-export const assertSystemApplicationSurfaceUnchanged = (
+const assertSystemApplicationSurfaceUnchanged = (
   previous: Json,
   next: Json,
   kind: "application" | "module",

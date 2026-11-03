@@ -80,16 +80,21 @@ begin
       and root.application_origin_kind = 'platform_system_application'
   ) and (
     p_replacement_release_revision is null
-    or p_replacement_release_revision = p_application_release_revision
+    or p_replacement_release_revision <= p_application_release_revision
     or not exists (
       select 1 from vortex_definition.releases as replacement
       where replacement.root_id = p_application_root_id
         and replacement.release_revision = p_replacement_release_revision
+        and replacement.compilation_output #>> '{kind}' = 'application'
+        and replacement.compilation_output #>> '{canonical,envelope,rootId}' = p_application_root_id::text
     )
   ) then
     raise exception using errcode = '42501',
       message = 'A platform application cannot be uninstalled';
   end if;
+  -- The replacement is proved at commit: the deferred trigger
+  -- system_application_stays_installed refuses a transaction that leaves a platform system
+  -- Application without an active binding.
 
   select pg_catalog.count(*)::integer into pin_count
   from vortex_definition.reachable_module_dependency_edges(
