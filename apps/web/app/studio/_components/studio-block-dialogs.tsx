@@ -7,6 +7,8 @@ import {
   StudioField,
   StudioReferencePicker,
   studioActionBarMore,
+  studioMoveUnavailableReason,
+  studioOutcomeText,
   describeStudioCompositionDestinations,
   describeStudioCompositionWrap,
   type StudioCompositionCommand,
@@ -16,13 +18,11 @@ import {
   type StudioSemanticSelection,
   type StudioSettingChoices,
 } from "@vortex/ui/studio";
+import type { StudioBlockDialogKind } from "@vortex/ui/studio/puck-provider";
 import { studioPlacementLabels } from "../_lib/studio-labels";
 import { StudioBlockSetupDialog, type StudioBlockSetupRequest } from "./studio-block-setup-dialog";
 import { StudioPlaceList } from "./studio-used-in";
 import { studioNotice } from "./studio-save-state";
-
-/** The dialogs the selected block's More menu opens on the canvas. */
-export type StudioBlockDialogKind = "move" | "wrap" | "usedIn";
 
 type Props = Readonly<{
   /** The dialog open for the selected block, or `null`. */
@@ -49,13 +49,6 @@ const destinationOptionKey = (destination: {
   destination.kind === "child"
     ? `child:${encodeURIComponent(destination.parentAlias ?? "")}:${encodeURIComponent(destination.slotKey ?? "")}`
     : destination.kind;
-
-const outcomeText = (result: StudioCompositionOutcome, fallback: string): string =>
-  result.kind === "stale"
-    ? "The draft or your selection changed. Try again."
-    : result.kind === "unsupported"
-      ? "This item does not support that change."
-      : (result.reason ?? fallback);
 
 /**
  * Move to and Wrap in container for the selected block, and where it is used. Each is one
@@ -94,6 +87,7 @@ export function StudioBlockDialogs(props: Props) {
   const returnFocus = () =>
     selection.kind === "placement" ? studioActionBarMore(selection.placementAlias) : null;
   const destinations = move?.kind === "available" ? move.destinations : [];
+  const moveReason = move === null ? undefined : studioMoveUnavailableReason(move);
 
   const moveTo = (key: string) => {
     // Option values identify a current closed descriptor, never a source path or an array index.
@@ -104,7 +98,7 @@ export function StudioBlockDialogs(props: Props) {
     }
     const result = onCommand(context, selection, { kind: "move", destination: chosen.destination });
     if (result.kind !== "applied") {
-      setProblem(outcomeText(result, "Nothing changed."));
+      setProblem(studioOutcomeText(result, "Nothing changed."));
       return;
     }
     studioNotice("Block moved.", "success");
@@ -128,7 +122,7 @@ export function StudioBlockDialogs(props: Props) {
         releaseVersion: chosen.releaseVersion,
         settings,
       });
-      if (result.kind !== "applied") return outcomeText(result, "Nothing changed.");
+      if (result.kind !== "applied") return studioOutcomeText(result, "Nothing changed.");
       studioNotice(`Block placed in a new ${chosen.name.toLowerCase()}.`, "success");
       return true;
     };
@@ -186,17 +180,9 @@ export function StudioBlockDialogs(props: Props) {
             />
           )}
         </StudioField>
-        {destinations.length === 0 && move !== null && (
+        {moveReason !== undefined && (
           <p role="status" className="text-sm text-muted-foreground">
-            {move.kind === "unsupported"
-              ? {
-                  page_kind: "Blocks on this kind of page can't be moved.",
-                  manifest_mismatch:
-                    "This page uses a block version Studio can't edit. Reload Studio.",
-                }[move.reason]
-              : move.kind === "invalid"
-                ? "This block's move destinations could not be read. Reload Studio."
-                : "There is no other area this block can move to."}
+            {moveReason}
           </p>
         )}
         {problemAlert}
@@ -252,7 +238,12 @@ export function StudioBlockDialogs(props: Props) {
           <StudioPlaceList places={places} label={`Where ${name} is used`} onBeforeOpen={close} />
         )}
       </StudioDialog>
-      <StudioBlockSetupDialog request={setup} choices={choices} onClose={() => setSetup(null)} />
+      <StudioBlockSetupDialog
+        request={setup}
+        choices={choices}
+        onClose={() => setSetup(null)}
+        finalFocus={returnFocus}
+      />
     </>
   );
 }

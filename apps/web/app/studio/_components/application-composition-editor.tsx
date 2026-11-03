@@ -21,6 +21,7 @@ import { studioPlacementLabels } from "../_lib/studio-labels";
 import {
   describeStudioCompositionEdit,
   describeStudioCompositionSettings,
+  studioOutcomeText,
   studioSemanticSelectionKey,
   studioBlockChoices,
   studioGridDataSettings,
@@ -130,13 +131,6 @@ const settingsInputsFor = (model: StudioCompositionSettingsModel): SettingsInput
     ? { settings: model.settings, query: model.query }
     : { settings: {}, query: null };
 const fieldClass = "w-full";
-
-const outcomeText = (result: StudioCompositionOutcome, fallback: string): string =>
-  result.kind === "stale"
-    ? "The draft or your selection changed. Try again."
-    : result.kind === "unsupported"
-      ? "This item does not support that change."
-      : (result.reason ?? fallback);
 
 /**
  * The selected item's settings, order, size and area. Every control edits the draft as it changes,
@@ -265,7 +259,7 @@ export function ApplicationCompositionEditor(props: Props) {
     setMessage(
       result.kind === "applied"
         ? done
-        : outcomeText(result, "Nothing changed. Use a valid size or order."),
+        : studioOutcomeText(result, "Nothing changed. Use a valid size or order."),
     );
     return result.kind === "applied";
   };

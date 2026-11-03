@@ -30,7 +30,6 @@ import { studioLimitReason } from "./studio-limit";
 import { studioCanvasPermissionReason } from "./studio-canvas-permissions";
 import { puckNeighbourOf, puckSelectorOf, studioBlockName } from "./studio-canvas-data";
 import { StudioCanvasMore, type StudioMoreChoice } from "./studio-canvas-more";
-import { registerStudioActionBarMore } from "./studio-action-bar-focus";
 import { studioCanvasVisible, useStudioCanvasView } from "./studio-canvas-scale";
 import { StudioCanvasIframe } from "./studio-canvas-root";
 import { useStudioScreen } from "./studio-canvas-screen";
@@ -252,12 +251,6 @@ function StudioActionBar({ id, type }: Readonly<{ id: string; type: string }>) {
   }, [id]);
 
   const buttons = () => [...(anchor.current?.querySelectorAll("button") ?? [])];
-  // The More button is the bar's last: the dialogs it opens give the focus back to it.
-  const hasParent = parent !== undefined;
-  useEffect(() => {
-    const more = buttons().at(-1);
-    return more === undefined ? undefined : registerStudioActionBarMore(id, more);
-  }, [id, hasParent]);
   // Alt+F10 moves focus to the selected block's bar, as the toolbar convention has it. A key
   // pressed while focus is inside the canvas frame reaches only its document, so both are heard.
   useEffect(() => {

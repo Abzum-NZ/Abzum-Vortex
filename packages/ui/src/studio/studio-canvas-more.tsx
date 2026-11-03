@@ -12,6 +12,7 @@ import {
 } from "../components/dropdown-menu";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../components/tooltip";
 import type { ReasonedTooltipProps } from "../components/reasoned";
+import { registerStudioActionBarMore } from "./studio-action-bar-focus";
 import type { StudioBlockActions, StudioBlockDialogKind } from "./studio-puck-provider";
 
 export type StudioMoreChoice = StudioBlockDialogKind | "remove";
@@ -28,7 +29,10 @@ type MoreProps = Readonly<{
   onChoose: (choice: StudioMoreChoice) => void;
 }>;
 
-/** One entry: its label, and below it the reason while it is unavailable. */
+/**
+ * One entry: its label, and below it the reason while it is unavailable. The reason stays at full
+ * strength (a disabled item is dimmed as a whole); the label alone is muted.
+ */
 function MoreEntry({
   label,
   reason,
@@ -44,14 +48,13 @@ function MoreEntry({
     <DropdownMenuItem
       disabled={reason !== undefined}
       variant={destructive === true ? "destructive" : "default"}
-      // Studio chrome is in sentence case; the canvas frame is outside the Studio surface the shared rule reads, and the application style capitalises menu items.
-      className="tracking-normal! normal-case!"
+      className="items-start data-disabled:opacity-100"
       onClick={onChoose}
     >
       <span className="flex min-w-0 flex-col items-start">
-        <span>{label}</span>
+        <span className={reason === undefined ? undefined : "text-muted-foreground"}>{label}</span>
         {reason === undefined ? null : (
-          <span className="max-w-64 text-xs text-muted-foreground">{reason}</span>
+          <span className="max-w-64 text-xs whitespace-normal text-foreground">{reason}</span>
         )}
       </span>
     </DropdownMenuItem>
@@ -65,11 +68,19 @@ function MoreEntries({
   reasons,
   onChoose,
 }: Pick<MoreProps, "id" | "actions" | "reasons" | "onChoose">) {
-  const wrap = useMemo(() => actions.availability(id).wrap, [actions, id]);
+  const available = useMemo(() => actions.availability(id), [actions, id]);
   return (
     <>
-      <MoreEntry label="Move to…" reason={reasons.move} onChoose={() => onChoose("move")} />
-      <MoreEntry label="Wrap in container…" reason={wrap} onChoose={() => onChoose("wrap")} />
+      <MoreEntry
+        label="Move to…"
+        reason={reasons.move ?? available.move}
+        onChoose={() => onChoose("move")}
+      />
+      <MoreEntry
+        label="Wrap in container…"
+        reason={available.wrap}
+        onChoose={() => onChoose("wrap")}
+      />
       <MoreEntry label="Used in…" reason={undefined} onChoose={() => onChoose("usedIn")} />
       <DropdownMenuSeparator />
       <MoreEntry
@@ -119,6 +130,10 @@ export function StudioCanvasMore({
                   aria-label="More actions"
                   tabIndex={stop ? 0 : -1}
                   onFocus={onStop}
+                  // The dialogs this menu opens give the focus back to this button.
+                  ref={(button) =>
+                    button === null ? undefined : registerStudioActionBarMore(id, button)
+                  }
                 />
               }
             />
@@ -131,6 +146,9 @@ export function StudioCanvasMore({
       <DropdownMenuContent
         align="end"
         className="min-w-44"
+        // Studio's chrome is in sentence case: the canvas frame holds the menu outside the Studio
+        // surface, under the application's style, so the menu carries the surface marker itself.
+        data-vortex-surface="studio"
         style={{ ...tooltip.style, transformOrigin: "top right" }}
       >
         <MoreEntries

@@ -95,6 +95,39 @@ export const validContext = (context: StudioCompositionContext): boolean =>
   context.localLifetime >= 1 &&
   context.key === context.source.key;
 
+/** A page's editable content is its main area or the content slot its layout opens for it. */
+export const pageContentRegion = (
+  region: Region,
+): region is Region & { page: NonNullable<Region["page"]> } =>
+  (region.ordinaryMain === true || region.parent !== undefined) &&
+  (region.page?.type === "list" ||
+    region.page?.type === "detail" ||
+    region.page?.type === "form" ||
+    region.page?.type === "dashboard");
+
+/** The regions whose blocks move: a page's editable content and a layout's own blocks. */
+export const movableRegion = (region: Region): boolean =>
+  region.shell !== undefined || pageContentRegion(region);
+
+/**
+ * Why no block of a region can be removed, or undefined: a page removes only from its editable
+ * content, and not from a page published at a public address. A layout's blocks always can leave.
+ * The one rule for the canvas (the references behind Puck's permissions) and the composition
+ * command the draft agent uses.
+ */
+export const regionRemovalCause = (
+  source: ApplicationSourceDocument,
+  region: Region,
+): "page_kind" | "public_page" | undefined => {
+  if (region.shell !== undefined) return undefined;
+  if (!pageContentRegion(region)) return "page_kind";
+  const page = region.page;
+  return source.body.public_addresses.some((address) => address.page === page.id) ||
+    source.body.experiences?.some((experience) => experience.page === page.key)
+    ? "public_page"
+    : undefined;
+};
+
 /** Enumerate native regions; a caller cannot supply a JSON pointer or a guessed step id. */
 export const regions = (source: ApplicationSourceDocument): Region[] => {
   const result: Region[] = source.body.shells.map((shell) => ({

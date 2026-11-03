@@ -107,17 +107,22 @@ export type StudioCanvasPalette = Readonly<{
   onAdd: (request: StudioCanvasAddRequest) => true | false | string;
 }>;
 
+/** The one Undo toast of a removal: a new removal replaces it. */
+const REMOVED_TOAST = "studio-block-removed";
+
 /** The dialogs a block's More menu opens in the workspace. */
 export type StudioBlockDialogKind = "move" | "wrap" | "usedIn";
 
 /** What the selected block's More menu asks of the workspace. */
 export type StudioBlockActions = Readonly<{
-  /** Why Wrap is unavailable for a block, read from the draft when the menu opens. */
-  availability: (alias: string) => Readonly<{ wrap: string | undefined }>;
+  /** Why Move to and Wrap are unavailable for a block, read from the draft when the menu opens. */
+  availability: (alias: string) => Readonly<{ move: string | undefined; wrap: string | undefined }>;
   /** Opens a dialog for the selected block; the workspace refuses a block that is not selected. */
   open: (alias: string, dialog: StudioBlockDialogKind) => void;
-  /** Takes back the last draft change, as Ctrl+Z does; the removal's Undo toast calls it. */
-  undo: () => void;
+  /** A token for the draft as it is now (its history entry). */
+  mark: () => unknown;
+  /** Takes back the last draft change when the draft is still the one `mark` named; else `false`. */
+  undoIf: (mark: unknown) => boolean;
 }>;
 
 export type StudioPuckInput = Readonly<{
@@ -377,12 +382,29 @@ export function StudioPuckProvider({
       return;
     }
     setRefused(null);
+    const before = now.blockActions.mark();
     now.onChange(now.source, result.source);
-    // One delete for the Delete key and the bar's Remove: it is immediate, and Undo is offered.
-    if (removed !== null)
-      toast(`Removed ${removed}`, {
-        action: { label: "Undo", onClick: () => latest.current.input.blockActions.undo() },
-      });
+    const after = now.blockActions.mark();
+    // The draft took the change. One delete for the Delete key and the bar's Remove: it is
+    // immediate, and Undo is offered for exactly the draft the removal produced; a later change of
+    // any kind withdraws the offer.
+    if (after === before) return;
+    if (removed === null) {
+      toast.dismiss(REMOVED_TOAST);
+      return;
+    }
+    toast(`Removed ${removed}`, {
+      id: REMOVED_TOAST,
+      action: {
+        label: "Undo",
+        onClick: () => {
+          if (!latest.current.input.blockActions.undoIf(after))
+            console.info(
+              "[studio] the removal's Undo was offered for an older draft; nothing was undone",
+            );
+        },
+      },
+    });
   }, []);
 
   const onAction = useCallback((action: PuckAction, state: AppState, previous: AppState) => {
