@@ -1,4 +1,7 @@
 "use client";
+import { FieldSet } from "@vortex/ui/components/field";
+import { Item, ItemContent, ItemGroup } from "@vortex/ui/components/item";
+import { Alert, AlertDescription } from "@vortex/ui/components/alert";
 import { Button } from "@vortex/ui/components/button";
 
 import { useEffect, useRef, useState } from "react";
@@ -235,14 +238,14 @@ export function ApplicationReactionConditionEditor(props: Props) {
         <p role="status">The page or its modules changed. Reload the fields before editing.</p>
       )}
       {model?.kind === "available" && (
-        <fieldset disabled={props.disabled} className="space-y-3">
+        <FieldSet disabled={props.disabled}>
           <StudioConditionControls
             {...(value === undefined ? {} : { value })}
             context={model.controls}
             label={slotInfo.title}
             onChange={update}
           />
-        </fieldset>
+        </FieldSet>
       )}
       {needsFields && (
         <Button
@@ -257,13 +260,21 @@ export function ApplicationReactionConditionEditor(props: Props) {
         </Button>
       )}
       {held !== null && held.validation.issues.length > 0 && (
-        <ul role="alert" className="text-sm text-destructive">
-          {held.validation.issues.map((issue, index) => (
-            <li key={`${issue.pointer}:${index}`}>
-              {slotInfo.title}: {issue.message}
-            </li>
-          ))}
-        </ul>
+        <Alert variant="destructive" role="alert">
+          <AlertDescription>
+            <ItemGroup className="gap-1">
+              {held.validation.issues.map((issue, index) => (
+                <Item key={`${issue.pointer}:${index}`} size="xs" role="listitem" className="p-0">
+                  <ItemContent>
+                    <p className="m-0">
+                      {slotInfo.title}: {issue.message}
+                    </p>
+                  </ItemContent>
+                </Item>
+              ))}
+            </ItemGroup>
+          </AlertDescription>
+        </Alert>
       )}
       <p role="status" aria-live="polite">
         {message}

@@ -1,5 +1,6 @@
 "use client";
 
+import { Field, FieldLabel } from "../../components/field";
 import { recordsTableBoardFeature, recordsTableSettingMaximumItems } from "@vortex/platform/schema";
 import { useId, type ReactElement } from "react";
 import { Trash2 } from "lucide-react";
@@ -10,7 +11,6 @@ import type {
 } from "@vortex/platform/schema";
 import { Button } from "../../components/button";
 import { Input } from "../../components/input";
-import { Label } from "../../components/label";
 import { studioBoardTotalChoices, type StudioBoardPipeline } from "../board-source";
 import {
   StudioReferencePicker,
@@ -89,8 +89,8 @@ function StudioBoardTotals({
     (options.find((option) => option.value === alias)?.label ?? "A removed item").slice(0, 60);
   const unchosen = options.filter((option) => !rows.some((row) => row.alias === option.value));
   return (
-    <div className="space-y-2" data-vortex-board-totals="">
-      <Label htmlFor={`${idPrefix}-add`}>Column totals</Label>
+    <Field data-vortex-board-totals="">
+      <FieldLabel htmlFor={`${idPrefix}-add`}>Column totals</FieldLabel>
       {rows.map((row, index) => (
         <div key={row.alias} className="flex items-start gap-2">
           <div className="min-w-0 flex-1 space-y-1">
@@ -148,7 +148,7 @@ function StudioBoardTotals({
       <p className="text-sm text-muted-foreground">
         Each column header shows these totals of its cards, computed on the server.
       </p>
-    </div>
+    </Field>
   );
 }
 
@@ -209,8 +209,8 @@ export function StudioBoardEditor({
         : "Choose a pipeline";
   return (
     <div className="space-y-3 pb-2" data-vortex-board-editor="">
-      <div className="space-y-1">
-        <Label htmlFor={`${idPrefix}-${ownId}-pipeline`}>Pipeline</Label>
+      <Field>
+        <FieldLabel htmlFor={`${idPrefix}-${ownId}-pipeline`}>Pipeline</FieldLabel>
         <StudioOptionControl
           id={`${idPrefix}-${ownId}-pipeline`}
           disabled={disabled}
@@ -237,7 +237,7 @@ export function StudioBoardEditor({
           Each stage of the pipeline is a column. Moving a card follows the pipeline&apos;s rules
           and permissions.
         </p>
-      </div>
+      </Field>
       {pipeline === undefined ? null : (
         <StudioBoardTotals
           idPrefix={`${idPrefix}-${ownId}-totals`}

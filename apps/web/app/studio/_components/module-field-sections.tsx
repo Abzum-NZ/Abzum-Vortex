@@ -14,7 +14,6 @@ import { Alert, AlertDescription, AlertTitle } from "@vortex/ui/components/alert
 import { Button } from "@vortex/ui/components/button";
 import { Checkbox } from "@vortex/ui/components/checkbox";
 import { Input } from "@vortex/ui/components/input";
-import { Label } from "@vortex/ui/components/label";
 import { Textarea } from "@vortex/ui/components/textarea";
 import {
   StudioInspectorGroup,
@@ -137,18 +136,18 @@ function PublishedOptionColours({
       },
     });
   return (
-    <div className="space-y-2">
-      <Label>Option colours</Label>
+    <Field>
+      <FieldLabel>Option colours</FieldLabel>
       {current.items.map((item, index) => {
         if (item.kind !== "group") return null;
         const label = item.properties["label"];
         const held = item.properties["tone"];
         const id = `module-field-option-colour-${index}`;
         return (
-          <div key={id} className="flex items-center justify-between gap-2">
-            <Label htmlFor={id}>
+          <Field key={id} orientation="horizontal" className="justify-between">
+            <FieldLabel htmlFor={id}>
               {label?.kind === "text" ? label.value : `Option ${index + 1}`}
-            </Label>
+            </FieldLabel>
             <StudioOptionControl
               id={id}
               value={held?.kind === "choice" ? held.value : ""}
@@ -157,10 +156,10 @@ function PublishedOptionColours({
               disabled={false}
               onChange={(next) => withTone(index, next)}
             />
-          </div>
+          </Field>
         );
       })}
-    </div>
+    </Field>
   );
 }
 
@@ -604,22 +603,22 @@ export function FieldFormsAndListsSection({
           </p>
         ) : (
           offered.map((place) => (
-            <div key={place.id} className="flex items-start gap-2">
+            <Field key={place.id} orientation="horizontal">
               <Checkbox
                 id={`module-field-place-${place.id}`}
                 checked={place.shown === true || checkedPlaces.has(place.id)}
                 disabled={disabled || place.shown === true || place.unavailable !== undefined}
                 onCheckedChange={(checked) => onPlace(place.id, checked === true)}
               />
-              <Label htmlFor={`module-field-place-${place.id}`} className="font-normal">
+              <FieldLabel htmlFor={`module-field-place-${place.id}`} className="font-normal">
                 {place.label}
                 {place.shown === true
                   ? " (already shown)"
                   : place.unavailable === undefined
                     ? ""
                     : ` (${place.unavailable})`}
-              </Label>
-            </div>
+              </FieldLabel>
+            </Field>
           ))
         )}
         {!adding && (

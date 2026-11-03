@@ -29,15 +29,39 @@ export const processSnapshot = () => {
   return processes;
 };
 
-/** TCP listeners on this host, IPv4 and IPv6, as `{ port, pid }`. */
+/**
+ * TCP listeners on this host, IPv4 and IPv6, as `{ port, pid }`. A listener is the row whose remote
+ * address is the wildcard port 0, so the localized state word (LISTENING in English) is never read.
+ */
 export const tcpListeners = () => {
   const result = spawnSync("netstat", ["-ano"], { encoding: "utf8" });
   if (result.error || result.status !== 0) throw new Error("Cannot list TCP listeners.");
   return result.stdout
     .split(/\r?\n/)
-    .map((line) => /^\s*TCP\s+\S+:(\d+)\s+\S+\s+LISTENING\s+(\d+)/.exec(line))
+    .map((line) => /^\s*TCP\s+\S+:(\d+)\s+\S+:0\s+\S+\s+(\d+)\s*$/.exec(line))
     .filter((match) => match !== null)
     .map((match) => ({ port: Number(match[1]), pid: Number(match[2]) }));
+};
+
+/**
+ * Starts a command in a hidden console of its own, its output going to one log, and returns the
+ * process ID recorded for it (a `cmd` that owns the command, so the whole tree is the server).
+ * A detached Node child has no console, so every process it starts opens a visible window; a
+ * hidden console is shared by the tree instead, and the tree outlives this command.
+ */
+export const launchHidden = ({ command, args, cwd, env, logPath }) => {
+  const quote = (value) => `"${value}"`;
+  const line = `${[command, ...args].map(quote).join(" ")} > ${quote(logPath)} 2>&1`;
+  const script =
+    '$p = Start-Process -FilePath cmd.exe -ArgumentList ("/d /s /c " + [char]34 + $env:VORTEX_HIDDEN_LAUNCH + [char]34) ' +
+    "-WorkingDirectory $env:VORTEX_HIDDEN_CWD -WindowStyle Hidden -PassThru; $p.Id";
+  const result = spawnSync("powershell", ["-NoProfile", "-Command", script], {
+    encoding: "utf8",
+    env: { ...env, VORTEX_HIDDEN_LAUNCH: line, VORTEX_HIDDEN_CWD: cwd },
+    timeout: 60_000,
+  });
+  const pid = Number(result.stdout?.trim());
+  return result.status === 0 && Number.isInteger(pid) && pid > 0 ? pid : undefined;
 };
 
 /**
