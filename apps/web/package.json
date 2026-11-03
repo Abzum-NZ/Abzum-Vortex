@@ -3,9 +3,9 @@
   "version": "0.0.0",
   "private": true,
   "scripts": {
-    "dev": "next dev -H 127.0.0.1",
+    "dev": "next dev -H localhost",
     "build": "next build",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "next typegen && tsc --noEmit",
     "setup:local": "node --conditions=react-server --import tsx scripts/development-setup/setup.ts",
     "demo:setup": "node --conditions=react-server --import tsx scripts/demo-setup/demo-setup.ts",
     "demo:owner": "node --conditions=react-server --import tsx scripts/demo-setup/local-demo-owner.ts"

@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import {
   builderKeySchema,
   identityAuthorityIdSchema,
@@ -179,6 +179,22 @@ export const requireLocalDevelopmentEnvironment = (
 /** Verify that the runtime database and API belong to the selected local Supabase workdir. */
 export const requireLocalSupabaseBinding = (): void => {
   const root = findRepositoryRoot();
+  const workdir = process.env.VORTEX_SUPABASE_WORKDIR;
+  if (workdir) {
+    const lane = /^db(3|4|5|7|8)$/.exec(basename(workdir));
+    if (!lane) throw new DevelopmentSetupRefusal("The selected Supabase workdir is not a lane.");
+    const lease = spawnSync(
+      process.execPath,
+      [join(root, "tooling/supabase/lane.mjs"), "check", lane[1]!, root],
+      {
+        cwd: root,
+        stdio: "inherit",
+      },
+    );
+    if (lease.error) throw lease.error;
+    if (lease.status !== 0)
+      throw new DevelopmentSetupRefusal("The selected lane is not held by this worktree.");
+  }
   const cli = join(root, "node_modules", "supabase", "dist", "supabase.js");
   const result = spawnSync(
     process.execPath,
