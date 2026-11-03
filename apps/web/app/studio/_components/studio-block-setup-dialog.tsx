@@ -64,11 +64,14 @@ export function StudioBlockSetupDialog({
   request,
   choices: draftChoices,
   onClose,
+  finalFocus,
 }: Readonly<{
   request: StudioBlockSetupRequest | null;
   /** What reference settings can point at, read from the draft being edited. */
   choices: StudioSettingChoices;
   onClose: () => void;
+  /** Where focus goes when the dialog closes, when it was not opened from a control that stays. */
+  finalFocus?: (() => HTMLElement | false) | undefined;
 }>) {
   const queries = [...draftChoices.queries, ...(draftChoices.recordQueries ?? [])];
   const [query, setQuery] = useState("");
@@ -193,6 +196,7 @@ export function StudioBlockSetupDialog({
     >
       <DialogContent
         className="sm:max-w-lg"
+        finalFocus={finalFocus}
         // Focus starts on the first setting, not on the first label's "More information" button.
         initialFocus={() =>
           document.querySelector<HTMLElement>(

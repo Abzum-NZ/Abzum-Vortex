@@ -166,7 +166,7 @@ export type StudioCompositionRemovalModel =
   | Readonly<{ kind: "invalid" }>;
 
 export type StudioCompositionRemovalUnsupportedReason =
-  "page_kind" | "public_page" | "manifest_mismatch" | "repeating_slot" | "has_children";
+  "page_kind" | "public_page" | "manifest_mismatch" | "repeating_slot";
 
 export type StudioCompositionEditorModel =
   | Readonly<{

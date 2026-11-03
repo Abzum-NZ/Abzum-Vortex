@@ -24,6 +24,7 @@ export function StudioDialog({
   description,
   submitLabel,
   closeLabel = "Close",
+  finalFocus,
   submitDisabled = false,
   onSubmit,
   children,
@@ -38,6 +39,8 @@ export function StudioDialog({
   closeLabel?: string;
   submitDisabled?: boolean;
   onSubmit?: () => void;
+  /** Where focus goes when the dialog closes, when it was not opened from a control that stays. */
+  finalFocus?: (() => HTMLElement | false) | undefined;
   children: ReactNode;
 }>) {
   const submit = (event: FormEvent<HTMLFormElement>) => {
@@ -60,7 +63,7 @@ export function StudioDialog({
   );
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-md" finalFocus={finalFocus}>
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
           {description !== undefined && <DialogDescription>{description}</DialogDescription>}
