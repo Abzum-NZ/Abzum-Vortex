@@ -164,6 +164,7 @@ export function useStudioMenuThemeTabs({
         disabled={draft.locked}
         onChange={changeThemeSelection}
         onPreset={changeThemePreset}
+        organizationThemeHref={`/studio/${draft.organizationId}/organization-theme`}
       />
     ) : null;
   return { menuPanel, themePanel };

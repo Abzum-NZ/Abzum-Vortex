@@ -5,8 +5,11 @@ import { after } from "next/server";
 import { z } from "zod";
 import {
   applicationRootIdSchema,
+  canonicalApplicationThemeSelection,
   canonicalJson,
   organizationIdSchema,
+  organizationSelectionCandidateSchema,
+  organizationThemeDelta,
   sameId,
   saveDefinitionDraftCommandSchema,
   sourceApplicationThemeSchema,
@@ -14,12 +17,18 @@ import {
 } from "@vortex/platform/schema";
 import { findPinnedPlatformThemeRelease } from "./_lib/pinned-platform-theme-release";
 import {
+  applyOrganizationTheme,
+  changeCurrentOrganizationThemeAfterAuthorization,
   createHumanApplicationDraftWriter,
+  DEFAULT_PLATFORM_THEME_RELEASE,
   fingerprintCanonicalValue,
   materialiseApplicationTheme,
+  readOrganizationThemeChangePermittedAfterAuthorization,
+  resolveThemeSelection,
   validateDefinitionSource,
 } from "@vortex/platform/server";
 import { humanOrganizationRequests } from "../_lib/server-composition";
+import { loadOrganizationTheme } from "../_lib/organization-theme";
 import { saveHumanApplicationDraft } from "../_lib/definition-draft-write";
 import { mapWebError } from "../_lib/web-error-mapper";
 import { loadStudioApplicationDraft } from "../_lib/studio-application-draft";
@@ -33,7 +42,10 @@ import {
 } from "./_lib/application-source-import";
 import { platformPermissionSource } from "../_lib/platform-permission-source";
 import { definitionLimits, tokenName } from "@vortex/platform/schema";
-import type { StudioThemeResolution } from "./_lib/studio-theme-options";
+import type {
+  StudioOrganizationThemeSave,
+  StudioThemeResolution,
+} from "./_lib/studio-theme-options";
 import type { StudioStoredApplicationDraft } from "@vortex/ui/studio";
 import { readStudioPersonLabel } from "../_lib/studio-person-labels";
 import { scheduleStudioPreviewMove } from "../_lib/studio-application-preview";
@@ -308,7 +320,19 @@ export async function resolveStudioApplicationTheme(
         kind: "refused",
       } as const);
     const result = materialiseApplicationTheme(request.data.theme, draft.key, release);
-    if (result.valid) return { kind: "available", valid: true, theme: result.theme };
+    if (result.valid) {
+      // The canvas draws the application as it runs: its theme through the organisation's.
+      const identity = await resolveIdentitySession();
+      if (identity.kind !== "active") return { kind: "refused" };
+      const organization = await loadOrganizationTheme(identity.session, organizationId);
+      if (organization.kind !== "available")
+        return { kind: organization.kind === "unavailable" ? "refused" : organization.kind };
+      return {
+        kind: "available",
+        valid: true,
+        theme: applyOrganizationTheme(result.theme, organization.theme.selection),
+      };
+    }
     console.error(
       `[studio] theme resolution refused: ${result.failures
         .map((failure) => `${failure.code}:${failure.tokenKey ?? ""}`)
@@ -324,6 +348,81 @@ export async function resolveStudioApplicationTheme(
     return refuse(
       "resolve-theme",
       "STUDIO_THEME_RESOLUTION_FAILED",
+      { kind: "temporarily_unavailable" } as const,
+      error,
+    );
+  }
+}
+
+const organizationThemeRequestSchema = z
+  .object({
+    expectedRevision: z.number().int().min(0),
+    selection: sourceApplicationThemeSchema.shape.selection,
+  })
+  .strict();
+
+/**
+ * Saves the organisation theme: the dimensions of the chosen selection that differ from the
+ * platform default. The selection is resolved over the platform default theme with the checks
+ * publication runs, so a combination the readability checks refuse is never stored. The database
+ * decides who may change it (the organisation settings manage permission) and the revision; the
+ * permission is read first so a member without it is refused cleanly.
+ */
+export async function saveStudioOrganizationTheme(
+  organizationId: string,
+  candidate: unknown,
+): Promise<StudioOrganizationThemeSave> {
+  const request = organizationThemeRequestSchema.safeParse(candidate);
+  const organization = organizationIdSchema.safeParse(organizationId);
+  if (!request.success || !organization.success)
+    return refuse(
+      "save-organization-theme",
+      "STUDIO_ORGANIZATION_THEME_REQUEST_INVALID",
+      { kind: "refused" } as const,
+      request.success ? organization.error : request.error,
+    );
+  const selection = canonicalApplicationThemeSelection(request.data.selection);
+  const resolution = resolveThemeSelection({
+    base: DEFAULT_PLATFORM_THEME_RELEASE,
+    baseTokens: DEFAULT_PLATFORM_THEME_RELEASE.tokens,
+    selection,
+  });
+  if (!resolution.valid)
+    return {
+      kind: "invalid",
+      problems: [...new Set(resolution.failures.map(describeThemeFailure))].slice(0, 6),
+    };
+  try {
+    const identity = await resolveIdentitySession();
+    if (identity.kind !== "active") return { kind: "refused" };
+    const result = await humanOrganizationRequests().run(
+      identity.session,
+      organizationSelectionCandidateSchema.parse({ organizationId: organization.data }),
+      async (transaction) =>
+        (await readOrganizationThemeChangePermittedAfterAuthorization(transaction))
+          ? changeCurrentOrganizationThemeAfterAuthorization(
+              transaction,
+              request.data.expectedRevision,
+              organizationThemeDelta(selection),
+            )
+          : undefined,
+    );
+    if (result.kind === "temporarily_unavailable")
+      return refuse(
+        "save-organization-theme",
+        "STUDIO_ORGANIZATION_THEME_UNAVAILABLE",
+        { kind: "temporarily_unavailable" } as const,
+        new Error(result.databaseCode ?? result.cause ?? "unavailable"),
+      );
+    if (result.kind !== "available" || result.value === undefined) {
+      console.info("[studio] the organisation theme change was refused for this person");
+      return { kind: "refused" };
+    }
+    return { kind: result.value.outcome, revision: result.value.revision };
+  } catch (error) {
+    return refuse(
+      "save-organization-theme",
+      "STUDIO_ORGANIZATION_THEME_SAVE_FAILED",
       { kind: "temporarily_unavailable" } as const,
       error,
     );

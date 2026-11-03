@@ -145,6 +145,7 @@ export {
 } from "./application-surface-capabilities";
 export {
   requireInstalledRuntimeContext,
+  withOrganizationTheme,
   type InstalledRuntimeContext,
 } from "./installed-runtime-context";
 export { contributedActionControlIds } from "./installed-record-contributions";

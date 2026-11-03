@@ -2,9 +2,11 @@ import "server-only";
 
 import { cache } from "react";
 import {
+  applyOrganizationTheme,
   isReservedTenantSegment,
   readAddressedApplicationFromInstalledBundleAtAddress,
   resolvePermittedApplicationAddress,
+  withOrganizationTheme,
   type AddressedApplicationBundleRead,
   type ApplicationExperience,
   type ApplicationLauncherRead,
@@ -15,6 +17,7 @@ import {
 import { loadPermittedApplicationsAtAddress } from "./organization-context";
 import { getIdentityAuthorityConfiguration } from "../auth/_lib/authority-configuration";
 import type { IdentitySession, ProjectedNavigation } from "@vortex/platform/schema";
+import { loadOrganizationTheme } from "./organization-theme";
 import { platformPermissionSource } from "./platform-permission-source";
 import { mapWebError } from "./web-error-mapper";
 import { attributePageReadScope } from "./page-read-attribution";
@@ -133,7 +136,20 @@ export const resolveApplicationAddress = cache(
         throw new Error("Addressed application read carries no release page keys");
       if (pageKey !== undefined && addressed.releasePageKeys.includes(pageKey))
         return { kind: "unavailable", application, page: "refused" };
-      const experience = addressed.experiences.find((entry) => entry.state === "not_found");
+      const found = addressed.experiences.find((entry) => entry.state === "not_found");
+      const organization =
+        found?.theme === undefined
+          ? undefined
+          : await loadOrganizationTheme(session, read.organizationId);
+      if (organization !== undefined && organization.kind !== "available")
+        return { kind: "temporarily_unavailable" };
+      const experience =
+        found?.theme === undefined || organization === undefined
+          ? found
+          : {
+              ...found,
+              theme: applyOrganizationTheme(found.theme, organization.theme.selection),
+            };
       return {
         kind: "unavailable",
         application,
@@ -142,12 +158,25 @@ export const resolveApplicationAddress = cache(
       };
     }
     attributePageReadScope(read.organizationId, resolved.application.applicationRootId);
+    const organization =
+      addressed.context === undefined
+        ? undefined
+        : await loadOrganizationTheme(session, read.organizationId);
+    if (organization !== undefined && organization.kind !== "available")
+      return { kind: "temporarily_unavailable" };
     return {
       kind: "application_page",
       read,
       application: resolved.application,
       pageKey: resolved.pageKey,
-      ...(addressed.context === undefined ? {} : { installedContext: addressed.context }),
+      ...(addressed.context === undefined || organization === undefined
+        ? {}
+        : {
+            installedContext: withOrganizationTheme(
+              addressed.context,
+              organization.theme.selection,
+            ),
+          }),
       ...(addressed.navigation === undefined ? {} : { navigation: addressed.navigation }),
     };
   },

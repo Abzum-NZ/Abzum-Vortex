@@ -305,6 +305,8 @@ Every interface primitive is a [shadcn/ui](https://ui.shadcn.com) component buil
 
 An organisation may choose a platform theme or edit the theme settings exposed by its application draft. The resulting values publish with the application. Themes cannot hide focus, lower required contrast, insert scripts, fetch remote code, or override field and permission meaning.
 
+**Three theme levels.** A theme resolves at the Vortex (platform) level, the organisation level and the application level, and the same selection format serves all three. The organisation theme stores only the dimensions the organisation changed from the platform default selection. For each dimension the effective value is the application's own value when it differs from the platform default, otherwise the organisation's value, otherwise the platform's, and the result is resolved with the same contrast and focus checks as an application theme. Studio's own chrome follows platform then organisation. The running application, Studio's canvas and the application's preview all draw the effective theme, so an organisation theme change reaches every application of the organisation that did not choose that dimension, and no other organisation. Reading the organisation theme is open to every member of the organisation; changing it needs the Manage organisation display settings permission (`platform.organization.runtime_settings.manage`), which the database decides. An application cannot keep the platform default for a dimension its organisation changes; Studio's Theme tab shows such a dimension as following the organisation.
+
 ## Accessibility and responsive behaviour
 
 Every page and block follows [quality and acceptance](20-quality-and-acceptance.md). In particular:
