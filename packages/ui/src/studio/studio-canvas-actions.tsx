@@ -1,6 +1,12 @@
 "use client";
 
-import { ActionBar, createUsePuck, useGetPuck, type Overrides } from "@puckeditor/core";
+import {
+  ActionBar,
+  createUsePuck,
+  useGetPuck,
+  type Overrides,
+  type PuckApi,
+} from "@puckeditor/core";
 import { sourceItemTree } from "@vortex/platform/schema";
 import { StudioOutlineRegion } from "./studio-puck-outline";
 import { Copy, Trash2 } from "lucide-react";
@@ -30,7 +36,6 @@ import { useStudioScreen } from "./studio-canvas-screen";
 import { useStudioCanvas } from "./studio-puck-provider";
 
 const usePuckSelector = createUsePuck();
-type PuckApi = ReturnType<ReturnType<typeof useGetPuck>>;
 
 /**
  * The bar an action chose takes the keyboard focus when it appears: the bar of that block, or of
@@ -80,6 +85,18 @@ function BarAction({ label, reason, onAct, tooltip, stop, onStop, children }: Ba
   );
 }
 
+/** Whether Puck allows an action on a block now; a block that is not on the canvas allows it. */
+const puckAllows = (
+  state: Pick<PuckApi, "getPermissions" | "getSelectorForId" | "getItemById">,
+  id: string,
+  action: "duplicate" | "delete",
+): boolean => {
+  // `getSelectorForId` answers undefined exactly when the block is not indexed (`getItemById`
+  // throws then), the lookup the provider's refresh uses too.
+  const item = state.getSelectorForId(id) === undefined ? undefined : state.getItemById(id);
+  return item === undefined ? true : state.getPermissions({ item })[action];
+};
+
 /**
  * The selected block's action bar, drawn in shadcn on the block itself. It is the content of
  * Puck's `componentOverlay` for the selected block, so it is given the block's own id and knows it
@@ -92,17 +109,6 @@ function BarAction({ label, reason, onAct, tooltip, stop, onStop, children }: Ba
  * there is no room above it). Alt+F10 moves keyboard focus to it, and inside it the arrow keys move
  * between the actions.
  */
-/** Whether Puck allows an action on a block now; a block that is not on the canvas allows it. */
-const allowed = (
-  state: Pick<PuckApi, "getPermissions" | "getSelectorForId" | "getItemBySelector">,
-  id: string,
-  action: "duplicate" | "delete",
-): boolean => {
-  const selector = state.getSelectorForId(id);
-  const item = selector === undefined ? undefined : state.getItemBySelector(selector);
-  return item === undefined ? true : state.getPermissions({ item })[action];
-};
-
 function StudioActionBar({ id, type }: Readonly<{ id: string; type: string }>) {
   const getPuck = useGetPuck();
   const { input, model, references } = useStudioCanvas();
@@ -134,13 +140,9 @@ function StudioActionBar({ id, type }: Readonly<{ id: string; type: string }>) {
   }, [view.well]);
   const puck = getPuck();
   // Puck sets a block's permissions a moment after the reasons change; the bar draws again when they do.
-  const canDuplicate = usePuckSelector((state) => allowed(state, id, "duplicate"));
-  const canDelete = usePuckSelector((state) => allowed(state, id, "delete"));
-  const permissions = {
-    ...puck.getPermissions({ item: puck.getItemById(id) ?? null }),
-    duplicate: canDuplicate,
-    delete: canDelete,
-  };
+  const canDuplicate = usePuckSelector((state) => puckAllows(state, id, "duplicate"));
+  const canDelete = usePuckSelector((state) => puckAllows(state, id, "delete"));
+  const permissions = { duplicate: canDuplicate, delete: canDelete };
   const parent = puck.getParentById(id);
   // The name the outline and the inspector use: the block's own item ("Button: Open").
   const item =
@@ -172,8 +174,8 @@ function StudioActionBar({ id, type }: Readonly<{ id: string; type: string }>) {
             ? (input.disabledReason ?? "Studio is busy; try again in a moment.")
             : undefined;
   const unavailable = knownCause ?? "This isn't available for this block.";
-  const reasonFor = (reference: string | undefined, allowed: boolean) =>
-    reference ?? (allowed ? undefined : unavailable);
+  const reasonFor = (reference: string | undefined, permitted: boolean) =>
+    reference ?? (permitted ? undefined : unavailable);
   // A full application cannot take another block: Duplicate says so instead of failing on save.
   const placed =
     input.palette?.targets.kind === "available"
@@ -196,10 +198,14 @@ function StudioActionBar({ id, type }: Readonly<{ id: string; type: string }>) {
   useEffect(() => {
     if (!unexplained) return;
     const timer = setTimeout(() => {
-      console.error("[studio] an action is unavailable for no known reason", { id, permissions });
+      console.error("[studio] an action is unavailable for no known reason", {
+        id,
+        duplicate: canDuplicate,
+        delete: canDelete,
+      });
     }, 1000);
     return () => clearTimeout(timer);
-  }, [unexplained, id]);
+  }, [unexplained, id, canDuplicate, canDelete]);
   const inverse = view.scale > 0 ? 1 / view.scale : 1;
   const visible = studioCanvasVisible(view);
   // A tooltip stays inside what the well shows, and is the size of the bar on screen.
@@ -314,8 +320,8 @@ function StudioActionBar({ id, type }: Readonly<{ id: string; type: string }>) {
       return;
     }
     const item = current.getItemBySelector(selector);
-    const allowed = current.getPermissions({ item: item ?? null });
-    if (!(action === "duplicate" ? allowed.duplicate : allowed.delete)) return;
+    const permitted = current.getPermissions({ item: item ?? null });
+    if (!(action === "duplicate" ? permitted.duplicate : permitted.delete)) return;
     if (action === "duplicate") {
       current.dispatch({
         type: "duplicate",

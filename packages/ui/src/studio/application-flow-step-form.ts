@@ -159,37 +159,45 @@ const navigationPendingHelp = {
   failed: "The other applications could not be read. Reload Studio to try again.",
 } as const;
 
-/** The applications a Navigate step can open; while they load, the one the step already names stays. */
+type NavigationOption = Readonly<{ value: string; label: string }>;
+
+/** While the targets are not ready, what the step already names stays among the options. */
+const keepNamedWhilePending = (
+  status: StudioNavigationApplicationsStatus,
+  options: readonly NavigationOption[],
+  named: string | undefined,
+): readonly NavigationOption[] =>
+  status !== "ready" &&
+  named !== undefined &&
+  named !== "" &&
+  !options.some((entry) => entry.value === named)
+    ? [...options, { value: named, label: studioWords(named) }]
+    : options;
+
+/** The applications a Navigate step can open. */
 const navigationApplicationOptions = (
   choices: Pick<StudioFlowDraftChoices, "applications" | "applicationsStatus">,
   named: string | undefined,
-): readonly Readonly<{ value: string; label: string }>[] => {
-  const options = choices.applications.map((entry) => ({ value: entry.key, label: entry.label }));
-  return choices.applicationsStatus !== "ready" &&
-    named !== undefined &&
-    named !== "" &&
-    !options.some((entry) => entry.value === named)
-    ? [...options, { value: named, label: named }]
-    : options;
-};
+): readonly NavigationOption[] =>
+  keepNamedWhilePending(
+    choices.applicationsStatus,
+    choices.applications.map((entry) => ({ value: entry.key, label: entry.label })),
+    named,
+  );
 
-/** The pages of the application a Navigate step names; while the targets load, the page it names stays. */
+/** The pages of the application a Navigate step names. */
 const navigationPageOptions = (
   choices: Pick<StudioFlowDraftChoices, "applications" | "applicationsStatus">,
   application: string | undefined,
   named: string | undefined,
-): readonly Readonly<{ value: string; label: string }>[] => {
-  const options =
+): readonly NavigationOption[] =>
+  keepNamedWhilePending(
+    choices.applicationsStatus,
     choices.applications
       .find((entry) => entry.key === application)
-      ?.pageKeys.map((page) => ({ value: page, label: studioWords(page) })) ?? [];
-  return choices.applicationsStatus !== "ready" &&
-    named !== undefined &&
-    named !== "" &&
-    !options.some((entry) => entry.value === named)
-    ? [...options, { value: named, label: studioWords(named) }]
-    : options;
-};
+      ?.pageKeys.map((page) => ({ value: page, label: studioWords(page) })) ?? [],
+    named,
+  );
 
 /** Everything a step setting can point at in the draft: record types, pages, forms, module actions, queries and connections. */
 export const projectStudioFlowDraftChoices = (

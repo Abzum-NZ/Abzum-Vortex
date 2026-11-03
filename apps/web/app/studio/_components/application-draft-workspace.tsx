@@ -51,6 +51,15 @@ import {
 import { Button } from "@vortex/ui/components/button";
 import type { StudioStructureForm } from "./studio-structure-editor";
 
+/**
+ * The Navigate targets as they are read: the targets, or `failed` when the installed applications
+ * could not be read (the page has already said so once). A genuine throw still rejects.
+ */
+export type StudioNavigationTargets = Promise<
+  | Readonly<{ kind: "ready"; targets: readonly StudioNavigationApplication[] }>
+  | Readonly<{ kind: "failed" }>
+>;
+
 /** Where the workspace sits: the organisation it belongs to and the running application it builds. */
 export type StudioWorkspacePlace = Readonly<{
   organizationName: string;
@@ -62,7 +71,7 @@ export type StudioWorkspacePlace = Readonly<{
    * The other applications a Navigate step can open, with their pages. Read beside the editor's
    * first load and delivered when finished: the Flows tab lists them once they arrive.
    */
-  navigationTargets: Promise<readonly StudioNavigationApplication[]>;
+  navigationTargets: StudioNavigationTargets;
 }>;
 
 type WorkspaceProps = Readonly<{
@@ -101,12 +110,18 @@ function ExistingApplicationWorkspace(props: ExistingProps) {
   useEffect(() => {
     let current = true;
     place.navigationTargets.then(
-      (targets) => {
-        if (current) setNavigation({ status: "ready", targets });
+      (result) => {
+        if (current)
+          setNavigation(
+            result.kind === "ready"
+              ? { status: "ready", targets: result.targets }
+              : { status: "failed", targets: [] },
+          );
       },
       (error: unknown) => {
+        if (!current) return;
         console.error("[studio] the Navigate targets could not be read", describeFailure(error));
-        if (current) setNavigation({ status: "failed", targets: [] });
+        setNavigation({ status: "failed", targets: [] });
       },
     );
     return () => {

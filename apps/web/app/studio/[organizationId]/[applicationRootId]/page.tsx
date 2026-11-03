@@ -10,6 +10,7 @@ import { continueStudioSession } from "../../_lib/studio-session";
 import { StudioUnavailable } from "../../_components/studio-unavailable";
 import {
   ApplicationDraftWorkspace,
+  type StudioNavigationTargets,
   type StudioWorkspacePlace,
 } from "../../_components/application-draft-workspace";
 import { studioViewRequest } from "../../_lib/studio-view-request";
@@ -21,7 +22,6 @@ import {
   type ApplicationRootId,
 } from "@vortex/platform/schema";
 import { humanOrganizationRequests } from "../../../_lib/server-composition";
-import type { StudioNavigationApplication } from "@vortex/ui/studio";
 
 export const dynamic = "force-dynamic";
 
@@ -107,9 +107,10 @@ const loadWorkspacePlace = async (
       : undefined;
   // The Flows tab's Navigate targets are needed after the editor opens, not to open it: their
   // address reads start now, run beside the reads below, and reach the editor when they finish.
-  const navigationTargets: Promise<readonly StudioNavigationApplication[]> =
+  const navigationTargets: StudioNavigationTargets =
     applications.kind !== "available"
-      ? Promise.reject(new Error(`STUDIO_NAVIGATION_TARGETS_UNAVAILABLE: ${applications.kind}`))
+      ? // Said once above, where the read failed; the editor is told it failed.
+        Promise.resolve({ kind: "failed" } as const)
       : Promise.all(
           applications.applications
             .filter((candidate) => candidate.key !== applicationKey)
@@ -131,7 +132,7 @@ const loadWorkspacePlace = async (
                   ]
                 : [];
             }),
-        ).then((targets) => targets.flat());
+        ).then((targets) => ({ kind: "ready", targets: targets.flat() }) as const);
   // Where the application stands in the organisation, with whether the builder may open and
   // install it: the facts the toolbar needs to offer Open the application, Install, Upgrade or none.
   // It does not wait for the Studio address below.
