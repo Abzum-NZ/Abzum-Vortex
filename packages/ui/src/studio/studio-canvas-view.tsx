@@ -9,13 +9,11 @@ import { Button } from "../components/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "../components/collapsible";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "../components/empty";
 import { Skeleton } from "../components/skeleton";
-import { Label } from "../components/label";
+import { Tabs, TabsList, TabsTrigger } from "../components/tabs";
 import { Icon } from "../icons";
-import { studioPageAreaLabel } from "./application-page-layout";
 import type { StudioCompileFailure } from "./compile-failure";
 import { StudioCanvasViewProvider } from "./studio-canvas-scale";
 import { useStudioScreen } from "./studio-canvas-screen";
-import { StudioReferencePicker } from "./studio-reference-picker";
 import { useStudioCanvas } from "./studio-puck-provider";
 
 function CanvasEmpty({ title, description }: Readonly<{ title: string; description: string }>) {
@@ -58,7 +56,7 @@ export function StudioCanvasSkeleton() {
 }
 
 /**
- * The page canvas: the content area picker, the notices and the workspace's Puck preview, drawn as
+ * The page canvas: the step tabs of a guided page, the notices and the workspace's Puck preview, drawn as
  * a device screen scaled inside its well. The selected block's actions are drawn on the block. It
  * unmounts with the rail tabs that do not show a canvas.
  */
@@ -77,7 +75,6 @@ export function StudioCanvasView({
   const { input, model, refusal } = useStudioCanvas();
   const { breakpoint, label, width } = useStudioScreen();
   const {
-    source,
     disabled,
     compileFailure,
     platformThemeTokens,
@@ -85,7 +82,7 @@ export function StudioCanvasView({
     arrangeGrid,
     onArrangeGrid,
   } = input;
-  const { at, page, slot, shown } = model;
+  const { page, shown } = model;
   const [well, setWell] = useState<HTMLDivElement | null>(null);
   // The canvas is a device screen: the iframe is as wide as the chosen screen and as tall as the
   // well, in the iframe's own pixels. The zoom only scales the iframe as a whole.
@@ -109,41 +106,27 @@ export function StudioCanvasView({
   }, [well, width, onFitZoom]);
   const canvasView = useMemo(() => ({ scale, well }), [scale, well]);
 
-  if (at === undefined || page === undefined)
+  if (page === undefined)
     return (
-      <CanvasEmpty
-        title="No content area"
-        description="This page has no content area to arrange."
-      />
+      <CanvasEmpty title="Page unavailable" description="Choose another page to keep working." />
     );
-  if (slot === undefined)
-    return (
-      <CanvasEmpty
-        title="Content area unavailable"
-        description="Choose another page or content area to keep working."
-      />
-    );
-  const picker =
-    model.addresses.length < 2 ? null : (
-      <div className="w-56 shrink-0">
-        <Label htmlFor="studio-canvas-area" className="sr-only">
-          Content area
-        </Label>
-        <StudioReferencePicker
-          id="studio-canvas-area"
-          value={at.key}
-          onChange={model.chooseArea}
-          options={model.addresses.map((candidate) => ({
-            value: candidate.key,
-            label: studioPageAreaLabel(source, page, candidate),
-          }))}
-        />
-      </div>
+  // A guided page has one canvas per step: the tabs choose the step, nothing else picks a zone.
+  const steps =
+    model.steps.length < 2 ? null : (
+      <Tabs value={model.step ?? ""} onValueChange={(step) => model.chooseStep(String(step))}>
+        <TabsList aria-label="Steps">
+          {model.steps.map((entry) => (
+            <TabsTrigger key={entry.id} value={entry.id}>
+              {entry.name}
+            </TabsTrigger>
+          ))}
+        </TabsList>
+      </Tabs>
     );
   if (shown === undefined || platformThemeTokens === null || fieldInputControlReleases === null)
     return (
       <div className="flex min-h-0 flex-1 flex-col gap-3 px-4">
-        {picker}
+        {steps}
         <section className="flex min-h-0 flex-1 flex-col gap-3" aria-label="Page canvas">
           {compileFailure == null && refusal.length === 0 ? <StudioCanvasSkeleton /> : null}
           {compileFailure == null ? null : <CompileFailureNotice failure={compileFailure} />}
@@ -161,7 +144,7 @@ export function StudioCanvasView({
         {/* The screen size is chosen in Studio's canvas toolbar. One strip of fixed height: the
             content area and what the canvas does. */}
         <div className="flex h-9 shrink-0 items-center gap-3 px-4">
-          {picker}
+          {steps}
           {model.readOnlyCause !== undefined || breakpoint !== "desktop" ? (
             <Tooltip>
               <TooltipTrigger render={<Badge variant="secondary" className="shrink-0" />}>

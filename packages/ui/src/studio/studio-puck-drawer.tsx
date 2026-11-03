@@ -265,7 +265,7 @@ export function StudioBlocksPanel() {
   const screen = useStudioScreen();
   const palette = input.palette;
   // No page is open: the panel says so itself.
-  if (palette === undefined || model.at === undefined || model.slot === undefined) return null;
+  if (palette === undefined || model.page === undefined) return null;
   if (model.shown === undefined)
     return (
       <BlocksEmpty
@@ -284,16 +284,16 @@ export function StudioBlocksPanel() {
         }
       />
     );
-  const at = model.at;
   return (
     <StudioBlocksDrawer
       targets={palette.targets.targets.filter(
-        (target) => palette.owner === "layout" || target.area === at.key,
+        (target) => palette.owner === "layout" || model.zoneKeys.has(target.area),
       )}
       blocked={blockedReason(model.editable, model.readOnlyCause, screen, input.disabledReason)}
       owner={palette.owner}
       message={palette.message}
       onAdd={palette.onAdd}
+      slotOfArea={model.slotOfZoneKey}
     />
   );
 }
@@ -304,6 +304,7 @@ function StudioBlocksDrawer({
   owner,
   message,
   onAdd,
+  slotOfArea,
 }: Readonly<{
   /** The places of the content area the canvas shows. */
   targets: readonly StudioCompositionAddTarget[];
@@ -312,6 +313,8 @@ function StudioBlocksDrawer({
   owner: "page" | "layout";
   message: string;
   onAdd: (request: StudioCanvasAddRequest) => true | false | string;
+  /** Puck's root slot of a content area's key; `undefined` for the page's default zone. */
+  slotOfArea: (area: string) => string | undefined;
 }>) {
   const [search, setSearch] = useState("");
   const [targetId, setTargetId] = useState("");
@@ -384,12 +387,12 @@ function StudioBlocksDrawer({
       getPuck().dispatch({
         type: "insert",
         componentType: choice.rendererKey,
-        destinationZone: zoneOfDestination(target.destination),
+        destinationZone: zoneOfDestination(target.destination, slotOfArea(target.area)),
         destinationIndex: request.index,
         id: `${choice.rendererKey}-${instance}-${(inserts.current += 1)}`,
       });
     },
-    [target, owner, onAdd, getPuck, instance],
+    [target, owner, onAdd, getPuck, instance, slotOfArea],
   );
   const limitId = useId();
   // The place is full when the application holds every block it may, or the place nests as deep as

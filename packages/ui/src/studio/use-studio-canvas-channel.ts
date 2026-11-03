@@ -32,12 +32,12 @@ export const useStudioCanvasChannelValue = (
 ): StudioCanvasChannel => {
   const { records, controls, grid } = useStudioCanvasRecords({
     area: model.area,
-    areaKey: model.at?.key ?? "",
+    areaKeys: model.zoneKeyList,
     readRecords: input.readRecords,
     catalogue: model.catalogue,
     compiledSource: input.compiledSource,
-    originalSlot: model.originalSlot,
-    slot: model.slot,
+    originalItems: model.originalItems,
+    items: model.items,
     // Records are read for the page the canvas shows: once it is on show with its compiled version
     // and frame, never before, so one read serves the final revision.
     visible:
@@ -55,7 +55,6 @@ export const useStudioCanvasChannelValue = (
   // The frame is derived from the whole draft (its menu follows the pages), so it is a new object
   // after every edit; it is only a change to the canvas when its content is.
   const frame = useStableValue(input.frame);
-  const empty = model.slot?.items.length === 0;
   const frameMetadata = useMemo(
     (): StudioCanvasFrameMetadata | null =>
       platformThemeTokens === null
@@ -64,9 +63,9 @@ export const useStudioCanvasChannelValue = (
             frame,
             appearance,
             platformThemeTokens,
-            empty,
+            slotKeys: model.slotKeys,
           },
-    [frame, appearance, platformThemeTokens, empty],
+    [frame, appearance, platformThemeTokens, model.slotKeys],
   );
   const viewer = input.viewer ?? null;
   const compiled = model.compiledSettings ?? NO_COMPILED_SETTINGS;

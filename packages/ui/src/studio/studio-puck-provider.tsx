@@ -40,7 +40,7 @@ import type {
   StudioCompositionOwner,
 } from "./application-composition-commands";
 import type { StudioCanvasFrame } from "./studio-canvas-projection";
-import { applyStudioCanvasChange } from "./studio-canvas-change";
+import { applyPageDataChange } from "./studio-canvas-change";
 import type { StudioPlacementDescriber } from "./semantic-outline";
 import {
   destinationOfZone,
@@ -49,6 +49,7 @@ import {
   puckNeighbourOf,
   puckSelectedAlias,
   puckSelectorOf,
+  slotOfZone,
   withoutEmptyPuckZones,
   type StudioCanvasCompiledSlot,
   type StudioPuckSelector,
@@ -326,7 +327,7 @@ export function StudioPuckProvider({
     const refusedId = refusedRemoval.current;
     if (refusedId !== null) {
       refusedRemoval.current = null;
-      if (!puckItemsHold(candidate.content, refusedId)) {
+      if (!puckItemsHold(candidate, refusedId)) {
         setResync((generation) => generation + 1);
         return;
       }
@@ -337,16 +338,15 @@ export function StudioPuckProvider({
       setResync((generation) => generation + 1);
       return;
     }
-    if (now.pageAlias === undefined || shown.at === undefined) return;
+    if (now.pageAlias === undefined || shown.data === undefined) return;
     // A block inserted from the drawer is added by Studio's add command, not by this edit.
-    for (const id of inserted.current) if (puckItemsHold(candidate.content, id)) return;
-    const result = applyStudioCanvasChange(
+    for (const id of inserted.current) if (puckItemsHold(candidate, id)) return;
+    const result = applyPageDataChange(
       shown.catalogue,
       now.source,
       now.pageAlias,
-      shown.at,
+      shown.step,
       withoutEmptyPuckZones(candidate),
-      shown.rootProps,
     );
     if (result.kind === "unchanged") return;
     if (result.kind === "refused") {
@@ -371,7 +371,7 @@ export function StudioPuckProvider({
     // action bar both remove what Puck's selector points at; if that is another block (a selection
     // that lags behind the draft), the removal is refused and the draft shown again.
     if (action.type === "remove") {
-      const removed = puckSelectedAlias(previous.data.content, {
+      const removed = puckSelectedAlias(previous.data, {
         index: action.index,
         zone: action.zone,
       });
@@ -391,11 +391,11 @@ export function StudioPuckProvider({
     // A drop or an Add from the drawer: Puck has put an interim block (the release defaults) in its
     // own data; Studio adds the real one.
     if (action.type === "insert") {
-      if (shown.at === undefined) return;
+      if (shown.data === undefined) return;
       const id = action.id;
       if (id !== undefined) inserted.current.add(id);
       const request: StudioCanvasAddRequest = {
-        area: shown.at.key,
+        area: shown.zoneKeyOfSlot(slotOfZone(action.destinationZone)),
         destination: destinationOfZone(action.destinationZone),
         index: action.destinationIndex,
         rendererKey: action.componentType,
@@ -416,7 +416,7 @@ export function StudioPuckProvider({
     // holding the slot), for the Delete key and the action bar alike. Puck keeps its selector as it
     // was, which would now name the neighbour while Studio still names the removed block.
     if (action.type === "remove" && now.canvasShown) {
-      const neighbour = puckNeighbourOf(previous.data.content, {
+      const neighbour = puckNeighbourOf(previous.data, {
         index: action.index,
         zone: action.zone,
       });
@@ -430,11 +430,11 @@ export function StudioPuckProvider({
     if (notSelectionActions.has(action.type) || !now.canvasShown) return;
     // A click, a drop, a duplicate or a delete moved Puck's selection: it becomes Studio's.
     if (sameSelector(state.ui.itemSelector, previous.ui.itemSelector)) return;
-    const alias = puckSelectedAlias(state.data.content, state.ui.itemSelector);
+    const alias = puckSelectedAlias(state.data, state.ui.itemSelector);
     if (alias === now.selectedPlacementAlias) return;
     // Only a block of the open page is a selection; a block dropped elsewhere (another page's block
     // carried over by a drag that outlived a page change) is not.
-    if (alias !== null && (shown.slot === undefined || !itemsHold(shown.slot.items, alias))) return;
+    if (alias !== null && !itemsHold(shown.items, alias)) return;
     // Puck calls this while it is changing its state; Studio's selection follows right after.
     queueMicrotask(() => {
       void latest.current.input.onSelectPlacement(alias).then((accepted) => {
@@ -466,10 +466,7 @@ export function StudioPuckProvider({
     }),
     [permitted, full, input.palette?.owner],
   );
-  const empty = useMemo(
-    (): Data => ({ root: { props: model.rootProps }, content: [] }),
-    [model.rootProps],
-  );
+  const empty = useMemo((): Data => ({ root: { props: {} }, content: [] }), []);
   const shown = model.shown ?? empty;
   // Puck takes its data once, when it opens; every later change reaches it through `StudioPuckSync`.
   const [initial] = useState(shown);
@@ -657,11 +654,10 @@ function StudioPuckSync({
       // Where it sits is read from Puck's data, not from Puck's index of it: after data replaced
       // from outside (an Undo) the index can still name the old place, and the selection would then
       // point at, and a Delete would remove, another block.
-      const selector =
-        alias === null ? null : (puckSelectorOf(appState.data.content, alias) ?? null);
+      const selector = alias === null ? null : (puckSelectorOf(appState.data, alias) ?? null);
       if (
         sameSelector(appState.ui.itemSelector, selector) &&
-        puckSelectedAlias(appState.data.content, appState.ui.itemSelector) === alias
+        puckSelectedAlias(appState.data, appState.ui.itemSelector) === alias
       )
         return;
       deriving.current = true;

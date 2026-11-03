@@ -5,11 +5,13 @@ import {
   readRecordDetailContract,
   readSourceItem,
   releaseSettingDeclarations,
+  sourcePageZones,
   storedItemRelease,
   validateStoredZone,
   type CompiledItem,
   type ImmutablePlatformBlockCatalogue,
   type SourceItem,
+  type SourcePageData,
   type SourcePageZone,
 } from "@vortex/platform/schema";
 import type { StudioCompositionDestination } from "./application-composition-commands";
@@ -112,16 +114,45 @@ export const itemsHold = (items: readonly SourceItem[], alias: string): boolean 
 /** Where Puck says a block sits: its zone and its index in it. */
 export type StudioPuckSelector = NonNullable<UiState["itemSelector"]>;
 
-/** Puck's name of the root zone, which holds a page's top-level blocks. */
+/** Puck's name of the page's default zone, which holds the blocks of a page in the default frame. */
 const ROOT_ZONE = "root:default-zone";
 
-/** Puck's name of the zone a place for a new block is: its root zone, or `<block name>:<slot key>`. */
-export const zoneOfDestination = (destination: StudioCompositionDestination): string =>
-  destination.kind === "root" ? ROOT_ZONE : `${destination.parentAlias}:${destination.slotKey}`;
+/** Puck's name of the zone of a root slot, which holds the blocks of one content slot of the shell. */
+export const rootSlotZone = (slot: string): string => `root:${slot}`;
+
+/** The root slot a Puck zone is, or `undefined` for the default zone and a block's slot. */
+export const slotOfZone = (zone: string): string | undefined =>
+  zone !== ROOT_ZONE && zone.startsWith("root:") ? zone.slice("root:".length) : undefined;
+
+/** Whether a Puck zone holds top-level blocks of the page: the default zone or a root slot. */
+const isTopZone = (zone: string): boolean => zone === ROOT_ZONE || zone.startsWith("root:");
+
+/** Every top-level zone of Puck's data with its blocks: the default zone, then each root slot. */
+const topZones = (data: Data): readonly (readonly [string, readonly unknown[]])[] => [
+  [ROOT_ZONE, data.content],
+  ...Object.entries((data.root as { props?: Record<string, unknown> }).props ?? {}).flatMap(
+    ([key, value]): [string, readonly unknown[]][] =>
+      key !== "vortex" && Array.isArray(value) ? [[rootSlotZone(key), value]] : [],
+  ),
+];
+
+/**
+ * Puck's name of the zone a place for a new block is: the page's default zone, a root slot (the
+ * shell content slot named `slot`), or `<block name>:<slot key>`.
+ */
+export const zoneOfDestination = (
+  destination: StudioCompositionDestination,
+  slot?: string,
+): string =>
+  destination.kind === "root"
+    ? slot === undefined
+      ? ROOT_ZONE
+      : rootSlotZone(slot)
+    : `${destination.parentAlias}:${destination.slotKey}`;
 
 /** The place for a new block that a Puck zone is: the inverse of `zoneOfDestination`. */
 export const destinationOfZone = (zone: string): StudioCompositionDestination => {
-  if (zone === ROOT_ZONE) return { kind: "root" };
+  if (isTopZone(zone)) return { kind: "root" };
   const separator = zone.lastIndexOf(":");
   return {
     kind: "child",
@@ -130,9 +161,9 @@ export const destinationOfZone = (zone: string): StudioCompositionDestination =>
   };
 };
 
-/** Whether Puck items hold the block named `alias`, at any depth. */
-export const puckItemsHold = (items: readonly unknown[], alias: string): boolean =>
-  findPuckItem(items, alias) !== undefined;
+/** Whether Puck's data holds the block named `alias`, at any depth. */
+export const puckItemsHold = (data: Data, alias: string): boolean =>
+  topZones(data).some(([, items]) => findPuckItem(items, alias) !== undefined);
 
 /** The block named `alias` among Puck items, at any depth. */
 const findPuckItem = (
@@ -153,12 +184,21 @@ const findPuckItem = (
   return undefined;
 };
 
+/** The block named `alias` anywhere in Puck's data. */
+const findInData = (data: Data, alias: string): Record<string, unknown> | undefined => {
+  for (const [, items] of topZones(data)) {
+    const found = findPuckItem(items, alias);
+    if (found !== undefined) return found;
+  }
+  return undefined;
+};
+
 /**
  * Where the block named `alias` sits in Puck's data: read from the data itself, never from Puck's
  * index of it, which can lag behind data that was replaced from outside (an Undo, another page).
  */
 export const puckSelectorOf = (
-  content: readonly unknown[],
+  data: Data,
   alias: string,
 ): Required<StudioPuckSelector> | undefined => {
   const search = (
@@ -177,55 +217,50 @@ export const puckSelectorOf = (
     }
     return undefined;
   };
-  return search(content, ROOT_ZONE);
+  for (const [zone, items] of topZones(data)) {
+    const found = search(items, zone);
+    if (found !== undefined) return found;
+  }
+  return undefined;
 };
 
-/** The items of a Puck zone in its data: the page's root zone or a block's slot. */
-const puckZoneItems = (
-  content: readonly unknown[],
-  zone: string,
-): readonly unknown[] | undefined => {
-  if (zone === ROOT_ZONE) return content;
+/** The items of a Puck zone in its data: a top-level zone of the page or a block's slot. */
+const puckZoneItems = (data: Data, zone: string): readonly unknown[] | undefined => {
+  const top = topZones(data).find(([name]) => name === zone);
+  if (top !== undefined) return top[1];
+  if (isTopZone(zone)) return undefined;
   const separator = zone.lastIndexOf(":");
-  const slot = findPuckItem(content, zone.slice(0, separator))?.[zone.slice(separator + 1)];
+  const slot = findInData(data, zone.slice(0, separator))?.[zone.slice(separator + 1)];
   return Array.isArray(slot) ? slot : undefined;
 };
 
 /**
  * The block that takes the selection when the block at `selector` is removed: the next one beside
- * it, else the one before, else the block holding the slot (the page's own root has none).
+ * it, else the one before, else the block holding the slot (the page's own zones have none).
  */
 export const puckNeighbourOf = (
-  content: readonly unknown[],
+  data: Data,
   selector: Required<StudioPuckSelector>,
 ): string | undefined => {
-  const items = puckZoneItems(content, selector.zone) ?? [];
+  const items = puckZoneItems(data, selector.zone) ?? [];
   const idOf = (entry: unknown): string | undefined => {
     const id = (entry as { props?: { id?: unknown } } | null)?.props?.id;
     return typeof id === "string" ? id : undefined;
   };
   const beside = idOf(items[selector.index + 1]) ?? idOf(items[selector.index - 1]);
   if (beside !== undefined) return beside;
-  return selector.zone === ROOT_ZONE
+  return isTopZone(selector.zone)
     ? undefined
     : selector.zone.slice(0, selector.zone.lastIndexOf(":"));
 };
 
 /** The block name Puck's item selector points at in its data, or `null` when it points at no block. */
 export const puckSelectedAlias = (
-  content: readonly unknown[],
+  data: Data,
   selector: StudioPuckSelector | null | undefined,
 ): string | null => {
   if (selector === null || selector === undefined) return null;
-  const zone = selector.zone ?? ROOT_ZONE;
-  let items: readonly unknown[] | undefined = content;
-  if (zone !== ROOT_ZONE) {
-    const separator = zone.lastIndexOf(":");
-    const holder = findPuckItem(content, zone.slice(0, separator));
-    const slot = holder?.[zone.slice(separator + 1)];
-    items = Array.isArray(slot) ? slot : undefined;
-  }
-  const item = items?.[selector.index];
+  const item = puckZoneItems(data, selector.zone ?? ROOT_ZONE)?.[selector.index];
   const id =
     item !== null && typeof item === "object"
       ? (item as { props?: { id?: unknown } }).props?.id
@@ -257,20 +292,26 @@ export const withoutEmptyPuckZones = (candidate: Data): Data => {
 export const zoneJson = (zone: StudioCanvasSourceSlot): string =>
   canonicalJson(JSON.parse(JSON.stringify(zone)) as unknown);
 
+/** A page's (or guided step's) data as canonical text, to compare two of them. */
+export const pageDataJson = (data: SourcePageData): string =>
+  canonicalJson(JSON.parse(JSON.stringify(data)) as unknown);
+
 /**
- * Why a content area is not editable on the canvas: its stored data does not pass the stored
- * composition check, or its compiled version does not match it. Such a content area is shown
+ * Why a page is not editable on the canvas: the stored data of one of its zones does not pass the
+ * stored composition check, or its compiled version does not match it. Such a page is shown
  * read-only rather than risking a silent change to the definition.
  */
 export const storedDataProblem = (
   catalogue: ImmutablePlatformBlockCatalogue,
-  slot: StudioCanvasSourceSlot,
+  data: SourcePageData,
 ): string | undefined => {
   try {
-    const checked = validateStoredZone(catalogue, slot);
-    return zoneJson(checked) === zoneJson(slot)
-      ? undefined
-      : "STUDIO_CANVAS_STORED_DATA_MISMATCH: the stored content reads back differently";
+    for (const [key, items] of sourcePageZones(data)) {
+      const zone = { items, order: data.root.props.vortex.slot_orders[key] };
+      if (zoneJson(validateStoredZone(catalogue, zone)) !== zoneJson(zone))
+        return "STUDIO_CANVAS_STORED_DATA_MISMATCH: the stored content reads back differently";
+    }
+    return undefined;
   } catch (error: unknown) {
     return `STUDIO_CANVAS_STORED_DATA_REFUSED: ${error instanceof Error ? error.message : String(error)}`;
   }

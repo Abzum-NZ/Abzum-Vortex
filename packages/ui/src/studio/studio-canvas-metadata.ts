@@ -57,8 +57,11 @@ export type StudioCanvasFrameMetadata = Readonly<{
   frame: StudioCanvasFrame | undefined;
   appearance: "light" | "dark";
   platformThemeTokens: PlatformThemeTokens;
-  /** The content area holds no block yet: the canvas says how to add one where it is empty. */
-  empty: boolean;
+  /**
+   * By root slot of the page, the key of the shell content slot it is, which locates the slot's
+   * editor in the frame; empty for a page in the platform's default frame.
+   */
+  slotKeys: Readonly<Record<string, string>>;
 }>;
 
 /**
