@@ -70,8 +70,8 @@ VORTEX_SUPABASE_WORKDIR=<lane directory> pnpm demo:setup  # provision without re
 Supabase CLI call. `status` lists every lane with its ports, holder, recorded servers and the free RAM; `free` prints an available batch lane
 (not blocked by a Windows excluded port range) and the RAM reading. The lane numbers exist once, in the lane table of `lane.mjs`; add a lane there only.
 
-**RAM.** 3 GB must remain free after a start. `start` of a lane stack needs at least 5.5 GB free (it costs about 2.5 GB), and `serve` of a dev
-server at least 4.5 GB (about 1.5 GB). Both print the reading and refuse below it. Builds and walks need at least 2 GB free.
+**RAM.** `start` of a lane stack needs at least 5.5 GB free (it costs about 2.5 GB; 3 GB remain), and `serve` of a dev
+server at least 3.5 GB (about 1.5 GB; 2 GB remain). Both print the reading and refuse below it. Builds and walks need at least 2 GB free.
 
 **Dev servers on a lane.** On a lane, start every dev server with `lane.mjs serve <n> .`, never `pnpm dev` or `next dev`:
 a server started any other way is unrecorded, so `stop` cannot refuse for it and nothing can end it safely. A lane has one database and

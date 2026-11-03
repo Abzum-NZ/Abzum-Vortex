@@ -64,8 +64,8 @@ const blockedAppPort = 3659;
 const stackRamGb = 2.5;
 const ramFloorGb = 3;
 const stackStartGb = stackRamGb + ramFloorGb;
-// A dev server costs about 1.5 GB (a build or walk needs 2 GB free); 3 GB must remain after it starts.
-const devServerStartGb = 1.5 + ramFloorGb;
+// A dev server costs about 1.5 GB and 2 GB must remain after it starts (owner ruling).
+const devServerStartGb = 3.5;
 const laneAppPort = (lane) => appPorts.get(lane);
 const laneApiPort = (lane) => 54321 + 1000 * (lane - 1);
 const laneDatabasePort = (lane) => 54322 + 1000 * (lane - 1);
@@ -408,7 +408,7 @@ const requireNotBlocked = async (lane) => {
 const freeRamGb = () => Math.round((os.freemem() / 1024 ** 3) * 10) / 10;
 const ramLine = () =>
   `free RAM ${freeRamGb()} GB; starting a lane stack needs ${stackStartGb} GB free (it costs about ${stackRamGb} GB and ${ramFloorGb} GB must remain)`;
-/** A start needs `needGb` free, so that 3 GB remain afterwards: print the reading, and refuse below it. */
+/** A start needs `needGb` free, so that the floor remains afterwards (3 GB after a stack, 2 GB after a dev server): print the reading, and refuse below it. */
 const requireRam = (needGb, what) => {
   log(`${ramLine()}; ${what} needs ${needGb} GB`);
   if (freeRamGb() < needGb) fail(`Not enough free RAM to ${what}.`);
