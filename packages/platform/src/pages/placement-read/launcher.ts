@@ -60,13 +60,16 @@ export const readLauncher = async (
   const { address, data } = read;
   const permittedApplicationKeys = read.permittedApplicationKeys;
   if (permittedApplicationKeys === undefined) {
-    data[placementId] = read.permittedApplicationsUnavailable
-      ? { status: "error" }
-      : {
-          status: "refused",
-          reason:
-            read.permittedApplicationsNotRead === true ? "applications_not_read" : "not_permitted",
-        };
+    data[placementId] =
+      read.permittedApplicationsState === "unavailable"
+        ? { status: "error" }
+        : {
+            status: "refused",
+            reason:
+              read.permittedApplicationsState === "not_read"
+                ? "applications_not_read"
+                : "not_permitted",
+          };
     return;
   }
   const targetRecordType = queryRecordType(read.context, bound.query);

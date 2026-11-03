@@ -33,14 +33,26 @@ export const fillPreviewAfterRead = (
       { signal: started.controller.signal },
     )
       .then((response) => {
+        // A session that ended (401) or a person no longer allowed (403) is an expected refusal.
+        if (response.status === 401 || response.status === 403) {
+          console.info("[studio] idle preview fill refused", { status: response.status });
+          return;
+        }
         if (!response.ok) throw new Error(`STUDIO_PREVIEW_FILL_HTTP_${response.status}`);
         const kind = isRecord(response.body) ? response.body.kind : undefined;
-        // A fill that finishes ready, follows the preview to a newer revision, loses to a save that
-        // superseded it, or is refused (the builder's role changed) changes nothing the person
-        // sees: those are expected, and they say nothing. Any other outcome is a fault, logged once
-        // for the one lease.
-        if (kind !== "ready" && kind !== "following" && kind !== "conflict" && kind !== "refused")
-          console.error("[studio] idle preview fill ended unexpectedly", { kind });
+        // `ready` is success and says nothing. A refusal (the builder's role changed), the preview
+        // following a newer revision, a save that superseded the fill and a draft that cannot run
+        // yet (its own problem is already shown to the person) are expected: each logs once at
+        // info. Any other outcome is a platform fault, logged once at error for the one lease.
+        if (kind === "ready") return;
+        if (
+          kind === "refused" ||
+          kind === "following" ||
+          kind === "conflict" ||
+          kind === "not_runnable"
+        )
+          console.info("[studio] idle preview fill ended", { kind });
+        else console.error("[studio] idle preview fill ended unexpectedly", { kind });
       })
       .catch((error: unknown) => {
         if (!started.controller.signal.aborted)

@@ -68,7 +68,7 @@ export const readMotionWebTiming = (
   const style = getComputedStyle(element);
   const duration = seconds(style.getPropertyValue(`--vortex-motion-${name}`));
   const ease = style.getPropertyValue(`--vortex-motion-${easingName}-easing`).trim();
-  return duration === undefined || duration <= 0 || ease === ""
+  return duration === undefined || duration <= 0 || easing(ease) === undefined
     ? undefined
     : { duration: duration * 1000, easing: ease };
 };

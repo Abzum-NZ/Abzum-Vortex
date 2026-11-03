@@ -186,10 +186,8 @@ export const readStudioPreviewState = async (
     // The one scope of the read is the organisation's: an Application's own scope exists only for
     // an installed Application, so asking for it first raised a refusal (42501) in the database
     // for every Application that was never installed.
-    const selection = { organizationId };
     const first = await readPreviewStateIn(
       session,
-      selection,
       organizationId,
       rootId,
       draftRevision,
@@ -203,14 +201,7 @@ export const readStudioPreviewState = async (
         "[studio] retrying preview state after serialization conflict: STUDIO_PREVIEW_STATE_RETRY",
       );
     const read = retried
-      ? await readPreviewStateIn(
-          session,
-          selection,
-          organizationId,
-          rootId,
-          draftRevision,
-          readCompilation,
-        )
+      ? await readPreviewStateIn(session, organizationId, rootId, draftRevision, readCompilation)
       : first;
     if (read.kind === "available") return read.value;
     return read.kind === "temporarily_unavailable"
@@ -228,83 +219,89 @@ export const readStudioPreviewState = async (
 
 const readPreviewStateIn = (
   session: IdentitySession,
-  selection: Readonly<{ organizationId: OrganizationId; applicationRootId?: ApplicationRootId }>,
   organizationId: OrganizationId,
   rootId: ApplicationRootId,
   draftRevision: number,
   readCompilation: boolean,
 ) =>
-  humanOrganizationRequests().run(session, selection, async (transaction, scope, issuedAt) => {
-    const authority = createBuilderAuthority({
-      transaction,
-      scope,
-      targetFacts: studioDraftTargetFacts,
-      permissions: platformPermissionSource,
-    });
-    // The builder's authority is decided before anything is read: the preview lookup itself
-    // refuses a caller who is not this Application's builder.
-    try {
-      await requireBuilderAuthority(authority, { kind: "draft_change", rootId });
-    } catch (error) {
-      if (error instanceof BuilderAuthorityError)
-        return { kind: "refused", reason: "permission_refused" } as const;
-      throw error;
-    }
-    const preview = await readBuilderPreviewInstallation(transaction, rootId);
-    if (
-      preview !== undefined &&
-      (!sameId(preview.applicationRootId, rootId) ||
-        !sameId(preview.organizationId, organizationId))
-    )
-      throw new Error("STUDIO_PREVIEW_LOOKUP_MISMATCH");
-    // A ready canvas needs the current compile as well as the saved source. When the preview can
-    // run this revision, the platform compiler's own snapshot is the one read: it checks the
-    // saved revision and the dependency revisions and returns the exact-revision draft it
-    // compiled, so the draft is not read a second time in this request.
-    if (readCompilation && previewCanRunRevision(preview, draftRevision)) {
-      const context = await readLiveHumanContext(transaction, { scope, session, issuedAt });
+  humanOrganizationRequests().run(
+    session,
+    { organizationId },
+    async (transaction, scope, issuedAt) => {
+      const authority = createBuilderAuthority({
+        transaction,
+        scope,
+        targetFacts: studioDraftTargetFacts,
+        permissions: platformPermissionSource,
+      });
+      // The builder's authority is decided before anything is read: the preview lookup itself
+      // refuses a caller who is not this Application's builder.
       try {
-        const snapshot = await createDatabaseDefinitionPublicationService(
-          installedReleaseCatalogue,
-          transaction,
-          authority,
-        ).readApplicationDraftSnapshot(
-          context,
-          { rootId, expectedDraftRevision: draftRevision },
-          { publication: false, releasable: true },
-        );
-        const compiled = snapshot.compilation;
-        // A compile that failed still leaves the saved draft to read, and only a ready canvas
-        // needs its compile.
-        const draft = snapshot.draft;
-        if (draft.kind !== "application")
-          throw new DefinitionError("DEFINITION_DRAFT_STALE_OR_MISSING");
-        if (studioPreviewRunsDraft(draft, preview) !== "ready")
-          return { kind: "read", draft, preview } as const;
-        if (compiled === null) {
-          console.error(
-            `[studio] canvas compilation refused: ${describeFailure(snapshot.failure)}`,
-          );
-          return failure(snapshot.failure, true);
-        }
-        return {
-          kind: "read",
-          draft,
-          preview,
-          content: compiled.compilation.canonical.content,
-        } as const;
+        await requireBuilderAuthority(authority, { kind: "draft_change", rootId });
       } catch (error) {
-        if (error instanceof DefinitionError && error.code === "DEFINITION_DRAFT_STALE_OR_MISSING")
-          return { kind: "conflict" } as const;
-        if (error instanceof BuilderAuthorityError) {
-          console.error(`[studio] canvas compilation refused: ${describeFailure(error)}`);
+        if (error instanceof BuilderAuthorityError)
           return { kind: "refused", reason: "permission_refused" } as const;
-        }
         throw error;
       }
-    }
-    return readDraftOnly(transaction, scope, rootId, draftRevision, preview);
-  });
+      const preview = await readBuilderPreviewInstallation(transaction, rootId);
+      if (
+        preview !== undefined &&
+        (!sameId(preview.applicationRootId, rootId) ||
+          !sameId(preview.organizationId, organizationId))
+      )
+        throw new Error("STUDIO_PREVIEW_LOOKUP_MISMATCH");
+      // A ready canvas needs the current compile as well as the saved source. When the preview can
+      // run this revision, the platform compiler's own snapshot is the one read: it checks the
+      // saved revision and the dependency revisions and returns the exact-revision draft it
+      // compiled, so the draft is not read a second time in this request.
+      if (readCompilation && previewCanRunRevision(preview, draftRevision)) {
+        const context = await readLiveHumanContext(transaction, { scope, session, issuedAt });
+        try {
+          const snapshot = await createDatabaseDefinitionPublicationService(
+            installedReleaseCatalogue,
+            transaction,
+            authority,
+          ).readApplicationDraftSnapshot(
+            context,
+            { rootId, expectedDraftRevision: draftRevision },
+            { publication: false, releasable: true },
+          );
+          const compiled = snapshot.compilation;
+          // A compile that failed still leaves the saved draft to read, and only a ready canvas
+          // needs its compile.
+          const draft = snapshot.draft;
+          if (draft.kind !== "application")
+            throw new DefinitionError("DEFINITION_DRAFT_STALE_OR_MISSING");
+          if (studioPreviewRunsDraft(draft, preview) !== "ready")
+            return { kind: "read", draft, preview } as const;
+          if (compiled === null) {
+            console.error(
+              `[studio] canvas compilation refused: ${describeFailure(snapshot.failure)}`,
+            );
+            return failure(snapshot.failure, true);
+          }
+          return {
+            kind: "read",
+            draft,
+            preview,
+            content: compiled.compilation.canonical.content,
+          } as const;
+        } catch (error) {
+          if (
+            error instanceof DefinitionError &&
+            error.code === "DEFINITION_DRAFT_STALE_OR_MISSING"
+          )
+            return { kind: "conflict" } as const;
+          if (error instanceof BuilderAuthorityError) {
+            console.error(`[studio] canvas compilation refused: ${describeFailure(error)}`);
+            return { kind: "refused", reason: "permission_refused" } as const;
+          }
+          throw error;
+        }
+      }
+      return readDraftOnly(transaction, scope, rootId, draftRevision, preview);
+    },
+  );
 
 /** The saved draft at exactly the requested revision; the caller decided the builder's authority. */
 const readDraftOnly = async (

@@ -13,6 +13,7 @@ import {
   type StudioCompositionRemovalReason,
 } from "./application-composition-commands";
 import { sourceNames, type StudioPlacementReference } from "./composition-references";
+import { settingsOf } from "./application-composition-regions";
 import type { StudioSemanticSelection } from "./semantic-selection";
 import { applyStudioItemLabels } from "./application-item-labels";
 import {
@@ -140,14 +141,6 @@ const removeBlocks = (
     }
   }
 };
-
-/** A block's own settings (not its name, slots or layout), for naming it to a person. */
-const settingsOf = (item: SourceItem): Record<string, unknown> =>
-  Object.fromEntries(
-    Object.entries(item.props).filter(
-      ([key, value]) => key !== "id" && key !== "vortex" && !Array.isArray(value),
-    ),
-  );
 
 /** The layouts a page can use: the application's layouts, then the platform's default frame. */
 export const studioStructureShellChoices = (

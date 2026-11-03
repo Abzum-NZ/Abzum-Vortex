@@ -61,6 +61,10 @@ const compositionLimitRefusal = (
   return undefined;
 };
 
+/** The page was removed or replaced while an edit was in flight: a race, refused like any other change. */
+const pageUnavailable = () =>
+  new StoredCompositionRefusal([], "is no longer available", "The selected page");
+
 /**
  * Every canvas change goes back through the definition: Puck's data is converted to the authored
  * content area, placed in the current draft and validated before the history takes it.
@@ -77,8 +81,7 @@ export const applyStudioCanvasChange = (
     const matches = current.body.pages.filter((item) => item.id === pageAlias);
     const target = matches[0];
     const targetSlot = target === undefined ? undefined : sourcePageSlotAt(target, at);
-    if (matches.length !== 1 || targetSlot === undefined)
-      throw new TypeError("The selected page is unavailable.");
+    if (matches.length !== 1 || targetSlot === undefined) throw pageUnavailable();
     const { zone: editedSlot, copies } = storedZoneFromPuck(
       catalogue,
       targetSlot,
@@ -90,7 +93,7 @@ export const applyStudioCanvasChange = (
     const next = structuredClone(current);
     const nextPage = next.body.pages.find((item) => item.id === pageAlias);
     if (nextPage === undefined || !setSourcePageSlot(nextPage, at, editedSlot))
-      throw new TypeError("The selected page is unavailable.");
+      throw pageUnavailable();
     const kept = storedZoneAliases(editedSlot);
     const removed = new Set([...storedZoneAliases(targetSlot)].filter((alias) => !kept.has(alias)));
     for (const alias of removed) {
@@ -134,7 +137,11 @@ export const applyStudioCanvasChange = (
     if (overLimit !== undefined) return { kind: "refused", message: overLimit };
     return { kind: "applied", source: parsed.data };
   } catch (error: unknown) {
-    console.error("Failed to apply Puck page changes", error);
+    // A change the composition rules refuse (or a page removed under it) is an expected refusal,
+    // already shown to the person as a sentence; anything else is a platform fault.
+    if (error instanceof StoredCompositionRefusal)
+      console.info("[studio] page change refused", error.message);
+    else console.error("[studio] page change failed", error);
     return {
       kind: "refused",
       message:

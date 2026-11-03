@@ -70,8 +70,10 @@ import {
   commitWorking,
   plainSource,
   plainSettings,
+  settingsOf,
 } from "./application-composition-regions";
 import { FORM_CONTAINER_KEY, NESTED_FORM_REASON } from "./application-composition-forms";
+import type { StudioPlacementDescriber } from "./semantic-outline";
 
 /** One place on a page or layout where a new block can go, as the palette and the add command know it. */
 type AddPlace = {
@@ -96,6 +98,7 @@ export const addPlaces = (
   catalogue: ImmutablePlatformBlockCatalogue,
   source: ApplicationSourceDocument,
   owner: StudioCompositionOwner,
+  describePlacement?: StudioPlacementDescriber,
 ): AddPlace[] | "invalid" | "unsupported" => {
   // Both owners are nonpublic and authenticated; the surface grants no authority.
   const discovery = createStudioDiscoveryAdapter({ catalogue, surface: { kind: "authenticated" } });
@@ -182,8 +185,9 @@ export const addPlaces = (
   const placed = regions(source).reduce((total, each) => total + countBlocks(each.zone.items), 0);
   for (const { region, area, label, admitted } of areas) {
     const hostLevels = regionHostLevels(catalogue, source, region);
-    // A block with slots is named by its kind and its place among blocks of that kind in this
-    // area, never by its alias.
+    // A block with slots is named as the outline names it (display name and item label); only
+    // without a describer is it named by its kind and its place among blocks of that kind in
+    // this area. Never by its alias.
     const ordinals = new Map<string, number>();
     // A place that would take a block past the composition limits offers every block as unavailable.
     const limited = (
@@ -253,7 +257,7 @@ export const addPlaces = (
               id: `${area}|${parentAlias}|${declaration.key}`,
               area,
               destination: { kind: "child", parentAlias, slotKey: declaration.key },
-              label: `${release.name} ${ordinal}: ${declaration.label}${outlet === undefined ? "" : ` (page content: ${outlet})`}`,
+              label: `${describePlacement?.({ block: item.props.vortex.block, settings: settingsOf(item) }) ?? `${release.name} ${ordinal}`}: ${declaration.label}${outlet === undefined ? "" : ` (page content: ${outlet})`}`,
               depth: hostLevels + childSteps.length,
               placed,
               choices:
@@ -292,6 +296,7 @@ export const addPlaces = (
 export const describeStudioCompositionAddTargets = (
   context: StudioCompositionContext,
   owner: StudioCompositionOwner,
+  describePlacement?: StudioPlacementDescriber,
 ): StudioCompositionAddTargetsModel => {
   try {
     plainSource(context.source);
@@ -300,6 +305,7 @@ export const describeStudioCompositionAddTargets = (
       context.catalogue,
       applicationSourceDocumentSchema.parse(context.source),
       owner,
+      describePlacement,
     );
     return typeof places === "string"
       ? { kind: places }

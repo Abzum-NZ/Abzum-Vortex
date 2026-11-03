@@ -275,12 +275,6 @@ export const LAYOUT_ONLY_STYLES_CSS = `
   display: none;
 }
 
-/* In a row, the header and menu are sidebars: they never take more than half the row, so a wide
-   block in one (a grid) scrolls inside its own box instead of leaving the content no width. */
-[data-vortex-direction="row"] > [data-vortex-container-region]:not([data-vortex-container-region="content"]) {
-  max-width: 50%;
-}
-
 /* A page's header actions are one row: the record detail's own actions with Refresh among them, primary
    first, Refresh next, destructive last, and a heading's actions in the order the page declares them.
    The row wraps only when it is too narrow to hold its actions, never one action per line. */

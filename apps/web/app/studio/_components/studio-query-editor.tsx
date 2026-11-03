@@ -1,5 +1,5 @@
 "use client";
-import { StudioLimitNote, StudioReasoned, studioLimitReason } from "@vortex/ui/studio";
+import { StudioLimitNote, Reasoned, studioLimitReason } from "@vortex/ui/studio";
 import { StudioDataEmpty } from "./studio-data-centre";
 import { Alert, AlertDescription } from "@vortex/ui/components/alert";
 import { useMemo, useState, type FormEvent, type ReactNode } from "react";
@@ -816,7 +816,7 @@ export function StudioQueryEditor({
             </Entry>
           ))}
         </ol>
-        <StudioReasoned reason={studioLimitReason("queryTotals", query.aggregates.length)}>
+        <Reasoned reason={studioLimitReason("queryTotals", query.aggregates.length)}>
           <Button
             type="button"
             size="sm"
@@ -837,7 +837,7 @@ export function StudioQueryEditor({
             <Icon name="plus" />
             Add a total
           </Button>
-        </StudioReasoned>
+        </Reasoned>
         <StudioLimitNote limit="queryTotals" used={query.aggregates.length} label="Totals" />
       </Section>
 
@@ -1139,11 +1139,11 @@ export function StudioNewQueryForm({
           />
         )}
       </StudioField>
-      <StudioReasoned reason={queryLimitReason}>
+      <Reasoned reason={queryLimitReason}>
         <Button type="submit" size="sm" disabled={disabled || label.trim() === ""}>
           Add query
         </Button>
-      </StudioReasoned>
+      </Reasoned>
       <StudioLimitNote
         limit="queriesPerModule"
         used={module?.queries.length ?? 0}

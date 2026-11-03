@@ -469,8 +469,8 @@ export function useStudioCanvasTab({
     () =>
       canvasPage === undefined || addOwner === undefined
         ? null
-        : describeStudioCompositionAddTargets(compositionContext, addOwner),
-    [compositionContext, canvasPage?.id, addOwnerKey],
+        : describeStudioCompositionAddTargets(compositionContext, addOwner, describePlacement),
+    [compositionContext, canvasPage?.id, addOwnerKey, describePlacement],
   );
   // A block for one place: added at once, or after its setup when it needs settings or data.
   const addBlock = (request: StudioCanvasAddRequest): true | false | string => {
@@ -1067,7 +1067,9 @@ export function useStudioCanvasTab({
       {selected?.kind === "placement" && canvasPage === undefined && (
         <p>This block is part of a layout. Change it in the inspector.</p>
       )}
-      {canvasPage === undefined && pageLoading && <StudioCanvasSkeleton />}
+      {canvasPage === undefined && pageLoading && draft.viewProblem === null && (
+        <StudioCanvasSkeleton />
+      )}
       {canvasPage === undefined &&
         !pageLoading &&
         selected?.kind !== "flow" &&
@@ -1098,9 +1100,11 @@ export function useStudioCanvasTab({
         </Alert>
       )}
       {canvasPage !== undefined &&
+        draft.viewProblem === null &&
         (!shown || fieldInputControlReleases === null || platformThemeTokens === null) && (
           // The page shape stays up until the canvas can draw: the inspector, the field controls
-          // and the theme tokens each load before it, and none of them may leave a blank centre.
+          // and the theme tokens each load before it, and none of them may leave a blank centre. A
+          // failed view read is shown as its own alert, so nothing is loading then.
           <StudioCanvasSkeleton />
         )}
       {shown &&

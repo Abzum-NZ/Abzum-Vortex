@@ -10,7 +10,7 @@ import {
   StudioField,
   StudioIconButton,
   StudioInspectorGroup,
-  StudioReasoned,
+  Reasoned,
   StudioReferencePicker,
   type StudioPermissionDeclaration as Declaration,
 } from "@vortex/ui/studio";
@@ -86,7 +86,12 @@ export function StudioPermissionDeclaration({
   const changed = permission !== undefined && permission.administrative !== administrative;
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (missing !== undefined || unsupportedScope) return;
+    if (missing !== undefined) {
+      // An attempted submit says why at the field that is missing.
+      leave(missing.field);
+      return;
+    }
+    if (unsupportedScope) return;
     const target: Declaration["target"] = recordPermission
       ? {
           kind: "record",
@@ -141,7 +146,10 @@ export function StudioPermissionDeclaration({
       </StudioField>
       {recordPermission && (
         <>
-          <StudioField label="Record type">
+          <StudioField
+            label="Record type"
+            error={problem("record", missing?.field === "record" ? missing.reason : undefined)}
+          >
             {(control) => (
               <StudioReferencePicker
                 {...control}
@@ -151,6 +159,7 @@ export function StudioPermissionDeclaration({
                   source.body.modules.find((module) => module.key === owner)?.record_types ?? []
                 ).map((entry) => ({ value: entry.key, label: entry.plural_name }))}
                 onChange={(value) => {
+                  leave("record");
                   setRecordKey(value);
                   setReadable([]);
                   setChangeable([]);
@@ -355,7 +364,7 @@ export function StudioPermissionDeclaration({
         )}
       </StudioInspectorGroup>
       <div className="flex items-center gap-2">
-        <StudioReasoned
+        <Reasoned
           reason={
             unsupportedScope
               ? "Studio can't edit this permission's record scope here."
@@ -368,7 +377,7 @@ export function StudioPermissionDeclaration({
             <Icon name="check" />
             {permission === undefined ? "Add permission" : "Save permission"}
           </Button>
-        </StudioReasoned>
+        </Reasoned>
         <StudioIconButton label="Cancel permission edit" onClick={close}>
           <Icon name="close" />
         </StudioIconButton>

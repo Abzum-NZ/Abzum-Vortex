@@ -189,8 +189,16 @@ export const useStudioCanvasModel = (
     [catalogue, slot, compiled],
   );
   useEffect(() => {
-    if (readOnlyCause !== undefined && compiledSlot !== undefined)
-      console.error(`[studio] canvas content area ${area} is read-only`, readOnlyCause);
+    if (readOnlyCause === undefined || compiledSlot === undefined) return;
+    // Waiting for a recompile (a live edit removed the page or area first) is a race; a compiled
+    // version that disagrees with its source, or stored data the validator should have refused, is
+    // a platform fault.
+    if (readOnlyCause.startsWith("STUDIO_CANVAS_COMPILED_PENDING"))
+      console.info(
+        `[studio] canvas content area ${area} waits for its compiled version`,
+        readOnlyCause,
+      );
+    else console.error(`[studio] canvas content area ${area} is read-only`, readOnlyCause);
   }, [readOnlyCause]);
   const shown = useMemo(
     () => (data === undefined ? undefined : puckDataForBreakpoint(data, breakpoint, slot?.order)),

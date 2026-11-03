@@ -74,15 +74,17 @@ export type StudioReleaseChanges =
   /** A version published in an earlier source format cannot be compared. */
   | Readonly<{ kind: "unavailable" }>;
 export type StudioApplicationReleaseEntry = DefinitionReleaseMetadata &
-  Readonly<{ changes: StudioReleaseChanges }>;
+  Readonly<{
+    changes: StudioReleaseChanges;
+    /** The platform itself published this version: no person's account, in any directory. */
+    publishedByPlatform: boolean;
+  }>;
 export type StudioApplicationHistoryPage = Readonly<{
   snapshot: StudioApplicationHistorySnapshot;
   /** Newest first. */
   entries: readonly StudioApplicationReleaseEntry[];
   /** The names of the people who published the entries, by lowercase account id, as far as the viewer may see them. */
   publishers: Readonly<Record<string, string>>;
-  /** The publishers (lowercase ids) that are the platform itself, not a person in any directory. */
-  platformPublishers: readonly string[];
   hasOlder: boolean;
   hasNewer: boolean;
 }>;
@@ -450,6 +452,7 @@ export const listStudioApplicationReleaseHistory = async (
           : page.entries.map((entry) => ({
               ...entryMetadata(entry, anchor),
               changes: changesOf(page, entry),
+              publishedByPlatform: entry.publishedByPlatform,
             }));
       // Who published each version, read in the same request with the viewer's own directory access.
       const authors = [...new Set(entries.map((entry) => entry.publishedBy.toLowerCase()))];
@@ -464,13 +467,6 @@ export const listStudioApplicationReleaseHistory = async (
           hasOlder: page?.hasOlder ?? false,
           hasNewer: page?.hasNewer ?? false,
           publishers: Object.fromEntries(names),
-          platformPublishers: [
-            ...new Set(
-              (page?.entries ?? [])
-                .filter((entry) => entry.publishedByPlatform)
-                .map((entry) => entry.publishedBy.toLowerCase()),
-            ),
-          ],
         },
         metadata: entries,
       };

@@ -5,14 +5,14 @@ import { Button } from "../components/button";
 import { Field, FieldDescription, FieldGroup, FieldLabel } from "../components/field";
 import { Input } from "../components/input";
 import { Textarea } from "../components/textarea";
-import { Tooltip, TooltipContent, TooltipTrigger } from "../components/tooltip";
+import { Reasoned } from "../components/reasoned";
 import type { FlowInlineFormIntent } from "./intents";
 
 /**
  * The fields a Show form step declares itself, in the dialog the flow host draws. A field the step
  * expects an exact text in (the name of the application to remove) keeps Submit off, and says why,
- * until it matches, and a Submit that cannot be used yet says what is missing in a tooltip; the server
- * still proves every answer.
+ * until it matches, and a Submit that cannot be used yet says what is missing (a tooltip, and at
+ * each field once Submit is tried); the server still proves every answer.
  */
 export function InlineFormFields({
   form,
@@ -47,6 +47,8 @@ export function InlineFormFields({
       noValidate
       onSubmit={(event) => {
         event.preventDefault();
+        if (problems.length > 0)
+          setTypedIn((held) => new Set([...held, ...problems.map((problem) => problem.name)]));
         if (problems.length === 0)
           onSubmit(
             Object.fromEntries(form.fields.map((field) => [field.name, values[field.name] ?? ""])),
@@ -96,15 +98,9 @@ export function InlineFormFields({
         <Button type="button" variant="secondary" onClick={onCancel}>
           Cancel
         </Button>
-        {/* aria-disabled, not disabled: a disabled button gets no hover or focus, so it could not say why. */}
-        <Tooltip>
-          <TooltipTrigger
-            render={<Button type="submit" aria-disabled={problems.length > 0 ? true : undefined} />}
-          >
-            {form.submitLabel ?? "Submit"}
-          </TooltipTrigger>
-          {problems[0] === undefined ? null : <TooltipContent>{problems[0].text}</TooltipContent>}
-        </Tooltip>
+        <Reasoned reason={problems[0]?.text}>
+          <Button type="submit">{form.submitLabel ?? "Submit"}</Button>
+        </Reasoned>
       </div>
     </form>
   );

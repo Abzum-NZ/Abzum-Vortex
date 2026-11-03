@@ -1,5 +1,5 @@
 "use client";
-import { StudioReasoned } from "@vortex/ui/studio";
+import { Reasoned } from "@vortex/ui/studio";
 import {
   Field,
   FieldContent,
@@ -208,9 +208,9 @@ function FieldFlag({
           </FieldDescription>
         )}
       </FieldContent>
-      <StudioReasoned reason={reason}>
+      <Reasoned reason={reason}>
         <Switch id={id} checked={checked} disabled={disabled} onCheckedChange={onChange} />
-      </StudioReasoned>
+      </Reasoned>
     </Field>
   );
 }

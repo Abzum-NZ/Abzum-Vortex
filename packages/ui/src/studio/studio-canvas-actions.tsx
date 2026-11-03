@@ -7,7 +7,7 @@ import { Copy, Trash2 } from "lucide-react";
 import { Button } from "../components/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../components/tooltip";
 import { Icon } from "../icons";
-import { StudioReasoned, studioLimitReason } from "./studio-limit";
+import { Reasoned, studioLimitReason } from "./studio-limit";
 import { studioCanvasPermissionReason } from "./studio-canvas-permissions";
 import { useStudioCanvas } from "./studio-puck-provider";
 
@@ -29,11 +29,11 @@ function BarAction({
 }>) {
   if (reason !== undefined)
     return (
-      <StudioReasoned reason={reason}>
+      <Reasoned reason={reason}>
         <Button type="button" variant="ghost" size="icon-sm" aria-label={label} onClick={onAct}>
           {children}
         </Button>
-      </StudioReasoned>
+      </Reasoned>
     );
   return (
     <Tooltip>

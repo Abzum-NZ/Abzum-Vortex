@@ -22,7 +22,7 @@ import {
   StudioEntryList,
   StudioInspectorGroup,
   StudioLimitNote,
-  StudioReasoned,
+  Reasoned,
   studioLimitReason,
   useStudioEntryKeys,
 } from "@vortex/ui/studio";
@@ -213,7 +213,7 @@ export function StudioActionInputs({
           };
         })}
       >
-        <StudioReasoned reason={studioLimitReason("actionInputs", inputs.length)}>
+        <Reasoned reason={studioLimitReason("actionInputs", inputs.length)}>
           <Button
             type="button"
             size="sm"
@@ -230,7 +230,7 @@ export function StudioActionInputs({
           >
             <Icon name="plus" /> Add input
           </Button>
-        </StudioReasoned>
+        </Reasoned>
         <StudioLimitNote limit="actionInputs" used={inputs.length} label="Inputs" />
       </StudioEntryList>
     </FieldSet>

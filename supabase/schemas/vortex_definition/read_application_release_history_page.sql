@@ -84,7 +84,8 @@ begin
     'publishedAt', release.published_at,
     'publishedBy', release.published_by,
     -- A version published under the system context carries the platform's actor, which is no
-    -- organisation account; a person's version carries their organisation account.
+    -- organisation account; a person's version carries their organisation account. This relies on
+    -- organisation accounts never being hard-deleted (they are soft-deleted through deleted_at).
     'publishedByPlatform', not exists (
       select 1 from vortex_identity.organization_accounts as account
       where account.organization_account_id = release.published_by

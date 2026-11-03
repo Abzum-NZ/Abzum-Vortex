@@ -380,9 +380,7 @@ export function ApplicationReleaseHistory({
   // as the platform; a person the viewer cannot see in the directory stays unnamed.
   const author = (entry: StudioApplicationReleaseEntry) =>
     page?.publishers[entry.publishedBy.toLowerCase()] ??
-    (page?.platformPublishers.includes(entry.publishedBy.toLowerCase()) === true
-      ? "Vortex"
-      : "Someone outside your directory");
+    (entry.publishedByPlatform ? "Vortex" : "Someone outside your directory");
   const rowMenu = (entry: StudioApplicationReleaseEntry) => (
     <DropdownMenu>
       <Tooltip>

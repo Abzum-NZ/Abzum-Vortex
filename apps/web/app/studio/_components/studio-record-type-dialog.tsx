@@ -1,5 +1,5 @@
 "use client";
-import { StudioLimitNote, StudioReasoned, studioLimitReason } from "@vortex/ui/studio";
+import { StudioLimitNote, Reasoned, studioLimitReason } from "@vortex/ui/studio";
 import { useState, type FormEvent } from "react";
 import {
   createInlineRecordType,
@@ -358,11 +358,11 @@ export function StudioRecordTypeDialog({
           >
             Cancel
           </Button>
-          <StudioReasoned reason={recordTypeLimitReason}>
+          <Reasoned reason={recordTypeLimitReason}>
             <Button type="submit" form="studio-record-type-form">
               Add record type
             </Button>
-          </StudioReasoned>
+          </Reasoned>
         </DialogFooter>
       </DialogContent>
     </Dialog>
