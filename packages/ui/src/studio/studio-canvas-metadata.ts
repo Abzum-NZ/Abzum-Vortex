@@ -7,6 +7,7 @@ import type { StudioCompileFailure } from "./compile-failure";
 import type { StudioCanvasCompiledSettings } from "./studio-canvas-data";
 import type { StudioCanvasGridChannel } from "./studio-canvas-grid";
 import type { StudioCanvasFrame } from "./studio-canvas-projection";
+import type { StudioCanvasReferences } from "./studio-canvas-permissions";
 
 /**
  * The records the canvas's data blocks show: read from the builder's preview of one saved draft
@@ -70,6 +71,7 @@ export type StudioCanvasMetadata = VortexPuckMetadata &
   Readonly<{
     /** The canvas always previews one screen size. */
     breakpoint: Breakpoint;
+    references: StudioCanvasReferences;
     /** By block name, the plain settings each block's last compiled version holds. */
     compiled: StudioCanvasCompiledSettings;
     /** The records of the canvas's data blocks. */

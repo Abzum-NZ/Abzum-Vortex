@@ -380,21 +380,6 @@ function CanvasBlock({
 
 const canvasConfigs = new WeakMap<Config, WeakMap<ImmutablePlatformBlockCatalogue, Config>>();
 
-/** The input blocks that each register one form field: an input naming its field. */
-const formFieldRendererKeys = (registry: PlatformComponentRegistry): ReadonlySet<string> =>
-  new Set(
-    registry
-      .getReleases()
-      .filter(
-        (release) =>
-          release.paletteGroup === "input" &&
-          release.properties.some(
-            (property) => property.key === "name" || property.key === "field",
-          ),
-      )
-      .map((release) => release.rendererKey),
-  );
-
 /**
  * The canvas config: the one config's components and root, each component drawing its stored
  * item as above. The fields stay exactly as the one config declares them (each slot with its
@@ -414,7 +399,6 @@ export const studioCanvasConfig = (
 ): Config => {
   let canvas = canvasConfigs.get(config)?.get(catalogue);
   if (canvas !== undefined) return canvas;
-  const fieldInputs = formFieldRendererKeys(registry);
   const releaseByKey = new Map(
     registry.list().map(({ metadata }) => [metadata.rendererKey, metadata]),
   );
@@ -470,10 +454,7 @@ export const studioCanvasConfig = (
             <CanvasBlock component={component} registry={registry} props={props} />
           </CanvasBlockBoundary>
         ),
-        // A second input for a field the form already shows would be refused when the form
-        // draws, so a field input is never duplicated; add another field from the palette.
         permissions: {
-          ...(fieldInputs.has(type) ? { duplicate: false } : {}),
           ...(notCreatable.has(type) ? { insert: false } : {}),
         },
       },

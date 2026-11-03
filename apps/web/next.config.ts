@@ -3,6 +3,7 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   agentRules: false,
   reactStrictMode: true,
+  devIndicators: false,
   experimental: {
     // Pages are composed per viewer from current permissions and records. A page change without a
     // prefetch reads the page fresh (dynamic 0). A page the person pointed at, focused or touched is

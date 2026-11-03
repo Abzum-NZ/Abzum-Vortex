@@ -9,3 +9,4 @@ node_modules/
 *.log
 *.tsbuildinfo
 .DS_Store
+apps/web/next-env.d.ts
