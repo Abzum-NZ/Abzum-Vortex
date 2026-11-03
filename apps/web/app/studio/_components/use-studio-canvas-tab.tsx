@@ -79,7 +79,7 @@ import { StudioLayoutOutlets, StudioLayoutOutletUses } from "./studio-layout-out
 import type { StudioStructureCommandRunner } from "./use-studio-structure-tab";
 import { StudioUsedIn } from "./studio-used-in";
 import type { StudioModuleOwnerApplication } from "./module-fields-editor";
-import { StudioBlockOutlinePanel } from "./studio-outline-panels";
+import { StudioOutlinePanel } from "./studio-outline-panels";
 import { railShowsCanvas, type StudioRailKey } from "./studio-rail-tabs";
 import type { StudioDraft, StudioDraftStep } from "./use-studio-draft";
 import { StudioPageValuesPanel } from "./studio-page-values-panel";
@@ -679,7 +679,8 @@ export function useStudioCanvasTab({
         };
       // A conflict means a newer save replaced this revision: its compile reads again, and what is shown stays meanwhile.
       if (result.kind === "conflict") return { state: "superseded" as const, records: {} };
-      console.error(
+      // A read that is temporarily unavailable is an expected race (logged as information); any other cause is a platform fault.
+      (result.kind === "temporarily_unavailable" ? console.info : console.error)(
         `[studio] the canvas records were not read: STUDIO_CANVAS_RECORDS_${result.kind.toUpperCase()}`,
       );
       return { state: "unavailable" as const, records: {} };
@@ -811,6 +812,7 @@ export function useStudioCanvasTab({
       : ownerShellKey === undefined
         ? undefined
         : labels.get(ownerShellKey);
+  // The page or layout whose blocks the Outline tab lists and searches.
   const outlineOwnerKey =
     canvasPage !== undefined && ownerShellKey === undefined
       ? studioSemanticSelectionKey({ kind: "page", pageAlias: canvasPage.id })
@@ -823,21 +825,17 @@ export function useStudioCanvasTab({
       : inspector.status === "resolved"
         ? (selectedName ?? inspector.descriptor.label)
         : "Select an item";
-  const outlinePanelProps = {
-    outline,
-    selectedKey: selectionKey,
-    disabled: draft.isHeld("publication"),
-    choose: (node: { selection: StudioSemanticSelection | null }) => {
-      if (node.selection !== null) draft.select(node.selection);
-    },
-  };
-
   const panels = (
     <>
-      <StudioBlockOutlinePanel
-        {...outlinePanelProps}
+      <StudioOutlinePanel
         hidden={tab !== "outline"}
+        pageOpen={canvasPage !== undefined}
+        outline={outline}
         ownerKey={outlineOwnerKey}
+        selectedKey={selectionKey}
+        choose={(node) => {
+          if (node.selection !== null) draft.select(node.selection);
+        }}
         levels={
           canvasPage === undefined
             ? undefined

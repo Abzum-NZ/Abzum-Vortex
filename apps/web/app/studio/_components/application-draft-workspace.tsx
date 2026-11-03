@@ -361,7 +361,7 @@ function ExistingApplicationWorkspace(props: ExistingProps) {
                   saveState={<StudioSaveState draft={draft} />}
                   canUndo={state.canUndo}
                   canRedo={state.canRedo}
-                  undoDisabled={draft.locked}
+                  undoDisabled={draft.historyBlocked}
                   onUndo={draft.undo}
                   onRedo={draft.redo}
                   applicationHref={releases.openHref}

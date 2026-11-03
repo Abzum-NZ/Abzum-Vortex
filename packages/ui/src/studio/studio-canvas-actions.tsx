@@ -2,6 +2,7 @@
 
 import { createUsePuck, useGetPuck, type Overrides } from "@puckeditor/core";
 import { sourceItemTree } from "@vortex/platform/schema";
+import { StudioOutlineRegion } from "./studio-puck-outline";
 import { Copy, Trash2 } from "lucide-react";
 import {
   Children,
@@ -370,12 +371,6 @@ function StudioComponentOverlay({
 }
 
 /**
- * Puck's overlay and iframe, drawn by Studio. Puck's own action bar is replaced with nothing: its
- * `children` (Puck's Duplicate and Delete, and the rich-text menu of an inline text field) are
- * deliberately not drawn, because the bar above is the one place a block's actions are. Studio's
- * blocks have no inline rich-text field; one that is added needs its menu drawn here.
- */
-/**
  * Puck's own bar draws nothing. What it would have drawn (its Duplicate and Delete) is left out on
  * purpose; anything else in it, such as an inline rich-text menu, is a block Studio does not have,
  * so it is reported once instead of silently missing.
@@ -393,8 +388,13 @@ function StudioPuckActionBar({ children }: Readonly<{ children?: ReactNode }>) {
   return <></>;
 }
 
+/**
+ * Puck's overlay, iframe and outline, drawn by Studio: the outline in its labelled region, with
+ * Studio's colours, height and edit lock.
+ */
 export const studioCanvasOverrides: Partial<Overrides> = {
   actionBar: StudioPuckActionBar,
   componentOverlay: StudioComponentOverlay,
   iframe: StudioCanvasIframe,
+  outline: StudioOutlineRegion,
 };
