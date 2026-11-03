@@ -346,7 +346,8 @@ export const createApplicationAuthoringService = (environment: ApplicationAuthor
         return { kind: "unavailable", code: "recent_authentication_required" };
       const problem = publicationProblem(published);
       return problem.authored
-        ? refuse(problem.code, {
+        ? // Only an invalid-command refusal carries a rule's own sentence to the person.
+          refuse("invalid_command", {
             code: "publication_refused",
             message: problem.sentence.slice(0, 300),
           })

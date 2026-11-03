@@ -280,7 +280,8 @@ begin
       compilation_output_value #> '{canonical,content}'
     ) into surface_violation;
     if surface_violation is not null then
-      raise exception using errcode = '23514', message = surface_violation;
+      raise exception using errcode = '23514', hint = 'system_surface_changed',
+        message = surface_violation;
     end if;
   end if;
 
@@ -1249,7 +1250,7 @@ revoke execute on function vortex_definition.append_release(uuid, bigint, text, 
 grant execute on function vortex_definition.append_release(uuid, bigint, text, jsonb)
   to vortex_request;
 comment on function vortex_definition.append_release(uuid, bigint, text, jsonb) is
-  'Atomically validates and records one compiled Definition release with exact field-policy ownership, pinned dependencies and canonical flow operations; retains System publication and permits ordinary human Application and Module publication only under locked current draft/release permissions and original account attribution, then advances only its root pointer.';
+  'Atomically validates and records one compiled Definition release with exact field-policy ownership, pinned dependencies and canonical flow operations; retains System publication and permits human publication of an ordinary or platform system Application, and of the Modules it owns, only under locked current draft/release permissions (a system Application also under system_applications.manage and the protected-surface rule) and original account attribution, then advances only its root pointer.';
 
 alter function vortex_definition.append_release(p_root_id uuid, p_expected_draft_revision bigint, p_expected_source_fingerprint text, p_release jsonb) owner to vortex_owner;
 

@@ -1,4 +1,4 @@
--- The latest published version of one ordinary Application of the request's organisation, for a
+-- The latest published version of one Application, ordinary or platform system, of the request's organisation, for a
 -- person who may manage the organisation's application installations. Installing and upgrading are
 -- anchored to it; no draft right is needed.
 create or replace function vortex_definition.read_application_latest_release(
