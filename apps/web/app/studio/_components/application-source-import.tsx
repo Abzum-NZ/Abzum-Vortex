@@ -1,4 +1,5 @@
 "use client";
+import { Item, ItemContent, ItemGroup } from "@vortex/ui/components/item";
 import {
   formatBytes,
   canonicalJson,
@@ -110,7 +111,7 @@ function SourceChangeTable({
   const rows = summarizeSourceChange(current, next);
   if (rows.length === 0) return <p>The file matches your draft. Nothing would change.</p>;
   return (
-    <div className="overflow-hidden rounded-xl border">
+    <Card className="gap-0 py-0">
       <Table containerClassName="border-0">
         <TableHeader className="bg-muted/50 text-xs">
           <TableRow>
@@ -129,7 +130,7 @@ function SourceChangeTable({
           ))}
         </TableBody>
       </Table>
-    </div>
+    </Card>
   );
 }
 
@@ -594,28 +595,30 @@ export function ApplicationSourceImport({
           {diagnosticsCurrent && diagnostics !== null && (
             <div role="status" aria-live="polite" className="space-y-2">
               <h3 className="font-semibold">Problems found in the file</h3>
-              <ul className="space-y-3">
+              <ItemGroup className="gap-3">
                 {diagnostics.validation.errors.map((error, index) => (
-                  <li key={`${error.code}:${index}`}>
-                    <p className="font-medium">{error.message}</p>
-                    <p>{error.guidance}</p>
-                    <StudioInspectorGroup title="Details" defaultOpen={false} persist={false}>
-                      <p className="break-all">
-                        Where: {error.location?.documentKey ?? diagnostics.snapshot.key}
-                        {error.location?.segments.map((segment, segmentIndex) => (
-                          <span key={segmentIndex}>
-                            {" "}
-                            · {segment.kind}: {segment.key}
-                          </span>
-                        ))}
-                      </p>
-                      <p>
-                        Code: <code>{error.code}</code>
-                      </p>
-                    </StudioInspectorGroup>
-                  </li>
+                  <Item size="xs" role="listitem" key={`${error.code}:${index}`} className="p-0">
+                    <ItemContent>
+                      <p className="font-medium">{error.message}</p>
+                      <p>{error.guidance}</p>
+                      <StudioInspectorGroup title="Details" defaultOpen={false} persist={false}>
+                        <p className="break-all">
+                          Where: {error.location?.documentKey ?? diagnostics.snapshot.key}
+                          {error.location?.segments.map((segment, segmentIndex) => (
+                            <span key={segmentIndex}>
+                              {" "}
+                              · {segment.kind}: {segment.key}
+                            </span>
+                          ))}
+                        </p>
+                        <p>
+                          Code: <code>{error.code}</code>
+                        </p>
+                      </StudioInspectorGroup>
+                    </ItemContent>
+                  </Item>
                 ))}
-              </ul>
+              </ItemGroup>
             </div>
           )}
           <p role="status" aria-live="polite" className="sr-only">

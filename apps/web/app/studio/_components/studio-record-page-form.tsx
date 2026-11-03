@@ -1,11 +1,14 @@
 "use client";
+import { Card, CardContent } from "@vortex/ui/components/card";
 import { Field, FieldLabel } from "@vortex/ui/components/field";
 import { Alert, AlertDescription } from "@vortex/ui/components/alert";
 import { useEffect, useId, useMemo, useState, type FormEvent } from "react";
 import type { ApplicationSourceDocument } from "@vortex/platform/schema";
 import { Button } from "@vortex/ui/components/button";
 import { Checkbox } from "@vortex/ui/components/checkbox";
+import { Empty, EmptyContent, EmptyDescription, EmptyHeader } from "@vortex/ui/components/empty";
 import { Input } from "@vortex/ui/components/input";
+import { Item, ItemContent, ItemGroup } from "@vortex/ui/components/item";
 import {
   StudioOptionControl,
   studioRecordPageChoices,
@@ -109,138 +112,146 @@ export function StudioRecordPageForm({
 
   if (recordTypes.length === 0)
     return (
-      <div className="space-y-2 rounded-md border border-border p-3">
-        <p className="text-sm text-muted-foreground">
-          This application owns no record types yet. Add one in Data, then come back.
-        </p>
-        <Button type="button" size="sm" variant="ghost" onClick={onClose}>
-          Close
-        </Button>
-      </div>
+      <Empty>
+        <EmptyHeader>
+          <EmptyDescription>
+            This application owns no record types yet. Add one in Data, then come back.
+          </EmptyDescription>
+        </EmptyHeader>
+        <EmptyContent>
+          <Button type="button" size="sm" variant="ghost" onClick={onClose}>
+            Close
+          </Button>
+        </EmptyContent>
+      </Empty>
     );
 
   return (
-    <form
-      className="space-y-3 rounded-md border border-border p-3"
-      onSubmit={submit}
-      aria-label="New page for a record type"
-    >
-      <StudioField label="Record type">
-        {(control) => (
-          <StudioOptionControl
-            {...control}
-            value={effectiveRecordType}
-            disabled={disabled}
-            options={recordTypes.map((entry) => ({
-              value: entry.recordType,
-              label: entry.label,
-            }))}
-            onChange={setRecordType}
-          />
-        )}
-      </StudioField>
-      <StudioField
-        label="Page"
-        hint={availableKinds.find((entry) => entry.kind === effectiveKind)?.hint}
-        error={
-          availableKinds.length === 0
-            ? "Enable Read under Standard actions in Data before adding pages."
-            : undefined
-        }
-      >
-        {(control) => (
-          <StudioOptionControl
-            {...control}
-            value={effectiveKind ?? ""}
-            disabled={disabled}
-            options={availableKinds.map((entry) => ({ value: entry.kind, label: entry.label }))}
-            onChange={(next) => chooseKind(next as StudioRecordPageKind)}
-          />
-        )}
-      </StudioField>
-      {boardUnavailable && (
-        <p className="text-xs text-muted-foreground">
-          Board pages need a pipeline: add one on a choice field in Data first.
-        </p>
-      )}
-      {(effectiveKind === "list" || effectiveKind === "board") && (
-        <StudioField
-          label="Page name"
-          hint="Leave empty to name it after the record type. A further list of the same records needs a name of its own."
-        >
-          {(control) => (
-            <Input
-              {...control}
-              value={listName}
-              maxLength={60}
-              placeholder="For example: Pipeline"
-              disabled={disabled}
-              onChange={(event) => setListName(event.target.value)}
-            />
+    <Card size="sm">
+      <CardContent>
+        <form className="space-y-3" onSubmit={submit} aria-label="New page for a record type">
+          <StudioField label="Record type">
+            {(control) => (
+              <StudioOptionControl
+                {...control}
+                value={effectiveRecordType}
+                disabled={disabled}
+                options={recordTypes.map((entry) => ({
+                  value: entry.recordType,
+                  label: entry.label,
+                }))}
+                onChange={setRecordType}
+              />
+            )}
+          </StudioField>
+          <StudioField
+            label="Page"
+            hint={availableKinds.find((entry) => entry.kind === effectiveKind)?.hint}
+            error={
+              availableKinds.length === 0
+                ? "Enable Read under Standard actions in Data before adding pages."
+                : undefined
+            }
+          >
+            {(control) => (
+              <StudioOptionControl
+                {...control}
+                value={effectiveKind ?? ""}
+                disabled={disabled}
+                options={availableKinds.map((entry) => ({ value: entry.kind, label: entry.label }))}
+                onChange={(next) => chooseKind(next as StudioRecordPageKind)}
+              />
+            )}
+          </StudioField>
+          {boardUnavailable && (
+            <p className="text-xs text-muted-foreground">
+              Board pages need a pipeline: add one on a choice field in Data first.
+            </p>
           )}
-        </StudioField>
-      )}
-      <StudioField label="Layout" hint="The frame the page is drawn in.">
-        {(control) => (
-          <StudioOptionControl
-            {...control}
-            value={shellChoice}
-            disabled={disabled}
-            options={choices.map((choice) => ({
-              value: choice.shellAlias ?? "",
-              label: choice.label,
-            }))}
-            onChange={setShellChoice}
-          />
-        )}
-      </StudioField>
-      {menuAllowed ? (
-        <Field orientation="horizontal">
-          <Checkbox
-            id={`${menuId}-menu`}
-            checked={addToMenu}
-            disabled={disabled}
-            onCheckedChange={(checked) => setAddToMenu(checked === true)}
-          />
-          <FieldLabel htmlFor={`${menuId}-menu`}>Show it in the menu</FieldLabel>
-        </Field>
-      ) : (
-        <p className="text-sm text-muted-foreground">
-          It opens one record, so it is reached from the list, not the menu.
-        </p>
-      )}
-      <section
-        aria-label="What will be added"
-        aria-busy={current === undefined}
-        className="space-y-1 rounded-md bg-muted p-2"
-      >
-        <p className="text-sm font-medium">What will be added</p>
-        {current === undefined ? (
-          <p className="text-sm text-muted-foreground">Working it out…</p>
-        ) : current.kind === "refused" ? (
-          <Alert variant="destructive">
-            <AlertDescription>{current.message}</AlertDescription>
-          </Alert>
-        ) : (
-          <ul className="list-disc space-y-1 pl-4 text-sm text-muted-foreground">
-            {current.details.map((detail, index) => (
-              <li key={index}>{detail}</li>
-            ))}
-          </ul>
-        )}
-      </section>
-      <div className="flex gap-2">
-        <Button
-          type="submit"
-          size="sm"
-          disabled={disabled || effectiveKind === undefined || current?.kind !== "applied"}
-        >
-          Add page
-        </Button>
-        <Button type="button" size="sm" variant="ghost" onClick={onClose}>
-          Cancel
-        </Button>
-      </div>
-    </form>
+          {(effectiveKind === "list" || effectiveKind === "board") && (
+            <StudioField
+              label="Page name"
+              hint="Leave empty to name it after the record type. A further list of the same records needs a name of its own."
+            >
+              {(control) => (
+                <Input
+                  {...control}
+                  value={listName}
+                  maxLength={60}
+                  placeholder="For example: Pipeline"
+                  disabled={disabled}
+                  onChange={(event) => setListName(event.target.value)}
+                />
+              )}
+            </StudioField>
+          )}
+          <StudioField label="Layout" hint="The frame the page is drawn in.">
+            {(control) => (
+              <StudioOptionControl
+                {...control}
+                value={shellChoice}
+                disabled={disabled}
+                options={choices.map((choice) => ({
+                  value: choice.shellAlias ?? "",
+                  label: choice.label,
+                }))}
+                onChange={setShellChoice}
+              />
+            )}
+          </StudioField>
+          {menuAllowed ? (
+            <Field orientation="horizontal">
+              <Checkbox
+                id={`${menuId}-menu`}
+                checked={addToMenu}
+                disabled={disabled}
+                onCheckedChange={(checked) => setAddToMenu(checked === true)}
+              />
+              <FieldLabel htmlFor={`${menuId}-menu`}>Show it in the menu</FieldLabel>
+            </Field>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              It opens one record, so it is reached from the list, not the menu.
+            </p>
+          )}
+          <section
+            aria-label="What will be added"
+            aria-busy={current === undefined}
+            className="space-y-1 rounded-md bg-muted p-2"
+          >
+            <p className="text-sm font-medium">What will be added</p>
+            {current === undefined ? (
+              <p className="text-sm text-muted-foreground">Working it out…</p>
+            ) : current.kind === "refused" ? (
+              <Alert variant="destructive">
+                <AlertDescription>{current.message}</AlertDescription>
+              </Alert>
+            ) : (
+              <ItemGroup className="gap-1">
+                {current.details.map((detail, index) => (
+                  <Item key={index} size="xs" role="listitem" className="p-0">
+                    <ItemContent>
+                      <p className="m-0 text-sm text-muted-foreground">{detail}</p>
+                    </ItemContent>
+                  </Item>
+                ))}
+              </ItemGroup>
+            )}
+          </section>
+          <div className="flex gap-2">
+            <Button
+              type="submit"
+              size="sm"
+              disabled={disabled || effectiveKind === undefined || current?.kind !== "applied"}
+            >
+              Add page
+            </Button>
+            <Button type="button" size="sm" variant="ghost" onClick={onClose}>
+              Cancel
+            </Button>
+          </div>
+        </form>
+      </CardContent>
+    </Card>
   );
 }

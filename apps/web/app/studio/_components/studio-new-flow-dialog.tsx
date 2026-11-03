@@ -1,5 +1,5 @@
 "use client";
-import { FieldLegend, FieldSet } from "@vortex/ui/components/field";
+import { Field, FieldLabel, FieldLegend, FieldSet } from "@vortex/ui/components/field";
 import { Alert, AlertDescription } from "@vortex/ui/components/alert";
 import { useState, type FormEvent } from "react";
 import { Button } from "@vortex/ui/components/button";
@@ -12,7 +12,6 @@ import {
   DialogTitle,
 } from "@vortex/ui/components/dialog";
 import { Input } from "@vortex/ui/components/input";
-import { Label } from "@vortex/ui/components/label";
 import { RadioGroup, RadioGroupItem } from "@vortex/ui/components/radio-group";
 import { Textarea } from "@vortex/ui/components/textarea";
 import type { ApplicationSourceDocument } from "@vortex/platform/schema";
@@ -159,8 +158,8 @@ export function StudioNewFlowDialog({
               saved are added on the record type in the Data tab.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-1.5">
-            <Label htmlFor="new-flow-existing">Workflow</Label>
+          <Field>
+            <FieldLabel htmlFor="new-flow-existing">Workflow</FieldLabel>
             <StudioOptionControl
               id="new-flow-existing"
               value={flowKey}
@@ -174,10 +173,10 @@ export function StudioNewFlowDialog({
                 setMapping({});
               }}
             />
-          </div>
+          </Field>
           {existingFlow === undefined && (
-            <div className="space-y-1.5">
-              <Label htmlFor="new-flow-name">Name</Label>
+            <Field>
+              <FieldLabel htmlFor="new-flow-name">Name</FieldLabel>
               <Input
                 id="new-flow-name"
                 value={name}
@@ -185,10 +184,10 @@ export function StudioNewFlowDialog({
                 required
                 onChange={(event) => setName(event.target.value)}
               />
-            </div>
+            </Field>
           )}
-          <div className="space-y-1.5">
-            <Label htmlFor="new-flow-control">Control</Label>
+          <Field>
+            <FieldLabel htmlFor="new-flow-control">Control</FieldLabel>
             {choices.actions.length === 0 ? (
               <p className="text-sm text-muted-foreground">
                 Every supported control event already runs a flow. Add a control to a page first.
@@ -210,10 +209,10 @@ export function StudioNewFlowDialog({
                 }}
               />
             )}
-          </div>
+          </Field>
           {chosen !== undefined && (
-            <div className="space-y-1.5">
-              <Label htmlFor="new-flow-event">Event</Label>
+            <Field>
+              <FieldLabel htmlFor="new-flow-event">Event</FieldLabel>
               <StudioOptionControl
                 id="new-flow-event"
                 value={chosen.event}
@@ -227,11 +226,11 @@ export function StudioNewFlowDialog({
                   setMapping({});
                 }}
               />
-            </div>
+            </Field>
           )}
           {chosen?.rowActionMenu === true && (
-            <div className="space-y-1.5">
-              <Label htmlFor="new-flow-row-action-label">Row action label</Label>
+            <Field>
+              <FieldLabel htmlFor="new-flow-row-action-label">Row action label</FieldLabel>
               <Input
                 id="new-flow-row-action-label"
                 value={rowActionLabel}
@@ -239,7 +238,7 @@ export function StudioNewFlowDialog({
                 required
                 onChange={(event) => setRowActionLabel(event.target.value)}
               />
-            </div>
+            </Field>
           )}
           {asksStep && (
             <FieldSet className="gap-2">
@@ -248,26 +247,18 @@ export function StudioNewFlowDialog({
                 value={what}
                 onValueChange={(value) => setWhat(value as "operation" | "message")}
               >
-                <div className="flex items-start gap-2">
-                  <RadioGroupItem
-                    id="new-flow-what-operation"
-                    value="operation"
-                    className="size-4 rounded-full border border-input"
-                  />
-                  <Label htmlFor="new-flow-what-operation" className="font-normal">
+                <Field orientation="horizontal">
+                  <RadioGroupItem id="new-flow-what-operation" value="operation" />
+                  <FieldLabel htmlFor="new-flow-what-operation" className="font-normal">
                     Run an operation
-                  </Label>
-                </div>
-                <div className="flex items-start gap-2">
-                  <RadioGroupItem
-                    id="new-flow-what-message"
-                    value="message"
-                    className="size-4 rounded-full border border-input"
-                  />
-                  <Label htmlFor="new-flow-what-message" className="font-normal">
+                  </FieldLabel>
+                </Field>
+                <Field orientation="horizontal">
+                  <RadioGroupItem id="new-flow-what-message" value="message" />
+                  <FieldLabel htmlFor="new-flow-what-message" className="font-normal">
                     Show a message
-                  </Label>
-                </div>
+                  </FieldLabel>
+                </Field>
               </RadioGroup>
               {what === "operation" &&
                 (choices.operations.length === 0 ? (
@@ -301,11 +292,11 @@ export function StudioNewFlowDialog({
           )}
           {existingFlow !== undefined &&
             Object.entries(existingFlow.inputs).map(([input, declaration]) => (
-              <div key={input} className="space-y-1.5">
-                <Label htmlFor={`new-flow-input-${input}`}>
+              <Field key={input}>
+                <FieldLabel htmlFor={`new-flow-input-${input}`}>
                   {input.replaceAll("_", " ")}
                   {declaration.required ? " (required)" : ""}
-                </Label>
+                </FieldLabel>
                 <StudioOptionControl
                   id={`new-flow-input-${input}`}
                   value={suppliedFor(input)}
@@ -317,7 +308,7 @@ export function StudioNewFlowDialog({
                   }))}
                   onChange={(value) => setMapping({ ...mapping, [input]: value })}
                 />
-              </div>
+              </Field>
             ))}
           {problem === "" ? null : (
             <Alert variant="destructive">

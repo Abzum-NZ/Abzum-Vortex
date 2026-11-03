@@ -1,5 +1,6 @@
 "use client";
 import { Alert, AlertDescription } from "../components/alert";
+import { Item, ItemContent, ItemGroup } from "../components/item";
 import { StudioReferencePicker } from "./studio-reference-picker";
 import { StudioField } from "./studio-field";
 import { Button } from "@vortex/ui/components/button";
@@ -633,13 +634,22 @@ export function StudioConditionControls({
   const validationSummary = validation.issues.length > 0 && (
     <Alert role="status" aria-live="polite">
       <AlertDescription>
-        <ul>
+        <ItemGroup>
           {validation.issues.map((issue, index) => (
-            <li key={`${issue.pointer}:${issue.code}:${index}`}>
-              <strong>{issuePlace(issue.path)}:</strong> {issue.message}
-            </li>
+            <Item
+              key={`${issue.pointer}:${issue.code}:${index}`}
+              size="xs"
+              role="listitem"
+              className="p-0"
+            >
+              <ItemContent>
+                <p className="m-0">
+                  <strong>{issuePlace(issue.path)}:</strong> {issue.message}
+                </p>
+              </ItemContent>
+            </Item>
           ))}
-        </ul>
+        </ItemGroup>
       </AlertDescription>
     </Alert>
   );

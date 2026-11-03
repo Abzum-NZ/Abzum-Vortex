@@ -261,13 +261,13 @@ export function StudioRelationshipsSection({
       {issues.length === 0 ? null : (
         <Alert variant="destructive">
           <AlertDescription>
-            <ul className="space-y-1">
+            <ItemGroup className="gap-1">
               {issues.map((issue, index) => (
-                <li key={index} className="break-words">
-                  {issue}
-                </li>
+                <Item size="xs" role="listitem" key={index} className="break-words p-0">
+                  <ItemContent>{issue}</ItemContent>
+                </Item>
               ))}
-            </ul>
+            </ItemGroup>
           </AlertDescription>
         </Alert>
       )}

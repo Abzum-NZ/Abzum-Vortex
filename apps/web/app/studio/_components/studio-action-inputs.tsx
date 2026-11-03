@@ -1,5 +1,5 @@
 "use client";
-import { FieldLegend, FieldSet } from "@vortex/ui/components/field";
+import { Field, FieldLabel, FieldLegend, FieldSet } from "@vortex/ui/components/field";
 import { useRef } from "react";
 import { deriveFieldKey, type ApplicationSourceDocument } from "@vortex/platform/schema";
 import { Icon } from "@vortex/ui";
@@ -16,7 +16,6 @@ import {
 } from "@vortex/ui/components/combobox";
 import { Input } from "@vortex/ui/components/input";
 import { InputGroup, InputGroupAddon } from "@vortex/ui/components/input-group";
-import { Label } from "@vortex/ui/components/label";
 import { StudioInputType } from "./studio-input-type";
 import {
   StudioEntryList,
@@ -94,8 +93,8 @@ export function StudioActionInputs({
             summary: `${typeLabels[input.type]} · ${input.required ? "Required" : "Optional"}`,
             content: (
               <div className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor={`${id}-label`}>Label</Label>
+                <Field>
+                  <FieldLabel htmlFor={`${id}-label`}>Label</FieldLabel>
                   <Input
                     id={`${id}-label`}
                     value={input.label}
@@ -119,76 +118,71 @@ export function StudioActionInputs({
                       );
                     }}
                   />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor={`${id}-type`}>Value type</Label>
-                  <StudioInputType
-                    id={`${id}-type`}
-                    type={input.type}
-                    recordTypes={input.type === "record_reference" ? input.record_types : []}
-                    options={Object.entries(typeLabels).map(([value, label]) => ({
-                      value: value as Inputs[number]["type"],
-                      label,
-                    }))}
-                    onChange={(type, recordTypes) => {
-                      replace(index, {
-                        key: input.key,
-                        label: input.label,
-                        required: input.required,
-                        type,
-                        ...(type === "record_reference" ? { record_types: [...recordTypes] } : {}),
-                      } as Inputs[number]);
-                      return undefined;
-                    }}
-                  >
-                    {(selectedRecords, changeRecords) => (
-                      <div className="space-y-2">
-                        <Label htmlFor={`${id}-records`}>Permitted record types</Label>
-                        <Combobox
-                          multiple
-                          items={records}
-                          value={records.filter((record) => selectedRecords.includes(record.key))}
-                          itemToStringLabel={(record) => record.label}
-                          itemToStringValue={(record) => record.key}
-                          isItemEqualToValue={(record, selected) => record.key === selected.key}
-                          onValueChange={(selected) =>
-                            changeRecords(selected.map((record) => record.key))
-                          }
-                        >
-                          <InputGroup>
-                            <ComboboxInput
-                              id={`${id}-records`}
-                              placeholder="Search record types…"
-                            />
-                            <InputGroupAddon align="inline-end">
-                              <ComboboxTrigger aria-label="Show record types" />
-                            </InputGroupAddon>
-                          </InputGroup>
-                          <ComboboxContent>
-                            <ComboboxEmpty>No matching record types.</ComboboxEmpty>
-                            <ComboboxList>
-                              {(record: (typeof records)[number]) => (
-                                <ComboboxItem key={record.key} value={record}>
-                                  {record.label}
-                                </ComboboxItem>
-                              )}
-                            </ComboboxList>
-                          </ComboboxContent>
-                        </Combobox>
-                        {selectedRecords.length > 0 && (
-                          <p className="text-sm text-muted-foreground" aria-live="polite">
-                            {selectedRecords
-                              .map(
-                                (key) => records.find((record) => record.key === key)?.label ?? key,
-                              )
-                              .join(", ")}
-                          </p>
-                        )}
-                      </div>
-                    )}
-                  </StudioInputType>
-                </div>
-                <div className="flex items-center gap-2">
+                </Field>
+                <StudioInputType
+                  label="Value type"
+                  id={`${id}-type`}
+                  type={input.type}
+                  recordTypes={input.type === "record_reference" ? input.record_types : []}
+                  options={Object.entries(typeLabels).map(([value, label]) => ({
+                    value: value as Inputs[number]["type"],
+                    label,
+                  }))}
+                  onChange={(type, recordTypes) => {
+                    replace(index, {
+                      key: input.key,
+                      label: input.label,
+                      required: input.required,
+                      type,
+                      ...(type === "record_reference" ? { record_types: [...recordTypes] } : {}),
+                    } as Inputs[number]);
+                    return undefined;
+                  }}
+                >
+                  {(selectedRecords, changeRecords) => (
+                    <Field>
+                      <FieldLabel htmlFor={`${id}-records`}>Permitted record types</FieldLabel>
+                      <Combobox
+                        multiple
+                        items={records}
+                        value={records.filter((record) => selectedRecords.includes(record.key))}
+                        itemToStringLabel={(record) => record.label}
+                        itemToStringValue={(record) => record.key}
+                        isItemEqualToValue={(record, selected) => record.key === selected.key}
+                        onValueChange={(selected) =>
+                          changeRecords(selected.map((record) => record.key))
+                        }
+                      >
+                        <InputGroup>
+                          <ComboboxInput id={`${id}-records`} placeholder="Search record types…" />
+                          <InputGroupAddon align="inline-end">
+                            <ComboboxTrigger aria-label="Show record types" />
+                          </InputGroupAddon>
+                        </InputGroup>
+                        <ComboboxContent>
+                          <ComboboxEmpty>No matching record types.</ComboboxEmpty>
+                          <ComboboxList>
+                            {(record: (typeof records)[number]) => (
+                              <ComboboxItem key={record.key} value={record}>
+                                {record.label}
+                              </ComboboxItem>
+                            )}
+                          </ComboboxList>
+                        </ComboboxContent>
+                      </Combobox>
+                      {selectedRecords.length > 0 && (
+                        <p className="text-sm text-muted-foreground" aria-live="polite">
+                          {selectedRecords
+                            .map(
+                              (key) => records.find((record) => record.key === key)?.label ?? key,
+                            )
+                            .join(", ")}
+                        </p>
+                      )}
+                    </Field>
+                  )}
+                </StudioInputType>
+                <Field orientation="horizontal">
                   <Checkbox
                     id={`${id}-required`}
                     checked={input.required}
@@ -196,8 +190,8 @@ export function StudioActionInputs({
                       replace(index, { ...input, required: checked === true })
                     }
                   />
-                  <Label htmlFor={`${id}-required`}>Required</Label>
-                </div>
+                  <FieldLabel htmlFor={`${id}-required`}>Required</FieldLabel>
+                </Field>
                 <StudioInspectorGroup title="Details" defaultOpen={false}>
                   <div className="space-y-1 text-sm">
                     <p>

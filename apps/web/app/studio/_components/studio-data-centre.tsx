@@ -1,4 +1,6 @@
 "use client";
+import { Field, FieldLabel } from "@vortex/ui/components/field";
+import { Card } from "@vortex/ui/components/card";
 import { Reasoned, studioLimitReason } from "@vortex/ui/studio";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
@@ -26,7 +28,6 @@ import { StudioPlaceList } from "./studio-used-in";
 import { Badge } from "@vortex/ui/components/badge";
 import { Spinner } from "@vortex/ui/components/spinner";
 import { Button } from "@vortex/ui/components/button";
-import { Label } from "@vortex/ui/components/label";
 import {
   StudioOptionControl,
   StudioFieldTypeIcon,
@@ -68,7 +69,7 @@ function SchemaGrid({
   onSelect: (selection: StudioDataSelection) => void;
 }>) {
   return (
-    <div className="overflow-hidden rounded-xl border">
+    <Card className="gap-0 py-0">
       <Table containerClassName="border-0">
         <TableCaption className="sr-only">Fields of {record.pluralName}</TableCaption>
         <TableHeader className="sticky top-0 bg-muted/50">
@@ -157,7 +158,7 @@ function SchemaGrid({
           })}
         </TableBody>
       </Table>
-    </div>
+    </Card>
   );
 }
 
@@ -442,10 +443,8 @@ function PreviewResults({
               : "From your preview of the saved draft, with your preview access."}
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <Label htmlFor="studio-data-page-size" className="text-sm">
-            Per page
-          </Label>
+        <Field orientation="horizontal" className="w-auto">
+          <FieldLabel htmlFor="studio-data-page-size">Per page</FieldLabel>
           <StudioOptionControl
             id="studio-data-page-size"
             value={String(pageSize)}
@@ -456,7 +455,7 @@ function PreviewResults({
               setPage({});
             }}
           />
-        </div>
+        </Field>
       </div>
       {current === null ? (
         <div role="status" className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -472,7 +471,7 @@ function PreviewResults({
       ) : (
         current.kind === "available" && (
           <>
-            <div className="overflow-hidden rounded-xl border">
+            <Card className="gap-0 py-0">
               <Table>
                 <TableHeader className="bg-muted/50">
                   <TableRow>
@@ -504,7 +503,7 @@ function PreviewResults({
                   )}
                 </TableBody>
               </Table>
-            </div>
+            </Card>
             <div className="flex items-center justify-between gap-2">
               <p role="status" className="text-sm text-muted-foreground">
                 {current.rows.length} {current.rows.length === 1 ? "record" : "records"} on this
@@ -592,7 +591,7 @@ export function StudioDataCentre({
         {module.recordTypes.length === 0 ? (
           <StudioDataEmpty onCreate={onCreate} />
         ) : (
-          <div className="overflow-hidden rounded-xl border">
+          <Card className="gap-0 py-0">
             <Table>
               <TableHeader className="bg-muted/50">
                 <TableRow>
@@ -627,7 +626,7 @@ export function StudioDataCentre({
                 ))}
               </TableBody>
             </Table>
-          </div>
+          </Card>
         )}
       </div>
     );

@@ -1,9 +1,9 @@
 "use client";
+import { Field, FieldLabel } from "@vortex/ui/components/field";
 import { Alert, AlertDescription } from "@vortex/ui/components/alert";
 import { createContext, useContext, useState, type ReactNode } from "react";
 import { Checkbox } from "@vortex/ui/components/checkbox";
 import { Input } from "@vortex/ui/components/input";
-import { Label } from "@vortex/ui/components/label";
 import { Textarea } from "@vortex/ui/components/textarea";
 import type { FlowFormula, FlowLiteral, FlowReference, FlowValue } from "@vortex/platform/schema";
 import {
@@ -144,16 +144,21 @@ function BuiltValue({
               parts: formula.parts.map((item, at) => (at === index ? next : item)),
             })),
           )}
-          <Label htmlFor={`${id}-separator`}>Between parts</Label>
-          <Input
-            id={`${id}-separator`}
-            disabled={disabled}
-            maxLength={20}
-            value={formula.separator ?? ""}
-            onChange={(event) =>
-              onChange({ kind: "formula", formula: { ...formula, separator: event.target.value } })
-            }
-          />
+          <Field>
+            <FieldLabel htmlFor={`${id}-separator`}>Between parts</FieldLabel>
+            <Input
+              id={`${id}-separator`}
+              disabled={disabled}
+              maxLength={20}
+              value={formula.separator ?? ""}
+              onChange={(event) =>
+                onChange({
+                  kind: "formula",
+                  formula: { ...formula, separator: event.target.value },
+                })
+              }
+            />
+          </Field>
         </BuiltParts>
       );
     case "if":
@@ -219,21 +224,23 @@ function BuiltValue({
             (amount) => ({ ...formula, amount }),
             "whole_number",
           )}
-          <Label htmlFor={`${id}-unit`}>Time unit</Label>
-          <StudioOptionControl
-            id={`${id}-unit`}
-            disabled={disabled}
-            value={formula.unit}
-            options={(["minutes", "hours", "days", "weeks", "months", "years"] as const).map(
-              (unit) => ({ value: unit, label: studioWords(unit) }),
-            )}
-            onChange={(unit) =>
-              onChange({
-                kind: "formula",
-                formula: { ...formula, unit: unit as typeof formula.unit },
-              })
-            }
-          />
+          <Field>
+            <FieldLabel htmlFor={`${id}-unit`}>Time unit</FieldLabel>
+            <StudioOptionControl
+              id={`${id}-unit`}
+              disabled={disabled}
+              value={formula.unit}
+              options={(["minutes", "hours", "days", "weeks", "months", "years"] as const).map(
+                (unit) => ({ value: unit, label: studioWords(unit) }),
+              )}
+              onChange={(unit) =>
+                onChange({
+                  kind: "formula",
+                  formula: { ...formula, unit: unit as typeof formula.unit },
+                })
+              }
+            />
+          </Field>
         </BuiltParts>
       );
     case "literal":
@@ -311,15 +318,15 @@ export function FixedInput({
   }
   if (literal.type === "yes_no")
     return (
-      <div className="flex items-center gap-2">
+      <Field orientation="horizontal">
         <Checkbox
           id={id}
           disabled={disabled}
           checked={literal.value === true}
           onCheckedChange={(checked) => onChange({ type: "yes_no", value: checked === true })}
         />
-        <Label htmlFor={id}>Yes</Label>
-      </div>
+        <FieldLabel htmlFor={id}>Yes</FieldLabel>
+      </Field>
     );
   if (literal.type === "choice" && options.length > 0)
     return (
@@ -434,11 +441,11 @@ export function StudioFlowValueControl({
     token === "built" ||
     offered.some((choice) => choice.token === token);
   return (
-    <div className="space-y-1.5">
-      <Label htmlFor={`${id}-from`}>
+    <Field>
+      <FieldLabel htmlFor={`${id}-from`}>
         {label}
         {optional && <span className="text-xs text-muted-foreground">Optional</span>}
-      </Label>
+      </FieldLabel>
       <StudioReferencePicker
         id={`${id}-from`}
         disabled={disabled}
@@ -527,6 +534,6 @@ export function StudioFlowValueControl({
           </AlertDescription>
         </Alert>
       )}
-    </div>
+    </Field>
   );
 }

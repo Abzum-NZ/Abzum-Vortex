@@ -1,5 +1,6 @@
 "use client";
 import { Alert, AlertDescription } from "@vortex/ui/components/alert";
+import { Field, FieldGroup, FieldLabel } from "@vortex/ui/components/field";
 import type { ReactNode } from "react";
 import { StudioOptionControl } from "@vortex/ui/studio";
 import { useStudioDraftHeld } from "./use-studio-draft-held";
@@ -7,6 +8,8 @@ import { useStudioDraftHeld } from "./use-studio-draft-held";
 /** A record type change stays at the control until the builder has chosen its record types. */
 export function StudioInputType<Type extends string>({
   id,
+  label,
+  labelClassName,
   type,
   recordTypes,
   options,
@@ -15,6 +18,8 @@ export function StudioInputType<Type extends string>({
   children,
 }: Readonly<{
   id: string;
+  label: string;
+  labelClassName?: string;
   type: Type;
   recordTypes: readonly string[];
   options: readonly Readonly<{ value: Type; label: string }>[];
@@ -34,14 +39,22 @@ export function StudioInputType<Type extends string>({
     else control.hold(next, problem);
   };
   return (
-    <div className="space-y-2">
-      <StudioOptionControl
-        id={id}
-        value={control.value.type}
-        options={options}
-        disabled={disabled}
-        onChange={(value) => change(value as Type, [])}
-      />
+    <FieldGroup className="gap-3">
+      <Field>
+        <FieldLabel
+          htmlFor={id}
+          {...(labelClassName === undefined ? {} : { className: labelClassName })}
+        >
+          {label}
+        </FieldLabel>
+        <StudioOptionControl
+          id={id}
+          value={control.value.type}
+          options={options}
+          disabled={disabled}
+          onChange={(value) => change(value as Type, [])}
+        />
+      </Field>
       {control.value.type === "record_reference" &&
         children(control.value.recordTypes, (records) => change(control.value.type, records))}
       {control.problem !== "" && (
@@ -49,6 +62,6 @@ export function StudioInputType<Type extends string>({
           <AlertDescription>{control.problem}</AlertDescription>
         </Alert>
       )}
-    </div>
+    </FieldGroup>
   );
 }

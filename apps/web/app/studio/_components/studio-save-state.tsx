@@ -1,8 +1,10 @@
 "use client";
 
 import { Alert, AlertDescription } from "@vortex/ui/components/alert";
+import { Card } from "@vortex/ui/components/card";
+import { Item, ItemContent, ItemGroup, ItemSeparator } from "@vortex/ui/components/item";
 import { useStudioFieldProblems } from "@vortex/ui/studio";
-import { useState, type ReactNode } from "react";
+import { Fragment, useState, type ReactNode } from "react";
 import { FormattedTime, Icon } from "@vortex/ui";
 import { Badge } from "@vortex/ui/components/badge";
 import { Button } from "@vortex/ui/components/button";
@@ -173,7 +175,8 @@ export function StudioSaveState({ draft }: Readonly<{ draft: StudioDraft }>) {
                   variant="outline"
                   size="sm"
                   disabled={
-                    (hasFieldProblems ? !fields?.canUndo : !draft.state.canUndo) || draft.locked
+                    (hasFieldProblems ? !fields?.canUndo : !draft.state.canUndo) ||
+                    draft.historyBlocked
                   }
                   onClick={hasFieldProblems ? fields?.undo : draft.undo}
                 >
@@ -231,16 +234,28 @@ export function StudioSaveState({ draft }: Readonly<{ draft: StudioDraft }>) {
             </AlertDialogDescription>
           </AlertDialogHeader>
           {status.kind === "conflict" && status.changes.length > 0 && (
-            <ul className="m-0 list-none divide-y rounded-lg border border-border p-0 text-sm">
-              {status.changes.slice(0, 6).map((row, index) => (
-                <li key={index} className="px-3 py-2">
-                  {row.area}: {row.change.toLowerCase()} {row.item}
-                </li>
-              ))}
-              {status.changes.length > 6 && (
-                <li className="px-3 py-2">+ {status.changes.length - 6} more</li>
-              )}
-            </ul>
+            <Card size="sm" className="gap-0 py-0">
+              <ItemGroup className="gap-0">
+                {status.changes.slice(0, 6).map((row, index) => (
+                  <Fragment key={index}>
+                    {index === 0 ? null : <ItemSeparator />}
+                    <Item size="xs" role="listitem">
+                      <ItemContent>
+                        {row.area}: {row.change.toLowerCase()} {row.item}
+                      </ItemContent>
+                    </Item>
+                  </Fragment>
+                ))}
+                {status.changes.length > 6 && (
+                  <>
+                    <ItemSeparator />
+                    <Item size="xs" role="listitem">
+                      <ItemContent>+ {status.changes.length - 6} more</ItemContent>
+                    </Item>
+                  </>
+                )}
+              </ItemGroup>
+            </Card>
           )}
           <p className="text-sm text-muted-foreground">Your unsaved change will be discarded.</p>
           {loadFailed && (
@@ -282,7 +297,7 @@ export function StudioSaveState({ draft }: Readonly<{ draft: StudioDraft }>) {
           <AlertDialogFooter>
             <Button
               variant="outline"
-              disabled={!draft.state.canUndo || draft.locked}
+              disabled={!draft.state.canUndo || draft.historyBlocked}
               onClick={() => {
                 draft.session.cancel();
                 void draft.flush().then(() => draft.undo());

@@ -158,6 +158,11 @@ export type StudioDraft = Readonly<{
   lifetime: number;
   /** Rendered: a hold is on, the draft is in conflict or not mounted yet, so the controls that edit it are disabled. */
   locked: boolean;
+  /**
+   * Rendered: the history itself cannot be changed now (a hold or a conflict). A page's view still
+   * loading does not stop Undo or Redo, which change the draft and let the view follow.
+   */
+  historyBlocked: boolean;
   isHeld: (hold: StudioDraftHold) => boolean;
   hold: (hold: StudioDraftHold, on: boolean) => void;
   /** Live: why an edit cannot run now, or undefined. */
@@ -902,6 +907,8 @@ export function useStudioDraft({
     await saveNow();
   }, [history, blockedReason, saveNow]);
   const updatingCanvas = view.draftRevision !== saved.draftRevision || state.isDirty;
+  // The one rule that blocks Undo and Redo, wherever their buttons are: it mirrors blockedReason().
+  const historyBlocked = renderedHolds.size > 0 || status.kind === "conflict";
   const words =
     status.kind === "saved" ? "Saved" : status.kind === "saving" ? "Saving…" : "Not saved";
   const chip =
@@ -911,8 +918,7 @@ export function useStudioDraft({
         ? `${words} · Updating canvas…`
         : words;
   const loadingView = JSON.stringify(view.request) !== requestKey;
-  const locked =
-    renderedHolds.size > 0 || status.kind === "conflict" || lifetime === 0 || loadingView;
+  const locked = historyBlocked || lifetime === 0 || loadingView;
 
   return useMemo<StudioDraft>(
     () => ({
@@ -937,6 +943,7 @@ export function useStudioDraft({
       chip,
       lifetime,
       locked,
+      historyBlocked,
       isHeld: (key) => renderedHolds.has(key),
       hold,
       blockedReason,
@@ -984,6 +991,7 @@ export function useStudioDraft({
       chip,
       lifetime,
       locked,
+      historyBlocked,
       renderedHolds,
       hold,
       blockedReason,

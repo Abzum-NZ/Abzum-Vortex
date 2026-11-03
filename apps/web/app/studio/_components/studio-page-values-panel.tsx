@@ -1,4 +1,5 @@
 "use client";
+import { Card, CardContent } from "@vortex/ui/components/card";
 import { Alert, AlertDescription } from "@vortex/ui/components/alert";
 import { useState } from "react";
 import { Input } from "@vortex/ui/components/input";
@@ -117,28 +118,30 @@ export function StudioPageValuesPanel({
         <p className="text-sm text-muted-foreground">This page declares no values yet.</p>
       )}
       {values.map(([key, declaration]) => (
-        <div key={key} className="space-y-1 rounded-md border px-2 py-1.5 text-sm">
-          <div className="flex items-center justify-between gap-2">
-            <span className="min-w-0">
-              <span className="block truncate font-medium">{declaration.label}</span>
-              <span className="block truncate font-mono text-xs text-muted-foreground">
-                {key} ·{" "}
-                {studioPageValueTypes.find((entry) => entry.type === declaration.type)?.label}
-                {declaration.currency === undefined ? "" : ` ${declaration.currency}`}
+        <Card size="sm" key={key}>
+          <CardContent className="space-y-1">
+            <div className="flex items-center justify-between gap-2">
+              <span className="min-w-0">
+                <span className="block truncate font-medium">{declaration.label}</span>
+                <span className="block truncate font-mono text-xs text-muted-foreground">
+                  {key} ·{" "}
+                  {studioPageValueTypes.find((entry) => entry.type === declaration.type)?.label}
+                  {declaration.currency === undefined ? "" : ` ${declaration.currency}`}
+                </span>
               </span>
-            </span>
-            <StudioRemoveButton
-              label="Remove value"
-              disabled={disabled}
-              onClick={() => run({ kind: "remove", pageAlias, name: key }, declaration.label)}
+              <StudioRemoveButton
+                label="Remove value"
+                disabled={disabled}
+                onClick={() => run({ kind: "remove", pageAlias, name: key }, declaration.label)}
+              />
+            </div>
+            <StudioUsedIn
+              source={source}
+              target={{ kind: "page_value", pageAlias, name: key }}
+              name={declaration.label}
             />
-          </div>
-          <StudioUsedIn
-            source={source}
-            target={{ kind: "page_value", pageAlias, name: key }}
-            name={declaration.label}
-          />
-        </div>
+          </CardContent>
+        </Card>
       ))}
       <StudioDialog
         open={adding}
