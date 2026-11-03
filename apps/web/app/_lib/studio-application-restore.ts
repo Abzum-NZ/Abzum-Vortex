@@ -42,6 +42,13 @@ const targetFacts: BuilderTargetFactsReader = async (transaction, _scope, rootId
 };
 
 const failureKind = (error: unknown): FailureKind => {
+  // A platform application's restore asks for a recent two-step verification first.
+  if (
+    error instanceof BuilderAuthorityError &&
+    (error.code === "BUILDER_MULTI_FACTOR_REQUIRED" ||
+      error.code === "BUILDER_RECENT_AUTHENTICATION_REQUIRED")
+  )
+    return "authentication_required";
   const kind = classifyDatabaseError(error);
   if (error instanceof DefinitionError) {
     if (error.code === "DEFINITION_DRAFT_STALE_OR_MISSING") return "conflict";
@@ -179,6 +186,7 @@ export async function restoreStudioApplicationDraft(
           await requireBuilderAuthority(authority, {
             kind: "draft_change",
             rootId: command.data.selector.rootId,
+            stepUp: true,
           });
           const service = createDefinitionHistoryService(
             installedReleaseCatalogue,

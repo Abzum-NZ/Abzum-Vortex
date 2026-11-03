@@ -154,16 +154,18 @@ const stripFlow = (flow: Record<string, Json>): Json => {
 
 const pageText = ["title", "label", "text", "description", "placeholder", "helpText", "heading"];
 
-/** A page or shell composition without its text properties, at any depth. */
+/** A page or shell composition without the text properties of its typed blocks. */
 const stripPageText = (value: Json, depth: number): Json => {
   if (depth > maximumDepth) return deepMarker;
   if (Array.isArray(value)) return value.map((item) => stripPageText(item, depth + 1));
   if (!isRecord(value)) return value;
-  return Object.fromEntries(
-    Object.entries(value)
-      .filter(([key]) => !pageText.includes(key))
-      .map(([key, item]) => [key, stripPageText(item, depth + 1)]),
+  const stripped: Record<string, Json> = Object.fromEntries(
+    Object.entries(value).map(([key, item]) => [key, stripPageText(item, depth + 1)]),
   );
+  // The text of a block is at known positions only: the properties of a typed block.
+  if (typeof stripped.type === "string" && isRecord(stripped.props))
+    stripped.props = without(stripped.props, ...pageText);
+  return stripped;
 };
 
 const stripRecordType = (recordType: Record<string, Json>): Json => {

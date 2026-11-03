@@ -38,7 +38,8 @@ begin
   select root.* into module_row
   from vortex_definition.roots as root
   where root.root_id = p_root_id
-    and root.kind = 'module';
+    and root.kind = 'module'
+    and root.organization_id = (vortex_platform.current_context() ->> 'organizationId')::uuid;
   if not found then
     return;
   end if;

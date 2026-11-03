@@ -5,25 +5,36 @@ set role vortex_owner;
 -- platform system Application from Studio (architecture decision 11).
 -- (0) system_application_surface_violation is an allow-list comparison of a release with the one it
 -- follows (an Application or a Module it owns). Free: name, description, icon, theme; flows,
--- bindings and actions that are not protected; cosmetic text at named positions (labels,
--- descriptions, interface step text, field and record type labels). Additive: pages, menu entries,
--- queries, events and platform block dependencies. Everything else, protected flows (they call a
--- protected operation, or name a protected flow), the bindings that start them, protected actions,
--- record types, permissions, roles, module bindings, settings and the pages that hold a protected
--- control, must be equal after the cosmetic text is removed, ids compared in lower case. Helpers:
--- system_application_as_set, _strip_text, _strip_task, _strip_flow. Deliberately ordinary: the
--- name, description, icon and theme, and what is not protected.
+-- bindings and actions that are not protected; cosmetic text at named positions (the text of a
+-- result message, message action labels, descriptions, the text properties of typed blocks, field
+-- and record type labels). Additive: pages, menu entries, queries, events and platform block
+-- dependencies. Everything else must be equal, ids compared in lower case: protected flows (they
+-- call a protected operation or name a protected flow) with their names and confirmations, every
+-- binding on a protected control, protected actions, record types, permissions, roles, module
+-- bindings, settings, the pages that hold a protected control, menu entries; content nested too
+-- deeply to compare is refused. Helpers: system_application_as_set, _strip_text, _strip_task,
+-- _strip_flow.
 -- (1) append_release accepts a human publication of a platform system Application and of the
 -- Modules it owns, and then also demands system_applications.manage (at the start and again at the
--- end of the transaction). It refuses, inside the publish transaction, a release that the
--- comparison refuses, with errcode 23514 and hint system_surface_changed.
+-- end of the transaction) and a recent two-step verification (require_system_application_step_up_
+-- internal). It refuses, inside the publish transaction, a release that the comparison refuses,
+-- with errcode 23514 and hint system_surface_changed. The baseline is the current release when it
+-- is of the new definition contract, otherwise the latest release the platform published at it.
 -- (2) restore_release_draft and read_release_for_restore no longer refuse a platform system
--- Application: the draft guard they already call demands both permissions for it.
+-- Application: the draft guard they already call demands both permissions for it, and a restore
+-- also demands the two-step verification.
 -- (3) read_application_latest_release reads a platform system Application's latest version too, for
 -- the upgrade review.
+-- (4) detach_application_installation refuses a platform system Application unless a replacing
+-- release of it is named (an upgrade); lock_application_installation_authority takes the recent
+-- authentication the operation needs, and purge_application asks for a recent sign-in.
+-- (5) stage_owned_module_source looks the Module up inside the caller's organisation first.
 -- No earlier migration rewrites any of these functions in place (the regprocedures were
 -- searched): the bodies below are the whole definitions and equal the canonical files in
 -- supabase/schemas.
+
+drop function if exists vortex_definition.detach_application_installation(uuid, bigint, jsonb);
+drop function if exists vortex_access.lock_application_installation_authority();
 
 create or replace function vortex_definition.system_application_as_set(p_value jsonb)
 returns jsonb
@@ -65,21 +76,28 @@ immutable
 security invoker
 set search_path = ''
 as $function$
+declare
+  result jsonb;
 begin
   if p_depth > 64 then
     return '"__too_deeply_nested__"'::jsonb;
   end if;
   case pg_catalog.jsonb_typeof(p_value)
     when 'object' then
-      return coalesce((
+      result := coalesce((
         select pg_catalog.jsonb_object_agg(
           entry.key, vortex_definition.system_application_strip_text(entry.value, p_depth + 1)
         )
         from pg_catalog.jsonb_each(p_value) as entry(key, value)
-        where entry.key <> all (array[
-          'title', 'label', 'text', 'description', 'placeholder', 'helpText', 'heading'
-        ])
       ), '{}'::jsonb);
+      -- The text of a block is at known positions only: the properties of a typed block.
+      if pg_catalog.jsonb_typeof(result -> 'type') = 'string'
+        and pg_catalog.jsonb_typeof(result -> 'props') = 'object' then
+        result := pg_catalog.jsonb_set(result, '{props}', (result -> 'props') - array[
+          'title', 'label', 'text', 'description', 'placeholder', 'helpText', 'heading'
+        ]);
+      end if;
+      return result;
     when 'array' then
       return coalesce((
         select pg_catalog.jsonb_agg(
@@ -103,7 +121,7 @@ grant execute on function vortex_definition.system_application_strip_text(jsonb,
   to postgres;
 
 comment on function vortex_definition.system_application_strip_text(jsonb, integer) is
-  'Private helper of the system Application surface comparison: a page or shell composition without its text properties, at any depth (bounded).';
+  'Private helper of the system Application surface comparison: a page or shell composition without the text properties of its typed blocks (bounded depth).';
 
 create or replace function vortex_definition.system_application_strip_task(
   p_task jsonb,
@@ -605,6 +623,58 @@ grant execute on function vortex_definition.system_application_surface_violation
 comment on function vortex_definition.system_application_surface_violation(jsonb, jsonb, text) is
   'Private allow-list comparison of two releases of a platform system Application or of a Module it owns: the first change that is not free (cosmetic text and result messages, unprotected flows, bindings and actions) or additive (pages, menu entries, queries, events, block dependencies), worded for the person publishing, or null. The name of a protected flow and the wording of its confirmations are compared, every binding on a protected control is protected, and content nested too deeply to compare is refused.';
 
+create or replace function vortex_definition.require_system_application_step_up_internal()
+returns void
+language plpgsql
+volatile
+security definer
+set search_path = ''
+as $function$
+declare
+  context_value jsonb;
+  decision record;
+begin
+  context_value := vortex_access.validated_human_request_context();
+  select evaluated.* into strict decision
+  from vortex_access.evaluate_organization_permission_eligibility(
+    pg_catalog.jsonb_build_object(
+      'operationKey', 'platform.organization.system_applications.manage',
+      'action', pg_catalog.jsonb_build_object('actionKind', 'manage'),
+      'target', pg_catalog.jsonb_build_object('kind', 'organization'),
+      'requiredPermission', vortex_access.required_platform_permission(
+        'platform.organization.system_applications.manage'
+      ),
+      'recentAuthentication',
+        pg_catalog.jsonb_build_object('kind', 'multi_factor', 'maximumAgeSeconds', 3600),
+      'authority', pg_catalog.jsonb_build_object('kind', 'permission')
+    )
+  ) as evaluated;
+  -- A platform system Application carries the steward's way to manage access: publishing or
+  -- discarding a change to it needs a recent two-step verification, as the role and group
+  -- changes do.
+  if decision.outcome is distinct from 'eligible'
+    or decision.organization_id is distinct from (context_value ->> 'organizationId')::uuid
+    or decision.organization_account_id
+      is distinct from (context_value ->> 'organizationAccountId')::uuid
+    or decision.correlation_id is distinct from (context_value ->> 'correlationId')::uuid then
+    raise exception using errcode = '42501',
+      message = 'Changing a platform application needs a recent two-step verification',
+      hint = 'multi_factor_required';
+  end if;
+end
+$function$;
+
+alter function vortex_definition.require_system_application_step_up_internal()
+  owner to vortex_owner;
+
+revoke all on function vortex_definition.require_system_application_step_up_internal()
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
+grant execute on function vortex_definition.require_system_application_step_up_internal()
+  to postgres;
+
+comment on function vortex_definition.require_system_application_step_up_internal() is
+  'Private step-up for publishing or discarding a change to a platform system Application: the current person holds system_applications.manage with a two-step verification within the hour.';
+
 create or replace function vortex_definition.append_release(
   p_root_id uuid,
   p_expected_draft_revision bigint,
@@ -635,6 +705,7 @@ declare
   permission_keys text[];
   system_publication boolean := false;
   surface_violation text;
+  baseline_content jsonb;
   permission_id uuid;
   permission_decision record;
   checked_at timestamptz;
@@ -773,6 +844,10 @@ begin
       raise exception using errcode = '42501',
         message = 'Definition publication authority is unavailable';
     end if;
+    -- Publishing a platform system Application also needs a recent two-step verification.
+    if system_publication then
+      perform vortex_definition.require_system_application_step_up_internal();
+    end if;
   end if;
 
   if p_root_id is null
@@ -879,11 +954,25 @@ begin
   -- permissions and roles stay the platform's: the release may not change them, so the
   -- organisation's steward always keeps a working way to manage access.
   if human_publication and system_publication then
+    -- The baseline is the current release when it is of this definition contract; after a contract
+    -- bump it is the latest release the platform itself published at the new contract.
+    select baseline.compilation_output #> '{canonical,content}' into baseline_content
+    from vortex_definition.releases as baseline
+    where baseline.root_id = p_root_id
+      and baseline.validation_contract_version = validation_contract_version_value
+      and (baseline.release_revision = root_row.current_release_revision
+        or not exists (
+          select 1 from vortex_identity.organization_accounts as account
+          where account.organization_account_id = baseline.published_by))
+    order by (baseline.release_revision = root_row.current_release_revision) desc,
+      baseline.release_revision desc
+    limit 1;
+    if not found and root_row.current_release_revision is not null then
+      raise exception using errcode = '23514', hint = 'system_surface_changed',
+        message = 'This platform application has not been refreshed for the current definition format yet. Publish it again after the platform refresh.';
+    end if;
     select vortex_definition.system_application_surface_violation(
-      (select previous_release.compilation_output #> '{canonical,content}'
-        from vortex_definition.releases as previous_release
-        where previous_release.root_id = p_root_id
-          and previous_release.release_revision = root_row.current_release_revision),
+      baseline_content,
       compilation_output_value #> '{canonical,content}',
       root_row.kind
     ) into surface_violation;
@@ -1947,6 +2036,10 @@ begin
       or p_target_release_revision > root_row.current_release_revision then
       return null;
     end if;
+    -- Discarding a change to a platform system Application also needs a recent two-step verification.
+    if root_row.application_origin_kind = 'platform_system_application' then
+      perform vortex_definition.require_system_application_step_up_internal();
+    end if;
 
     select draft.*
     into draft_row
@@ -2685,5 +2778,600 @@ grant execute on function vortex_definition.read_application_latest_release(uuid
 comment on function vortex_definition.read_application_latest_release(uuid) is
   'Returns the latest published version of one Application, ordinary or platform system, of the request organisation to a caller holding platform.organization.applications.manage, or null when it has none.';
 alter function vortex_definition.read_application_latest_release(uuid) owner to vortex_owner;
+
+create or replace function vortex_definition.stage_owned_module_source(
+  p_root_id uuid,
+  p_expected_revision bigint,
+  p_source jsonb,
+  p_source_fingerprint text,
+  p_identity_requirements jsonb
+)
+returns table (
+  root_id uuid,
+  definition_key text,
+  draft_revision bigint,
+  current_release_revision bigint,
+  source_fingerprint text
+)
+language plpgsql
+volatile
+security definer
+set search_path = ''
+as $function$
+declare
+  checked_context jsonb;
+  human_write boolean;
+  actor_id uuid;
+  operation_at timestamptz := pg_catalog.statement_timestamp();
+  module_row vortex_definition.roots%rowtype;
+  saved_revision bigint;
+begin
+  -- A Module is never drafted on its own: its owning Application's publication stages the
+  -- current lowering of the Application's inline Module here, then compiles and releases it.
+  if p_root_id is null
+    or p_root_id = '00000000-0000-0000-0000-000000000000'::uuid
+    or p_expected_revision is null
+    or p_expected_revision not between 1 and 9007199254740991 then
+    raise exception using errcode = '22023',
+      message = 'Module source staging has an invalid root or expected revision';
+  end if;
+
+  select root.* into module_row
+  from vortex_definition.roots as root
+  where root.root_id = p_root_id
+    and root.kind = 'module'
+    and root.organization_id = (vortex_platform.current_context() ->> 'organizationId')::uuid;
+  if not found then
+    return;
+  end if;
+
+  human_write := vortex_platform.current_context() ->> 'callerKind' = 'human';
+  if human_write then
+    -- The person needs draft authority over the owning Application: for a platform system
+    -- Application the guard also demands the system-application permission.
+    checked_context := vortex_definition.validated_builder_draft_write_context_internal(
+      module_row.owner_application_root_id
+    );
+    actor_id := (checked_context ->> 'organizationAccountId')::uuid;
+  else
+    checked_context := vortex_definition.validated_system_context();
+    actor_id := (checked_context ->> 'systemActorId')::uuid;
+  end if;
+
+  if module_row.organization_id <> (checked_context ->> 'organizationId')::uuid then
+    raise exception using errcode = '42501',
+      message = 'Definition root does not belong to the context organization';
+  end if;
+
+  if not exists (
+      select 1
+      from vortex_definition.roots as owner_root
+      where owner_root.root_id = module_row.owner_application_root_id
+        and owner_root.organization_id = module_row.organization_id
+        and owner_root.kind = 'application'
+    )
+    or p_source ->> 'kind' is distinct from 'module'
+    or p_source ->> 'key' is distinct from module_row.key
+    or not vortex_definition.is_owned_module_source_internal(
+      module_row.owner_application_root_id, module_row.organization_id, p_source
+    ) then
+    raise exception using errcode = '22023',
+      message = 'A Module source must be an inline Module of its owning Application',
+      hint = 'module_source_not_owned';
+  end if;
+
+  update vortex_definition.drafts as draft
+  set
+    draft_revision = draft.draft_revision + 1,
+    draft_source = p_source,
+    identity_requirements = p_identity_requirements,
+    source_contract_version = p_source ->> 'source_contract_version',
+    source_fingerprint = p_source_fingerprint,
+    restored_from_release_revision = null,
+    restored_from_source_fingerprint = null,
+    restored_by = null,
+    restored_at = null,
+    restore_correlation_id = null,
+    updated_at = operation_at,
+    updated_by = actor_id
+  where draft.root_id = p_root_id
+    and draft.draft_revision = p_expected_revision
+  returning draft.draft_revision into saved_revision;
+
+  if saved_revision is null then
+    return;
+  end if;
+
+  perform vortex_definition.record_source_identities(
+    p_root_id, p_identity_requirements, actor_id, operation_at
+  );
+
+  if human_write and (
+    checked_context ->> 'draftWriteDeadline' is null
+    or (checked_context ->> 'draftWriteDeadline')::timestamptz <= pg_catalog.clock_timestamp()
+  ) then
+    raise exception using errcode = '42501',
+      message = 'Definition draft write authority is unavailable';
+  end if;
+
+  return query
+  select root.root_id, root.key, draft.draft_revision, root.current_release_revision,
+    draft.source_fingerprint
+  from vortex_definition.roots as root
+  join vortex_definition.drafts as draft on draft.root_id = root.root_id
+  where root.root_id = p_root_id;
+end
+$function$;
+
+revoke all on function vortex_definition.stage_owned_module_source(uuid, bigint, jsonb, text, jsonb)
+  from public, anon, authenticated, service_role, vortex_runtime;
+
+grant execute on function vortex_definition.stage_owned_module_source(uuid, bigint, jsonb, text, jsonb)
+  to vortex_request;
+
+comment on function vortex_definition.stage_owned_module_source(uuid, bigint, jsonb, text, jsonb) is
+  'Stages the current lowering of an inline Module into its internal Module root for the owning Application''s publication, recording its permanent identities.';
+
+alter function vortex_definition.stage_owned_module_source(uuid, bigint, jsonb, text, jsonb)
+  owner to vortex_owner;
+
+CREATE OR REPLACE FUNCTION vortex_access.lock_application_installation_authority(p_recent_authentication jsonb DEFAULT NULL) RETURNS TABLE(organization_id uuid, organization_account_id uuid, access_version bigint, correlation_id uuid)
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+declare
+  context_value jsonb;
+  permission_decision record;
+  delegation_decision record;
+  current_version bigint;
+begin
+  context_value := vortex_access.validated_human_request_context();
+
+  select version.current_version into current_version
+  from vortex_access.organization_access_versions as version
+  join vortex_identity.organizations as organization
+    on organization.organization_id = version.organization_id
+  join vortex_identity.tenants as tenant on tenant.tenant_id = organization.tenant_id
+  where version.organization_id = (context_value ->> 'organizationId')::uuid
+    and organization.state = 'active'
+    and tenant.state = 'active'
+  for share of version;
+  if not found then
+    raise exception using errcode = '42501',
+      message = 'Application installation scope is unavailable';
+  end if;
+  if current_version <> (context_value ->> 'accessVersion')::bigint then
+    raise exception using errcode = '40001',
+      message = 'Application installation authority changed';
+  end if;
+
+  select evaluated.* into strict permission_decision
+  from vortex_access.evaluate_organization_permission_eligibility(
+    pg_catalog.jsonb_build_object(
+      'operationKey', 'platform.organization.applications.install',
+      'action', pg_catalog.jsonb_build_object('actionKind', 'manage'),
+      'target', pg_catalog.jsonb_build_object('kind', 'organization'),
+      'requiredPermission', pg_catalog.jsonb_build_object(
+        'ownerKind', 'platform',
+        'ownerId', vortex_access.platform_permission_owner_id(),
+        'permissionId', vortex_access.platform_permission_id('platform.organization.applications.manage')
+      ),
+      -- The caller names the recent authentication its operation needs (a purge needs a recent sign-in).
+      'recentAuthentication', coalesce(p_recent_authentication, pg_catalog.jsonb_build_object('kind', 'none')),
+      'authority', pg_catalog.jsonb_build_object('kind', 'permission')
+    )
+  ) as evaluated;
+  if permission_decision.outcome is distinct from 'eligible' then
+    raise exception using errcode = '42501',
+      message = 'Application installation authority is unavailable';
+  end if;
+
+  select evaluated.* into strict delegation_decision
+  from vortex_access.evaluate_organization_permission_eligibility(
+    pg_catalog.jsonb_build_object(
+      'operationKey', 'platform.organization.applications.install_scope',
+      'action', pg_catalog.jsonb_build_object('actionKind', 'manage'),
+      'target', pg_catalog.jsonb_build_object('kind', 'organization'),
+      'requiredPermission', pg_catalog.jsonb_build_object(
+        'ownerKind', 'platform',
+        'ownerId', vortex_access.platform_permission_owner_id(),
+        'permissionId', vortex_access.platform_permission_id('platform.organization.applications.manage')
+      ),
+      'recentAuthentication', pg_catalog.jsonb_build_object('kind', 'none'),
+      'authority', pg_catalog.jsonb_build_object(
+        'kind', 'delegated_management',
+        'before', pg_catalog.jsonb_build_object('kind', 'organization_catalogue'),
+        'after', pg_catalog.jsonb_build_object('kind', 'organization_catalogue')
+      )
+    )
+  ) as evaluated;
+  if delegation_decision.outcome is distinct from 'eligible'
+    or delegation_decision.organization_id <> permission_decision.organization_id
+    or delegation_decision.organization_account_id <> permission_decision.organization_account_id
+    or delegation_decision.access_version <> permission_decision.access_version
+    or delegation_decision.correlation_id <> permission_decision.correlation_id then
+    raise exception using errcode = '42501',
+      message = 'Application installation delegation is unavailable';
+  end if;
+
+  return query select permission_decision.organization_id,
+    permission_decision.organization_account_id, permission_decision.access_version,
+    permission_decision.correlation_id;
+end
+$$;
+
+alter function vortex_access.lock_application_installation_authority(jsonb) owner to vortex_owner;
+
+COMMENT ON FUNCTION vortex_access.lock_application_installation_authority(jsonb) IS 'Access-owned lock and current authority decision for one protected Application installation lifecycle transaction; the caller may name the recent authentication its operation needs.';
+
+REVOKE ALL ON FUNCTION vortex_access.lock_application_installation_authority(jsonb) FROM PUBLIC;
+GRANT ALL ON FUNCTION vortex_access.lock_application_installation_authority(jsonb) TO vortex_owner;
+
+grant execute on function vortex_access.lock_application_installation_authority(jsonb) to postgres;
+
+create or replace function vortex_definition.detach_application_installation(
+  p_application_root_id uuid,
+  p_application_release_revision bigint,
+  p_expected_module_bindings jsonb,
+  p_replacement_release_revision bigint default null
+)
+returns jsonb
+language plpgsql
+volatile
+security definer
+set search_path = ''
+as $function$
+declare
+  initial_authority record;
+  current_authority record;
+  pin record;
+  expected_count integer;
+  pin_count integer;
+  all_active boolean;
+  all_provisioned boolean;
+  all_detached boolean;
+  changed_value boolean;
+  binding_evidence jsonb;
+  sort_index_status jsonb;
+begin
+  if p_application_root_id is null
+    or p_application_root_id = '00000000-0000-0000-0000-000000000000'::uuid
+    or p_application_release_revision not between 1 and 9007199254740991
+    or pg_catalog.jsonb_typeof(p_expected_module_bindings) is distinct from 'array'
+    or pg_catalog.jsonb_array_length(p_expected_module_bindings) = 0
+    or exists (
+      select 1 from pg_catalog.jsonb_array_elements(p_expected_module_bindings) as item(value)
+      where pg_catalog.jsonb_typeof(item.value) <> 'object'
+        or not item.value ?& array['moduleRootId', 'bindingRevision']
+        or item.value - array['moduleRootId', 'bindingRevision'] <> '{}'::jsonb
+        or (item.value ->> 'moduleRootId')::uuid =
+          '00000000-0000-0000-0000-000000000000'::uuid
+        or (item.value ->> 'bindingRevision')::bigint not between 1 and 9007199254740991
+    )
+    or exists (
+      select 1
+      from pg_catalog.jsonb_array_elements(p_expected_module_bindings) as item(value)
+      group by (item.value ->> 'moduleRootId')::uuid
+      having pg_catalog.count(*) <> 1
+    )
+    or p_expected_module_bindings is distinct from (
+      select pg_catalog.jsonb_agg(item.value order by (item.value ->> 'moduleRootId')::uuid)
+      from pg_catalog.jsonb_array_elements(p_expected_module_bindings) as item(value)
+    ) then
+    raise exception using errcode = '22023',
+      message = 'Application installation detach command is invalid';
+  end if;
+
+  select locked.* into strict initial_authority
+  from vortex_access.lock_application_installation_authority() as locked;
+
+  -- Detaching only retires bindings, so an installed release of an earlier definition contract
+  -- stays detachable: its identity is checked, never its contract version.
+  if not exists (
+    select 1
+    from vortex_definition.roots as root
+    join vortex_definition.releases as release on release.root_id = root.root_id
+    where root.root_id = p_application_root_id
+      and root.organization_id = initial_authority.organization_id
+      and root.kind = 'application'
+      and release.release_revision = p_application_release_revision
+      and release.compilation_output #>> '{kind}' = 'application'
+      and release.compilation_output #>> '{canonical,envelope,rootId}' = p_application_root_id::text
+  ) then
+    raise exception using errcode = 'P0002',
+      message = 'Exact Application release is unavailable';
+  end if;
+
+  -- A platform system Application is never uninstalled (architecture decision 11): it is detached
+  -- only to be replaced by another release of the same Application, as an upgrade does.
+  if exists (
+    select 1
+    from vortex_definition.roots as root
+    where root.root_id = p_application_root_id
+      and root.application_origin_kind = 'platform_system_application'
+  ) and (
+    p_replacement_release_revision is null
+    or p_replacement_release_revision = p_application_release_revision
+    or not exists (
+      select 1 from vortex_definition.releases as replacement
+      where replacement.root_id = p_application_root_id
+        and replacement.release_revision = p_replacement_release_revision
+    )
+  ) then
+    raise exception using errcode = '42501',
+      message = 'A platform application cannot be uninstalled';
+  end if;
+
+  select pg_catalog.count(*)::integer into pin_count
+  from vortex_definition.reachable_module_dependency_edges(
+    p_application_root_id, p_application_release_revision
+  );
+  expected_count := pg_catalog.jsonb_array_length(p_expected_module_bindings);
+  if pin_count = 0 or expected_count <> pin_count
+    or exists (
+      select 1
+      from vortex_definition.reachable_module_dependency_edges(
+        p_application_root_id, p_application_release_revision
+      ) as required
+      where not exists (
+        select 1 from pg_catalog.jsonb_array_elements(p_expected_module_bindings) as expected(value)
+        where (expected.value ->> 'moduleRootId')::uuid = required.target_root_id
+      )
+    ) then
+    raise exception using errcode = '23514',
+      message = 'Application installation binding set is incomplete';
+  end if;
+
+  for pin in
+    select required.*
+    from vortex_definition.reachable_module_dependency_edges(
+      p_application_root_id, p_application_release_revision
+    ) as required
+    order by required.target_root_id
+  loop
+    perform pg_catalog.pg_advisory_xact_lock(
+      pg_catalog.hashtextextended(
+        'vortex_definition.binding:' || initial_authority.organization_id::text || ':' ||
+          p_application_root_id::text || ':' || pin.target_root_id::text,
+        0
+      )
+    );
+    perform 1
+    from vortex_definition.installation_bindings as binding
+    where binding.organization_id = initial_authority.organization_id
+      and binding.application_root_id = p_application_root_id
+      and binding.module_root_id = pin.target_root_id
+    for update;
+  end loop;
+
+  select locked.* into strict current_authority
+  from vortex_access.lock_application_installation_authority() as locked;
+  if current_authority.organization_id <> initial_authority.organization_id
+    or current_authority.organization_account_id <> initial_authority.organization_account_id
+    or current_authority.access_version <> initial_authority.access_version
+    or current_authority.correlation_id <> initial_authority.correlation_id then
+    raise exception using errcode = '40001',
+      message = 'Application installation authority changed';
+  end if;
+
+  -- Each accepted state must hold for the complete exact set; mixed states are refused.
+  select pg_catalog.bool_and(coalesce(
+      binding.state = 'active'
+      and binding.binding_revision = expected.binding_revision
+      and binding.application_release_revision = p_application_release_revision
+      and binding.module_release_revision = required.target_release_revision, false
+    )),
+    pg_catalog.bool_and(coalesce(
+      binding.state = 'provisioned'
+      and binding.binding_revision = expected.binding_revision
+      and binding.application_release_revision = p_application_release_revision
+      and binding.module_release_revision = required.target_release_revision, false
+    )),
+    pg_catalog.bool_and(coalesce(
+      binding.state = 'detached'
+      and binding.binding_revision = expected.binding_revision
+      and binding.application_release_revision = p_application_release_revision
+      and binding.module_release_revision = required.target_release_revision, false
+    ))
+  into all_active, all_provisioned, all_detached
+  from vortex_definition.reachable_module_dependency_edges(
+    p_application_root_id, p_application_release_revision
+  ) as required
+  left join vortex_definition.installation_bindings as binding
+    on binding.organization_id = initial_authority.organization_id
+    and binding.application_root_id = p_application_root_id
+    and binding.module_root_id = required.target_root_id
+  left join lateral (
+    select (expected.value ->> 'bindingRevision')::bigint as binding_revision
+    from pg_catalog.jsonb_array_elements(p_expected_module_bindings) as expected(value)
+    where (expected.value ->> 'moduleRootId')::uuid = required.target_root_id
+  ) as expected on true
+  ;
+  if all_active is null or (not all_active and not all_provisioned and not all_detached)
+    or exists (
+      select 1 from vortex_definition.installation_bindings as binding
+      where binding.organization_id = initial_authority.organization_id
+        and binding.application_root_id = p_application_root_id
+        and binding.state <> 'detached'
+        and not exists (
+          select 1 from vortex_definition.reachable_module_dependency_edges(
+            p_application_root_id, p_application_release_revision
+          ) as required
+          where required.target_root_id = binding.module_root_id
+        )
+    ) then
+    raise exception using errcode = '40001',
+      message = 'Application installation bindings changed or are incomplete';
+  end if;
+
+  changed_value := all_active or all_provisioned;
+  if changed_value then
+    if exists (
+      select 1 from vortex_definition.reachable_module_dependency_edges(
+        p_application_root_id, p_application_release_revision
+      ) as required
+      join vortex_definition.installation_bindings as binding
+        on binding.organization_id = initial_authority.organization_id
+        and binding.application_root_id = p_application_root_id
+        and binding.module_root_id = required.target_root_id
+      where binding.binding_revision = 9007199254740991
+    ) then
+      raise exception using errcode = '22003',
+        message = 'Application installation binding revision is exhausted';
+    end if;
+    update vortex_definition.installation_bindings as binding
+    set state = 'detached', binding_revision = binding.binding_revision + 1,
+      changed_at = pg_catalog.statement_timestamp()
+    from vortex_definition.reachable_module_dependency_edges(
+      p_application_root_id, p_application_release_revision
+    ) as required
+    where binding.organization_id = initial_authority.organization_id
+      and binding.application_root_id = p_application_root_id
+      and binding.module_root_id = required.target_root_id
+      and binding.state in ('active', 'provisioned');
+    if not found then
+      raise exception using errcode = '40001',
+        message = 'Application installation bindings changed';
+    end if;
+    sort_index_status := vortex_record.sync_published_sort_indexes_internal();
+  end if;
+
+  select pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
+    'organizationId', binding.organization_id,
+    'applicationRootId', binding.application_root_id,
+    'moduleRootId', binding.module_root_id,
+    'bindingRevision', binding.binding_revision,
+    'applicationReleaseRevision', binding.application_release_revision,
+    'moduleReleaseRevision', binding.module_release_revision,
+    'state', binding.state
+  ) order by binding.module_root_id) into binding_evidence
+  from vortex_definition.reachable_module_dependency_edges(
+    p_application_root_id, p_application_release_revision
+  ) as required
+  join vortex_definition.installation_bindings as binding
+    on binding.organization_id = initial_authority.organization_id
+    and binding.application_root_id = p_application_root_id
+    and binding.module_root_id = required.target_root_id;
+
+  return pg_catalog.jsonb_build_object(
+    'organizationId', initial_authority.organization_id,
+    'applicationRootId', p_application_root_id,
+    'applicationReleaseRevision', p_application_release_revision,
+    'state', 'detached', 'changed', changed_value,
+    'sortIndexes', sort_index_status,
+    'moduleBindings', binding_evidence
+  );
+exception
+  when no_data_found then
+    raise exception using errcode = 'P0002',
+      message = 'Application installation evidence is unavailable';
+  when too_many_rows then
+    raise exception using errcode = '55000',
+      message = 'Application installation evidence is ambiguous';
+  when invalid_text_representation or numeric_value_out_of_range then
+    raise exception using errcode = '22023',
+      message = 'Application installation detach command is invalid';
+end
+$function$;
+
+alter function vortex_definition.detach_application_installation(uuid,bigint,jsonb,bigint) owner to vortex_owner;
+
+revoke all on function vortex_definition.detach_application_installation(uuid, bigint, jsonb, bigint)
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_record_adapter;
+grant execute on function vortex_definition.detach_application_installation(uuid, bigint, jsonb, bigint)
+  to vortex_request;
+comment on function vortex_definition.detach_application_installation(uuid, bigint, jsonb, bigint) is
+  'Revision-checked atomic detach of one complete Application Module binding set while retaining storage and records. A platform system Application is detached only to be replaced by another release of it.';
+
+-- Counts, or with p_apply removes, everything one ordinary application and the modules it owns
+-- hold in the validated organisation, in one transaction under the application installation
+-- authority. The proof of what may be removed (purge_application_review_internal) and the
+-- deletion of the protected history (purge_application_history_internal, owned by the only role
+-- the history protection lets delete) both prove it again themselves; this function only
+-- sequences them, then removes the roots and records the change.
+create or replace function vortex_definition.purge_application(
+  p_application_root_id uuid,
+  p_apply boolean,
+  p_delete_only boolean,
+  p_confirmed_name text
+)
+returns jsonb
+language plpgsql
+volatile
+security definer
+set search_path = ''
+as $function$
+declare
+  authority record;
+  impact jsonb;
+  context_value jsonb;
+begin
+  if p_application_root_id is null or p_apply is null or p_delete_only is null then
+    raise exception using errcode = '22023',
+      message = 'Application purge command is invalid';
+  end if;
+
+  -- Purging or deleting needs a recent sign-in, as the installation authority in TypeScript says.
+  select locked.* into strict authority
+  from vortex_access.lock_application_installation_authority(
+    case when p_apply then pg_catalog.jsonb_build_object('kind', 'primary', 'maximumAgeSeconds', 900) end
+  ) as locked;
+
+  -- Without a typed name this only reads; with p_apply the typed name is required and proved.
+  impact := vortex_definition.purge_application_review_internal(
+    authority.organization_id,
+    p_application_root_id,
+    p_delete_only,
+    case when p_apply then coalesce(p_confirmed_name, '') else null end);
+  if not p_apply then
+    return impact;
+  end if;
+
+  perform vortex_definition.purge_application_history_internal(
+    authority.organization_id, p_application_root_id, p_delete_only, p_confirmed_name);
+  perform vortex_definition.purge_application_roots_internal(
+    authority.organization_id, p_application_root_id);
+
+  context_value := vortex_access.validated_human_request_context();
+  perform vortex_access.increment_organization_access_version(
+    authority.organization_id,
+    authority.organization_account_id,
+    authority.correlation_id,
+    'application_access_changed'
+  );
+  perform vortex_record.append_organization_activity_entry(
+    authority.organization_id,
+    pg_catalog.gen_random_uuid(),
+    pg_catalog.statement_timestamp(),
+    'organization_account',
+    authority.organization_account_id,
+    case when p_delete_only then 'delete_application' else 'purge_application' end,
+    array[p_application_root_id]::uuid[],
+    array[]::uuid[],
+    vortex_platform.channel(),
+    (context_value ->> 'correlationId')::uuid,
+    'completed'
+  );
+
+  return pg_catalog.jsonb_build_object(
+    'roles', impact -> 'roles',
+    'role_assignments', impact -> 'role_assignments',
+    'permission_entries', impact -> 'permission_entries',
+    'releases', impact -> 'releases',
+    'records', impact -> 'records',
+    'record_tables', impact -> 'record_tables'
+  );
+end
+$function$;
+
+revoke all on function vortex_definition.purge_application(uuid, boolean, boolean, text)
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_record_adapter;
+grant execute on function vortex_definition.purge_application(uuid, boolean, boolean, text)
+  to vortex_request;
+
+comment on function vortex_definition.purge_application(uuid, boolean, boolean, text) is
+  'Counts, or with p_apply removes, everything one ordinary Application and the Modules it owns hold in the validated organisation, in one transaction under the application installation authority: the protected history through the one role allowed to delete it, then the roots. A system application, the default application and an application another one depends on are refused; p_delete_only also refuses an installed application; the typed name is required and proved to remove.';
+
+alter function vortex_definition.purge_application(uuid, boolean, boolean, text) owner to vortex_owner;
 
 reset role;

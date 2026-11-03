@@ -54,7 +54,13 @@ export const studioApplicationRestoreCommandResultSchema = z.union([
     .strict(),
   z
     .object({
-      kind: z.enum(["refused", "superseded", "conflict", "temporarily_unavailable"]),
+      kind: z.enum([
+        "refused",
+        "superseded",
+        "conflict",
+        "temporarily_unavailable",
+        "authentication_required",
+      ]),
       stateMayHaveChanged: z.union([z.literal(false), z.literal("unknown")]),
     })
     .strict(),
@@ -62,7 +68,8 @@ export const studioApplicationRestoreCommandResultSchema = z.union([
 
 /** Why a restore did not run; `superseded`: the version predates the current definition contract. */
 export type StudioApplicationRestoreFailure = Readonly<{
-  kind: "refused" | "superseded" | "conflict" | "temporarily_unavailable";
+  kind:
+    "refused" | "superseded" | "conflict" | "temporarily_unavailable" | "authentication_required";
 }>;
 export type StudioApplicationRestoreCommand = z.infer<typeof studioApplicationRestoreCommandSchema>;
 export type StudioApplicationRestoreCommandResult = z.infer<

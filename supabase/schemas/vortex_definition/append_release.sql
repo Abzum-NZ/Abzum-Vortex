@@ -28,6 +28,7 @@ declare
   permission_keys text[];
   system_publication boolean := false;
   surface_violation text;
+  baseline_content jsonb;
   permission_id uuid;
   permission_decision record;
   checked_at timestamptz;
@@ -166,6 +167,10 @@ begin
       raise exception using errcode = '42501',
         message = 'Definition publication authority is unavailable';
     end if;
+    -- Publishing a platform system Application also needs a recent two-step verification.
+    if system_publication then
+      perform vortex_definition.require_system_application_step_up_internal();
+    end if;
   end if;
 
   if p_root_id is null
@@ -272,11 +277,25 @@ begin
   -- permissions and roles stay the platform's: the release may not change them, so the
   -- organisation's steward always keeps a working way to manage access.
   if human_publication and system_publication then
+    -- The baseline is the current release when it is of this definition contract; after a contract
+    -- bump it is the latest release the platform itself published at the new contract.
+    select baseline.compilation_output #> '{canonical,content}' into baseline_content
+    from vortex_definition.releases as baseline
+    where baseline.root_id = p_root_id
+      and baseline.validation_contract_version = validation_contract_version_value
+      and (baseline.release_revision = root_row.current_release_revision
+        or not exists (
+          select 1 from vortex_identity.organization_accounts as account
+          where account.organization_account_id = baseline.published_by))
+    order by (baseline.release_revision = root_row.current_release_revision) desc,
+      baseline.release_revision desc
+    limit 1;
+    if not found and root_row.current_release_revision is not null then
+      raise exception using errcode = '23514', hint = 'system_surface_changed',
+        message = 'This platform application has not been refreshed for the current definition format yet. Publish it again after the platform refresh.';
+    end if;
     select vortex_definition.system_application_surface_violation(
-      (select previous_release.compilation_output #> '{canonical,content}'
-        from vortex_definition.releases as previous_release
-        where previous_release.root_id = p_root_id
-          and previous_release.release_revision = root_row.current_release_revision),
+      baseline_content,
       compilation_output_value #> '{canonical,content}',
       root_row.kind
     ) into surface_violation;

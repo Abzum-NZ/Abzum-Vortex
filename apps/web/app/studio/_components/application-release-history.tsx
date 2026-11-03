@@ -101,9 +101,11 @@ const restoreFailureMessage = (
       ? "The draft changed since this list was loaded, so nothing was restored. Reload the versions and try again."
       : result.kind === "superseded"
         ? "This version was published in an earlier definition format and can't be restored. Its history stays here; change the current draft instead."
-        : result.kind === "refused"
-          ? "Restoring was refused for your account or this version, so nothing was restored."
-          : "Restoring is temporarily unavailable, so nothing was restored. Try again in a moment.";
+        : result.kind === "authentication_required"
+          ? "Restoring a version of a platform application needs a recent two-step verification. Sign in again with your authenticator, then restore it. Nothing was restored."
+          : result.kind === "refused"
+            ? "Restoring was refused for your account or this version, so nothing was restored."
+            : "Restoring is temporarily unavailable, so nothing was restored. Try again in a moment.";
 
 /** "3 pages, 2 blocks, 1 flow changed": the design's areas a version touched, as the publish confirmation words it. */
 const changeSummary = (changes: StudioReleaseChanges): string => {
@@ -352,7 +354,11 @@ export function ApplicationReleaseHistory({
         return;
       }
       // A superseded version leaves the list usable; only the restore is refused.
-      setFailure(result.kind === "superseded" ? null : result.kind);
+      setFailure(
+        result.kind === "superseded" || result.kind === "authentication_required"
+          ? null
+          : result.kind,
+      );
       setMessage(restoreFailureMessage(result));
       studioNotice(restoreFailureMessage(result), "error");
     } catch (error) {
