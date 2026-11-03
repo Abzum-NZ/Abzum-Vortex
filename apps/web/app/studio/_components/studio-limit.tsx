@@ -16,8 +16,8 @@ export function StudioLimitRow({
 }>) {
   return (
     <div className="flex items-center justify-between gap-3 text-sm">
-      <span>{label}</span>
-      <span className="flex items-center gap-2 tabular-nums text-muted-foreground">
+      <span className="min-w-0">{label}</span>
+      <span className="flex shrink-0 items-center gap-2 whitespace-nowrap tabular-nums text-muted-foreground">
         {definitionLimitUsage(limit, used)}
         {action === undefined ? null : (
           <Button type="button" variant="link" size="xs" onClick={action.onSelect}>

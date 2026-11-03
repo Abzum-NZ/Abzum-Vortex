@@ -83,7 +83,7 @@ const itemLabel = (
   return undefined;
 };
 
-/** "Button: New company": the block's display name from its release, then the item's own label. */
+/** "Button · New company": the block's display name from its release, then the item's own label. */
 export const createStudioPlacementDescriber = (
   catalogue: ImmutablePlatformBlockCatalogue,
   source: ApplicationSourceDocument,
@@ -105,7 +105,7 @@ export const createStudioPlacementDescriber = (
     );
     const name = release?.name === undefined ? "Item" : String(release.name);
     const label = itemLabel(release, placement.settings, fieldLabels);
-    return label === undefined ? name : `${name}: ${label}`;
+    return label === undefined ? name : `${name} · ${label}`;
   };
 };
 
