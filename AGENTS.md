@@ -58,6 +58,8 @@ node tooling/supabase/lane.mjs env <n>      # lines for apps/web/.env.developmen
 node tooling/supabase/lane.mjs sync <n> .   # mirror migrations and seed and update the lane's auth origin, no reset
 node node_modules/supabase/dist/supabase.js migration up --include-all --local --workdir <lane directory>  # forward migrate
 node tooling/supabase/lane.mjs reset <n> .  # destructive: mirror migrations and seed, then reset (your lane only)
+node tooling/supabase/lane.mjs serve <n> . --port <p>  # dev server from this worktree against lane n's database
+node tooling/supabase/lane.mjs unserve <n> .           # end the servers this tool recorded for this worktree
 VORTEX_SUPABASE_WORKDIR=<lane directory> pnpm demo:setup  # provision without resetting
 ```
 
@@ -65,7 +67,16 @@ VORTEX_SUPABASE_WORKDIR=<lane directory> pnpm demo:setup  # provision without re
 `VORTEX_RUNTIME_DATABASE_URL`, `VORTEX_DEV_SERVICE_ROLE_KEY`, `VORTEX_SESSION_COOKIE_NAME` and `VORTEX_SUPABASE_WORKDIR`; put them in the worktree's ignored
 `apps/web/.env.development.local`, never in a tracked file or a log. With
 `VORTEX_SUPABASE_WORKDIR` set, the demo and development setup scripts pass `--workdir` to every
-Supabase CLI call. `status` lists running lanes and holders; `free` prints an available batch lane. Lane 3 cannot be reset.
+Supabase CLI call. `status` lists every lane with its ports, holder, recorded servers and the free RAM; `free` prints an available batch lane
+(not blocked by a Windows excluded port range, and starting it must leave 3 GB of RAM free) and the RAM reading. The lane
+numbers exist once, in the lane table of `lane.mjs`; add a lane there only.
+
+Lanes are shared by dev servers, not by databases. `serve` starts a server on the lane's one database: the holder on the
+lane's own port, any other worktree as a guest on the `--port` it names (lane 3: 3631 and up). A guest is refused when its
+branch adds a migration relative to `origin/main` ("a branch with a migration needs its own lane"), or when the port is
+taken or excluded. `stop` and `reset` refuse while guests run. `serve` records each server's process ID in the lane's
+`servers.json`; `stop` and `unserve` end only those process trees, never by image name or command line, and never the
+supervised demo server on 3630. Several agents walking the same branch use the same server. Lane 3 cannot be reset.
 
 ## Rules
 
