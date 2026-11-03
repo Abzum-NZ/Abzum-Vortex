@@ -528,8 +528,8 @@ export function StudioPuckProvider({
   // props across: it is opened again with the new page's data (the key below), only for such a page.
   const opened = useRef<{ key: string; data: Data; ui: Partial<UiState> } | null>(null);
   if (opened.current === null || opened.current.key !== model.slotsKey) {
-    // The keyboard focus is found again after the reopen.
-    rememberFocus();
+    // The keyboard focus is found again after a reopen (the first open has nothing to remember).
+    if (opened.current !== null) rememberFocus();
     opened.current = {
       key: model.slotsKey,
       data: shown,
