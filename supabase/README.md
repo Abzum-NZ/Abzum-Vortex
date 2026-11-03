@@ -13,9 +13,9 @@ Never place customer data, a database address or a credential in this directory.
 
 ## Local database operations
 
-Use `pnpm db:start`, `pnpm db:stop` and `pnpm db:reset` for interactive development with the local Supabase stack. Lanes are the normal path for worker databases; their rules are in [AGENTS.md](../AGENTS.md).
+Use `pnpm db:start`, `pnpm db:stop` and `pnpm db:reset` with the local Supabase stack.
 
-`pnpm db:start` first prepares a local-only P-256 `ES256` signing key through `tooling/supabase/ensure-local-signing-key.mjs`. The key is generated once per checkout and kept in the ignored `supabase/.temp` file that `config.toml` reads; a linked worktree copies the shared key from the main checkout. No hosted signing key is downloaded and no private key is ever committed. After changing signing-key settings, restart the local stack with `pnpm db:stop` then `pnpm db:start`.
+`pnpm db:start` first prepares a local-only P-256 `ES256` signing key through `tooling/supabase/ensure-local-signing-key.mjs`. The key is generated once per checkout and kept in the ignored `supabase/.temp` file that `config.toml` reads. No hosted signing key is downloaded and no private key is ever committed. After changing signing-key settings, restart the local stack with `pnpm db:stop` then `pnpm db:start`.
 
 Supabase Auth remains the durable session store and Vortex adds no database session relation. Ordinary protected resolution uses the non-mutating projection read; only session bootstrap may call the idempotent ensure operation, so a missing projection is never recreated as a side effect of checking liveness.
 

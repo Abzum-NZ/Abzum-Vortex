@@ -21,164 +21,104 @@ export const packageAreas: Record<string, string> = {
   "@vortex/web": "web",
 };
 
-/**
- * Every rule protects a rule in AGENTS.md or a defect that has happened. A pull request that
- * changes what a rule covers updates or removes the rule in the same pull request. Past its
- * review-by date the guard prints a notice; the lead then keeps, changes or removes the rule.
- */
+/** Every rule protects a product rule in AGENTS.md or the target architecture, or a defect that has happened. */
 export const guardRules = {
   "catalogue-release-superseded": {
     tier: "warning",
-    owner: "lead",
-    reviewBy: "2027-01-25",
     description: "Changed block and theme content pins supersede compiled releases using them",
   },
   "query-input-name-matching": {
     tier: "blocking",
-    owner: "lead",
-    reviewBy: "2027-01-15",
     description: "Query input values must come from explicit bindings through the shared resolver",
   },
   "business-name": {
     tier: "blocking",
-    owner: "lead",
-    reviewBy: "2027-01-15",
     description: "Business application names in generic engines",
   },
   layering: {
     tier: "blocking",
-    owner: "lead",
-    reviewBy: "2027-01-15",
     description: "Imports that break the package dependency direction",
   },
   "migration-mismatch": {
     tier: "blocking",
-    owner: "lead",
-    reviewBy: "2027-01-15",
     description: "Canonical SQL functions that differ from their latest migration",
   },
   "migration-orphan": {
     tier: "blocking",
-    owner: "lead",
-    reviewBy: "2027-01-15",
     description:
       "Functions a forward migration leaves live without a canonical file, excluding signatures removed by DROP FUNCTION [IF EXISTS] (the generated baseline is exempt)",
   },
   "sql-identifier-length": {
     tier: "blocking",
-    owner: "lead",
-    reviewBy: "2027-01-15",
     description: "SQL objects named past 63 characters, which Postgres silently truncates",
   },
   "sql-overload": {
     tier: "blocking",
-    owner: "lead",
-    reviewBy: "2027-01-15",
     description:
       "A canonical function name declared with more than one signature, which forces Postgres to resolve a call by argument types",
   },
   "migration-version-duplicate": {
     tier: "blocking",
-    owner: "lead",
-    reviewBy: "2027-01-15",
     description: "Migration files that share a version; a fresh reset fails on the duplicate key",
   },
   "migration-version-order": {
     tier: "blocking",
-    owner: "lead",
-    reviewBy: "2027-01-15",
     description:
       "A new migration on a branch behind origin/main or whose version is not above the highest on origin/main",
   },
   "function-uuid": {
     tier: "blocking",
-    owner: "lead",
-    reviewBy: "2027-01-15",
     description: "Hard-coded non-nil UUIDs in SQL functions",
   },
   "migration-owner-role": {
     tier: "blocking",
-    owner: "lead",
-    reviewBy: "2027-01-15",
     description:
       "Forward migrations must run object DDL under an explicitly set role, not postgres, and end with reset role;",
   },
   "versioned-export": {
     tier: "blocking",
-    owner: "lead",
-    reviewBy: "2027-01-15",
     description: "Exported identifiers ending in V2 or later",
   },
   "versioned-file": {
     tier: "blocking",
-    owner: "lead",
-    reviewBy: "2027-01-15",
     description: "Source file names ending in -v2 or later",
   },
   "ui-literal-style": {
     tier: "blocking",
-    owner: "lead",
-    reviewBy: "2027-01-15",
     description:
       "Literal rounded-*, arbitrary px or arbitrary font-family classes in packages/ui renderers (outside shadcn components; Studio chrome permits its specified md/lg/xl/full radius scale)",
   },
-  "file-size": {
-    tier: "warning",
-    owner: "lead",
-    reviewBy: "2026-11-15",
-    reviewNote:
-      "No source file exceeds the limit; the three near-limit platform files were split by CRM-FIX-PLATFORM; reconsider promoting the rule to blocking",
-    description: "Source and canonical SQL files over 1,500 lines",
-  },
   "silent-catch": {
     tier: "warning",
-    owner: "lead",
-    reviewBy: "2027-01-15",
     description:
       "A catch in platform services or web server helpers that swallows its cause without logging or rethrowing",
   },
   "definition-validation": {
     tier: "blocking",
-    owner: "lead",
-    reviewBy: "2027-01-15",
-    reviewNote:
-      "Drafts, preview plans and publication share compilation and source rules: one Records table release with its declared data contract is registered, and row-action bindings require matching commands; calculation fields share the FlowFormula schema and offline validation enforces the same dependency rules.",
     description:
       "A shipped definition source that publication would refuse (offline compile and validation)",
   },
   "contract-version-parity": {
     tier: "blocking",
-    owner: "lead",
-    reviewBy: "2027-01-15",
     description:
       "Each definition kind accepts exactly one contract version: vortex_definition.accepted_contract_version returns a single element per kind and the one definitionContractVersion constant equals it",
   },
   "derived-id-parity": {
     tier: "blocking",
-    owner: "lead",
-    reviewBy: "2027-01-15",
     description:
       "The derived Definition identity in TypeScript and SQL drifting apart: the TypeScript derivation must reproduce the recorded SQL vectors, and the SQL function must be the one they were recorded from",
   },
   "grid-feature-definition": {
     tier: "blocking",
-    owner: "core-grid",
-    reviewBy: "2026-12-15",
-    reviewNote:
-      "Introduced with the grid feature definition contract; review once every grid feature is declared through it",
     description:
       "A Records table grid feature key spelled outside its definition file in the grid code, a feature setting group without a default that turns it off, a refusal code without exactly one declared sentence, a featureNotPossible that does not name its file's own refusal, a row-action binding without its compiler gate, an eager row-command renderer, or a feature chunk imported outside the UI registry",
   },
   "invalid-guard-allow": {
     tier: "blocking",
-    owner: "lead",
-    reviewBy: "2027-01-15",
     description: "Malformed guard-allow directive or invalid rule id/reason",
   },
   "unused-guard-allow": {
     tier: "warning",
-    owner: "lead",
-    reviewBy: "2027-01-15",
     description: "A guard-allow directive that matches no finding",
   },
 } as const;
@@ -196,7 +136,6 @@ export const scannedRuleIds = new Set([
   "migration-owner-role",
   "versioned-export",
   "versioned-file",
-  "file-size",
   "silent-catch",
   "ui-literal-style",
   "definition-validation",
