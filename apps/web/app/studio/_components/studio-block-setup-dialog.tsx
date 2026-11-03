@@ -71,7 +71,7 @@ export function StudioBlockSetupDialog({
   choices: StudioSettingChoices;
   onClose: () => void;
   /** Where focus goes when the dialog closes, when it was not opened from a control that stays. */
-  finalFocus?: (() => HTMLElement | null) | undefined;
+  finalFocus?: (() => HTMLElement | false) | undefined;
 }>) {
   const queries = [...draftChoices.queries, ...(draftChoices.recordQueries ?? [])];
   const [query, setQuery] = useState("");

@@ -40,7 +40,7 @@ export function StudioDialog({
   submitDisabled?: boolean;
   onSubmit?: () => void;
   /** Where focus goes when the dialog closes, when it was not opened from a control that stays. */
-  finalFocus?: (() => HTMLElement | null) | undefined;
+  finalFocus?: (() => HTMLElement | false) | undefined;
   children: ReactNode;
 }>) {
   const submit = (event: FormEvent<HTMLFormElement>) => {

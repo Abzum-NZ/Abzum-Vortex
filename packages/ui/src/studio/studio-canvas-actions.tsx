@@ -277,6 +277,14 @@ function StudioActionBar({ id, type }: Readonly<{ id: string; type: string }>) {
     focusBar = null;
     buttons()[0]?.focus({ preventScroll: true });
   }, [id]);
+  // A bar that goes away with the keyboard focus inside it (the Delete key pressed on its block)
+  // hands the focus to the next bar, as the bar's own actions do.
+  useLayoutEffect(() => {
+    const own = anchor.current;
+    return () => {
+      if (own?.contains(own.ownerDocument.activeElement) === true) focusBarOn(null);
+    };
+  }, []);
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     const all = buttons();
     const at = all.findIndex((button) => button === event.target);

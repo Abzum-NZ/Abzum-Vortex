@@ -1,5 +1,5 @@
 "use client";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { applicationUses, type ApplicationSourceDocument } from "@vortex/platform/schema";
 import { Alert, AlertDescription } from "@vortex/ui/components/alert";
 import {
@@ -83,9 +83,16 @@ export function StudioBlockDialogs(props: Props) {
     setProblem("");
     onClose();
   };
-  // The block that was acted on takes the focus back: its More button in the action bar.
-  const returnFocus = () =>
-    selection.kind === "placement" ? studioActionBarMore(selection.placementAlias) : null;
+  // The block that was acted on takes the focus back: its More button in the action bar. A Wrap
+  // that asks for settings first hands the focus to the setup dialog, which gives it back.
+  const handedOff = useRef(false);
+  const returnFocus = (): HTMLElement | false => {
+    if (handedOff.current) {
+      handedOff.current = false;
+      return false;
+    }
+    return selection.kind === "placement" ? studioActionBarMore(selection.placementAlias) : false;
+  };
   const destinations = move?.kind === "available" ? move.destinations : [];
   const moveReason = move === null ? undefined : studioMoveUnavailableReason(move);
 
@@ -133,6 +140,7 @@ export function StudioBlockDialogs(props: Props) {
       else setProblem(outcome);
       return;
     }
+    handedOff.current = true;
     close();
     setSetup({
       choice: chosen.choice,

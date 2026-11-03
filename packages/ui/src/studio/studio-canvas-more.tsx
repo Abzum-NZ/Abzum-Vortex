@@ -107,10 +107,15 @@ export function StudioCanvasMore({
   onChoose,
 }: MoreProps) {
   const chosen = useRef<StudioMoreChoice | null>(null);
+  // Set once an entry is chosen, until the menu opens again (`chosen` is cleared when it acts).
+  const picked = useRef(false);
   return (
     <DropdownMenu
-      // The choice acts once the menu has closed and given the focus back to its button: a dialog
-      // opened earlier would lose the focus to that return, which crosses into the canvas frame.
+      onOpenChange={(open) => {
+        if (open) picked.current = false;
+      }}
+      // The choice acts once the menu has closed; the menu gives up its own focus return then
+      // (`finalFocus` below), so a dialog or the neighbour's bar keeps the focus it takes.
       onOpenChangeComplete={(open) => {
         const choice = chosen.current;
         if (open || choice === null) return;
@@ -149,13 +154,19 @@ export function StudioCanvasMore({
         // Studio's chrome is in sentence case: the canvas frame holds the menu outside the Studio
         // surface, under the application's style, so the menu carries the surface marker itself.
         data-vortex-surface="studio"
+        // A choice takes the focus where it belongs (a dialog, the neighbour's bar after a removal);
+        // the menu gives it back to its button only when nothing was chosen.
+        finalFocus={() => !picked.current}
         style={{ ...tooltip.style, transformOrigin: "top right" }}
       >
         <MoreEntries
           id={id}
           actions={actions}
           reasons={reasons}
-          onChoose={(choice) => (chosen.current = choice)}
+          onChoose={(choice) => {
+            chosen.current = choice;
+            picked.current = true;
+          }}
         />
       </DropdownMenuContent>
     </DropdownMenu>
