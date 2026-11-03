@@ -2,7 +2,7 @@
 
 [Records](../06-records-and-lifecycle.md) · [People](../02-people-organisations-and-sign-in.md) · [Retention](../14-activity-privacy-and-retention.md)
 
-These requirements implement the owner's 12 September 2026 decisions and state current behaviour.
+These requirements state current behaviour.
 
 ## Initial ownership
 
@@ -72,7 +72,7 @@ flowchart TD
 ## Scheduled time-based calculations
 
 A value that depends on the current time, such as whether a named deadline has
-passed, is a read-time computed field ([Decision 4](../../build-plan/architecture-decisions.md#decision-4--formulas-and-read-time-computed-fields)).
+passed, is a read-time computed field ([Decision 4](../../architecture/decisions.md#decision-4--formulas-and-read-time-computed-fields)).
 It is a [formula](frontend-rule-designer.md#formulas) that uses `now`, and it is
 computed whenever the record is read. It is never stored, and no background
 worker, due-time metadata or recalculation refreshes it. The first release's

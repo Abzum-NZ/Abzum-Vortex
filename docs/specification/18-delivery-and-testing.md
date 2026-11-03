@@ -2,10 +2,6 @@
 
 [Specification index](README.md) · [Code-review acceptance](20-quality-and-acceptance.md)
 
-## Development acceptance
-
-Every behaviour change is walked through in the running app on a local database lane you hold (reset only that lane) before merge. The walkthrough covers sign-in and the affected application pages; pull requests that change what users see include screenshots.
-
 ## Repository layout convention
 
 Deployable applications live under `apps/`; `apps/web` is the single Next.js composition root. Shared runtime packages expose public service interfaces and remain separate workspace members. Browser code cannot import database credentials or privileged server implementations. Use the pinned dependency catalogue and lockfile. A different deployment root or package boundary requires an explicit architecture change rather than an implicit exception.

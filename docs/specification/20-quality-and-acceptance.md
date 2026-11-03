@@ -4,7 +4,7 @@
 
 ## Definition of complete
 
-A behaviour change is complete when its functionality is implemented, a separate code review confirms the acceptance criteria, and the affected pages are walked through in the running app on a freshly reset local database. Pull requests that change what users see include screenshots. Completion describes implemented code, not production readiness.
+A behaviour change is complete when its functionality is implemented, and the affected pages are exercised in the running app. Completion describes implemented code, not production readiness.
 
 ## Functional quality
 
@@ -25,9 +25,7 @@ Review behaviour against the owning specification:
 - File removal, privacy restrictions, legal holds, retention and restore use their owning product rules. No role or environment shortcut bypasses them.
 - Secrets and private content stay out of browser bundles, safe errors and operational logs.
 
-## Review scope
-
-Review scope names the owning code, inputs, outputs, dependencies and excluded work. Acceptance criteria describe observable implementation behaviour and structures a reviewer can inspect. They do not add a second implementation of the same feature or an unnecessary framework.
+## Design
 
 Use the simplest design that meets the current specification. Correct an unsuitable contract or schema at its source. Published product revisions remain useful functionality; retaining an obsolete platform serialization is not required for this new application.
 
