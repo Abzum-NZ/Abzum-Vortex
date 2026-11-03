@@ -10,6 +10,7 @@ import { URL } from "node:url";
 import { setTimeout as delay } from "node:timers/promises";
 import { ensureLocalSigningKey } from "./ensure-local-signing-key.mjs";
 import {
+  killLateDescendants,
   killRecord,
   processSnapshot,
   readRecords,
@@ -60,12 +61,15 @@ const guestWindows = { shared: [3631, 3649], batch: [3670, 3699] };
 const guestWindow = (lane) => (lane === sharedLane ? guestWindows.shared : guestWindows.batch);
 // Application port 3659 is blocked on this host.
 const blockedAppPort = 3659;
-// RAM: a lane stack costs about 2.5 GB and 3 GB must remain after it starts.
+// RAM (owner ruling): 2 GB must remain free after a start. A lane stack costs about 2.5 GB and a dev
+// server about 1.5 GB; measured servers run 1.1 to 2.2 GB.
+const ramFloorGb = 2;
 const stackRamGb = 2.5;
-const ramFloorGb = 3;
+const devServerRamGb = 1.5;
 const stackStartGb = stackRamGb + ramFloorGb;
-// A dev server costs about 1.5 GB and 2 GB must remain after it starts (owner ruling).
-const devServerStartGb = 3.5;
+const devServerStartGb = devServerRamGb + ramFloorGb;
+// `free` offers a lane that its holder can use: the stack and the holder's own server both fit.
+const laneUseGb = stackRamGb + devServerRamGb + ramFloorGb;
 const laneAppPort = (lane) => appPorts.get(lane);
 const laneApiPort = (lane) => 54321 + 1000 * (lane - 1);
 const laneDatabasePort = (lane) => 54322 + 1000 * (lane - 1);
@@ -162,7 +166,8 @@ const databaseRunning = (lane) => {
     fail(`Cannot inspect lane ${lane} database: ${result.stderr.trim()}`);
   return result.status === 0 && result.stdout.trim() === "true";
 };
-const readLease = async (lane) => {
+/** The lane's lease. A stale lease is deleted only when the caller holds the lane's lock (`prune`). */
+const readLease = async (lane, prune = false) => {
   if (lane === sharedLane && databaseRunning(lane))
     return {
       worktree: primaryWorktree(),
@@ -184,14 +189,16 @@ const readLease = async (lane) => {
   )
     fail(`Lane ${lane} has an invalid lease.`);
   if (!existsSync(lease.worktree) || !databaseRunning(lane)) {
-    await rm(leasePath(lane));
-    log(`Cleared stale lease for lane ${lane}.`);
+    if (prune) {
+      await rm(leasePath(lane));
+      log(`Cleared stale lease for lane ${lane}.`);
+    }
     return undefined;
   }
   return lease;
 };
-const requireLeaseHolder = async (lane, worktree, required = false) => {
-  const lease = await readLease(lane);
+const requireLeaseHolder = async (lane, worktree, required = false, prune = false) => {
+  const lease = await readLease(lane, prune);
   if (lease && !sameWorktree(lease.worktree, worktree))
     fail(`Lane ${lane} is held by ${lease.worktree}.`);
   if (required && !lease)
@@ -407,8 +414,8 @@ const requireNotBlocked = async (lane) => {
 
 const freeRamGb = () => Math.round((os.freemem() / 1024 ** 3) * 10) / 10;
 const ramLine = () =>
-  `free RAM ${freeRamGb()} GB; starting a lane stack needs ${stackStartGb} GB free (it costs about ${stackRamGb} GB and ${ramFloorGb} GB must remain)`;
-/** A start needs `needGb` free, so that the floor remains afterwards (3 GB after a stack, 2 GB after a dev server): print the reading, and refuse below it. */
+  `free RAM ${freeRamGb()} GB; ${ramFloorGb} GB must remain after a start: a lane stack needs ${stackStartGb} GB free (about ${stackRamGb} GB), a dev server ${devServerStartGb} GB (about ${devServerRamGb} GB)`;
+/** A start needs `needGb` free, so that the floor remains afterwards: print the reading, and refuse below it. */
 const requireRam = (needGb, what) => {
   log(`${ramLine()}; ${what} needs ${needGb} GB`);
   if (freeRamGb() < needGb) fail(`Not enough free RAM to ${what}.`);
@@ -432,9 +439,13 @@ const portFree = async (port) =>
 const acquireLock = async (lane, worktree) => {
   const lockPath = path.join(laneDirectory(lane), "operation.lock");
   const deadline = Date.now() + 120_000;
+  // A lock is this process's while the process ID has the creation time stored in it, so a reused ID is not mistaken for the holder.
+  const created = processSnapshot().get(process.pid)?.created;
   for (;;) {
     try {
-      await writeFile(lockPath, JSON.stringify({ pid: process.pid, worktree }), { flag: "wx" });
+      await writeFile(lockPath, JSON.stringify({ pid: process.pid, created, worktree }), {
+        flag: "wx",
+      });
       return () => rm(lockPath, { force: true });
     } catch (error) {
       if (error.code !== "EEXIST") throw error;
@@ -445,12 +456,12 @@ const acquireLock = async (lane, worktree) => {
         holder = undefined;
       }
       if (Number.isInteger(holder?.pid) && holder.pid > 0) {
-        let alive = true;
-        try {
-          process.kill(holder.pid, 0);
-        } catch (cause) {
-          if (cause.code === "ESRCH") alive = false;
-        }
+        const running = processSnapshot().get(holder.pid);
+        const alive =
+          running !== undefined &&
+          (holder.created === undefined ||
+            running.created === "0" ||
+            running.created === holder.created);
         if (!alive) {
           await rm(lockPath, { force: true });
           log(`Cleared stale operation lock for lane ${lane}.`);
@@ -458,7 +469,9 @@ const acquireLock = async (lane, worktree) => {
         }
       }
       if (Date.now() >= deadline)
-        fail(`Lane ${lane} operation is held by ${holder?.worktree ?? "an unknown worktree"}.`);
+        fail(
+          `Lane ${lane} operation is held by ${holder?.worktree ?? "an unknown worktree"} (process ${holder?.pid ?? "unknown"}); if that process is gone, delete ${lockPath}.`,
+        );
       await delay(500);
     }
   }
@@ -521,8 +534,8 @@ const protectedProcesses = async (snapshot, record) => {
 /** Ends one recorded server by its process IDs, checks it is gone, and removes its log. */
 const endRecord = async (record, snapshot) => {
   if (record.port === demoPort) fail("Lane tooling never touches the supervised demo server.");
-  if (recordState(record, snapshot) !== "gone")
-    killRecord(record, snapshot, await protectedProcesses(snapshot, record));
+  const protectedPids = await protectedProcesses(snapshot, record);
+  if (recordState(record, snapshot) !== "gone") killRecord(record, snapshot, protectedPids);
   for (let attempt = 0; ; attempt += 1) {
     if (recordState(record, processSnapshot()) === "gone") break;
     if (attempt >= 8)
@@ -531,6 +544,17 @@ const endRecord = async (record, snapshot) => {
       );
     await delay(400);
   }
+  // Children created after the tree was read can outlive the root and keep the port.
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    killLateDescendants(record, protectedPids);
+    if (!tcpListeners().some((listener) => listener.port === record.port)) break;
+    await delay(400);
+  }
+  const owners = tcpListeners().filter((listener) => listener.port === record.port);
+  if (owners.length > 0)
+    fail(
+      `Port ${record.port} is still served by process ${owners.map((owner) => owner.pid).join(", ")}; the record is kept.`,
+    );
   await rm(record.log, { force: true });
   log(`Ended ${describeServer(record)}.`);
 };
@@ -598,10 +622,10 @@ const branchDatabaseChanges = (worktreePath) => {
   ];
 };
 
-/** Migrations in the lane's mirrored sources that origin/main lacks or has with other content. */
-const laneMigrationExtras = (lane) => {
-  const onMain = new Map(
-    gitLines(workspaceRoot, ["ls-tree", "origin/main", "supabase/migrations/"]).map((line) => {
+/** How the lane's mirrored migrations differ from the guest's own: files only the lane has or has differently, and files only the guest has. */
+const laneMigrationDifferences = (lane, worktreePath) => {
+  const own = new Map(
+    gitLines(worktreePath, ["ls-tree", "HEAD", "supabase/migrations/"]).map((line) => {
       const [meta, name] = line.split("\t");
       return [path.basename(name), meta.split(" ")[2]];
     }),
@@ -615,7 +639,10 @@ const laneMigrationExtras = (lane) => {
   });
   if (hashes.error || hashes.status !== 0) fail("Cannot hash the lane's migrations.");
   const hashList = hashes.stdout.split(/\r?\n/).filter((line) => line.length > 0);
-  return names.filter((name, index) => onMain.get(name) !== hashList[index]);
+  return {
+    extra: names.filter((name, index) => own.get(name) !== hashList[index]),
+    missing: [...own.keys()].filter((name) => !names.includes(name)),
+  };
 };
 
 const parseGuestPort = async (lane, value) => {
@@ -640,7 +667,7 @@ const startServer = async (lane, worktreePath, requestedPort) => {
   requireInitialized(lane);
   await requireNotBlocked(lane);
   if (!databaseRunning(lane)) fail(`Lane ${lane} is not running.`);
-  const lease = await readLease(lane);
+  const lease = await readLease(lane, true);
   if (!lease) fail(`Lane ${lane} has no active lease.`);
   if (sameWorktree(primaryWorktree(), worktreePath))
     fail(
@@ -655,10 +682,14 @@ const startServer = async (lane, worktreePath, requestedPort) => {
     const changes = branchDatabaseChanges(worktreePath);
     if (changes.length > 0)
       fail(`A branch with a migration needs its own lane. Changed: ${changes.join(", ")}.`);
-    const extras = laneMigrationExtras(lane);
-    if (extras.length > 0)
+    const { extra, missing } = laneMigrationDifferences(lane, worktreePath);
+    if (extra.length > 0)
       fail(
-        `A branch with a migration needs its own lane: lane ${lane}'s database carries migrations origin/main lacks: ${extras.join(", ")}.`,
+        `A branch with a migration needs its own lane: lane ${lane}'s database carries migrations this branch lacks or has differently: ${extra.join(", ")}.`,
+      );
+    if (missing.length > 0)
+      fail(
+        `Lane ${lane} is behind this branch: its migrations lack ${missing.join(", ")}. Its holder runs reset or sync with a current checkout first.`,
       );
   }
   const snapshot = processSnapshot();
@@ -745,22 +776,33 @@ const startServer = async (lane, worktreePath, requestedPort) => {
   return record;
 };
 
-/** Waits, without the lane's lock, until the recorded server listens; ends it if it does not. */
+/** Waits, without the lane's lock, until the recorded server itself listens; ends it if it does not. */
 const awaitServer = async (lane, worktreePath, record) => {
   const deadline = Date.now() + 90_000;
+  let problem;
   for (;;) {
-    if (tcpListeners().some((listener) => listener.port === record.port)) break;
+    const onPort = tcpListeners().filter((listener) => listener.port === record.port);
+    if (onPort.length > 0) {
+      const snapshot = processSnapshot();
+      if (onPort.some((listener) => withAncestors(listener.pid, snapshot).has(record.pid))) break;
+      problem = `port ${record.port} is served by another process (${onPort.map((listener) => listener.pid).join(", ")})`;
+    }
     let running = true;
     try {
       process.kill(record.pid, 0);
     } catch (cause) {
       if (cause.code === "ESRCH") running = false;
     }
-    if (!running || Date.now() >= deadline) {
+    if (problem !== undefined || !running || Date.now() >= deadline) {
+      // The log goes with the record, so show its end first.
+      const lines = existsSync(record.log)
+        ? (await readFile(record.log, "utf8")).split(/\r?\n/)
+        : [];
+      process.stderr.write(`${lines.slice(-40).join("\n")}\n`);
       await withLock(lane, worktreePath, () =>
         endServers(lane, (entry) => entry.pid === record.pid),
       );
-      fail(`The dev server did not come up on ${record.port}; see ${record.log}.`);
+      fail(`The dev server did not come up on ${record.port}${problem ? `: ${problem}` : ""}.`);
     }
     await delay(500);
   }
@@ -805,7 +847,7 @@ if (command === "status" || command === "free") {
     entries.push({ number, lease, running, initialized, blocked, records, recordProblem });
   }
   if (command === "free") {
-    const roomForAnother = freeRamGb() >= stackStartGb;
+    const roomForAnother = freeRamGb() >= laneUseGb;
     const free = entries.find(
       (entry) =>
         entry.number !== sharedLane &&
@@ -817,7 +859,9 @@ if (command === "status" || command === "free") {
     process.stdout.write(`${free !== undefined && roomForAnother ? free.number : "none"}\n`);
     log(ramLine());
     if (free !== undefined && !roomForAnother)
-      log(`Lane ${free.number} is free but there is not enough RAM to start its stack.`);
+      log(
+        `Lane ${free.number} is free but its stack and its holder's server need ${laneUseGb} GB free.`,
+      );
   } else {
     const snapshot = entries.some((entry) => entry.records.length > 0)
       ? processSnapshot()
@@ -859,6 +903,23 @@ if (command === "status" || command === "free") {
         process.stdout.write(`    server ${describeServer(record)}${note}\n`);
       }
     }
+    const recordedPorts = new Set(
+      entries.flatMap((entry) => entry.records.map((record) => record.port)),
+    );
+    const dev = [...laneNumbers]
+      .filter((number) => number !== sharedLane)
+      .map((number) => [laneAppPort(number), number]);
+    const inWindow = (port) =>
+      Object.values(guestWindows).some(([from, to]) => port >= from && port <= to);
+    const unrecorded = tcpListeners().filter(
+      (listener) =>
+        !recordedPorts.has(listener.port) &&
+        (dev.some(([port]) => port === listener.port) || inWindow(listener.port)),
+    );
+    for (const listener of unrecorded)
+      process.stdout.write(
+        `unrecorded dev server on port ${listener.port} (process ${listener.pid}): its owner ends it and restarts it with: node tooling/supabase/lane.mjs serve <n> .\n`,
+      );
     log(ramLine());
   }
   process.exit(0);
@@ -869,7 +930,8 @@ const worktree = path.resolve(worktreeArgument ?? process.cwd());
 
 try {
   const locked = (work) => withLock(lane, worktree, work);
-  // The shared lane's files are never touched by anyone but the primary checkout, not even a lock file.
+  // Start, stop and sync of the shared lane belong to the primary checkout; its guests touch only the
+  // lane lock, servers.json and their own server logs.
   if (["sync", "start", "stop"].includes(command)) requirePrimaryForSharedLane(lane, worktree);
   if (command === "init" && lane === sharedLane)
     fail(`Lane ${sharedLane} is the shared demo lane and is not initialised here.`);
@@ -885,7 +947,7 @@ try {
       if (worktreeArgument === undefined) fail(usage);
       requireInitialized(lane);
       await locked(async () => {
-        const lease = await requireLeaseHolder(lane, worktree);
+        const lease = await requireLeaseHolder(lane, worktree, false, true);
         if (!lease && databaseRunning(lane))
           fail(
             `Lane ${lane} is running without a lease; its worktree runs start to claim it before anyone syncs it.`,
@@ -897,7 +959,7 @@ try {
       requireInitialized(lane);
       await locked(async () => {
         await requireNotBlocked(lane);
-        const lease = await requireLeaseHolder(lane, worktree);
+        const lease = await requireLeaseHolder(lane, worktree, false, true);
         if (!databaseRunning(lane)) requireStackRam("start the lane stack");
         else log(ramLine());
         await updateLaneAuthConfig(lane);

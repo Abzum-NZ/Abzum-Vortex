@@ -77,30 +77,62 @@ export const withAncestors = (pid, snapshot) => {
   return chain;
 };
 
+const endProcesses = (pids, port) => {
+  for (const pid of pids) {
+    const result = spawnSync("taskkill", ["/PID", String(pid), "/F"], { encoding: "utf8" });
+    if (result.error) throw result.error;
+    // 128: the process was already gone.
+    if (result.status !== 0 && result.status !== 128)
+      throw new Error(
+        `taskkill could not end process ${pid} of the server on port ${port}: ${`${result.stderr}${result.stdout}`.trim()}`,
+      );
+  }
+};
+
+const refuseProtected = (pids, protectedPids, port) => {
+  const shielded = pids.filter((pid) => protectedPids.has(pid));
+  if (shielded.length > 0)
+    throw new Error(
+      `Not ending the server on port ${port}: its process tree holds protected process(es) ${shielded.join(", ")}.`,
+    );
+};
+
 /**
- * Ends a verified recorded server and its descendants, leaves first, by process ID only. Refuses
- * when the tree holds a protected process (another recorded server or the supervised demo server).
+ * Ends a verified recorded server and its descendants, leaves first, by process ID only. The tree is
+ * read fresh, so children created since the caller's snapshot are included. Refuses when the tree,
+ * root included, holds a protected process (another recorded server or the supervised demo server).
  */
 export const killRecord = (record, snapshot, protectedPids) => {
   if (recordState(record, snapshot) !== "alive")
     throw new Error(
       `Process ${record.pid} cannot be verified as the server on port ${record.port}; end it yourself if it is yours.`,
     );
-  const tree = processTree(record.pid, snapshot);
-  const shielded = tree.filter((pid) => pid !== record.pid && protectedPids.has(pid));
-  if (shielded.length > 0)
-    throw new Error(
-      `Not ending the server on port ${record.port}: its process tree holds protected process(es) ${shielded.join(", ")}.`,
-    );
-  for (const pid of [...tree].reverse()) {
-    const result = spawnSync("taskkill", ["/PID", String(pid), "/F"], { encoding: "utf8" });
-    if (result.error) throw result.error;
-    // 128: the process was already gone.
-    if (result.status !== 0 && result.status !== 128)
-      throw new Error(
-        `taskkill could not end process ${pid} of the server on port ${record.port}: ${`${result.stderr}${result.stdout}`.trim()}`,
-      );
+  const fresh = processSnapshot();
+  if (!fresh.has(record.pid)) return;
+  const tree = processTree(record.pid, fresh);
+  refuseProtected(tree, protectedPids, record.port);
+  endProcesses([...tree].reverse(), record.port);
+};
+
+/**
+ * Ends children that outlived an ended root: processes whose parent chain leads to the root's
+ * process ID and that were created after the root started. Returns how many it ended.
+ */
+export const killLateDescendants = (record, protectedPids) => {
+  const snapshot = processSnapshot();
+  const started = BigInt(record.processStart ?? "0");
+  const found = [];
+  for (const frontier = [record.pid]; frontier.length > 0;) {
+    const parent = frontier.pop();
+    for (const [pid, child] of snapshot)
+      if (child.parent === parent && !found.includes(pid) && BigInt(child.created) >= started) {
+        found.push(pid);
+        frontier.push(pid);
+      }
   }
+  refuseProtected(found, protectedPids, record.port);
+  endProcesses([...found].reverse(), record.port);
+  return found.length;
 };
 
 const roles = new Set(["holder", "guest"]);
@@ -116,8 +148,7 @@ const validRecord = (record) =>
   typeof record.worktree === "string" &&
   path.isAbsolute(record.worktree) &&
   typeof record.startedAt === "string" &&
-  typeof record.log === "string" &&
-  path.isAbsolute(record.log);
+  typeof record.log === "string";
 
 /** The records of one lane, strictly validated. A corrupt file is refused, never repaired or deleted. */
 export const readRecords = async (file) => {
@@ -134,7 +165,10 @@ export const readRecords = async (file) => {
   } catch {
     records = undefined;
   }
-  if (!Array.isArray(records) || !records.every(validRecord))
+  // The log is deleted with its record, so it must be this lane's own server log.
+  const ownLog = (record) =>
+    path.normalize(record.log) === path.join(path.dirname(file), `server-${record.port}.log`);
+  if (!Array.isArray(records) || !records.every((record) => validRecord(record) && ownLog(record)))
     throw new Error(
       `${file} is not a valid server record. Check by hand that no server of this lane is still running, then delete the file.`,
     );
