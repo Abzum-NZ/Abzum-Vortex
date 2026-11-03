@@ -4,7 +4,11 @@ import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { createClient } from "@supabase/supabase-js";
 import { identityIdSchema } from "@vortex/platform/schema";
-import { isLocalSupabaseApiUrl, supabaseWorkdirArguments } from "../development-setup/guards";
+import {
+  isLocalSupabaseApiUrl,
+  requireLocalSupabaseBinding,
+  supabaseWorkdirArguments,
+} from "../development-setup/guards";
 import { findRepositoryRoot } from "../development-setup/state";
 import { loadLocalWebEnvironment } from "./local-environment";
 
@@ -91,6 +95,7 @@ export const ensureLocalDemoOwner = async (): Promise<string> => {
 const main = async (): Promise<void> => {
   try {
     loadLocalWebEnvironment();
+    requireLocalSupabaseBinding();
     const identityId = await ensureLocalDemoOwner();
     process.stdout.write(`[demo owner] local account is ready (${identityId}).\n`);
   } catch (error) {

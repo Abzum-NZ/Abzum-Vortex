@@ -8,6 +8,10 @@ export async function register(): Promise<void> {
   const { z } = await import("zod");
   z.config({ jitless: true });
 
+  const { identitySessionCookieProfile } = await import("./app/auth/_lib/session-cookie");
+  const { requiredEnvironmentValue } = await import("./app/_lib/server-configuration");
+  identitySessionCookieProfile(requiredEnvironmentValue("VORTEX_SITE_URL"));
+
   const { registerCleanNetworkStartup } = await import("./app/_lib/clean-network-startup");
   registerCleanNetworkStartup();
 

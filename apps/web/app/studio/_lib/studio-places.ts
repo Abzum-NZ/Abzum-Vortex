@@ -51,6 +51,8 @@ export const studioUseTargetOf = (
   selection: StudioSemanticSelection | null,
 ): ApplicationUseTarget | null => {
   switch (selection?.kind) {
+    case "placement":
+      return { kind: "placement", placementAlias: selection.placementAlias };
     case "page":
       return { kind: "page", pageAlias: selection.pageAlias };
     case "navigation":

@@ -2,6 +2,7 @@ import "server-only";
 
 import type { CookieOptions } from "@supabase/ssr";
 import { isLoopbackHostname } from "@vortex/platform/schema";
+import { requiredEnvironmentValue } from "../../_lib/server-configuration";
 
 const sessionCookieChunkSize = 3_180;
 const sessionCookieMaximumChunks = 8;
@@ -16,7 +17,7 @@ export type SessionCookieMutation = Readonly<{
 type SessionCookieHeaders = Readonly<Record<string, string>>;
 
 export type SessionCookieProfile = Readonly<{
-  name: "__Host-vortex-session" | "vortex-local-session";
+  name: string;
   secure: boolean;
   httpOnly: true;
   sameSite: "lax";
@@ -40,8 +41,12 @@ export const identitySessionCookieProfile = (siteUrl: string): SessionCookieProf
   )
     throw new Error("Invalid identity-session site URL");
 
+  const name = requiredEnvironmentValue("VORTEX_SESSION_COOKIE_NAME");
+  if (!/^[A-Za-z0-9_-]+$/u.test(name) || (!localHttp && !name.startsWith("__Host-")))
+    throw new Error("VORTEX_SESSION_COOKIE_NAME is invalid for the configured site URL");
+
   return Object.freeze({
-    name: localHttp ? "vortex-local-session" : "__Host-vortex-session",
+    name,
     secure: !localHttp,
     httpOnly: true,
     sameSite: "lax",
