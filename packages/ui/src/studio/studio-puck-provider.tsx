@@ -49,10 +49,12 @@ import {
   puckNeighbourOf,
   puckSelectedAlias,
   puckSelectorOf,
+  studioBlockName,
   withoutEmptyPuckZones,
   type StudioCanvasCompiledSlot,
   type StudioPuckSelector,
 } from "./studio-canvas-data";
+import { toast } from "../components/sonner";
 import { studioCanvasOverrides } from "./studio-canvas-actions";
 import type { StudioCanvasGridChange, StudioCanvasGridRead } from "./studio-canvas-grid";
 import { useStudioCanvasModel, type StudioCanvasModel } from "./studio-canvas-model";
@@ -105,6 +107,19 @@ export type StudioCanvasPalette = Readonly<{
   onAdd: (request: StudioCanvasAddRequest) => true | false | string;
 }>;
 
+/** The dialogs a block's More menu opens in the workspace. */
+export type StudioBlockDialogKind = "move" | "wrap" | "usedIn";
+
+/** What the selected block's More menu asks of the workspace. */
+export type StudioBlockActions = Readonly<{
+  /** Why Wrap is unavailable for a block, read from the draft when the menu opens. */
+  availability: (alias: string) => Readonly<{ wrap: string | undefined }>;
+  /** Opens a dialog for the selected block; the workspace refuses a block that is not selected. */
+  open: (alias: string, dialog: StudioBlockDialogKind) => void;
+  /** Takes back the last draft change, as Ctrl+Z does; the removal's Undo toast calls it. */
+  undo: () => void;
+}>;
+
 export type StudioPuckInput = Readonly<{
   source: ApplicationSourceDocument;
   compiledSource: ApplicationSourceDocument;
@@ -151,6 +166,8 @@ export type StudioPuckInput = Readonly<{
   gridReads?: Readonly<Record<string, StudioCanvasGridRead>> | undefined;
   /** The block palette; absent when no page is open. */
   palette?: StudioCanvasPalette | undefined;
+  /** The More menu of the selected block's action bar. */
+  blockActions: StudioBlockActions;
 }>;
 
 /**
@@ -314,6 +331,9 @@ export function StudioPuckProvider({
   const inserted = useRef<Set<string>>(new Set());
   // The block a refused removal named: the change that carries the removal is refused with it.
   const refusedRemoval = useRef<string | null>(null);
+  // The name of the block Puck has just removed (its Delete key or the bar's Remove): once the
+  // draft takes the removal, the Undo toast names it.
+  const removing = useRef<string | null>(null);
   const permitted = model.editable && input.canvasShown;
   const latest = useRef({ input, model, permitted });
   latest.current = { input, model, permitted };
@@ -323,6 +343,8 @@ export function StudioPuckProvider({
   const change = useCallback((candidate: Data) => {
     const { input: now, model: shown, permitted: allowed } = latest.current;
     if (synchronizing.current) return;
+    const removed = removing.current;
+    removing.current = null;
     const refusedId = refusedRemoval.current;
     if (refusedId !== null) {
       refusedRemoval.current = null;
@@ -356,6 +378,11 @@ export function StudioPuckProvider({
     }
     setRefused(null);
     now.onChange(now.source, result.source);
+    // One delete for the Delete key and the bar's Remove: it is immediate, and Undo is offered.
+    if (removed !== null)
+      toast(`Removed ${removed}`, {
+        action: { label: "Undo", onClick: () => latest.current.input.blockActions.undo() },
+      });
   }, []);
 
   const onAction = useCallback((action: PuckAction, state: AppState, previous: AppState) => {
@@ -387,6 +414,10 @@ export function StudioPuckProvider({
         });
         return;
       }
+      removing.current =
+        (shown.slot === undefined || removed === null
+          ? undefined
+          : studioBlockName(now.describePlacement, shown.slot.items, removed)) ?? "block";
     }
     // A drop or an Add from the drawer: Puck has put an interim block (the release defaults) in its
     // own data; Studio adds the real one.

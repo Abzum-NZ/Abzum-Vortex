@@ -7,9 +7,8 @@ import {
   type Overrides,
   type PuckApi,
 } from "@puckeditor/core";
-import { sourceItemTree } from "@vortex/platform/schema";
 import { StudioOutlineRegion } from "./studio-puck-outline";
-import { Copy, Trash2 } from "lucide-react";
+import { Copy } from "lucide-react";
 import {
   Children,
   cloneElement,
@@ -29,7 +28,8 @@ import { Icon } from "../icons";
 import { Reasoned, type ReasonedTooltipProps } from "../components/reasoned";
 import { studioLimitReason } from "./studio-limit";
 import { studioCanvasPermissionReason } from "./studio-canvas-permissions";
-import { puckNeighbourOf, puckSelectorOf } from "./studio-canvas-data";
+import { puckNeighbourOf, puckSelectorOf, studioBlockName } from "./studio-canvas-data";
+import { StudioCanvasMore, type StudioMoreChoice } from "./studio-canvas-more";
 import { studioCanvasVisible, useStudioCanvasView } from "./studio-canvas-scale";
 import { StudioCanvasIframe } from "./studio-canvas-root";
 import { useStudioScreen } from "./studio-canvas-screen";
@@ -89,7 +89,7 @@ function BarAction({ label, reason, onAct, tooltip, stop, onStop, children }: Ba
 const puckAllows = (
   state: Pick<PuckApi, "getPermissions" | "getSelectorForId" | "getItemById">,
   id: string,
-  action: "duplicate" | "delete",
+  action: "duplicate" | "delete" | "drag",
 ): boolean => {
   // `getSelectorForId` answers undefined exactly when the block is not indexed (`getItemById`
   // throws then), the lookup the provider's refresh uses too.
@@ -101,7 +101,8 @@ const puckAllows = (
  * The selected block's action bar, drawn in shadcn on the block itself. It is the content of
  * Puck's `componentOverlay` for the selected block, so it is given the block's own id and knows it
  * is the selected one, with no reading of Puck's markup and no writing to its elements. The block's
- * name comes first, then select-parent, Duplicate and Delete. An action Puck's permissions forbid
+ * name comes first, then select-parent, Duplicate and the More menu (Move to, Wrap, Used in and
+ * Remove, the one delete beside the Delete key). An action Puck's permissions forbid
  * stays in the bar, unavailable, and says why on hover and on keyboard focus.
  *
  * The page frame is scaled by the workspace, so the bar counter-scales to keep its size on screen,
@@ -142,24 +143,14 @@ function StudioActionBar({ id, type }: Readonly<{ id: string; type: string }>) {
   // Puck sets a block's permissions a moment after the reasons change; the bar draws again when they do.
   const canDuplicate = usePuckSelector((state) => puckAllows(state, id, "duplicate"));
   const canDelete = usePuckSelector((state) => puckAllows(state, id, "delete"));
-  const permissions = { duplicate: canDuplicate, delete: canDelete };
+  const canDrag = usePuckSelector((state) => puckAllows(state, id, "drag"));
+  const permissions = { duplicate: canDuplicate, delete: canDelete, drag: canDrag };
   const parent = puck.getParentById(id);
   // The name the outline and the inspector use: the block's own item ("Button: Open").
-  const item =
-    model.slot === undefined
-      ? undefined
-      : sourceItemTree(model.slot.items).find((candidate) => candidate.props.id === id);
   const name =
-    (item === undefined
+    (model.slot === undefined
       ? undefined
-      : input.describePlacement({
-          block: item.props.vortex.block,
-          settings: Object.fromEntries(
-            Object.entries(item.props).filter(
-              ([key, value]) => key !== "id" && key !== "vortex" && !Array.isArray(value),
-            ),
-          ),
-        })) ??
+      : studioBlockName(input.describePlacement, model.slot.items, id)) ??
     puck.config.components[type]?.label ??
     type;
   // Why a forbidden action is unavailable when the draft itself names no reason.
@@ -187,12 +178,15 @@ function StudioActionBar({ id, type }: Readonly<{ id: string; type: string }>) {
   const deleteNamed = studioCanvasPermissionReason(references, id, "delete");
   const duplicateReason = reasonFor(duplicateNamed, permissions.duplicate);
   const deleteReason = reasonFor(deleteNamed, permissions.delete);
+  const moveNamed = studioCanvasPermissionReason(references, id, "drag");
+  const moveReason = reasonFor(moveNamed, permissions.drag);
   // A denial that neither the draft nor a cause above explains is a defect to find and word, so it
   // is logged, once per block.
   const unexplained =
     knownCause === undefined &&
     ((!permissions.duplicate && duplicateNamed === undefined) ||
-      (!permissions.delete && deleteNamed === undefined));
+      (!permissions.delete && deleteNamed === undefined) ||
+      (!permissions.drag && moveNamed === undefined));
   // Puck sets a block's permissions again a moment after the draft's reasons change (a reason that
   // has just cleared), so a denial counts as unexplained only when it outlasts that moment.
   useEffect(() => {
@@ -202,10 +196,11 @@ function StudioActionBar({ id, type }: Readonly<{ id: string; type: string }>) {
         id,
         duplicate: canDuplicate,
         delete: canDelete,
+        drag: canDrag,
       });
     }, 1000);
     return () => clearTimeout(timer);
-  }, [unexplained, id, canDuplicate, canDelete]);
+  }, [unexplained, id, canDuplicate, canDelete, canDrag]);
   const inverse = view.scale > 0 ? 1 / view.scale : 1;
   const visible = studioCanvasVisible(view);
   // A tooltip stays inside what the well shows, and is the size of the bar on screen.
@@ -302,7 +297,7 @@ function StudioActionBar({ id, type }: Readonly<{ id: string; type: string }>) {
   };
 
   // What the action acts on is found in the data, and must be this bar's own block.
-  const act = (action: "parent" | "duplicate" | "remove") => {
+  const act = (action: "parent" | "duplicate" | StudioMoreChoice) => {
     const current = getPuck();
     const content = current.appState.data.content;
     const selector = puckSelectorOf(content, id);
@@ -317,6 +312,10 @@ function StudioActionBar({ id, type }: Readonly<{ id: string; type: string }>) {
         focusBarOn(parent.props.id);
         current.dispatch({ type: "setUi", ui: { itemSelector: parentSelector } });
       }
+      return;
+    }
+    if (action === "move" || action === "wrap" || action === "usedIn") {
+      input.blockActions.open(id, action);
       return;
     }
     const item = current.getItemBySelector(selector);
@@ -383,15 +382,14 @@ function StudioActionBar({ id, type }: Readonly<{ id: string; type: string }>) {
         >
           <Copy aria-hidden="true" />
         </BarAction>
-        <BarAction
-          label="Delete block"
-          reason={deleteReason}
+        <StudioCanvasMore
+          id={id}
+          actions={input.blockActions}
+          reasons={{ move: moveReason, remove: deleteReason }}
           tooltip={tooltip}
-          onAct={() => act("remove")}
+          onChoose={act}
           {...stop(first + 1)}
-        >
-          <Trash2 aria-hidden="true" />
-        </BarAction>
+        />
       </ButtonGroup>
     </div>
   );
