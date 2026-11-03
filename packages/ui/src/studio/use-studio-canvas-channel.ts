@@ -2,6 +2,7 @@ import { useMemo, useRef } from "react";
 import { sameCompositionValue } from "./composition-references";
 import type { StudioCanvasModel } from "./studio-canvas-model";
 import type { StudioCanvasChannel, StudioCanvasFrameMetadata } from "./studio-canvas-metadata";
+import type { StudioCanvasReferences } from "./studio-canvas-permissions";
 import type { StudioPuckInput } from "./studio-puck-provider";
 import { useStudioCanvasRecords } from "./use-studio-canvas-records";
 
@@ -29,6 +30,7 @@ const NO_COMPILED_SETTINGS: StudioCanvasChannel["compiled"] = Object.freeze({});
 export const useStudioCanvasChannelValue = (
   input: StudioPuckInput,
   model: StudioCanvasModel,
+  references: StudioCanvasReferences,
 ): StudioCanvasChannel => {
   const { records, controls, grid } = useStudioCanvasRecords({
     area: model.area,
@@ -70,7 +72,7 @@ export const useStudioCanvasChannelValue = (
   const viewer = input.viewer ?? null;
   const compiled = model.compiledSettings ?? NO_COMPILED_SETTINGS;
   return useMemo(
-    () => ({ compiled, records, viewer, controls, grid, frame: frameMetadata }),
-    [compiled, records, viewer, controls, grid, frameMetadata],
+    () => ({ compiled, references, records, viewer, controls, grid, frame: frameMetadata }),
+    [compiled, references, records, viewer, controls, grid, frameMetadata],
   );
 };

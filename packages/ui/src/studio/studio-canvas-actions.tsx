@@ -33,6 +33,7 @@ import { StudioCanvasMore, type StudioMoreChoice } from "./studio-canvas-more";
 import { studioCanvasVisible, useStudioCanvasView } from "./studio-canvas-scale";
 import { StudioCanvasIframe } from "./studio-canvas-root";
 import { useStudioScreen } from "./studio-canvas-screen";
+import { useStudioCanvasChannel } from "./studio-canvas-metadata";
 import { useStudioCanvas } from "./studio-puck-provider";
 
 const usePuckSelector = createUsePuck();
@@ -112,7 +113,8 @@ const puckAllows = (
  */
 function StudioActionBar({ id, type }: Readonly<{ id: string; type: string }>) {
   const getPuck = useGetPuck();
-  const { input, model, references } = useStudioCanvas();
+  const { input, model } = useStudioCanvas();
+  const { references } = useStudioCanvasChannel();
   const { breakpoint, label: screenLabel } = useStudioScreen();
   const view = useStudioCanvasView();
   // While a block is dragged the bar lets the pointer through.
@@ -324,9 +326,7 @@ function StudioActionBar({ id, type }: Readonly<{ id: string; type: string }>) {
       input.blockActions.open(id, action);
       return;
     }
-    const item = current.getItemBySelector(selector);
-    const permitted = current.getPermissions({ item: item ?? null });
-    if (!(action === "duplicate" ? permitted.duplicate : permitted.delete)) return;
+    if ((action === "duplicate" ? duplicateReason : deleteReason) !== undefined) return;
     if (action === "duplicate") {
       current.dispatch({
         type: "duplicate",

@@ -27,6 +27,7 @@ import { studioCanvasMetadata, useStudioCanvasChannel } from "./studio-canvas-me
 import { useStudioCanvasView } from "./studio-canvas-scale";
 import { useStudioScreen } from "./studio-canvas-screen";
 import { studioPuckIframeCss } from "./studio-puck-style";
+import { useStudioCanvas } from "./studio-puck-provider";
 
 const resolvePageHref = () => "#";
 
@@ -309,6 +310,15 @@ export function StudioCanvasIframe({
   document: frameDocument,
 }: Readonly<{ children: ReactNode; document?: Document | undefined }>) {
   const previewMode = usePuckSelector((state) => state.appState.ui.previewMode);
+  // The provider reaches the canvas's document (the drop animation, the scroll to a chosen block)
+  // through this override, which Puck hands the document.
+  const { frameDocument: held } = useStudioCanvas();
+  useEffect(() => {
+    held.current = frameDocument ?? null;
+    return () => {
+      held.current = null;
+    };
+  }, [held, frameDocument]);
   // While blocks are edited the canvas is a picture of the page, outside Studio's Tab path (blocks
   // are chosen in the Outline); while grids are arranged its column controls need the keyboard.
   useEffect(() => {

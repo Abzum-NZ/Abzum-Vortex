@@ -45,13 +45,11 @@ import {
   repeatableSlotKey,
   type BreakpointOrder,
   type CompiledItemVortex,
-  type BlockPaletteGroup,
   type BlockPropertyValueContract,
   type ApplicationPuckRootShell,
   type PlatformBlockRelease,
   type ProjectedNavigation,
 } from "@vortex/platform/schema";
-import { PALETTE_GROUP_TITLES } from "./palette-groups";
 import {
   DefinitionRenderError,
   placementSettings,
@@ -806,16 +804,6 @@ function createVortexPuckConfig(
   }
 
   return {
-    categories: Object.fromEntries(
-      [...keysByCategory].map(([category, components]) => [
-        category,
-        {
-          title: PALETTE_GROUP_TITLES[category as BlockPaletteGroup] ?? category,
-          components,
-          defaultExpanded: true,
-        },
-      ]),
-    ),
     components,
     root: {
       defaultProps: {

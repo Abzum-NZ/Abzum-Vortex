@@ -6,6 +6,7 @@ import type { VortexPuckMetadata } from "../puck-config";
 import type { PlatformThemeTokens } from "../theme";
 import type { StudioCompileFailure } from "./compile-failure";
 import type { StudioCanvasCompiledSettings } from "./studio-canvas-data";
+import type { StudioCanvasReferences } from "./studio-canvas-permissions";
 import type { StudioCanvasGridChannel } from "./studio-canvas-grid";
 import type { StudioCanvasFrame } from "./studio-canvas-projection";
 
@@ -89,6 +90,8 @@ export const studioCanvasMetadata = (puck: Pick<PuckContext, "metadata">): Studi
 export type StudioCanvasChannel = Readonly<{
   /** By block name, the plain settings each block's last compiled version holds. */
   compiled: StudioCanvasCompiledSettings;
+  /** Why a block's delete, drag or duplicate is unavailable, by block name; the action bar says it. */
+  references: StudioCanvasReferences;
   /** The records of the canvas's data blocks. */
   records: StudioCanvasRecords;
   /** The role the canvas previews, or `null` for the design view. */
