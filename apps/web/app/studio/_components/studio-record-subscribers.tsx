@@ -1,4 +1,5 @@
 "use client";
+import { Field, FieldLabel } from "@vortex/ui/components/field";
 import { Alert, AlertDescription } from "@vortex/ui/components/alert";
 import { useState, type FormEvent } from "react";
 import type { ApplicationSourceDocument } from "@vortex/platform/schema";
@@ -9,11 +10,11 @@ import {
   Item,
   ItemActions,
   ItemContent,
+  ItemGroup,
   ItemDescription,
   ItemHeader,
   ItemTitle,
 } from "@vortex/ui/components/item";
-import { Label } from "@vortex/ui/components/label";
 import { applyStudioFlowCreate, studioRecordSubscribers } from "@vortex/ui/studio";
 import { useStudioPlaceOpener } from "./studio-used-in";
 import { studioEditProblem, type StudioDataEdit } from "../_lib/studio-data-model";
@@ -104,8 +105,8 @@ export function StudioRecordSubscribers({
       </p>
       {adding && (
         <form className="space-y-2" onSubmit={add} aria-label="New after-save flow">
-          <div className="space-y-1.5">
-            <Label htmlFor="record-subscriber-name">Flow name</Label>
+          <Field>
+            <FieldLabel htmlFor="record-subscriber-name">Flow name</FieldLabel>
             <Input
               id="record-subscriber-name"
               required
@@ -117,18 +118,18 @@ export function StudioRecordSubscribers({
                 setProblem("");
               }}
             />
-          </div>
-          <div className="flex items-center gap-2">
+          </Field>
+          <Field orientation="horizontal">
             <Checkbox
               id="record-subscriber-created"
               checked={onCreate}
               disabled={disabled}
               onCheckedChange={(checked) => setOnCreate(checked === true)}
             />
-            <Label htmlFor="record-subscriber-created">
+            <FieldLabel htmlFor="record-subscriber-created">
               When it is created (otherwise when it is changed)
-            </Label>
-          </div>
+            </FieldLabel>
+          </Field>
           <div className="flex gap-2">
             <Button type="submit" size="sm" disabled={disabled}>
               Add and open the flow
@@ -147,9 +148,9 @@ export function StudioRecordSubscribers({
           </div>
         </form>
       )}
-      <ul className="space-y-2">
+      <ItemGroup className="gap-2">
         {subscribers.map((subscriber) => (
-          <Item key={subscriber.flowAlias} render={<li />} variant="outline" size="sm">
+          <Item key={subscriber.flowAlias} role="listitem" variant="outline" size="sm">
             <ItemHeader className="flex-wrap gap-2">
               <ItemTitle>{subscriber.name}</ItemTitle>
               <ItemActions className="gap-1">
@@ -168,7 +169,7 @@ export function StudioRecordSubscribers({
             </ItemContent>
           </Item>
         ))}
-      </ul>
+      </ItemGroup>
       {problem === "" ? null : (
         <Alert variant="destructive">
           <AlertDescription>{problem}</AlertDescription>

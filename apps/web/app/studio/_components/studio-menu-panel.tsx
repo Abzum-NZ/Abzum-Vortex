@@ -1,4 +1,6 @@
 "use client";
+import { Card, CardContent } from "@vortex/ui/components/card";
+import { Item } from "@vortex/ui/components/item";
 import { Spinner } from "@vortex/ui/components/spinner";
 import { FieldLegend, FieldSet } from "@vortex/ui/components/field";
 import { Alert, AlertDescription } from "@vortex/ui/components/alert";
@@ -383,58 +385,62 @@ export function StudioMenuPanel({
           Add a heading
         </Button>
         {addingHeading && (
-          <form
-            aria-label="New menu heading"
-            className="space-y-3 rounded-md border p-3"
-            onSubmit={(event) => {
-              event.preventDefault();
-              if (
-                run({
-                  kind: "add_heading",
-                  label: headingName,
-                  first: { kind: "page", pageKey: firstPage },
-                })
-              ) {
-                setHeadingName("");
-                setFirstPage("");
-                setAddingHeading(false);
-              }
-            }}
-          >
-            <StudioField label="Heading name">
-              {(control) => (
-                <Input
-                  {...control}
-                  value={headingName}
-                  required
-                  maxLength={60}
-                  disabled={disabled}
-                  onChange={(event) => setHeadingName(event.target.value)}
-                />
-              )}
-            </StudioField>
-            <StudioField label="First page">
-              {(control) => (
-                <StudioOptionControl
-                  {...control}
-                  value={firstPage}
-                  disabled={disabled}
-                  options={[
-                    { value: "", label: "Choose a page…" },
-                    ...pages.map((page) => ({ value: page.key, label: page.label })),
-                  ]}
-                  onChange={(value) => setFirstPage(value)}
-                />
-              )}
-            </StudioField>
-            <Button
-              type="submit"
-              size="sm"
-              disabled={disabled || headingName.trim().length === 0 || firstPage.length === 0}
-            >
-              Create heading
-            </Button>
-          </form>
+          <Card size="sm">
+            <CardContent>
+              <form
+                aria-label="New menu heading"
+                className="space-y-3"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  if (
+                    run({
+                      kind: "add_heading",
+                      label: headingName,
+                      first: { kind: "page", pageKey: firstPage },
+                    })
+                  ) {
+                    setHeadingName("");
+                    setFirstPage("");
+                    setAddingHeading(false);
+                  }
+                }}
+              >
+                <StudioField label="Heading name">
+                  {(control) => (
+                    <Input
+                      {...control}
+                      value={headingName}
+                      required
+                      maxLength={60}
+                      disabled={disabled}
+                      onChange={(event) => setHeadingName(event.target.value)}
+                    />
+                  )}
+                </StudioField>
+                <StudioField label="First page">
+                  {(control) => (
+                    <StudioOptionControl
+                      {...control}
+                      value={firstPage}
+                      disabled={disabled}
+                      options={[
+                        { value: "", label: "Choose a page…" },
+                        ...pages.map((page) => ({ value: page.key, label: page.label })),
+                      ]}
+                      onChange={(value) => setFirstPage(value)}
+                    />
+                  )}
+                </StudioField>
+                <Button
+                  type="submit"
+                  size="sm"
+                  disabled={disabled || headingName.trim().length === 0 || firstPage.length === 0}
+                >
+                  Create heading
+                </Button>
+              </form>
+            </CardContent>
+          </Card>
         )}
         <form onSubmit={addEntry} className="flex items-end gap-2" aria-label="New menu entry">
           <StudioField
@@ -493,7 +499,9 @@ export function StudioMenuPanel({
             </StudioSection>
           )}
           {dragging !== null && (
-            <div
+            <Item
+              variant="outline"
+              size="xs"
               onDragOver={(event) => {
                 event.preventDefault();
                 setDropTarget("__end");
@@ -501,12 +509,12 @@ export function StudioMenuPanel({
               onDragLeave={() => setDropTarget(null)}
               onDrop={(event) => drop(event, null)}
               className={cn(
-                "rounded-md border border-dashed border-border p-2 text-center text-xs text-muted-foreground",
+                "justify-center border-dashed text-center text-xs text-muted-foreground",
                 dropTarget === "__end" && "border-primary text-foreground",
               )}
             >
               Drop here to move it to the end of the menu
-            </div>
+            </Item>
           )}
           {feedback !== null && (
             <Alert

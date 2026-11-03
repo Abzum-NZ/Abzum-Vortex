@@ -198,8 +198,10 @@ const resolveRequestIdentity = async (
   const beforeRead = boundary.stage.snapshot();
   if (beforeRead.refused || beforeRead.mutations.length > 0) return { resolution: unavailable() };
   execution?.checkpoint();
-  const current = await readIdentitySessionProvider("get-session", () =>
-    boundary.client.auth.getSession(),
+  const current = await readIdentitySessionProvider(
+    "get-session",
+    () => boundary.client.auth.getSession(),
+    boundary.verificationRefused,
   );
   execution?.checkpoint();
   if (boundary.verificationRefused()) return { resolution: unavailable() };

@@ -1,4 +1,5 @@
 "use client";
+import { Field, FieldLabel } from "@vortex/ui/components/field";
 import { Alert, AlertDescription } from "@vortex/ui/components/alert";
 import { Icon } from "@vortex/ui";
 import { useState, type FormEvent } from "react";
@@ -19,10 +20,10 @@ import {
   ItemActions,
   ItemContent,
   ItemDescription,
+  ItemGroup,
   ItemHeader,
   ItemTitle,
 } from "@vortex/ui/components/item";
-import { Label } from "@vortex/ui/components/label";
 import { Textarea } from "@vortex/ui/components/textarea";
 import {
   applyStudioFlowCreate,
@@ -162,8 +163,8 @@ export function StudioRecordRules({
       </p>
       {adding && (
         <form className="space-y-2" onSubmit={add} aria-label="New rule">
-          <div className="space-y-1.5">
-            <Label htmlFor="record-rule-name">Name</Label>
+          <Field>
+            <FieldLabel htmlFor="record-rule-name">Name</FieldLabel>
             <Input
               id="record-rule-name"
               required
@@ -175,9 +176,9 @@ export function StudioRecordRules({
                 setProblem("");
               }}
             />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="record-rule-message">Warning message</Label>
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="record-rule-message">Warning message</FieldLabel>
             <Textarea
               id="record-rule-message"
               required
@@ -185,25 +186,25 @@ export function StudioRecordRules({
               disabled={disabled}
               onChange={(event) => setMessage(event.target.value)}
             />
-          </div>
-          <div className="flex items-center gap-2">
+          </Field>
+          <Field orientation="horizontal">
             <Checkbox
               id="record-rule-create"
               checked={onCreate}
               disabled={disabled}
               onCheckedChange={(checked) => setOnCreate(checked === true)}
             />
-            <Label htmlFor="record-rule-create">When it is created</Label>
-          </div>
-          <div className="flex items-center gap-2">
+            <FieldLabel htmlFor="record-rule-create">When it is created</FieldLabel>
+          </Field>
+          <Field orientation="horizontal">
             <Checkbox
               id="record-rule-update"
               checked={onUpdate}
               disabled={disabled}
               onCheckedChange={(checked) => setOnUpdate(checked === true)}
             />
-            <Label htmlFor="record-rule-update">When it is changed</Label>
-          </div>
+            <FieldLabel htmlFor="record-rule-update">When it is changed</FieldLabel>
+          </Field>
           <div className="flex gap-2">
             <Button type="submit" size="sm" disabled={disabled}>
               Add and open the rule
@@ -233,9 +234,9 @@ export function StudioRecordRules({
           </EmptyHeader>
         </Empty>
       )}
-      <ol className="space-y-2">
+      <ItemGroup className="gap-2">
         {rules.map((rule, index) => (
-          <Item key={rule.flowAlias} render={<li />} variant="outline" size="sm">
+          <Item key={rule.flowAlias} role="listitem" variant="outline" size="sm">
             <ItemHeader className="flex-wrap gap-2">
               <ItemTitle>
                 {index + 1}. {rule.name}
@@ -285,18 +286,20 @@ export function StudioRecordRules({
             <ItemContent className="basis-full">
               <ItemDescription>{rule.when}.</ItemDescription>
               {rule.effects.length === 0 ? null : (
-                <ul className="list-disc space-y-0.5 pl-5 text-sm">
+                <ItemGroup className="gap-0.5">
                   {rule.effects.map((effect, index) => (
-                    <li key={index} className="break-words">
-                      {effect}
-                    </li>
+                    <Item key={index} size="xs" role="listitem" className="p-0">
+                      <ItemContent>
+                        <p className="m-0 break-words text-sm">{effect}</p>
+                      </ItemContent>
+                    </Item>
                   ))}
-                </ul>
+                </ItemGroup>
               )}
             </ItemContent>
           </Item>
         ))}
-      </ol>
+      </ItemGroup>
       {problem === "" ? null : (
         <Alert variant="destructive">
           <AlertDescription>{problem}</AlertDescription>

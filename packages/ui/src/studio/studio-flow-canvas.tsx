@@ -67,6 +67,7 @@ import {
 import { Badge } from "../components/badge";
 import { Button } from "../components/button";
 import { Card } from "../components/card";
+import { Item, ItemContent, ItemGroup } from "../components/item";
 import { Popover, PopoverContent, PopoverTitle, PopoverTrigger } from "../components/popover";
 import { cn } from "../lib/utils";
 import type { ThemeMode } from "../theme";
@@ -174,7 +175,7 @@ const StudioFlowNode = memo(function StudioFlowNode({
   return (
     <Card
       className={cn(
-        "group/node relative min-h-24 w-64 gap-2 rounded-xl border bg-card px-3 py-2.5 text-card-foreground shadow-xs hover:border-foreground/20",
+        "group/node relative min-h-24 w-64 gap-2 px-3 py-2.5 hover:ring-foreground/20",
         data.kind !== "start" && "h-24",
         selected && "ring-2 ring-primary shadow-lg",
       )}
@@ -203,11 +204,13 @@ const StudioFlowNode = memo(function StudioFlowNode({
         <div className="text-xs text-muted-foreground">
           <span className="font-medium">Behaviour</span>
           {data.behaviour?.length ? (
-            <ul className="m-0 list-none p-0">
+            <ItemGroup>
               {data.behaviour.map((entry) => (
-                <li key={entry}>{entry}</li>
+                <Item key={entry} size="xs" role="listitem" className="p-0">
+                  <ItemContent>{entry}</ItemContent>
+                </Item>
               ))}
-            </ul>
+            </ItemGroup>
           ) : (
             <p>No components bound</p>
           )}
@@ -321,48 +324,45 @@ const edgeTypes = { studio: StudioFlowEdge };
 function StudioFlowControls() {
   const { zoomIn, zoomOut, fitView } = useReactFlow();
   return (
-    <Panel
-      position="bottom-left"
-      className="flex flex-col rounded-lg border bg-card p-1 text-card-foreground shadow-xs"
-      aria-label="Canvas zoom"
-      role="group"
-    >
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon-sm"
-        aria-label="Zoom in"
-        title="Zoom in"
-        onClick={() => {
-          void zoomIn();
-        }}
-      >
-        <ZoomIn aria-hidden="true" className="size-4" />
-      </Button>
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon-sm"
-        aria-label="Zoom out"
-        title="Zoom out"
-        onClick={() => {
-          void zoomOut();
-        }}
-      >
-        <ZoomOut aria-hidden="true" className="size-4" />
-      </Button>
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon-sm"
-        aria-label="Fit flow to canvas"
-        title="Fit flow to canvas"
-        onClick={() => {
-          void fitView({ maxZoom: 1 });
-        }}
-      >
-        <Maximize aria-hidden="true" className="size-4" />
-      </Button>
+    <Panel position="bottom-left" aria-label="Canvas zoom" role="group">
+      <Card size="sm" className="gap-0 p-1">
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-sm"
+          aria-label="Zoom in"
+          title="Zoom in"
+          onClick={() => {
+            void zoomIn();
+          }}
+        >
+          <ZoomIn aria-hidden="true" className="size-4" />
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-sm"
+          aria-label="Zoom out"
+          title="Zoom out"
+          onClick={() => {
+            void zoomOut();
+          }}
+        >
+          <ZoomOut aria-hidden="true" className="size-4" />
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-sm"
+          aria-label="Fit flow to canvas"
+          title="Fit flow to canvas"
+          onClick={() => {
+            void fitView({ maxZoom: 1 });
+          }}
+        >
+          <Maximize aria-hidden="true" className="size-4" />
+        </Button>
+      </Card>
     </Panel>
   );
 }
