@@ -1,4 +1,6 @@
 import { randomUUID } from "node:crypto";
+import { spawnSync } from "node:child_process";
+import { join } from "node:path";
 import { developmentSetupManifestFor } from "./manifest";
 import { signupPrivacyNoticeSetting } from "@vortex/definitions";
 import {
@@ -21,6 +23,7 @@ import {
   requireLocalDevelopmentEnvironment,
   requireLocalSupabaseBinding,
   resolveFirstOwnerIdentity,
+  supabaseWorkdirArguments,
 } from "./guards";
 import { createConfiguredTenantAdministrationService } from "@vortex/platform/server";
 import { createDatabaseSystemApplicationBoundReleaseSetService } from "@vortex/platform/server";
@@ -41,7 +44,7 @@ import {
   mintSystemContext,
   nominatedOwnerSession,
 } from "./development-authority";
-import { loadSetupState, prepareSetupState } from "./state";
+import { findRepositoryRoot, loadSetupState, prepareSetupState } from "./state";
 import { loadLocalWebEnvironment } from "../demo-setup/local-environment";
 import { createInProcessEventDispatcher } from "../../app/_lib/event-dispatch";
 
@@ -339,7 +342,32 @@ export const runDevelopmentSetup = async (
       throw new Error("Local database system identifier is unavailable.");
     return value;
   });
-  prepareSetupState(databaseSystemId);
+  await prepareSetupState(databaseSystemId, async (organizationId) => {
+    const cli = join(findRepositoryRoot(), "node_modules", "supabase", "dist", "supabase.js");
+    const result = spawnSync(
+      process.execPath,
+      [
+        cli,
+        "db",
+        "query",
+        "--local",
+        "--output",
+        "json",
+        ...supabaseWorkdirArguments(),
+        `select exists (select 1 from vortex_identity.organizations where organization_id = '${organizationId}'::uuid) as present`,
+      ],
+      { cwd: findRepositoryRoot(), encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] },
+    );
+    if (result.error) throw result.error;
+    if (result.status !== 0)
+      throw new Error(`Unable to validate local setup state: ${result.stderr.trim()}`);
+    const output: unknown = JSON.parse(result.stdout);
+    const rows =
+      typeof output === "object" && output !== null && "rows" in output ? output.rows : undefined;
+    if (!Array.isArray(rows) || rows.length !== 1 || typeof rows[0]?.present !== "boolean")
+      throw new Error("Invalid local setup state query result.");
+    return rows[0].present;
+  });
   const stewardIdentityId = await resolveFirstOwnerIdentity(args.firstOwner);
   log(`first owner identity ${stewardIdentityId}`);
 

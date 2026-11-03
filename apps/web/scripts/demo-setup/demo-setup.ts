@@ -1,12 +1,10 @@
 import { spawnSync } from "node:child_process";
-import { join } from "node:path";
 import { findRepositoryRoot } from "../development-setup/state";
 import { isLoopbackHostname } from "@vortex/platform/schema";
 import {
   isLocalSupabaseApiUrl,
   requireLocalDevelopmentEnvironment,
   requireLocalSupabaseBinding,
-  supabaseWorkdirArguments,
 } from "../development-setup/guards";
 import { ensureLocalDemoOwner, validateDemoOwnerConfiguration } from "./local-demo-owner";
 import { loadLocalWebEnvironment } from "./local-environment";
@@ -48,12 +46,12 @@ const validateDemoEnvironment = (): void => {
   const supabase = new URL(process.env.VORTEX_SUPABASE_URL!);
   if (
     site.protocol !== "http:" ||
-    site.hostname !== "127.0.0.1" ||
+    site.hostname !== "localhost" ||
     site.pathname !== "/" ||
     site.search.length > 0 ||
     site.hash.length > 0
   )
-    throw new Error("VORTEX_SITE_URL must use the canonical local host, 127.0.0.1.");
+    throw new Error("VORTEX_SITE_URL must use the canonical local host, localhost.");
   if (!isLocalSupabaseApiUrl(supabase))
     throw new Error(
       "VORTEX_SUPABASE_URL must be a loopback HTTP origin (the main stack or a database lane).",
@@ -70,24 +68,9 @@ const validateDemoEnvironment = (): void => {
 const main = async (): Promise<void> => {
   loadLocalWebEnvironment();
   validateDemoEnvironment();
-  const root = findRepositoryRoot();
-  const supabaseCli = join(root, "node_modules", "supabase", "dist", "supabase.js");
-  const workdir = supabaseWorkdirArguments();
+  if (/[\\/]db3[\\/]?$/.test(process.env.VORTEX_SUPABASE_WORKDIR ?? ""))
+    throw new Error("Demo setup cannot run on the shared lane 3.");
   requireLocalSupabaseBinding();
-
-  if (workdir.length === 0) {
-    log("resetting the local database");
-    runPnpm(["db:reset"]);
-  } else {
-    log(`resetting the database lane at ${workdir[1]}`);
-    const reset = spawnSync(process.execPath, [supabaseCli, "db", "reset", ...workdir], {
-      cwd: root,
-      stdio: "inherit",
-    });
-    if (reset.error !== undefined) throw reset.error;
-    if (reset.status !== 0)
-      throw new Error(`supabase db reset failed (${reset.status ?? "terminated"}).`);
-  }
   const identityId = await ensureLocalDemoOwner();
   runPnpm([
     "--filter",

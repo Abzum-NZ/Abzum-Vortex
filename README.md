@@ -36,17 +36,16 @@ pnpm install --frozen-lockfile
 pnpm dev
 ```
 
-The development server binds to `127.0.0.1`. Authentication and protected data operations also need
+The development server binds to `localhost`. Authentication and protected data operations also need
 the appropriate environment configuration and database; installing packages alone does not configure
 them. Starting a server is not a completion gate.
 
 ### Local development setup
 
 A fresh local database has no organisation, so a signed-in developer sees "No organisations
-available". `pnpm demo:setup` is the one-command path: it resets the local database, creates a
+available". `pnpm demo:setup` is the one-command path: it creates a
 confirmed local owner account, and runs the protected development setup. It requires the local
-Supabase stack to be running. The reset deletes all data in that local stack, including local
-sign-ups; never point it at a hosted database.
+Supabase stack to be running. Never point it at a hosted database.
 
 1. Install dependencies, start the local stack, and copy the environment example:
 
@@ -70,7 +69,7 @@ sign-ups; never point it at a hosted database.
    The owner email and password come from `VORTEX_DEMO_OWNER_EMAIL` and
    `VORTEX_DEMO_OWNER_PASSWORD`. The account is confirmed locally, so no email step is required.
    The setup publishes and installs the shipped core applications and grants the owner their defined
-   application roles. Re-running `pnpm demo:setup` starts over by resetting the local database.
+   application roles. Re-running `pnpm demo:setup` reuses the local database.
 
 3. Start the web application and sign in using the configured demo account:
 
@@ -78,7 +77,7 @@ sign-ups; never point it at a hosted database.
    pnpm dev
    ```
 
-   Open `http://127.0.0.1:3000` (or the origin in `VORTEX_SITE_URL`) and sign in with
+   Open `http://localhost:3000` (or the origin in `VORTEX_SITE_URL`) and sign in with
    `VORTEX_DEMO_OWNER_EMAIL` and `VORTEX_DEMO_OWNER_PASSWORD`. The Landing Zone lists the installed
    applications; further applications are built in App Studio and installed from the App Store.
 
@@ -105,22 +104,11 @@ assigned through the protected Access operations.
 
 An interrupted `pnpm setup:local` run resumes from identifiers recorded in the local Supabase
 workdir's `supabase/.temp/development-setup-state.json`; worktrees using the same lane share this
-state. A database reset makes setup start afresh; provisioning and record saves replay by their stable
+state. An explicit lane reset clears that lane's state so setup starts afresh; provisioning and record saves replay by their stable
 idempotency keys. Re-running setup for the same organisation reuses its published releases,
-installations and role assignments. A different nominated account is refused. `pnpm demo:setup`
-deliberately resets the local database before starting a fresh demo.
+installations and role assignments. A different nominated account is refused. `pnpm demo:setup` never resets the local database.
 
-An older setup state may lack `databaseSystemId`. Setup names the state file and refuses to change it.
-If its database has not been reset since that state was written, query the identifier from the same
-local Supabase workdir, then add `"databaseSystemId": "<identifier>"` to the JSON file by hand:
-
-```sh
-node node_modules/supabase/dist/supabase.js db query --local --workdir <workdir> "select system_identifier::text from pg_control_system()"
-```
-
-For the main local stack, omit `--workdir <workdir>`. If the state does not describe the current
-database, delete that state file and reset the local database before running setup; a reset removes
-all data in that database. Never reset a lane held by someone else.
+Old, mismatched or orphaned setup state is refused. Reset a lane you hold with `node tooling/supabase/lane.mjs reset <n> .` before setting it up again; the reset clears its state only after the database reset succeeds. Lane 3 cannot be reset.
 
 ### Local environment variables
 
@@ -133,6 +121,8 @@ environment or database that is not the local one.
 For a database lane, `node tooling/supabase/lane.mjs env <n>` emits the lane's connection values and
 its persistent, randomly generated Query continuation key. Copy the output into the worktree's
 ignored `apps/web/.env.development.local`; it contains secrets and must not be committed or logged.
+Each environment must set `VORTEX_SESSION_COOKIE_NAME`; Testing and Production use a secure
+host-only name beginning with `__Host-`. A local lane receives its own name from `lane.mjs env`.
 
 The custom-component and file pages read additional variables and report a configuration error until
 they are set: `VORTEX_COMPONENT_BUNDLE_ORIGIN`, `VORTEX_FILE_STORAGE_SIGNING_KEY` and
