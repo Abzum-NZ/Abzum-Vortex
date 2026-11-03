@@ -15,6 +15,15 @@ begin
   if p_previous is not distinct from p_next then
     return null;
   end if;
+  -- A change only to what is free at the top (name, description, and for an Application icon and
+  -- theme) changes nothing on the surface.
+  if pg_catalog.jsonb_typeof(p_previous) = 'object' and pg_catalog.jsonb_typeof(p_next) = 'object'
+    and (p_previous - case when p_kind = 'module' then array['name', 'description']
+      else array['name', 'description', 'icon', 'theme'] end)
+      = (p_next - case when p_kind = 'module' then array['name', 'description']
+      else array['name', 'description', 'icon', 'theme'] end) then
+    return null;
+  end if;
   with recursive sides as (
     select
       side.side,
@@ -50,7 +59,10 @@ begin
   flows as (
     select sides.side, flow.value as flow,
       pg_catalog.lower(coalesce(flow.value ->> 'id', '')) as id,
-      pg_catalog.lower(flow.value::text) as flow_text
+      pg_catalog.jsonb_path_exists(flow.value, 'strict $.**?(@.type == "operation.call")') as calls,
+      -- the text is read only of a flow that does not itself call a protected operation
+      case when pg_catalog.jsonb_path_exists(flow.value, 'strict $.**?(@.type == "operation.call")')
+        then null else pg_catalog.lower(flow.value::text) end as flow_text
     from sides
     cross join lateral pg_catalog.jsonb_array_elements(sides.flows_a) as flow(value)
     where pg_catalog.jsonb_typeof(flow.value) = 'object'
@@ -62,12 +74,12 @@ begin
       flows.flow_text,
       '([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})', 'g'
     ) as reference(match)
-    where reference.match[1] <> flows.id
+    where reference.match[1] <> flows.id and not flows.calls
   ),
   protected_flows(side, id) as (
     select flows.side, flows.id
     from flows
-    where pg_catalog.jsonb_path_exists(flows.flow, 'strict $.**?(@.type == "operation.call")')
+    where flows.calls
     union
     select reference.side, reference.from_id
     from references_between as reference
@@ -98,7 +110,7 @@ begin
     from sides
     cross join lateral (
       select 'flow'::text as kind, flows.id as ident, coalesce(flows.flow ->> 'key', '') as block,
-        vortex_definition.system_application_strip_flow(flows.flow) as detail
+        flows.flow as detail
       from flows
       join protected_flows as found on found.side = flows.side and found.id = flows.id
       where flows.side = sides.side
@@ -247,7 +259,7 @@ begin
     select distinct on (surface.side, surface.kind, surface.ident)
       surface.side, surface.kind, surface.ident, surface.block, surface.detail
     from surface
-    order by surface.side, surface.kind, surface.ident, surface.detail::text collate "C"
+    order by surface.side, surface.kind, surface.ident
   ),
   problems as (
     select counted.kind, counted.block, counted.ident, 'twice' as change
@@ -261,7 +273,13 @@ begin
     from (select * from one where side = 'previous') as previous
     full join (select * from one where side = 'next') as next
       on next.kind = previous.kind and next.ident = previous.ident
-    where previous.detail is distinct from next.detail
+    where case when previous.kind = 'flow' or next.kind = 'flow'
+        -- A flow is compared as it is first; only a flow that differs is stripped of its text.
+        then case when previous.detail is distinct from next.detail
+          then vortex_definition.system_application_strip_flow(previous.detail)
+            is distinct from vortex_definition.system_application_strip_flow(next.detail)
+          else false end
+        else previous.detail is distinct from next.detail end
       and not (previous.kind is null
         and next.kind in ('page', 'navigation', 'query', 'event', 'block_dependency'))
   )

@@ -166,23 +166,27 @@ const navigationEntries = (
     ...navigationEntries(item.children, text(item.id) === "" ? parent : text(item.id)),
   ]);
 
+const uuidPattern = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/g;
+
 /** The ids (lower case) of the flows that are protected, to a fixpoint. */
 const protectedFlowIds = (flows: Record<string, Json>[]): Set<string> => {
-  const entries = flows.map((flow) => ({
-    flow,
-    id: lower(flow.id),
-    text: JSON.stringify(flow).toLowerCase(),
-  }));
+  const entries = flows.map((flow) => {
+    const id = lower(flow.id);
+    // The ids a flow's text names, once each: a run, a message action or a back-end run names its target.
+    const text = JSON.stringify(flow).toLowerCase();
+    return {
+      flow,
+      id,
+      named: new Set((text.match(uuidPattern) ?? []).filter((name) => name !== id)),
+    };
+  });
   const found = new Set(
     entries.filter((entry) => callsProtectedOperation(entry.flow)).map((entry) => entry.id),
   );
   for (let changed = true; changed;) {
     changed = false;
     for (const entry of entries)
-      if (
-        !found.has(entry.id) &&
-        [...found].some((id) => id !== "" && id !== entry.id && entry.text.includes(id))
-      ) {
+      if (!found.has(entry.id) && [...entry.named].some((name) => found.has(name))) {
         found.add(entry.id);
         changed = true;
       }
@@ -416,6 +420,14 @@ const systemApplicationSurfaceViolation = (
   kind: "application" | "module",
 ): string | null => {
   if (canonicalJson(previous ?? null) === canonicalJson(next ?? null)) return null;
+  // A change only to what is free at the top changes nothing on the surface.
+  const free = kind === "module" ? moduleFree : applicationFree;
+  if (
+    isRecord(previous) &&
+    isRecord(next) &&
+    canonicalJson(without(previous, ...free)) === canonicalJson(without(next, ...free))
+  )
+    return null;
   const problems = problemsOf(surfaceOf(previous, kind), surfaceOf(next, kind));
   problems.sort(
     (left, right) =>
