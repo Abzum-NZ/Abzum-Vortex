@@ -469,7 +469,12 @@ export function StudioPuckProvider({
   const empty = useMemo((): Data => ({ root: { props: {} }, content: [] }), []);
   const shown = model.shown ?? empty;
   // Puck takes its data once, when it opens; every later change reaches it through `StudioPuckSync`.
-  const [initial] = useState(shown);
+  // A page whose shell has other content slots needs another config, which Puck keeps its old root
+  // props across: it is opened again with the new page's data (the key below), only for such a page.
+  const opened = useRef<{ key: string; data: Data } | null>(null);
+  if (opened.current === null || opened.current.key !== model.slotsKey)
+    opened.current = { key: model.slotsKey, data: shown };
+  const initial = opened.current.data;
   const refusal = refused?.area === model.area ? refused.message : "";
   const value = useMemo(
     (): StudioCanvasContextValue => ({ input, model, references, refusal }),
@@ -484,6 +489,7 @@ export function StudioPuckProvider({
           are drawn in a Sheet outside this element. */}
         <div className="contents" style={studioPuckStyle}>
           <Puck
+            key={model.slotsKey}
             config={config}
             data={initial}
             onChange={change}

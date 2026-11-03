@@ -45,6 +45,8 @@ export type StudioCanvasModel = Readonly<{
   registry: PlatformComponentRegistry;
   /** The Puck config, with one root slot per content slot of the page's shell. */
   config: Config;
+  /** The root slots the config declares: Puck is opened again when this changes. */
+  slotsKey: string;
   page: SourcePage | undefined;
   /** The guided steps of the open page, or none; the tabs above the canvas choose among them. */
   steps: readonly Readonly<{ id: string; name: string }>[];
@@ -335,6 +337,7 @@ export const useStudioCanvasModel = (
       catalogue,
       registry,
       config,
+      slotsKey: rootSlotsJson,
       page,
       steps,
       step,
@@ -359,6 +362,7 @@ export const useStudioCanvasModel = (
       catalogue,
       registry,
       config,
+      rootSlotsJson,
       page,
       steps,
       step,

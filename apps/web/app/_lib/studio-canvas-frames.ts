@@ -44,9 +44,9 @@ export type StudioApplicationCanvasFrames = Readonly<{
         pageName: string;
         frame: ProjectedApplicationFrame;
         /**
-         * The shell's own placements around the page's content slots, with those slots empty:
-         * what a shell with several content slots keeps inside its outlet, where the canvas puts
-         * each slot's editor.
+         * Only for a shell with several content slots: the shell's own placements around them,
+         * those slots empty (the holding placement, or the whole shell layout when no placement
+         * holds them all). The canvas puts each slot's editor there.
          */
         outletContent?: CompiledLayout;
       }>
@@ -95,9 +95,10 @@ export const studioCanvasFramesFor = (
       );
       split = {
         frame: projected.frame,
-        // Only a shell with several content slots keeps its own placements inside the outlet.
+        // A shell with several content slots keeps its own placements around them: the holding
+        // placement (placement outlet) or its whole layout (root outlet, where the frame is empty).
         content:
-          projected.frame.outlet.kind === "placement"
+          shell !== undefined && shell.contentSlots.length > 1
             ? (projected.content.composition as unknown as CompiledLayout)
             : undefined,
       };

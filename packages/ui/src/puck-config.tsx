@@ -359,6 +359,9 @@ const defaultSettingsFor = (release: PlatformBlockRelease): PlacementSettings =>
   return defaults;
 };
 
+/** The slot gap of a page root: a stored root holds none, so the runtime and the canvas both take this. */
+export const PAGE_ROOT_GAP: SlotGapName = "medium";
+
 const isSlotGapName = (value: string): value is SlotGapName =>
   value === "none" || value === "small" || value === "medium" || value === "large";
 
@@ -816,7 +819,7 @@ function createVortexPuckConfig(
     components,
     root: {
       defaultProps: {
-        gap: "medium",
+        gap: PAGE_ROOT_GAP,
         padding: "medium",
         applicationShell: { kind: "default" },
       },

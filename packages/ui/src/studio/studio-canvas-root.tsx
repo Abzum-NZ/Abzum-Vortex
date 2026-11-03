@@ -16,11 +16,11 @@ import { isElement, isHtmlElement } from "../lib/dom";
 import { PagePuckRenderer } from "../page-puck-renderer";
 import {
   createSelectedPlacementStore,
+  PAGE_ROOT_GAP,
   RootSlotGapProvider,
   SelectedPlacementProvider,
 } from "../puck-config";
 import type { Breakpoint } from "../definition-error";
-import type { SlotGapName } from "../layout-styles";
 import type { FieldInputControlReleaseMap, PlatformComponentRegistry } from "../registry";
 import { createAppearanceRootProps, createThemeRootProps, VortexStyleRoot } from "../theme";
 import { studioCanvasMetadata, useStudioCanvasChannel } from "./studio-canvas-metadata";
@@ -45,7 +45,6 @@ function SelectedBlock({ children }: Readonly<{ children: ReactNode }>) {
 }
 
 /** The slot gap of the page root, which the runtime's pages use by default. */
-const PAGE_GAP: SlotGapName = "medium";
 
 /** Puck's component for one slot of the root; the root receives one for every slot field it declares. */
 type RootSlot = (props?: { className?: string; style?: CSSProperties }) => ReactNode;
@@ -67,8 +66,15 @@ const SLOT_STYLE: CSSProperties = { display: "flex", flexDirection: "column", ga
 function CanvasSlot({
   content,
   name,
+  label,
   breakpoint,
-}: Readonly<{ content: ReactNode; name: string | undefined; breakpoint: Breakpoint }>) {
+}: Readonly<{
+  content: ReactNode;
+  name: string | undefined;
+  /** What the shell calls the slot; each empty slot is named for it. */
+  label: string;
+  breakpoint: Breakpoint;
+}>) {
   // A layout's blocks are added with Add; only a page's blocks drop onto the canvas.
   const canDrop = usePuckSelector((state) => state.getPermissions().insert);
   // Studio's own mark of a drag in progress, from Puck's public state, for the empty-slot rules.
@@ -88,7 +94,7 @@ function CanvasSlot({
       data-vortex-editing=""
       {...(dragging ? { "data-vortex-dragging": "" } : {})}
       {...(breakpoint === "desktop" ? {} : { "data-vortex-view-only": "" })}
-      aria-label={empty ? "Empty content area" : undefined}
+      aria-label={empty ? `Empty ${label}` : undefined}
       className={empty ? "relative min-h-48 min-w-32" : "min-h-24"}
       style={OUTLET_STYLE}
     >
@@ -135,8 +141,11 @@ export function StudioCanvasRoot({
   const latestSlots = useRef<Record<string, RootSlot>>({});
   const stableSlots = useRef<Record<string, RootSlot>>({});
   for (const name of rootSlots) {
-    latestSlots.current[name] = slots[name]!;
-    stableSlots.current[name] ??= (props) => latestSlots.current[name]!(props);
+    // While Puck draws a new page's config over the old page's data, a slot of the new config can
+    // be missing for one render: the last slot function stays, and nothing is drawn without one.
+    const slot = slots[name];
+    if (slot !== undefined) latestSlots.current[name] = slot;
+    stableSlots.current[name] ??= (props) => latestSlots.current[name]?.(props) ?? null;
   }
   const rootSlotsKey = rootSlots.join(" ");
   const shellId = frame?.frame.shellId;
@@ -167,6 +176,8 @@ export function StudioCanvasRoot({
     // The slot names are compared by value, so the list keeps one length per render.
     [rootSlotsKey, shell, studio.slotKeys],
   );
+  const labelOf = (name: string): string =>
+    shell?.contentSlots.find((entry) => entry.key === studio.slotKeys[name])?.label ?? name;
   const slotContent = (name: string) => {
     const Slot = stableSlots.current[name]!;
     return <Slot style={SLOT_STYLE} />;
@@ -191,6 +202,7 @@ export function StudioCanvasRoot({
                   key={name}
                   content={slotContent(name)}
                   name={name}
+                  label={labelOf(name)}
                   breakpoint={breakpoint}
                 />,
               ]),
@@ -202,7 +214,7 @@ export function StudioCanvasRoot({
   const content =
     outletContent !== undefined && frame !== undefined && rootSlots.length > 0 ? (
       <SelectedBlock>
-        <RootSlotGapProvider gap={PAGE_GAP}>
+        <RootSlotGapProvider gap={PAGE_ROOT_GAP}>
           <PagePuckRenderer
             contentRegion
             readSettings={compiledItemSettings}
@@ -222,15 +234,16 @@ export function StudioCanvasRoot({
       </SelectedBlock>
     ) : (
       <SelectedBlock>
-        <RootSlotGapProvider gap={PAGE_GAP}>
+        <RootSlotGapProvider gap={PAGE_ROOT_GAP}>
           {rootSlots.length === 0 ? (
-            <CanvasSlot content={children} name={undefined} breakpoint={breakpoint} />
+            <CanvasSlot content={children} name={undefined} label="page" breakpoint={breakpoint} />
           ) : (
             rootSlots.map((name) => (
               <CanvasSlot
                 key={name}
                 content={slotContent(name)}
                 name={name}
+                label={labelOf(name)}
                 breakpoint={breakpoint}
               />
             ))

@@ -16,7 +16,7 @@ import {
 } from "@vortex/platform/schema";
 import type { StudioCompositionDestination } from "./application-composition-commands";
 
-/** One compiled content area: its items, exactly as the published definition holds them. */
+/** One compiled zone of the page (a content slot, or the default zone): its items, exactly as the published definition holds them. */
 export type StudioCanvasCompiledSlot = readonly CompiledItem[];
 type StudioCanvasSourceSlot = SourcePageZone;
 export type StudioCanvasCompiledSettings = Readonly<

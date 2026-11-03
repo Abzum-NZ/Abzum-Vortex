@@ -50,7 +50,7 @@ export class StoredCompositionRefusal extends TypeError {
     readonly subject?: string,
   ) {
     super(
-      `${subject ?? (location.length === 0 ? "This content area" : `Content at ${location.join(".")}`)}: ${reason}`,
+      `${subject ?? (location.length === 0 ? "This page" : `Content at ${location.join(".")}`)}: ${reason}`,
     );
   }
 }

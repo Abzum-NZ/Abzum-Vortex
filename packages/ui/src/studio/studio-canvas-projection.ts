@@ -20,7 +20,7 @@ export type StudioCanvasFrame = Readonly<{
   pageId: string;
   pageName: string;
   frame: ProjectedApplicationFrame;
-  /** Only for a shell with several content slots: its own placements around them, those slots empty. */
+  /** Only for a shell with several content slots: its own placements around them (the holding placement, or the whole layout), those slots empty. */
   outletContent?: CompiledLayout;
 }>;
 
