@@ -1,6 +1,6 @@
 # IAM application: people, access requests and role grants
 
-[Access rules](../04-access-and-permissions.md) · [Workflow rules](../09-workflows-and-pipelines.md) · [Application definitions #72](https://github.com/Abzum-NZ/Abzum-Vortex/issues/72)
+[Access rules](../04-access-and-permissions.md) · [Workflow rules](../09-workflows-and-pipelines.md) · Application definitions
 
 ## One application for managing access
 

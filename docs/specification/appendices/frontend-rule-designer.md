@@ -1,6 +1,6 @@
 # Frontend flow design and execution
 
-[Specification index](../README.md) · [Forms, actions, rules and events](../08-forms-actions-rules-and-events.md) · [Page builder](page-builder-contracts.md) · [Architecture decisions](../../build-plan/architecture-decisions.md)
+[Specification index](../README.md) · [Forms, actions, rules and events](../08-forms-actions-rules-and-events.md) · [Page builder](page-builder-contracts.md) · [Architecture decisions](../../architecture/decisions.md)
 
 ## One flow language
 

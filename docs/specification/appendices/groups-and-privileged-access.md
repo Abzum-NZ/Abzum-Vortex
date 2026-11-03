@@ -1,6 +1,6 @@
 # Roles and Groups
 
-[Access specification](../04-access-and-permissions.md) · [IAM application](iam-application.md) · [Data contracts](data-contracts.md#permission-and-role-contracts) · [Build plan](../../build-plan/README.md)
+[Access specification](../04-access-and-permissions.md) · [IAM application](iam-application.md) · [Data contracts](data-contracts.md#permission-and-role-contracts)
 
 ## Product model
 
@@ -33,14 +33,14 @@ one authorised change. It does not extend the old window or make the gap look li
 Only one non-revoked membership may occupy an organisation/Group/account pair, including a scheduled
 or naturally expired row; renewal closes that predecessor before creating its replacement.
 
-The initial [membership operations in #33](https://github.com/Abzum-NZ/Abzum-Vortex/issues/33) are
+The initial membership operations in are
 add, remove, restore and renew. Add, restore and renew require an active Group and active account in
 that same organisation; removal can still revoke a retained membership after its source becomes
 inactive. Renewal accepts an expired, non-revoked predecessor and derives the same Group/account from
 it. If the predecessor was already revoked, use a fresh authorised add instead. Every successful
 operation changes Access once, including renewal's two membership rows. Competing changes use the
 existing reviewed revision and organisation transaction lock. The
-[protected invocation #40](https://github.com/Abzum-NZ/Abzum-Vortex/issues/40) checks caller
+protected invocation checks caller
 authority, and the [IAM application](iam-application.md) supplies the human journey.
 
 ## Editing a role versus accepting permissions
@@ -81,9 +81,9 @@ flowchart TD
 ```
 
 These are the required behaviours of the private
-[role-change composition #33](https://github.com/Abzum-NZ/Abzum-Vortex/issues/33). The
-[protected operation #40](https://github.com/Abzum-NZ/Abzum-Vortex/issues/40) and
-[IAM journey #267](https://github.com/Abzum-NZ/Abzum-Vortex/issues/267) add current caller authority
+role-change composition. The
+protected operation and
+IAM journey add current caller authority
 and the permanent-steward safeguard.
 
 ## Creating, renaming and retiring Groups
@@ -98,10 +98,10 @@ Creation, rename and retirement each commit one complete revisioned change and o
 increment. Rename and retirement require the revision the administrator reviewed; a competing change
 requires refresh rather than silently overwriting it. A role assignment racing retirement either
 commits first and then becomes ineffective through the retired Group, or is refused after retirement.
-The private [#33 composition](https://github.com/Abzum-NZ/Abzum-Vortex/issues/33) does not itself
-expose administration: [#34](https://github.com/Abzum-NZ/Abzum-Vortex/issues/34) evaluates current
-access, [#40](https://github.com/Abzum-NZ/Abzum-Vortex/issues/40) invokes protected changes with
-#33's stewardship safeguards, and [IAM](iam-application.md) presents the authorised journey.
+The private composition does not itself
+expose administration: central Access evaluates current
+access, protected administration invokes changes with
+the stewardship safeguards, and [IAM](iam-application.md) presents the authorised journey.
 Membership changes are separate operations.
 
 ```mermaid

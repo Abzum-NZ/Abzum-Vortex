@@ -1,16 +1,11 @@
 # Abzum Vortex platform specification
 
-The [target architecture](../build-plan/target-architecture.md) records the current architecture.
-Working instructions are maintained in [AGENTS.md](../../AGENTS.md). The
-[architecture decisions](../build-plan/architecture-decisions.md) govern the one flow definition,
-engine and protected operations.
+The [target architecture](../architecture/target-architecture.md) records the current architecture,
+and the [architecture decisions](../architecture/decisions.md) govern the one flow definition, engine
+and protected operations.
 
 This is the approved product contract for the current build scope. Every chapter and appendix states
-current behaviour. [Record ownership and lifecycle](appendices/record-ownership-and-lifecycle.md)
-defines the ownership and deadline-refresh choices and organisation-bounded
-record-type policies. The owner selected one Frontend Rule Designer with
-configurable component data flows, flow-level `runAs` authority and reusable custom forms.
-Collect-first atomic submission is optional, while configured sequential commits remain explicit.
+current behaviour.
 
 ## How to read this specification
 
@@ -61,24 +56,16 @@ meanings are maintained in the [glossary](appendices/glossary.md).
 - [Core contract boundary](appendices/core-contract-boundary.md)
 - [Application packages, custom components and the installation lifecycle](appendices/application-packages.md)
 - [Application role review volume](appendices/application-role-review-volume.md)
-- [Revised build plan](../build-plan/README.md)
+- [Architecture documents](../architecture/target-architecture.md)
 
 ## Authority and change rules
 
-- The approved requirements remain authoritative. A new question blocks only the affected
-  behaviour; it does not block unrelated implementation or the whole specification.
-- A change to required behaviour updates this specification before the related
-  [GitHub issue](https://github.com/orgs/Abzum-NZ/projects/2/views/1) is built.
-- A change must check its impact on diagrams, requirements, acceptance examples,
-  [data contracts](appendices/data-contracts.md) and [build-plan dependencies](../build-plan/README.md).
-  Update the affected sources; do not duplicate an unchanged requirement or edit every document
-  merely to record that a review occurred.
-- The repository history is the revision record.
-- No issue, comment, fixture, or implementation detail silently overrides this specification. Record
-  a contradiction in its owning GitHub task and correct the affected specification before
-  implementing changed behaviour. Engineering corrections are decided and reviewed by the
-  engineering owner; only a genuinely unresolved business/product choice is escalated to the owner.
-  Continue unaffected work.
+- The approved requirements remain authoritative. A change to required behaviour updates this
+  specification in the same change that builds it, including the impact on diagrams, requirements,
+  acceptance examples and [data contracts](appendices/data-contracts.md). Do not duplicate an
+  unchanged requirement. The repository history is the revision record.
+- No fixture or implementation detail silently overrides this specification. Correct the
+  specification before implementing changed behaviour.
 - Every privileged contract must pass the normative
   [core contract admission test](appendices/core-contract-boundary.md#admission-test).
   Business-domain functionality is built as an ordinary Vortex application unless a documented

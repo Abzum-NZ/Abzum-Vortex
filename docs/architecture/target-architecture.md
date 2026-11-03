@@ -1,6 +1,6 @@
 # Target architecture
 
-**Status:** approved by the owner on 12 October 2026 and binding for all work. Where another document conflicts with this one, this one wins.
+Binding for all work. Where another document conflicts with this one, this one wins.
 
 This document defines the shape the code keeps and the rules that keep it there. Every review checks against it.
 
@@ -38,7 +38,7 @@ packages/ui              shadcn components, Puck config, blocks, controls, theme
 packages/definitions     shipped application and module definitions plus their loader
 supabase                 config, migrations, schemas/<schema>/<function>.sql, seed
 tooling                  development scripts and the guardrail checks
-docs                     specification and build plan
+docs                     specification and architecture
 ```
 
 ### Dependency direction
@@ -60,7 +60,6 @@ Server code must never reach the browser bundle.
 - **No layers without a reason.**
   - Do not add a `-repository`, `-composition`, `-adapter`, `-port`, `-handoff`, `-coordinator` or `create…Service` factory unless there are genuinely two implementations.
   - Today's `x` / `x-repository` / `x-composition` / `x-catalogue` quadruples collapse into one module.
-- **No file over 1,500 lines.** Split by concern, for example one file per definition node kind in the compiler and validator.
 - **Routes in `apps/web` are thin.** Each parses the request, calls one platform operation and maps the result. Business logic does not live in `apps/web/app/_lib`.
 
 ## 3. Rendering pipeline
@@ -104,29 +103,16 @@ flowchart LR
 - `vortex_request` is the role every request transaction runs as; the API functions, record writes included, are granted to it, never the owner-only `*_internal` helpers. Request code never switches back to `vortex_runtime`, with one explicit exception: tenant governance and the connection executor run each authorised operation under `vortex_runtime` inside a savepoint that admits exactly one call and restores `vortex_request` before it settles (`identity/tenant-governance-request-bound.ts`).
 - `vortex_record_adapter` is the role the record-data RLS policies are written for.
 
-The local signup privacy integration uses `vortex_identity.before_user_created`, owned by
-`vortex_owner` and executable only by `supabase_auth_admin`. It validates the acknowledgement and
-refuses public self-registration without it. GoTrue v2.196.0 refuses to call the hook inside a
-transaction, so the hook cannot write evidence that commits or rolls back with the account.
-`vortex_identity.append_signup_privacy_acknowledgment`, also owned by `vortex_owner`, therefore
-writes the evidence (identity, notice version, time, server-derived channel and a correlation
-ID; no IP or user agent) from an `auth.users` AFTER INSERT trigger for every account that claims
-an acknowledgement.
-Admin API provisioning does not pass through the hook, claims none and records none. Both use
-one private validator and a fixed empty search path. The trigger does not alter Auth rows.
-Hosted activation requires separate rollout approval.
-
-Rollback, in one transaction as `postgres` and keeping the version and evidence tables: disable
-the hook configuration, then `drop trigger if exists vortex_signup_privacy_acknowledgment on
-auth.users`; as `vortex_owner` (the grantor), `drop function if exists
-vortex_identity.append_signup_privacy_acknowledgment()`, `revoke execute on function
-vortex_identity.before_user_created(jsonb) from supabase_auth_admin` and `drop function if exists
-vortex_identity.before_user_created(jsonb)`; then, as `postgres` (the schema owner), `revoke usage
-on schema vortex_identity from supabase_auth_admin`. The statements are listed in migration
-`20261025184000_signup_privacy_notice.sql`.
+The signup privacy integration uses `vortex_identity.before_user_created`, owned by `vortex_owner`
+and executable only by `supabase_auth_admin`. It validates the acknowledgement and refuses public
+self-registration without it. The hook cannot write evidence inside the account transaction, so
+`vortex_identity.append_signup_privacy_acknowledgment`, also owned by `vortex_owner`, writes the
+evidence (identity, notice version, time, server-derived channel and a correlation ID; no IP or user
+agent) from an `auth.users` AFTER INSERT trigger for every account that claims an acknowledgement.
+Admin API provisioning does not pass through the hook, claims none and records none. The trigger
+does not alter Auth rows.
 
 The operational `postgres` role retains explicit privileges on the transferred objects for the local seed and controlled migrations; ownership remains with `vortex_owner`. The restricted record roles and their organisation-scoped grants and policies remain separate.
-
 
 ### API surface
 
@@ -166,12 +152,4 @@ Tables are private. The application calls `security definer` functions with `set
 
 ## 6. Guardrails that keep it this way
 
-Static checks run in CI on every pull request and locally with `pnpm guard`. They are lint-style rules, not tests. Any blocking finding fails the build; an intentional exception carries a reviewed `guard-allow` comment. `tooling/guard/config.ts` is the list of rules and their tiers.
-
-### Running app as the gate
-
-Every pull request that changes behaviour states which pages were exercised on a local database lane (sign-in, then the affected application pages). Reviewers re-run that walkthrough before merging, and a pull request that changes what users see includes screenshots.
-
-### Review checklist
-
-The checklist lives in the [pull request template](../../.github/pull_request_template.md); it covers this document, the absence of new layers and process artefacts, loud errors, and the guard and walk gates.
+Static checks run with `pnpm guard`. They are lint-style rules, not tests. `tooling/guard/config.ts` is the list of rules and their tiers.
