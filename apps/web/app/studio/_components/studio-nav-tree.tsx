@@ -365,6 +365,7 @@ export function StudioNavTree({
       const open = branch && isOpen(node);
       const groupId = `${id}-${encodeURIComponent(node.key)}`;
       return (
+        // shadcn-only: the navigation tree has no shadcn equivalent (ARIA tree with roving focus)
         <li role="none" key={node.key}>
           <StudioNavItem
             {...node.props}
@@ -416,6 +417,7 @@ export function StudioNavTree({
             }}
           />
           {open && (
+            // shadcn-only: the navigation tree has no shadcn equivalent (ARIA tree with roving focus)
             <ul
               id={groupId}
               role="group"
@@ -428,6 +430,7 @@ export function StudioNavTree({
       );
     });
   return (
+    // shadcn-only: the navigation tree has no shadcn equivalent (ARIA tree with roving focus)
     <ul ref={host} role="tree" aria-label={label} className="m-0 list-none space-y-1 p-0">
       {rows(nodes, 0)}
     </ul>

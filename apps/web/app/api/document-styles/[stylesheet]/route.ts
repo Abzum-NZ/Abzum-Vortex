@@ -1,12 +1,11 @@
 import { DOCUMENT_STYLESHEETS } from "../../../_lib/document-styles";
 
-export const dynamic = "force-static";
-export const dynamicParams = false;
-
-export const generateStaticParams = () =>
-  Object.values(DOCUMENT_STYLESHEETS).map(({ filename }) => ({ stylesheet: filename }));
-
-/** Only the build's public stylesheets exist; none reads a session or application data. */
+/**
+ * Only the build's public stylesheets exist; none reads a session or application data. The sheets
+ * are in-memory constants named by their content hash, so each response is cached by its headers.
+ * The route is not pre-rendered: two sheets requested at once on a cold dev server raced each
+ * other's static-params cache file and one of them answered 500.
+ */
 export async function GET(
   _request: Request,
   { params }: { params: Promise<{ stylesheet: string }> },

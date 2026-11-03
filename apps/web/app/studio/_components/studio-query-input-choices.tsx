@@ -1,11 +1,12 @@
 "use client";
+import { Field, FieldLabel } from "@vortex/ui/components/field";
+import { Item, ItemGroup } from "@vortex/ui/components/item";
 import { Alert, AlertDescription } from "@vortex/ui/components/alert";
 import { useState, type FormEvent } from "react";
 import { deriveQueryKey } from "@vortex/platform/schema";
 import { Button } from "@vortex/ui/components/button";
 import { Checkbox } from "@vortex/ui/components/checkbox";
 import { Input } from "@vortex/ui/components/input";
-import { Label } from "@vortex/ui/components/label";
 import { Icon } from "@vortex/ui";
 import { useStudioDraftText } from "./use-studio-draft-text";
 
@@ -91,7 +92,7 @@ export function StudioQueryInputChoices({
   };
   return (
     <div className="space-y-2">
-      <div className="flex items-center gap-2">
+      <Field orientation="horizontal">
         <Checkbox
           id={`${id}-limited`}
           checked={limited}
@@ -101,15 +102,15 @@ export function StudioQueryInputChoices({
             if (checked !== true && choices !== undefined) apply(undefined);
           }}
         />
-        <Label htmlFor={`${id}-limited`} className="font-normal">
+        <FieldLabel htmlFor={`${id}-limited`} className="font-normal">
           Limit to a list of choices
-        </Label>
-      </div>
+        </FieldLabel>
+      </Field>
       {limited && (
         <>
-          <ul className="list-none space-y-1" aria-label={`Choices of ${inputLabel}`}>
+          <ItemGroup className="gap-1" aria-label={`Choices of ${inputLabel}`}>
             {list.map((choice, index) => (
-              <li key={choice.value} className="flex items-start gap-1">
+              <Item size="xs" role="listitem" key={choice.value} className="items-start p-0">
                 <ChoiceLabel
                   label={choice.label}
                   name={`Name of choice ${choice.label}`}
@@ -155,9 +156,9 @@ export function StudioQueryInputChoices({
                 >
                   <Icon name="close" />
                 </Button>
-              </li>
+              </Item>
             ))}
-          </ul>
+          </ItemGroup>
           <form className="flex items-end gap-2" onSubmit={add} aria-label="New choice">
             <Input
               aria-label={`Name of a new choice for ${inputLabel}`}

@@ -1,4 +1,6 @@
 "use client";
+import { Card } from "@vortex/ui/components/card";
+import { Item, ItemContent, ItemGroup } from "@vortex/ui/components/item";
 import { useEffect, useRef, useTransition } from "react";
 import { Icon } from "@vortex/ui";
 import { Alert, AlertDescription, AlertAction } from "@vortex/ui/components/alert";
@@ -171,7 +173,7 @@ export function StandardPageAdoption({
             </EmptyHeader>
           </Empty>
         ) : (
-          <div className="overflow-hidden rounded-xl border">
+          <Card className="gap-0 py-0">
             <Table aria-label="Page replacement comparisons">
               <TableHeader className="bg-muted/50 text-xs">
                 <TableRow>
@@ -206,17 +208,24 @@ export function StandardPageAdoption({
                           {choice.differences.entries.length === 0 ? (
                             <p>No differences in the page summary.</p>
                           ) : (
-                            <ul className="space-y-3">
+                            <ItemGroup className="gap-3">
                               {choice.differences.entries.map((difference, index) => (
-                                <li key={`${difference.path}:${index}`} className="space-y-1">
-                                  <p className="font-medium">
-                                    {difference.path} · {difference.change}
-                                  </p>
-                                  <p>Your page: {difference.currentReplacement}</p>
-                                  <p>Standard: {difference.suppliedPage}</p>
-                                </li>
+                                <Item
+                                  size="xs"
+                                  role="listitem"
+                                  key={`${difference.path}:${index}`}
+                                  className="space-y-1"
+                                >
+                                  <ItemContent>
+                                    <p className="font-medium">
+                                      {difference.path} · {difference.change}
+                                    </p>
+                                    <p>Your page: {difference.currentReplacement}</p>
+                                    <p>Standard: {difference.suppliedPage}</p>
+                                  </ItemContent>
+                                </Item>
                               ))}
-                            </ul>
+                            </ItemGroup>
                           )}
                           {choice.differences.omittedCount > 0 && (
                             <p>{choice.differences.omittedCount} more differences.</p>
@@ -261,7 +270,7 @@ export function StandardPageAdoption({
                 ))}
               </TableBody>
             </Table>
-          </div>
+          </Card>
         ))}
     </section>
   );

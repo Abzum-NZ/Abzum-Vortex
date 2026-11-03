@@ -1,11 +1,16 @@
 "use client";
 import { Empty, EmptyDescription, EmptyHeader } from "@vortex/ui/components/empty";
-import { FieldLegend, FieldSet, FieldDescription } from "@vortex/ui/components/field";
+import {
+  Field,
+  FieldDescription,
+  FieldLabel,
+  FieldLegend,
+  FieldSet,
+} from "@vortex/ui/components/field";
 import { Alert, AlertDescription } from "@vortex/ui/components/alert";
 import { useEffect, useState } from "react";
 import { Checkbox } from "@vortex/ui/components/checkbox";
 import { Input } from "@vortex/ui/components/input";
-import { Label } from "@vortex/ui/components/label";
 import { flowStandardEventKindSchema, workflowValueTypeSchema } from "@vortex/platform/schema";
 import {
   StudioEntryList,
@@ -122,8 +127,8 @@ function TriggerEditor({
   onChange: (trigger: StudioFlowTriggerDraft, setting?: string) => true | string;
 }>) {
   const recordType = (
-    <div className="space-y-1.5">
-      <Label htmlFor={`${id}-record`}>Record type</Label>
+    <Field>
+      <FieldLabel htmlFor={`${id}-record`}>Record type</FieldLabel>
       <StudioReferencePicker
         id={`${id}-record`}
         disabled={disabled}
@@ -142,14 +147,14 @@ function TriggerEditor({
           )
         }
       />
-    </div>
+    </Field>
   );
   const runAfter =
     trigger.kind === "before_save" || subscribers.length === 0 ? null : (
-      <div className="space-y-1.5">
-        <Label>Run after</Label>
+      <Field>
+        <FieldLabel>Run after</FieldLabel>
         {subscribers.map((subscriber) => (
-          <div key={subscriber.key} className="flex items-center gap-2">
+          <Field key={subscriber.key} orientation="horizontal">
             <Checkbox
               id={`${id}-after-${subscriber.key}`}
               disabled={disabled}
@@ -164,25 +169,27 @@ function TriggerEditor({
                 })
               }
             />
-            <Label htmlFor={`${id}-after-${subscriber.key}`}>{subscriber.label}</Label>
-          </div>
+            <FieldLabel htmlFor={`${id}-after-${subscriber.key}`}>{subscriber.label}</FieldLabel>
+          </Field>
         ))}
-      </div>
+      </Field>
     );
   if (trigger.kind === "declared_event")
     return (
       <div className="space-y-3">
         {recordType}
-        <Label htmlFor={`${id}-event`}>After this event</Label>
-        <StudioReferencePicker
-          id={`${id}-event`}
-          disabled={disabled}
-          value={trigger.eventKey}
-          options={events
-            .filter((event) => event.recordType === trigger.recordType)
-            .map((event) => ({ value: event.key, label: event.label }))}
-          onChange={(eventKey) => onChange({ ...trigger, eventKey })}
-        />
+        <Field>
+          <FieldLabel htmlFor={`${id}-event`}>After this event</FieldLabel>
+          <StudioReferencePicker
+            id={`${id}-event`}
+            disabled={disabled}
+            value={trigger.eventKey}
+            options={events
+              .filter((event) => event.recordType === trigger.recordType)
+              .map((event) => ({ value: event.key, label: event.label }))}
+            onChange={(eventKey) => onChange({ ...trigger, eventKey })}
+          />
+        </Field>
         {runAfter}
       </div>
     );
@@ -190,8 +197,8 @@ function TriggerEditor({
     return (
       <div className="space-y-2">
         {recordType}
-        <div className="space-y-1.5">
-          <Label htmlFor={`${id}-event`}>After the record</Label>
+        <Field>
+          <FieldLabel htmlFor={`${id}-event`}>After the record</FieldLabel>
           <StudioOptionControl
             id={`${id}-event`}
             disabled={disabled}
@@ -202,7 +209,7 @@ function TriggerEditor({
             }))}
             onChange={(eventKind) => onChange({ ...trigger, eventKind })}
           />
-        </div>
+        </Field>
         {runAfter}
       </div>
     );
@@ -218,24 +225,24 @@ function TriggerEditor({
   return (
     <div className="space-y-2">
       {recordType}
-      <div className="flex items-center gap-2">
+      <Field orientation="horizontal">
         <Checkbox
           id={`${id}-create`}
           disabled={disabled}
           checked={trigger.operations.includes("create")}
           onCheckedChange={(checked) => covers("create", checked === true)}
         />
-        <Label htmlFor={`${id}-create`}>Before it is created</Label>
-      </div>
-      <div className="flex items-center gap-2">
+        <FieldLabel htmlFor={`${id}-create`}>Before it is created</FieldLabel>
+      </Field>
+      <Field orientation="horizontal">
         <Checkbox
           id={`${id}-update`}
           disabled={disabled}
           checked={trigger.operations.includes("update")}
           onCheckedChange={(checked) => covers("update", checked === true)}
         />
-        <Label htmlFor={`${id}-update`}>Before it is changed</Label>
-      </div>
+        <FieldLabel htmlFor={`${id}-update`}>Before it is changed</FieldLabel>
+      </Field>
     </div>
   );
 }
@@ -267,8 +274,8 @@ function InputSettings({
         value={input.name}
         apply={(name) => onChange({ ...input, name }, `${id}-name`)}
       />
-      <div className="space-y-1.5">
-        <Label htmlFor={`${id}-type`}>Kind of value</Label>
+      <Field>
+        <FieldLabel htmlFor={`${id}-type`}>Kind of value</FieldLabel>
         <StudioOptionControl
           id={`${id}-type`}
           disabled={disabled}
@@ -288,10 +295,10 @@ function InputSettings({
             if (onChange({ ...input, type: next }) === true) setType(next);
           }}
         />
-      </div>
+      </Field>
       {recordKind && (
-        <div className="space-y-1.5">
-          <Label htmlFor={`${id}-record`}>Record type</Label>
+        <Field>
+          <FieldLabel htmlFor={`${id}-record`}>Record type</FieldLabel>
           <StudioReferencePicker
             id={`${id}-record`}
             disabled={disabled}
@@ -303,17 +310,17 @@ function InputSettings({
           {type !== input.type && (
             <FieldDescription>Choose a record type to apply this kind of value.</FieldDescription>
           )}
-        </div>
+        </Field>
       )}
-      <div className="flex items-center gap-2">
+      <Field orientation="horizontal">
         <Checkbox
           id={`${id}-required`}
           disabled={disabled}
           checked={input.required}
           onCheckedChange={(checked) => onChange({ ...input, required: checked === true })}
         />
-        <Label htmlFor={`${id}-required`}>Required</Label>
-      </div>
+        <FieldLabel htmlFor={`${id}-required`}>Required</FieldLabel>
+      </Field>
     </>
   );
 }
@@ -481,14 +488,14 @@ export function StudioFlowStartEditor({
                   setting,
                 );
               return (
-                <div key={inputKeys.current[inputIndex]} className="space-y-1.5">
-                  <Label htmlFor={id}>
+                <Field key={inputKeys.current[inputIndex]}>
+                  <FieldLabel htmlFor={id}>
                     {studioWords(input.name)}
                     {!input.required && (
                       <span className="text-xs text-muted-foreground"> Optional</span>
                     )}{" "}
                     comes from
-                  </Label>
+                  </FieldLabel>
                   <StudioReferencePicker
                     id={id}
                     disabled={disabled}
@@ -536,7 +543,7 @@ export function StudioFlowStartEditor({
                       }
                     />
                   )}
-                </div>
+                </Field>
               );
             })}
           </FieldSet>

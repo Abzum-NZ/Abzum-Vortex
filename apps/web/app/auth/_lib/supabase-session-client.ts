@@ -38,14 +38,18 @@ export const identitySessionProviderFailure = (
   });
 };
 
-/** Catch both returned provider errors and rejected reads; never mutate response cookies here. */
+/**
+ * Catch both returned provider errors and rejected reads; never mutate response cookies here. A
+ * transient fetch failure is read once more before it is mapped and logged, so only the final
+ * failure is reported, once. A read the verification-only client refused is never repeated.
+ */
 export const readIdentitySessionProvider = async <Result extends { data: unknown; error: unknown }>(
   operation: "get-claims" | "get-session",
   read: () => Promise<Result>,
-  retry = false,
+  refused?: () => boolean,
 ): Promise<{ ok: true; data: Result["data"] } | { ok: false; state: ProviderFailure }> => {
   let error: unknown;
-  for (let attempt = 0; attempt < (retry ? 2 : 1); attempt += 1) {
+  for (let attempt = 0; attempt < 2; attempt += 1) {
     try {
       const result = await read();
       if (!result.error) return { ok: true, data: result.data };
@@ -53,7 +57,7 @@ export const readIdentitySessionProvider = async <Result extends { data: unknown
     } catch (cause) {
       error = cause;
     }
-    if (!isAuthRetryableFetchError(error)) break;
+    if (!isAuthRetryableFetchError(error) || refused?.() === true) break;
   }
   return { ok: false, state: identitySessionProviderFailure(error, operation) };
 };

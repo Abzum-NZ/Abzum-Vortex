@@ -1,5 +1,6 @@
 "use client";
 
+import { Field, FieldLabel } from "@vortex/ui/components/field";
 import { useMemo } from "react";
 import {
   calculationForcedReadTime,
@@ -14,7 +15,6 @@ import {
 } from "@vortex/platform/schema";
 import { StudioOptionControl, studioFieldValueType, studioWords } from "@vortex/ui/studio";
 import { Input } from "@vortex/ui/components/input";
-import { Label } from "@vortex/ui/components/label";
 import { StudioFormulaEditor } from "./studio-formula-editor";
 
 export function StudioCalculationEditor({
@@ -56,19 +56,21 @@ export function StudioCalculationEditor({
   });
   return (
     <div className="space-y-4">
-      <Label htmlFor={idPrefix}>Formula</Label>
-      <StudioFormulaEditor
-        id={idPrefix}
-        value={settings.expression}
-        references={references}
-        disabled={disabled}
-        onChange={(expression) => {
-          if (expression === undefined) onChange(settings, false);
-          else set({ expression });
-        }}
-      />
-      <div className="space-y-2">
-        <Label htmlFor={`${idPrefix}-result`}>Result</Label>
+      <Field>
+        <FieldLabel htmlFor={idPrefix}>Formula</FieldLabel>
+        <StudioFormulaEditor
+          id={idPrefix}
+          value={settings.expression}
+          references={references}
+          disabled={disabled}
+          onChange={(expression) => {
+            if (expression === undefined) onChange(settings, false);
+            else set({ expression });
+          }}
+        />
+      </Field>
+      <Field>
+        <FieldLabel htmlFor={`${idPrefix}-result`}>Result</FieldLabel>
         <StudioOptionControl
           id={`${idPrefix}-result`}
           disabled={disabled || shapeLocked}
@@ -86,11 +88,11 @@ export function StudioCalculationEditor({
             set({ result_type: result_type as CalculationSettings["result_type"] })
           }
         />
-      </div>
+      </Field>
       {["decimal_number", "money"].includes(settings.result_type) && (
         <>
-          <div className="space-y-2">
-            <Label htmlFor={`${idPrefix}-places`}>Result decimal places</Label>
+          <Field>
+            <FieldLabel htmlFor={`${idPrefix}-places`}>Result decimal places</FieldLabel>
             <Input
               id={`${idPrefix}-places`}
               disabled={disabled || shapeLocked}
@@ -100,9 +102,9 @@ export function StudioCalculationEditor({
               value={settings.decimal_places ?? ""}
               onChange={(event) => set({ decimal_places: typedDecimalPlaces(event.target.value) })}
             />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor={`${idPrefix}-rounding`}>Rounding</Label>
+          </Field>
+          <Field>
+            <FieldLabel htmlFor={`${idPrefix}-rounding`}>Rounding</FieldLabel>
             <StudioOptionControl
               id={`${idPrefix}-rounding`}
               disabled={disabled}
@@ -115,11 +117,11 @@ export function StudioCalculationEditor({
                 set({ rounding: rounding as CalculationSettings["rounding"] })
               }
             />
-          </div>
+          </Field>
         </>
       )}
-      <div className="space-y-2">
-        <Label htmlFor={`${idPrefix}-evaluation`}>When it is worked out</Label>
+      <Field>
+        <FieldLabel htmlFor={`${idPrefix}-evaluation`}>When it is worked out</FieldLabel>
         <StudioOptionControl
           id={`${idPrefix}-evaluation`}
           disabled={disabled || shapeLocked || forced}
@@ -130,7 +132,7 @@ export function StudioCalculationEditor({
           ]}
           onChange={(evaluation) => set({ evaluation: evaluation as "stored" | "read_time" })}
         />
-      </div>
+      </Field>
     </div>
   );
 }

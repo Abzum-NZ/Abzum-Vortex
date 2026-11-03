@@ -83,6 +83,7 @@ export * from "./studio-dialog";
 export * from "./studio-icon-buttons";
 export * from "./studio-limit";
 export { studioPageNestingLevels } from "./studio-composition-depth";
+export { StudioPuckOutline } from "./studio-puck-outline";
 export * from "./studio-inspector-actions";
 export * from "./studio-field-type-icon";
 export {
