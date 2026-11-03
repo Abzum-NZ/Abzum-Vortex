@@ -7,9 +7,11 @@ import {
   sourceItemTree,
   sourcePageDataOf,
   sourcePageRootSlots,
+  sourcePageZones,
   sourceSlotBreakpointOrders,
   type SourceApplicationShell,
   type SourceItem,
+  type SourcePageData,
   type SourceSlotOrder,
 } from "../application-composition/source-composition";
 import {
@@ -48,7 +50,7 @@ export class StoredCompositionRefusal extends TypeError {
     readonly subject?: string,
   ) {
     super(
-      `${subject ?? (location.length === 0 ? "This content area" : `Content at ${location.join(".")}`)}: ${reason}`,
+      `${subject ?? (location.length === 0 ? "This page" : `Content at ${location.join(".")}`)}: ${reason}`,
     );
   }
 }
@@ -538,29 +540,43 @@ const childSlotsOf = (props: Record<string, unknown>): [string, unknown[]][] =>
   );
 
 /**
- * The stored slot a canvas edit produced. Puck's data is the stored data; Puck itself only adds a
- * root holding its config's root defaults and, on Duplicate, generated ids. Generated ids become unique block names, a copied block's
+ * The stored page data a canvas edit produced. Puck's data is the stored page data itself: the page
+ * (or guided step) data with `root.props.vortex` and one root slot per shell content slot. Puck
+ * only adds, on Duplicate, generated ids. Generated ids become unique block names, a copied block's
  * slot orders follow its copied children, and every declared tablet and phone order keeps its
- * authored sequence while blocks join or leave its slot. The result is judged like any stored slot,
- * and every copy Duplicate made is named, with each copied descendant, beside its original.
+ * authored sequence while blocks join or leave its zone. Each zone is judged like any stored slot,
+ * the root may change only in its slot arrays, and every copy Duplicate made is named, with each
+ * copied descendant, beside its original.
  */
-export const storedZoneFromPuck = (
+export const storedPageDataFromPuck = (
   catalogue: ImmutablePlatformBlockCatalogue,
-  baseline: StoredZone,
+  baseline: SourcePageData,
   candidate: unknown,
-  /** The root props the canvas gave Puck: its config's root defaults, which Puck writes back. */
-  rootProps: Readonly<Record<string, unknown>>,
-): Readonly<{ zone: StoredZone; copies: ReadonlyMap<string, string> }> => {
-  const data = closed(candidate, ["root", "content", "zones"], []);
-  const root = closed(data.root, ["props", "readOnly"], ["root"]);
-  if (
-    root.props !== undefined &&
-    JSON.stringify(withoutIdentity(root.props)) !== JSON.stringify(withoutIdentity(rootProps))
-  )
-    refuse(["root", "props"], "changed the page root, which the canvas does not edit");
+): Readonly<{ data: SourcePageData; copies: ReadonlyMap<string, string> }> => {
+  const puck = closed(candidate, ["root", "content", "zones"], []);
+  const root = closed(puck.root, ["props", "readOnly"], ["root"]);
   if (root.readOnly !== undefined) closed(root.readOnly, [], ["root", "readOnly"]);
-  if (data.zones !== undefined) closed(data.zones, [], ["zones"]);
-  boundItems(catalogue, data.content, []);
+  if (puck.zones !== undefined) closed(puck.zones, [], ["zones"]);
+  const props = closed(root.props, Object.keys(baseline.root.props), ["root", "props"]);
+  const vortex = closed(props.vortex, ["shell", "slot_orders"], ["root", "props", "vortex"]);
+  if (vortex.shell !== baseline.root.props.vortex.shell)
+    refuse(["root", "props", "vortex"], "changed the page frame, which the canvas does not edit");
+  // A page in an application shell places its blocks in the shell's content slots, never in the
+  // default zone (a drop there is an expected refusal, not a platform fault).
+  if (
+    baseline.root.props.vortex.shell !== null &&
+    Array.isArray(puck.content) &&
+    puck.content.length > 0
+  )
+    refuse(["content"], "places blocks outside the shell's content slots");
+  const zones = sourcePageZones(baseline).map(([key, items]) => ({
+    key,
+    items,
+    at: key === "content" ? ["content"] : ["root", "props", key],
+    candidate: key === "content" ? puck.content : props[key],
+    order: baseline.root.props.vortex.slot_orders[key],
+  }));
+  for (const zone of zones) boundItems(catalogue, zone.candidate, zone.at);
 
   // Index the baseline: every block name, and the slot each block was in.
   const baselineAliases = new Set<string>();
@@ -576,7 +592,7 @@ export const storedZoneFromPuck = (
         index(children as SourceItem[], item, slotKey);
     }
   };
-  index(baseline.items);
+  for (const zone of zones) index(zone.items);
 
   const assigned = new Set<string>();
   const rebuild = (content: unknown[], at: Location): SourceItem[] =>
@@ -631,69 +647,81 @@ export const storedZoneFromPuck = (
         }
       return item;
     });
-  const items = rebuild(data.content as unknown[], []);
-
-  // A copy's slot orders name the original's children; map them to the copied children by position.
-  const remapCopiedOrders = (list: readonly SourceItem[]): void => {
-    for (const item of list) {
-      const orders = item.props.vortex?.slot_orders;
-      if (!baselineAliases.has(item.props.id) && orders !== undefined && plainObject(orders))
-        for (const [key, order] of Object.entries(orders)) {
-          const copied = item.props[key];
-          const named = order?.tablet?.[0] ?? order?.phone?.[0];
-          const origin = named === undefined ? undefined : baselineParent.get(named);
-          const originals = origin === undefined ? undefined : origin.parent.props[origin.key];
-          if (
-            !Array.isArray(copied) ||
-            !Array.isArray(originals) ||
-            originals.length !== copied.length
-          )
-            continue;
-          const byOriginal = new Map(
-            originals.map((child, position) => [
-              (child as SourceItem).props.id,
-              (copied[position] as SourceItem).props.id,
-            ]),
-          );
-          const map = (ids: string[] | undefined) => ids?.map((id) => byOriginal.get(id) ?? id);
-          orders[key] = {
-            ...(order.tablet === undefined ? {} : { tablet: map(order.tablet) }),
-            ...(order.phone === undefined ? {} : { phone: map(order.phone) }),
-          };
-        }
-      for (const [, children] of childSlotsOf(item.props))
-        remapCopiedOrders(children as SourceItem[]);
-    }
-  };
-  remapCopiedOrders(items);
-
-  // Declared orders follow their slot's members: a block moved away leaves, a new one joins.
-  const adjustNested = (list: readonly SourceItem[]): void => {
-    for (const item of list) {
-      const orders = item.props.vortex?.slot_orders;
-      if (orders !== undefined && plainObject(orders)) {
-        for (const key of Object.keys(orders)) {
-          const children = item.props[key];
-          if (!Array.isArray(children)) continue;
-          const adjusted = adjustedSlotOrder(
-            orders[key],
-            (children as SourceItem[]).map((child) => child.props.id),
-          );
-          if (adjusted === undefined) delete orders[key];
-          else orders[key] = adjusted;
-        }
-        if (Object.keys(orders).length === 0) delete item.props.vortex.slot_orders;
+  const data = structuredClone(baseline);
+  const copies = new Map<string, string>();
+  for (const zone of zones) {
+    const items = rebuild(zone.candidate as unknown[], zone.at);
+    // A copy's slot orders name the original's children; map them to the copied children by position.
+    const remapCopiedOrders = (list: readonly SourceItem[]): void => {
+      for (const item of list) {
+        const orders = item.props.vortex?.slot_orders;
+        if (!baselineAliases.has(item.props.id) && orders !== undefined && plainObject(orders))
+          for (const [key, order] of Object.entries(orders)) {
+            const copied = item.props[key];
+            const named = order?.tablet?.[0] ?? order?.phone?.[0];
+            const origin = named === undefined ? undefined : baselineParent.get(named);
+            const originals = origin === undefined ? undefined : origin.parent.props[origin.key];
+            if (
+              !Array.isArray(copied) ||
+              !Array.isArray(originals) ||
+              originals.length !== copied.length
+            )
+              continue;
+            const byOriginal = new Map(
+              originals.map((child, position) => [
+                (child as SourceItem).props.id,
+                (copied[position] as SourceItem).props.id,
+              ]),
+            );
+            const map = (ids: string[] | undefined) => ids?.map((id) => byOriginal.get(id) ?? id);
+            orders[key] = {
+              ...(order.tablet === undefined ? {} : { tablet: map(order.tablet) }),
+              ...(order.phone === undefined ? {} : { phone: map(order.phone) }),
+            };
+          }
+        for (const [, children] of childSlotsOf(item.props))
+          remapCopiedOrders(children as SourceItem[]);
       }
-      for (const [, children] of childSlotsOf(item.props)) adjustNested(children as SourceItem[]);
-    }
-  };
-  adjustNested(items);
-  const order = adjustedSlotOrder(
-    baseline.order,
-    items.map((item) => item.props.id),
-  );
-  const zone = validateStoredZone(catalogue, order === undefined ? { items } : { items, order });
-  return { zone, copies: copiesOf(zone.items, baselineAliases) };
+    };
+    remapCopiedOrders(items);
+
+    // Declared orders follow their slot's members: a block moved away leaves, a new one joins.
+    const adjustNested = (list: readonly SourceItem[]): void => {
+      for (const item of list) {
+        const orders = item.props.vortex?.slot_orders;
+        if (orders !== undefined && plainObject(orders)) {
+          for (const key of Object.keys(orders)) {
+            const children = item.props[key];
+            if (!Array.isArray(children)) continue;
+            const adjusted = adjustedSlotOrder(
+              orders[key],
+              (children as SourceItem[]).map((child) => child.props.id),
+            );
+            if (adjusted === undefined) delete orders[key];
+            else orders[key] = adjusted;
+          }
+          if (Object.keys(orders).length === 0) delete item.props.vortex.slot_orders;
+        }
+        for (const [, children] of childSlotsOf(item.props)) adjustNested(children as SourceItem[]);
+      }
+    };
+    adjustNested(items);
+    const order = adjustedSlotOrder(
+      zone.order,
+      items.map((item) => item.props.id),
+    );
+    const checked = validateStoredZone(
+      catalogue,
+      order === undefined ? { items } : { items, order },
+    );
+    if (zone.key === "content") data.content = checked.items;
+    else data.root.props[zone.key] = checked.items;
+    if (checked.order === undefined) delete data.root.props.vortex.slot_orders[zone.key];
+    else data.root.props.vortex.slot_orders[zone.key] = checked.order;
+    for (const [original, copy] of copiesOf(checked.items, baselineAliases))
+      copies.set(original, copy);
+  }
+  return { data, copies };
 };
 
 /** The item with every block name and slot order left out, to compare a copy with its original. */

@@ -8,6 +8,7 @@ import {
   type Config,
   type Data,
   type PuckAction,
+  type UiState,
 } from "@puckeditor/core";
 import "@puckeditor/core/no-external.css";
 import {
@@ -40,7 +41,7 @@ import type {
   StudioCompositionOwner,
 } from "./application-composition-commands";
 import type { StudioCanvasFrame } from "./studio-canvas-projection";
-import { applyStudioCanvasChange } from "./studio-canvas-change";
+import { applyPageDataChange } from "./studio-canvas-change";
 import type { StudioPlacementDescriber } from "./semantic-outline";
 import {
   destinationOfZone,
@@ -49,6 +50,7 @@ import {
   puckNeighbourOf,
   puckSelectedAlias,
   puckSelectorOf,
+  rootSlotHolding,
   studioBlockName,
   withoutEmptyPuckZones,
   type StudioCanvasCompiledSlot,
@@ -61,6 +63,7 @@ import { useStudioCanvasModel, type StudioCanvasModel } from "./studio-canvas-mo
 import {
   studioInitialBreakpoint,
   studioInitialUi,
+  studioScreenOfBreakpoint,
   studioScreenOfWidth,
   studioViewports,
 } from "./studio-canvas-screen";
@@ -99,7 +102,7 @@ export type StudioCanvasAddRequest = Readonly<{
 export type StudioCanvasPalette = Readonly<{
   /** The places on the open page a new block can go. */
   targets: StudioCompositionAddTargetsModel;
-  /** Whose blocks the palette adds to: the open page's content areas, or its layout. */
+  /** Whose blocks the palette adds to: the open page's content slots, or its layout. */
   owner: StudioCompositionOwner["kind"];
   message: string;
   /** Adds a block through Studio's one add command; `false` when nothing was added yet. */
@@ -134,7 +137,7 @@ export type StudioPuckInput = Readonly<{
   platformThemeTokens: PlatformThemeTokens | null;
   /** The page on the canvas; `undefined` when the workspace shows no page. */
   pageAlias: string | undefined;
-  /** The compiled items of each content area of this page, keyed by page slot address key. */
+  /** The compiled items of each content slot of this page (or step), keyed by page slot address key. */
   compiledSlots?: Readonly<Record<string, StudioCanvasCompiledSlot>> | undefined;
   disabled: boolean;
   /** Why the draft takes no change now (a conflict, a publication), when `disabled` says it does not. */
@@ -153,7 +156,7 @@ export type StudioPuckInput = Readonly<{
   appearance: "light" | "dark";
   /** The application frame the page is drawn inside, when the draft compiled. */
   frame?: StudioCanvasFrame | undefined;
-  /** Reads the records of one content area's data blocks for the saved revision, once. */
+  /** Reads the records of one content slot's data blocks for the saved revision, once. */
   readRecords?: StudioCanvasRecordsReader | undefined;
   /** A newer saved revision than `compiledSource` is being compiled. */
   updating?: boolean | undefined;
@@ -353,7 +356,7 @@ export function StudioPuckProvider({
     const refusedId = refusedRemoval.current;
     if (refusedId !== null) {
       refusedRemoval.current = null;
-      if (!puckItemsHold(candidate.content, refusedId)) {
+      if (!puckItemsHold(candidate, refusedId)) {
         setResync((generation) => generation + 1);
         return;
       }
@@ -364,16 +367,15 @@ export function StudioPuckProvider({
       setResync((generation) => generation + 1);
       return;
     }
-    if (now.pageAlias === undefined || shown.at === undefined) return;
+    if (now.pageAlias === undefined || shown.data === undefined) return;
     // A block inserted from the drawer is added by Studio's add command, not by this edit.
-    for (const id of inserted.current) if (puckItemsHold(candidate.content, id)) return;
-    const result = applyStudioCanvasChange(
+    for (const id of inserted.current) if (puckItemsHold(candidate, id)) return;
+    const result = applyPageDataChange(
       shown.catalogue,
       now.source,
       now.pageAlias,
-      shown.at,
+      shown.step,
       withoutEmptyPuckZones(candidate),
-      shown.rootProps,
     );
     if (result.kind === "unchanged") return;
     if (result.kind === "refused") {
@@ -420,7 +422,7 @@ export function StudioPuckProvider({
     // action bar both remove what Puck's selector points at; if that is another block (a selection
     // that lags behind the draft), the removal is refused and the draft shown again.
     if (action.type === "remove") {
-      const removed = puckSelectedAlias(previous.data.content, {
+      const removed = puckSelectedAlias(previous.data, {
         index: action.index,
         zone: action.zone,
       });
@@ -437,18 +439,18 @@ export function StudioPuckProvider({
         return;
       }
       removing.current =
-        (shown.slot === undefined || removed === null
+        (removed === null
           ? undefined
-          : studioBlockName(now.describePlacement, shown.slot.items, removed)) ?? "block";
+          : studioBlockName(now.describePlacement, shown.items, removed)) ?? "block";
     }
     // A drop or an Add from the drawer: Puck has put an interim block (the release defaults) in its
     // own data; Studio adds the real one.
     if (action.type === "insert") {
-      if (shown.at === undefined) return;
+      if (shown.data === undefined) return;
       const id = action.id;
       if (id !== undefined) inserted.current.add(id);
       const request: StudioCanvasAddRequest = {
-        area: shown.at.key,
+        area: shown.zoneKeyOfSlot(rootSlotHolding(state.data, action.destinationZone)),
         destination: destinationOfZone(action.destinationZone),
         index: action.destinationIndex,
         rendererKey: action.componentType,
@@ -469,7 +471,7 @@ export function StudioPuckProvider({
     // holding the slot), for the Delete key and the action bar alike. Puck keeps its selector as it
     // was, which would now name the neighbour while Studio still names the removed block.
     if (action.type === "remove" && now.canvasShown) {
-      const neighbour = puckNeighbourOf(previous.data.content, {
+      const neighbour = puckNeighbourOf(previous.data, {
         index: action.index,
         zone: action.zone,
       });
@@ -483,11 +485,11 @@ export function StudioPuckProvider({
     if (notSelectionActions.has(action.type) || !now.canvasShown) return;
     // A click, a drop, a duplicate or a delete moved Puck's selection: it becomes Studio's.
     if (sameSelector(state.ui.itemSelector, previous.ui.itemSelector)) return;
-    const alias = puckSelectedAlias(state.data.content, state.ui.itemSelector);
+    const alias = puckSelectedAlias(state.data, state.ui.itemSelector);
     if (alias === now.selectedPlacementAlias) return;
     // Only a block of the open page is a selection; a block dropped elsewhere (another page's block
     // carried over by a drag that outlived a page change) is not.
-    if (alias !== null && (shown.slot === undefined || !itemsHold(shown.slot.items, alias))) return;
+    if (alias !== null && !itemsHold(shown.items, alias)) return;
     // Puck calls this while it is changing its state; Studio's selection follows right after.
     queueMicrotask(() => {
       void latest.current.input.onSelectPlacement(alias).then((accepted) => {
@@ -519,13 +521,30 @@ export function StudioPuckProvider({
     }),
     [permitted, full, input.palette?.owner],
   );
-  const empty = useMemo(
-    (): Data => ({ root: { props: model.rootProps }, content: [] }),
-    [model.rootProps],
-  );
+  const empty = useMemo((): Data => ({ root: { props: {} }, content: [] }), []);
   const shown = model.shown ?? empty;
   // Puck takes its data once, when it opens; every later change reaches it through `StudioPuckSync`.
-  const [initial] = useState(shown);
+  // A page whose shell has other content slots needs another config, which Puck keeps its old root
+  // props across: it is opened again with the new page's data (the key below), only for such a page.
+  const opened = useRef<{ key: string; data: Data; ui: Partial<UiState> } | null>(null);
+  if (opened.current === null || opened.current.key !== model.slotsKey) {
+    // The keyboard focus is found again after a reopen (the first open has nothing to remember).
+    if (opened.current !== null) rememberFocus();
+    opened.current = {
+      key: model.slotsKey,
+      data: shown,
+      // A reopened Puck keeps the screen and the mode the person had chosen.
+      ui: {
+        ...studioInitialUi,
+        viewports: {
+          ...studioInitialUi.viewports!,
+          current: { width: studioScreenOfBreakpoint(breakpoint).width, height: "auto" },
+        },
+        previewMode: input.arrangeGrid === true ? "interactive" : "edit",
+      },
+    };
+  }
+  const initial = opened.current.data;
   const refusal = refused?.area === model.area ? refused.message : "";
   const value = useMemo(
     (): StudioCanvasContextValue => ({ input, model, references, refusal }),
@@ -540,13 +559,14 @@ export function StudioPuckProvider({
           are drawn in a Sheet outside this element. */}
         <div className="contents" style={studioPuckStyle}>
           <Puck
+            key={model.slotsKey}
             config={config}
             data={initial}
             onChange={change}
             onAction={onAction}
             iframe={IFRAME}
             viewports={studioViewports}
-            ui={studioInitialUi}
+            ui={opened.current.ui}
             // Puck's own wrapper fills the workspace, so the canvas has the height of its well.
             height="100%"
             overrides={OVERRIDES}
@@ -580,6 +600,44 @@ export function StudioPuckProvider({
 }
 
 /**
+ * What held the keyboard focus when Puck was reopened (the workspace is drawn inside it, so its
+ * controls are drawn again): found again by id or by name inside the rail panel, once the new
+ * workspace is on screen.
+ */
+let focusBeforeReopen: Readonly<{ id: string; label: string }> | null = null;
+const rememberFocus = (): void => {
+  const active = document.activeElement;
+  focusBeforeReopen =
+    active instanceof HTMLElement && active !== document.body
+      ? {
+          id: active.id,
+          label: active.getAttribute("aria-label") ?? active.textContent?.trim() ?? "",
+        }
+      : null;
+};
+const restoreFocus = (final: boolean): void => {
+  const wanted = focusBeforeReopen;
+  if (wanted === null) return;
+  const byId = wanted.id === "" ? null : document.getElementById(wanted.id);
+  const byLabel =
+    wanted.label === ""
+      ? undefined
+      : [
+          ...document.querySelectorAll<HTMLElement>(
+            "[data-studio-rail-panel] button, [data-studio-rail-panel] [role=treeitem], [data-studio-rail-panel] a",
+          ),
+        ].find(
+          (element) =>
+            (element.getAttribute("aria-label") ?? element.textContent?.trim()) === wanted.label,
+        );
+  const found = byId ?? byLabel;
+  if (found !== undefined && found !== null) {
+    focusBeforeReopen = null;
+    found.focus();
+  } else if (final) focusBeforeReopen = null;
+};
+
+/**
  * Runs inside Puck and draws nothing: it keeps Puck's private state in step with Studio. The
  * workspace draft is the source of truth; Puck only ever receives data derived from it, its
  * history is held at the one current state, its selection is derived from Studio's selection and
@@ -606,7 +664,7 @@ function StudioPuckSync({
   config: Config;
   references: StudioCanvasReferences;
   data: Data;
-  /** The page and content area on the canvas. */
+  /** The page and step on the canvas. */
   area: string;
   dragGate: RefObject<StudioDragGate>;
   /** Changes when Puck holds a change the draft refused, so the draft is shown again. */
@@ -625,6 +683,12 @@ function StudioPuckSync({
   showSelection: RefObject<((alias: string | null) => void) | null>;
 }>) {
   const getPuck = useGetPuck();
+  // A workspace opened again after a page with other outlets: the focus it had comes back.
+  useLayoutEffect(() => {
+    restoreFocus(false);
+    const frame = requestAnimationFrame(() => restoreFocus(true));
+    return () => cancelAnimationFrame(frame);
+  }, []);
   const previewMode = usePuckSelector((state) => state.appState.ui.previewMode);
   const recorded = usePuckSelector((state) => state.history.histories.length);
   // The config Puck holds: it takes the page's config a moment after this component sees it.
@@ -706,15 +770,14 @@ function StudioPuckSync({
   const select = useCallback(
     (alias: string | null) => {
       const { dispatch, appState } = getPuck();
-      // A placement drawn elsewhere (another content area or the frame) clears the canvas selection.
+      // A placement drawn elsewhere (another page, step or the frame) clears the canvas selection.
       // Where it sits is read from Puck's data, not from Puck's index of it: after data replaced
       // from outside (an Undo) the index can still name the old place, and the selection would then
       // point at, and a Delete would remove, another block.
-      const selector =
-        alias === null ? null : (puckSelectorOf(appState.data.content, alias) ?? null);
+      const selector = alias === null ? null : (puckSelectorOf(appState.data, alias) ?? null);
       if (
         sameSelector(appState.ui.itemSelector, selector) &&
-        puckSelectedAlias(appState.data.content, appState.ui.itemSelector) === alias
+        puckSelectedAlias(appState.data, appState.ui.itemSelector) === alias
       )
         return;
       deriving.current = true;

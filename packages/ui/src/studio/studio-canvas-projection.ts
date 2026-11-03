@@ -1,6 +1,7 @@
 import type { Content, Data } from "@puckeditor/core";
 import type {
   ApplicationShell,
+  CompiledLayout,
   ProjectedApplicationFrame,
   ProjectedNavigation,
 } from "@vortex/platform/schema";
@@ -19,6 +20,8 @@ export type StudioCanvasFrame = Readonly<{
   pageId: string;
   pageName: string;
   frame: ProjectedApplicationFrame;
+  /** Only for a shell with several content slots: its own placements around them (the holding placement, or the whole layout), those slots empty. */
+  outletContent?: CompiledLayout;
 }>;
 
 /** A slot's items; a plain list setting is an array too, but of values, not items. */
@@ -28,21 +31,19 @@ const isContent = (value: unknown): value is Content =>
     (entry) => entry !== null && typeof entry === "object" && "type" in entry && "props" in entry,
   );
 
+type PageVortex = Readonly<{ slot_orders: Readonly<Record<string, SlotOrder>> }>;
+
 type SlotOrder = Readonly<{
   tablet?: readonly string[] | undefined;
   phone?: readonly string[] | undefined;
 }>;
 
 /**
- * The canvas shows a smaller screen in that screen's own order: the root slot's stored order and
+ * The canvas shows a smaller screen in that screen's own order: each page zone's stored order and
  * each block's stored slot orders. The arrays are reordered for display only; a canvas showing
  * another size than desktop never sends its data back as an edit.
  */
-export const puckDataForBreakpoint = (
-  data: Data,
-  breakpoint: Breakpoint,
-  rootOrder: SlotOrder | undefined,
-): Data => {
+export const puckDataForBreakpoint = (data: Data, breakpoint: Breakpoint): Data => {
   if (breakpoint === "desktop") return data;
   const reorder = (content: Content, order: SlotOrder | undefined): Content => {
     const sequence = breakpoint === "phone" ? (order?.phone ?? order?.tablet) : order?.tablet;
@@ -71,5 +72,19 @@ export const puckDataForBreakpoint = (
       };
     }) as Content;
   };
-  return { ...data, content: reorder(data.content, rootOrder) };
+  const root = data.root as { props: Record<string, unknown> & { vortex: PageVortex } };
+  const orders = root.props.vortex.slot_orders;
+  return {
+    ...data,
+    root: {
+      ...root,
+      props: Object.fromEntries(
+        Object.entries(root.props).map(([key, value]) => [
+          key,
+          key !== "vortex" && isContent(value) ? reorder(value, orders[key]) : value,
+        ]),
+      ),
+    } as Data["root"],
+    content: reorder(data.content, orders.content),
+  };
 };

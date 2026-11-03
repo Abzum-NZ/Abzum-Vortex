@@ -42,6 +42,7 @@ import {
 } from "./registry";
 import {
   getVortexPuckConfig,
+  PAGE_ROOT_GAP,
   VortexPuckThemeTokensProvider,
   type VortexPuckMetadata,
 } from "./puck-config";
@@ -49,8 +50,9 @@ import { computeSlotOrderCss } from "./layout-styles";
 import {
   contentConfigFor,
   frameConfigFor,
+  PAGE_OUTLET,
   ShellOutletProvider,
-  withShellOutlet,
+  withShellOutlets,
 } from "./shell-outlet";
 import {
   selectRenderedLayout,
@@ -126,7 +128,7 @@ const resolvedPageData = (inputs: ResolvedPageInputs): ResolvedPageData => {
     layout,
     data: {
       root: {
-        props: { gap: "medium", padding: "medium", applicationShell: rootShell },
+        props: { gap: PAGE_ROOT_GAP, padding: "medium", applicationShell: rootShell },
       } as unknown as Data["root"],
       content: layout.content as unknown as Data["content"],
       zones: {},
@@ -217,6 +219,15 @@ export type PagePuckRendererProps = Readonly<{
    * already supplies the theme root, the shell and the root slot gap.
    */
   contentRegion?: boolean;
+  /**
+   * With `contentRegion`: the region holds the shell's own placements around the page's content
+   * slots, and each named slot shows `content` where the shell declares it, so a page with several
+   * content slots is drawn (and edited) in each of them.
+   */
+  contentOutlets?: Readonly<{
+    locations: Readonly<Record<string, ShellOutletLocation>>;
+    content: Readonly<Record<string, ReactNode>>;
+  }>;
 }>;
 
 export function PagePuckRenderer({
@@ -250,6 +261,7 @@ export function PagePuckRenderer({
   componentBundleOrigin,
   outlet,
   contentRegion = false,
+  contentOutlets,
 }: PagePuckRendererProps): ReactElement {
   const { layout, data, orderCss } = resolvedPageData({
     composition,
@@ -376,7 +388,17 @@ export function PagePuckRenderer({
       <>
         {feedback == null ? null : <div data-vortex-page-feedback="">{feedback}</div>}
         {order}
-        <Render config={contentConfigFor(baseConfig)} data={data} metadata={metadata} />
+        {contentOutlets === undefined ? (
+          <Render config={contentConfigFor(baseConfig)} data={data} metadata={metadata} />
+        ) : (
+          <ShellOutletProvider outlets={contentOutlets.content}>
+            <Render
+              config={frameConfigFor(contentConfigFor(baseConfig))}
+              data={withShellOutlets(data, contentOutlets.locations)}
+              metadata={metadata}
+            />
+          </ShellOutletProvider>
+        )}
         {guidedSummary}
         {guidedNavigation}
       </>
@@ -386,10 +408,10 @@ export function PagePuckRenderer({
       {outlet === undefined ? (
         <Render config={baseConfig} data={data} metadata={metadata} />
       ) : (
-        <ShellOutletProvider content={outlet.content}>
+        <ShellOutletProvider outlets={{ [PAGE_OUTLET]: outlet.content }}>
           <Render
             config={frameConfigFor(baseConfig)}
-            data={withShellOutlet(data, outlet.location)}
+            data={withShellOutlets(data, { [PAGE_OUTLET]: outlet.location })}
             metadata={metadata}
           />
         </ShellOutletProvider>

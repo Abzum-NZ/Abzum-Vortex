@@ -3,9 +3,10 @@ import {
   canonicalJson,
   type ApplicationSourceDocument,
   type ImmutablePlatformBlockCatalogue,
+  type SourceItem,
 } from "@vortex/platform/schema";
 import type { StudioCompileFailure } from "./compile-failure";
-import { itemsHold, recordKeys, type StudioCanvasSourceSlot } from "./studio-canvas-data";
+import { itemsHold, recordKeys } from "./studio-canvas-data";
 import type { StudioCanvasGridChange, StudioCanvasGridRead } from "./studio-canvas-grid";
 import type { StudioCanvasRecords, StudioCanvasSample } from "./studio-canvas-metadata";
 
@@ -23,7 +24,7 @@ export type StudioCanvasRecordsRead = Readonly<{
   sample?: StudioCanvasSample;
 }>;
 
-/** Reads the records of one content area's data blocks for the saved revision, once. */
+/** Reads the records of one content slot's data blocks for the saved revision, once. */
 export type StudioCanvasRecordsReader = (
   area: string,
   signal: AbortSignal,
@@ -31,9 +32,23 @@ export type StudioCanvasRecordsReader = (
   tableStates: Readonly<Record<string, StudioCanvasGridRead>>,
 ) => Promise<StudioCanvasRecordsRead>;
 
+/**
+ * The records of every zone of the page as one read: all that was read, and the first zone that
+ * could not be read says why the page's records are not.
+ */
+const mergedRead = (reads: readonly StudioCanvasRecordsRead[]): StudioCanvasRecordsRead => {
+  const failed = reads.find((read) => read.state !== "ready");
+  const sample = reads.find((read) => read.sample !== undefined)?.sample;
+  return {
+    ...(failed ?? { state: "ready" as const }),
+    records: Object.assign({}, ...reads.map((read) => read.records)) as Record<string, unknown>,
+    ...(sample === undefined ? {} : { sample }),
+  };
+};
+
 type HeldRead = StudioCanvasRecordsRead & {
   state: StudioCanvasRecords["state"];
-  /** The page and content area the records were read for. */
+  /** The page and step the records were read for. */
   area: string;
   source?: ApplicationSourceDocument;
   keys?: ReadonlyMap<string, string>;
@@ -55,19 +70,19 @@ const useStableKeys = (keys: ReadonlyMap<string, string>): Readonly<Record<strin
 const NO_VALUES_READ: StudioCanvasRecords["records"] = Object.freeze({});
 
 /**
- * The records the open content area's data blocks show, the value chosen in each control on the
+ * The records the open page's data blocks show, the value chosen in each control on the
  * canvas and the channel the grid's events arrive on. Reads follow the visible area only: one per
- * content area and compiled revision, and one more (debounced, the earlier one cancelled) per
+ * page (or step) and compiled revision, and one more (debounced, the earlier one cancelled) per
  * control or grid-state change, sent once the preview runs this revision's data shape.
  */
 export const useStudioCanvasRecords = ({
   area,
-  areaKey: contentArea,
+  areaKeys,
   readRecords,
   catalogue,
   compiledSource,
-  originalSlot,
-  slot,
+  originalItems,
+  items,
   visible,
   gridReads,
   onGridChange,
@@ -75,15 +90,15 @@ export const useStudioCanvasRecords = ({
   updating,
   compileFailure,
 }: Readonly<{
-  /** The page and content area on the canvas. */
+  /** The page and step on the canvas. */
   area: string;
-  /** The content area's own key on its page, which the reader is asked for. */
-  areaKey: string;
+  /** The page slot address keys of the page's zones, which the reader is asked for one by one. */
+  areaKeys: readonly string[];
   readRecords: StudioCanvasRecordsReader | undefined;
   catalogue: ImmutablePlatformBlockCatalogue;
   compiledSource: ApplicationSourceDocument;
-  originalSlot: StudioCanvasSourceSlot | undefined;
-  slot: StudioCanvasSourceSlot | undefined;
+  originalItems: readonly SourceItem[];
+  items: readonly SourceItem[];
   /** The area has been on screen. */
   visible: boolean;
   gridReads: Readonly<Record<string, StudioCanvasGridRead>> | undefined;
@@ -94,10 +109,8 @@ export const useStudioCanvasRecords = ({
 }>) => {
   // The records of this area's data blocks, read for the saved revision the compiled version is,
   // with each data block's release, settings and query in that revision.
-  const savedKeys = useMemo(
-    () => recordKeys(catalogue, originalSlot?.items ?? []),
-    [catalogue, originalSlot],
-  );
+  const savedKeys = useMemo(() => recordKeys(catalogue, originalItems), [catalogue, originalItems]);
+  const areaKeysKey = areaKeys.join(" ");
   const [held, setHeld] = useState<HeldRead>({ state: LOADING, records: {}, area });
   // The value chosen in each control on the canvas; a change reads the bound blocks again.
   const [controls, setControls] = useState<
@@ -117,12 +130,10 @@ export const useStudioCanvasRecords = ({
   // Only the controls and the query state of grids still on this area are sent, and only a
   // change to them re-reads this area: a grid change elsewhere leaves it as it is.
   const areaChosen = Object.fromEntries(
-    Object.entries(controlValues).filter(([alias]) => itemsHold(originalSlot?.items ?? [], alias)),
+    Object.entries(controlValues).filter(([alias]) => itemsHold(originalItems, alias)),
   );
   const areaTables = Object.fromEntries(
-    Object.entries(gridReads ?? {}).filter(([alias]) =>
-      itemsHold(originalSlot?.items ?? [], alias),
-    ),
+    Object.entries(gridReads ?? {}).filter(([alias]) => itemsHold(originalItems, alias)),
   );
   const stateKey = canonicalJson([areaChosen, areaTables]);
   const sent = useRef({ chosen: areaChosen, tables: areaTables });
@@ -141,8 +152,9 @@ export const useStudioCanvasRecords = ({
       lastRead.current.area === area && lastRead.current.stateKey !== stateKey ? 300 : 0;
     lastRead.current = { area, stateKey };
     const timer = setTimeout(() => {
-      readRecords(contentArea, controller.signal, chosen, tables).then(
-        (read) => {
+      Promise.all(areaKeys.map((key) => readRecords(key, controller.signal, chosen, tables))).then(
+        (reads) => {
+          const read = mergedRead(reads);
           if (cancelled || controller.signal.aborted) return;
           // A newer saved revision replaced this one: its own read follows, and what is shown stays.
           if (read.state === "superseded") return;
@@ -167,8 +179,8 @@ export const useStudioCanvasRecords = ({
       clearTimeout(timer);
       controller.abort();
     };
-  }, [readRecords, compiledSource, area, contentArea, visible, stateKey]);
-  // Records read for another page or content area are never shown as this one's.
+  }, [readRecords, compiledSource, area, areaKeysKey, visible, stateKey]);
+  // Records read for another page or step are never shown as this one's.
   const read = useMemo(
     (): HeldRead => (held.area === area ? held : { state: LOADING, records: {}, area }),
     [held, area],
@@ -184,9 +196,7 @@ export const useStudioCanvasRecords = ({
   // Plain data only: Puck copies every object in a block's props, so a Map or the saved source
   // would arrive broken or copied once per block.
   const saved = useStableKeys(savedKeys);
-  const current = useStableKeys(
-    useMemo(() => recordKeys(catalogue, slot?.items ?? []), [catalogue, slot]),
-  );
+  const current = useStableKeys(useMemo(() => recordKeys(catalogue, items), [catalogue, items]));
   const records = useMemo((): StudioCanvasRecords => {
     const shown = read.source === compiledSource || carried ? read : undefined;
     const refusal = compileFailure ?? shown?.refusal;

@@ -7,6 +7,7 @@ import {
   splitProjectedPage,
   type ApplicationContent,
   type ApplicationShell,
+  type CompiledLayout,
   type OrganizationThemeSelection,
   type ProjectedApplicationFrame,
 } from "@vortex/platform/schema";
@@ -42,6 +43,12 @@ export type StudioApplicationCanvasFrames = Readonly<{
         pageId: string;
         pageName: string;
         frame: ProjectedApplicationFrame;
+        /**
+         * Only for a shell with several content slots: the shell's own placements around them,
+         * those slots empty (the holding placement, or the whole shell layout when no placement
+         * holds them all). The canvas puts each slot's editor there.
+         */
+        outletContent?: CompiledLayout;
       }>
     >
   >;
@@ -60,7 +67,10 @@ export const studioCanvasFramesFor = (
   const pages: Record<string, StudioApplicationCanvasFrames["pages"][string]> = {};
   // Pages sharing a shell share the same empty frame. Keeping that identity also lets the RSC
   // serializer send the frame once rather than cloning its layout into every page's props.
-  const frames = new Map<string | undefined, ProjectedApplicationFrame>();
+  const frames = new Map<
+    string | undefined,
+    Readonly<{ frame: ProjectedApplicationFrame; content: CompiledLayout | undefined }>
+  >();
   sourcePages.forEach((sourcePage, index) => {
     if (sourcePage.id !== pageAlias) return;
     const compiled = content.pages[index];
@@ -77,20 +87,30 @@ export const studioCanvasFramesFor = (
         : shells.find((candidate) => sameId(String(candidate.shellId), String(shellId)));
     if (shellId !== undefined && shell === undefined)
       throw new Error(`Studio compiled page '${compiled.key}' references a missing shell`);
-    let frame = frames.get(shellId);
-    if (frame === undefined) {
-      frame = splitProjectedPage(
+    let split = frames.get(shellId);
+    if (split === undefined) {
+      const projected = splitProjectedPage(
         { pageId: compiled.pageId, composition: shell?.layout ?? emptyLayout },
         shell,
-      ).frame;
-      frames.set(shellId, frame);
+      );
+      split = {
+        frame: projected.frame,
+        // A shell with several content slots keeps its own placements around them: the holding
+        // placement (placement outlet) or its whole layout (root outlet, where the frame is empty).
+        content:
+          shell !== undefined && shell.contentSlots.length > 1
+            ? (projected.content.composition as unknown as CompiledLayout)
+            : undefined,
+      };
+      frames.set(shellId, split);
     }
     pages[sourcePage.id] = {
       pageId: String(compiled.pageId),
       pageName: compiled.name,
       // The frame is the shell alone: its content slots are reserved and empty in the compiled
       // shell, and the canvas draws the page being edited in the outlet they declare.
-      frame,
+      frame: split.frame,
+      ...(split.content === undefined ? {} : { outletContent: split.content }),
     };
   });
   return {

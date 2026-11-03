@@ -12,22 +12,27 @@ import { RootSlotGapProvider } from "./puck-config";
  * the host places it in that outlet, so the frame stays mounted while pages change.
  */
 const SHELL_OUTLET_TYPE = "VortexShellOutlet";
-const SHELL_OUTLET_ID = "vortex-shell-outlet";
+/** The outlet of a page frame, which holds the whole page. */
+export const PAGE_OUTLET = "page";
 
-const ShellOutletContext = createContext<ReactNode>(null);
+/** What each outlet of the rendered data shows, by outlet name. */
+const ShellOutletContext = createContext<Readonly<Record<string, ReactNode>>>({});
 
 export function ShellOutletProvider({
-  content,
+  outlets,
   children,
-}: Readonly<{ content: ReactNode; children: ReactNode }>) {
-  return <ShellOutletContext.Provider value={content}>{children}</ShellOutletContext.Provider>;
+}: Readonly<{ outlets: Readonly<Record<string, ReactNode>>; children: ReactNode }>) {
+  return <ShellOutletContext.Provider value={outlets}>{children}</ShellOutletContext.Provider>;
 }
 
-function ShellOutlet() {
-  return <>{useContext(ShellOutletContext)}</>;
+function ShellOutlet({ outlet }: Readonly<{ outlet: string }>) {
+  return <>{useContext(ShellOutletContext)[outlet]}</>;
 }
 
-const outletItem: ComponentData = { type: SHELL_OUTLET_TYPE, props: { id: SHELL_OUTLET_ID } };
+const outletItem = (outlet: string): ComponentData => ({
+  type: SHELL_OUTLET_TYPE,
+  props: { id: `vortex-shell-outlet-${outlet}`, outlet },
+});
 
 const frameConfigs = new WeakMap<Config, Config>();
 const contentConfigs = new WeakMap<Config, Config>();
@@ -40,9 +45,12 @@ export const frameConfigFor = (config: Config): Config => {
       ...config,
       components: {
         ...config.components,
-        [SHELL_OUTLET_TYPE]: { fields: {}, render: () => <ShellOutlet /> },
+        [SHELL_OUTLET_TYPE]: {
+          fields: {},
+          render: ({ outlet }: { outlet?: string }) => <ShellOutlet outlet={String(outlet)} />,
+        },
       },
-    } as Config;
+    } as unknown as Config;
     frameConfigs.set(config, frame);
   }
   return frame;
@@ -79,36 +87,58 @@ const isContent = (value: unknown): value is Content =>
 
 const replaceIn = (
   content: Content,
-  location: Exclude<ShellOutletLocation, { kind: "root" }>,
+  outlets: ReadonlyMap<string, Exclude<ShellOutletLocation, { kind: "root" }>>,
 ): Content =>
   content.map((item) => {
-    if (item.props.id === location.placementId) {
-      if (location.kind === "placement") return outletItem;
-      return { ...item, props: { ...item.props, [location.slotKey]: [outletItem] } };
-    }
+    const here = [...outlets].filter(([, location]) => location.placementId === item.props.id);
+    // A placement that is an outlet is replaced; one that holds outlets gets them in its slots.
+    const replaced = here.find(([, location]) => location.kind === "placement");
+    if (replaced !== undefined) return outletItem(replaced[0]);
+    const props = { ...item.props } as Record<string, unknown>;
+    for (const [outlet, location] of here)
+      if (location.kind === "slot") props[location.slotKey] = [outletItem(outlet)];
     // The item's slots are exactly those its `vortex.slotOrders` orders.
     const slotKeys = new Set(
       Object.keys((item.props.vortex as { slotOrders?: object } | undefined)?.slotOrders ?? {}),
     );
-    const props = Object.fromEntries(
-      Object.entries(item.props).map(([key, value]) => [
-        key,
-        slotKeys.has(key) && isContent(value) ? replaceIn(value, location) : value,
-      ]),
-    );
-    return { ...item, props } as ComponentData;
+    return {
+      ...item,
+      props: Object.fromEntries(
+        Object.entries(props).map(([key, value]) => [
+          key,
+          slotKeys.has(key) &&
+          isContent(value) &&
+          !here.some(([, l]) => l.kind === "slot" && l.slotKey === key)
+            ? replaceIn(value, outlets)
+            : value,
+        ]),
+      ),
+    } as ComponentData;
   });
 
 const framedData = new WeakMap<Data, Map<string, Data>>();
 
-/** The frame's Puck data with the outlet placed at the shell's declared content location. */
-export const withShellOutlet = (data: Data, location: ShellOutletLocation): Data => {
-  const key = JSON.stringify(location);
+/**
+ * The Puck data with an outlet placed at each declared location: the frame's one page outlet, or
+ * the content slots of a page's shell region.
+ */
+export const withShellOutlets = (
+  data: Data,
+  locations: Readonly<Record<string, ShellOutletLocation>>,
+): Data => {
+  const key = JSON.stringify(locations);
   const cached = framedData.get(data)?.get(key);
   if (cached !== undefined) return cached;
+  const root = Object.entries(locations).find(([, location]) => location.kind === "root");
+  const placed = new Map(
+    Object.entries(locations).filter(
+      (entry): entry is [string, Exclude<ShellOutletLocation, { kind: "root" }>] =>
+        entry[1].kind !== "root",
+    ),
+  );
   const framed: Data = {
     ...data,
-    content: location.kind === "root" ? [outletItem] : replaceIn(data.content, location),
+    content: root !== undefined ? [outletItem(root[0])] : replaceIn(data.content, placed),
   };
   const entries = framedData.get(data) ?? new Map<string, Data>();
   entries.set(key, framed);

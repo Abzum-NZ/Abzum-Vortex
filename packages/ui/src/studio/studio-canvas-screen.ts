@@ -44,6 +44,14 @@ export const studioScreenOfWidth = (width: number | "100%") => {
   return screen;
 };
 
+/** The declared screen of a breakpoint. */
+export const studioScreenOfBreakpoint = (breakpoint: Breakpoint) => {
+  const screen = studioScreens.find((entry) => entry.breakpoint === breakpoint);
+  if (screen === undefined)
+    throw new Error(`STUDIO_CANVAS_SCREEN_UNKNOWN: no declared screen is ${breakpoint}`);
+  return screen;
+};
+
 /** The breakpoint of the screen Puck starts on. */
 export const studioInitialBreakpoint: Breakpoint = studioScreens[0]!.breakpoint;
 
@@ -64,9 +72,7 @@ export function useStudioScreen(): Readonly<{
   const dispatch = usePuckSelector((state) => state.dispatch);
   const choose = useCallback(
     (breakpoint: Breakpoint) => {
-      const screen = studioScreens.find((entry) => entry.breakpoint === breakpoint);
-      if (screen === undefined)
-        throw new Error(`STUDIO_CANVAS_SCREEN_UNKNOWN: no declared screen is ${breakpoint}`);
+      const screen = studioScreenOfBreakpoint(breakpoint);
       dispatch({
         type: "setUi",
         ui: (ui) => ({

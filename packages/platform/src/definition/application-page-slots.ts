@@ -47,11 +47,32 @@ export const sourcePageSlotAddresses = (page: SourcePage): readonly PageSlotAddr
   );
 };
 
-const dataAt = (page: SourcePage, at: PageSlotAddress): SourcePageData | undefined => {
+/** The page data of a page, or of one guided step of it; undefined when the page has no such data. */
+export const sourcePageDataAt = (
+  page: SourcePage,
+  step: string | undefined,
+): SourcePageData | undefined => {
   const composition = page.composition;
-  if (!("step_content" in composition)) return at.step === undefined ? composition : undefined;
-  return at.step === undefined ? undefined : composition.step_content[at.step];
+  if (!("step_content" in composition)) return step === undefined ? composition : undefined;
+  return step === undefined ? undefined : composition.step_content[step];
 };
+
+/** Replaces the page data of a page (or one guided step) wholesale; false when the page has no such data. */
+export const setSourcePageData = (
+  page: SourcePage,
+  step: string | undefined,
+  value: SourcePageData,
+): boolean => {
+  if (sourcePageDataAt(page, step) === undefined) return false;
+  if (step === undefined) page.composition = value as typeof page.composition;
+  else
+    (page.composition as { step_content: Record<string, SourcePageData> }).step_content[step] =
+      value;
+  return true;
+};
+
+const dataAt = (page: SourcePage, at: PageSlotAddress): SourcePageData | undefined =>
+  sourcePageDataAt(page, at.step);
 
 const zoneKeyAt = (data: SourcePageData, at: PageSlotAddress): string | undefined => {
   if (data.root.props.vortex.shell === null) return at.slot === undefined ? contentZone : undefined;

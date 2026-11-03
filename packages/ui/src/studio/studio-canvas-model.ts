@@ -4,12 +4,16 @@ import {
   definitionLimits,
   immutablePlatformBlockCatalogueSchema,
   sourceItemTree,
+  sourcePageDataAt,
+  sourcePageRootSlots,
   sourcePageSlotAddresses,
   sourcePageSlotAt,
+  sourcePageZones,
   storedItemRelease,
   type ApplicationSourceDocument,
   type ImmutablePlatformBlockCatalogue,
-  type PageSlotAddress,
+  type SourceItem,
+  type SourcePageData,
 } from "@vortex/platform/schema";
 import { createPlatformComponentRegistryForReleases } from "../combined-registry";
 import type { Breakpoint } from "../definition-error";
@@ -21,7 +25,6 @@ import {
   storedDataProblem,
   type StudioCanvasCompiledSettings,
   type StudioCanvasCompiledSlot,
-  type StudioCanvasSourceSlot,
 } from "./studio-canvas-data";
 import { puckDataForBreakpoint } from "./studio-canvas-projection";
 import { studioCanvasGridSetup } from "./studio-canvas-grid";
@@ -33,37 +36,53 @@ type SourcePage = ApplicationSourceDocument["body"]["pages"][number];
 const NO_COMPONENTS = { components: {} } as unknown as Config;
 
 /**
- * The content area of the open page the canvas shows, with everything the canvas needs to draw
- * and check it: the one Puck config, the stored area, the compiled settings of its blocks, the
- * data Puck is given and whether the area may be arranged on the canvas.
+ * The open page (or the open step of a guided page) the canvas shows, with everything the canvas
+ * needs to draw and check it: the Puck config for its root slots, its stored data, the compiled
+ * settings of its blocks, the data Puck is given and whether it may be arranged on the canvas.
  */
 export type StudioCanvasModel = Readonly<{
   catalogue: ImmutablePlatformBlockCatalogue;
   registry: PlatformComponentRegistry;
+  /** The Puck config, with one root slot per content slot of the page's shell. */
   config: Config;
-  /** The root props Puck writes into its data. */
-  rootProps: Readonly<Record<string, unknown>>;
+  /** The keys of the root slots the config declares: Puck is opened again when they change. */
+  slotsKey: string;
   page: SourcePage | undefined;
-  /** The content areas of the open page. */
-  addresses: readonly PageSlotAddress[];
-  /** The content area on the canvas. */
-  at: PageSlotAddress | undefined;
-  /** The page and content area together, which changes whenever the canvas shows another. */
+  /** The guided steps of the open page, or none; the tabs above the canvas choose among them. */
+  steps: readonly Readonly<{ id: string; name: string }>[];
+  /** The step on the canvas; `undefined` on a page without steps. */
+  step: string | undefined;
+  chooseStep: (step: string) => void;
+  /** The page and step together, which changes whenever the canvas shows another. */
   area: string;
-  chooseArea: (key: string) => void;
-  slot: StudioCanvasSourceSlot | undefined;
-  /** The same content area in the compiled revision. */
-  originalSlot: StudioCanvasSourceSlot | undefined;
+  /** The page slot address keys of the zones the canvas shows. */
+  zoneKeys: ReadonlySet<string>;
+  zoneKeyList: readonly string[];
+  /** By root slot of the page, the key of the shell content slot it is. */
+  slotKeys: Readonly<Record<string, string>>;
+  /**
+   * The zone the Blocks panel adds to unless the person chose another: the one that holds the
+   * selected block, else the first zone the shell requires (the main content), else the first.
+   */
+  defaultZoneKey: string | undefined;
+  /** Puck's root slot of a page slot address key; `undefined` for the default zone. */
+  slotOfZoneKey: (key: string) => string | undefined;
+  /** The page slot address key of Puck's root slot, or of the default zone when `undefined`. */
+  zoneKeyOfSlot: (slot: string | undefined) => string;
+  /** Every block of the page data on the canvas, in every zone. */
+  items: readonly SourceItem[];
+  /** The same blocks in the compiled revision. */
+  originalItems: readonly SourceItem[];
   compiledSettings: StudioCanvasCompiledSettings | undefined;
   /** The data Puck holds on the desktop; `undefined` until the page has a compiled version. */
   data: Data | undefined;
   /** The data for the screen size on show. */
   shown: Data | undefined;
-  /** Why the area is shown read-only; `undefined` when it can be arranged. */
+  /** Why the page is shown read-only; `undefined` when it can be arranged. */
   readOnlyCause: string | undefined;
-  /** Whether the area takes edits: not busy, readable, and on the desktop screen. */
+  /** Whether the page takes edits: not busy, readable, and on the desktop screen. */
   editable: boolean;
-  /** Whether a data grid of the area has columns the person can arrange. */
+  /** Whether a data grid of the page has columns the person can arrange. */
   arrangeable: boolean;
 }>;
 
@@ -110,7 +129,145 @@ export const useStudioCanvasModel = (
       }),
     [registry],
   );
-  // The application frame is the canvas root, so the content renders in its outlet inside the iframe.
+  const page = source.body.pages.find((candidate) => candidate.id === pageAlias);
+  const steps = useMemo(
+    () =>
+      page === undefined || page.type !== "guided_form"
+        ? []
+        : page.steps.map((entry) => ({ id: entry.id, name: entry.name })),
+    [page],
+  );
+  // The guided step the person chose on this page; another page starts from its first.
+  const [chosen, setChosen] = useState<Readonly<{ page: string; step: string }> | null>(null);
+  const chosenStep = chosen !== null && chosen.page === pageAlias ? chosen.step : "";
+  // A block selected in the outline is shown in the step that holds it.
+  const holding =
+    selectedPlacementAlias === null || page === undefined || steps.length === 0
+      ? undefined
+      : steps.find((entry) => {
+          const data = sourcePageDataAt(page, entry.id);
+          return (
+            data !== undefined &&
+            itemsHold(
+              sourcePageZones(data).flatMap(([, list]) => list),
+              selectedPlacementAlias,
+            )
+          );
+        });
+  useEffect(() => {
+    if (pageAlias !== undefined && holding !== undefined && holding.id !== chosenStep)
+      setChosen({ page: pageAlias, step: holding.id });
+  }, [holding?.id, pageAlias]);
+  const step =
+    steps.length === 0
+      ? undefined
+      : (steps.find((entry) => entry.id === chosenStep) ?? holding ?? steps[0])?.id;
+  const area = `${pageAlias ?? ""}:${step ?? ""}`;
+  // The data is read fresh from its page, so it is kept per page object and step.
+  const pageData = useMemo(
+    (): SourcePageData | undefined =>
+      page === undefined ? undefined : sourcePageDataAt(page, step),
+    [page, step],
+  );
+  const originalPage = compiledSource.body.pages.find((candidate) => candidate.id === pageAlias);
+  const originalData = useMemo(
+    (): SourcePageData | undefined =>
+      originalPage === undefined ? undefined : sourcePageDataAt(originalPage, step),
+    [originalPage, step],
+  );
+  // The page's content slots (its zones) by address key: the canvas shows all of them at once.
+  const addresses = useMemo(
+    () =>
+      page === undefined
+        ? []
+        : sourcePageSlotAddresses(page).filter((entry) => entry.step === step),
+    [page, step],
+  );
+  const zoneKeyList = useMemo(() => addresses.map((entry) => entry.key), [addresses]);
+  const zoneKeys = useMemo(() => new Set(zoneKeyList), [zoneKeyList]);
+  // Kept by value: the shells are a new object after every edit of the draft.
+  const shellSlotsJson = JSON.stringify(
+    Object.fromEntries(
+      (
+        source.body.shells.find((entry) => entry.id === pageData?.root.props.vortex.shell)
+          ?.content_slots ?? []
+      ).map((slot) => [slot.id, slot.key]),
+    ),
+  );
+  const slotKeys = useMemo(
+    () => JSON.parse(shellSlotsJson) as Readonly<Record<string, string>>,
+    [shellSlotsJson],
+  );
+  const slotOfZoneKey = useCallback(
+    (key: string) => addresses.find((entry) => entry.key === key)?.slot,
+    [addresses],
+  );
+  const zoneKeyOfSlot = useCallback(
+    (slot: string | undefined) => addresses.find((entry) => entry.slot === slot)?.key ?? "",
+    [addresses],
+  );
+  const defaultZoneKey = useMemo(() => {
+    if (page === undefined) return undefined;
+    const shell = source.body.shells.find(
+      (entry) => entry.id === pageData?.root.props.vortex.shell,
+    );
+    const holding =
+      selectedPlacementAlias === null
+        ? undefined
+        : addresses.find((entry) =>
+            itemsHold(sourcePageSlotAt(page, entry)?.items ?? [], selectedPlacementAlias),
+          );
+    const required = addresses.find(
+      (entry) => shell?.content_slots.find((slot) => slot.id === entry.slot)?.required === true,
+    );
+    return (holding ?? required ?? addresses[0])?.key;
+  }, [page, source, pageData, addresses, selectedPlacementAlias]);
+  const items = useMemo(
+    () => (pageData === undefined ? [] : sourcePageZones(pageData).flatMap(([, list]) => list)),
+    [pageData],
+  );
+  const originalItems = useMemo(
+    () =>
+      originalData === undefined ? [] : sourcePageZones(originalData).flatMap(([, list]) => list),
+    [originalData],
+  );
+  // The compiled version is read once per compile; a mismatch keeps the canvas closed.
+  const compiled = useMemo((): { settings?: StudioCanvasCompiledSettings; problem?: string } => {
+    if (originalPage === undefined || addresses.length === 0) return {};
+    try {
+      const settings: StudioCanvasCompiledSettings = {};
+      for (const entry of addresses) {
+        const original = sourcePageSlotAt(originalPage, entry);
+        const compiledSlot = compiledSlots?.[entry.key];
+        if (original === undefined || compiledSlot === undefined) return {};
+        Object.assign(settings, compiledSettingsFor(catalogue, original.items, compiledSlot));
+      }
+      return { settings };
+    } catch (error: unknown) {
+      return {
+        problem: `STUDIO_CANVAS_COMPILED_MISMATCH: ${error instanceof Error ? error.message : String(error)}`,
+      };
+    }
+  }, [catalogue, compiledSlots, originalPage, addresses]);
+  // The root slots of the page's shell, named as the shell labels its content slots: Puck's config
+  // declares one slot field for each, and the Outline lists them by that name.
+  const rootSlotsJson = JSON.stringify(
+    pageData === undefined
+      ? []
+      : sourcePageRootSlots(pageData).map(([key]) => [
+          key,
+          source.body.shells
+            .find((entry) => entry.id === pageData.root.props.vortex.shell)
+            ?.content_slots.find((slot) => slot.id === key)?.label ?? key,
+        ]),
+  );
+  const rootSlots = useMemo(
+    () => JSON.parse(rootSlotsJson) as readonly (readonly [string, string])[],
+    [rootSlotsJson],
+  );
+  // Puck is opened again only when the set of root slots changes; a label alone changes the config.
+  const slotsKey = useMemo(() => rootSlots.map(([key]) => key).join(" "), [rootSlots]);
+  // The application frame is the canvas root, so the page renders in its outlets inside the iframe.
   const config = useMemo(
     () =>
       fieldInputControlReleases === null
@@ -120,107 +277,59 @@ export const useStudioCanvasModel = (
             registry,
             fieldInputControlReleases,
             catalogue,
+            rootSlots,
           ),
-    [registry, fieldInputControlReleases, catalogue],
+    [registry, fieldInputControlReleases, catalogue, rootSlots],
   );
-  const page = source.body.pages.find((candidate) => candidate.id === pageAlias);
-  const addresses = useMemo(
-    () => (page === undefined ? [] : sourcePageSlotAddresses(page)),
-    [page],
-  );
-  // The content area the person chose on this page; another page starts from its first.
-  const [chosen, setChosen] = useState<Readonly<{ page: string; key: string }> | null>(null);
-  const chosenKey = chosen !== null && chosen.page === pageAlias ? chosen.key : "";
-  // A block selected in the outline is shown in the content slot that holds it.
-  const holding =
-    selectedPlacementAlias === null || page === undefined
-      ? undefined
-      : addresses.find((candidate) =>
-          itemsHold(sourcePageSlotAt(page, candidate)!.items, selectedPlacementAlias),
-        );
-  useEffect(() => {
-    if (pageAlias !== undefined && holding !== undefined && holding.key !== chosenKey)
-      setChosen({ page: pageAlias, key: holding.key });
-  }, [holding?.key, pageAlias]);
-  const at = addresses.find((candidate) => candidate.key === chosenKey) ?? holding ?? addresses[0];
-  const area = `${pageAlias ?? ""}:${at?.key ?? ""}`;
-  // A zone is read fresh from its page, so it is kept per page object and address.
-  const slot = useMemo(
-    () => (page === undefined || at === undefined ? undefined : sourcePageSlotAt(page, at)),
-    [page, at?.key],
-  );
-  const originalPage = compiledSource.body.pages.find((candidate) => candidate.id === pageAlias);
-  const originalSlot = useMemo(
-    () =>
-      originalPage === undefined || at === undefined
-        ? undefined
-        : sourcePageSlotAt(originalPage, at),
-    [originalPage, at?.key],
-  );
-  const compiledSlot = at === undefined ? undefined : compiledSlots?.[at.key];
-  // The compiled version is read once per compile; a mismatch keeps the canvas closed.
-  const compiled = useMemo((): { settings?: StudioCanvasCompiledSettings; problem?: string } => {
-    if (originalSlot === undefined || compiledSlot === undefined) return {};
-    try {
-      return { settings: compiledSettingsFor(catalogue, originalSlot.items, compiledSlot) };
-    } catch (error: unknown) {
-      return {
-        problem: `STUDIO_CANVAS_COMPILED_MISMATCH: ${error instanceof Error ? error.message : String(error)}`,
-      };
-    }
-  }, [catalogue, compiledSlot, originalSlot]);
-  // Puck's data is the stored content area itself; Puck only needs a root beside it, holding the
-  // config's root defaults that Puck writes into it anyway.
-  const rootProps = useMemo(() => ({ ...config.root?.defaultProps }), [config]);
+  // Puck's data is the stored page data itself: the root holds the shell and one slot per outlet.
   const data = useMemo(
     (): Data | undefined =>
-      slot === undefined || compiled.settings === undefined
+      pageData === undefined || compiled.settings === undefined
         ? undefined
-        : { root: { props: rootProps }, content: slot.items as unknown as Data["content"] },
-    [compiled.settings, slot, rootProps],
+        : (pageData as unknown as Data),
+    [compiled.settings, pageData],
   );
-  // Checked whenever the content area or its compiled version changes, and closed until it passes.
+  // Checked whenever the page or its compiled version changes, and closed until it passes.
   // Without a compiled version there is nothing to draw yet.
   const readOnlyCause = useMemo(
     () =>
-      slot === undefined || compiled.settings === undefined
+      pageData === undefined || compiled.settings === undefined
         ? (compiled.problem ?? "STUDIO_CANVAS_COMPILED_PENDING: no compiled version to draw from")
-        : storedDataProblem(catalogue, slot),
-    [catalogue, slot, compiled],
+        : storedDataProblem(catalogue, pageData),
+    [catalogue, pageData, compiled],
   );
   useEffect(() => {
-    if (readOnlyCause === undefined || compiledSlot === undefined) return;
-    // Waiting for a recompile (a live edit removed the page or area first) is a race; a compiled
+    if (
+      readOnlyCause === undefined ||
+      addresses.every((entry) => compiledSlots?.[entry.key] === undefined)
+    )
+      return;
+    // Waiting for a recompile (a live edit removed the page or step first) is a race; a compiled
     // version that disagrees with its source, or stored data the validator should have refused, is
     // a platform fault.
     if (readOnlyCause.startsWith("STUDIO_CANVAS_COMPILED_PENDING"))
-      console.info(
-        `[studio] canvas content area ${area} waits for its compiled version`,
-        readOnlyCause,
-      );
-    else console.error(`[studio] canvas content area ${area} is read-only`, readOnlyCause);
+      console.info(`[studio] canvas page ${area} waits for its compiled version`, readOnlyCause);
+    else console.error(`[studio] canvas page ${area} is read-only`, readOnlyCause);
   }, [readOnlyCause]);
   const shown = useMemo(
-    () => (data === undefined ? undefined : puckDataForBreakpoint(data, breakpoint, slot?.order)),
-    [data, breakpoint, slot],
+    () => (data === undefined ? undefined : puckDataForBreakpoint(data, breakpoint)),
+    [data, breakpoint],
   );
   const arrangeable = useMemo(
     () =>
-      slot === undefined
-        ? false
-        : sourceItemTree(slot.items).some((item) => {
-            const settings = compiled.settings?.[item.props.id];
-            return (
-              settings !== undefined &&
-              studioCanvasGridSetup(item.props, settings, storedItemRelease(catalogue, item)) !==
-                undefined
-            );
-          }),
-    [slot, catalogue, compiled],
+      sourceItemTree(items).some((item) => {
+        const settings = compiled.settings?.[item.props.id];
+        return (
+          settings !== undefined &&
+          studioCanvasGridSetup(item.props, settings, storedItemRelease(catalogue, item)) !==
+            undefined
+        );
+      }),
+    [items, catalogue, compiled],
   );
-  const chooseArea = useCallback(
-    (key: string) => {
-      if (pageAlias !== undefined) setChosen({ page: pageAlias, key });
+  const chooseStep = useCallback(
+    (next: string) => {
+      if (pageAlias !== undefined) setChosen({ page: pageAlias, step: next });
     },
     [pageAlias],
   );
@@ -230,14 +339,20 @@ export const useStudioCanvasModel = (
       catalogue,
       registry,
       config,
-      rootProps,
+      slotsKey,
       page,
-      addresses,
-      at,
+      steps,
+      step,
+      chooseStep,
       area,
-      chooseArea,
-      slot,
-      originalSlot,
+      zoneKeys,
+      zoneKeyList,
+      slotKeys,
+      defaultZoneKey,
+      slotOfZoneKey,
+      zoneKeyOfSlot,
+      items,
+      originalItems,
       compiledSettings: compiled.settings,
       data,
       shown,
@@ -249,14 +364,20 @@ export const useStudioCanvasModel = (
       catalogue,
       registry,
       config,
-      rootProps,
+      slotsKey,
       page,
-      addresses,
-      at,
+      steps,
+      step,
+      chooseStep,
       area,
-      chooseArea,
-      slot,
-      originalSlot,
+      zoneKeys,
+      zoneKeyList,
+      slotKeys,
+      defaultZoneKey,
+      slotOfZoneKey,
+      zoneKeyOfSlot,
+      items,
+      originalItems,
       compiled.settings,
       data,
       shown,

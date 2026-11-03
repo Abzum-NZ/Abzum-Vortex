@@ -84,6 +84,37 @@ const readStoredWidths = (): Record<string, number> => {
     return {};
   }
 };
+// The workspace is drawn inside the canvas editor, which is opened again when a page has other
+// outlets than the last one: what the person set (panel, inspector, focus mode) is held here, so a
+// reopen draws it as it was.
+const panelsBeforeFocus = { panel: true, inspector: true };
+const heldWorkspace = new Map<string, unknown>();
+const workspaceListeners = new Set<() => void>();
+const useHeldWorkspace = <Value,>(
+  name: string,
+  initial: Value,
+): [Value, (next: Value | ((current: Value) => Value)) => void] => {
+  const value = useSyncExternalStore(
+    (listener) => {
+      workspaceListeners.add(listener);
+      return () => workspaceListeners.delete(listener);
+    },
+    () => (heldWorkspace.has(name) ? (heldWorkspace.get(name) as Value) : initial),
+    () => initial,
+  );
+  const set = useCallback(
+    (next: Value | ((current: Value) => Value)) => {
+      const current = heldWorkspace.has(name) ? (heldWorkspace.get(name) as Value) : initial;
+      heldWorkspace.set(
+        name,
+        typeof next === "function" ? (next as (c: Value) => Value)(current) : next,
+      );
+      for (const notify of workspaceListeners) notify();
+    },
+    [name, initial],
+  );
+  return [value, set];
+};
 const collapsedStorageKey = "vortex.studio.panel-collapsed";
 // Without storage (a private window) the choice lasts for this visit only.
 let heldCollapsed: boolean | undefined;
@@ -421,7 +452,7 @@ export function StudioFrame<Key extends string>({
   const movedHandle = useRef<"panel" | "inspector">("panel");
   const panelRef = usePanelRef();
   const inspectorRef = usePanelRef();
-  const [panelOpen, setPanelOpen] = useState(true);
+  const [panelOpen, setPanelOpen] = useHeldWorkspace("panelOpen", true);
   // Collapsed: the panel is closed until the pointer visits the rail, and then it overlays the canvas.
   // `null` until the stored choice is read, so a reload never shows the panel and then folds it away.
   const storedCollapsed = useSyncExternalStore<boolean | null>(
@@ -456,23 +487,23 @@ export function StudioFrame<Key extends string>({
     if (wasDragging.current && !dragging) setPeeking(false);
     wasDragging.current = dragging;
   }, [dragging]);
-  const [inspectorOpen, setInspectorOpen] = useState(true);
+  const [inspectorOpen, setInspectorOpen] = useHeldWorkspace("inspectorOpen", true);
   const [narrowPanelOpen, setNarrowPanelOpen] = useState(false);
   const [narrowInspectorOpen, setNarrowInspectorOpen] = useState(false);
   const inspectorSheet = useRef<HTMLDivElement>(null);
-  const [focused, setFocused] = useState(false);
+  const [focused, setFocused] = useHeldWorkspace("focused", false);
   const hasInspector = inspector !== null;
-  const beforeFocus = useRef({ panel: true, inspector: true });
+  const [beforeFocus, setBeforeFocus] = useHeldWorkspace("beforeFocus", panelsBeforeFocus);
   const focusCanvas = useCallback(() => {
     if (!focused) {
-      beforeFocus.current = { panel: panelOpen, inspector: inspectorOpen };
+      setBeforeFocus({ panel: panelOpen, inspector: inspectorOpen });
       setPanelOpen(false);
       setInspectorOpen(false);
       setNarrowPanelOpen(false);
       setNarrowInspectorOpen(false);
     } else {
-      setPanelOpen(beforeFocus.current.panel);
-      setInspectorOpen(beforeFocus.current.inspector);
+      setPanelOpen(beforeFocus.panel);
+      setInspectorOpen(beforeFocus.inspector);
     }
     setFocused(!focused);
   }, [focused, panelOpen, inspectorOpen]);

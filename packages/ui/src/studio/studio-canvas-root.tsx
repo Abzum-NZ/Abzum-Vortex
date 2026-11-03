@@ -1,11 +1,12 @@
 "use client";
 
 import { createUsePuck, type PuckContext } from "@puckeditor/core";
-import { compiledItemSettings } from "@vortex/platform/schema";
+import { compiledItemSettings, type ShellOutletLocation } from "@vortex/platform/schema";
 import {
   useEffect,
   useLayoutEffect,
   useMemo,
+  useRef,
   useState,
   type CSSProperties,
   type ReactNode,
@@ -15,10 +16,11 @@ import { isElement, isHtmlElement } from "../lib/dom";
 import { PagePuckRenderer } from "../page-puck-renderer";
 import {
   createSelectedPlacementStore,
+  PAGE_ROOT_GAP,
   RootSlotGapProvider,
   SelectedPlacementProvider,
 } from "../puck-config";
-import type { SlotGapName } from "../layout-styles";
+import type { Breakpoint } from "../definition-error";
 import type { FieldInputControlReleaseMap, PlatformComponentRegistry } from "../registry";
 import { createAppearanceRootProps, createThemeRootProps, VortexStyleRoot } from "../theme";
 import { studioCanvasMetadata, useStudioCanvasChannel } from "./studio-canvas-metadata";
@@ -42,47 +44,59 @@ function SelectedBlock({ children }: Readonly<{ children: ReactNode }>) {
   return <SelectedPlacementProvider store={store}>{children}</SelectedPlacementProvider>;
 }
 
+/** Puck's component for one slot of the root; the root receives one for every slot field it declares. */
+type RootSlot = (props?: { className?: string; style?: CSSProperties }) => ReactNode;
+
 /**
- * The canvas root's render, inside Puck's preview, in every Puck mode. It draws the application's
- * theme, appearance and frame (shell and menu) from the frame Studio put in the canvas channel, with
- * the page's content region in the frame's outlet. The content region carries the one editor
- * marker `data-vortex-studio-canvas` that every editor-only rule keys on, so the page lays out the
- * same whether it is being edited or its grids are being arranged.
+ * Both elements take the gap of the shell's own slot that holds them (the block that holds the
+ * content slot sets it from its release setting), as the running page's outlet does, so the page
+ * is spaced on the canvas exactly as it runs. The style is one object for every render.
  */
-export function StudioCanvasRoot({
-  children,
-  gap,
-  puck,
-  registry,
-  fieldInputControlReleases,
+const OUTLET_STYLE: CSSProperties = { gap: "inherit" };
+const SLOT_STYLE: CSSProperties = { display: "flex", flexDirection: "column", gap: "inherit" };
+
+/**
+ * One content slot of the page on the canvas: Studio's own element around the slot's content (Puck's
+ * slot for a root slot, Puck's default zone for a page in the default frame). The editor-only rules
+ * key on the element's `data-vortex-studio-canvas` marker, so the page lays out the same whether it
+ * is being edited or its grids are being arranged.
+ */
+function CanvasSlot({
+  content,
+  name,
+  label,
+  breakpoint,
 }: Readonly<{
-  children: ReactNode;
-  gap: SlotGapName;
-  puck: PuckContext;
-  registry: PlatformComponentRegistry;
-  fieldInputControlReleases: FieldInputControlReleaseMap;
+  content: ReactNode;
+  name: string | undefined;
+  /** What the shell calls the slot; each empty slot is named for it. */
+  label: string;
+  breakpoint: Breakpoint;
 }>) {
-  const { breakpoint } = studioCanvasMetadata(puck);
-  const { frame: studio } = useStudioCanvasChannel();
-  if (studio === null) throw new Error("The Studio canvas has no frame");
-  const { empty } = studio;
   // A layout's blocks are added with Add; only a page's blocks drop onto the canvas.
   const canDrop = usePuckSelector((state) => state.getPermissions().insert);
   // Studio's own mark of a drag in progress, from Puck's public state, for the empty-slot rules.
   const dragging = usePuckSelector((state) => state.appState.ui.isDragging);
-  const content = (
+  const empty = usePuckSelector((state) => {
+    const data = state.appState.data;
+    const list =
+      name === undefined
+        ? data.content
+        : (data.root as { props?: Record<string, unknown> }).props?.[name];
+    return !Array.isArray(list) || list.length === 0;
+  });
+  return (
     <div
       data-vortex-studio-canvas=""
       data-vortex-shell-outlet=""
       data-vortex-editing=""
       {...(dragging ? { "data-vortex-dragging": "" } : {})}
       {...(breakpoint === "desktop" ? {} : { "data-vortex-view-only": "" })}
-      aria-label={empty ? "Empty content area" : undefined}
-      className={empty ? "relative min-h-48" : "min-h-24"}
+      aria-label={empty ? `Empty ${label}` : undefined}
+      className={empty ? "relative min-h-48 min-w-32" : "min-h-24"}
+      style={OUTLET_STYLE}
     >
-      <RootSlotGapProvider gap={gap}>
-        <SelectedBlock>{children}</SelectedBlock>
-      </RootSlotGapProvider>
+      {content}
       {empty && (
         <p className="pointer-events-none absolute inset-0 flex items-center justify-center px-6 text-center text-sm text-muted-foreground">
           {canDrop ? "Drop a block here, or add one from Blocks." : "Add a block from Blocks."}
@@ -90,7 +104,151 @@ export function StudioCanvasRoot({
       )}
     </div>
   );
+}
+
+/**
+ * The canvas root's render, inside Puck's preview, in every Puck mode. It draws the application's
+ * theme, appearance and frame (shell and menu) from the frame Studio put in the canvas channel, with
+ * each of the page's content slots (the root's slot fields) drawn where the shell declares it. A
+ * page in the default frame has one content area, Puck's default zone, which Puck spaces itself:
+ * the only public route to the page's block spacing is a root slot.
+ */
+export function StudioCanvasRoot({
+  children,
+  puck,
+  registry,
+  fieldInputControlReleases,
+  slotKeys: rootSlots,
+  ...rest
+}: Readonly<{
+  children: ReactNode;
+  puck: PuckContext;
+  registry: PlatformComponentRegistry;
+  fieldInputControlReleases: FieldInputControlReleaseMap;
+  /** The page's root slot names, each one a slot component among the other props. */
+  slotKeys: readonly string[];
+}>) {
+  const { breakpoint } = studioCanvasMetadata(puck);
+  const { frame: studio } = useStudioCanvasChannel();
+  if (studio === null) throw new Error("The Studio canvas has no frame");
   const frame = studio.frame;
+  const slots = rest as unknown as Readonly<Record<string, RootSlot>>;
+  // Puck hands over a new slot function whenever that slot's blocks change; drawing it as a
+  // component type would remount every block in it. Each slot name keeps one component that calls
+  // the latest function, as a block's own slots do.
+  const latestSlots = useRef<Record<string, RootSlot>>({});
+  const stableSlots = useRef<Record<string, RootSlot>>({});
+  for (const name of rootSlots) {
+    // Until Puck holds the page's config (it opens on the empty one before the field controls load),
+    // a declared slot has no function yet: the last one stays, and nothing is drawn without one.
+    const slot = slots[name];
+    if (slot !== undefined) latestSlots.current[name] = slot;
+    stableSlots.current[name] ??= (props) => latestSlots.current[name]?.(props) ?? null;
+  }
+  const rootSlotsKey = rootSlots.join(" ");
+  const shellId = frame?.frame.shellId;
+  const shell =
+    frame === undefined || shellId === undefined
+      ? undefined
+      : frame.shells.find((candidate) => String(candidate.shellId) === shellId);
+  // Where in the shell each root slot goes: its content slot's parent placement and slot.
+  const locations = useMemo(
+    (): Readonly<Record<string, ShellOutletLocation>> =>
+      Object.fromEntries(
+        rootSlots.flatMap((name) => {
+          const declared = shell?.contentSlots.find((entry) => entry.key === studio.slotKeys[name]);
+          return declared === undefined
+            ? []
+            : [
+                [
+                  name,
+                  {
+                    kind: "slot" as const,
+                    placementId: String(declared.parentPlacementId),
+                    slotKey: declared.parentSlotKey,
+                  },
+                ],
+              ];
+        }),
+      ),
+    // The slot names are compared by value, so the list keeps one length per render.
+    [rootSlotsKey, shell, studio.slotKeys],
+  );
+  const labelOf = (name: string): string =>
+    shell?.contentSlots.find((entry) => entry.key === studio.slotKeys[name])?.label ?? name;
+  const slotContent = (name: string) => {
+    const Slot = stableSlots.current[name]!;
+    return <Slot style={SLOT_STYLE} />;
+  };
+  // Several content slots sit inside the shell's own placements (the outlet holds the placement
+  // that holds them all): that region is drawn from the shell, each slot's editor in its place.
+  const outletContent = useMemo(
+    () => (frame?.outletContent === undefined ? undefined : { composition: frame.outletContent }),
+    [frame?.outletContent],
+  );
+  const regionOutlets = useMemo(
+    () => ({
+      locations,
+      content: Object.fromEntries(
+        rootSlotsKey === ""
+          ? []
+          : rootSlotsKey
+              .split(" ")
+              .map((name) => [
+                name,
+                <CanvasSlot
+                  key={name}
+                  content={slotContent(name)}
+                  name={name}
+                  label={labelOf(name)}
+                  breakpoint={breakpoint}
+                />,
+              ]),
+      ),
+    }),
+    // The slot components are stable per name; the region follows the names, not the functions.
+    [locations, rootSlotsKey, breakpoint],
+  );
+  const content =
+    outletContent !== undefined && frame !== undefined && rootSlots.length > 0 ? (
+      <SelectedBlock>
+        <RootSlotGapProvider gap={PAGE_ROOT_GAP}>
+          <PagePuckRenderer
+            contentRegion
+            readSettings={compiledItemSettings}
+            composition={outletContent}
+            breakpoint={breakpoint}
+            registry={registry}
+            fieldInputControlReleases={fieldInputControlReleases}
+            platformThemeTokens={studio.platformThemeTokens}
+            {...(shell === undefined ? {} : { shell })}
+            theme={frame.theme}
+            projectedNavigation={frame.navigation}
+            resolvePageHref={resolvePageHref}
+            currentPageId={frame.pageId}
+            contentOutlets={regionOutlets}
+          />
+        </RootSlotGapProvider>
+      </SelectedBlock>
+    ) : (
+      <SelectedBlock>
+        <RootSlotGapProvider gap={PAGE_ROOT_GAP}>
+          {rootSlots.length === 0 ? (
+            <CanvasSlot content={children} name={undefined} label="page" breakpoint={breakpoint} />
+          ) : (
+            rootSlots.map((name) => (
+              <CanvasSlot
+                key={name}
+                content={slotContent(name)}
+                name={name}
+                label={labelOf(name)}
+                breakpoint={breakpoint}
+              />
+            ))
+          )}
+        </RootSlotGapProvider>
+      </SelectedBlock>
+    );
   const applicationName = frame?.applicationName ?? "";
   const pageName = frame?.pageName ?? "";
   // Stable while the application and page are: the shell below is not drawn again for other changes.
@@ -105,11 +263,6 @@ export function StudioCanvasRoot({
     () => ({ applicationName, applicationHref: "#", organizationName: "", pageName }),
     [applicationName, pageName],
   );
-  const shellId = frame?.frame.shellId;
-  const shell =
-    frame === undefined || shellId === undefined
-      ? undefined
-      : frame.shells.find((candidate) => String(candidate.shellId) === shellId);
   return (
     <div
       {...createAppearanceRootProps(studio.appearance)}

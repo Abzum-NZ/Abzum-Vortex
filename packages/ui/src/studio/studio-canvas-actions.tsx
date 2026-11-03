@@ -148,9 +148,7 @@ function StudioActionBar({ id, type }: Readonly<{ id: string; type: string }>) {
   const parent = puck.getParentById(id);
   // The name the outline and the inspector use: the block's own item ("Button: Open").
   const name =
-    (model.slot === undefined
-      ? undefined
-      : studioBlockName(input.describePlacement, model.slot.items, id)) ??
+    studioBlockName(input.describePlacement, model.items, id) ??
     puck.config.components[type]?.label ??
     type;
   // Why a forbidden action is unavailable when the draft itself names no reason.
@@ -307,15 +305,15 @@ function StudioActionBar({ id, type }: Readonly<{ id: string; type: string }>) {
   // What the action acts on is found in the data, and must be this bar's own block.
   const act = (action: "parent" | "duplicate" | StudioMoreChoice) => {
     const current = getPuck();
-    const content = current.appState.data.content;
-    const selector = puckSelectorOf(content, id);
+    const data = current.appState.data;
+    const selector = puckSelectorOf(data, id);
     if (selector === undefined || current.getItemBySelector(selector)?.props.id !== id) {
       console.info(`[studio] the action bar of '${id}' found the block moved; nothing was changed`);
       return;
     }
     if (action === "parent") {
       const parentSelector =
-        parent === undefined ? undefined : puckSelectorOf(content, parent.props.id);
+        parent === undefined ? undefined : puckSelectorOf(data, parent.props.id);
       if (parent !== undefined && parentSelector !== undefined) {
         focusBarOn(parent.props.id);
         current.dispatch({ type: "setUi", ui: { itemSelector: parentSelector } });
@@ -340,7 +338,7 @@ function StudioActionBar({ id, type }: Readonly<{ id: string; type: string }>) {
       return;
     }
     // The selection goes to the neighbour (the provider sees to that for every removal).
-    const neighbour = puckNeighbourOf(content, selector);
+    const neighbour = puckNeighbourOf(data, selector);
     if (neighbour !== undefined) focusBarOn(neighbour);
     current.dispatch({ type: "remove", index: selector.index, zone: selector.zone });
   };

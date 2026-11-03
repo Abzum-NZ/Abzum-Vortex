@@ -377,7 +377,10 @@ function CanvasBlock({
   );
 }
 
-const canvasConfigs = new WeakMap<Config, WeakMap<ImmutablePlatformBlockCatalogue, Config>>();
+const canvasConfigs = new WeakMap<
+  Config,
+  WeakMap<ImmutablePlatformBlockCatalogue, Map<string, Config>>
+>();
 
 /**
  * The canvas config: the one config's components and root, each component drawing its stored
@@ -395,8 +398,12 @@ export const studioCanvasConfig = (
   registry: PlatformComponentRegistry,
   fieldInputControlReleases: FieldInputControlReleaseMap,
   catalogue: ImmutablePlatformBlockCatalogue,
+  /** The page's root slots with their labels: one slot field of the root for each content slot of its shell. */
+  slots: readonly (readonly [key: string, label: string])[],
 ): Config => {
-  let canvas = canvasConfigs.get(config)?.get(catalogue);
+  const slotKeys = slots.map(([key]) => key);
+  const slotsKey = JSON.stringify(slots);
+  let canvas = canvasConfigs.get(config)?.get(catalogue)?.get(slotsKey);
   if (canvas !== undefined) return canvas;
   const releaseByKey = new Map(
     registry.list().map(({ metadata }) => [metadata.rendererKey, metadata]),
@@ -462,12 +469,15 @@ export const studioCanvasConfig = (
   canvas = {
     ...config,
     components,
-    // The application frame is the canvas root: it draws the theme, appearance and shell around the page.
+    // The application frame is the canvas root: it draws the theme, appearance and shell around the
+    // page. Puck's data holds only what the stored page holds, so the root has no props of its own
+    // (no defaults, no settings) beside one slot per content slot of the page's shell.
     root: {
-      ...config.root,
+      fields: Object.fromEntries(slots.map(([key, label]) => [key, { type: "slot", label }])),
       render: (props: Parameters<typeof StudioCanvasRoot>[0]) => (
         <StudioCanvasRoot
           {...props}
+          slotKeys={slotKeys}
           registry={registry}
           fieldInputControlReleases={fieldInputControlReleases}
         />
@@ -475,7 +485,9 @@ export const studioCanvasConfig = (
     },
   } as unknown as Config;
   const byCatalogue = canvasConfigs.get(config) ?? new WeakMap();
-  byCatalogue.set(catalogue, canvas);
+  const bySlots = byCatalogue.get(catalogue) ?? new Map<string, Config>();
+  bySlots.set(slotsKey, canvas);
+  byCatalogue.set(catalogue, bySlots);
   canvasConfigs.set(config, byCatalogue);
   return canvas;
 };

@@ -5,18 +5,19 @@ import {
   definitionLimitMessage,
   definitionLimits,
   removeFlowBindingsOf,
-  setSourcePageSlot,
+  setSourcePageData,
   sourceItemTree,
-  sourcePageSlotAt,
+  sourcePageDataAt,
+  sourcePageZones,
   StoredCompositionRefusal,
+  storedPageDataFromPuck,
   storedZoneAliases,
-  storedZoneFromPuck,
   syncStoredBlockDependencies,
   validateStoredApplicationOutlets,
   withCopiedFlowBindings,
   type ApplicationSourceDocument,
   type ImmutablePlatformBlockCatalogue,
-  type PageSlotAddress,
+  type SourcePageData,
 } from "@vortex/platform/schema";
 import { regions } from "./application-composition-regions";
 import { regionLevels } from "./studio-composition-depth";
@@ -28,7 +29,7 @@ import {
   studioPlacementReferenceSentence,
   studioPlacementRemovalReference,
 } from "./composition-references";
-import { zoneJson } from "./studio-canvas-data";
+import { pageDataJson } from "./studio-canvas-data";
 import { studioDuplicateRefusal, studioPlacementReferrers } from "./studio-canvas-permissions";
 
 /** What a change Puck reported on the canvas comes to in the definition. */
@@ -65,33 +66,35 @@ const compositionLimitRefusal = (
 const pageUnavailable = () =>
   new StoredCompositionRefusal([], "its page was removed while this change was being made");
 
+/** The blocks of every zone of a page's data, in zone order. */
+const dataItems = (data: SourcePageData) => sourcePageZones(data).flatMap(([, items]) => items);
+
+/** Every block name in the page data, at any depth. */
+const dataAliases = (data: SourcePageData): Set<string> =>
+  storedZoneAliases({ items: dataItems(data), order: undefined });
+
 /**
- * Every canvas change goes back through the definition: Puck's data is converted to the authored
- * content area, placed in the current draft and validated before the history takes it.
+ * Every canvas change goes back through the definition, as the page's whole data: Puck's data is
+ * converted to the authored page (or guided step) data, placed in the current draft and validated
+ * before the history takes it.
  */
-export const applyStudioCanvasChange = (
+export const applyPageDataChange = (
   catalogue: ImmutablePlatformBlockCatalogue,
   current: ApplicationSourceDocument,
   pageAlias: string,
-  at: PageSlotAddress,
+  step: string | undefined,
   candidate: Data,
-  rootProps: Readonly<Record<string, unknown>>,
 ): StudioCanvasChange => {
   try {
     const matches = current.body.pages.filter((item) => item.id === pageAlias);
     const target = matches[0];
-    const targetSlot = target === undefined ? undefined : sourcePageSlotAt(target, at);
-    if (matches.length !== 1 || targetSlot === undefined) throw pageUnavailable();
-    const { zone: editedSlot, copies } = storedZoneFromPuck(
-      catalogue,
-      targetSlot,
-      candidate,
-      rootProps,
-    );
+    const targetData = target === undefined ? undefined : sourcePageDataAt(target, step);
+    if (matches.length !== 1 || targetData === undefined) throw pageUnavailable();
+    const { data: edited, copies } = storedPageDataFromPuck(catalogue, targetData, candidate);
     // Puck reports the draft it was just given (after Undo, Redo or a save) as a change too.
-    if (zoneJson(editedSlot) === zoneJson(targetSlot)) return { kind: "unchanged" };
+    if (pageDataJson(edited) === pageDataJson(targetData)) return { kind: "unchanged" };
     // Duplicate has the same refusals as its button, whichever draft the button was drawn from.
-    const originals = sourceItemTree(targetSlot.items);
+    const originals = sourceItemTree(dataItems(targetData));
     for (const original of copies.keys()) {
       const item = originals.find((entry) => entry.props.id === original);
       const refusal = item === undefined ? undefined : studioDuplicateRefusal(catalogue, item);
@@ -100,10 +103,10 @@ export const applyStudioCanvasChange = (
     }
     const next = structuredClone(current);
     const nextPage = next.body.pages.find((item) => item.id === pageAlias);
-    if (nextPage === undefined || !setSourcePageSlot(nextPage, at, editedSlot))
+    if (nextPage === undefined || !setSourcePageData(nextPage, step, edited))
       throw pageUnavailable();
-    const kept = storedZoneAliases(editedSlot);
-    const removed = new Set([...storedZoneAliases(targetSlot)].filter((alias) => !kept.has(alias)));
+    const kept = dataAliases(edited);
+    const removed = new Set([...dataAliases(targetData)].filter((alias) => !kept.has(alias)));
     for (const alias of removed) {
       const users = studioPlacementReferrers(current, alias, removed);
       if (users.length > 0)
@@ -113,7 +116,12 @@ export const applyStudioCanvasChange = (
         };
     }
     // Deleting and dragging keep every form whole, by the same rule as Remove and Move.
-    const broken = studioFormChangeRefusal(catalogue, current, targetSlot.items, editedSlot.items);
+    const broken = studioFormChangeRefusal(
+      catalogue,
+      current,
+      dataItems(targetData),
+      dataItems(edited),
+    );
     if (broken !== undefined)
       return {
         kind: "refused",
