@@ -1,5 +1,6 @@
 import "server-only";
 
+import { applyOrganizationTheme } from "@vortex/platform/server";
 import {
   compiledPageShellId,
   sameId,
@@ -7,6 +8,7 @@ import {
   type ApplicationContent,
   type ApplicationShell,
   type CompiledLayout,
+  type OrganizationThemeSelection,
   type ProjectedApplicationFrame,
 } from "@vortex/platform/schema";
 
@@ -57,6 +59,7 @@ export const studioCanvasFramesFor = (
   sourcePages: SourcePages,
   content: ApplicationContent,
   pageAlias: string | undefined,
+  organizationTheme: OrganizationThemeSelection | undefined,
 ): StudioApplicationCanvasFrames => {
   if (content.pages.length !== sourcePages.length)
     throw new Error("Studio compiled page list does not match its authored draft");
@@ -119,7 +122,7 @@ export const studioCanvasFramesFor = (
               sameId(String(page.frame.shellId), String(shell.shellId)),
             ),
           ),
-    theme: content.theme,
+    theme: applyOrganizationTheme(content.theme, organizationTheme),
     roles: Object.fromEntries(
       content.roles.map((role) => [role.key, role.permissionKeys.map(String)]),
     ),

@@ -216,6 +216,22 @@ export const canonicalApplicationThemeSelection = (
   headingFont: source.heading_font,
 });
 
+/** Maps a canonical selection onto its authored form, the inverse of the mapping above. */
+export const authoredApplicationThemeSelection = (
+  selection: ApplicationThemeSelection,
+): SourceApplicationThemeSelection => ({
+  style: selection.style,
+  base_color: selection.baseColor,
+  theme: selection.theme,
+  chart_color: selection.chartColor,
+  radius: selection.radius,
+  menu_color: selection.menuColor,
+  menu_accent: selection.menuAccent,
+  icon_library: selection.iconLibrary,
+  body_font: selection.bodyFont,
+  heading_font: selection.headingFont,
+});
+
 /**
  * Canonical  themes contain the complete resolved application token set plus the catalogue
  * selection they were materialised from. Every theme records its selection, including the icon
