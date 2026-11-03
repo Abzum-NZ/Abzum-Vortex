@@ -135,7 +135,11 @@ export async function readApplicationSwitcherAction(
                 icon: candidate.icon,
                 href: `/${encodeURIComponent(tenantShortName)}/${encodeURIComponent(organizationShortName)}/${encodeURIComponent(candidate.key)}/${encodeURIComponent(candidate.homePageKey)}`,
               })),
-              ...(studio?.kind === "available" && studio.organizationId === read.organizationId
+              // The installed Studio application is already a row of the list when this person
+              // holds a role in it; a second Studio row would repeat it with another icon.
+              ...(studio?.kind === "available" &&
+              studio.organizationId === read.organizationId &&
+              !read.applications.some((candidate) => candidate.key === "vortex.app.studio")
                 ? [
                     {
                       key: "studio",
