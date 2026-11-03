@@ -21,7 +21,7 @@ import {
   readInstallationAuthorityDeadlines,
   readInstallationDatabaseTime,
   readInstallationHumanContext,
-  readInstallationOrdinaryRoot,
+  readInstallationUpgradeRoot,
   requireInstallationAuthority,
 } from "./installation-authority";
 import { readInstallationBindings, type InstallationBindings } from "./installation-binding-reader";
@@ -80,7 +80,17 @@ const readFirstInstallCandidateInTransaction = async (
   );
   if (scope.applicationRootId !== undefined)
     installationProblem("first_install_scope_not_organization", "refused");
-  await readInstallationOrdinaryRoot(transaction, selector.rootId);
+  // A platform system application is installed when its organisation is created: it is only ever
+  // upgraded, so its journey is the upgrade's.
+  if ((await readInstallationUpgradeRoot(transaction, selector.rootId)).isSystemApplication) {
+    await requireInstallationAuthority(
+      transaction,
+      scope,
+      permissions,
+      installationOperation(selector.rootId, false),
+    );
+    return "already_installed";
+  }
   const latest = await readApplicationLatestRelease(transaction, selector.rootId);
   if (selector.releaseRevision > latest.releaseRevision)
     firstInstallUnavailable("release_not_published");

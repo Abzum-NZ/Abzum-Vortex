@@ -149,12 +149,12 @@ const installControlOf = (standing: ApplicationReleaseStanding): StudioInstallCo
       ? standing.mayInstall
         ? "upgrade"
         : undefined
-      : standing.kind === "live" || standing.kind === "system"
+      : standing.kind === "live"
         ? "open"
         : undefined;
 
 const openHrefOf = (standing: ApplicationReleaseStanding): string | undefined =>
-  standing.kind === "live" || standing.kind === "system" ? standing.openHref : undefined;
+  standing.kind === "live" ? standing.openHref : undefined;
 
 /**
  * The Releases tab and what acts on the saved draft as a whole: Publish and Install or upgrade

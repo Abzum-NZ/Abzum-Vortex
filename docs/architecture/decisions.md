@@ -320,10 +320,13 @@ Ordinary organisation administrators do not hold these permissions unless a role
 are platform packages, installed when an organisation is created. They cannot be uninstalled. Their
 protected operations and operation bindings stay platform-owned. People holding
 `system_applications.manage` customise them through extension fields, theme, navigation and their own
-dependent applications, or through an organisation-owned customised copy. A customised copy replaces
-the system application's installation and never exists alongside it. It cannot add, remove or retarget
-protected-operation bindings, and it receives platform fixes through compare-and-merge. Platform
-upgrades never overwrite customisations. The organisation always keeps a working way for its steward
+dependent applications, and publish the result as the system application's own root: one application and
+one installation, no separate copy. Publishing or discarding asks for a recent two-step verification. A
+release cannot add, remove or retarget a protected-operation binding or what feeds or starts it, and
+cannot change the permissions, roles and screens the steward manages access through. Each release is
+compared with the release it follows, in the application and in the publication transaction. After a
+platform refresh the platform's release is the baseline of the next one and a customisation is re-applied to
+it; merging customisations over a refresh is not built. The organisation always keeps a working way for its steward
 to manage access.
 
 ## Decision 12 — shadcn/ui on Base UI is the component base

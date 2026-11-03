@@ -59,16 +59,17 @@ export const studioApplicationRestoreCommandResultSchema = z.union([
         "superseded",
         "conflict",
         "temporarily_unavailable",
-        "platform_application",
+        "authentication_required",
       ]),
       stateMayHaveChanged: z.union([z.literal(false), z.literal("unknown")]),
     })
     .strict(),
 ]);
 
-/** Why a restore did not run; `superseded`: the version predates the current definition contract; `platform_application`: a platform application's versions cannot be restored from Studio yet. */
+/** Why a restore did not run; `superseded`: the version predates the current definition contract. */
 export type StudioApplicationRestoreFailure = Readonly<{
-  kind: "refused" | "superseded" | "conflict" | "temporarily_unavailable" | "platform_application";
+  kind:
+    "refused" | "superseded" | "conflict" | "temporarily_unavailable" | "authentication_required";
 }>;
 export type StudioApplicationRestoreCommand = z.infer<typeof studioApplicationRestoreCommandSchema>;
 export type StudioApplicationRestoreCommandResult = z.infer<
