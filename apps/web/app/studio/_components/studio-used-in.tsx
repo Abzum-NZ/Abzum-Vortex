@@ -1,4 +1,5 @@
 "use client";
+import { Item, ItemContent, ItemGroup } from "@vortex/ui/components/item";
 import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
 import {
   applicationUses,
@@ -66,50 +67,52 @@ export function StudioPlaceList({
 }>) {
   const opener = useStudioPlaceOpener();
   return (
-    <ul className="space-y-1 text-sm" aria-label={label}>
+    <ItemGroup className="gap-1 text-sm" aria-label={label}>
       {places.map((place, index) => {
         const trail = trailOf(place, opener);
         const last = trail.length - 1;
         return (
-          <li key={index} className="break-words">
-            {trail.map((segment, at) => {
-              const text =
-                at === last && place.open.kind !== "none" ? (
-                  <Button
-                    type="button"
-                    variant="link"
-                    size="xs"
-                    aria-label={`Go to ${trail.join(" › ")}`}
-                    className="h-auto whitespace-normal break-words p-0 text-left text-sm text-foreground"
-                    onClick={() => {
-                      onBeforeOpen?.();
-                      opener.open(place.open);
-                    }}
-                  >
-                    {segment}
-                  </Button>
+          <Item size="xs" role="listitem" key={index} className="break-words">
+            <ItemContent>
+              {trail.map((segment, at) => {
+                const text =
+                  at === last && place.open.kind !== "none" ? (
+                    <Button
+                      type="button"
+                      variant="link"
+                      size="xs"
+                      aria-label={`Go to ${trail.join(" › ")}`}
+                      className="h-auto whitespace-normal break-words p-0 text-left text-sm text-foreground"
+                      onClick={() => {
+                        onBeforeOpen?.();
+                        opener.open(place.open);
+                      }}
+                    >
+                      {segment}
+                    </Button>
+                  ) : (
+                    <span className={at === last ? undefined : "text-muted-foreground"}>
+                      {segment}
+                    </span>
+                  );
+                // The separator and the segment after it are one unit, so a line never ends in " › ".
+                return at === 0 ? (
+                  <Fragment key={at}>{text}</Fragment>
                 ) : (
-                  <span className={at === last ? undefined : "text-muted-foreground"}>
-                    {segment}
-                  </span>
+                  <Fragment key={at}>
+                    {" "}
+                    <span className="inline-flex max-w-full items-start gap-1 align-top">
+                      <span className="shrink-0 text-muted-foreground">›</span>
+                      <span className="min-w-0">{text}</span>
+                    </span>
+                  </Fragment>
                 );
-              // The separator and the segment after it are one unit, so a line never ends in " › ".
-              return at === 0 ? (
-                <Fragment key={at}>{text}</Fragment>
-              ) : (
-                <Fragment key={at}>
-                  {" "}
-                  <span className="inline-flex max-w-full items-start gap-1 align-top">
-                    <span className="shrink-0 text-muted-foreground">›</span>
-                    <span className="min-w-0">{text}</span>
-                  </span>
-                </Fragment>
-              );
-            })}
-          </li>
+              })}
+            </ItemContent>
+          </Item>
         );
       })}
-    </ul>
+    </ItemGroup>
   );
 }
 

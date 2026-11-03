@@ -1,4 +1,5 @@
 "use client";
+import { Card } from "@vortex/ui/components/card";
 import { Fragment, useMemo, useState } from "react";
 import { applicationUses, type ApplicationSourceDocument } from "@vortex/platform/schema";
 import { Icon } from "@vortex/ui";
@@ -53,7 +54,7 @@ export function StudioAccessPageGates({
         A page opens for people who hold its permission, and a menu entry shows for people who hold
         its own. Give the permission to roles in each role&apos;s page.
       </p>
-      <div className="overflow-hidden rounded-xl border">
+      <Card className="gap-0 py-0">
         <Table
           containerClassName="border-0"
           className="[&_tr]:h-11 [&_tr>:first-child]:sticky [&_tr>:first-child]:left-0 [&_tr>:first-child]:bg-card [&_tr]:hover:bg-muted/40 [&_th]:bg-muted/50 [&_th]:text-foreground"
@@ -110,9 +111,9 @@ export function StudioAccessPageGates({
             })}
           </TableBody>
         </Table>
-      </div>
+      </Card>
       {external.length > 0 && (
-        <div className="overflow-hidden rounded-xl border">
+        <Card className="gap-0 py-0">
           <Table
             containerClassName="border-0"
             className="[&_tr]:h-11 [&_tr>:first-child]:sticky [&_tr>:first-child]:left-0 [&_tr>:first-child]:bg-card [&_tr]:hover:bg-muted/40 [&_th]:bg-muted/50 [&_th]:text-foreground"
@@ -141,7 +142,7 @@ export function StudioAccessPageGates({
               ))}
             </TableBody>
           </Table>
-        </div>
+        </Card>
       )}
     </section>
   );
@@ -188,7 +189,7 @@ export function StudioAccessPermissionList({
           close={() => setExpanded(null)}
         />
       )}
-      <div className="overflow-hidden rounded-xl border">
+      <Card className="gap-0 py-0">
         <Table
           containerClassName="border-0"
           className="table-fixed [&_tr]:h-11 [&_tr]:hover:bg-muted/40 [&_th]:bg-muted/50 [&_th]:text-foreground"
@@ -393,7 +394,7 @@ export function StudioAccessPermissionList({
             })}
           </TableBody>
         </Table>
-      </div>
+      </Card>
     </section>
   );
 }

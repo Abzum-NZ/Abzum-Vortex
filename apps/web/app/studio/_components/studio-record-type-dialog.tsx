@@ -1,4 +1,5 @@
 "use client";
+import { Item, ItemContent, ItemGroup } from "@vortex/ui/components/item";
 import { StudioLimitNote, StudioReasoned, studioLimitReason } from "@vortex/ui/studio";
 import { useState, type FormEvent } from "react";
 import {
@@ -337,11 +338,13 @@ export function StudioRecordTypeDialog({
             {issues.length === 0 ? null : (
               <Alert variant="destructive" aria-label="Why the record type was not added">
                 <AlertDescription>
-                  <ul className="space-y-1">
+                  <ItemGroup className="gap-1">
                     {issues.map((issue, index) => (
-                      <li key={index}>{issue}</li>
+                      <Item size="xs" role="listitem" key={index}>
+                        <ItemContent>{issue}</ItemContent>
+                      </Item>
                     ))}
-                  </ul>
+                  </ItemGroup>
                 </AlertDescription>
               </Alert>
             )}

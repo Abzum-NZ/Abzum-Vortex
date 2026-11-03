@@ -1,4 +1,5 @@
 "use client";
+import { Item, ItemGroup } from "@vortex/ui/components/item";
 import { Alert, AlertDescription } from "@vortex/ui/components/alert";
 import { useState, type FormEvent } from "react";
 import { deriveQueryKey } from "@vortex/platform/schema";
@@ -107,9 +108,9 @@ export function StudioQueryInputChoices({
       </div>
       {limited && (
         <>
-          <ul className="list-none space-y-1" aria-label={`Choices of ${inputLabel}`}>
+          <ItemGroup className="gap-1" aria-label={`Choices of ${inputLabel}`}>
             {list.map((choice, index) => (
-              <li key={choice.value} className="flex items-start gap-1">
+              <Item size="xs" role="listitem" key={choice.value} className="flex items-start gap-1">
                 <ChoiceLabel
                   label={choice.label}
                   name={`Name of choice ${choice.label}`}
@@ -155,9 +156,9 @@ export function StudioQueryInputChoices({
                 >
                   <Icon name="close" />
                 </Button>
-              </li>
+              </Item>
             ))}
-          </ul>
+          </ItemGroup>
           <form className="flex items-end gap-2" onSubmit={add} aria-label="New choice">
             <Input
               aria-label={`Name of a new choice for ${inputLabel}`}

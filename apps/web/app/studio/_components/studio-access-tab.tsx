@@ -1,4 +1,5 @@
 "use client";
+import { Item, ItemContent, ItemGroup } from "@vortex/ui/components/item";
 import { Alert, AlertDescription } from "@vortex/ui/components/alert";
 import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import type { ApplicationSourceDocument, ApplicationUsePlace } from "@vortex/platform/schema";
@@ -190,24 +191,26 @@ export function useStudioAccessTab({
       }
     >
       <StudioSection title="Roles" count={roles.length}>
-        <ul className="m-0 list-none space-y-1 p-0">
+        <ItemGroup className="gap-1">
           {roles.map((entry) => (
-            <li key={entry.key}>
-              <StudioNavItem
-                label={entry.name}
-                icon="shield"
-                selected={view === "role" && role?.key === entry.key}
-                description={
-                  entry.permissions.includes("*")
-                    ? "Every permission"
-                    : `${entry.permissions.length} permissions`
-                }
-                meta={entry.default_member ? <Badge variant="outline">Default</Badge> : undefined}
-                onClick={() => showRole(entry.key)}
-              />
-            </li>
+            <Item size="xs" role="listitem" key={entry.key}>
+              <ItemContent>
+                <StudioNavItem
+                  label={entry.name}
+                  icon="shield"
+                  selected={view === "role" && role?.key === entry.key}
+                  description={
+                    entry.permissions.includes("*")
+                      ? "Every permission"
+                      : `${entry.permissions.length} permissions`
+                  }
+                  meta={entry.default_member ? <Badge variant="outline">Default</Badge> : undefined}
+                  onClick={() => showRole(entry.key)}
+                />
+              </ItemContent>
+            </Item>
           ))}
-        </ul>
+        </ItemGroup>
       </StudioSection>
       <StudioSection title="Across the application">
         <StudioNavItem

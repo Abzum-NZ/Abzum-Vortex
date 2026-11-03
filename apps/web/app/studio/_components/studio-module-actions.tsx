@@ -29,6 +29,7 @@ import {
   Item,
   ItemActions,
   ItemContent,
+  ItemGroup,
   ItemDescription,
   ItemHeader,
   ItemTitle,
@@ -259,11 +260,13 @@ export function ActionDialog({
           {issues.length === 0 ? null : (
             <Alert variant="destructive">
               <AlertDescription>
-                <ul className="space-y-1">
+                <ItemGroup className="gap-1">
                   {issues.map((issue, index) => (
-                    <li key={index}>{issue}</li>
+                    <Item size="xs" role="listitem" key={index}>
+                      <ItemContent>{issue}</ItemContent>
+                    </Item>
                   ))}
-                </ul>
+                </ItemGroup>
               </AlertDescription>
             </Alert>
           )}
@@ -370,7 +373,7 @@ export function StudioModuleActions({
       {actions.length === 0 && (
         <p className="text-sm text-muted-foreground">No named actions yet, such as Mark won.</p>
       )}
-      <ul className="space-y-2">
+      <ItemGroup className="gap-2">
         {actions.map((action) => {
           const target = { kind: "action", moduleKey: module.key, actionKey: action.key } as const;
           const unused = applicationUses(source, target).length === 0;
@@ -406,7 +409,7 @@ export function StudioModuleActions({
                     ? "Its permission allows no fields yet. Choose what it reads and changes in Access → Permissions."
                     : undefined;
           return (
-            <Item key={action.key} render={<li />} variant="outline" size="sm">
+            <Item key={action.key} role="listitem" variant="outline" size="sm">
               <ItemHeader className="flex-wrap gap-2">
                 <ItemTitle>{action.label}</ItemTitle>
                 {option === undefined ? null : <Badge variant="outline">Owns {option.label}</Badge>}
@@ -470,7 +473,7 @@ export function StudioModuleActions({
             </Item>
           );
         })}
-      </ul>
+      </ItemGroup>
       {refused === undefined ? null : (
         <StudioReferencesAlert
           key={refusals}
@@ -482,11 +485,13 @@ export function StudioModuleActions({
       {issues.length === 0 ? null : (
         <Alert variant="destructive">
           <AlertDescription>
-            <ul className="space-y-1">
+            <ItemGroup className="gap-1">
               {issues.map((issue, index) => (
-                <li key={index}>{issue}</li>
+                <Item size="xs" role="listitem" key={index}>
+                  <ItemContent>{issue}</ItemContent>
+                </Item>
               ))}
-            </ul>
+            </ItemGroup>
           </AlertDescription>
         </Alert>
       )}

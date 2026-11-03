@@ -1,4 +1,6 @@
 "use client";
+import { Card } from "@vortex/ui/components/card";
+import { Item, ItemContent, ItemGroup } from "@vortex/ui/components/item";
 import { Alert, AlertDescription } from "@vortex/ui/components/alert";
 import { useState, type ReactNode } from "react";
 import {
@@ -41,16 +43,18 @@ const headClass = "text-xs text-foreground";
 function Inputs({ inputs }: Readonly<{ inputs: readonly StudioQueryInput[] }>) {
   if (inputs.length === 0) return <span className="text-muted-foreground">None</span>;
   return (
-    <ul className="list-none space-y-1">
+    <ItemGroup className="gap-1">
       {inputs.map((input) => (
-        <li key={input.key}>
-          {input.label}{" "}
-          <span className="text-muted-foreground">
-            {queryInputTypeLabel(input.type)}, {input.required ? "required" : "optional"}
-          </span>
-        </li>
+        <Item size="xs" role="listitem" key={input.key}>
+          <ItemContent>
+            {input.label}{" "}
+            <span className="text-muted-foreground">
+              {queryInputTypeLabel(input.type)}, {input.required ? "required" : "optional"}
+            </span>
+          </ItemContent>
+        </Item>
       ))}
-    </ul>
+    </ItemGroup>
   );
 }
 
@@ -106,7 +110,7 @@ function QueryTable({
   owned: boolean;
 }>) {
   return (
-    <div className="overflow-x-auto rounded-xl border">
+    <Card className="gap-0 py-0 overflow-x-auto">
       <Table containerClassName="border-0">
         <TableCaption className="sr-only">{caption}</TableCaption>
         <TableHeader className="bg-muted/50">
@@ -172,7 +176,7 @@ function QueryTable({
           })}
         </TableBody>
       </Table>
-    </div>
+    </Card>
   );
 }
 

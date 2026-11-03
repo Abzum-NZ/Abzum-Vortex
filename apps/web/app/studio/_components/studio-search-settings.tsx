@@ -1,4 +1,5 @@
 "use client";
+import { Item, ItemContent, ItemGroup } from "@vortex/ui/components/item";
 import { FieldLegend, FieldSet } from "@vortex/ui/components/field";
 import { Alert, AlertDescription } from "@vortex/ui/components/alert";
 import { useState } from "react";
@@ -256,13 +257,13 @@ export function StudioRecordTypeSearch({
       {issues.length === 0 ? null : (
         <Alert variant="destructive">
           <AlertDescription>
-            <ul className="space-y-1">
+            <ItemGroup className="gap-1">
               {issues.map((issue, index) => (
-                <li key={index} className="break-words">
-                  {issue}
-                </li>
+                <Item size="xs" role="listitem" key={index} className="break-words">
+                  <ItemContent>{issue}</ItemContent>
+                </Item>
               ))}
-            </ul>
+            </ItemGroup>
           </AlertDescription>
         </Alert>
       )}
@@ -321,31 +322,33 @@ export function StudioSearchOverview({
               Search is on
             </Label>
           </div>
-          <ul className="m-0 list-none space-y-2 p-0" aria-label="Found in search">
+          <ItemGroup className="gap-2" aria-label="Found in search">
             {found.map(({ reference, module, record }) => (
-              <li key={reference}>
-                {module === undefined || record === undefined ? (
-                  <span className="text-sm">{reference}</span>
-                ) : (
-                  <Button
-                    type="button"
-                    variant="link"
-                    size="sm"
-                    className="dark:text-foreground dark:underline"
-                    onClick={() =>
-                      onSelect({
-                        kind: "record_type",
-                        moduleKey: module.key,
-                        recordKey: record.key,
-                      })
-                    }
-                  >
-                    {record.pluralName}
-                  </Button>
-                )}
-              </li>
+              <Item size="xs" role="listitem" key={reference}>
+                <ItemContent>
+                  {module === undefined || record === undefined ? (
+                    <span className="text-sm">{reference}</span>
+                  ) : (
+                    <Button
+                      type="button"
+                      variant="link"
+                      size="sm"
+                      className="dark:text-foreground dark:underline"
+                      onClick={() =>
+                        onSelect({
+                          kind: "record_type",
+                          moduleKey: module.key,
+                          recordKey: record.key,
+                        })
+                      }
+                    >
+                      {record.pluralName}
+                    </Button>
+                  )}
+                </ItemContent>
+              </Item>
             ))}
-          </ul>
+          </ItemGroup>
         </>
       )}
       {problem === "" ? null : (

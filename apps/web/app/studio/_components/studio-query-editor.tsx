@@ -1,4 +1,5 @@
 "use client";
+import { Item, ItemContent, ItemGroup } from "@vortex/ui/components/item";
 import { StudioLimitNote, StudioReasoned, studioLimitReason } from "@vortex/ui/studio";
 import { StudioDataEmpty } from "./studio-data-centre";
 import { Alert, AlertDescription } from "@vortex/ui/components/alert";
@@ -129,7 +130,7 @@ function Entry({
   children: ReactNode;
 }>) {
   return (
-    <li className="flex flex-wrap items-center gap-1 rounded-md border border-border p-2">
+    <Item size="xs" role="listitem" variant="outline" className="flex flex-wrap items-center gap-1">
       <div className="min-w-0 flex-1 space-y-1">{children}</div>
       <Button
         type="button"
@@ -161,7 +162,7 @@ function Entry({
       >
         <Icon name="close" />
       </Button>
-    </li>
+    </Item>
   );
 }
 
@@ -531,7 +532,7 @@ export function StudioQueryEditor({
       </StudioField>
 
       <Section title="Columns" hint="The fields the query returns, in the order lists show them.">
-        <ol className="list-none space-y-1" aria-label="Columns">
+        <ItemGroup className="gap-1" aria-label="Columns">
           {query.select.map((key, index) => (
             <Entry
               key={key}
@@ -545,7 +546,7 @@ export function StudioQueryEditor({
               <span className="text-sm">{labelOf(key)}</span>
             </Entry>
           ))}
-        </ol>
+        </ItemGroup>
         {unselected.length === 0 ? (
           <p className="text-sm text-muted-foreground">Every field is a column.</p>
         ) : (
@@ -616,7 +617,7 @@ export function StudioQueryEditor({
             : "The order records are listed in. Only sortable fields are offered."
         }
       >
-        <ol className="list-none space-y-1" aria-label="Sorting">
+        <ItemGroup className="gap-1" aria-label="Sorting">
           {query.sort.map((sort, index) => (
             <Entry
               key={`${sort.field}:${index}`}
@@ -647,7 +648,7 @@ export function StudioQueryEditor({
               />
             </Entry>
           ))}
-        </ol>
+        </ItemGroup>
         {sortable.filter((key) => !query.sort.some((sort) => sort.field === key)).length ===
         0 ? null : (
           <>
@@ -673,7 +674,7 @@ export function StudioQueryEditor({
         title="Grouping and totals"
         hint="Groups and totals make the query a summary: it then feeds Summary values, Charts, Boards and Grouped tables. A plain Records table lists a query without them."
       >
-        <ol className="list-none space-y-1" aria-label="Groups">
+        <ItemGroup className="gap-1" aria-label="Groups">
           {query.group_by.map((key, index) => (
             <Entry
               key={key}
@@ -692,7 +693,7 @@ export function StudioQueryEditor({
               <span className="text-sm">Group by {labelOf(key)}</span>
             </Entry>
           ))}
-        </ol>
+        </ItemGroup>
         {groupable.length === 0 ? null : (
           <>
             <ScreenReaderLabel id={`query-${queryKey}-add-group`}>Group by</ScreenReaderLabel>
@@ -722,7 +723,7 @@ export function StudioQueryEditor({
             />
           </>
         )}
-        <ol className="list-none space-y-1" aria-label="Totals">
+        <ItemGroup className="gap-1" aria-label="Totals">
           {query.aggregates.map((total, index) => (
             <Entry
               key={total.alias}
@@ -815,7 +816,7 @@ export function StudioQueryEditor({
               )}
             </Entry>
           ))}
-        </ol>
+        </ItemGroup>
         <StudioReasoned reason={studioLimitReason("queryTotals", query.aggregates.length)}>
           <Button
             type="button"
@@ -868,132 +869,134 @@ export function StudioQueryEditor({
         title="Inputs"
         hint="Values a page gives the query when it lists records, for example the company a record page shows. The filter can compare a field with them."
       >
-        <ul className="list-none space-y-1" aria-label="Inputs">
+        <ItemGroup className="gap-1" aria-label="Inputs">
           {query.inputs.map((input, index) => (
-            <li key={input.key} className="space-y-1 rounded-md border border-border p-2">
-              <div className="flex items-start gap-1">
-                <div className="min-w-0 flex-1">
-                  <InputName
-                    input={input}
-                    disabled={disabled}
-                    commit={(next) =>
-                      next.trim() === ""
-                        ? "Enter the input's name, for example Company."
-                        : (commit(
-                            { inputs: setInput(index, { label: next.trim().slice(0, 60) }) },
-                            `query-input-label:${moduleKey}:${queryKey}:${input.key}`,
-                          ) ?? true)
-                    }
-                  />
-                </div>
-                <Button
-                  type="button"
-                  size="icon-xs"
-                  variant="ghost"
-                  aria-label={`Remove input ${input.label}`}
-                  disabled={disabled}
-                  onClick={() => change({ inputs: query.inputs.filter((_, at) => at !== index) })}
-                >
-                  <Icon name="close" />
-                </Button>
-              </div>
-              <p className="text-sm text-muted-foreground">Key: {input.key}</p>
-              <ScreenReaderLabel
-                id={`query-${queryKey}-input-${index}-type`}
-              >{`Type of input ${input.label}`}</ScreenReaderLabel>
-              <StudioInputType
-                id={`query-${queryKey}-input-${index}-type`}
-                type={input.type}
-                recordTypes={input.type === "record_reference" ? input.record_types : []}
-                disabled={disabled}
-                options={inputTypes}
-                onChange={(type, recordTypes) => {
-                  const base = Object.fromEntries(
-                    Object.entries(input).filter(
-                      ([key]) => key !== "record_types" && key !== "validation",
-                    ),
-                  );
-                  const inputs = query.inputs.map((item, at) =>
-                    at !== index
-                      ? item
-                      : ({
-                          ...base,
-                          type,
-                          ...(type === "record_reference"
-                            ? { record_types: [...recordTypes] }
-                            : {}),
-                        } as InlineQueryInput),
-                  );
-                  const retained = retainedFilterProblems(inputs);
-                  if (retained.length > 0) return retained.join(" ");
-                  const problem = commit({ inputs });
-                  if (problem === undefined) setIssues([]);
-                  return problem;
-                }}
-              >
-                {(records, changeRecords) => (
-                  <>
-                    <ScreenReaderLabel id={`query-${queryKey}-input-${index}-record`}>
-                      {`Record type of input ${input.label}`}
-                    </ScreenReaderLabel>
-                    <StudioOptionControl
-                      id={`query-${queryKey}-input-${index}-record`}
-                      value={records[0] ?? ""}
+            <Item size="xs" role="listitem" variant="outline" key={input.key} className="space-y-1">
+              <ItemContent>
+                <div className="flex items-start gap-1">
+                  <div className="min-w-0 flex-1">
+                    <InputName
+                      input={input}
                       disabled={disabled}
-                      options={[
-                        { value: "", label: "Choose a record type…" },
-                        ...recordTypes.map((item) => ({ value: item.key, label: item.label })),
-                      ]}
-                      onChange={(recordType) =>
-                        changeRecords(recordType === "" ? [] : [recordType])
+                      commit={(next) =>
+                        next.trim() === ""
+                          ? "Enter the input's name, for example Company."
+                          : (commit(
+                              { inputs: setInput(index, { label: next.trim().slice(0, 60) }) },
+                              `query-input-label:${moduleKey}:${queryKey}:${input.key}`,
+                            ) ?? true)
                       }
                     />
-                  </>
-                )}
-              </StudioInputType>
-              {input.type === "text" && (
-                <StudioQueryInputChoices
-                  id={`query-${queryKey}-input-${index}`}
-                  inputLabel={input.label}
-                  choices={input.validation?.choices}
+                  </div>
+                  <Button
+                    type="button"
+                    size="icon-xs"
+                    variant="ghost"
+                    aria-label={`Remove input ${input.label}`}
+                    disabled={disabled}
+                    onClick={() => change({ inputs: query.inputs.filter((_, at) => at !== index) })}
+                  >
+                    <Icon name="close" />
+                  </Button>
+                </div>
+                <p className="text-sm text-muted-foreground">Key: {input.key}</p>
+                <ScreenReaderLabel
+                  id={`query-${queryKey}-input-${index}-type`}
+                >{`Type of input ${input.label}`}</ScreenReaderLabel>
+                <StudioInputType
+                  id={`query-${queryKey}-input-${index}-type`}
+                  type={input.type}
+                  recordTypes={input.type === "record_reference" ? input.record_types : []}
                   disabled={disabled}
-                  onEdit={(problem) => setIssues(problem === undefined ? [] : [problem])}
-                  onChange={(choices, merge) => {
-                    // The list is the input's one constraint: it replaces any other validation.
-                    const rest = Object.fromEntries(
-                      Object.entries(input).filter(([key]) => key !== "validation"),
+                  options={inputTypes}
+                  onChange={(type, recordTypes) => {
+                    const base = Object.fromEntries(
+                      Object.entries(input).filter(
+                        ([key]) => key !== "record_types" && key !== "validation",
+                      ),
                     );
                     const inputs = query.inputs.map((item, at) =>
                       at !== index
                         ? item
                         : ({
-                            ...rest,
-                            ...(choices === undefined ? {} : { validation: { choices } }),
+                            ...base,
+                            type,
+                            ...(type === "record_reference"
+                              ? { record_types: [...recordTypes] }
+                              : {}),
                           } as InlineQueryInput),
                     );
-                    return commit({ inputs }, merge);
+                    const retained = retainedFilterProblems(inputs);
+                    if (retained.length > 0) return retained.join(" ");
+                    const problem = commit({ inputs });
+                    if (problem === undefined) setIssues([]);
+                    return problem;
                   }}
-                />
-              )}
-              <div className="flex items-center gap-2">
-                <Checkbox
-                  id={`query-${queryKey}-input-${index}-required`}
-                  checked={input.required}
-                  disabled={disabled}
-                  onCheckedChange={(checked) =>
-                    change({ inputs: setInput(index, { required: checked === true }) })
-                  }
-                />
-                <Label
-                  htmlFor={`query-${queryKey}-input-${index}-required`}
-                  className="font-normal"
                 >
-                  The query needs it
-                </Label>
-              </div>
-            </li>
+                  {(records, changeRecords) => (
+                    <>
+                      <ScreenReaderLabel id={`query-${queryKey}-input-${index}-record`}>
+                        {`Record type of input ${input.label}`}
+                      </ScreenReaderLabel>
+                      <StudioOptionControl
+                        id={`query-${queryKey}-input-${index}-record`}
+                        value={records[0] ?? ""}
+                        disabled={disabled}
+                        options={[
+                          { value: "", label: "Choose a record type…" },
+                          ...recordTypes.map((item) => ({ value: item.key, label: item.label })),
+                        ]}
+                        onChange={(recordType) =>
+                          changeRecords(recordType === "" ? [] : [recordType])
+                        }
+                      />
+                    </>
+                  )}
+                </StudioInputType>
+                {input.type === "text" && (
+                  <StudioQueryInputChoices
+                    id={`query-${queryKey}-input-${index}`}
+                    inputLabel={input.label}
+                    choices={input.validation?.choices}
+                    disabled={disabled}
+                    onEdit={(problem) => setIssues(problem === undefined ? [] : [problem])}
+                    onChange={(choices, merge) => {
+                      // The list is the input's one constraint: it replaces any other validation.
+                      const rest = Object.fromEntries(
+                        Object.entries(input).filter(([key]) => key !== "validation"),
+                      );
+                      const inputs = query.inputs.map((item, at) =>
+                        at !== index
+                          ? item
+                          : ({
+                              ...rest,
+                              ...(choices === undefined ? {} : { validation: { choices } }),
+                            } as InlineQueryInput),
+                      );
+                      return commit({ inputs }, merge);
+                    }}
+                  />
+                )}
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    id={`query-${queryKey}-input-${index}-required`}
+                    checked={input.required}
+                    disabled={disabled}
+                    onCheckedChange={(checked) =>
+                      change({ inputs: setInput(index, { required: checked === true }) })
+                    }
+                  />
+                  <Label
+                    htmlFor={`query-${queryKey}-input-${index}-required`}
+                    className="font-normal"
+                  >
+                    The query needs it
+                  </Label>
+                </div>
+              </ItemContent>
+            </Item>
           ))}
-        </ul>
+        </ItemGroup>
         <form className="flex flex-wrap items-end gap-2" onSubmit={addInput} aria-label="New input">
           <Input
             aria-label="Name of a new input"
@@ -1049,13 +1052,13 @@ export function StudioQueryEditor({
       {issues.length === 0 ? null : (
         <Alert variant="destructive" aria-label="Why the query was not changed">
           <AlertDescription>
-            <ul className="space-y-1">
+            <ItemGroup className="gap-1">
               {issues.map((issue, index) => (
-                <li key={index} className="break-words">
-                  {issue}
-                </li>
+                <Item size="xs" role="listitem" key={index} className="break-words">
+                  <ItemContent>{issue}</ItemContent>
+                </Item>
               ))}
-            </ul>
+            </ItemGroup>
           </AlertDescription>
         </Alert>
       )}
@@ -1152,13 +1155,13 @@ export function StudioNewQueryForm({
       {issues.length === 0 ? null : (
         <Alert variant="destructive">
           <AlertDescription>
-            <ul className="space-y-1">
+            <ItemGroup className="gap-1">
               {issues.map((issue, index) => (
-                <li key={index} className="break-words">
-                  {issue}
-                </li>
+                <Item size="xs" role="listitem" key={index} className="break-words">
+                  <ItemContent>{issue}</ItemContent>
+                </Item>
               ))}
-            </ul>
+            </ItemGroup>
           </AlertDescription>
         </Alert>
       )}

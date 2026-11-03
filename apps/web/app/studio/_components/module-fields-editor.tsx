@@ -1,4 +1,5 @@
 "use client";
+import { Item, ItemContent, ItemGroup } from "@vortex/ui/components/item";
 import { StudioDataEmpty } from "./studio-data-centre";
 import { useMemo, useState, type FormEvent } from "react";
 import { Alert, AlertDescription, AlertTitle } from "@vortex/ui/components/alert";
@@ -951,13 +952,13 @@ export function ModuleFieldsEditor({
           aria-label={adding ? "Why the field was not added" : "Why the field was not changed"}
         >
           <AlertDescription>
-            <ul className="space-y-1">
+            <ItemGroup className="gap-1">
               {issues.map((issue, index) => (
-                <li key={index} className="break-words">
-                  {issue}
-                </li>
+                <Item size="xs" role="listitem" key={index} className="break-words">
+                  <ItemContent>{issue}</ItemContent>
+                </Item>
               ))}
-            </ul>
+            </ItemGroup>
           </AlertDescription>
         </Alert>
       )}

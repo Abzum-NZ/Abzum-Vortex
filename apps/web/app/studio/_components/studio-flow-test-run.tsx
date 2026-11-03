@@ -1,4 +1,5 @@
 "use client";
+import { Item, ItemContent, ItemGroup } from "@vortex/ui/components/item";
 import { StudioHelp } from "@vortex/ui/studio";
 import { Alert, AlertDescription } from "@vortex/ui/components/alert";
 import { useState } from "react";
@@ -70,36 +71,38 @@ const parsedInput = (declaration: Declaration, raw: string | boolean): JsonValue
 function TraceStep({ step, flowKey }: Readonly<{ step: Step; flowKey: string }>) {
   const ended = step.outcome === "refused" || step.outcome === "failed";
   return (
-    <li className="space-y-1 border-b py-2 text-sm last:border-b-0">
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="font-medium">{titleOf(step.taskType)}</span>
-        <code className="text-xs text-muted-foreground">
-          {step.flow === flowKey || step.taskType === "after_save_subscriber"
-            ? step.taskId
-            : `${step.flow} / ${step.taskId}`}
-        </code>
-        <Badge variant="outline">{locationLabels[step.location]}</Badge>
-        <Badge variant={ended ? "destructive" : "secondary"}>
-          {step.outcome.replace("_", " ")}
-        </Badge>
-        <span className="ml-auto text-xs text-muted-foreground">{step.ms} ms</span>
-      </div>
-      {step.notRun !== undefined ? (
-        <p className="text-muted-foreground">{notRunSentences[step.notRun]}</p>
-      ) : null}
-      {step.refusal !== undefined ? (
-        <Alert variant="destructive">
-          <AlertDescription>
-            {step.refusal.sentence} <code className="text-xs">{step.refusal.code}</code>
-          </AlertDescription>
-        </Alert>
-      ) : null}
-      {Object.keys(step.outputs).length > 0 ? (
-        <pre className="m-0 overflow-x-auto rounded bg-muted p-2 text-xs">
-          {JSON.stringify(step.outputs, null, 2)}
-        </pre>
-      ) : null}
-    </li>
+    <Item size="xs" role="listitem" className="space-y-1 border-b py-2 text-sm last:border-b-0">
+      <ItemContent>
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="font-medium">{titleOf(step.taskType)}</span>
+          <code className="text-xs text-muted-foreground">
+            {step.flow === flowKey || step.taskType === "after_save_subscriber"
+              ? step.taskId
+              : `${step.flow} / ${step.taskId}`}
+          </code>
+          <Badge variant="outline">{locationLabels[step.location]}</Badge>
+          <Badge variant={ended ? "destructive" : "secondary"}>
+            {step.outcome.replace("_", " ")}
+          </Badge>
+          <span className="ml-auto text-xs text-muted-foreground">{step.ms} ms</span>
+        </div>
+        {step.notRun !== undefined ? (
+          <p className="text-muted-foreground">{notRunSentences[step.notRun]}</p>
+        ) : null}
+        {step.refusal !== undefined ? (
+          <Alert variant="destructive">
+            <AlertDescription>
+              {step.refusal.sentence} <code className="text-xs">{step.refusal.code}</code>
+            </AlertDescription>
+          </Alert>
+        ) : null}
+        {Object.keys(step.outputs).length > 0 ? (
+          <pre className="m-0 overflow-x-auto rounded bg-muted p-2 text-xs">
+            {JSON.stringify(step.outputs, null, 2)}
+          </pre>
+        ) : null}
+      </ItemContent>
+    </Item>
   );
 }
 
@@ -297,7 +300,7 @@ export function StudioFlowTestRun({
               </span>
             </AlertDescription>
           </Alert>
-          <ol className="m-0 list-none p-0">
+          <ItemGroup>
             {reply.steps.map((step, index) => (
               <TraceStep
                 key={`${step.taskId}:${step.iteration}:${index}`}
@@ -305,7 +308,7 @@ export function StudioFlowTestRun({
                 flowKey={flow.key}
               />
             ))}
-          </ol>
+          </ItemGroup>
         </div>
       ) : reply.kind === "temporarily_unavailable" ? (
         <Alert variant="destructive">

@@ -1,4 +1,5 @@
 "use client";
+import { Item, ItemContent, ItemGroup } from "@vortex/ui/components/item";
 import { NavigationLink } from "@vortex/ui/routing";
 import { useEffect, useRef, useState } from "react";
 import {
@@ -117,13 +118,13 @@ function Problems({ issues }: Readonly<{ issues: readonly string[] }>) {
   return issues.length === 0 ? null : (
     <Alert variant="destructive">
       <AlertDescription>
-        <ul className="space-y-1">
+        <ItemGroup className="gap-1">
           {issues.map((issue, index) => (
-            <li key={index} className="break-words">
-              {issue}
-            </li>
+            <Item size="xs" role="listitem" key={index} className="break-words">
+              <ItemContent>{issue}</ItemContent>
+            </Item>
           ))}
-        </ul>
+        </ItemGroup>
       </AlertDescription>
     </Alert>
   );
@@ -404,21 +405,23 @@ function RecordTypeInspector({
           {queries.length === 0 ? (
             <p className="text-sm text-muted-foreground">No queries yet.</p>
           ) : (
-            <ul className="space-y-1 text-sm">
+            <ItemGroup className="gap-1 text-sm">
               {queries.map((query) => (
-                <li key={query.key}>
-                  <Button
-                    type="button"
-                    variant="link"
-                    size="xs"
-                    className="h-auto whitespace-normal break-words p-0 text-left text-sm text-foreground"
-                    onClick={() => onSelect({ kind: "query", moduleKey, queryKey: query.key })}
-                  >
-                    {query.label ?? query.key}
-                  </Button>
-                </li>
+                <Item size="xs" role="listitem" key={query.key}>
+                  <ItemContent>
+                    <Button
+                      type="button"
+                      variant="link"
+                      size="xs"
+                      className="h-auto whitespace-normal break-words p-0 text-left text-sm text-foreground"
+                      onClick={() => onSelect({ kind: "query", moduleKey, queryKey: query.key })}
+                    >
+                      {query.label ?? query.key}
+                    </Button>
+                  </ItemContent>
+                </Item>
               ))}
-            </ul>
+            </ItemGroup>
           )}
         </StudioInspectorGroup>
         <StudioInspectorGroup title="Events and actions" defaultOpen={false}>

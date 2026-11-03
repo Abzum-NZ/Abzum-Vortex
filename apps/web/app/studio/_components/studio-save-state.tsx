@@ -1,6 +1,8 @@
 "use client";
 
 import { Alert, AlertDescription } from "@vortex/ui/components/alert";
+import { Card } from "@vortex/ui/components/card";
+import { Item, ItemContent, ItemGroup } from "@vortex/ui/components/item";
 import { useStudioFieldProblems } from "@vortex/ui/studio";
 import { useState, type ReactNode } from "react";
 import { FormattedTime, Icon } from "@vortex/ui";
@@ -231,16 +233,22 @@ export function StudioSaveState({ draft }: Readonly<{ draft: StudioDraft }>) {
             </AlertDialogDescription>
           </AlertDialogHeader>
           {status.kind === "conflict" && status.changes.length > 0 && (
-            <ul className="m-0 list-none divide-y rounded-lg border border-border p-0 text-sm">
-              {status.changes.slice(0, 6).map((row, index) => (
-                <li key={index} className="px-3 py-2">
-                  {row.area}: {row.change.toLowerCase()} {row.item}
-                </li>
-              ))}
-              {status.changes.length > 6 && (
-                <li className="px-3 py-2">+ {status.changes.length - 6} more</li>
-              )}
-            </ul>
+            <Card size="sm" className="gap-0 py-0">
+              <ItemGroup>
+                {status.changes.slice(0, 6).map((row, index) => (
+                  <Item key={index} size="xs" role="listitem">
+                    <ItemContent>
+                      {row.area}: {row.change.toLowerCase()} {row.item}
+                    </ItemContent>
+                  </Item>
+                ))}
+                {status.changes.length > 6 && (
+                  <Item size="xs" role="listitem">
+                    <ItemContent>+ {status.changes.length - 6} more</ItemContent>
+                  </Item>
+                )}
+              </ItemGroup>
+            </Card>
           )}
           <p className="text-sm text-muted-foreground">Your unsaved change will be discarded.</p>
           {loadFailed && (

@@ -1,4 +1,5 @@
 "use client";
+import { Card } from "@vortex/ui/components/card";
 import { StudioReasoned, studioLimitReason } from "@vortex/ui/studio";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
@@ -68,7 +69,7 @@ function SchemaGrid({
   onSelect: (selection: StudioDataSelection) => void;
 }>) {
   return (
-    <div className="overflow-hidden rounded-xl border">
+    <Card className="gap-0 py-0">
       <Table containerClassName="border-0">
         <TableCaption className="sr-only">Fields of {record.pluralName}</TableCaption>
         <TableHeader className="sticky top-0 bg-muted/50">
@@ -157,7 +158,7 @@ function SchemaGrid({
           })}
         </TableBody>
       </Table>
-    </div>
+    </Card>
   );
 }
 
@@ -472,7 +473,7 @@ function PreviewResults({
       ) : (
         current.kind === "available" && (
           <>
-            <div className="overflow-hidden rounded-xl border">
+            <Card className="gap-0 py-0">
               <Table>
                 <TableHeader className="bg-muted/50">
                   <TableRow>
@@ -504,7 +505,7 @@ function PreviewResults({
                   )}
                 </TableBody>
               </Table>
-            </div>
+            </Card>
             <div className="flex items-center justify-between gap-2">
               <p role="status" className="text-sm text-muted-foreground">
                 {current.rows.length} {current.rows.length === 1 ? "record" : "records"} on this
@@ -592,7 +593,7 @@ export function StudioDataCentre({
         {module.recordTypes.length === 0 ? (
           <StudioDataEmpty onCreate={onCreate} />
         ) : (
-          <div className="overflow-hidden rounded-xl border">
+          <Card className="gap-0 py-0">
             <Table>
               <TableHeader className="bg-muted/50">
                 <TableRow>
@@ -627,7 +628,7 @@ export function StudioDataCentre({
                 ))}
               </TableBody>
             </Table>
-          </div>
+          </Card>
         )}
       </div>
     );

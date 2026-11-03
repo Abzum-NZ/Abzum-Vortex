@@ -1,5 +1,6 @@
 "use client";
 import { Spinner } from "@vortex/ui/components/spinner";
+import { Item, ItemContent, ItemGroup } from "@vortex/ui/components/item";
 import { useState } from "react";
 import type { SourceApplicationThemeSelection } from "@vortex/platform/schema";
 import { createVortexStyleRootProps, Icon, VORTEX_STYLES } from "@vortex/ui";
@@ -352,11 +353,13 @@ export function StudioThemePanel({
             content={feedback.message}
           />
           {feedback.problems !== undefined && (
-            <ul className="list-disc pl-5">
+            <ItemGroup className="gap-0.5">
               {feedback.problems.map((problem) => (
-                <li key={problem}>{problem}</li>
+                <Item key={problem} size="xs" role="listitem" className="px-0 py-0">
+                  <ItemContent>{problem}</ItemContent>
+                </Item>
               ))}
-            </ul>
+            </ItemGroup>
           )}
         </div>
       )}

@@ -1,4 +1,5 @@
 "use client";
+import { Card } from "@vortex/ui/components/card";
 import { StudioLimitNote, StudioReasoned, studioLimitReason } from "@vortex/ui/studio";
 import { FieldLegend, FieldSet } from "@vortex/ui/components/field";
 import { useState, type FormEvent } from "react";
@@ -43,6 +44,7 @@ import {
   Item,
   ItemActions,
   ItemContent,
+  ItemGroup,
   ItemDescription,
   ItemHeader,
   ItemTitle,
@@ -118,13 +120,13 @@ function Problems({ issues }: Readonly<{ issues: readonly string[] }>) {
   return issues.length === 0 ? null : (
     <Alert variant="destructive">
       <AlertDescription>
-        <ul className="space-y-1">
+        <ItemGroup className="gap-1">
           {issues.map((issue, index) => (
-            <li key={index} className="break-words">
-              {issue}
-            </li>
+            <Item size="xs" role="listitem" key={index} className="break-words">
+              <ItemContent>{issue}</ItemContent>
+            </Item>
           ))}
-        </ul>
+        </ItemGroup>
       </AlertDescription>
     </Alert>
   );
@@ -435,9 +437,9 @@ function PipelineDialog({
 
           <FieldSet className="gap-2">
             <FieldLegend variant="label">Stages, in board order</FieldLegend>
-            <ul className="space-y-2">
+            <ItemGroup className="gap-2">
               {stages.map((stage, index) => (
-                <Item key={stage.option} render={<li />} variant="outline" size="sm">
+                <Item key={stage.option} role="listitem" variant="outline" size="sm">
                   <ItemHeader className="flex-wrap gap-2">
                     <ItemTitle className="gap-2">
                       <StageSwatch tone={toneOf(stage.option)} />
@@ -523,7 +525,7 @@ function PipelineDialog({
                   </ItemContent>
                 </Item>
               ))}
-            </ul>
+            </ItemGroup>
             <p className="text-sm text-muted-foreground">
               A gated stage runs its action wherever the option is saved: a board, a form or a flow
               step. Only people whose access groups hold the action&apos;s permission can move a
@@ -538,7 +540,7 @@ function PipelineDialog({
               Tick each move a record may make. Any other move between two stages is refused. A new
               record without a stage starts at the first stage.
             </p>
-            <div className="overflow-x-auto rounded-xl border">
+            <Card className="gap-0 py-0 overflow-x-auto">
               <Table>
                 <TableHeader className="bg-muted/50">
                   <TableRow>
@@ -587,7 +589,7 @@ function PipelineDialog({
                   ))}
                 </TableBody>
               </Table>
-            </div>
+            </Card>
           </FieldSet>
 
           <Problems issues={issues} />
@@ -730,7 +732,7 @@ export function StudioRecordPipelines({
           </EmptyHeader>
         </Empty>
       )}
-      <ul className="space-y-2">
+      <ItemGroup className="gap-2">
         {record.pipelines.map((pipeline) => {
           const options = optionsOf(record, pipeline.stage_field);
           const label = (value: string) =>
@@ -741,7 +743,7 @@ export function StudioRecordPipelines({
             record.fields.find((field) => field.key === pipeline.stage_field)?.label ??
             pipeline.stage_field;
           return (
-            <Item key={pipeline.key} render={<li />} variant="outline" size="sm">
+            <Item key={pipeline.key} role="listitem" variant="outline" size="sm">
               <ItemHeader className="flex-wrap gap-2">
                 <ItemTitle>{pipeline.name}</ItemTitle>
                 <Badge variant="outline">{fieldLabel}</Badge>
@@ -795,7 +797,7 @@ export function StudioRecordPipelines({
             </Item>
           );
         })}
-      </ul>
+      </ItemGroup>
       {refusal === undefined ? null : (
         <StudioReferencesAlert
           name={refusal.name ?? "The pipeline"}

@@ -1,4 +1,5 @@
 "use client";
+import { Card, CardContent } from "@vortex/ui/components/card";
 import { Alert, AlertDescription } from "@vortex/ui/components/alert";
 import { useState } from "react";
 import { Button } from "@vortex/ui/components/button";
@@ -198,108 +199,110 @@ function BehaviourEvent({
     setProblem(result === true ? "" : result);
   };
   return (
-    <div className="space-y-1.5 rounded-md border p-2" aria-label={entry.label}>
-      <div className="flex min-h-9 items-center justify-between gap-2 text-sm">
-        <span className="min-w-0">
-          <span className="block truncate font-medium">
-            {binding === null ? "No flow yet" : binding.flowName}
+    <Card size="sm" aria-label={entry.label}>
+      <CardContent className="space-y-1.5">
+        <div className="flex min-h-9 items-center justify-between gap-2 text-sm">
+          <span className="min-w-0">
+            <span className="block truncate font-medium">
+              {binding === null ? "No flow yet" : binding.flowName}
+            </span>
+            <span className="block truncate text-xs text-muted-foreground">{entry.label}</span>
           </span>
-          <span className="block truncate text-xs text-muted-foreground">{entry.label}</span>
-        </span>
-        {flow !== undefined && (
-          <StudioIconButton
-            label="Edit workflow"
-            disabled={disabled}
-            onClick={() => onOpen({ kind: "flow", flowAlias: flow.id, moduleKey: null })}
-          >
-            <Icon name="workflow" />
-          </StudioIconButton>
-        )}
-      </div>
-      {binding === null ? (
-        canCreate && (
-          <Button type="button" size="sm" variant="ghost" disabled={disabled} onClick={onCreate}>
-            <Icon name="plus" />
-            Create workflow
-          </Button>
-        )
-      ) : (
-        <>
-          {others.length > 0 && (
-            <>
-              <Label className="flex flex-col items-start gap-1 text-xs">
-                Run another flow
-                <StudioOptionControl
-                  value=""
-                  unset="Choose a flow…"
-                  disabled={disabled}
-                  options={others.map((candidate) => ({
-                    value: candidate.key,
-                    label: candidate.labels.name ?? candidate.key,
-                  }))}
-                  onChange={(value) => {
-                    if (value !== "")
-                      run((current) => applyStudioRebind(current, binding.id, value));
-                  }}
-                />
-              </Label>
-              <Label className="flex flex-col items-start gap-1 text-xs">
-                Combine with another flow
-                <StudioOptionControl
-                  value=""
-                  unset="Choose a flow…"
-                  disabled={disabled}
-                  options={others.map((candidate) => ({
-                    value: candidate.key,
-                    label: candidate.labels.name ?? candidate.key,
-                  }))}
-                  onChange={(value) => {
-                    if (value !== "")
-                      run((current) => applyStudioFlowCombine(current, binding.id, value));
-                  }}
-                />
-              </Label>
-            </>
+          {flow !== undefined && (
+            <StudioIconButton
+              label="Edit workflow"
+              disabled={disabled}
+              onClick={() => onOpen({ kind: "flow", flowAlias: flow.id, moduleKey: null })}
+            >
+              <Icon name="workflow" />
+            </StudioIconButton>
           )}
-          <Button
-            type="button"
-            size="sm"
-            variant="ghost"
-            disabled={disabled}
-            onClick={() => run((current) => applyStudioUnbind(current, binding.id))}
-          >
-            Stop running this flow
-          </Button>
-          {studioBindingDefault(source, binding.id) !== undefined && (
+        </div>
+        {binding === null ? (
+          canCreate && (
+            <Button type="button" size="sm" variant="ghost" disabled={disabled} onClick={onCreate}>
+              <Icon name="plus" />
+              Create workflow
+            </Button>
+          )
+        ) : (
+          <>
+            {others.length > 0 && (
+              <>
+                <Label className="flex flex-col items-start gap-1 text-xs">
+                  Run another flow
+                  <StudioOptionControl
+                    value=""
+                    unset="Choose a flow…"
+                    disabled={disabled}
+                    options={others.map((candidate) => ({
+                      value: candidate.key,
+                      label: candidate.labels.name ?? candidate.key,
+                    }))}
+                    onChange={(value) => {
+                      if (value !== "")
+                        run((current) => applyStudioRebind(current, binding.id, value));
+                    }}
+                  />
+                </Label>
+                <Label className="flex flex-col items-start gap-1 text-xs">
+                  Combine with another flow
+                  <StudioOptionControl
+                    value=""
+                    unset="Choose a flow…"
+                    disabled={disabled}
+                    options={others.map((candidate) => ({
+                      value: candidate.key,
+                      label: candidate.labels.name ?? candidate.key,
+                    }))}
+                    onChange={(value) => {
+                      if (value !== "")
+                        run((current) => applyStudioFlowCombine(current, binding.id, value));
+                    }}
+                  />
+                </Label>
+              </>
+            )}
             <Button
               type="button"
               size="sm"
               variant="ghost"
               disabled={disabled}
-              onClick={() =>
-                run((current) => applyStudioResetToDefault(current, binding.id, borrowed))
-              }
+              onClick={() => run((current) => applyStudioUnbind(current, binding.id))}
             >
-              Go back to the default flow
+              Stop running this flow
             </Button>
-          )}
-          <BindingSettings
-            settings={binding.settings}
-            event={entry.event}
-            disabled={disabled}
-            references={references}
-            onChange={(settings) =>
-              run((current) => applyStudioBindingSettings(current, binding.id, settings))
-            }
-          />
-        </>
-      )}
-      {problem !== "" && (
-        <Alert variant="destructive">
-          <AlertDescription>{problem}</AlertDescription>
-        </Alert>
-      )}
-    </div>
+            {studioBindingDefault(source, binding.id) !== undefined && (
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                disabled={disabled}
+                onClick={() =>
+                  run((current) => applyStudioResetToDefault(current, binding.id, borrowed))
+                }
+              >
+                Go back to the default flow
+              </Button>
+            )}
+            <BindingSettings
+              settings={binding.settings}
+              event={entry.event}
+              disabled={disabled}
+              references={references}
+              onChange={(settings) =>
+                run((current) => applyStudioBindingSettings(current, binding.id, settings))
+              }
+            />
+          </>
+        )}
+        {problem !== "" && (
+          <Alert variant="destructive">
+            <AlertDescription>{problem}</AlertDescription>
+          </Alert>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 

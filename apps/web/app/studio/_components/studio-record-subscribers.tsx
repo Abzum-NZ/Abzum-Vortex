@@ -9,6 +9,7 @@ import {
   Item,
   ItemActions,
   ItemContent,
+  ItemGroup,
   ItemDescription,
   ItemHeader,
   ItemTitle,
@@ -147,9 +148,9 @@ export function StudioRecordSubscribers({
           </div>
         </form>
       )}
-      <ul className="space-y-2">
+      <ItemGroup className="gap-2">
         {subscribers.map((subscriber) => (
-          <Item key={subscriber.flowAlias} render={<li />} variant="outline" size="sm">
+          <Item key={subscriber.flowAlias} role="listitem" variant="outline" size="sm">
             <ItemHeader className="flex-wrap gap-2">
               <ItemTitle>{subscriber.name}</ItemTitle>
               <ItemActions className="gap-1">
@@ -168,7 +169,7 @@ export function StudioRecordSubscribers({
             </ItemContent>
           </Item>
         ))}
-      </ul>
+      </ItemGroup>
       {problem === "" ? null : (
         <Alert variant="destructive">
           <AlertDescription>{problem}</AlertDescription>

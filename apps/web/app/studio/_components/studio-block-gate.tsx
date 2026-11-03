@@ -1,4 +1,5 @@
 "use client";
+import { Item, ItemGroup } from "@vortex/ui/components/item";
 import { useMemo, useState } from "react";
 import type { ConditionNode } from "@vortex/platform/schema";
 import {
@@ -144,9 +145,14 @@ export function StudioBlockVisibility({
           This block&apos;s conditions can&apos;t be changed here.
         </p>
       ) : (
-        <ul className="space-y-2" aria-label="Conditions">
+        <ItemGroup className="gap-2" aria-label="Conditions">
           {studioReactionSlots.map((entry) => (
-            <li key={entry.slot} className="flex items-center justify-between gap-2">
+            <Item
+              size="xs"
+              role="listitem"
+              key={entry.slot}
+              className="flex items-center justify-between gap-2"
+            >
               <span className="min-w-0">
                 <span className="block text-sm">{entry.title}</span>
                 <span
@@ -164,9 +170,9 @@ export function StudioBlockVisibility({
                   setEditing(true);
                 }}
               />
-            </li>
+            </Item>
           ))}
-        </ul>
+        </ItemGroup>
       )}
       <StudioDialog
         open={editing}

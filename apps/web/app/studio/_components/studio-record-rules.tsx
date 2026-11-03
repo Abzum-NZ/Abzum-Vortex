@@ -19,6 +19,7 @@ import {
   ItemActions,
   ItemContent,
   ItemDescription,
+  ItemGroup,
   ItemHeader,
   ItemTitle,
 } from "@vortex/ui/components/item";
@@ -233,9 +234,9 @@ export function StudioRecordRules({
           </EmptyHeader>
         </Empty>
       )}
-      <ol className="space-y-2">
+      <ItemGroup className="gap-2">
         {rules.map((rule, index) => (
-          <Item key={rule.flowAlias} render={<li />} variant="outline" size="sm">
+          <Item key={rule.flowAlias} role="listitem" variant="outline" size="sm">
             <ItemHeader className="flex-wrap gap-2">
               <ItemTitle>
                 {index + 1}. {rule.name}
@@ -285,18 +286,18 @@ export function StudioRecordRules({
             <ItemContent className="basis-full">
               <ItemDescription>{rule.when}.</ItemDescription>
               {rule.effects.length === 0 ? null : (
-                <ul className="list-disc space-y-0.5 pl-5 text-sm">
+                <ItemGroup className="gap-0.5">
                   {rule.effects.map((effect, index) => (
-                    <li key={index} className="break-words">
-                      {effect}
-                    </li>
+                    <Item key={index} size="xs" role="listitem" className="px-0 py-0">
+                      <ItemDescription className="break-words">{effect}</ItemDescription>
+                    </Item>
                   ))}
-                </ul>
+                </ItemGroup>
               )}
             </ItemContent>
           </Item>
         ))}
-      </ol>
+      </ItemGroup>
       {problem === "" ? null : (
         <Alert variant="destructive">
           <AlertDescription>{problem}</AlertDescription>

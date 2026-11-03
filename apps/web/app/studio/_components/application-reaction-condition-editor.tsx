@@ -1,4 +1,5 @@
 "use client";
+import { Alert, AlertDescription } from "@vortex/ui/components/alert";
 import { Button } from "@vortex/ui/components/button";
 
 import { useEffect, useRef, useState } from "react";
@@ -257,13 +258,15 @@ export function ApplicationReactionConditionEditor(props: Props) {
         </Button>
       )}
       {held !== null && held.validation.issues.length > 0 && (
-        <ul role="alert" className="text-sm text-destructive">
-          {held.validation.issues.map((issue, index) => (
-            <li key={`${issue.pointer}:${index}`}>
-              {slotInfo.title}: {issue.message}
-            </li>
-          ))}
-        </ul>
+        <Alert variant="destructive" role="alert">
+          <AlertDescription>
+            {held.validation.issues.map((issue, index) => (
+              <p key={`${issue.pointer}:${index}`}>
+                {slotInfo.title}: {issue.message}
+              </p>
+            ))}
+          </AlertDescription>
+        </Alert>
       )}
       <p role="status" aria-live="polite">
         {message}
