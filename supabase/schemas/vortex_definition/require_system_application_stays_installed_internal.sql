@@ -17,7 +17,7 @@ begin
     )
     and not exists (
       select 1
-      from vortex_module.installation_bindings as binding
+      from vortex_definition.installation_bindings as binding
       where binding.organization_id = new.organization_id
         and binding.application_root_id = new.application_root_id
         and binding.state = 'active'

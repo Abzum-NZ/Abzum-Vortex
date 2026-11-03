@@ -3039,7 +3039,7 @@ begin
     )
     and not exists (
       select 1
-      from vortex_module.installation_bindings as binding
+      from vortex_definition.installation_bindings as binding
       where binding.organization_id = new.organization_id
         and binding.application_root_id = new.application_root_id
         and binding.state = 'active'
@@ -3430,10 +3430,10 @@ comment on function vortex_definition.purge_application(uuid, boolean, boolean, 
 
 alter function vortex_definition.purge_application(uuid, boolean, boolean, text) owner to vortex_owner;
 
-reset role;
-
 create constraint trigger system_application_stays_installed
-  after update of state on vortex_module.installation_bindings
+  after update of state on vortex_definition.installation_bindings
   deferrable initially deferred
   for each row when (new.state = 'detached')
   execute function vortex_definition.require_system_application_stays_installed_internal();
+
+reset role;
