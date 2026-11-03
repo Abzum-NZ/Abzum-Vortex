@@ -20,6 +20,7 @@ import {
   createContext,
   useCallback,
   useContext,
+  useDeferredValue,
   useEffect,
   useMemo,
   useLayoutEffect,
@@ -61,13 +62,18 @@ import {
   studioScreenOfWidth,
   studioViewports,
 } from "./studio-canvas-screen";
-import type { StudioCanvasMetadata, StudioCanvasViewer } from "./studio-canvas-metadata";
+import {
+  StudioCanvasChannelContext,
+  type StudioCanvasMetadata,
+  type StudioCanvasViewer,
+} from "./studio-canvas-metadata";
 import { StudioDrawerItem } from "./studio-puck-drawer";
 import { studioPuckStyle } from "./studio-puck-style";
 import { studioPuckWords } from "./studio-puck-words";
 import type { StudioCanvasRecordsReader } from "./use-studio-canvas-records";
-import { useStudioCanvasMetadata } from "./use-studio-canvas-metadata";
+import { useStudioCanvasChannelValue } from "./use-studio-canvas-channel";
 import { studioCanvasReferences, type StudioCanvasReferences } from "./studio-canvas-permissions";
+import { sameCompositionValue } from "./composition-references";
 
 export { studioScreens, useStudioScreen } from "./studio-canvas-screen";
 export type { StudioCanvasFrame } from "./studio-canvas-projection";
@@ -256,10 +262,21 @@ export function StudioPuckProvider({
   const stylesheetApplied = useStylesheetApplied();
   const [breakpoint, setBreakpoint] = useState<Breakpoint>(studioInitialBreakpoint);
   const model = useStudioCanvasModel(input, breakpoint);
-  const references = useMemo(
-    () => studioCanvasReferences(input.source, model.catalogue),
-    [input.source, model.catalogue],
+  // Why a block's delete, drag or duplicate is unavailable is read from the live draft, so a block
+  // added a moment ago already says what it cannot do, and a reason clears as soon as what caused
+  // it is gone. The read is cheap (it does not grow faster than the page) and is made at lower
+  // priority than typing: the deferred draft is the one a keystroke has not just replaced.
+  const referenceSource = useDeferredValue(input.source);
+  const readReferences = useMemo(
+    () => studioCanvasReferences(referenceSource, model.catalogue),
+    [referenceSource, model.catalogue],
   );
+  // A new revision usually leaves every reason as it was (a label changed, say); Puck asks every
+  // block's permissions again for a new object, so the one held stays while the reasons are the same.
+  const heldReferences = useRef(readReferences);
+  if (!sameCompositionValue(heldReferences.current, readReferences))
+    heldReferences.current = readReferences;
+  const references = heldReferences.current;
   const referencesRef = useRef(references);
   referencesRef.current = references;
   // The config remains stable while its permission resolver reads the current draft's map.
@@ -426,15 +443,11 @@ export function StudioPuckProvider({
     });
   }, []);
 
-  const canvasMetadata = useStudioCanvasMetadata(input, model);
+  const channel = useStudioCanvasChannelValue(input, model);
+  // Puck walks this object once for every block it draws: it stays small.
   const metadata = useMemo(
-    (): StudioCanvasMetadata => ({
-      breakpoint,
-      references,
-      readSettings: compiledItemSettings,
-      ...canvasMetadata,
-    }),
-    [breakpoint, canvasMetadata, references],
+    (): StudioCanvasMetadata => ({ breakpoint, readSettings: compiledItemSettings }),
+    [breakpoint],
   );
   // The application holds every block it may: Duplicate and every other insert are off.
   const placed =
@@ -468,45 +481,47 @@ export function StudioPuckProvider({
   if (!stylesheetApplied) return null;
   return (
     <StudioCanvasContext.Provider value={value}>
-      {/* Puck's own wrapper reads its font and spacing from the tokens too, so the map sits above it.
+      <StudioCanvasChannelContext.Provider value={channel}>
+        {/* Puck's own wrapper reads its font and spacing from the tokens too, so the map sits above it.
           The Outline and Blocks regions repeat it on their own roots: below the wide breakpoint they
           are drawn in a Sheet outside this element. */}
-      <div className="contents" style={studioPuckStyle}>
-        <Puck
-          config={config}
-          data={initial}
-          onChange={change}
-          onAction={onAction}
-          iframe={IFRAME}
-          viewports={studioViewports}
-          ui={studioInitialUi}
-          // Puck's own wrapper fills the workspace, so the canvas has the height of its well.
-          height="100%"
-          overrides={OVERRIDES}
-          metadata={metadata}
-          permissions={permissions}
-          dictionary={studioPuckWords}
-        >
-          <StudioPuckSync
+        <div className="contents" style={studioPuckStyle}>
+          <Puck
             config={config}
-            references={references}
-            data={shown}
-            resync={resync}
-            area={model.area}
-            dragGate={dragGate}
-            canvasShown={input.canvasShown}
-            arrangeGrid={input.arrangeGrid === true}
-            onArrangeGrid={input.onArrangeGrid}
-            onArrangeableGrids={input.onArrangeableGrids}
-            arrangeable={model.arrangeable}
-            selectedAlias={input.selectedPlacementAlias}
-            synchronizing={synchronizing}
-            deriving={deriving}
-            showSelection={showSelection}
-          />
-          <div className="flex h-full min-h-0 flex-col">{children}</div>
-        </Puck>
-      </div>
+            data={initial}
+            onChange={change}
+            onAction={onAction}
+            iframe={IFRAME}
+            viewports={studioViewports}
+            ui={studioInitialUi}
+            // Puck's own wrapper fills the workspace, so the canvas has the height of its well.
+            height="100%"
+            overrides={OVERRIDES}
+            metadata={metadata}
+            permissions={permissions}
+            dictionary={studioPuckWords}
+          >
+            <StudioPuckSync
+              config={config}
+              references={references}
+              data={shown}
+              resync={resync}
+              area={model.area}
+              dragGate={dragGate}
+              canvasShown={input.canvasShown}
+              arrangeGrid={input.arrangeGrid === true}
+              onArrangeGrid={input.onArrangeGrid}
+              onArrangeableGrids={input.onArrangeableGrids}
+              arrangeable={model.arrangeable}
+              selectedAlias={input.selectedPlacementAlias}
+              synchronizing={synchronizing}
+              deriving={deriving}
+              showSelection={showSelection}
+            />
+            <div className="flex h-full min-h-0 flex-col">{children}</div>
+          </Puck>
+        </div>
+      </StudioCanvasChannelContext.Provider>
     </StudioCanvasContext.Provider>
   );
 }
@@ -561,9 +576,49 @@ function StudioPuckSync({
   const recorded = usePuckSelector((state) => state.history.histories.length);
   // The config Puck holds: it takes the page's config a moment after this component sees it.
   const held = usePuckSelector((state) => state.config);
+  // Puck asks for a block's permissions again only when told to, and keeps what it last worked out
+  // for a block whose data has not changed. A new config asks for the blocks on the canvas; after
+  // that, a block whose reasons differ from the ones it was last asked with is asked again, so
+  // deleting one block of five hundred does not set every block's permissions again. A block that is
+  // not on the canvas (another page) is left pending and asked when it comes onto the canvas; only
+  // pending blocks are looked at when nothing but the canvas data changed.
+  const worked = useRef<Readonly<{
+    held: Config;
+    seen: StudioCanvasReferences;
+    reasons: StudioCanvasReferences;
+    pending: ReadonlySet<string>;
+  }> | null>(null);
+  // The data Puck holds, which is walked (and its blocks indexed) after the draft's data arrives.
+  const canvasData = usePuckSelector((state) => state.appState.data);
   useEffect(() => {
-    getPuck().refreshPermissions();
-  }, [getPuck, held, references]);
+    const { refreshPermissions, getSelectorForId, getItemById } = getPuck();
+    const last = worked.current;
+    const full = last === null || last.held !== held;
+    if (full) refreshPermissions();
+    const reasons: Record<string, StudioCanvasReferences[string]> = { ...last?.reasons };
+    const pending = new Set<string>();
+    const aliases =
+      full || last.seen !== references
+        ? new Set([...Object.keys(references), ...Object.keys(reasons)])
+        : last.pending;
+    for (const alias of aliases) {
+      const waiting = !full && last.pending.has(alias);
+      if (!full && !waiting && sameCompositionValue(references[alias] ?? {}, reasons[alias] ?? {}))
+        continue;
+      // `getSelectorForId` answers undefined exactly when the block is not on the canvas
+      // (`getItemById` throws then).
+      if (getSelectorForId(alias) === undefined) {
+        pending.add(alias);
+        continue;
+      }
+      const item = full ? undefined : getItemById(alias);
+      if (item !== undefined) refreshPermissions({ item }, true);
+      const now = references[alias];
+      if (now === undefined) delete reasons[alias];
+      else reasons[alias] = now;
+    }
+    worked.current = { held, seen: references, reasons, pending };
+  }, [getPuck, held, references, canvasData]);
   // The config Puck's data was last walked under; Puck walked its first data under `held`.
   const walked = useRef(held);
   const latestData = useRef(data);
@@ -669,8 +724,8 @@ function StudioPuckSync({
     if (held !== config) return;
     const { appState } = getPuck();
     const changed =
-      JSON.stringify(appState.data.content) !== JSON.stringify(data.content) ||
-      JSON.stringify(appState.data.root) !== JSON.stringify(data.root);
+      !sameCompositionValue(appState.data.content, data.content) ||
+      !sameCompositionValue(appState.data.root, data.root);
     if (changed || (walked.current !== held && !appState.ui.isDragging)) walk(data);
     select(wantedRef.current);
     // The draft is shown again every time the canvas comes into view, so nothing Puck held while

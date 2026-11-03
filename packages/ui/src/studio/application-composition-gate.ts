@@ -28,9 +28,10 @@ import { validateStoredApplicationOutlets } from "@vortex/platform/schema";
 const resolveGateTarget = (
   context: StudioCompositionContext,
   selection: StudioSemanticSelection | null,
+  reading = false,
 ) => {
   plainSource(context.source);
-  const resolved = resolve(context, selection);
+  const resolved = resolve(context, selection, reading);
   if (resolved === undefined)
     return { kind: "refused", reason: "This block is no longer in the current draft." } as const;
   const { source, target } = resolved;
@@ -69,7 +70,7 @@ export const describeStudioCompositionGate = (
   selection: StudioSemanticSelection | null,
 ) => {
   try {
-    const resolved = resolveGateTarget(context, selection);
+    const resolved = resolveGateTarget(context, selection, true);
     if (resolved.kind !== "available") return resolved;
     return {
       kind: "available",

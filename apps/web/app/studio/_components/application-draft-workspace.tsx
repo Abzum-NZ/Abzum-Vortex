@@ -1,6 +1,6 @@
 "use client";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { SourceIdentityReservation } from "@vortex/platform/schema";
+import { describeFailure, type SourceIdentityReservation } from "@vortex/platform/schema";
 import {
   StudioFieldProblemsProvider,
   projectStudioSemanticOutline,
@@ -46,9 +46,19 @@ import {
   type StudioAccessCommand,
   type StudioAccessResult,
   type StudioNavigationApplication,
+  type StudioNavigationApplicationsStatus,
 } from "@vortex/ui/studio";
 import { Button } from "@vortex/ui/components/button";
 import type { StudioStructureForm } from "./studio-structure-editor";
+
+/**
+ * The Navigate targets as they are read: the targets, or `failed` when the installed applications
+ * could not be read (the page has already said so once). A genuine throw still rejects.
+ */
+export type StudioNavigationTargets = Promise<
+  | Readonly<{ kind: "ready"; targets: readonly StudioNavigationApplication[] }>
+  | Readonly<{ kind: "failed" }>
+>;
 
 /** Where the workspace sits: the organisation it belongs to and the running application it builds. */
 export type StudioWorkspacePlace = Readonly<{
@@ -57,8 +67,11 @@ export type StudioWorkspacePlace = Readonly<{
   frame: StudioFrameDefinition;
   /** Where the application stood in the organisation when the editor opened. */
   standing: ApplicationReleaseStanding;
-  /** The other applications a Navigate step can open, with their pages. */
-  navigationTargets: readonly StudioNavigationApplication[];
+  /**
+   * The other applications a Navigate step can open, with their pages. Read beside the editor's
+   * first load and delivered when finished: the Flows tab lists them once they arrive.
+   */
+  navigationTargets: StudioNavigationTargets;
 }>;
 
 type WorkspaceProps = Readonly<{
@@ -87,6 +100,34 @@ export function ApplicationDraftWorkspace(props: WorkspaceProps) {
  */
 function ExistingApplicationWorkspace(props: ExistingProps) {
   const { organizationId, place, applications } = props;
+  // The Navigate targets arrive after the editor has opened; the Flows tab lists them from then on.
+  const [navigation, setNavigation] = useState<
+    Readonly<{
+      status: StudioNavigationApplicationsStatus;
+      targets: readonly StudioNavigationApplication[];
+    }>
+  >({ status: "loading", targets: [] });
+  useEffect(() => {
+    let current = true;
+    place.navigationTargets.then(
+      (result) => {
+        if (current)
+          setNavigation(
+            result.kind === "ready"
+              ? { status: "ready", targets: result.targets }
+              : { status: "failed", targets: [] },
+          );
+      },
+      (error: unknown) => {
+        if (!current) return;
+        console.error("[studio] the Navigate targets could not be read", describeFailure(error));
+        setNavigation({ status: "failed", targets: [] });
+      },
+    );
+    return () => {
+      current = false;
+    };
+  }, [place.navigationTargets]);
   const [tab, setCurrentTab] = useState<StudioRailKey>(
     isStudioRailKey(props.initialTab) ? props.initialTab : "structure",
   );
@@ -175,7 +216,8 @@ function ExistingApplicationWorkspace(props: ExistingProps) {
     catalogue,
     labels,
     applications,
-    navigationTargets: place.navigationTargets,
+    navigationTargets: navigation.targets,
+    navigationStatus: navigation.status,
     hidden: tab !== "flows",
     openFlowsTab: () => setTab("flows"),
   });

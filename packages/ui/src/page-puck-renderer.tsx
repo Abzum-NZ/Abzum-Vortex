@@ -1,6 +1,6 @@
 // The render-only entry: the main entry would also bundle the whole editor for every page view.
 import { Render } from "@puckeditor/core/rsc";
-import type { CSSProperties, ReactElement, ReactNode } from "react";
+import { useMemo, type CSSProperties, type ReactElement, type ReactNode } from "react";
 import type { Data } from "@puckeditor/core";
 import {
   compiledItemTree,
@@ -276,19 +276,37 @@ export function PagePuckRenderer({
   const vortexStyle = resolveVortexStyleSelection(applicationTheme?.selection);
   const themeRootProps = createThemeRootProps(applicationTheme, platformThemeTokens);
   const vortexStyleProps = createVortexStyleRootProps(vortexStyle);
-  const metadata: VortexPuckMetadata = {
-    readSettings,
-    ...(breakpoint === undefined ? {} : { breakpoint }),
-    ...(runtimeInputs === undefined ? {} : { runtimeInputs }),
-    ...(runtimeState === undefined ? {} : { runtimeState }),
-    ...(projectedNavigation === undefined ? {} : { projectedNavigation }),
-    ...(resolvePageHref === undefined ? {} : { resolvePageHref }),
-    ...(currentPageId === undefined ? {} : { currentPageId }),
-    ...(componentBundleOrigin === undefined ? {} : { componentBundleOrigin }),
-    ...(applicationShellRuntime === undefined ? {} : { applicationShellRuntime }),
-    ...(applicationSearch === undefined ? {} : { applicationSearch }),
-    ...(applicationSearchPageSubject === undefined ? {} : { applicationSearchPageSubject }),
-  };
+  // Puck draws every placement again when its `metadata` is a new object, and this renderer is drawn
+  // again for reasons that change none of these fields (a selection in the editor, say): the object
+  // is held for this instance while every field is the same one.
+  const metadata = useMemo(
+    (): VortexPuckMetadata => ({
+      readSettings,
+      ...(breakpoint === undefined ? {} : { breakpoint }),
+      ...(runtimeInputs === undefined ? {} : { runtimeInputs }),
+      ...(runtimeState === undefined ? {} : { runtimeState }),
+      ...(projectedNavigation === undefined ? {} : { projectedNavigation }),
+      ...(resolvePageHref === undefined ? {} : { resolvePageHref }),
+      ...(currentPageId === undefined ? {} : { currentPageId }),
+      ...(componentBundleOrigin === undefined ? {} : { componentBundleOrigin }),
+      ...(applicationShellRuntime === undefined ? {} : { applicationShellRuntime }),
+      ...(applicationSearch === undefined ? {} : { applicationSearch }),
+      ...(applicationSearchPageSubject === undefined ? {} : { applicationSearchPageSubject }),
+    }),
+    [
+      readSettings,
+      breakpoint,
+      runtimeInputs,
+      runtimeState,
+      projectedNavigation,
+      resolvePageHref,
+      currentPageId,
+      componentBundleOrigin,
+      applicationShellRuntime,
+      applicationSearch,
+      applicationSearchPageSubject,
+    ],
+  );
   const guidedSteps = composition.steps;
   const stepIndex =
     activeStepId === undefined

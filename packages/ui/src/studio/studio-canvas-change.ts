@@ -29,7 +29,7 @@ import {
   studioPlacementRemovalReference,
 } from "./composition-references";
 import { zoneJson } from "./studio-canvas-data";
-import { studioPlacementReferrers } from "./studio-canvas-permissions";
+import { studioDuplicateRefusal, studioPlacementReferrers } from "./studio-canvas-permissions";
 
 /** What a change Puck reported on the canvas comes to in the definition. */
 export type StudioCanvasChange =
@@ -90,6 +90,14 @@ export const applyStudioCanvasChange = (
     );
     // Puck reports the draft it was just given (after Undo, Redo or a save) as a change too.
     if (zoneJson(editedSlot) === zoneJson(targetSlot)) return { kind: "unchanged" };
+    // Duplicate has the same refusals as its button, whichever draft the button was drawn from.
+    const originals = sourceItemTree(targetSlot.items);
+    for (const original of copies.keys()) {
+      const item = originals.find((entry) => entry.props.id === original);
+      const refusal = item === undefined ? undefined : studioDuplicateRefusal(catalogue, item);
+      if (refusal !== undefined)
+        return { kind: "refused", message: `${refusal} The page stays as it was.` };
+    }
     const next = structuredClone(current);
     const nextPage = next.body.pages.find((item) => item.id === pageAlias);
     if (nextPage === undefined || !setSourcePageSlot(nextPage, at, editedSlot))

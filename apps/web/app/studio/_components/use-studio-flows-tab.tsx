@@ -57,6 +57,7 @@ import {
   type StudioInspectorAction,
   type StudioSemanticSelection,
   type StudioNavigationApplication,
+  type StudioNavigationApplicationsStatus,
 } from "@vortex/ui/studio";
 import type { StudioDraft, StudioDraftStep } from "./use-studio-draft";
 import { deferredStudioPart } from "./studio-deferred-part";
@@ -113,6 +114,7 @@ export function useStudioFlowsTab({
   labels,
   applications,
   navigationTargets,
+  navigationStatus,
   hidden,
   openFlowsTab,
 }: Readonly<{
@@ -123,6 +125,8 @@ export function useStudioFlowsTab({
   applications: readonly StudioModuleOwnerApplication[];
   /** The other applications a Navigate step can open. */
   navigationTargets: readonly StudioNavigationApplication[];
+  /** Whether the targets are still arriving, arrived, or could not be read. */
+  navigationStatus: StudioNavigationApplicationsStatus;
   hidden: boolean;
   openFlowsTab: () => void;
 }>) {
@@ -239,8 +243,9 @@ export function useStudioFlowsTab({
         source,
         catalogue,
         applications: navigationTargets,
+        applicationsStatus: navigationStatus,
       }),
-    [state.rootId, source, catalogue, navigationTargets],
+    [state.rootId, source, catalogue, navigationTargets, navigationStatus],
   );
   const flowChoices = useMemo(
     () =>
@@ -252,8 +257,9 @@ export function useStudioFlowsTab({
             catalogue,
             flow: outline.flow,
             applications: navigationTargets,
+            applicationsStatus: navigationStatus,
           }),
-    [outline, draftChoices, state.rootId, source, catalogue, navigationTargets],
+    [outline, draftChoices, state.rootId, source, catalogue, navigationTargets, navigationStatus],
   );
   const start = useMemo(
     () =>

@@ -19,7 +19,11 @@ import {
 import { studioPaletteChoices } from "./contextual-palette";
 import type { FieldInputControlReleaseMap, PlatformComponentRegistry } from "../registry";
 import { useStudioCanvasGridEvents } from "./studio-canvas-grid";
-import { studioCanvasMetadata, type StudioCanvasRecords } from "./studio-canvas-metadata";
+import {
+  studioCanvasMetadata,
+  useStudioCanvasChannel,
+  type StudioCanvasRecords,
+} from "./studio-canvas-metadata";
 import { StudioCanvasRoot } from "./studio-canvas-root";
 
 /**
@@ -30,8 +34,9 @@ import { StudioCanvasRoot } from "./studio-canvas-root";
  * stored block, layout and theme in their canonical spelling. A stored value is drawn only when it
  * is already a compiled value of its declaration, so an unresolved reference draws as compiled.
  * Everything Studio knows about the canvas (compiled settings, records, the previewed role, the
- * controls and the grid channel) arrives through Puck's `metadata`, as at runtime. Nothing here
- * is written to Puck's data.
+ * controls and the grid channel) arrives through the canvas channel (React context): Puck walks its
+ * `metadata` once per block, so nothing that grows with the page goes there. Nothing here is
+ * written to Puck's data.
  */
 
 /** The controls whose chosen value the canvas can hold: their value is plain text. */
@@ -202,13 +207,7 @@ function CanvasBlock({
   registry: PlatformComponentRegistry;
   props: Record<string, unknown>;
 }>): ReactElement {
-  const {
-    compiled,
-    records,
-    viewer,
-    controls: publishControl,
-    grid,
-  } = studioCanvasMetadata(props.puck as PuckContext);
+  const { compiled, records, viewer, controls: publishControl, grid } = useStudioCanvasChannel();
   const id = typeof props.id === "string" ? props.id : "";
   const dragRef = dragRefOf(props);
   const release = releaseOf(registry, props);
