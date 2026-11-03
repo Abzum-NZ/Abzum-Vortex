@@ -61,15 +61,9 @@ const guestWindows = { shared: [3631, 3649], batch: [3670, 3699] };
 const guestWindow = (lane) => (lane === sharedLane ? guestWindows.shared : guestWindows.batch);
 // Application port 3659 is blocked on this host.
 const blockedAppPort = 3659;
-// RAM (owner ruling): 2 GB must remain free after a start. A lane stack costs about 2.5 GB and a dev
-// server about 1.5 GB; measured servers run 1.1 to 2.2 GB.
+// RAM (owner ruling): one rule for every start (lane stack, dev server, build, walk, agent): at least
+// 2 GB free. Measured dev servers use 1.1 to 2.2 GB and a lane stack about 2.5 GB.
 const ramFloorGb = 2;
-const stackRamGb = 2.5;
-const devServerRamGb = 1.5;
-const stackStartGb = stackRamGb + ramFloorGb;
-const devServerStartGb = devServerRamGb + ramFloorGb;
-// `free` offers a lane that its holder can use: the stack and the holder's own server both fit.
-const laneUseGb = stackRamGb + devServerRamGb + ramFloorGb;
 const laneAppPort = (lane) => appPorts.get(lane);
 const laneApiPort = (lane) => 54321 + 1000 * (lane - 1);
 const laneDatabasePort = (lane) => 54322 + 1000 * (lane - 1);
@@ -413,14 +407,12 @@ const requireNotBlocked = async (lane) => {
 };
 
 const freeRamGb = () => Math.round((os.freemem() / 1024 ** 3) * 10) / 10;
-const ramLine = () =>
-  `free RAM ${freeRamGb()} GB; ${ramFloorGb} GB must remain after a start: a lane stack needs ${stackStartGb} GB free (about ${stackRamGb} GB), a dev server ${devServerStartGb} GB (about ${devServerRamGb} GB)`;
-/** A start needs `needGb` free, so that the floor remains afterwards: print the reading, and refuse below it. */
-const requireRam = (needGb, what) => {
-  log(`${ramLine()}; ${what} needs ${needGb} GB`);
-  if (freeRamGb() < needGb) fail(`Not enough free RAM to ${what}.`);
+const ramLine = () => `free RAM ${freeRamGb()} GB; a start needs at least ${ramFloorGb} GB free`;
+/** Print the reading, and refuse a start below the floor. */
+const requireRam = (what) => {
+  log(ramLine());
+  if (freeRamGb() < ramFloorGb) fail(`Not enough free RAM to ${what}.`);
 };
-const requireStackRam = (what) => requireRam(stackStartGb, what);
 
 const canBind = (port, host) =>
   new Promise((resolve) => {
@@ -713,7 +705,7 @@ const startServer = async (lane, worktreePath, requestedPort) => {
   }
   const port = role === "holder" ? laneAppPort(lane) : await parseGuestPort(lane, requestedPort);
   if (role === "holder" && !(await portFree(port))) fail(`Port ${port} is taken.`);
-  requireRam(devServerStartGb, "start a dev server");
+  requireRam("start a dev server");
   const next = path.join(
     worktreePath,
     "apps",
@@ -847,7 +839,7 @@ if (command === "status" || command === "free") {
     entries.push({ number, lease, running, initialized, blocked, records, recordProblem });
   }
   if (command === "free") {
-    const roomForAnother = freeRamGb() >= laneUseGb;
+    const roomForAnother = freeRamGb() >= ramFloorGb;
     const free = entries.find(
       (entry) =>
         entry.number !== sharedLane &&
@@ -859,9 +851,7 @@ if (command === "status" || command === "free") {
     process.stdout.write(`${free !== undefined && roomForAnother ? free.number : "none"}\n`);
     log(ramLine());
     if (free !== undefined && !roomForAnother)
-      log(
-        `Lane ${free.number} is free but its stack and its holder's server need ${laneUseGb} GB free.`,
-      );
+      log(`Lane ${free.number} is free but there is not enough RAM to start it.`);
   } else {
     const snapshot = entries.some((entry) => entry.records.length > 0)
       ? processSnapshot()
@@ -960,7 +950,7 @@ try {
       await locked(async () => {
         await requireNotBlocked(lane);
         const lease = await requireLeaseHolder(lane, worktree, false, true);
-        if (!databaseRunning(lane)) requireStackRam("start the lane stack");
+        if (!databaseRunning(lane)) requireRam("start the lane stack");
         else log(ramLine());
         await updateLaneAuthConfig(lane);
         await ensureLocalSigningKey(
