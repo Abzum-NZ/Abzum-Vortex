@@ -40,6 +40,12 @@ export {
   readCurrentOrganizationAppStoreAddressAfterAuthorization,
   readViewerPresentationAfterAuthorization,
 } from "./organization-runtime-settings-administration";
+export {
+  changeCurrentOrganizationThemeAfterAuthorization,
+  readCurrentOrganizationThemeAfterAuthorization,
+  readOrganizationThemeChangePermittedAfterAuthorization,
+  type OrganizationThemeRead,
+} from "./organization-theme-administration";
 export { createOrganizationLocalAdministrationService } from "./organization-local-administration-access";
 export {
   decideOrganizationAccessBatch,

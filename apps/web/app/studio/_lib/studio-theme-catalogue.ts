@@ -1,6 +1,7 @@
 import "server-only";
 
 import {
+  authoredApplicationThemeSelection,
   SHADCN_HEADING_FONT_INHERIT,
   SHADCN_ICON_LIBRARIES,
   shadcnFontOptions,
@@ -12,7 +13,6 @@ import {
   type PlatformThemeRelease,
   type ShadcnThemeCatalogueDimensionKey,
 } from "@vortex/platform/server";
-import type { SourceApplicationThemeSelection } from "@vortex/platform/schema";
 import type {
   StudioThemeDimension,
   StudioThemeOption,
@@ -79,21 +79,6 @@ const colour = (release: PlatformThemeRelease, key: string, mode: "light" | "dar
   return token[mode]!;
 };
 
-const sourceSelection = (
-  selection: (typeof PLATFORM_THEME_PRESETS)[number]["selection"],
-): SourceApplicationThemeSelection => ({
-  style: selection.style,
-  base_color: selection.baseColor,
-  theme: selection.theme,
-  chart_color: selection.chartColor,
-  radius: selection.radius,
-  menu_color: selection.menuColor,
-  menu_accent: selection.menuAccent,
-  icon_library: selection.iconLibrary,
-  body_font: selection.bodyFont,
-  heading_font: selection.headingFont,
-});
-
 /** The platform theme set as preview cards: each release's own surface, text, accent and badge. */
 const themePresets: readonly StudioThemePreset[] = PLATFORM_THEME_PRESETS.map((entry) => ({
   key: entry.key,
@@ -103,7 +88,7 @@ const themePresets: readonly StudioThemePreset[] = PLATFORM_THEME_PRESETS.map((e
     catalogueThemeId: entry.release.catalogueThemeId,
     releaseVersion: entry.release.releaseVersion,
   },
-  selection: sourceSelection(entry.selection),
+  selection: authoredApplicationThemeSelection(entry.selection),
   preview: {
     light: {
       background: colour(entry.release, "background", "light"),

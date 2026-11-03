@@ -26,3 +26,5 @@ export type {
   ThemeValidationFailure,
   ThemeValidationResult,
 } from "./types";
+
+export { applyOrganizationTheme } from "./organization-theme";

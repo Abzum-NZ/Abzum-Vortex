@@ -6,6 +6,12 @@ export type StudioThemeResolution =
   | Readonly<{ kind: "available"; valid: false; problems: readonly string[] }>
   | Readonly<{ kind: "refused" | "temporarily_unavailable" }>;
 
+/** What saving the organisation theme came to; a conflict carries the stored revision to retry from. */
+export type StudioOrganizationThemeSave =
+  | Readonly<{ kind: "saved" | "conflict"; revision: number }>
+  | Readonly<{ kind: "invalid"; problems: readonly string[] }>
+  | Readonly<{ kind: "refused" | "temporarily_unavailable" }>;
+
 /**
  * What the Theme tab offers: each shadcn create setting with the options of the pinned shadcn
  * 4.21.0 catalogue that is checked in, minus any option the catalogue refuses. The server builds

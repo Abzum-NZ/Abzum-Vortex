@@ -64,6 +64,7 @@ import {
   createDatabaseDefinitionPublicationService,
   fingerprintCanonicalValue,
   DefinitionCompilationError,
+  readCurrentOrganizationThemeAfterAuthorization,
 } from "@vortex/platform/server";
 import { studioUsesSignature } from "@vortex/ui/studio/contextual-palette";
 import type {
@@ -631,6 +632,10 @@ export const loadStudioApplicationDraft = async (
         let pageCompiledSlots: (StudioApplicationCompiledPageSlots | null)[] = requests.map(
           () => null,
         );
+        // The canvas draws the application as it runs: the draft's theme through the organisation's.
+        const organizationTheme = canvas
+          ? await readCurrentOrganizationThemeAfterAuthorization(transaction)
+          : undefined;
         let canvasFrames: (StudioApplicationCanvasFrames | null)[] = requests.map(() => null);
         let placements: StudioFlowPlacements | null = null;
         let compileFailure: StudioCompileFailure | null = null;
@@ -676,6 +681,7 @@ export const loadStudioApplicationDraft = async (
                     draft.source.body.pages,
                     compiled.compilation.canonical.content,
                     request.pageAlias,
+                    organizationTheme?.selection,
                   )
                 : null,
             );

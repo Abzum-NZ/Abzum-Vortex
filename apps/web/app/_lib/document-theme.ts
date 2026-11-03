@@ -1,17 +1,24 @@
 import "server-only";
 
+import { cache, type CSSProperties } from "react";
 import { headers } from "next/headers";
-import type { CSSProperties } from "react";
 import { DEFAULT_APPLICATION_THEME_SELECTION } from "@vortex/platform/schema";
-import { DEFAULT_PLATFORM_THEME_RELEASE, STUDIO_THEME_ROOT } from "@vortex/platform/server";
+import {
+  applyOrganizationTheme,
+  DEFAULT_PLATFORM_THEME_RELEASE,
+  STUDIO_THEME_ROOT,
+} from "@vortex/platform/server";
 import {
   createDocumentThemeVariables,
   createThemeRootProps,
   createVortexStyleRootProps,
   resolveVortexStyleSelection,
+  type ApplicationTheme,
   type VortexStyleRootProps,
 } from "@vortex/ui/theme";
+import { resolveIdentitySession } from "../auth/_lib/session-server";
 import { loadApplicationStartTheme } from "./application-frame";
+import { loadOrganizationTheme } from "./organization-theme";
 import { requestAddressHeader } from "./request-address";
 
 /** The first path segments that are platform routes, never a tenant. */
@@ -22,19 +29,22 @@ const platformStyle = createVortexStyleRootProps(
   resolveVortexStyleSelection(DEFAULT_APPLICATION_THEME_SELECTION),
 );
 
-/** The same Studio root props serve the document's first paint and client-side route transitions. */
-const studioTheme = createThemeRootProps(STUDIO_THEME_ROOT, DEFAULT_PLATFORM_THEME_RELEASE.tokens);
-const studioStyle = createVortexStyleRootProps(
-  resolveVortexStyleSelection(STUDIO_THEME_ROOT.selection),
-);
-export const STUDIO_DOCUMENT_THEME = {
-  ...studioTheme,
-  ...studioStyle,
-  // Studio's own marker: the Studio rule below matches only while Studio is on screen, never an
-  // application that happens to pick Studio's style, menu and accent.
-  "data-vortex-surface": "studio",
-  style: { ...studioTheme.style, ...studioStyle.style },
+/** The document root props of Studio drawn in one theme: its attributes and every theme variable. */
+const studioDocumentThemeOf = (theme: ApplicationTheme) => {
+  const root = createThemeRootProps(theme, DEFAULT_PLATFORM_THEME_RELEASE.tokens);
+  const style = createVortexStyleRootProps(resolveVortexStyleSelection(theme.selection));
+  return {
+    ...root,
+    ...style,
+    // Studio's own marker: the Studio rule below matches only while Studio is on screen, never an
+    // application that happens to pick Studio's style, menu and accent.
+    "data-vortex-surface": "studio",
+    style: { ...root.style, ...style.style },
+  };
 };
+
+/** The same Studio root props serve the document's first paint and client-side route transitions. */
+export const STUDIO_DOCUMENT_THEME = studioDocumentThemeOf(STUDIO_THEME_ROOT);
 
 /**
  * The platform default theme as one `:root` rule. It is the document's theme wherever no
@@ -61,6 +71,41 @@ export const STUDIO_ROOT_CSS = variablesRule(
     .join("")}`,
   studioDocumentStyle,
 );
+
+const organizationIdPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Studio's theme for the organisation its address names (`/studio/<organisation>/...`): Studio's
+ * platform theme with that organisation's theme applied, or undefined where Studio keeps its own
+ * theme (no organisation named, not signed in, or an organisation the person is not a member of).
+ * An organisation theme that cannot be read now fails loudly; Studio is never drawn in a theme
+ * nobody chose.
+ */
+const loadStudioOrganizationTheme = cache(
+  async (organizationId: string | undefined): Promise<ApplicationTheme | undefined> => {
+    if (organizationId === undefined || !organizationIdPattern.test(organizationId))
+      return undefined;
+    const resolution = await resolveIdentitySession();
+    if (resolution.kind !== "active") return undefined;
+    const load = await loadOrganizationTheme(resolution.session, organizationId);
+    if (load.kind === "unavailable") return undefined;
+    if (load.kind === "temporarily_unavailable")
+      throw new Error("STUDIO_ORGANIZATION_THEME_UNAVAILABLE");
+    const theme = applyOrganizationTheme(STUDIO_THEME_ROOT, load.theme.selection);
+    return theme === STUDIO_THEME_ROOT ? undefined : theme;
+  },
+);
+
+/** The root props Studio draws with for the request's organisation: Studio's own, or the organisation's. */
+export async function loadStudioDocumentTheme(): Promise<typeof STUDIO_DOCUMENT_THEME> {
+  const address = (await headers()).get(requestAddressHeader);
+  const [tenant, organization] =
+    address === null
+      ? []
+      : new URL(address, "http://address.invalid").pathname.split("/").filter(Boolean);
+  const theme = tenant === "studio" ? await loadStudioOrganizationTheme(organization) : undefined;
+  return theme === undefined ? STUDIO_DOCUMENT_THEME : studioDocumentThemeOf(theme);
+}
 
 type DocumentTheme = Readonly<{
   attributes: Omit<VortexStyleRootProps, "style">;
@@ -91,7 +136,16 @@ export async function loadDocumentTheme(): Promise<DocumentTheme> {
     .map((segment) => decodeURIComponent(segment));
   const [tenant, organization, application] = segments;
   if (tenant === "studio") {
-    return { attributes: studioDocumentAttributes, style: {}, stylesheet: "studio" };
+    const studio = await loadStudioOrganizationTheme(organization);
+    if (studio === undefined)
+      return { attributes: studioDocumentAttributes, style: {}, stylesheet: "studio" };
+    const { style: _studioStyle, ...attributes } = studioDocumentThemeOf(studio);
+    return {
+      attributes,
+      // Only what differs from the platform rule the document already links.
+      style: createDocumentThemeVariables(studio, DEFAULT_PLATFORM_THEME_RELEASE.tokens),
+      stylesheet: "studio",
+    };
   }
   if (
     segments.length !== 4 ||

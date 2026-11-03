@@ -12,6 +12,7 @@ import { Notice } from "@vortex/ui/components/notice";
 import { RadioGroup, RadioGroupItem } from "@vortex/ui/components/radio-group";
 import { ToggleGroup, ToggleGroupItem } from "@vortex/ui/components/toggle-group";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@vortex/ui/components/tooltip";
+import { NavigationLink } from "@vortex/ui/routing";
 import { studioNotice } from "./studio-save-state";
 import { cn } from "@vortex/ui/lib/utils";
 import {
@@ -174,10 +175,14 @@ function Swatch({
 /**
  * The Theme tab: shadcn create's settings for the whole application, kept in the draft's one theme
  * selection. Each change, a swatch, a pasted preset code or Shuffle, is resolved with the checks
- * publication runs before it reaches the draft, and the canvas then draws it; Studio's own frame
- * keeps its Studio theme. Only options of the pinned shadcn 4.21.0 catalogue are offered.
+ * publication runs before it reaches the draft, and the canvas then draws it. Only options of the
+ * pinned shadcn 4.21.0 catalogue are offered. The organisation theme editor is this same panel: it
+ * passes no `base` and no `onPreset` (an organisation theme is a selection, never a platform
+ * release pin), so the platform theme cards are not offered, and it names its own title and help.
  */
 export function StudioThemePanel({
+  title = "Theme",
+  description = "How every page of this application looks. Changes show on the canvas and save automatically.",
   selection,
   base,
   options,
@@ -185,9 +190,14 @@ export function StudioThemePanel({
   hidden,
   onChange,
   onPreset,
+  organizationThemeHref,
 }: Readonly<{
+  /** Where the organisation theme is edited; offered by an application's Theme tab, not by the editor itself. */
+  organizationThemeHref?: string;
+  title?: string;
+  description?: string;
   selection: SourceApplicationThemeSelection;
-  base: Readonly<{ catalogue_theme_id: string; release_version: string }>;
+  base?: Readonly<{ catalogue_theme_id: string; release_version: string }>;
   options: StudioThemeOptions;
   disabled: boolean;
   hidden: boolean;
@@ -197,7 +207,7 @@ export function StudioThemePanel({
     what: string,
   ) => Promise<StudioThemeChangeOutcome & Readonly<{ problems?: readonly string[] }>>;
   /** Puts a complete theme (its release and selection) in the draft after it resolves. */
-  onPreset: (
+  onPreset?: (
     next: StudioThemePreset,
     what: string,
   ) => Promise<StudioThemeChangeOutcome & Readonly<{ problems?: readonly string[] }>>;
@@ -243,13 +253,16 @@ export function StudioThemePanel({
       `${dimension(key).label} set to ${studioThemeOptionLabel(options, key, id)}`,
     );
   };
-  const selectedPreset = options.presets.find(
-    (preset) =>
-      base.catalogue_theme_id === preset.base.catalogueThemeId &&
-      base.release_version === preset.base.releaseVersion,
-  );
+  const selectedPreset =
+    base === undefined
+      ? undefined
+      : options.presets.find(
+          (preset) =>
+            base.catalogue_theme_id === preset.base.catalogueThemeId &&
+            base.release_version === preset.base.releaseVersion,
+        );
   const applyPreset = async (preset: StudioThemePreset) => {
-    if (locked) return;
+    if (locked || onPreset === undefined) return;
     setPending(true);
     try {
       const outcome = await onPreset(preset, `Theme ${preset.label} applied`);
@@ -337,9 +350,9 @@ export function StudioThemePanel({
 
   return (
     <StudioPanelShell
-      title="Theme"
+      title={title}
       hidden={hidden}
-      description="How every page of this application looks. Changes show on the canvas and save automatically."
+      description={description}
       action={
         <StudioIconButton label="Shuffle theme" disabled={locked} onClick={() => void shuffle()}>
           <Icon name="redo" />
@@ -369,23 +382,25 @@ export function StudioThemePanel({
           Checking the theme…
         </div>
       )}
-      <StudioInspectorGroup title="Themes">
-        <ToggleGroup
-          variant="outline"
-          spacing={3}
-          value={selectedPreset === undefined ? [] : [selectedPreset.key]}
-          disabled={locked}
-          onValueChange={(next) => {
-            const preset = options.presets.find((candidate) => candidate.key === next[0]);
-            if (preset !== undefined) void applyPreset(preset);
-          }}
-          className="grid w-full grid-cols-1 sm:grid-cols-2"
-        >
-          {options.presets.map((preset) => (
-            <ThemePresetItem key={preset.key} preset={preset} />
-          ))}
-        </ToggleGroup>
-      </StudioInspectorGroup>
+      {onPreset !== undefined && (
+        <StudioInspectorGroup title="Themes">
+          <ToggleGroup
+            variant="outline"
+            spacing={3}
+            value={selectedPreset === undefined ? [] : [selectedPreset.key]}
+            disabled={locked}
+            onValueChange={(next) => {
+              const preset = options.presets.find((candidate) => candidate.key === next[0]);
+              if (preset !== undefined) void applyPreset(preset);
+            }}
+            className="grid w-full grid-cols-1 sm:grid-cols-2"
+          >
+            {options.presets.map((preset) => (
+              <ThemePresetItem key={preset.key} preset={preset} />
+            ))}
+          </ToggleGroup>
+        </StudioInspectorGroup>
+      )}
       <StudioInspectorGroup title="Style">
         <RadioGroup
           aria-label="Style"
@@ -457,6 +472,21 @@ export function StudioThemePanel({
           {segmented(dimension("menu_accent"))}
         </div>
       </StudioInspectorGroup>
+      {organizationThemeHref !== undefined && (
+        <StudioInspectorGroup title="Organisation theme" defaultOpen={false}>
+          <p className="text-sm text-muted-foreground">
+            A setting left at the platform default follows the organisation theme.
+          </p>
+          <Button
+            variant="outline"
+            size="sm"
+            nativeButton={false}
+            render={<NavigationLink href={organizationThemeHref} />}
+          >
+            Open the organisation theme
+          </Button>
+        </StudioInspectorGroup>
+      )}
       <StudioInspectorGroup title="Preset code" defaultOpen={false}>
         <InputGroup>
           <InputGroupInput
