@@ -143,7 +143,7 @@ export function StudioCanvasActions() {
 
 /**
  * Replaces Puck's floating action bar with StudioCanvasActions, draws the frame in the iframe, and
- * gives the outline the labelled keyboard region Puck lacks.
+ * draws the outline in Studio's labelled region (its colours, height and edit lock).
  */
 export const studioCanvasOverrides: Partial<Overrides> = {
   actionBar: () => <></>,

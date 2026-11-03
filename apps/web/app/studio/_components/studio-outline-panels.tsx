@@ -256,8 +256,10 @@ export function StudioOutlinePanel({
             narrow it.
           </p>
         )}
-        {/* Kept drawn while searching: Puck's rows take a moment to draw again on a long page. */}
-        <div className={searching ? "hidden" : "flex min-h-0 flex-1 flex-col"}>
+        {/* Kept drawn while searching: Puck's rows take a moment to draw again on a long page. The outline spans the
+            rail body's padding (px-4): Puck's rows need more width than the padded body leaves, and its list then
+            scrolls sideways and clips the selected row's border. */}
+        <div className={searching ? "hidden" : "-mx-4 flex min-h-0 flex-1 flex-col"}>
           <StudioPuckOutline open={pageOpen} />
         </div>
         {!searching && shownByFlows !== undefined && (
