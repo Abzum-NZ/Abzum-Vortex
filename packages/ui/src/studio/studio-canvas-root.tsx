@@ -334,6 +334,49 @@ export function StudioCanvasIframe({
     setFrameDocument(frameDocument ?? null);
     return () => setFrameDocument(null);
   }, [setFrameDocument, frameDocument]);
+  // A block chosen outside the canvas (the Outline, the inspector, an address) is brought into view,
+  // found by Studio's own attribute on its wrapper. It may not be drawn yet (its slots wait), and
+  // the slots around it are drawn after the scroll with heights that were estimates, so it is kept
+  // in view until the page stops changing size or the person scrolls.
+  const selectedId = usePuckSelector((state) => state.selectedItem?.props.id);
+  useEffect(() => {
+    if (frameDocument === undefined || selectedId === undefined) return;
+    let frame = 0;
+    let tries = 0;
+    let observer: MutationObserver | undefined;
+    let timer = 0;
+    const interactions = ["wheel", "pointerdown", "keydown", "touchstart"] as const;
+    const stop = () => {
+      observer?.disconnect();
+      clearTimeout(timer);
+      for (const name of interactions) frameDocument.removeEventListener(name, stop);
+    };
+    const find = () =>
+      frameDocument.querySelector(`[data-vortex-placement-id="${CSS.escape(selectedId)}"]`);
+    const scroll = () => {
+      const block = find();
+      if (block === null) {
+        if (tries++ < 600) frame = requestAnimationFrame(scroll);
+        return;
+      }
+      block.scrollIntoView({ block: "nearest" });
+      timer = window.setTimeout(stop, 8000);
+      observer = new MutationObserver(() => {
+        find()?.scrollIntoView({ block: "nearest" });
+        clearTimeout(timer);
+        timer = window.setTimeout(stop, 4000);
+      });
+      // Slots drawn (or drawn again) change the page's size: what is added to the body is watched.
+      observer.observe(frameDocument.body, { childList: true, subtree: true });
+      for (const name of interactions)
+        frameDocument.addEventListener(name, stop, { passive: true });
+    };
+    frame = requestAnimationFrame(scroll);
+    return () => {
+      cancelAnimationFrame(frame);
+      stop();
+    };
+  }, [frameDocument, selectedId]);
   // While blocks are edited the canvas is a picture of the page, outside Studio's Tab path (blocks
   // are chosen in the Outline); while grids are arranged its column controls need the keyboard.
   useEffect(() => {
@@ -475,7 +518,9 @@ export function StudioCanvasIframe({
     // size, a slot drawn shorter than its placeholder): slots are looked at again.
     const resize = new ResizeObserver(tell);
     if (well !== null) resize.observe(well);
-    if (frameDocument !== undefined) resize.observe(frameDocument.body);
+    const drawn = new MutationObserver(tell);
+    if (frameDocument !== undefined)
+      drawn.observe(frameDocument.body, { childList: true, subtree: true });
     // The frame is laid out or scaled after the first draw: slots are looked at again.
     tell();
     return () => {
@@ -483,6 +528,7 @@ export function StudioCanvasIframe({
       well?.removeEventListener("scroll", tell);
       frameDocument?.removeEventListener("scroll", tell);
       resize.disconnect();
+      drawn.disconnect();
     };
   }, [view.well, view.scale, frameDocument, interactive]);
   return (

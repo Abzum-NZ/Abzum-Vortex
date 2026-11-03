@@ -872,48 +872,7 @@ function StudioPuckSync({
   // The outline or the inspector selected something, or the canvas came into or left view.
   useEffect(() => {
     select(wanted);
-    // Chosen outside the canvas (the outline, the inspector): bring the block into the frame's view.
-    // The block is found by Studio's own attribute on its wrapper (`PlacementBlock`). The canvas
-    // document may not exist yet (a block chosen by address at open) and the slots that hold the
-    // block are drawn a frame or two later, so the block is looked for until it is there.
-    if (wanted === null || frameDocument === null) return;
-    let frame = 0;
-    let tries = 0;
-    let observer: ResizeObserver | undefined;
-    let timer = 0;
-    const interactions = ["wheel", "pointerdown", "keydown", "touchstart"] as const;
-    const stop = () => {
-      observer?.disconnect();
-      clearTimeout(timer);
-      for (const name of interactions) frameDocument.removeEventListener(name, stop);
-    };
-    const scroll = () => {
-      const block = frameDocument.querySelector(
-        `[data-vortex-placement-id="${CSS.escape(wanted)}"]`,
-      );
-      if (block === null) {
-        if (tries++ < 600) frame = requestAnimationFrame(scroll);
-        return;
-      }
-      block.scrollIntoView({ block: "nearest" });
-      // The slots around the block are drawn after the scroll (their heights were estimates): the
-      // block is kept in view until the page stops changing size, or the person scrolls.
-      timer = window.setTimeout(stop, 8000);
-      observer = new ResizeObserver(() => {
-        block.scrollIntoView({ block: "nearest" });
-        clearTimeout(timer);
-        timer = window.setTimeout(stop, 4000);
-      });
-      observer.observe(frameDocument.body);
-      for (const name of interactions)
-        frameDocument.addEventListener(name, stop, { passive: true });
-    };
-    frame = requestAnimationFrame(scroll);
-    return () => {
-      cancelAnimationFrame(frame);
-      stop();
-    };
-  }, [wanted, select, frameDocument]);
+  }, [wanted, select]);
 
   return null;
 }
