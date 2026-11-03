@@ -177,21 +177,21 @@ function StudioActionBar({ id, type }: Readonly<{ id: string; type: string }>) {
   useLayoutEffect(() => {
     const bar = anchor.current;
     const block = bar?.parentElement;
-    if (bar == null || block == null || visible === undefined) return;
+    const shown = studioCanvasVisible(view);
+    if (bar == null || block == null || shown === undefined) return;
     const box = bar.getBoundingClientRect();
     const blockBox = block.getBoundingClientRect();
     // `box` includes the shift in force, so the unshifted edges are found first.
     const left = box.left - shift;
     const right = box.right - shift;
     let next = 0;
-    if (right > visible.right) next = visible.right - right;
-    if (left + next < visible.left) next = visible.left - left;
+    if (right > shown.right) next = shown.right - right;
+    if (left + next < shown.left) next = shown.left - left;
     const rounded = Math.round(next);
     if (rounded !== shift) setShift(rounded);
-    const flip = blockBox.top - box.height < visible.top;
+    const flip = blockBox.top - box.height < shown.top;
     if (flip !== below) setBelow(flip);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- placed again for these changes only
-  }, [id, view.scale, scrolled, name, shift, below]);
+  }, [id, view, scrolled, name, shift, below]);
   // The block resizes (a drag, a setting): the bar follows its edges.
   useEffect(() => {
     const block = anchor.current?.parentElement;
@@ -290,7 +290,7 @@ function StudioActionBar({ id, type }: Readonly<{ id: string; type: string }>) {
     translate: `${shift}px 0`,
     transformOrigin: below ? "left top" : "left bottom",
   };
-  let slot = 0;
+  const first = parent === undefined ? 0 : 1;
   return (
     <div
       ref={anchor}
@@ -316,7 +316,7 @@ function StudioActionBar({ id, type }: Readonly<{ id: string; type: string }>) {
             reason={undefined}
             tooltip={tooltip}
             onAct={() => act("parent")}
-            {...stop(slot++)}
+            {...stop(0)}
           >
             <Icon name="arrow-up" />
           </BarAction>
@@ -326,7 +326,7 @@ function StudioActionBar({ id, type }: Readonly<{ id: string; type: string }>) {
           reason={duplicateReason}
           tooltip={tooltip}
           onAct={() => act("duplicate")}
-          {...stop(slot++)}
+          {...stop(first)}
         >
           <Copy aria-hidden="true" />
         </BarAction>
@@ -335,7 +335,7 @@ function StudioActionBar({ id, type }: Readonly<{ id: string; type: string }>) {
           reason={deleteReason}
           tooltip={tooltip}
           onAct={() => act("remove")}
-          {...stop(slot++)}
+          {...stop(first + 1)}
         >
           <Trash2 aria-hidden="true" />
         </BarAction>
