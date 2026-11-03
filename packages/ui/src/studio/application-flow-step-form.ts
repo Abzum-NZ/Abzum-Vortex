@@ -67,10 +67,10 @@ const calculationFormula = (
 
 // ─── What the draft offers a step ────────────────────────────────────────────────────────────
 
-/** An installed application a Navigate step can open, with the keys of its pages. */
 /** Where the Navigate targets stand: they are read beside the editor's first load. */
 export type StudioNavigationApplicationsStatus = "loading" | "ready" | "failed";
 
+/** An installed application a Navigate step can open, with the keys of its pages. */
 export type StudioNavigationApplication = Readonly<{
   key: string;
   label: string;
@@ -170,6 +170,24 @@ const navigationApplicationOptions = (
     named !== "" &&
     !options.some((entry) => entry.value === named)
     ? [...options, { value: named, label: named }]
+    : options;
+};
+
+/** The pages of the application a Navigate step names; while the targets load, the page it names stays. */
+const navigationPageOptions = (
+  choices: Pick<StudioFlowDraftChoices, "applications" | "applicationsStatus">,
+  application: string | undefined,
+  named: string | undefined,
+): readonly Readonly<{ value: string; label: string }>[] => {
+  const options =
+    choices.applications
+      .find((entry) => entry.key === application)
+      ?.pageKeys.map((page) => ({ value: page, label: studioWords(page) })) ?? [];
+  return choices.applicationsStatus !== "ready" &&
+    named !== undefined &&
+    named !== "" &&
+    !options.some((entry) => entry.value === named)
+    ? [...options, { value: named, label: studioWords(named) }]
     : options;
 };
 
@@ -929,9 +947,11 @@ export const projectStudioFlowStepForm = (
                   : task.type === "interface.navigate" &&
                       key === "page" &&
                       task.properties.application !== undefined
-                    ? (choices.applications
-                        .find((entry) => entry.key === literalText(task.properties.application))
-                        ?.pageKeys.map((page) => ({ value: page, label: studioWords(page) })) ?? [])
+                    ? navigationPageOptions(
+                        choices,
+                        literalText(task.properties.application),
+                        literalText(task.properties.page),
+                      )
                     : task.type === "interface.set_value" && key === "value"
                       ? choices.pageValues.map((entry) => ({
                           value: entry.name,

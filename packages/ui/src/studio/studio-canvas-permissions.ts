@@ -42,6 +42,31 @@ export const studioPlacementReferrers = (
     ...applicationUses(source, { kind: "message_target", placementAlias: alias }),
   ].filter((place) => place.open.kind !== "placement" || !leaving.has(place.open.placementAlias));
 
+/**
+ * Why a block cannot be duplicated, or undefined: a form, or a block holding a field input, because
+ * its field inputs cannot be copied. The one rule for Puck's Duplicate button (the references) and
+ * for the canvas change that carries a duplicate (`applyStudioCanvasChange`).
+ */
+export const studioDuplicateRefusal = (
+  catalogue: ImmutablePlatformBlockCatalogue,
+  item: SourceItem,
+  descendants: readonly SourceItem[] = sourceItemTree([item]),
+): string | undefined => {
+  if (holdsForm(catalogue, [item]))
+    return "A form cannot be duplicated because its field inputs cannot be.";
+  return descendants.some((child) => {
+    const childRelease = releaseFor(catalogue, child);
+    return (
+      childRelease?.paletteGroup === "input" &&
+      childRelease.properties.some(
+        (property) => property.key === "name" || property.key === "field",
+      )
+    );
+  })
+    ? "A field input cannot be duplicated. Add another field instead."
+    : undefined;
+};
+
 /** Build the references once for a draft; the values are plain metadata. */
 export const studioCanvasReferences = (
   source: ApplicationSourceDocument,
@@ -65,20 +90,8 @@ export const studioCanvasReferences = (
         const removed = new Set(descendants.map((child) => child.props.id));
         const reasons: Partial<Record<StudioCanvasAction, string>> = {};
         const release = releaseFor(catalogue, item);
-        if (holdsForm(catalogue, [item]))
-          reasons.duplicate = "A form cannot be duplicated because its field inputs cannot be.";
-        if (
-          descendants.some((child) => {
-            const childRelease = releaseFor(catalogue, child);
-            return (
-              childRelease?.paletteGroup === "input" &&
-              childRelease.properties.some(
-                (property) => property.key === "name" || property.key === "field",
-              )
-            );
-          })
-        )
-          reasons.duplicate ??= "A field input cannot be duplicated. Add another field instead.";
+        const duplicate = studioDuplicateRefusal(catalogue, item, descendants);
+        if (duplicate !== undefined) reasons.duplicate = duplicate;
         // The tooltip names the outlets themselves, not every page bound to them.
         const outlets = studioLayoutOutletPlacementUses(source, id).filter(
           (place) => place.open.kind === "shell",

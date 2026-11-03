@@ -753,6 +753,15 @@ export function useStudioDraft({
           if (after.isDirty && after.source !== before.source) scheduleSave(autosaveDelayMs);
           return;
         case "failed":
+          // The platform was never asked: retrying would send the same draft nowhere. Undo is the way back.
+          if (outcome.invalid === true) {
+            setStatus({
+              kind: "refused",
+              message:
+                "This change made the draft invalid, so it was not saved. Undo it, and Studio saves again.",
+            });
+            return;
+          }
           retries.current += 1;
           if (retries.current > maximumRetries) {
             setStatus({

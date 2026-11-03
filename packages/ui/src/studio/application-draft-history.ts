@@ -40,7 +40,8 @@ export type StudioApplicationDraftSaveOutcome =
   | Readonly<{ kind: "saved"; draftRevision: number }>
   | Readonly<{ kind: "conflict"; reason?: StudioApplicationDraftConflictReason }>
   | Readonly<{ kind: "refused"; reason?: StudioApplicationDraftRefusalReason; sentence?: string }>
-  | Readonly<{ kind: "failed" }>
+  /** `invalid`: the draft did not pass the source contract at save, so nothing was sent. */
+  | Readonly<{ kind: "failed"; invalid?: true }>
   | Readonly<{ kind: "busy" }>;
 
 export type StudioApplicationDraftHistoryState = Readonly<{
@@ -336,7 +337,7 @@ export const createStudioApplicationDraftHistoryController = (
       }
       if (command === undefined) {
         isSaving = false;
-        outcome = Object.freeze({ kind: "failed" });
+        outcome = Object.freeze({ kind: "failed", invalid: true });
         lastSaveOutcome = outcome;
         notify();
         return outcome;

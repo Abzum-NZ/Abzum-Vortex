@@ -109,7 +109,7 @@ const loadWorkspacePlace = async (
   // address reads start now, run beside the reads below, and reach the editor when they finish.
   const navigationTargets: Promise<readonly StudioNavigationApplication[]> =
     applications.kind !== "available"
-      ? Promise.resolve([])
+      ? Promise.reject(new Error(`STUDIO_NAVIGATION_TARGETS_UNAVAILABLE: ${applications.kind}`))
       : Promise.all(
           applications.applications
             .filter((candidate) => candidate.key !== applicationKey)
