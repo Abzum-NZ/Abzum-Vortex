@@ -13,6 +13,7 @@ import {
   type SyntheticEvent,
 } from "react";
 import { isElement, isHtmlElement } from "../lib/dom";
+import { DeferredDrawingProvider, type DeferredDrawing } from "../deferred-drawing";
 import { PagePuckRenderer } from "../page-puck-renderer";
 import {
   createSelectedPlacementStore,
@@ -24,12 +25,15 @@ import type { Breakpoint } from "../definition-error";
 import type { FieldInputControlReleaseMap, PlatformComponentRegistry } from "../registry";
 import { createAppearanceRootProps, createThemeRootProps, VortexStyleRoot } from "../theme";
 import { studioCanvasMetadata, useStudioCanvasChannel } from "./studio-canvas-metadata";
-import { useStudioCanvasView } from "./studio-canvas-scale";
+import { studioCanvasVisible, useStudioCanvasView } from "./studio-canvas-scale";
 import { useStudioScreen } from "./studio-canvas-screen";
 import { studioPuckIframeCss } from "./studio-puck-style";
 import { useStudioCanvas } from "./studio-puck-provider";
 
 const resolvePageHref = () => "#";
+
+/** How far past what the canvas shows (in the page's pixels) a waiting slot is drawn. */
+const DRAW_AHEAD = 1200;
 
 const usePuckSelector = createUsePuck();
 
@@ -41,7 +45,20 @@ const usePuckSelector = createUsePuck();
 function SelectedBlock({ children }: Readonly<{ children: ReactNode }>) {
   const [store] = useState(createSelectedPlacementStore);
   const selected = usePuckSelector((state) => state.selectedItem?.props.id);
-  useLayoutEffect(() => store.set(selected), [store, selected]);
+  // The blocks that hold the selected one, nearest first (a slot that holds it is drawn at once).
+  const holders = usePuckSelector((state) => {
+    const chain: string[] = [];
+    let parent = selected === undefined ? undefined : state.getParentById(selected);
+    while (parent !== undefined && parent !== null) {
+      chain.push(parent.props.id);
+      parent = state.getParentById(parent.props.id);
+    }
+    return chain.join("\n");
+  });
+  useLayoutEffect(
+    () => store.set(selected, holders === "" ? [] : holders.split("\n")),
+    [store, selected, holders],
+  );
   return <SelectedPlacementProvider store={store}>{children}</SelectedPlacementProvider>;
 }
 
@@ -392,15 +409,58 @@ export function StudioCanvasIframe({
     if (isElement(event.target) && event.target.closest("a[href]") !== null) event.preventDefault();
   };
   // What the canvas draws for the person (empty-slot labels) counter-scales by the zoom, in CSS.
-  const { scale } = useStudioCanvasView();
+  const view = useStudioCanvasView();
+  const { scale } = view;
+  // A slot far from what the well shows is drawn when it comes near (see `DeferredSlot`): the
+  // well's and the page's own scrolls tell the slots that wait, once per frame.
+  const viewRef = useRef(view);
+  viewRef.current = view;
+  const waiting = useRef(new Set<() => void>());
+  const deferral = useMemo(
+    (): DeferredDrawing => ({
+      near: (element) => {
+        const visible = studioCanvasVisible(viewRef.current);
+        const box = element.getBoundingClientRect();
+        // Until the well has laid the frame out, the first screens are what is near.
+        if (visible === undefined) return box.top < DRAW_AHEAD * 2;
+        return box.bottom >= visible.top - DRAW_AHEAD && box.top <= visible.bottom + DRAW_AHEAD;
+      },
+      subscribe: (listener) => {
+        waiting.current.add(listener);
+        return () => waiting.current.delete(listener);
+      },
+    }),
+    [],
+  );
+  useEffect(() => {
+    const well = view.well;
+    let frame = 0;
+    const tell = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        for (const listener of [...waiting.current]) listener();
+      });
+    };
+    well?.addEventListener("scroll", tell, { passive: true });
+    frameDocument?.addEventListener("scroll", tell, { passive: true });
+    // The frame is laid out or scaled after the first draw: slots are looked at again.
+    tell();
+    return () => {
+      cancelAnimationFrame(frame);
+      well?.removeEventListener("scroll", tell);
+      frameDocument?.removeEventListener("scroll", tell);
+    };
+  }, [view.well, view.scale, frameDocument]);
   return (
-    <div
-      className="min-h-full"
-      style={{ "--vortex-canvas-scale": scale } as CSSProperties}
-      onClickCapture={inert}
-      onAuxClickCapture={inert}
-    >
-      {children}
-    </div>
+    <DeferredDrawingProvider value={deferral}>
+      <div
+        className="min-h-full"
+        style={{ "--vortex-canvas-scale": scale } as CSSProperties}
+        onClickCapture={inert}
+        onAuxClickCapture={inert}
+      >
+        {children}
+      </div>
+    </DeferredDrawingProvider>
   );
 }
