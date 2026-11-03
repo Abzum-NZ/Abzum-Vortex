@@ -1,7 +1,6 @@
 import type { Data } from "@puckeditor/core";
 import {
   applicationSourceDocumentSchema,
-  applicationUses,
   describeApplicationUsers,
   definitionLimitMessage,
   definitionLimits,
@@ -30,6 +29,7 @@ import {
   studioPlacementRemovalReference,
 } from "./composition-references";
 import { zoneJson } from "./studio-canvas-data";
+import { studioPlacementReferrers } from "./studio-canvas-permissions";
 
 /** What a change Puck reported on the canvas comes to in the definition. */
 export type StudioCanvasChange =
@@ -94,9 +94,7 @@ export const applyStudioCanvasChange = (
     const kept = storedZoneAliases(editedSlot);
     const removed = new Set([...storedZoneAliases(targetSlot)].filter((alias) => !kept.has(alias)));
     for (const alias of removed) {
-      const users = applicationUses(current, { kind: "placement", placementAlias: alias }).filter(
-        (place) => place.open.kind !== "placement" || !removed.has(place.open.placementAlias),
-      );
+      const users = studioPlacementReferrers(current, alias, removed);
       if (users.length > 0)
         return {
           kind: "refused",

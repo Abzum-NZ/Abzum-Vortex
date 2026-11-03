@@ -30,6 +30,17 @@ export const studioCanvasPermissionReason = (
   action: StudioCanvasAction,
 ): string | undefined => references[alias]?.[action];
 
+/** What still refers to a block, other than blocks that leave with it: query inputs and message targets. */
+export const studioPlacementReferrers = (
+  source: ApplicationSourceDocument,
+  alias: string,
+  leaving: ReadonlySet<string>,
+) =>
+  [
+    ...applicationUses(source, { kind: "placement", placementAlias: alias }),
+    ...applicationUses(source, { kind: "message_target", placementAlias: alias }),
+  ].filter((place) => place.open.kind !== "placement" || !leaving.has(place.open.placementAlias));
+
 /** Build the references once for a draft; the values are plain metadata. */
 export const studioCanvasReferences = (
   source: ApplicationSourceDocument,
@@ -50,6 +61,7 @@ export const studioCanvasReferences = (
             copy.props[key] = without(slot.items, alias);
           return copy;
         });
+    const regionHoldsForm = holdsForm(catalogue, region.zone.items);
     const visit = (items: readonly SourceItem[], required: boolean) => {
       for (const item of items) {
         const id = item.props.id;
@@ -79,22 +91,20 @@ export const studioCanvasReferences = (
         for (const child of descendants) {
           const flow = studioPlacementRemovalReference(source, child.props.id, aliases);
           if (flow !== undefined) reasons.delete ??= studioPlacementReferenceSentence(flow);
-          const users = [
-            ...applicationUses(source, { kind: "placement", placementAlias: child.props.id }),
-            ...applicationUses(source, { kind: "message_target", placementAlias: child.props.id }),
-          ].filter(
-            (place) => place.open.kind !== "placement" || !removed.has(place.open.placementAlias),
-          );
+          const users = studioPlacementReferrers(source, child.props.id, removed);
           if (users.length > 0)
             reasons.delete ??= `This block is used by ${describeApplicationUsers(users)}. Change that reference first.`;
         }
         if (required && items.length === 1) reasons.delete ??= "This block fills a required slot.";
-        const broken = studioFormChangeRefusal(
-          catalogue,
-          source,
-          region.zone.items,
-          without(region.zone.items, id),
-        );
+        // Only a page that holds a form can break one by removing a block.
+        const broken = regionHoldsForm
+          ? studioFormChangeRefusal(
+              catalogue,
+              source,
+              region.zone.items,
+              without(region.zone.items, id),
+            )
+          : undefined;
         if (broken !== undefined)
           reasons.delete ??= studioFormChangeRefusalSentence(
             broken,
