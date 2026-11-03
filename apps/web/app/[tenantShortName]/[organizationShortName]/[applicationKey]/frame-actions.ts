@@ -139,7 +139,7 @@ export async function readApplicationSwitcherAction(
               // holds a role in it; a second Studio row would repeat it with another icon.
               ...(studio?.kind === "available" &&
               studio.organizationId === read.organizationId &&
-              !read.applications.some((candidate) => candidate.key === "vortex.app.studio")
+              !read.applications.some((candidate) => candidate.name === "Studio")
                 ? [
                     {
                       key: "studio",
