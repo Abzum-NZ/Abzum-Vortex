@@ -14,8 +14,11 @@ import {
   applyStudioCompositionCommand,
   applyStudioReactionCondition,
   describeStudioCompositionAddTargets,
+  describeStudioCompositionDestinations,
+  describeStudioCompositionWrap,
   studioDraftChoices,
   resolveStudioSelectionInspectorContext,
+  studioMoveUnavailableReason,
   studioSemanticSelectionKey,
   traverseStudioSemanticSelectionDraft,
   type StudioCompositionCommand,
@@ -49,6 +52,8 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@vortex/ui/components/t
 import { StudioCanvasSkeleton, StudioCanvasView } from "@vortex/ui/studio/canvas-view";
 import { StudioBlocksPanel } from "@vortex/ui/studio/puck-drawer";
 import type {
+  StudioBlockActions,
+  StudioBlockDialogKind,
   StudioCanvasAddRequest,
   StudioCanvasFrame,
   StudioPuckInput,
@@ -72,6 +77,7 @@ import type { StudioInspectorAction } from "@vortex/ui/studio";
 import { ApplicationCompositionEditor } from "./application-composition-editor";
 import { StudioBlockVisibility } from "./studio-block-gate";
 import { StudioBlockSetupDialog, type StudioBlockSetupRequest } from "./studio-block-setup-dialog";
+import { StudioBlockDialogs } from "./studio-block-dialogs";
 import { StudioQuerySheet } from "./studio-query-sheet";
 import { StudioCanvasToolbar, type StudioCanvasZoom } from "./studio-canvas-toolbar";
 import { StudioPanelShell } from "./studio-frame";
@@ -189,6 +195,8 @@ export function useStudioCanvasTab({
   const [viewAs, setViewAs] = useState<string | null>(null);
   const [paletteMessage, setPaletteMessage] = useState("");
   const [blockSetup, setBlockSetup] = useState<StudioBlockSetupRequest | null>(null);
+  // The dialog the selected block's More menu opened on the canvas.
+  const [blockDialog, setBlockDialog] = useState<StudioBlockDialogKind | null>(null);
   const [notice, setNotice] = useState("");
   const [arrangeGrid, setArrangeGrid] = useState(false);
   const [arrangeableGrids, setArrangeableGrids] = useState(false);
@@ -1164,8 +1172,24 @@ export function useStudioCanvasTab({
     />
   );
 
+  // A selection that changes closes the block dialog opened for the one before.
+  useEffect(() => {
+    setBlockDialog(null);
+  }, [selectionKey]);
   const dialog = (
     <>
+      {selected?.kind === "placement" && (
+        <StudioBlockDialogs
+          open={blockDialog}
+          onClose={() => setBlockDialog(null)}
+          context={compositionContext}
+          selection={selected}
+          source={source}
+          disabled={draft.locked}
+          choices={blockChoices}
+          onCommand={commandComposition}
+        />
+      )}
       <StudioBlockSetupDialog
         request={blockSetup}
         choices={draftChoices}
@@ -1212,6 +1236,42 @@ export function useStudioCanvasTab({
   );
   const onPageEdit = useStable(applyPuckPageEdit);
   const onAddBlock = useStable(addBlock);
+  const blockActions = useMemo<StudioBlockActions>(
+    () => ({
+      // Why Move to and Wrap are unavailable for a block, read when the menu opens.
+      availability: (alias) => {
+        const selection = { kind: "placement", placementAlias: alias } as const;
+        if (draft.locked) {
+          const reason = draft.blockedReason() ?? "Studio is busy; try again.";
+          return { move: reason, wrap: reason };
+        }
+        const wrap = describeStudioCompositionWrap(compositionContext, selection);
+        return {
+          move: studioMoveUnavailableReason(
+            describeStudioCompositionDestinations(compositionContext, selection),
+          ),
+          wrap:
+            wrap.kind !== "available"
+              ? "This block can't be wrapped here."
+              : wrap.containers.every((container) => container.unavailable !== undefined)
+                ? "No container can hold this block here."
+                : undefined,
+        };
+      },
+      open: (alias, which) => {
+        if (selected?.kind === "placement" && selected.placementAlias === alias)
+          setBlockDialog(which);
+        else console.info(`[studio] the block menu of '${alias}' found it no longer selected`);
+      },
+      mark: () => draft.history.getState().source,
+      undoIf: (mark) => {
+        if (draft.history.getState().source !== mark) return false;
+        draft.undo();
+        return true;
+      },
+    }),
+    [draft, compositionContext, selected],
+  );
   const palette = useMemo(
     () =>
       addTargets === null
@@ -1255,6 +1315,7 @@ export function useStudioCanvasTab({
       gridReads,
       updating: draft.updatingCanvas,
       palette,
+      blockActions,
     }),
     [
       source,
@@ -1280,6 +1341,7 @@ export function useStudioCanvasTab({
       gridReads,
       draft.updatingCanvas,
       palette,
+      blockActions,
     ],
   );
 

@@ -4,11 +4,9 @@ import { Alert, AlertDescription } from "@vortex/ui/components/alert";
 import { plainSourceSettingValue, recordsTableBoardFeature } from "@vortex/platform/schema";
 import type { StudioCompiledFields } from "../_lib/studio-data-model";
 import {
-  StudioDialog,
   StudioField,
   StudioInspectorActions,
   StudioInspectorGroup,
-  StudioReferencePicker,
   StudioHelp,
   StudioSegmentedControl,
 } from "@vortex/ui/studio";
@@ -20,14 +18,10 @@ import { Input } from "@vortex/ui/components/input";
 
 import { useId, useMemo, useRef, useState } from "react";
 import { studioPlacementLabels } from "../_lib/studio-labels";
-import { useConfirm } from "@vortex/ui/components/confirm-dialog";
 import {
-  describeStudioCompositionDestinations,
   describeStudioCompositionEdit,
-  describeStudioCompositionRemoval,
   describeStudioCompositionSettings,
-  describeStudioCompositionWrap,
-  studioPlacementReferenceSentence,
+  studioOutcomeText,
   studioSemanticSelectionKey,
   studioBlockChoices,
   studioGridDataSettings,
@@ -56,7 +50,6 @@ import {
   type StudioSettingChoices,
 } from "@vortex/ui/studio";
 import { useStudioDraftHeld } from "./use-studio-draft-held";
-import { StudioBlockSetupDialog, type StudioBlockSetupRequest } from "./studio-block-setup-dialog";
 import { StudioTableAddRecords } from "./studio-table-add-records";
 
 type Props = Readonly<{
@@ -139,50 +132,18 @@ const settingsInputsFor = (model: StudioCompositionSettingsModel): SettingsInput
     : { settings: {}, query: null };
 const fieldClass = "w-full";
 
-/** Stable option key of a move destination: its closed descriptor, not a serialised object. */
-const destinationOptionKey = (destination: {
-  readonly kind: string;
-  readonly parentAlias?: string;
-  readonly slotKey?: string;
-}): string =>
-  destination.kind === "child"
-    ? `child:${encodeURIComponent(destination.parentAlias ?? "")}:${encodeURIComponent(destination.slotKey ?? "")}`
-    : destination.kind;
-
-/** What the Move dialog holds while it is closed. */
-const NO_MOVE_MODEL: ReturnType<typeof describeStudioCompositionDestinations> = {
-  kind: "available",
-  destinations: [],
-};
-
-const outcomeText = (result: StudioCompositionOutcome, fallback: string): string =>
-  result.kind === "stale"
-    ? "The draft or your selection changed. Try again."
-    : result.kind === "unsupported"
-      ? "This item does not support that change."
-      : (result.reason ?? fallback);
-
 /**
  * The selected item's settings, order, size and area. Every control edits the draft as it changes,
  * through the one composition command; input that is not valid yet stays here with its problem and
  * never reaches the draft. New blocks come from the Blocks panel's palette.
  */
 export function ApplicationCompositionEditor(props: Props) {
-  const [confirm, confirmDialog] = useConfirm();
   // The screen is the canvas screen: one state, kept by Puck.
   const { breakpoint, choose: chooseScreen } = useStudioScreen();
   const names = useMemo(() => studioPlacementLabels(props.context), [props.context]);
   const model = useMemo(
     () => describeStudioCompositionEdit(props.context, props.selection, breakpoint),
     [props.context, props.selection, breakpoint],
-  );
-  const wrapModel = useMemo(
-    () => describeStudioCompositionWrap(props.context, props.selection),
-    [props.context, props.selection],
-  );
-  const removalModel = useMemo(
-    () => describeStudioCompositionRemoval(props.context, props.selection),
-    [props.context, props.selection],
   );
   const settingsModel = useMemo(
     () => describeStudioCompositionSettings(props.context, props.selection),
@@ -207,17 +168,6 @@ export function ApplicationCompositionEditor(props: Props) {
   );
   // The query sheet answers after the draft changed: it chooses through the latest settings.
   const chooseQuery = useRef<(reference: string) => void>(() => undefined);
-  const [wrapSetup, setWrapSetup] = useState<StudioBlockSetupRequest | null>(null);
-  const [dialog, setDialog] = useState<"move" | "wrap" | null>(null);
-  // The places this block can move to are worked out when the Move dialog is open, not at every
-  // edit: each one is a check of the whole content area.
-  const moveModel = useMemo(
-    () =>
-      dialog === "move"
-        ? describeStudioCompositionDestinations(props.context, props.selection)
-        : NO_MOVE_MODEL,
-    [dialog, props.context, props.selection],
-  );
   // The optional settings nobody has set go to "More settings", decided once for this block.
   const moreSettings = useRef<ReadonlySet<string> | null>(null);
 
@@ -293,7 +243,6 @@ export function ApplicationCompositionEditor(props: Props) {
       })
       .map((property) => property.key),
   );
-  const destinations = moveModel.kind === "available" ? moveModel.destinations : [];
   const inputs = layout.value;
   const widthWord =
     inputs.width === "fill"
@@ -310,7 +259,7 @@ export function ApplicationCompositionEditor(props: Props) {
     setMessage(
       result.kind === "applied"
         ? done
-        : outcomeText(result, "Nothing changed. Use a valid size, order or destination."),
+        : studioOutcomeText(result, "Nothing changed. Use a valid size or order."),
     );
     return result.kind === "applied";
   };
@@ -408,67 +357,6 @@ export function ApplicationCompositionEditor(props: Props) {
     next.splice(nextIndex, 0, moved);
     command({ kind: "order", breakpoint, order: next }, undefined, "Order changed.");
   };
-  const moveTo = (key: string) => {
-    // Option values identify a current closed descriptor, never a source path or an array index.
-    const chosen = destinations.find((item) => destinationOptionKey(item.destination) === key);
-    if (chosen === undefined) {
-      setMessage("This destination is no longer available.");
-      return;
-    }
-    command({ kind: "move", destination: chosen.destination }, undefined, "Item moved.");
-  };
-  const wrapIn = (key: string) => {
-    const chosen =
-      wrapModel.kind === "available"
-        ? wrapModel.containers.find((item) => `${item.blockId}:${item.releaseVersion}` === key)
-        : undefined;
-    if (chosen === undefined) {
-      setMessage("This container is no longer available.");
-      return;
-    }
-    const place = (settings: StudioCompositionSettings): string | true => {
-      if (props.disabled) return "Studio is read-only right now.";
-      const result = props.onCommand(props.context, props.selection, {
-        kind: "wrap",
-        blockId: chosen.blockId,
-        releaseVersion: chosen.releaseVersion,
-        settings,
-      });
-      if (result.kind !== "applied") return outcomeText(result, "Nothing changed.");
-      setMessage(`Item placed in a new ${chosen.name.toLowerCase()}.`);
-      return true;
-    };
-    // A container with required settings (a dialog's title) asks for them before it wraps.
-    if (chosen.choice.setup.length === 0) {
-      place({});
-      return;
-    }
-    setWrapSetup({
-      choice: chosen.choice,
-      description: `Place this item in a new ${chosen.name.toLowerCase()}.`,
-      action: `Place in ${chosen.name.toLowerCase()}`,
-      pageQuery: undefined,
-      add: place,
-    });
-  };
-  const remove = async () => {
-    if (
-      props.disabled ||
-      describeStudioCompositionRemoval(props.context, props.selection).kind !== "available"
-    ) {
-      setMessage("This item cannot be removed. Nothing was changed.");
-      return;
-    }
-    const confirmed = await confirm({
-      title: "Remove this item?",
-      description: "The item is removed from your draft. Undo brings it back.",
-      confirmLabel: "Remove item",
-      cancelLabel: "Keep item",
-      destructive: true,
-    });
-    if (confirmed) command({ kind: "remove" }, undefined, "Item removed.");
-  };
-
   return (
     <section aria-labelledby={titleId}>
       <header className="flex items-start justify-between gap-2 pb-3">
@@ -495,57 +383,9 @@ export function ApplicationCompositionEditor(props: Props) {
                 selectedIndex >= model.order.length - 1,
               onSelect: () => move(1),
             },
-            {
-              label: "Move to…",
-              disabled: props.disabled,
-              onSelect: () => setDialog("move"),
-            },
-            {
-              label: "Wrap in container…",
-              disabled:
-                props.disabled ||
-                wrapModel.kind !== "available" ||
-                wrapModel.containers.length === 0,
-              onSelect: () => setDialog("wrap"),
-            },
-            {
-              label: "Remove",
-              destructive: true,
-              disabled: props.disabled || removalModel.kind !== "available",
-              onSelect: () => {
-                void remove();
-              },
-            },
           ]}
         />
       </header>
-      {removalModel.kind !== "available" && (
-        <p
-          role="status"
-          className="text-sm text-muted-foreground"
-          aria-label="Removal restrictions"
-        >
-          {removalModel.kind === "blocked"
-            ? removalModel.reason === "required_slot"
-              ? "This area needs at least this item."
-              : removalModel.reason === "content_outlet"
-                ? "This item holds a content outlet of its layout. Retarget the outlet in the Layout inspector first."
-                : removalModel.reason === "unresolved_target"
-                  ? "Something this item points to cannot be found. It cannot be removed."
-                  : `${studioPlacementReferenceSentence(removalModel)} It cannot be removed.`
-            : removalModel.kind === "invalid"
-              ? "This item could not be read. Reload Studio."
-              : removalModel.reason === "page_kind"
-                ? "Items can only be removed from a layout or from the content of a list, detail, form or dashboard page."
-                : removalModel.reason === "public_page"
-                  ? "This page is published at a public address. Its items cannot be removed."
-                  : removalModel.reason === "has_children"
-                    ? "This item holds other items. Remove or move them first."
-                    : removalModel.reason === "repeating_slot"
-                      ? "This item sits in a repeating area and cannot be removed here."
-                      : "This item no longer matches its page definition. Reload Studio."}
-        </p>
-      )}
       {settingsModel.kind === "available" ? (
         <StudioInspectorGroup title="Settings" hint="A setting you leave unset uses its default.">
           <fieldset className="space-y-4" disabled={props.disabled}>
@@ -909,91 +749,6 @@ export function ApplicationCompositionEditor(props: Props) {
       <p role="status" aria-live="polite" className={message === "" ? "sr-only" : "py-2 text-sm"}>
         {message}
       </p>
-      <StudioDialog
-        open={dialog === "move"}
-        onOpenChange={(open) => {
-          if (!open) setDialog(null);
-        }}
-        title="Move to another area"
-        description="Moves this item, with what is inside it, to the end of the area you choose in this page or layout. Required content and nesting limits are checked first."
-        closeLabel="Cancel"
-      >
-        <StudioField label="Destination">
-          {(control) => (
-            <StudioReferencePicker
-              {...control}
-              value=""
-              unset="Choose a destination"
-              disabled={props.disabled || destinations.length === 0}
-              options={destinations.map((item) => ({
-                value: destinationOptionKey(item.destination),
-                label:
-                  item.destination.kind === "child"
-                    ? `${names.get(item.destination.parentAlias) ?? "Item"} / ${item.label.slice(item.label.indexOf(" / ") + 3)}`
-                    : item.label,
-              }))}
-              onChange={(next) => {
-                if (next === "") return;
-                moveTo(next);
-                setDialog(null);
-              }}
-            />
-          )}
-        </StudioField>
-        {destinations.length === 0 && (
-          <p role="status" className="text-sm text-muted-foreground">
-            {moveModel.kind === "unsupported"
-              ? {
-                  page_kind: "Items on this kind of page can't be moved.",
-                  manifest_mismatch:
-                    "This page uses a block version Studio can't edit. Reload Studio.",
-                }[moveModel.reason]
-              : moveModel.kind === "invalid"
-                ? "This item's move destinations could not be read. Reload Studio."
-                : "There is no other area this item can move to."}
-          </p>
-        )}
-      </StudioDialog>
-      <StudioDialog
-        open={dialog === "wrap"}
-        onOpenChange={(open) => {
-          if (!open) setDialog(null);
-        }}
-        title="Wrap in container"
-        description="Puts this item into a new container that takes its place. The item keeps its name, settings and order. Containers that cannot hold it say why."
-        closeLabel="Cancel"
-      >
-        {wrapModel.kind === "available" && wrapModel.containers.length > 0 && (
-          <StudioField label="Container">
-            {(control) => (
-              <StudioReferencePicker
-                {...control}
-                value=""
-                unset="Choose a container"
-                disabled={props.disabled}
-                options={wrapModel.containers.map((item) => ({
-                  value: `${item.blockId}:${item.releaseVersion}`,
-                  label:
-                    item.unavailable === undefined
-                      ? item.name
-                      : `${item.name} (not possible: ${item.unavailable})`,
-                }))}
-                onChange={(next) => {
-                  if (next === "") return;
-                  setDialog(null);
-                  wrapIn(next);
-                }}
-              />
-            )}
-          </StudioField>
-        )}
-      </StudioDialog>
-      {confirmDialog}
-      <StudioBlockSetupDialog
-        request={wrapSetup}
-        choices={props.choices}
-        onClose={() => setWrapSetup(null)}
-      />
     </section>
   );
 }

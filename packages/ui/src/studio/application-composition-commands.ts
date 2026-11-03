@@ -65,13 +65,13 @@ import type {
   StudioCompositionSettingsModel,
   StudioCompositionDestination,
   StudioCompositionDestinationModel,
+  StudioCompositionOutcome,
   StudioCompositionCommandResult,
   StudioCompositionRemovalModel,
   StudioCompositionEditorModel,
 } from "./application-composition-model";
 import {
   type Zone,
-  type Region,
   type SlotStep,
   type Target,
   refuse,
@@ -94,6 +94,8 @@ import {
   validateRegion,
   plainSource,
   plainSettings,
+  movableRegion,
+  regionRemovalCause,
 } from "./application-composition-regions";
 import { applyAdd, commandSettings } from "./application-composition-add";
 import { applyWrap } from "./application-composition-wrap";
@@ -137,20 +139,6 @@ type MoveDestination = {
   label: string;
   steps: readonly SlotStep[];
 };
-
-/** A page's editable content is its main area or the content slot its layout opens for it. */
-const pageContentRegion = (
-  region: Region,
-): region is Region & { page: NonNullable<Region["page"]> } =>
-  (region.ordinaryMain === true || region.parent !== undefined) &&
-  (region.page?.type === "list" ||
-    region.page?.type === "detail" ||
-    region.page?.type === "form" ||
-    region.page?.type === "dashboard");
-
-/** The regions whose blocks move: a page's editable content and a layout's own blocks. */
-const movableRegion = (region: Region): boolean =>
-  region.shell !== undefined || pageContentRegion(region);
 
 /**
  * Only actual non-repeatable slots in this original movable region are destinations. A layout
@@ -542,18 +530,10 @@ const resolveRemoval = (
   const resolved = resolve(context, selection, reading);
   if (resolved === undefined) return { kind: "invalid" };
   const { source, target, alias } = resolved;
-  // Any of a layout's own blocks leaves with everything inside it, as any of them can be added.
-  // A page removes one item, and only from its editable content.
-  const layout = target.region.shell !== undefined;
-  if (!layout) {
-    if (!pageContentRegion(target.region)) return { kind: "unsupported", reason: "page_kind" };
-    const page = target.region.page;
-    if (
-      source.body.public_addresses.some((address) => address.page === page.id) ||
-      source.body.experiences?.some((experience) => experience.page === page.key)
-    )
-      return { kind: "unsupported", reason: "public_page" };
-  }
+  // A layout's blocks leave with everything inside them; a page removes only from its editable
+  // content (the one rule, shared with the canvas's permissions).
+  const regionCause = regionRemovalCause(source, target.region);
+  if (regionCause !== undefined) return { kind: "unsupported", reason: regionCause };
   if (
     releaseFor(catalogue, target.item) === undefined ||
     !manifestMatches(catalogue, source, target.region.zone.items) ||
@@ -605,12 +585,6 @@ const resolveRemoval = (
   );
   if (broken !== undefined)
     return studioFormShapeRefusal(broken) ? { kind: "invalid" } : { kind: "blocked", ...broken };
-  // What a flow still names is the cause to fix first, so it is told before the item's content is.
-  if (
-    !layout &&
-    [...itemSlots(catalogue, target.item).values()].some((slot) => slot.items.length > 0)
-  )
-    return { kind: "unsupported", reason: "has_children" };
   return {
     kind: "available",
     removal: {
@@ -677,6 +651,29 @@ const applyRemoval = (
     ? { kind: "invalid" }
     : { kind: "applied", source: parsed };
 };
+
+/** The words for a command that did not apply, from its outcome. */
+export const studioOutcomeText = (result: StudioCompositionOutcome, fallback: string): string =>
+  result.kind === "stale"
+    ? "The draft or your selection changed. Try again."
+    : result.kind === "unsupported"
+      ? "This item does not support that change."
+      : (result.reason ?? fallback);
+
+/** Why a block cannot move anywhere, or undefined: the one wording for the menu and the dialog. */
+export const studioMoveUnavailableReason = (
+  model: StudioCompositionDestinationModel,
+): string | undefined =>
+  model.kind === "unsupported"
+    ? {
+        page_kind: "Blocks on this kind of page can't be moved.",
+        manifest_mismatch: "This page uses a block version Studio can't edit. Reload Studio.",
+      }[model.reason]
+    : model.kind === "invalid"
+      ? "This block's move destinations could not be read. Reload Studio."
+      : model.destinations.length === 0
+        ? "There is no other area this block can move to."
+        : undefined;
 
 export const describeStudioCompositionDestinations = (
   context: StudioCompositionContext,
