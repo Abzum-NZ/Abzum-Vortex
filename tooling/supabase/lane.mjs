@@ -485,7 +485,9 @@ const serve = async (lane, worktreePath) => {
       sameWorktree(entry.worktree, worktreePath),
     );
     if (running)
-      fail(`${worktreePath} already serves lane ${other}: ${describeServer(running)}. Ending it: unserve ${other}.`);
+      fail(
+        `${worktreePath} already serves lane ${other}: ${describeServer(running)}. Ending it: unserve ${other}.`,
+      );
   }
   if (role === "guest" && addsMigration(worktreePath))
     fail("A branch with a migration needs its own lane.");
