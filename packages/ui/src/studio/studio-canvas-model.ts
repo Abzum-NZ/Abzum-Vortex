@@ -45,7 +45,7 @@ export type StudioCanvasModel = Readonly<{
   registry: PlatformComponentRegistry;
   /** The Puck config, with one root slot per content slot of the page's shell. */
   config: Config;
-  /** The root slots the config declares: Puck is opened again when this changes. */
+  /** The keys of the root slots the config declares: Puck is opened again when they change. */
   slotsKey: string;
   page: SourcePage | undefined;
   /** The guided steps of the open page, or none; the tabs above the canvas choose among them. */
@@ -265,6 +265,8 @@ export const useStudioCanvasModel = (
     () => JSON.parse(rootSlotsJson) as readonly (readonly [string, string])[],
     [rootSlotsJson],
   );
+  // Puck is opened again only when the set of root slots changes; a label alone changes the config.
+  const slotsKey = useMemo(() => rootSlots.map(([key]) => key).join(" "), [rootSlots]);
   // The application frame is the canvas root, so the page renders in its outlets inside the iframe.
   const config = useMemo(
     () =>
@@ -337,7 +339,7 @@ export const useStudioCanvasModel = (
       catalogue,
       registry,
       config,
-      slotsKey: rootSlotsJson,
+      slotsKey,
       page,
       steps,
       step,
@@ -362,7 +364,7 @@ export const useStudioCanvasModel = (
       catalogue,
       registry,
       config,
-      rootSlotsJson,
+      slotsKey,
       page,
       steps,
       step,

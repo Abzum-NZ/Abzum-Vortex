@@ -44,8 +44,6 @@ function SelectedBlock({ children }: Readonly<{ children: ReactNode }>) {
   return <SelectedPlacementProvider store={store}>{children}</SelectedPlacementProvider>;
 }
 
-/** The slot gap of the page root, which the runtime's pages use by default. */
-
 /** Puck's component for one slot of the root; the root receives one for every slot field it declares. */
 type RootSlot = (props?: { className?: string; style?: CSSProperties }) => ReactNode;
 
@@ -141,8 +139,8 @@ export function StudioCanvasRoot({
   const latestSlots = useRef<Record<string, RootSlot>>({});
   const stableSlots = useRef<Record<string, RootSlot>>({});
   for (const name of rootSlots) {
-    // While Puck draws a new page's config over the old page's data, a slot of the new config can
-    // be missing for one render: the last slot function stays, and nothing is drawn without one.
+    // Until Puck holds the page's config (it opens on the empty one before the field controls load),
+    // a declared slot has no function yet: the last one stays, and nothing is drawn without one.
     const slot = slots[name];
     if (slot !== undefined) latestSlots.current[name] = slot;
     stableSlots.current[name] ??= (props) => latestSlots.current[name]?.(props) ?? null;

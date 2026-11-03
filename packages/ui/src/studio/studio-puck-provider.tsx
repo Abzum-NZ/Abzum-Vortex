@@ -8,6 +8,7 @@ import {
   type Config,
   type Data,
   type PuckAction,
+  type UiState,
 } from "@puckeditor/core";
 import "@puckeditor/core/no-external.css";
 import {
@@ -62,6 +63,7 @@ import { useStudioCanvasModel, type StudioCanvasModel } from "./studio-canvas-mo
 import {
   studioInitialBreakpoint,
   studioInitialUi,
+  studioScreenOfBreakpoint,
   studioScreenOfWidth,
   studioViewports,
 } from "./studio-canvas-screen";
@@ -524,9 +526,24 @@ export function StudioPuckProvider({
   // Puck takes its data once, when it opens; every later change reaches it through `StudioPuckSync`.
   // A page whose shell has other content slots needs another config, which Puck keeps its old root
   // props across: it is opened again with the new page's data (the key below), only for such a page.
-  const opened = useRef<{ key: string; data: Data } | null>(null);
-  if (opened.current === null || opened.current.key !== model.slotsKey)
-    opened.current = { key: model.slotsKey, data: shown };
+  const opened = useRef<{ key: string; data: Data; ui: Partial<UiState> } | null>(null);
+  if (opened.current === null || opened.current.key !== model.slotsKey) {
+    // The keyboard focus is found again after the reopen.
+    rememberFocus();
+    opened.current = {
+      key: model.slotsKey,
+      data: shown,
+      // A reopened Puck keeps the screen and the mode the person had chosen.
+      ui: {
+        ...studioInitialUi,
+        viewports: {
+          ...studioInitialUi.viewports!,
+          current: { width: studioScreenOfBreakpoint(breakpoint).width, height: "auto" },
+        },
+        previewMode: input.arrangeGrid === true ? "interactive" : "edit",
+      },
+    };
+  }
   const initial = opened.current.data;
   const refusal = refused?.area === model.area ? refused.message : "";
   const value = useMemo(
@@ -549,7 +566,7 @@ export function StudioPuckProvider({
             onAction={onAction}
             iframe={IFRAME}
             viewports={studioViewports}
-            ui={studioInitialUi}
+            ui={opened.current.ui}
             // Puck's own wrapper fills the workspace, so the canvas has the height of its well.
             height="100%"
             overrides={OVERRIDES}
@@ -581,6 +598,44 @@ export function StudioPuckProvider({
     </StudioCanvasContext.Provider>
   );
 }
+
+/**
+ * What held the keyboard focus when Puck was reopened (the workspace is drawn inside it, so its
+ * controls are drawn again): found again by id or by name inside the rail panel, once the new
+ * workspace is on screen.
+ */
+let focusBeforeReopen: Readonly<{ id: string; label: string }> | null = null;
+const rememberFocus = (): void => {
+  const active = document.activeElement;
+  focusBeforeReopen =
+    active instanceof HTMLElement && active !== document.body
+      ? {
+          id: active.id,
+          label: active.getAttribute("aria-label") ?? active.textContent?.trim() ?? "",
+        }
+      : null;
+};
+const restoreFocus = (final: boolean): void => {
+  const wanted = focusBeforeReopen;
+  if (wanted === null) return;
+  const byId = wanted.id === "" ? null : document.getElementById(wanted.id);
+  const byLabel =
+    wanted.label === ""
+      ? undefined
+      : [
+          ...document.querySelectorAll<HTMLElement>(
+            "[data-studio-rail-panel] button, [data-studio-rail-panel] [role=treeitem], [data-studio-rail-panel] a",
+          ),
+        ].find(
+          (element) =>
+            (element.getAttribute("aria-label") ?? element.textContent?.trim()) === wanted.label,
+        );
+  const found = byId ?? byLabel;
+  if (found !== undefined && found !== null) {
+    focusBeforeReopen = null;
+    found.focus();
+  } else if (final) focusBeforeReopen = null;
+};
 
 /**
  * Runs inside Puck and draws nothing: it keeps Puck's private state in step with Studio. The
@@ -628,6 +683,12 @@ function StudioPuckSync({
   showSelection: RefObject<((alias: string | null) => void) | null>;
 }>) {
   const getPuck = useGetPuck();
+  // A workspace opened again after a page with other outlets: the focus it had comes back.
+  useLayoutEffect(() => {
+    restoreFocus(false);
+    const frame = requestAnimationFrame(() => restoreFocus(true));
+    return () => cancelAnimationFrame(frame);
+  }, []);
   const previewMode = usePuckSelector((state) => state.appState.ui.previewMode);
   const recorded = usePuckSelector((state) => state.history.histories.length);
   // The config Puck holds: it takes the page's config a moment after this component sees it.

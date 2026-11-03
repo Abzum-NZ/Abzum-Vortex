@@ -42,6 +42,7 @@ import {
 } from "./registry";
 import {
   getVortexPuckConfig,
+  PAGE_ROOT_GAP,
   VortexPuckThemeTokensProvider,
   type VortexPuckMetadata,
 } from "./puck-config";
@@ -127,7 +128,7 @@ const resolvedPageData = (inputs: ResolvedPageInputs): ResolvedPageData => {
     layout,
     data: {
       root: {
-        props: { gap: "medium", padding: "medium", applicationShell: rootShell },
+        props: { gap: PAGE_ROOT_GAP, padding: "medium", applicationShell: rootShell },
       } as unknown as Data["root"],
       content: layout.content as unknown as Data["content"],
       zones: {},
