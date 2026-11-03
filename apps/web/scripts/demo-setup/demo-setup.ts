@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { findRepositoryRoot } from "../development-setup/state";
+import { findRepositoryRoot, laneOfWorkdir } from "../development-setup/state";
 import { isLoopbackHostname } from "@vortex/platform/schema";
 import {
   isLocalSupabaseApiUrl,
@@ -68,8 +68,9 @@ const validateDemoEnvironment = (): void => {
 const main = async (): Promise<void> => {
   loadLocalWebEnvironment();
   validateDemoEnvironment();
-  if (/[\\/]db3[\\/]?$/.test(process.env.VORTEX_SUPABASE_WORKDIR ?? ""))
-    throw new Error("Demo setup cannot run on the shared lane 3.");
+  const workdir = process.env.VORTEX_SUPABASE_WORKDIR;
+  if (workdir !== undefined && laneOfWorkdir(workdir)?.shared)
+    throw new Error("Demo setup cannot run on the shared demo lane.");
   requireLocalSupabaseBinding();
   const identityId = await ensureLocalDemoOwner();
   runPnpm([
