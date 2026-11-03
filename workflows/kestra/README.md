@@ -1,22 +1,12 @@
 # The operations scheduler
 
-## Operational reference
-
 Kestra open source runs on the Coolify-managed server with its own PostgreSQL. It is the operations
 scheduler in the [current hosting boundary](../../docs/specification/17-runtime-storage-and-caching.md#hosting-boundaries).
 It runs the two scheduled operations flows below. It does not run application flows: those are
-compiled and executed by the in-house flow engine (ADR #1127), and Kestra holds no application
+compiled and executed by the in-house flow engine (see the [architecture decisions](../../docs/architecture/decisions.md)), and Kestra holds no application
 credentials or application database access.
 
 No application user sees it. The two operations flows use only their protected route credentials.
-
-## What is here
-
-| File | Holds |
-|---|---|
-| `Dockerfile` | The pinned Kestra operations image with the reviewed flow definitions |
-| `docker-compose.yml` | The stack Coolify deploys: Kestra and its own PostgreSQL |
-| `flows/` | Scheduled event-dispatch recovery and runtime-bundle cleanup |
 
 ## How it is deployed
 
@@ -111,8 +101,7 @@ is given up until there is a sandbox for it.
 **Both images are pinned.** Kestra's file uses `kestra/kestra:latest`. This repository pins Kestra's
 exact release and multi-platform image digest, and pins its state database to an exact PostgreSQL
 patch release, distribution and digest. The workflow engine and its database therefore change only
-as their own reviewed change, the same rule
-[#6](https://github.com/Abzum-NZ/Abzum-Vortex/issues/6) applies to Next.js and Puck.
+as their own reviewed change, the same rule that applies to Next.js and Puck.
 
 **No password is written down.** Kestra's file publishes `POSTGRES_PASSWORD: k3str4` in its own
 public repository.
@@ -128,8 +117,3 @@ Both are turned off. This engine runs tenants' business processes on a server th
 database, and a standing hourly call outward from it is a decision, not a default. The
 [privacy and operational rules](../../docs/specification/14-activity-privacy-and-retention.md)
 refuse unapproved third-party analytics; this is the same rule one layer down.
-
-## Memory
-
-The server has 8 GB and already runs Coolify and a STUN/TURN service. Kestra is a JVM and takes what
-it is given, so both containers carry a limit: 3 GB for Kestra, 1 GB for PostgreSQL.

@@ -20,15 +20,7 @@ The schema directory names the function's schema and the file name is the functi
 lowercase SQL identifiers, so one name has one file: do not overload a function name. Keep each
 canonical file synchronized with the migration that installs its function.
 
-`vortex_record_adapter` owns the record functions its restricted policies need. A function keeps
-`postgres` ownership only where it calls an integration the `vortex_owner` role cannot be granted;
-every other function is owned by `vortex_owner`.
-
-`vortex_owner` is NOLOGIN and, like `postgres`, has `BYPASSRLS`, so the security-definer functions it owns keep the
-access that their former `postgres` ownership provided on FORCE RLS tables. Every organisation-owned
-table has RLS enabled and forced; the inert policies that duplicated those rules are removed. The
-restricted record role `vortex_record_adapter` does not have `BYPASSRLS`, and its
-organisation-scoped policies continue to apply.
+Function ownership and the role model are described in the [target architecture](../../docs/architecture/target-architecture.md#roles): a function keeps `postgres` ownership only where it calls an integration the `vortex_owner` role cannot be granted.
 
 ## Migration rule
 
@@ -51,16 +43,7 @@ organisation-scoped policies continue to apply.
 
 ## Enforcement
 
-`pnpm guard` runs the check in [`tooling/guard/guard.ts`](../../tooling/guard/guard.ts): it compares
-each canonical function definition with the latest matching definition found in the ordered
-migrations, and rejects non-nil hard-coded UUIDs in new function bodies. It also
-rejects a canonical function name declared with more than one signature, since a call would then
-resolve by argument types instead of by name. The comparison normalizes whitespace. It does not
-inspect the live database or verify the canonical
-file's comment, grants, revokes, owner statement, filename, or one-function-per-file layout. Review
-those details manually, including owner and privilege changes. Do not read a stored function
-definition (`pg_get_functiondef`, `prosrc`, `routine_definition`) or patch one with `replace()`;
-change an argument list only after an explicit `drop function`.
+`pnpm guard` runs the check in [`tooling/guard/guard.ts`](../../tooling/guard/guard.ts): it compares each canonical function definition with the latest matching definition found in the ordered migrations (whitespace normalised), rejects non-nil hard-coded UUIDs in new function bodies, and rejects a canonical function name declared with more than one signature. It does not inspect the live database or verify the canonical file's comment, grants, revokes, owner statement, filename or one-function-per-file layout; review those manually, including owner and privilege changes.
 
 ## Example
 
