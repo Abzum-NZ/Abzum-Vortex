@@ -811,6 +811,11 @@ export function useStudioCanvasTab({
       : ownerShellKey === undefined
         ? undefined
         : labels.get(ownerShellKey);
+  // The page or layout whose blocks the Outline tab lists and searches.
+  const outlineOwnerKey =
+    canvasPage !== undefined && ownerShellKey === undefined
+      ? studioSemanticSelectionKey({ kind: "page", pageAlias: canvasPage.id })
+      : ownerShellKey;
   const selectedName = selected === null ? undefined : labels.get(selectionKey);
   const usedIn = studioUseTargetOf(selected);
   const title =
@@ -825,6 +830,11 @@ export function useStudioCanvasTab({
         hidden={tab !== "outline"}
         pageOpen={canvasPage !== undefined}
         outline={outline}
+        ownerKey={outlineOwnerKey}
+        selectedKey={selectionKey}
+        choose={(node) => {
+          if (node.selection !== null) draft.select(node.selection);
+        }}
         levels={
           canvasPage === undefined
             ? undefined

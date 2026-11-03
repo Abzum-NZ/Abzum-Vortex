@@ -1,15 +1,9 @@
 "use client";
-import { useState, type ReactNode } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import type { StudioSemanticOutline, StudioSemanticOutlineNode } from "@vortex/ui/studio";
 import { StudioPuckOutline } from "@vortex/ui/studio";
-import { useStudioCanvas } from "@vortex/ui/studio/puck-provider";
-import { cn } from "@vortex/ui/lib/utils";
-import {
-  STUDIO_RAIL_BODY_CLASS,
-  StudioPanelShell,
-  StudioSearchBox,
-  StudioSection,
-} from "./studio-frame";
+import { Button } from "@vortex/ui/components/button";
+import { StudioPanelShell, StudioSearchBox, StudioSection } from "./studio-frame";
 import { StudioOutline } from "./studio-outline";
 import { StudioLimitRow } from "./studio-limit";
 
@@ -136,37 +130,137 @@ export function StudioStructurePanel({
   );
 }
 
+/** The open page's or layout's node, found by its key. */
+const findNode = (
+  node: StudioSemanticOutlineNode,
+  key: string,
+): StudioSemanticOutlineNode | undefined =>
+  node.key === key
+    ? node
+    : node.children.reduce<StudioSemanticOutlineNode | undefined>(
+        (found, child) => found ?? findNode(child, key),
+        undefined,
+      );
+
+/** The blocks of a node, nested ones included, in the order the outline lists them. */
+const blocksOf = (node: StudioSemanticOutlineNode): readonly StudioSemanticOutlineNode[] =>
+  node.children.flatMap((child) => [
+    ...(child.kind === "placement" ? [child] : []),
+    ...blocksOf(child),
+  ]);
+
+/** The most results the search lists; a longer list asks for a narrower search. */
+const SEARCH_RESULTS = 50;
+
+/**
+ * The Outline tab: Puck's own outline of the page's blocks, and a search that finds a block by the
+ * name the inspector gives it (Puck's rows are named by block type only, so a page of headings reads
+ * as a column of "Heading"). Choosing a result selects the block; the outline, the canvas and the
+ * inspector follow, as they do for a click on a row.
+ */
 export function StudioOutlinePanel({
   hidden,
   pageOpen,
   outline,
+  ownerKey,
+  selectedKey,
+  choose,
   levels,
 }: Readonly<{
   hidden: boolean;
   /** Whether the canvas holds a page: Puck's outline lists the blocks of the data it holds. */
   pageOpen: boolean;
   outline: StudioSemanticOutline;
+  /** The page or layout the canvas shows, whose blocks the search lists. */
+  ownerKey: string | undefined;
+  selectedKey: string;
+  choose: Choose;
   /** The levels of nested blocks the open page uses, its layout's included. */
   levels: number | undefined;
 }>) {
-  const canvas = useStudioCanvas();
+  const [query, setQuery] = useState("");
+  const owner = ownerKey === undefined ? undefined : findNode(outline, ownerKey);
+  const blocks = useMemo(() => (owner === undefined ? [] : blocksOf(owner)), [owner]);
+  const needle = query.trim().toLocaleLowerCase();
+  const matches = useMemo(
+    () =>
+      needle.length === 0
+        ? []
+        : blocks.filter((block) => block.label.toLocaleLowerCase().includes(needle)),
+    [blocks, needle],
+  );
+  // Blocks that share a name are told apart by their key.
+  const duplicated = useMemo(() => {
+    const seen = new Set<string>();
+    const repeated = new Set<string>();
+    for (const block of blocks) (seen.has(block.label) ? repeated : seen).add(block.label);
+    return repeated;
+  }, [blocks]);
+  const searching = needle.length > 0;
   return (
-    <div hidden={hidden} className={cn("min-h-0 flex-1 flex-col", hidden ? "hidden" : "flex")}>
-      <div className={STUDIO_RAIL_BODY_CLASS} data-studio-rail-body="">
-        <StudioPuckOutline open={pageOpen} areaEmpty={canvas.model.slot?.items.length === 0} />
-        {pageOpen && (
-          <section className="space-y-1" aria-label="Application limits">
-            <StudioLimitRow
-              label="Blocks in the application"
-              limit="compositionPlacements"
-              used={countBlocks(outline.children)}
-            />
-            {levels === undefined ? null : (
-              <StudioLimitRow label="Levels on this page" limit="compositionDepth" used={levels} />
-            )}
-          </section>
-        )}
+    <StudioPanelShell
+      hidden={hidden}
+      search={
+        pageOpen ? (
+          <StudioSearchBox
+            value={query}
+            onChange={setQuery}
+            placeholder="Find a block"
+            label="Find a block"
+          />
+        ) : undefined
+      }
+    >
+      {searching && (
+        <ul className="space-y-1" aria-label="Matching blocks">
+          {matches.slice(0, SEARCH_RESULTS).map((block) => (
+            <li key={block.key}>
+              <Button
+                type="button"
+                variant="ghost"
+                className="w-full justify-start"
+                aria-current={block.key === selectedKey ? true : undefined}
+                onClick={() => {
+                  choose(block);
+                  setQuery("");
+                }}
+              >
+                <span className="truncate">{block.label}</span>
+                {duplicated.has(block.label) && block.selection?.kind === "placement" && (
+                  <span className="truncate text-muted-foreground">
+                    {block.selection.placementAlias}
+                  </span>
+                )}
+              </Button>
+            </li>
+          ))}
+          {matches.length === 0 && (
+            <li className="text-sm text-muted-foreground">No block matches.</li>
+          )}
+          {matches.length > SEARCH_RESULTS && (
+            <li className="text-sm text-muted-foreground">
+              Showing the first {SEARCH_RESULTS} of {matches.length}. Search for more of the name to
+              narrow it.
+            </li>
+          )}
+        </ul>
+      )}
+      {/* Kept drawn while searching: Puck's rows take a moment to draw again on a long page. */}
+      <div hidden={searching}>
+        <StudioPuckOutline open={pageOpen} />
       </div>
-    </div>
+      {pageOpen && (
+        <section className="space-y-1" aria-label="Application limits">
+          <StudioLimitRow
+            label="Blocks in the application"
+            limit="compositionPlacements"
+            used={countBlocks(outline.children)}
+          />
+          {levels === undefined ? null : (
+            <StudioLimitRow label="Levels on this page" limit="compositionDepth" used={levels} />
+          )}
+        </section>
+      )}
+    </StudioPanelShell>
   );
 }

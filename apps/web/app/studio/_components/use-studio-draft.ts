@@ -907,11 +907,8 @@ export function useStudioDraft({
     await saveNow();
   }, [history, blockedReason, saveNow]);
   const updatingCanvas = view.draftRevision !== saved.draftRevision || state.isDirty;
-  const historyBlocked =
-    renderedHolds.has("publication") ||
-    renderedHolds.has("reopening") ||
-    renderedHolds.has("restoring") ||
-    status.kind === "conflict";
+  // The one rule that blocks Undo and Redo, wherever their buttons are: it mirrors blockedReason().
+  const historyBlocked = renderedHolds.size > 0 || status.kind === "conflict";
   const words =
     status.kind === "saved" ? "Saved" : status.kind === "saving" ? "Saving…" : "Not saved";
   const chip =
@@ -921,8 +918,7 @@ export function useStudioDraft({
         ? `${words} · Updating canvas…`
         : words;
   const loadingView = JSON.stringify(view.request) !== requestKey;
-  const locked =
-    renderedHolds.size > 0 || status.kind === "conflict" || lifetime === 0 || loadingView;
+  const locked = historyBlocked || lifetime === 0 || loadingView;
 
   return useMemo<StudioDraft>(
     () => ({

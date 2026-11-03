@@ -817,7 +817,10 @@ export function useStudioTabVisited(visible: boolean): boolean {
   return visible || visited;
 }
 
-/** The chrome every Studio panel is built from: a titled header with an optional action, over scrolling content. */
+/**
+ * The chrome every Studio panel is built from: a titled header with an optional action, over scrolling
+ * content. A panel whose content draws its own heading (the Outline tab: Puck's) passes no title.
+ */
 export function StudioPanelShell({
   title,
   description,
@@ -826,7 +829,7 @@ export function StudioPanelShell({
   search,
   children,
 }: Readonly<{
-  title: string;
+  title?: string | undefined;
   description?: string | undefined;
   action?: ReactNode;
   search?: ReactNode;
@@ -838,28 +841,30 @@ export function StudioPanelShell({
   if (!visited) return null;
   return (
     <div hidden={hidden} className={cn("min-h-0 flex-1 flex-col", hidden ? "hidden" : "flex")}>
-      <div className="flex shrink-0 items-center justify-between gap-2 px-4 pt-4 pb-3">
-        <div className="flex min-w-0 items-center gap-2">
-          <h2 className="text-base font-semibold text-foreground">{title}</h2>
-          {description !== undefined && (
-            <Tooltip>
-              <TooltipTrigger
-                render={
-                  <button
-                    type="button"
-                    aria-label={`About ${title.toLowerCase()}`}
-                    className="flex size-6 items-center justify-center rounded-md text-muted-foreground"
-                  />
-                }
-              >
-                <Icon name="info" className="size-4" />
-              </TooltipTrigger>
-              <TooltipContent>{description}</TooltipContent>
-            </Tooltip>
-          )}
+      {title !== undefined && (
+        <div className="flex shrink-0 items-center justify-between gap-2 px-4 pt-4 pb-3">
+          <div className="flex min-w-0 items-center gap-2">
+            <h2 className="text-base font-semibold text-foreground">{title}</h2>
+            {description !== undefined && (
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <button
+                      type="button"
+                      aria-label={`About ${title.toLowerCase()}`}
+                      className="flex size-6 items-center justify-center rounded-md text-muted-foreground"
+                    />
+                  }
+                >
+                  <Icon name="info" className="size-4" />
+                </TooltipTrigger>
+                <TooltipContent>{description}</TooltipContent>
+              </Tooltip>
+            )}
+          </div>
+          {action}
         </div>
-        {action}
-      </div>
+      )}
       {search !== undefined && <div className="shrink-0 px-4 pb-3">{search}</div>}
       <div className={STUDIO_RAIL_BODY_CLASS} data-studio-rail-body="">
         {children}
