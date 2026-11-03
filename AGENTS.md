@@ -73,6 +73,7 @@ Supabase CLI call. `status` lists every lane with its ports, holder, recorded se
 
 **RAM.** One rule for every start (lane stack, dev server, build, walk, agent): at least 2 GB free. `start` and `serve` print the reading and
 refuse below it, and `free` offers a lane only at 2 GB free.
+
 **Dev servers on a lane.** On a lane, start every dev server with `lane.mjs serve <n> .`, never `pnpm dev` or `next dev`:
 a server started any other way is unrecorded, so `stop` cannot refuse for it and nothing can end it safely. A lane has one database and
 several dev servers may share it. The holder serves the lane's own port. Any other worktree is a guest on the `--port` it names, inside the

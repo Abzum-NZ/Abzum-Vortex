@@ -77,14 +77,32 @@ export const withAncestors = (pid, snapshot) => {
   return chain;
 };
 
-/** Listeners on the record's port that descend from the recorded process (Windows keeps a dead parent's ID). */
+/**
+ * Whether the process descends from `rootPid`. The walk stops at a parent that is missing or newer
+ * than its child (Windows keeps a dead parent's ID, which may since belong to another process); the
+ * direct child of a dead root still matches.
+ */
+const descends = (pid, snapshot, rootPid) => {
+  for (let current = pid, seen = new Set(); !seen.has(current);) {
+    if (current === rootPid) return true;
+    seen.add(current);
+    const own = snapshot.get(current);
+    const parent = own && snapshot.get(own.parent);
+    if (own?.parent === rootPid) return true;
+    if (!parent || BigInt(parent.created) > BigInt(own.created)) return false;
+    current = own.parent;
+  }
+  return false;
+};
+
+/** Listeners on the record's port that descend from the recorded process. */
 export const recordListeners = (record, snapshot) =>
   tcpListeners().filter((listener) => {
     if (listener.port !== record.port) return false;
     const own = snapshot.get(listener.pid);
     return (
       own !== undefined &&
-      withAncestors(listener.pid, snapshot).has(record.pid) &&
+      descends(listener.pid, snapshot, record.pid) &&
       BigInt(own.created) >= BigInt(record.processStart ?? "0")
     );
   });
