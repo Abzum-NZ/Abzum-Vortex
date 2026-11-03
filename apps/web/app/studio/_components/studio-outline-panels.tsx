@@ -2,6 +2,7 @@
 import { useState, type ReactNode } from "react";
 import type { StudioSemanticOutline, StudioSemanticOutlineNode } from "@vortex/ui/studio";
 import { StudioPuckOutline } from "@vortex/ui/studio";
+import { useStudioCanvas } from "@vortex/ui/studio/puck-provider";
 import { StudioPanelShell, StudioSearchBox, StudioSection } from "./studio-frame";
 import { StudioOutline } from "./studio-outline";
 import { StudioLimitRow } from "./studio-limit";
@@ -142,9 +143,10 @@ export function StudioOutlinePanel({
   /** The levels of nested blocks the open page uses, its layout's included. */
   levels: number | undefined;
 }>) {
+  const canvas = useStudioCanvas();
   return (
     <StudioPanelShell title="Outline" hidden={hidden}>
-      <StudioPuckOutline open={pageOpen} />
+      <StudioPuckOutline open={pageOpen} areaEmpty={canvas.model.slot?.items.length === 0} />
       {pageOpen && (
         <section className="space-y-1 px-1 pt-2" aria-label="Application limits">
           <StudioLimitRow

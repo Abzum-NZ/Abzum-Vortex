@@ -76,7 +76,10 @@ export function StudioOutlineRegion({ children }: Readonly<{ children: ReactNode
 }
 
 /** The Outline tab's body: Puck's outline of the blocks Puck holds, or the empty state when no page is open. */
-export function StudioPuckOutline({ open }: Readonly<{ open: boolean }>) {
+export function StudioPuckOutline({
+  open,
+  areaEmpty,
+}: Readonly<{ open: boolean; areaEmpty: boolean }>) {
   if (!open)
     return (
       <Empty>
@@ -91,5 +94,15 @@ export function StudioPuckOutline({ open }: Readonly<{ open: boolean }>) {
         </EmptyHeader>
       </Empty>
     );
-  return <Puck.Outline />;
+  return (
+    <>
+      <Puck.Outline />
+      {areaEmpty && (
+        <p className="px-4 pb-3 text-sm text-muted-foreground">
+          This content area has no blocks. Add a block from Blocks, or choose another content area
+          above the canvas.
+        </p>
+      )}
+    </>
+  );
 }
