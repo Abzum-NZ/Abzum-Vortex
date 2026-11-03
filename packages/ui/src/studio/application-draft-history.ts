@@ -8,6 +8,7 @@ import {
   type StoredDefinitionDraft,
   platformIdSchema,
 } from "@vortex/platform/schema";
+import { shareSnapshot } from "./draft-snapshot";
 
 export type StudioStoredApplicationDraft = Extract<StoredDefinitionDraft, { kind: "application" }>;
 
@@ -39,7 +40,8 @@ export type StudioApplicationDraftSaveOutcome =
   | Readonly<{ kind: "saved"; draftRevision: number }>
   | Readonly<{ kind: "conflict"; reason?: StudioApplicationDraftConflictReason }>
   | Readonly<{ kind: "refused"; reason?: StudioApplicationDraftRefusalReason; sentence?: string }>
-  | Readonly<{ kind: "failed" }>
+  /** `invalid`: the draft did not pass the source contract at save, so nothing was sent. */
+  | Readonly<{ kind: "failed"; invalid?: true }>
   | Readonly<{ kind: "busy" }>;
 
 export type StudioApplicationDraftHistoryState = Readonly<{
@@ -57,13 +59,16 @@ export type StudioApplicationDraftHistoryListener = (
   state: StudioApplicationDraftHistoryState,
 ) => void;
 
+/** What an edit came to: it entered the history, it changed nothing, or the source was refused. */
+export type StudioApplicationDraftEditOutcome = "edited" | "unchanged" | "refused";
+
 export interface StudioApplicationDraftHistoryController {
   getState(): StudioApplicationDraftHistoryState;
   /**
    * Takes one edit. Consecutive edits with the same `merge` key (typing into one field) replace the
    * newest entry instead of adding one, so Undo restores the value from before the whole run.
    */
-  edit(source: ApplicationSourceDocument, merge?: string): boolean;
+  edit(source: ApplicationSourceDocument, merge?: string): StudioApplicationDraftEditOutcome;
   undo(): boolean;
   redo(): boolean;
   save(): Promise<StudioApplicationDraftSaveOutcome>;
@@ -72,20 +77,19 @@ export interface StudioApplicationDraftHistoryController {
   subscribe(listener: StudioApplicationDraftHistoryListener): () => void;
 }
 
-const snapshotSource = (source: ApplicationSourceDocument): StudioApplicationSourceSnapshot => {
-  // Definition persists authored source as JSON, which omits optional undefined properties.
-  const serialized: unknown = JSON.parse(JSON.stringify(source));
-  return deepFreeze(applicationSourceDocumentSchema.parse(serialized));
-};
+/** Undo and Redo keep at most this many entries; the oldest are dropped. */
+const maximumHistoryEntries = 100;
 
-const deepFreeze = <Value>(value: Value): Readonly<Value> => {
-  if (value !== null && typeof value === "object") {
-    for (const nested of Object.values(value)) deepFreeze(nested);
-    return Object.freeze(value);
-  }
-  return value;
-};
+const snapshotSource = (
+  source: ApplicationSourceDocument,
+  previous?: StudioApplicationSourceSnapshot,
+): StudioApplicationSourceSnapshot =>
+  shareSnapshot(source, previous) as StudioApplicationSourceSnapshot;
 
+/**
+ * The full parse the platform will run, taken once per save: a mutable copy in the shape the
+ * source contract defines.
+ */
 const mutableSourceCopy = (source: StudioApplicationSourceSnapshot): ApplicationSourceDocument => {
   const cloned: unknown = structuredClone(source);
   return applicationSourceDocumentSchema.parse(cloned);
@@ -182,10 +186,18 @@ export const createStudioApplicationDraftHistoryController = (
   const organizationId = parsedInitialDraft.organizationId;
   const key = parsedInitialDraft.key;
   let draftRevision = parsedInitialDraft.draftRevision;
+  // The saved source, and the revision number of the history entry that holds it: the draft is
+  // dirty exactly when the entry on screen is not that one, so no state is compared in depth.
   let baseline = snapshotSource(parsedInitialDraft.source);
-  let history = [baseline];
+  let revisions = 0;
+  let baselineRevision = revisions;
+  let history: { source: StudioApplicationSourceSnapshot; revision: number }[] = [
+    { source: baseline, revision: baselineRevision },
+  ];
   let historyIndex = 0;
   let isSaving = false;
+  // The entry that did not pass the full parse at save, so it is not parsed and logged again.
+  let unsavableRevision = -1;
   // The merge key of the newest entry, while the next edit may still extend it.
   let mergeKey: string | undefined;
   let lastSaveOutcome: StudioApplicationDraftSaveOutcome | null = null;
@@ -195,10 +207,10 @@ export const createStudioApplicationDraftHistoryController = (
     Object.freeze({
       rootId,
       draftRevision,
-      source: history[historyIndex]!,
+      source: history[historyIndex]!.source,
       canUndo: historyIndex > 0,
       canRedo: historyIndex < history.length - 1,
-      isDirty: !sameValue(history[historyIndex], baseline),
+      isDirty: history[historyIndex]!.revision !== baselineRevision,
       isSaving,
       lastSaveOutcome,
     });
@@ -216,25 +228,69 @@ export const createStudioApplicationDraftHistoryController = (
 
   return Object.freeze({
     getState,
-    edit: (source: ApplicationSourceDocument, merge?: string): boolean => {
-      const parsed = applicationSourceDocumentSchema.safeParse(source);
-      if (!parsed.success || parsed.data.key !== key) return false;
+    edit: (
+      source: ApplicationSourceDocument,
+      merge?: string,
+    ): StudioApplicationDraftEditOutcome => {
+      if (source.key !== key) {
+        console.error(
+          "[studio] the draft history refused a command's source: STUDIO_DRAFT_EDIT_REFUSED (another application's key)",
+        );
+        return "refused";
+      }
 
-      const next = snapshotSource(parsed.data);
-      if (sameValue(next, history[historyIndex])) return false;
+      // One comparison shares every node the edit did not touch.
+      const current = history[historyIndex]!;
+      let next: StudioApplicationSourceSnapshot;
+      try {
+        next = snapshotSource(source, current.source);
+      } catch (error) {
+        console.error(
+          `[studio] the draft history refused a command's source: STUDIO_DRAFT_EDIT_REFUSED (${describeFailure(error)})`,
+        );
+        return "refused";
+      }
+      if (next === current.source) return "unchanged";
+
+      // A discrete command (no merge key) is checked against the source contract here, so a bad
+      // command is refused at the edit and not at the next autosave. A typing run is made of
+      // settings commands, which check the block's own settings; nothing is parsed per keystroke.
+      if (merge === undefined) {
+        const checked = applicationSourceDocumentSchema.safeParse(next);
+        if (!checked.success) {
+          console.error(
+            `[studio] the draft history refused a command's source: STUDIO_DRAFT_EDIT_REFUSED (${describeFailure(checked.error)})`,
+          );
+          return "refused";
+        }
+      }
 
       const extendsNewest =
         merge !== undefined &&
         merge === mergeKey &&
         historyIndex > 0 &&
         historyIndex === history.length - 1;
+      // A typing run that comes back to where it started leaves nothing to save or undo.
+      if (extendsNewest) {
+        const before = history[historyIndex - 1]!;
+        if (snapshotSource(source, before.source) === before.source) {
+          history = history.slice(0, historyIndex);
+          historyIndex -= 1;
+          mergeKey = undefined;
+          lastSaveOutcome = null;
+          notify();
+          return "edited";
+        }
+      }
       history = history.slice(0, extendsNewest ? historyIndex : historyIndex + 1);
-      history.push(next);
+      history.push({ source: next, revision: ++revisions });
+      if (history.length > maximumHistoryEntries)
+        history = history.slice(history.length - maximumHistoryEntries);
       historyIndex = history.length - 1;
       mergeKey = merge;
       lastSaveOutcome = null;
       notify();
-      return true;
+      return "edited";
     },
     undo: (): boolean => {
       if (historyIndex === 0) return false;
@@ -256,25 +312,39 @@ export const createStudioApplicationDraftHistoryController = (
       if (isSaving) return Object.freeze({ kind: "busy" });
 
       const expectedDraftRevision = draftRevision;
-      const submittedSource = history[historyIndex]!;
-      const command: StudioApplicationDraftSaveCommand = Object.freeze({
-        rootId: platformIdSchema.parse(rootId),
-        expectedDraftRevision,
-        source: mutableSourceCopy(submittedSource),
-      });
+      const submitted = history[historyIndex]!;
 
       isSaving = true;
       lastSaveOutcome = null;
       notify();
 
       let outcome: StudioApplicationDraftSaveOutcome;
+      let command: StudioApplicationDraftSaveCommand | undefined;
+      if (submitted.revision !== unsavableRevision) {
+        try {
+          command = Object.freeze({
+            rootId: platformIdSchema.parse(rootId),
+            expectedDraftRevision,
+            source: mutableSourceCopy(submitted.source),
+          });
+        } catch (error) {
+          // A fault of this editor, said once; the same entry is not sent (or logged) again.
+          unsavableRevision = submitted.revision;
+          console.error(
+            `[studio] the draft does not match the application source contract: ${describeFailure(error)}`,
+          );
+        }
+      }
+      if (command === undefined) {
+        isSaving = false;
+        outcome = Object.freeze({ kind: "failed", invalid: true });
+        lastSaveOutcome = outcome;
+        notify();
+        return outcome;
+      }
       try {
         const response = await port.saveDraft(command);
         const parsed = storedDefinitionDraftSchema.safeParse(response);
-        const returnedSource =
-          parsed.success && parsed.data.kind === "application"
-            ? snapshotSource(parsed.data.source)
-            : undefined;
         if (!parsed.success)
           console.error(
             `[studio] application draft save response invalid: ${describeFailure(parsed.error)}`,
@@ -282,12 +352,11 @@ export const createStudioApplicationDraftHistoryController = (
         if (
           !parsed.success ||
           parsed.data.kind !== "application" ||
-          returnedSource === undefined ||
           parsed.data.rootId !== rootId ||
           parsed.data.organizationId !== organizationId ||
           parsed.data.draftRevision !== expectedDraftRevision + 1 ||
           parsed.data.key !== key ||
-          !sameValue(returnedSource, submittedSource)
+          !sameValue(parsed.data.source, command.source)
         ) {
           if (parsed.success)
             console.error(
@@ -296,7 +365,8 @@ export const createStudioApplicationDraftHistoryController = (
           outcome = Object.freeze({ kind: "failed" });
         } else {
           draftRevision = parsed.data.draftRevision;
-          baseline = returnedSource;
+          baseline = snapshotSource(parsed.data.source, submitted.source);
+          baselineRevision = submitted.revision;
           outcome = Object.freeze({ kind: "saved", draftRevision });
         }
       } catch (error) {
@@ -326,12 +396,13 @@ export const createStudioApplicationDraftHistoryController = (
       )
         return false;
 
-      const next = snapshotSource(parsed.source);
-      if (parsed.draftRevision === draftRevision && !sameValue(next, baseline)) return false;
+      const next = snapshotSource(parsed.source, baseline);
+      if (parsed.draftRevision === draftRevision && next !== baseline) return false;
 
       draftRevision = parsed.draftRevision;
       baseline = next;
-      history = [next];
+      baselineRevision = ++revisions;
+      history = [{ source: next, revision: baselineRevision }];
       historyIndex = 0;
       mergeKey = undefined;
       lastSaveOutcome = null;

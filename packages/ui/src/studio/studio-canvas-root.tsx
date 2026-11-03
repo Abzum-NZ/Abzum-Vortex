@@ -21,7 +21,7 @@ import {
 import type { SlotGapName } from "../layout-styles";
 import type { FieldInputControlReleaseMap, PlatformComponentRegistry } from "../registry";
 import { createAppearanceRootProps, createThemeRootProps, VortexStyleRoot } from "../theme";
-import { studioCanvasMetadata } from "./studio-canvas-metadata";
+import { studioCanvasMetadata, useStudioCanvasChannel } from "./studio-canvas-metadata";
 import { useStudioCanvasView } from "./studio-canvas-scale";
 import { useStudioScreen } from "./studio-canvas-screen";
 import { studioPuckIframeCss } from "./studio-puck-style";
@@ -44,7 +44,7 @@ function SelectedBlock({ children }: Readonly<{ children: ReactNode }>) {
 
 /**
  * The canvas root's render, inside Puck's preview, in every Puck mode. It draws the application's
- * theme, appearance and frame (shell and menu) from the frame Studio put in Puck's `metadata`, with
+ * theme, appearance and frame (shell and menu) from the frame Studio put in the canvas channel, with
  * the page's content region in the frame's outlet. The content region carries the one editor
  * marker `data-vortex-studio-canvas` that every editor-only rule keys on, so the page lays out the
  * same whether it is being edited or its grids are being arranged.
@@ -62,7 +62,8 @@ export function StudioCanvasRoot({
   registry: PlatformComponentRegistry;
   fieldInputControlReleases: FieldInputControlReleaseMap;
 }>) {
-  const { frame: studio, breakpoint } = studioCanvasMetadata(puck);
+  const { breakpoint } = studioCanvasMetadata(puck);
+  const { frame: studio } = useStudioCanvasChannel();
   if (studio === null) throw new Error("The Studio canvas has no frame");
   const { empty } = studio;
   // A layout's blocks are added with Add; only a page's blocks drop onto the canvas.

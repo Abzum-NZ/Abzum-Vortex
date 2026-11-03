@@ -149,6 +149,12 @@ const destinationOptionKey = (destination: {
     ? `child:${encodeURIComponent(destination.parentAlias ?? "")}:${encodeURIComponent(destination.slotKey ?? "")}`
     : destination.kind;
 
+/** What the Move dialog holds while it is closed. */
+const NO_MOVE_MODEL: ReturnType<typeof describeStudioCompositionDestinations> = {
+  kind: "available",
+  destinations: [],
+};
+
 const outcomeText = (result: StudioCompositionOutcome, fallback: string): string =>
   result.kind === "stale"
     ? "The draft or your selection changed. Try again."
@@ -169,10 +175,6 @@ export function ApplicationCompositionEditor(props: Props) {
   const model = useMemo(
     () => describeStudioCompositionEdit(props.context, props.selection, breakpoint),
     [props.context, props.selection, breakpoint],
-  );
-  const moveModel = useMemo(
-    () => describeStudioCompositionDestinations(props.context, props.selection),
-    [props.context, props.selection],
   );
   const wrapModel = useMemo(
     () => describeStudioCompositionWrap(props.context, props.selection),
@@ -207,6 +209,15 @@ export function ApplicationCompositionEditor(props: Props) {
   const chooseQuery = useRef<(reference: string) => void>(() => undefined);
   const [wrapSetup, setWrapSetup] = useState<StudioBlockSetupRequest | null>(null);
   const [dialog, setDialog] = useState<"move" | "wrap" | null>(null);
+  // The places this block can move to are worked out when the Move dialog is open, not at every
+  // edit: each one is a check of the whole content area.
+  const moveModel = useMemo(
+    () =>
+      dialog === "move"
+        ? describeStudioCompositionDestinations(props.context, props.selection)
+        : NO_MOVE_MODEL,
+    [dialog, props.context, props.selection],
+  );
   // The optional settings nobody has set go to "More settings", decided once for this block.
   const moreSettings = useRef<ReadonlySet<string> | null>(null);
 

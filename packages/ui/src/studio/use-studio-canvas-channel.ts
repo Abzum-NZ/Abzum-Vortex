@@ -1,37 +1,35 @@
 import { useMemo, useRef } from "react";
-import { canonicalJson } from "@vortex/platform/schema";
+import { sameCompositionValue } from "./composition-references";
 import type { StudioCanvasModel } from "./studio-canvas-model";
-import type { StudioCanvasMetadata, StudioCanvasFrameMetadata } from "./studio-canvas-metadata";
+import type { StudioCanvasChannel, StudioCanvasFrameMetadata } from "./studio-canvas-metadata";
 import type { StudioPuckInput } from "./studio-puck-provider";
 import { useStudioCanvasRecords } from "./use-studio-canvas-records";
 
-/** The value from an earlier render while its canonical spelling is the same. */
+/**
+ * The value from an earlier render while the new one holds the same data. A value that is the
+ * same object costs nothing; a new object is compared once, not written out as text.
+ */
 const useStableValue = <T>(value: T): T => {
-  const held = useRef<{ text: string; value: T } | null>(null);
-  const text = value === undefined ? "" : canonicalJson(value);
-  if (held.current?.text !== text) held.current = { text, value };
+  const held = useRef<{ value: T } | null>(null);
+  if (held.current === null || !sameCompositionValue(held.current.value, value))
+    held.current = { value };
   return held.current.value;
 };
 
-const NO_COMPILED_SETTINGS: StudioCanvasMetadata["compiled"] = Object.freeze({});
-
-/** The part of Puck's `metadata` that is Studio's: what its blocks draw from and report to. */
-export type StudioCanvasMetadataPart = Pick<
-  StudioCanvasMetadata,
-  "compiled" | "records" | "viewer" | "controls" | "grid" | "frame"
->;
+const NO_COMPILED_SETTINGS: StudioCanvasChannel["compiled"] = Object.freeze({});
 
 /**
- * Studio's part of the canvas metadata, in one place. Compiled settings come from the open page's
+ * What the canvas draws from that grows with the page, in one place (`StudioCanvasChannel`, not
+ * Puck's `metadata`, which Puck walks once per block). Compiled settings come from the open page's
  * model; the records are read for the saved revision (only while the canvas is on show, and only
  * for the visible page); the controls and the grid report back into the same reads; the frame is
  * the application the page is drawn in. The object changes only when one of its parts does, so
  * blocks draw again only for a real change.
  */
-export const useStudioCanvasMetadata = (
+export const useStudioCanvasChannelValue = (
   input: StudioPuckInput,
   model: StudioCanvasModel,
-): StudioCanvasMetadataPart => {
+): StudioCanvasChannel => {
   const { records, controls, grid } = useStudioCanvasRecords({
     area: model.area,
     areaKey: model.at?.key ?? "",

@@ -1,4 +1,5 @@
 import {
+  sourceItemChildSlots,
   sourceItemTree,
   type ApplicationSourceDocument,
   type ImmutablePlatformBlockCatalogue,
@@ -6,7 +7,7 @@ import {
 } from "@vortex/platform/schema";
 import { studioFlowLabel } from "./semantic-selection";
 import type { StudioPlacementReference } from "./composition-references";
-import { releaseFor, itemSlots } from "./application-composition-regions";
+import { releaseFor } from "./application-composition-regions";
 
 /**
  * What a form needs from every edit of the content around it, whichever command makes the edit
@@ -76,8 +77,11 @@ const formsOf = (catalogue: ImmutablePlatformBlockCatalogue, items: readonly Sou
       if (isForm && form !== undefined) nested = true;
       enclosing.set(item.props.id, form);
       blocks.set(item.props.id, item);
-      for (const slot of itemSlots(catalogue, item).values())
-        visit(slot.items, isForm ? item.props.id : form);
+      // The slots are read from the props alone, as `holdsForm` reads them: nothing here needs
+      // the block's settings checked, and checking them for every block made a move or a delete
+      // cost a validation of the whole content area.
+      for (const [, children] of sourceItemChildSlots(item))
+        visit(children, isForm ? item.props.id : form);
     }
   };
   visit(items, undefined);
@@ -158,12 +162,56 @@ export const studioFormChangeRefusal = (
         return { reason: "form_context" };
       continue;
     }
-    // A form that leaves takes its inputs and its own bindings with it.
-    if (form === undefined || !now.blocks.has(form) || !isFormInput(keyOf(catalogue, item)))
-      continue;
-    if (requiredInput(source, item)) return { reason: "required_field" };
-    const mapped = mappingFlow(source, form, answerName(item));
-    if (mapped !== undefined) return mapped;
+    const left = lostInputRefusal(catalogue, source, was, alias, now.blocks.has(form ?? ""));
+    if (left !== undefined) return left;
+  }
+  return undefined;
+};
+
+/** The forms of one content area's blocks, read once for every block's removal check. */
+export const studioRegionForms = formsOf;
+
+/**
+ * What leaving `alias` out takes from a form that stays: an input for a required field, or one
+ * the form's submit binding maps into a flow. A form that leaves takes its inputs and its own
+ * bindings with it. `formStays` says whether the enclosing form is still in the content area.
+ */
+const lostInputRefusal = (
+  catalogue: ImmutablePlatformBlockCatalogue,
+  source: ApplicationSourceDocument,
+  was: ReturnType<typeof formsOf>,
+  alias: string,
+  formStays: boolean,
+): StudioPlacementReference | undefined => {
+  const form = was.enclosing.get(alias);
+  const item = was.blocks.get(alias)!;
+  if (form === undefined || !formStays || !isFormInput(keyOf(catalogue, item))) return undefined;
+  if (requiredInput(source, item)) return { reason: "required_field" };
+  return mappingFlow(source, form, answerName(item));
+};
+
+/**
+ * Why removing `item` and everything inside it breaks a form of the content area `was` describes,
+ * or undefined: the same check as `studioFormChangeRefusal` for one removal, without building the
+ * content area that is left.
+ */
+export const studioRemovalFormRefusal = (
+  catalogue: ImmutablePlatformBlockCatalogue,
+  source: ApplicationSourceDocument,
+  was: ReturnType<typeof formsOf>,
+  removed: ReadonlySet<string>,
+): StudioFormChangeRefusal | undefined => {
+  for (const alias of was.blocks.keys()) {
+    if (!removed.has(alias)) continue;
+    const form = was.enclosing.get(alias);
+    const left = lostInputRefusal(
+      catalogue,
+      source,
+      was,
+      alias,
+      form !== undefined && !removed.has(form),
+    );
+    if (left !== undefined) return left;
   }
   return undefined;
 };

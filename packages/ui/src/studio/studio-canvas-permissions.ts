@@ -10,12 +10,13 @@ import { itemSlots, regions, releaseFor } from "./application-composition-region
 import { studioLayoutOutletPlacementUses } from "./application-layout-outlets";
 import {
   studioPlacementReferenceSentence,
-  studioPlacementRemovalReference,
+  studioPlacementRemovalReferences,
 } from "./composition-references";
 import {
   holdsForm,
-  studioFormChangeRefusal,
   studioFormChangeRefusalSentence,
+  studioRegionForms,
+  studioRemovalFormRefusal,
 } from "./application-composition-forms";
 
 export type StudioCanvasAction = "delete" | "drag" | "duplicate";
@@ -41,6 +42,31 @@ export const studioPlacementReferrers = (
     ...applicationUses(source, { kind: "message_target", placementAlias: alias }),
   ].filter((place) => place.open.kind !== "placement" || !leaving.has(place.open.placementAlias));
 
+/**
+ * Why a block cannot be duplicated, or undefined: a form, or a block holding a field input, because
+ * its field inputs cannot be copied. The one rule for Puck's Duplicate button (the references) and
+ * for the canvas change that carries a duplicate (`applyStudioCanvasChange`).
+ */
+export const studioDuplicateRefusal = (
+  catalogue: ImmutablePlatformBlockCatalogue,
+  item: SourceItem,
+  descendants: readonly SourceItem[] = sourceItemTree([item]),
+): string | undefined => {
+  if (holdsForm(catalogue, [item]))
+    return "A form cannot be duplicated because its field inputs cannot be.";
+  return descendants.some((child) => {
+    const childRelease = releaseFor(catalogue, child);
+    return (
+      childRelease?.paletteGroup === "input" &&
+      childRelease.properties.some(
+        (property) => property.key === "name" || property.key === "field",
+      )
+    );
+  })
+    ? "A field input cannot be duplicated. Add another field instead."
+    : undefined;
+};
+
 /** Build the references once for a draft; the values are plain metadata. */
 export const studioCanvasReferences = (
   source: ApplicationSourceDocument,
@@ -50,18 +76,13 @@ export const studioCanvasReferences = (
   const aliases = new Set(
     allRegions.flatMap((region) => sourceItemTree(region.zone.items).map((item) => item.props.id)),
   );
+  // The flows are scanned once for every block, not once per block.
+  const flowReference = studioPlacementRemovalReferences(source, aliases);
   const result: Record<string, Partial<Record<StudioCanvasAction, string>>> = {};
   for (const region of allRegions) {
-    const without = (items: readonly SourceItem[], alias: string): SourceItem[] =>
-      items
-        .filter((item) => item.props.id !== alias)
-        .map((item) => {
-          const copy = structuredClone(item);
-          for (const [key, slot] of itemSlots(catalogue, item))
-            copy.props[key] = without(slot.items, alias);
-          return copy;
-        });
+    // Only a page that holds a form can break one by removing a block; its forms are read once.
     const regionHoldsForm = holdsForm(catalogue, region.zone.items);
+    const forms = regionHoldsForm ? studioRegionForms(catalogue, region.zone.items) : undefined;
     const visit = (items: readonly SourceItem[], required: boolean) => {
       for (const item of items) {
         const id = item.props.id;
@@ -69,20 +90,8 @@ export const studioCanvasReferences = (
         const removed = new Set(descendants.map((child) => child.props.id));
         const reasons: Partial<Record<StudioCanvasAction, string>> = {};
         const release = releaseFor(catalogue, item);
-        if (holdsForm(catalogue, [item]))
-          reasons.duplicate = "A form cannot be duplicated because its field inputs cannot be.";
-        if (
-          descendants.some((child) => {
-            const childRelease = releaseFor(catalogue, child);
-            return (
-              childRelease?.paletteGroup === "input" &&
-              childRelease.properties.some(
-                (property) => property.key === "name" || property.key === "field",
-              )
-            );
-          })
-        )
-          reasons.duplicate ??= "A field input cannot be duplicated. Add another field instead.";
+        const duplicate = studioDuplicateRefusal(catalogue, item, descendants);
+        if (duplicate !== undefined) reasons.duplicate = duplicate;
         // The tooltip names the outlets themselves, not every page bound to them.
         const outlets = studioLayoutOutletPlacementUses(source, id).filter(
           (place) => place.open.kind === "shell",
@@ -92,22 +101,17 @@ export const studioCanvasReferences = (
           reasons.drag = reasons.delete;
         }
         for (const child of descendants) {
-          const flow = studioPlacementRemovalReference(source, child.props.id, aliases);
+          const flow = flowReference(child.props.id);
           if (flow !== undefined) reasons.delete ??= studioPlacementReferenceSentence(flow);
           const users = studioPlacementReferrers(source, child.props.id, removed);
           if (users.length > 0)
             reasons.delete ??= `This block is used by ${describeApplicationUsers(users)}. Change that reference first.`;
         }
         if (required && items.length === 1) reasons.delete ??= "This block fills a required slot.";
-        // Only a page that holds a form can break one by removing a block.
-        const broken = regionHoldsForm
-          ? studioFormChangeRefusal(
-              catalogue,
-              source,
-              region.zone.items,
-              without(region.zone.items, id),
-            )
-          : undefined;
+        const broken =
+          forms === undefined
+            ? undefined
+            : studioRemovalFormRefusal(catalogue, source, forms, removed);
         if (broken !== undefined)
           reasons.delete ??= studioFormChangeRefusalSentence(
             broken,

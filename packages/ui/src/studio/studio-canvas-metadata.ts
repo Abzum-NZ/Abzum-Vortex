@@ -1,4 +1,5 @@
 import type { PuckContext } from "@puckeditor/core";
+import { createContext, useContext } from "react";
 import type { NavigationPermissionDecisions } from "@vortex/platform/schema";
 import type { Breakpoint } from "../definition-error";
 import type { VortexPuckMetadata } from "../puck-config";
@@ -7,7 +8,6 @@ import type { StudioCompileFailure } from "./compile-failure";
 import type { StudioCanvasCompiledSettings } from "./studio-canvas-data";
 import type { StudioCanvasGridChannel } from "./studio-canvas-grid";
 import type { StudioCanvasFrame } from "./studio-canvas-projection";
-import type { StudioCanvasReferences } from "./studio-canvas-permissions";
 
 /**
  * The records the canvas's data blocks show: read from the builder's preview of one saved draft
@@ -63,33 +63,50 @@ export type StudioCanvasFrameMetadata = Readonly<{
 
 /**
  * What Studio supplies to the canvas through Puck's `metadata`, beside what the page runtime
- * supplies. It is the only channel from Studio to the blocks on the canvas. Puck copies every
- * object a block is given in its props, so everything here is plain data or a function: a Map or
- * a class instance would reach the block as an empty object.
+ * supplies. Puck walks everything in `metadata` once for every block it draws, so it holds only
+ * what every block reads and is small: the screen size and what the page runtime itself reads.
+ * What grows with the page (settings, records, the frame) travels in `StudioCanvasChannel`.
  */
 export type StudioCanvasMetadata = VortexPuckMetadata &
   Readonly<{
     /** The canvas always previews one screen size. */
     breakpoint: Breakpoint;
-    references: StudioCanvasReferences;
-    /** By block name, the plain settings each block's last compiled version holds. */
-    compiled: StudioCanvasCompiledSettings;
-    /** The records of the canvas's data blocks. */
-    records: StudioCanvasRecords;
-    /** The role the canvas previews, or `null` for the design view. */
-    viewer: StudioCanvasViewer | null;
-    /**
-     * Records the value the builder chose in a control on the canvas, by the control's placement
-     * name. The canvas then asks the server to read the blocks bound to that control again;
-     * nothing is resolved in the browser.
-     */
-    controls: (placement: string, value: string) => void;
-    /** The one channel the grid's layout, sort, filter, search and refresh events arrive on. */
-    grid: StudioCanvasGridChannel;
-    /** `null` until the draft's theme and field-input controls have loaded. */
-    frame: StudioCanvasFrameMetadata | null;
   }>;
 
 /** Studio's part of the metadata a canvas render function was given. */
 export const studioCanvasMetadata = (puck: Pick<PuckContext, "metadata">): StudioCanvasMetadata =>
   puck.metadata as StudioCanvasMetadata;
+
+/**
+ * What the blocks and the root of the canvas draw from that belongs to Studio and grows with the
+ * page, delivered through React context to the components that read it. It is the only channel
+ * from Studio to the blocks on the canvas besides `StudioCanvasMetadata`; the runtime blocks
+ * themselves are given one entry each, through `runtimeInputs`.
+ */
+export type StudioCanvasChannel = Readonly<{
+  /** By block name, the plain settings each block's last compiled version holds. */
+  compiled: StudioCanvasCompiledSettings;
+  /** The records of the canvas's data blocks. */
+  records: StudioCanvasRecords;
+  /** The role the canvas previews, or `null` for the design view. */
+  viewer: StudioCanvasViewer | null;
+  /**
+   * Records the value the builder chose in a control on the canvas, by the control's placement
+   * name. The canvas then asks the server to read the blocks bound to that control again;
+   * nothing is resolved in the browser.
+   */
+  controls: (placement: string, value: string) => void;
+  /** The one channel the grid's layout, sort, filter, search and refresh events arrive on. */
+  grid: StudioCanvasGridChannel;
+  /** `null` until the draft's theme and field-input controls have loaded. */
+  frame: StudioCanvasFrameMetadata | null;
+}>;
+
+export const StudioCanvasChannelContext = createContext<StudioCanvasChannel | null>(null);
+
+/** The canvas channel; only inside the workspace's Puck editor. */
+export const useStudioCanvasChannel = (): StudioCanvasChannel => {
+  const channel = useContext(StudioCanvasChannelContext);
+  if (channel === null) throw new Error("STUDIO_CANVAS_CHANNEL_MISSING: used outside the canvas");
+  return channel;
+};
