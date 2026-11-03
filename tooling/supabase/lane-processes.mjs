@@ -52,7 +52,7 @@ export const recordState = (record, snapshot) => {
 };
 
 /** The process and its descendants, root first. A child counts only if it is not older than its parent. */
-const processTree = (rootPid, snapshot) => {
+export const processTree = (rootPid, snapshot) => {
   const tree = [rootPid];
   for (let index = 0; index < tree.length; index += 1) {
     const parent = snapshot.get(tree[index]);
@@ -76,6 +76,18 @@ export const withAncestors = (pid, snapshot) => {
   }
   return chain;
 };
+
+/** Listeners on the record's port that descend from the recorded process (Windows keeps a dead parent's ID). */
+export const recordListeners = (record, snapshot) =>
+  tcpListeners().filter((listener) => {
+    if (listener.port !== record.port) return false;
+    const own = snapshot.get(listener.pid);
+    return (
+      own !== undefined &&
+      withAncestors(listener.pid, snapshot).has(record.pid) &&
+      BigInt(own.created) >= BigInt(record.processStart ?? "0")
+    );
+  });
 
 const endProcesses = (pids, port) => {
   for (const pid of pids) {
@@ -119,7 +131,12 @@ export const killRecord = (record, snapshot, protectedPids) => {
  * process ID and that were created after the root started. Returns how many it ended.
  */
 export const killLateDescendants = (record, protectedPids) => {
+  // Without a verified start there is nothing to tell the root's children from a reused ID's.
+  if (record.processStart === null) return 0;
   const snapshot = processSnapshot();
+  // The ID now belongs to another process: its children are not ours.
+  const holder = snapshot.get(record.pid);
+  if (holder !== undefined && holder.created !== record.processStart) return 0;
   const started = BigInt(record.processStart ?? "0");
   const found = [];
   for (const frontier = [record.pid]; frontier.length > 0;) {

@@ -72,14 +72,14 @@ Supabase CLI call. `status` lists every lane with its ports, holder, recorded se
 (not blocked by a Windows excluded port range) and the RAM reading. The lane numbers exist once, in the lane table of `lane.mjs`; add a lane there only.
 
 **RAM.** One rule for every start (lane stack, dev server, build, walk, agent): at least 2 GB free. `start` and `serve` print the reading and
-refuse below it, and `free` offers a lane only at 2 GB free. A lane stack costs about 2.5 GB and measured dev servers 1.1 to 2.2 GB.
-
+refuse below it, and `free` offers a lane only at 2 GB free.
 **Dev servers on a lane.** On a lane, start every dev server with `lane.mjs serve <n> .`, never `pnpm dev` or `next dev`:
 a server started any other way is unrecorded, so `stop` cannot refuse for it and nothing can end it safely. A lane has one database and
 several dev servers may share it. The holder serves the lane's own port. Any other worktree is a guest on the `--port` it names, inside the
 guest window (lane 3: 3631 to 3649; other lanes: 3670 to 3699). A guest is refused when its branch changes `supabase/migrations` or
-`supabase/schemas` relative to `origin/main` (renames, edits and deletions included), or when the lane's mirrored migrations hold any
-file `origin/main` lacks or has with other content ("a branch with a migration needs its own lane"), or when the port is taken or excluded.
+`supabase/schemas` relative to `origin/main` (renames, edits and deletions included), or when the lane's mirrored migrations differ from this
+branch's (a file the branch lacks, has with other content, or has that the lane lacks: its holder resets or syncs first; "a branch with a
+migration needs its own lane"), or when the port is taken or excluded.
 The primary checkout never serves on any lane but lane 3, where its supervised server runs. A guest has its own session cookie
 (`vortex-lane-<n>-<port>-session`), and a worktree runs one dev server at a time. A guest's server also delivers the lane's queued events:
 a branch that changes event or workflow delivery takes its own lane. After pulling a `lane.mjs` change, end your dev server and serve it again with `lane.mjs serve`; `status` lists any dev server that is not recorded. `stop` and `reset` refuse while guests run.

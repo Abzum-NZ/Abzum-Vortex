@@ -4,7 +4,7 @@ import { randomBytes } from "node:crypto";
 import { closeSync, existsSync, openSync, readdirSync, realpathSync } from "node:fs";
 import net from "node:net";
 import os from "node:os";
-import { cp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { cp, mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { URL } from "node:url";
 import { setTimeout as delay } from "node:timers/promises";
@@ -13,6 +13,8 @@ import {
   killLateDescendants,
   killRecord,
   processSnapshot,
+  processTree,
+  recordListeners,
   readRecords,
   recordState,
   tcpListeners,
@@ -62,7 +64,7 @@ const guestWindow = (lane) => (lane === sharedLane ? guestWindows.shared : guest
 // Application port 3659 is blocked on this host.
 const blockedAppPort = 3659;
 // RAM (owner ruling): one rule for every start (lane stack, dev server, build, walk, agent): at least
-// 2 GB free. Measured dev servers use 1.1 to 2.2 GB and a lane stack about 2.5 GB.
+// ramFloorGb free.
 const ramFloorGb = 2;
 const laneAppPort = (lane) => appPorts.get(lane);
 const laneApiPort = (lane) => 54321 + 1000 * (lane - 1);
@@ -455,8 +457,33 @@ const acquireLock = async (lane, worktree) => {
             running.created === "0" ||
             running.created === holder.created);
         if (!alive) {
-          await rm(lockPath, { force: true });
-          log(`Cleared stale operation lock for lane ${lane}.`);
+          // Only one waiter breaks a stale lock, under a second exclusive file, so a second waiter
+          // cannot delete the lock the first one has just taken.
+          const breakPath = `${lockPath}.break`;
+          try {
+            await writeFile(breakPath, String(process.pid), { flag: "wx" });
+          } catch (breakError) {
+            if (breakError.code !== "EEXIST") throw breakError;
+            const age =
+              Date.now() - (await stat(breakPath).catch(() => ({ mtimeMs: Date.now() }))).mtimeMs;
+            if (age > 10_000) await rm(breakPath, { force: true });
+            await delay(200);
+            continue;
+          }
+          try {
+            let current;
+            try {
+              current = JSON.parse(await readFile(lockPath, "utf8"));
+            } catch {
+              current = undefined;
+            }
+            if (current?.pid === holder.pid && current?.created === holder.created) {
+              await rm(lockPath, { force: true });
+              log(`Cleared stale operation lock for lane ${lane}.`);
+            }
+          } finally {
+            await rm(breakPath, { force: true });
+          }
           continue;
         }
       }
@@ -491,9 +518,10 @@ const demoPort = laneAppPort(sharedLane);
  */
 const pruneServers = async (lane, snapshot) => {
   const records = await readRecords(serversPath(lane));
-  const listening = new Set(tcpListeners().map((listener) => listener.port));
+  // Orphan: the recorded process is gone but a descendant of it still serves the port.
   const orphans = records.filter(
-    (record) => recordState(record, snapshot) === "gone" && listening.has(record.port),
+    (record) =>
+      recordState(record, snapshot) === "gone" && recordListeners(record, snapshot).length > 0,
   );
   const kept = records.filter(
     (record) => recordState(record, snapshot) !== "gone" || orphans.includes(record),
@@ -519,7 +547,11 @@ const protectedProcesses = async (snapshot, record) => {
   }
   for (const listener of tcpListeners())
     if (listener.port === demoPort)
-      for (const pid of withAncestors(listener.pid, snapshot)) protectedPids.add(pid);
+      for (const pid of [
+        ...withAncestors(listener.pid, snapshot),
+        ...processTree(listener.pid, snapshot),
+      ])
+        protectedPids.add(pid);
   return protectedPids;
 };
 
@@ -539,13 +571,19 @@ const endRecord = async (record, snapshot) => {
   // Children created after the tree was read can outlive the root and keep the port.
   for (let attempt = 0; attempt < 3; attempt += 1) {
     killLateDescendants(record, protectedPids);
-    if (!tcpListeners().some((listener) => listener.port === record.port)) break;
+    if (recordListeners(record, processSnapshot()).length === 0) break;
     await delay(400);
   }
-  const owners = tcpListeners().filter((listener) => listener.port === record.port);
+  const finalSnapshot = processSnapshot();
+  const owners = recordListeners(record, finalSnapshot);
   if (owners.length > 0)
     fail(
       `Port ${record.port} is still served by process ${owners.map((owner) => owner.pid).join(", ")}; the record is kept.`,
+    );
+  const others = tcpListeners().filter((listener) => listener.port === record.port);
+  if (others.length > 0)
+    log(
+      `Port ${record.port} is now used by process ${others.map((other) => other.pid).join(", ")}, not by this record.`,
     );
   await rm(record.log, { force: true });
   log(`Ended ${describeServer(record)}.`);
@@ -559,9 +597,7 @@ const endServers = async (lane, matches) => {
   try {
     for (const record of records.filter(matches)) {
       if (orphans.includes(record)) {
-        const owners = tcpListeners()
-          .filter((listener) => listener.port === record.port)
-          .map((listener) => listener.pid);
+        const owners = recordListeners(record, snapshot).map((listener) => listener.pid);
         fail(
           `The server on port ${record.port} lost its recorded process ${record.pid} but the port is still served (process ${owners.join(", ")}); whoever started it ends it, then run the command again.`,
         );
@@ -637,7 +673,7 @@ const laneMigrationDifferences = (lane, worktreePath) => {
   };
 };
 
-const parseGuestPort = async (lane, value) => {
+const parseGuestPort = async (lane, value, snapshot) => {
   const port = Number(value);
   const [from, to] = guestWindow(lane);
   if (!Number.isInteger(port) || port < from || port > to)
@@ -645,6 +681,19 @@ const parseGuestPort = async (lane, value) => {
   if (portExcluded(port, excludedPortRanges()))
     fail(`Port ${port} is in a Windows excluded port range.`);
   if (!(await portFree(port))) fail(`Port ${port} is taken.`);
+  // A port another guest recorded but has not bound yet is taken too (lane locks are per lane).
+  for (const number of laneNumbers) {
+    let records;
+    try {
+      records = await readRecords(serversPath(number));
+    } catch {
+      continue;
+    }
+    const recorded = records.find(
+      (record) => record.port === port && recordState(record, snapshot) !== "gone",
+    );
+    if (recorded) fail(`Port ${port} is recorded for lane ${number}: ${describeServer(recorded)}.`);
+  }
   return port;
 };
 
@@ -703,7 +752,8 @@ const startServer = async (lane, worktreePath, requestedPort) => {
         `${worktreePath} already serves lane ${other}: ${describeServer(running)}. End it first: unserve ${other}.`,
       );
   }
-  const port = role === "holder" ? laneAppPort(lane) : await parseGuestPort(lane, requestedPort);
+  const port =
+    role === "holder" ? laneAppPort(lane) : await parseGuestPort(lane, requestedPort, snapshot);
   if (role === "holder" && !(await portFree(port))) fail(`Port ${port} is taken.`);
   requireRam("start a dev server");
   const next = path.join(
@@ -761,7 +811,11 @@ const startServer = async (lane, worktreePath, requestedPort) => {
   const started = processSnapshot().get(record.pid);
   if (started === undefined) {
     await writeRecords(serversPath(lane), existing);
-    fail(`The dev server exited at once; see ${logPath}.`);
+    // No record points at the log any more: show its end, then remove it.
+    const lines = existsSync(logPath) ? (await readFile(logPath, "utf8")).split(/\r?\n/) : [];
+    process.stderr.write(`${lines.slice(-40).join("\n")}\n`);
+    await rm(logPath, { force: true });
+    fail("The dev server exited at once.");
   }
   record.processStart = started.created === "0" ? null : started.created;
   await writeRecords(serversPath(lane), [...existing, record]);
@@ -856,7 +910,6 @@ if (command === "status" || command === "free") {
     const snapshot = entries.some((entry) => entry.records.length > 0)
       ? processSnapshot()
       : undefined;
-    const listening = new Set(tcpListeners().map((listener) => listener.port));
     for (const {
       number,
       lease,
@@ -882,11 +935,14 @@ if (command === "status" || command === "free") {
       if (recordProblem !== undefined) process.stdout.write(`    ${recordProblem}\n`);
       for (const record of records) {
         const recorded = recordState(record, snapshot);
+        const others = tcpListeners().filter((listener) => listener.port === record.port);
         const note =
           recorded === "gone"
-            ? listening.has(record.port)
-              ? ", recorded process gone but the port is still served: unrecorded listener, its starter ends it"
-              : ", recorded process gone"
+            ? recordListeners(record, snapshot).length > 0
+              ? ", recorded process gone but its child still serves the port: unrecorded listener, its starter ends it"
+              : others.length > 0
+                ? `, recorded process gone; the port is now used by process ${others.map((other) => other.pid).join(", ")}`
+                : ", recorded process gone"
             : recorded === "unverified"
               ? ", process not verifiable"
               : "";
