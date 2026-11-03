@@ -149,12 +149,12 @@ const installControlOf = (standing: ApplicationReleaseStanding): StudioInstallCo
       ? standing.mayInstall
         ? "upgrade"
         : undefined
-      : standing.kind === "live" || standing.kind === "system"
+      : standing.kind === "live"
         ? "open"
         : undefined;
 
 const openHrefOf = (standing: ApplicationReleaseStanding): string | undefined =>
-  standing.kind === "live" || standing.kind === "system" ? standing.openHref : undefined;
+  standing.kind === "live" ? standing.openHref : undefined;
 
 /**
  * The Releases tab and what acts on the saved draft as a whole: Publish and Install or upgrade
@@ -212,15 +212,20 @@ export function useStudioReleasesTab({
   // It is read when the tab opens and again after an install, publish or restore.
   const [adoption, setAdoption] = useState<StudioStandardPageAdoptionLoadResult | null>(null);
   const readAdoption = useCallback(async (): Promise<void> => {
+    let cause: string | undefined;
     const next = await readStandardPageAdoption(organizationId, rootId).catch(
       (error: unknown): StudioStandardPageAdoptionLoadResult => {
-        console.error(`[studio] page adoption comparison failed: ${describeFailure(error)}`);
+        cause = describeFailure(error);
         return { kind: "temporarily_unavailable" };
       },
     );
-    // A refusal is the expected answer for a platform application; only an outage is an error.
+    // One line per outcome: a refusal (a platform application has no comparison) is expected and
+    // logs at info; an outage is a platform fault and logs once at error.
     if (next.kind === "temporarily_unavailable")
-      console.error(`[studio] page adoption comparison ${next.kind}`);
+      console.error(
+        `[studio] page adoption comparison unavailable${cause === undefined ? "" : `: ${cause}`}`,
+      );
+    else if (next.kind === "refused") console.info("[studio] page adoption comparison refused");
     if (latest.current.isActive()) setAdoption(next);
   }, [organizationId, rootId]);
   // The comparison is of the saved draft, so a saved edit reads it again.

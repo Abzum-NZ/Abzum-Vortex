@@ -366,8 +366,10 @@ const outputTypes = (steps: readonly FlowTask[]): Record<string, string> =>
         entry?.effect === "read" ||
         entry?.effect === "change" ||
         entry?.effect === "background_start"
-      )
+      ) {
         outputs.push([`outputs.${step.id}.outcome`, "text"]);
+        outputs.push([`outputs.${step.id}.refusal_message`, "text"]);
+      }
       return outputs;
     }),
   );
@@ -410,7 +412,7 @@ const inputTypes = (
           (step) => step.id === reference.task,
         );
         types[key] =
-          reference.key === "outcome"
+          reference.key === "outcome" || reference.key === "refusal_message"
             ? "text"
             : ((producer === undefined ? undefined : outputTypes([producer])[key]) ?? "json");
         break;

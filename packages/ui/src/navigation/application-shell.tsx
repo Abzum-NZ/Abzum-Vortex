@@ -351,7 +351,10 @@ function ApplicationSwitcher({
         {source?.search === undefined ? null : (
           <div
             className="w-full p-[var(--vortex-space-sm)]"
-            onKeyDown={(event) => event.stopPropagation()}
+            // The search field answers its own keys; Escape still reaches the menu, which closes on it.
+            onKeyDown={(event) => {
+              if (event.key !== "Escape") event.stopPropagation();
+            }}
           >
             <ApplicationSearchControl
               placementId="application-switcher-search"

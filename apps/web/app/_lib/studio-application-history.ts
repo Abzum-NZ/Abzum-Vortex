@@ -74,7 +74,11 @@ export type StudioReleaseChanges =
   /** A version published in an earlier source format cannot be compared. */
   | Readonly<{ kind: "unavailable" }>;
 export type StudioApplicationReleaseEntry = DefinitionReleaseMetadata &
-  Readonly<{ changes: StudioReleaseChanges }>;
+  Readonly<{
+    changes: StudioReleaseChanges;
+    /** The platform itself published this version: no person's account, in any directory. */
+    publishedByPlatform: boolean;
+  }>;
 export type StudioApplicationHistoryPage = Readonly<{
   snapshot: StudioApplicationHistorySnapshot;
   /** Newest first. */
@@ -307,6 +311,7 @@ const sourceEntrySchema = z
     releaseVersion: z.string(),
     publishedAt: z.string(),
     publishedBy: z.string(),
+    publishedByPlatform: z.boolean(),
     releaseNote: z.string(),
     authoredSourceFingerprint: fingerprintSchema,
     authoredSource: z.unknown(),
@@ -447,6 +452,7 @@ export const listStudioApplicationReleaseHistory = async (
           : page.entries.map((entry) => ({
               ...entryMetadata(entry, anchor),
               changes: changesOf(page, entry),
+              publishedByPlatform: entry.publishedByPlatform,
             }));
       // Who published each version, read in the same request with the viewer's own directory access.
       const authors = [...new Set(entries.map((entry) => entry.publishedBy.toLowerCase()))];

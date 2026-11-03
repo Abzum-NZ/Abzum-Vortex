@@ -60,8 +60,10 @@ function geometryCss(scope: string, geometry: ContainerGeometry): string {
         : "position:static;min-height:0;max-height:none;overflow-y:visible;align-self:auto";
   return [
     `${root}{display:flex;flex-direction:${geometry.direction};width:100%;min-width:0}`,
-    `${header}{width:${row ? "auto" : "100%"};flex:none}`,
-    `${menu}{flex:${menuWidth === undefined ? "none" : `0 0 ${menuWidth}`};width:${menuWidth ?? (row ? "auto" : "100%")};max-width:100%;${placement}}`,
+    // In a row, the header and menu are sidebars and never take more than half the row, so a wide
+    // block in one (a grid) scrolls inside its own box instead of leaving the content no width.
+    `${header}{width:${row ? "auto" : "100%"};max-width:${row ? "50%" : "100%"};flex:none}`,
+    `${menu}{flex:${menuWidth === undefined ? "none" : `0 0 ${menuWidth}`};width:${menuWidth ?? (row ? "auto" : "100%")};max-width:${row ? "50%" : "100%"};${placement}}`,
     `${content}{flex:${row ? "1 1 0%" : "none"};width:${row ? "auto" : "100%"};min-width:0}`,
   ].join("\n");
 }
@@ -122,10 +124,17 @@ export function Container(props: ContainerProps): ReactElement {
     : geometryCss(scope, { desktop, tablet, phone }[props.breakpoint]);
 
   // In a row, header and menu keep their content width and content fills the remaining space, so
-  // a menu beside page content reads as a sidebar rather than an equal third.
+  // a menu beside page content reads as a sidebar rather than an equal third. A sidebar never takes
+  // more than half the row: with per-breakpoint geometry the scoped rule above is the cap, and
+  // this class is the cap for a container without it.
   const regionClassName = (key: ContainerRegionKey): string =>
     direction === "row"
-      ? cn("min-w-0", key === "content" ? "flex-1 basis-0" : "flex-none")
+      ? cn(
+          "min-w-0",
+          key === "content"
+            ? "flex-1 basis-0"
+            : cn("flex-none", !menuGeometryDeclared && "max-w-1/2"),
+        )
       : "min-w-0";
 
   const regions: ReactNode[] = [];

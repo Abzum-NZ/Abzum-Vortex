@@ -10,7 +10,13 @@ import {
   standardPermissionKey,
   type SourceItem,
 } from "@vortex/platform/schema";
-import { columnLimit, columnTypes, listing, lowerFirst } from "./application-record-page-kinds";
+import {
+  columnLimit,
+  columnTypes,
+  isProjectionAddressField,
+  listing,
+  lowerFirst,
+} from "./application-record-page-kinds";
 import { applyStudioFlowCreate } from "./application-flow-create";
 import { bindDefault, flowParts, freshAlias, type Plan } from "./application-record-plan";
 import { ensureStudioRecordQuery } from "./default-record-query";
@@ -235,14 +241,18 @@ export const listQuery = (
 
 /**
  * The fields a table of the record type shows: its numbers, its title, its first choice, its links
- * to other records, then compact fields, each one its read permission lets people read.
+ * to other records, then compact fields, each one its read permission lets people read. A system
+ * projection's organisation and revision fields are what the projection is addressed by, not
+ * information a person reads, so they are never default columns.
  */
 export const keyColumns = (
   record: RecordType,
   title: Field,
   readable: ReadonlySet<string>,
 ): Field[] => {
-  const shown = record.fields.filter((entry) => readable.has(entry.key));
+  const shown = record.fields.filter(
+    (entry) => readable.has(entry.key) && !isProjectionAddressField(record, entry.key),
+  );
   const numbers = shown.filter((entry) => entry.type === "reference_number");
   const state = shown.find((entry) => entry !== title && entry.type === "choice");
   const links = shown.filter(

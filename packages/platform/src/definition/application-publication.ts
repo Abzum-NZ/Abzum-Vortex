@@ -7,6 +7,7 @@ import {
   type ExactDefinitionDependency,
   type PrepareDefinitionPublicationCommand,
 } from "./definition-store-contracts";
+import { assertSystemApplicationBaseline } from "./system-application-surface";
 import { definitionContractChangedReason, nextDefinitionVersion } from "./version-impact";
 import type { VersionImpact, VersionImpactReason } from "./version-impact";
 import { definitionContractVersion } from "./application-contract-versions";
@@ -421,6 +422,7 @@ export const planApplicationPublication = async (
   roots: ReadonlyMap<string, OwnedModuleRoot>,
   releaseNote: string,
   pinned?: readonly ExactDefinitionDependency[],
+  systemApplication = false,
 ): Promise<ApplicationPublicationState> => {
   const latestVersion = latestReleaseVersion(candidate) ?? undefined;
   const provisional =
@@ -450,6 +452,25 @@ export const planApplicationPublication = async (
   assertReleasable(application, candidate.releaseHistory, catalogue.permissions);
   if (canonicalJson(reasons) !== canonicalJson(provisionalReasons))
     refuse("DEFINITION_VERSION_REFUSED");
+  // A platform system application's protected surface is the platform's: its Application and each
+  // Module released with it may not change it (architecture decision 11).
+  // A release is compared with the release it follows; one of an earlier definition contract has
+  // no content to compare with, and the platform's refresh publishes it again first. A first
+  // release is compared with nothing, as the database does.
+  if (systemApplication) {
+    for (const module of modules)
+      if (module.released)
+        assertSystemApplicationBaseline(
+          module.candidate.releaseHistory,
+          module.output.canonical.content,
+          "module",
+        );
+    assertSystemApplicationBaseline(
+      candidate.releaseHistory,
+      application.output.canonical.content,
+      "application",
+    );
+  }
   const confirmation = definitionPublicationConfirmationSchema.parse({
     outcome: latestVersion === undefined ? "initial_release" : "release_required",
     rootId: candidate.draft.rootId,

@@ -290,7 +290,8 @@ export const detachApplicationInstallation = async (
         select vortex_definition.detach_application_installation(
           ${command.data.applicationRootId}::uuid,
           ${command.data.applicationReleaseRevision}::bigint,
-          ${JSON.stringify(command.data.expectedModuleBindings)}::text::jsonb
+          ${JSON.stringify(command.data.expectedModuleBindings)}::text::jsonb,
+          ${command.data.replacementApplicationReleaseRevision ?? null}::bigint
         ) as lifecycle_result
       `,
     );

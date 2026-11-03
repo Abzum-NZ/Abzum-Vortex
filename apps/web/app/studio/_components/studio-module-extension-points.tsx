@@ -1,5 +1,5 @@
 "use client";
-import { StudioLimitNote, StudioReasoned, studioLimitReason } from "@vortex/ui/studio";
+import { StudioLimitNote, Reasoned, studioLimitReason } from "@vortex/ui/studio";
 import { Spinner } from "@vortex/ui/components/spinner";
 import { Alert, AlertDescription } from "@vortex/ui/components/alert";
 import { useId, useState, type FormEvent } from "react";
@@ -293,7 +293,7 @@ export function StudioModuleExtensionPoints({
         />
       ) : (
         <>
-          <StudioReasoned
+          <Reasoned
             reason={studioLimitReason("extensionPointsPerModule", module.extension_points.length)}
           >
             <Button
@@ -306,7 +306,7 @@ export function StudioModuleExtensionPoints({
               <Icon name="plus" />
               Add extension
             </Button>
-          </StudioReasoned>
+          </Reasoned>
           <StudioLimitNote
             limit="extensionPointsPerModule"
             used={module.extension_points.length}

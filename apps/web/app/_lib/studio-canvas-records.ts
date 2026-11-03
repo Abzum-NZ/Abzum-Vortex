@@ -380,7 +380,7 @@ export const readStudioCanvasRecords = async (
       services: services.placementServices(context, readSubject),
       permittedApplicationKeys: undefined,
       permittedApplications: undefined,
-      permittedApplicationsUnavailable: false,
+      permittedApplicationsState: "not_read",
       // The Studio canvas shows the authored layout and reports arrangements for capture; a
       // person's layout belongs to the running app.
       gridLayouts: {

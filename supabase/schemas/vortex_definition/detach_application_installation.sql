@@ -1,7 +1,8 @@
 create or replace function vortex_definition.detach_application_installation(
   p_application_root_id uuid,
   p_application_release_revision bigint,
-  p_expected_module_bindings jsonb
+  p_expected_module_bindings jsonb,
+  p_replacement_release_revision bigint default null
 )
 returns jsonb
 language plpgsql
@@ -69,6 +70,31 @@ begin
     raise exception using errcode = 'P0002',
       message = 'Exact Application release is unavailable';
   end if;
+
+  -- A platform system Application is never uninstalled (architecture decision 11): it is detached
+  -- only to be replaced by another release of the same Application, as an upgrade does.
+  if exists (
+    select 1
+    from vortex_definition.roots as root
+    where root.root_id = p_application_root_id
+      and root.application_origin_kind = 'platform_system_application'
+  ) and (
+    p_replacement_release_revision is null
+    or p_replacement_release_revision <= p_application_release_revision
+    or not exists (
+      select 1 from vortex_definition.releases as replacement
+      where replacement.root_id = p_application_root_id
+        and replacement.release_revision = p_replacement_release_revision
+        and replacement.compilation_output #>> '{kind}' = 'application'
+        and replacement.compilation_output #>> '{canonical,envelope,rootId}' = p_application_root_id::text
+    )
+  ) then
+    raise exception using errcode = '42501',
+      message = 'A platform application cannot be uninstalled';
+  end if;
+  -- The replacement is proved at commit: the deferred trigger
+  -- system_application_stays_installed refuses a transaction that leaves a platform system
+  -- Application without an active binding.
 
   select pg_catalog.count(*)::integer into pin_count
   from vortex_definition.reachable_module_dependency_edges(
@@ -242,11 +268,11 @@ exception
 end
 $function$;
 
-alter function vortex_definition.detach_application_installation(uuid,bigint,jsonb) owner to vortex_owner;
+alter function vortex_definition.detach_application_installation(uuid,bigint,jsonb,bigint) owner to vortex_owner;
 
-revoke all on function vortex_definition.detach_application_installation(uuid, bigint, jsonb)
+revoke all on function vortex_definition.detach_application_installation(uuid, bigint, jsonb, bigint)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_record_adapter;
-grant execute on function vortex_definition.detach_application_installation(uuid, bigint, jsonb)
+grant execute on function vortex_definition.detach_application_installation(uuid, bigint, jsonb, bigint)
   to vortex_request;
-comment on function vortex_definition.detach_application_installation(uuid, bigint, jsonb) is
-  'Revision-checked atomic detach of one complete Application Module binding set while retaining storage and records.';
+comment on function vortex_definition.detach_application_installation(uuid, bigint, jsonb, bigint) is
+  'Revision-checked atomic detach of one complete Application Module binding set while retaining storage and records. A platform system Application is detached only to be replaced by another release of it.';
