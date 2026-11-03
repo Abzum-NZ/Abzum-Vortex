@@ -96,7 +96,7 @@ export const validContext = (context: StudioCompositionContext): boolean =>
   context.key === context.source.key;
 
 /** A page's editable content is its main area or the content slot its layout opens for it. */
-export const pageContentRegion = (
+const pageContentRegion = (
   region: Region,
 ): region is Region & { page: NonNullable<Region["page"]> } =>
   (region.ordinaryMain === true || region.parent !== undefined) &&
