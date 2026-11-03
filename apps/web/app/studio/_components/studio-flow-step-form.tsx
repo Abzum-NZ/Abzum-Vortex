@@ -1,11 +1,11 @@
 "use client";
 import { Empty, EmptyDescription, EmptyHeader } from "@vortex/ui/components/empty";
 import {
+  Field,
+  FieldDescription,
+  FieldLabel,
   FieldLegend,
   FieldSet,
-  FieldDescription,
-  Field,
-  FieldLabel,
 } from "@vortex/ui/components/field";
 import { Alert, AlertDescription } from "@vortex/ui/components/alert";
 import { useState } from "react";
@@ -129,8 +129,8 @@ function EntryRows({
           summary: describeStudioFlowValue(entry.source, references),
           content: (
             <>
-              <div className="space-y-1.5">
-                <Label htmlFor={`${id}-extra-${index}-name`}>Name</Label>
+              <Field>
+                <FieldLabel htmlFor={`${id}-extra-${index}-name`}>Name</FieldLabel>
                 <Input
                   id={`${id}-extra-${index}-name`}
                   disabled={disabled}
@@ -143,7 +143,7 @@ function EntryRows({
                     )
                   }
                 />
-              </div>
+              </Field>
               <StudioFlowValueControl
                 id={`${id}-extra-${index}`}
                 label="Value"
@@ -238,20 +238,20 @@ function MessageActions({
           summary: targets.find((target) => target.value === action.flow)?.label ?? "Choose a flow",
           content: (
             <>
-              <div className="space-y-1.5">
-                <Label htmlFor={`${id}-${index}-label`}>Button label</Label>
+              <Field>
+                <FieldLabel htmlFor={`${id}-${index}-label`}>Button label</FieldLabel>
                 <Input
                   id={`${id}-${index}-label`}
                   disabled={disabled}
                   value={action.label}
                   onChange={(event) => change(index, { label: event.target.value })}
                 />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor={`${id}-${index}-flow`}>
+              </Field>
+              <Field>
+                <FieldLabel htmlFor={`${id}-${index}-flow`}>
                   Flow it starts
                   <StudioHelp hint="Another flow of this application that a person can start from a page. It runs as if they had pressed its own button." />
-                </Label>
+                </FieldLabel>
                 <StudioReferencePicker
                   id={`${id}-${index}-flow`}
                   disabled={disabled}
@@ -260,7 +260,7 @@ function MessageActions({
                   unset={targets.length === 0 ? "No other page flow yet" : "Choose…"}
                   onChange={(flow) => change(index, { flow, inputs: [] })}
                 />
-              </div>
+              </Field>
               <EntryRows
                 id={`${id}-${index}-inputs`}
                 label="Inputs it gives that flow"
@@ -325,9 +325,9 @@ function ReadFields({
   const selected = value?.kind === "read_fields" ? value.fields : [];
   const options = field.options ?? [];
   return (
-    <div className="space-y-1.5">
+    <Field>
       <div className="flex items-center gap-1">
-        <Label htmlFor={id}>{label}</Label>
+        <FieldLabel htmlFor={id}>{label}</FieldLabel>
         <StudioHelp hint="The step returns these fields as its values output, keyed by field name." />
       </div>
       {options.length === 0 ? (
@@ -352,7 +352,7 @@ function ReadFields({
           </Field>
         ))
       )}
-    </div>
+    </Field>
   );
 }
 
@@ -485,8 +485,8 @@ function FieldValues({
             }
           />
           {unused.length > 0 && (
-            <div className="space-y-1.5">
-              <Label htmlFor={`${id}-add`}>Set another field</Label>
+            <Field>
+              <FieldLabel htmlFor={`${id}-add`}>Set another field</FieldLabel>
               <StudioReferencePicker
                 id={`${id}-add`}
                 value=""
@@ -511,7 +511,7 @@ function FieldValues({
                   onChange({ kind: "fields", entries: [...entries, { field: key, source }] });
                 }}
               />
-            </div>
+            </Field>
           )}
         </>
       )}
@@ -612,8 +612,8 @@ function PropertyControl({
       );
     case "calculation":
       return (
-        <div className="space-y-1.5">
-          <Label htmlFor={id}>{label}</Label>
+        <Field>
+          <FieldLabel htmlFor={id}>{label}</FieldLabel>
           <StudioFormulaEditor
             id={id}
             disabled={disabled}
@@ -633,7 +633,7 @@ function PropertyControl({
               })
             }
           />
-        </div>
+        </Field>
       );
     case "field_values":
       return (
@@ -717,11 +717,11 @@ function PropertyControl({
           ? (options?.find((entry) => entry.value.endsWith(`:${written}`))?.value ?? written)
           : written;
       return (
-        <div className="space-y-1.5">
-          <Label htmlFor={id}>
+        <Field>
+          <FieldLabel htmlFor={id}>
             {label}
             {!field.required && <span className="text-xs text-muted-foreground">Optional</span>}
-          </Label>
+          </FieldLabel>
           {options === undefined ? (
             <Input
               id={id}
@@ -745,7 +745,7 @@ function PropertyControl({
               onChange={(next) => onChange(next === "" ? null : { kind: "text", value: next })}
             />
           )}
-        </div>
+        </Field>
       );
     }
   }
@@ -880,9 +880,9 @@ function ControlForm({
       );
     case "stop":
       return (
-        <div className="space-y-1.5">
+        <Field>
           <div className="flex items-center gap-1">
-            <Label htmlFor={id}>Outcome</Label>
+            <FieldLabel htmlFor={id}>Outcome</FieldLabel>
             <StudioHelp hint="A short name for how the flow ended, such as cancelled." />
           </div>
           <Input
@@ -891,13 +891,13 @@ function ControlForm({
             value={control.outcome}
             onChange={(event) => onChange({ kind: "stop", outcome: event.target.value }, null)}
           />
-        </div>
+        </Field>
       );
     case "run_flow":
       return (
         <div className="space-y-4">
-          <div className="space-y-1.5">
-            <Label htmlFor={id}>Flow</Label>
+          <Field>
+            <FieldLabel htmlFor={id}>Flow</FieldLabel>
             <StudioReferencePicker
               id={id}
               disabled={disabled}
@@ -905,7 +905,7 @@ function ControlForm({
               options={flows.map((flow) => ({ value: flow.id, label: studioFlowLabel(flow) }))}
               onChange={(flow) => onChange({ ...control, flow }, null)}
             />
-          </div>
+          </Field>
           <EntryRows
             id={`${id}-inputs`}
             label="Inputs"
@@ -929,8 +929,8 @@ function ControlForm({
             disabled={disabled}
             onChange={(source) => keep(source, (items) => ({ ...control, items }))}
           />
-          <div className="space-y-1.5">
-            <Label htmlFor={`${id}-most`}>Most items</Label>
+          <Field>
+            <FieldLabel htmlFor={`${id}-most`}>Most items</FieldLabel>
             <Input
               id={`${id}-most`}
               inputMode="numeric"
@@ -940,7 +940,7 @@ function ControlForm({
                 onChange({ ...control, maximumItems: Number(event.target.value) }, null)
               }
             />
-          </div>
+          </Field>
         </div>
       );
     case "switch":
@@ -970,8 +970,8 @@ function ControlForm({
                 summary: when === "" ? undefined : `When the value is ${when}`,
                 content: (
                   <>
-                    <div className="space-y-1.5">
-                      <Label htmlFor={`${id}-case-${index}`}>Name</Label>
+                    <Field>
+                      <FieldLabel htmlFor={`${id}-case-${index}`}>Name</FieldLabel>
                       <Input
                         id={`${id}-case-${index}`}
                         disabled={disabled}
@@ -990,9 +990,9 @@ function ControlForm({
                           )
                         }
                       />
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label htmlFor={`${id}-when-${index}`}>When the value is</Label>
+                    </Field>
+                    <Field>
+                      <FieldLabel htmlFor={`${id}-when-${index}`}>When the value is</FieldLabel>
                       <Input
                         id={`${id}-when-${index}`}
                         disabled={disabled}
@@ -1014,7 +1014,7 @@ function ControlForm({
                           )
                         }
                       />
-                    </div>
+                    </Field>
                   </>
                 ),
               };

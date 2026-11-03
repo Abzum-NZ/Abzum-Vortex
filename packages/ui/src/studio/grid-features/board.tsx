@@ -1,5 +1,6 @@
 "use client";
 
+import { Field, FieldLabel } from "../../components/field";
 import { recordsTableBoardFeature, recordsTableSettingMaximumItems } from "@vortex/platform/schema";
 import { useId, type ReactElement } from "react";
 import { Trash2 } from "lucide-react";
@@ -209,8 +210,8 @@ export function StudioBoardEditor({
         : "Choose a pipeline";
   return (
     <div className="space-y-3 pb-2" data-vortex-board-editor="">
-      <div className="space-y-1">
-        <Label htmlFor={`${idPrefix}-${ownId}-pipeline`}>Pipeline</Label>
+      <Field>
+        <FieldLabel htmlFor={`${idPrefix}-${ownId}-pipeline`}>Pipeline</FieldLabel>
         <StudioOptionControl
           id={`${idPrefix}-${ownId}-pipeline`}
           disabled={disabled}
@@ -237,7 +238,7 @@ export function StudioBoardEditor({
           Each stage of the pipeline is a column. Moving a card follows the pipeline&apos;s rules
           and permissions.
         </p>
-      </div>
+      </Field>
       {pipeline === undefined ? null : (
         <StudioBoardTotals
           idPrefix={`${idPrefix}-${ownId}-totals`}

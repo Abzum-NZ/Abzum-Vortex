@@ -1,4 +1,5 @@
 "use client";
+import { Field, FieldLabel } from "@vortex/ui/components/field";
 import { Alert, AlertDescription } from "@vortex/ui/components/alert";
 import { createContext, useContext, useState, type ReactNode } from "react";
 import { Checkbox } from "@vortex/ui/components/checkbox";
@@ -434,11 +435,11 @@ export function StudioFlowValueControl({
     token === "built" ||
     offered.some((choice) => choice.token === token);
   return (
-    <div className="space-y-1.5">
-      <Label htmlFor={`${id}-from`}>
+    <Field>
+      <FieldLabel htmlFor={`${id}-from`}>
         {label}
         {optional && <span className="text-xs text-muted-foreground">Optional</span>}
-      </Label>
+      </FieldLabel>
       <StudioReferencePicker
         id={`${id}-from`}
         disabled={disabled}
@@ -527,6 +528,6 @@ export function StudioFlowValueControl({
           </AlertDescription>
         </Alert>
       )}
-    </div>
+    </Field>
   );
 }

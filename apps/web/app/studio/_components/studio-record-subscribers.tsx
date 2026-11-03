@@ -1,4 +1,5 @@
 "use client";
+import { Field, FieldLabel } from "@vortex/ui/components/field";
 import { Alert, AlertDescription } from "@vortex/ui/components/alert";
 import { useState, type FormEvent } from "react";
 import type { ApplicationSourceDocument } from "@vortex/platform/schema";
@@ -105,8 +106,8 @@ export function StudioRecordSubscribers({
       </p>
       {adding && (
         <form className="space-y-2" onSubmit={add} aria-label="New after-save flow">
-          <div className="space-y-1.5">
-            <Label htmlFor="record-subscriber-name">Flow name</Label>
+          <Field>
+            <FieldLabel htmlFor="record-subscriber-name">Flow name</FieldLabel>
             <Input
               id="record-subscriber-name"
               required
@@ -118,7 +119,7 @@ export function StudioRecordSubscribers({
                 setProblem("");
               }}
             />
-          </div>
+          </Field>
           <div className="flex items-center gap-2">
             <Checkbox
               id="record-subscriber-created"

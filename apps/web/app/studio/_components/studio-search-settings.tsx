@@ -1,6 +1,6 @@
 "use client";
 import { Item, ItemContent, ItemGroup } from "@vortex/ui/components/item";
-import { FieldLegend, FieldSet } from "@vortex/ui/components/field";
+import { Field, FieldLabel, FieldLegend, FieldSet } from "@vortex/ui/components/field";
 import { Alert, AlertDescription } from "@vortex/ui/components/alert";
 import { useState } from "react";
 import {
@@ -204,10 +204,10 @@ export function StudioRecordTypeSearch({
               );
             })}
           </FieldSet>
-          <div className="space-y-2">
-            <Label htmlFor={`search-${reference}-title`} className="text-sm">
+          <Field>
+            <FieldLabel htmlFor={`search-${reference}-title`} className="text-sm">
               A result is named by
-            </Label>
+            </FieldLabel>
             <StudioOptionControl
               id={`search-${reference}-title`}
               value={form.title}
@@ -215,11 +215,11 @@ export function StudioRecordTypeSearch({
               options={options}
               onChange={(title) => change({ title })}
             />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor={`search-${reference}-subtitle`} className="text-sm">
+          </Field>
+          <Field>
+            <FieldLabel htmlFor={`search-${reference}-subtitle`} className="text-sm">
               Under its name it shows
-            </Label>
+            </FieldLabel>
             <StudioOptionControl
               id={`search-${reference}-subtitle`}
               value={form.subtitle}
@@ -228,11 +228,11 @@ export function StudioRecordTypeSearch({
               options={options}
               onChange={(subtitle) => change({ subtitle })}
             />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor={`search-${reference}-page`} className="text-sm">
+          </Field>
+          <Field>
+            <FieldLabel htmlFor={`search-${reference}-page`} className="text-sm">
               A result opens
-            </Label>
+            </FieldLabel>
             {pages.length === 0 ? (
               <p role="note" className="text-sm">
                 {record.name} has no detail page yet. Add one in Structure: a result opens it.
@@ -246,7 +246,7 @@ export function StudioRecordTypeSearch({
                 onChange={(page) => change({ page })}
               />
             )}
-          </div>
+          </Field>
         </>
       )}
       {form.on ? (

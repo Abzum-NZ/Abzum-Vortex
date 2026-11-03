@@ -1,4 +1,5 @@
 "use client";
+import { Field, FieldLabel } from "@vortex/ui/components/field";
 import { Card, CardContent } from "@vortex/ui/components/card";
 import { Alert, AlertDescription } from "@vortex/ui/components/alert";
 import { useState } from "react";
@@ -328,10 +329,10 @@ function BindingSettings({
         Run settings{changed ? " (changed)" : ""}
       </CollapsibleTrigger>
       <CollapsibleContent keepMounted className="mt-2 space-y-2">
-        <div className="space-y-1">
-          <Label className="text-xs" htmlFor={`condition-${event}`}>
+        <Field>
+          <FieldLabel className="text-xs" htmlFor={`condition-${event}`}>
             Start only when
-          </Label>
+          </FieldLabel>
           {settings.condition === null ? (
             <Button
               type="button"
@@ -370,7 +371,7 @@ function BindingSettings({
               </Button>
             </>
           )}
-        </div>
+        </Field>
         <Label className="flex flex-col items-start gap-1 text-xs">
           Wait before starting (milliseconds, at most 250)
           <Input

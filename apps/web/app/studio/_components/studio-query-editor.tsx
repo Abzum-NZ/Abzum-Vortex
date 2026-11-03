@@ -1,4 +1,5 @@
 "use client";
+import { Field, FieldLabel } from "@vortex/ui/components/field";
 import { Item, ItemContent, ItemGroup } from "@vortex/ui/components/item";
 import { StudioLimitNote, StudioReasoned, studioLimitReason } from "@vortex/ui/studio";
 import { StudioDataEmpty } from "./studio-data-centre";
@@ -1020,8 +1021,8 @@ export function StudioQueryEditor({
             }
           />
           {newInput.type === "record_reference" && (
-            <div className="space-y-1">
-              <Label htmlFor={`query-${queryKey}-new-input-record`}>Record type</Label>
+            <Field>
+              <FieldLabel htmlFor={`query-${queryKey}-new-input-record`}>Record type</FieldLabel>
               <StudioOptionControl
                 id={`query-${queryKey}-new-input-record`}
                 value={newInput.recordType}
@@ -1032,7 +1033,7 @@ export function StudioQueryEditor({
                 ]}
                 onChange={(recordType) => setNewInput({ ...newInput, recordType })}
               />
-            </div>
+            </Field>
           )}
           <Button
             type="submit"

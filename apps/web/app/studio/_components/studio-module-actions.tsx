@@ -1,6 +1,6 @@
 "use client";
 import { StudioLimitNote, StudioReasoned, studioLimitReason } from "@vortex/ui/studio";
-import { FieldLegend, FieldSet } from "@vortex/ui/components/field";
+import { Field, FieldLabel, FieldLegend, FieldSet } from "@vortex/ui/components/field";
 import { Alert, AlertDescription } from "@vortex/ui/components/alert";
 import { useMemo, useState, type FormEvent } from "react";
 import {
@@ -189,8 +189,8 @@ export function ActionDialog({
               flow, edited in the flow editor.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-1.5">
-            <Label htmlFor="action-name">Name</Label>
+          <Field>
+            <FieldLabel htmlFor="action-name">Name</FieldLabel>
             <Input
               id="action-name"
               required
@@ -198,7 +198,7 @@ export function ActionDialog({
               value={label}
               onChange={(event) => setLabel(event.target.value)}
             />
-          </div>
+          </Field>
           <StudioActionInputs inputs={inputs} source={source} onChange={changeInputs} />
           <FieldSet className="gap-2">
             <FieldLegend variant="label">Runs only when</FieldLegend>
@@ -242,8 +242,8 @@ export function ActionDialog({
               and permission.
             </Label>
           </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="action-permission">Permission</Label>
+          <Field>
+            <FieldLabel htmlFor="action-permission">Permission</FieldLabel>
             <StudioOptionControl
               id="action-permission"
               value={permission}
@@ -256,7 +256,7 @@ export function ActionDialog({
               ]}
               onChange={setPermission}
             />
-          </div>
+          </Field>
           {issues.length === 0 ? null : (
             <Alert variant="destructive">
               <AlertDescription>

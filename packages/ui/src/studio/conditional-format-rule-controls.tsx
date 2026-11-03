@@ -1,5 +1,6 @@
 "use client";
 
+import { Field, FieldLabel } from "../components/field";
 import { useState, type ReactElement } from "react";
 import {
   conditionalFormatIcons,
@@ -242,8 +243,8 @@ export function ConditionalFormatStyleControls({
   return (
     <>
       {wholeRowOnly && target.kind === "row" ? null : (
-        <div className="space-y-1">
-          <Label className="text-sm">Formats</Label>
+        <Field>
+          <FieldLabel className="text-sm">Formats</FieldLabel>
           <ToggleGroup
             aria-label="Formats"
             variant="outline"
@@ -263,7 +264,7 @@ export function ConditionalFormatStyleControls({
               Chosen cells
             </ToggleGroupItem>
           </ToggleGroup>
-        </div>
+        </Field>
       )}
       {target.kind === "cells" ? (
         <div className="space-y-1">
@@ -305,15 +306,15 @@ export function ConditionalFormatStyleControls({
           />
         </div>
       ) : null}
-      <div className="space-y-1">
-        <Label className="text-sm">Colour</Label>
+      <Field>
+        <FieldLabel className="text-sm">Colour</FieldLabel>
         <ConditionalFormatTokenPicker
           label="Colour"
           value={style.token}
           disabled={disabled}
           onChange={(token) => withStyle({ token })}
         />
-      </div>
+      </Field>
       <ConditionalFormatSwitchRow
         id={`${idPrefix}-tint`}
         label="Background tint"
@@ -343,10 +344,10 @@ export function ConditionalFormatStyleControls({
         onChange={(on) => withStyle({ strike: on })}
       />
       <div className="grid grid-cols-2 gap-2">
-        <div className="space-y-1">
-          <Label htmlFor={`${idPrefix}-icon`} className="text-sm">
+        <Field>
+          <FieldLabel htmlFor={`${idPrefix}-icon`} className="text-sm">
             Icon
-          </Label>
+          </FieldLabel>
           <StudioOptionControl
             id={`${idPrefix}-icon`}
             value={style.icon ?? "none"}
@@ -360,11 +361,11 @@ export function ConditionalFormatStyleControls({
               withStyle({ icon });
             }}
           />
-        </div>
-        <div className="space-y-1">
-          <Label htmlFor={`${idPrefix}-badge`} className="text-sm">
+        </Field>
+        <Field>
+          <FieldLabel htmlFor={`${idPrefix}-badge`} className="text-sm">
             Label
-          </Label>
+          </FieldLabel>
           <Input
             id={`${idPrefix}-badge`}
             className="h-8"
@@ -377,7 +378,7 @@ export function ConditionalFormatStyleControls({
               withStyle({ badgeLabel: label === "" ? undefined : label });
             }}
           />
-        </div>
+        </Field>
       </div>
       <ConditionalFormatSwitchRow
         id={`${idPrefix}-stop`}

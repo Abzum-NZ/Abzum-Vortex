@@ -1,5 +1,5 @@
 "use client";
-import { FieldLegend, FieldSet } from "@vortex/ui/components/field";
+import { Field, FieldLabel, FieldLegend, FieldSet } from "@vortex/ui/components/field";
 import { useRef } from "react";
 import { deriveFieldKey, type ApplicationSourceDocument } from "@vortex/platform/schema";
 import { Icon } from "@vortex/ui";
@@ -94,8 +94,8 @@ export function StudioActionInputs({
             summary: `${typeLabels[input.type]} · ${input.required ? "Required" : "Optional"}`,
             content: (
               <div className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor={`${id}-label`}>Label</Label>
+                <Field>
+                  <FieldLabel htmlFor={`${id}-label`}>Label</FieldLabel>
                   <Input
                     id={`${id}-label`}
                     value={input.label}
@@ -119,9 +119,9 @@ export function StudioActionInputs({
                       );
                     }}
                   />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor={`${id}-type`}>Value type</Label>
+                </Field>
+                <Field>
+                  <FieldLabel htmlFor={`${id}-type`}>Value type</FieldLabel>
                   <StudioInputType
                     id={`${id}-type`}
                     type={input.type}
@@ -142,8 +142,8 @@ export function StudioActionInputs({
                     }}
                   >
                     {(selectedRecords, changeRecords) => (
-                      <div className="space-y-2">
-                        <Label htmlFor={`${id}-records`}>Permitted record types</Label>
+                      <Field>
+                        <FieldLabel htmlFor={`${id}-records`}>Permitted record types</FieldLabel>
                         <Combobox
                           multiple
                           items={records}
@@ -184,10 +184,10 @@ export function StudioActionInputs({
                               .join(", ")}
                           </p>
                         )}
-                      </div>
+                      </Field>
                     )}
                   </StudioInputType>
-                </div>
+                </Field>
                 <div className="flex items-center gap-2">
                   <Checkbox
                     id={`${id}-required`}

@@ -1,4 +1,5 @@
 "use client";
+import { FieldSet } from "@vortex/ui/components/field";
 import { Alert, AlertDescription } from "@vortex/ui/components/alert";
 import { Button } from "@vortex/ui/components/button";
 
@@ -236,14 +237,14 @@ export function ApplicationReactionConditionEditor(props: Props) {
         <p role="status">The page or its modules changed. Reload the fields before editing.</p>
       )}
       {model?.kind === "available" && (
-        <fieldset disabled={props.disabled} className="space-y-3">
+        <FieldSet disabled={props.disabled}>
           <StudioConditionControls
             {...(value === undefined ? {} : { value })}
             context={model.controls}
             label={slotInfo.title}
             onChange={update}
           />
-        </fieldset>
+        </FieldSet>
       )}
       {needsFields && (
         <Button

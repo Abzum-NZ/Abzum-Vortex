@@ -1,6 +1,6 @@
 "use client";
-import { FieldLegend } from "@vortex/ui/components/field";
-import { useState } from "react";
+import { Field, FieldGroup, FieldLabel, FieldLegend, FieldSet } from "@vortex/ui/components/field";
+import { useId, useState } from "react";
 import type {
   ApplicationSourceDocument,
   ImmutablePlatformBlockCatalogue,
@@ -88,6 +88,7 @@ function OutletSettings({
     (entry) =>
       entry.parentPlacement === outlet.parent_placement && entry.parentSlot === outlet.parent_slot,
   );
+  const checkboxId = useId();
   const edit = (values: StudioLayoutOutletValues, merge?: string) =>
     run(
       {
@@ -141,29 +142,30 @@ function OutletSettings({
           />
         )}
       </StudioField>
-      <fieldset className="space-y-2" disabled={disabled}>
-        <FieldLegend variant="label" className="mb-2">
-          Allowed child categories
-        </FieldLegend>
-        {target?.categories.map(({ value: category, label }) => (
-          <label key={category} className="flex items-center gap-2 text-sm">
-            <Checkbox
-              disabled={disabled}
-              checked={outlet.allowed_child_categories.includes(category)}
-              onCheckedChange={(checked) =>
-                edit({
-                  ...outlet,
-                  allowed_child_categories:
-                    checked === true
-                      ? [...outlet.allowed_child_categories, category]
-                      : outlet.allowed_child_categories.filter((entry) => entry !== category),
-                })
-              }
-            />
-            {label}
-          </label>
-        ))}
-      </fieldset>
+      <FieldSet disabled={disabled}>
+        <FieldLegend variant="label">Allowed child categories</FieldLegend>
+        <FieldGroup className="gap-2">
+          {target?.categories.map(({ value: category, label }) => (
+            <Field key={category} orientation="horizontal">
+              <Checkbox
+                id={`${checkboxId}-${category}`}
+                disabled={disabled}
+                checked={outlet.allowed_child_categories.includes(category)}
+                onCheckedChange={(checked) =>
+                  edit({
+                    ...outlet,
+                    allowed_child_categories:
+                      checked === true
+                        ? [...outlet.allowed_child_categories, category]
+                        : outlet.allowed_child_categories.filter((entry) => entry !== category),
+                  })
+                }
+              />
+              <FieldLabel htmlFor={`${checkboxId}-${category}`}>{label}</FieldLabel>
+            </Field>
+          ))}
+        </FieldGroup>
+      </FieldSet>
     </div>
   );
 }

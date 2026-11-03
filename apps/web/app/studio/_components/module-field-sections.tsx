@@ -137,8 +137,8 @@ function PublishedOptionColours({
       },
     });
   return (
-    <div className="space-y-2">
-      <Label>Option colours</Label>
+    <Field>
+      <FieldLabel>Option colours</FieldLabel>
       {current.items.map((item, index) => {
         if (item.kind !== "group") return null;
         const label = item.properties["label"];
@@ -160,7 +160,7 @@ function PublishedOptionColours({
           </div>
         );
       })}
-    </div>
+    </Field>
   );
 }
 

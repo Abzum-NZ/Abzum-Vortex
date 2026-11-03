@@ -1,7 +1,7 @@
 "use client";
 import { Card } from "@vortex/ui/components/card";
 import { StudioLimitNote, StudioReasoned, studioLimitReason } from "@vortex/ui/studio";
-import { FieldLegend, FieldSet } from "@vortex/ui/components/field";
+import { Field, FieldLabel, FieldLegend, FieldSet } from "@vortex/ui/components/field";
 import { useState, type FormEvent } from "react";
 import {
   applicationUses,
@@ -49,7 +49,6 @@ import {
   ItemHeader,
   ItemTitle,
 } from "@vortex/ui/components/item";
-import { Label } from "@vortex/ui/components/label";
 import { StudioOptionControl } from "@vortex/ui/studio";
 import {
   Table,
@@ -210,8 +209,8 @@ function NewPipelineDialog({
               moves and gates once it is added.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-1.5">
-            <Label htmlFor="pipeline-name">Name</Label>
+          <Field>
+            <FieldLabel htmlFor="pipeline-name">Name</FieldLabel>
             <Input
               id="pipeline-name"
               required
@@ -223,9 +222,9 @@ function NewPipelineDialog({
                 setIssues([]);
               }}
             />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="pipeline-field">Stages come from</Label>
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="pipeline-field">Stages come from</FieldLabel>
             <StudioOptionControl
               id="pipeline-field"
               value={stageField}
@@ -242,7 +241,7 @@ function NewPipelineDialog({
             <p className="text-sm text-muted-foreground">
               Options become stages. Filtering is enabled so Boards can show them.
             </p>
-          </div>
+          </Field>
           <Problems issues={issues} />
           <DialogFooter>
             <Button type="button" variant="outline" onClick={onClose}>
@@ -409,8 +408,8 @@ function PipelineDialog({
               which stages need an action. Each change is kept as you make it.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-1.5">
-            <Label htmlFor="pipeline-name">Name</Label>
+          <Field>
+            <FieldLabel htmlFor="pipeline-name">Name</FieldLabel>
             <Input
               id="pipeline-name"
               required
@@ -424,7 +423,7 @@ function PipelineDialog({
                 <AlertDescription>{name.problem}</AlertDescription>
               </Alert>
             )}
-          </div>
+          </Field>
           <div className="space-y-1.5">
             <p className="text-sm font-medium">Stages come from</p>
             <p className="text-sm">
@@ -482,8 +481,8 @@ function PipelineDialog({
                     <p className="space-y-1 text-sm text-muted-foreground">
                       Colours come from the field&apos;s options.
                     </p>
-                    <div className="space-y-1">
-                      <Label htmlFor={`stage-gate-${stage.option}`}>Moving here</Label>
+                    <Field>
+                      <FieldLabel htmlFor={`stage-gate-${stage.option}`}>Moving here</FieldLabel>
                       <StudioOptionControl
                         id={`stage-gate-${stage.option}`}
                         value={gates[stage.option] ?? ""}
@@ -507,7 +506,7 @@ function PipelineDialog({
                           change({ gates: updated });
                         }}
                       />
-                    </div>
+                    </Field>
                     <div className="sm:col-span-2">
                       <StudioUsedIn
                         source={source}

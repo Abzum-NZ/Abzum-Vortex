@@ -1,4 +1,5 @@
 "use client";
+import { Field, FieldLabel } from "@vortex/ui/components/field";
 import { Alert, AlertDescription } from "@vortex/ui/components/alert";
 import { Icon } from "@vortex/ui";
 import { useState, type FormEvent } from "react";
@@ -163,8 +164,8 @@ export function StudioRecordRules({
       </p>
       {adding && (
         <form className="space-y-2" onSubmit={add} aria-label="New rule">
-          <div className="space-y-1.5">
-            <Label htmlFor="record-rule-name">Name</Label>
+          <Field>
+            <FieldLabel htmlFor="record-rule-name">Name</FieldLabel>
             <Input
               id="record-rule-name"
               required
@@ -176,9 +177,9 @@ export function StudioRecordRules({
                 setProblem("");
               }}
             />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="record-rule-message">Warning message</Label>
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="record-rule-message">Warning message</FieldLabel>
             <Textarea
               id="record-rule-message"
               required
@@ -186,7 +187,7 @@ export function StudioRecordRules({
               disabled={disabled}
               onChange={(event) => setMessage(event.target.value)}
             />
-          </div>
+          </Field>
           <div className="flex items-center gap-2">
             <Checkbox
               id="record-rule-create"

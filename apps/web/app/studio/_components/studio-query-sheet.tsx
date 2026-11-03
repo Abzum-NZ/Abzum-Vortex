@@ -1,9 +1,9 @@
 "use client";
+import { Field, FieldLabel } from "@vortex/ui/components/field";
 import { Empty, EmptyDescription, EmptyHeader } from "@vortex/ui/components/empty";
 import { useMemo, useState } from "react";
 import { StudioReferencePicker } from "@vortex/ui/studio";
 import { Button } from "@vortex/ui/components/button";
-import { Label } from "@vortex/ui/components/label";
 import {
   Sheet,
   SheetContent,
@@ -113,8 +113,8 @@ export function StudioQuerySheet({
               </Empty>
             ) : (
               <>
-                <div className="space-y-2">
-                  <Label htmlFor="new-query-record-type">Records it lists</Label>
+                <Field>
+                  <FieldLabel htmlFor="new-query-record-type">Records it lists</FieldLabel>
                   <StudioReferencePicker
                     id="new-query-record-type"
                     value={step.recordType}
@@ -124,7 +124,7 @@ export function StudioQuerySheet({
                       if (recordType !== "") setStep({ kind: "name", recordType });
                     }}
                   />
-                </div>
+                </Field>
                 {moduleKey === undefined || recordKey === undefined ? null : (
                   <StudioNewQueryForm
                     key={step.recordType}
