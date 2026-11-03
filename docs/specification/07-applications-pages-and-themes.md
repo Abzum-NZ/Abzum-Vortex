@@ -21,11 +21,11 @@ flowchart TD
 
 These application components, including exact Module bindings, are published together under the [application definition](03-composition-and-publication.md#definition-ownership-and-versions). The bound Modules remain independently versioned definitions; their record types, fields and relationships publish with the Module. A page or flow can have its own stable identifier and editing history without acquiring an independent live version.
 
-Installing, updating or withdrawing an application requires its declared application-management operation and current authorised scope; permission to manage roles or assignments alone does not authorise an application lifecycle change. The [Application engine](https://github.com/Abzum-NZ/Abzum-Vortex/issues/64) supplies this protected operation binding and composes the current Access decision, exact affected scope, existing private lifecycle writer and Activity in the same transaction. It reuses the [Access administration transaction pattern](https://github.com/Abzum-NZ/Abzum-Vortex/issues/40), preserves supplier and final-steward safeguards and exposes no unbound installation or withdrawal endpoint.
+Installing, updating or withdrawing an application requires its declared application-management operation and current authorised scope; permission to manage roles or assignments alone does not authorise an application lifecycle change. The Application engine supplies this protected operation binding and composes the current Access decision, exact affected scope, existing private lifecycle writer and Activity in the same transaction. It reuses the Access administration transaction pattern, preserves supplier and final-steward safeguards and exposes no unbound installation or withdrawal endpoint.
 
 ### System applications
 
-**System applications** — [IAM](appendices/iam-application.md), Organisation Administration, Tenant Administration and the [Landing Zone](#landing-zone-application) — are platform packages installed when an organisation is created. They are ordinary definitions over system modules and consume the same application/page primitives as any other application, but they cannot be uninstalled. Their protected operations and operation bindings stay platform-owned. A person whose role grants the `platform.organization.system_applications.manage` [platform permission](appendices/application-packages.md#permissions) customises them through [extension fields](05-modules-fields-and-relationships.md#extension-points), theme, navigation, the organisation's own dependent applications, or an organisation-owned customised copy ([#1058](https://github.com/Abzum-NZ/Abzum-Vortex/issues/1058)) that replaces the system application's installation, never exists alongside it and receives platform fixes through compare-and-merge ([#721](https://github.com/Abzum-NZ/Abzum-Vortex/issues/721)). A customisation cannot add, remove or retarget a protected-operation binding. Platform upgrades never overwrite customisations, and the organisation always keeps a working way for its steward to manage access ([last-steward safeguard](appendices/iam-application.md#setup-and-removal)).
+**System applications** — [IAM](appendices/iam-application.md), Organisation Administration, Tenant Administration and the [Landing Zone](#landing-zone-application) — are platform packages installed when an organisation is created. They are ordinary definitions over system modules and consume the same application/page primitives as any other application, but they cannot be uninstalled. Their protected operations and operation bindings stay platform-owned. A person whose role grants the `platform.organization.system_applications.manage` [platform permission](appendices/application-packages.md#permissions) customises them through [extension fields](05-modules-fields-and-relationships.md#extension-points), theme, navigation, the organisation's own dependent applications, or an organisation-owned customised copy that replaces the system application's installation, never exists alongside it and receives platform fixes through compare-and-merge. A customisation cannot add, remove or retarget a protected-operation binding. Platform upgrades never overwrite customisations, and the organisation always keeps a working way for its steward to manage access ([last-steward safeguard](appendices/iam-application.md#setup-and-removal)).
 
 ## Page-builder implementation handoff
 
@@ -141,13 +141,13 @@ in the existing permission-semantic version comparison. Runtime filtering may
 leave an otherwise permitted layout empty: that result is not a new published
 definition and is not rejected by authoring-time required-slot rules.
 
-The [page projection engine](https://github.com/Abzum-NZ/Abzum-Vortex/issues/38)
+The page projection engine
 uses the exact published page and current authenticated organisation/application
 context. Installed-page selection, actual web rendering and anonymous public authority
 are consumer integrations on that same engine; no client supplies its own
 permission map.
 
-The [application runtime](https://github.com/Abzum-NZ/Abzum-Vortex/issues/64) supplies
+The application runtime supplies
 the trusted service identity and exact installed release used to read immutable
 definitions. That service read never grants the person's page or operation access:
 the human request still passes its own current Access checks. The existing
@@ -301,7 +301,7 @@ It covers:
 - Phone behaviour.
 - The shadcn/create dimensions: visual style, base colour, theme colour, chart colours, heading and body fonts, icon library, radius, menu and menu accent. Every option offered at the pinned shadcn version is available, and a shadcn preset code can be imported into these selections.
 
-Every interface primitive is a [shadcn/ui](https://ui.shadcn.com) component built on Base UI and styled with Tailwind CSS, kept as source in the shared `ui` package. The theme engine supplies every design value through the shadcn CSS variables, so a theme change restyles every component without code changes ([architecture decision 12](../build-plan/architecture-decisions.md)).
+Every interface primitive is a [shadcn/ui](https://ui.shadcn.com) component built on Base UI and styled with Tailwind CSS, kept as source in the shared `ui` package. The theme engine supplies every design value through the shadcn CSS variables, so a theme change restyles every component without code changes ([architecture decision 12](../architecture/decisions.md)).
 
 An organisation may choose a platform theme or edit the theme settings exposed by its application draft. The resulting values publish with the application. Themes cannot hide focus, lower required contrast, insert scripts, fetch remote code, or override field and permission meaning.
 

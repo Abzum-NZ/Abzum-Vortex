@@ -4,7 +4,7 @@
 
 ## Definition of complete
 
-A behaviour change is complete when its functionality is implemented, a separate code review confirms the acceptance criteria, and the affected pages are walked through in the running app on a freshly reset local database. Pull requests that change what users see include screenshots. Completion describes implemented code, not production readiness.
+A behaviour change is complete when its functionality is implemented, a separate code review confirms the acceptance criteria, and the affected pages are walked through in the running app on a local database lane. Pull requests that change what users see include screenshots. Completion describes implemented code, not production readiness.
 
 ## Functional quality
 
