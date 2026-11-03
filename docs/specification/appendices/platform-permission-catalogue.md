@@ -4,20 +4,18 @@
 
 ## Purpose and ownership
 
-The current platform administration permission catalogue is version `1.4.0` and contains 23 permissions. Its permanent owner remains `ownerKind = platform` with owner ID `cabe121e-0baf-4084-9471-cce915d460a8`. Changing where a declaration is authored does not change its permission ID, key, authority meaning. Registering a platform permission makes it available in one organisation; it does not assign that permission to a person or Group.
+The current platform administration permission catalogue is the declared set below. Its permanent owner remains `ownerKind = platform` with owner ID `cabe121e-0baf-4084-9471-cce915d460a8`. Changing where a declaration is authored does not change its permission ID, key, authority meaning. Registering a platform permission makes it available in one organisation; it does not assign that permission to a person or Group.
 
-Organisation Administration owns the 15 permissions that protect its system record types and management operations. The system core declaration owns the eight platform permissions that have no corresponding system record type: connections, security, support and application building. The permission's owning source is declaration metadata. It does not replace the permanent platform permission owner.
+Organisation Administration owns the permissions that protect its system record types and management operations. The system core declaration owns the platform permissions that have no corresponding system record type: connections, security, support and application building. The permission's owning source is declaration metadata. It does not replace the permanent platform permission owner.
 
-## Owner decisions
-
-These decisions were recorded on 27 September 2026 and define the declaration and registration design:
+## Declaration and registration design
 
 1. Keep `ownerKind = platform` and owner `cabe121e-0baf-4084-9471-cce915d460a8`. Move only the authoring location. Record the owning system module as metadata. Keep all permission identities and authority-bearing fields unchanged.
 2. Add `pinnedPermissionId` for a declared permission's permanent identity. Accept it only in platform system-module declaration sources, including the declaration-only system core.
 3. Keep permissions without a system record type in the platform system core declaration: connections, security, support and builder permissions.
 4. Register platform permissions from declared data when an organisation is created, independently of module installation.
 5. Seed a declaration table through a migration and have one generic registration function read it. Do not keep catalogue JSON in SQL function bodies.
-6. Preserve `registration_kind = 'platform'`, the `platform_catalogue` source kind and registration revisions 1-6 as history. The current declaration-driven registration uses revision 6.
+6. Preserve `registration_kind = 'platform'`, the `platform_catalogue` source kind.
 7. Mark the steward minimum in declared data with `stewardMinimum`. Store it as `steward_minimum` in the seeded declaration data, and guard against silently removing the flag or a flagged permission.
 
 ## Declaration ownership and registration
@@ -26,22 +24,22 @@ The declaration sources and aggregate used by runtime packages are:
 
 | Purpose | Source |
 | --- | --- |
-| Organisation Administration's 15 platform permissions | `packages/definitions/src/organisation-administration/platform-permissions.ts` |
-| The eight permissions without a system record type; declaration only, not an installable module | `packages/definitions/src/system-core/platform-permissions.ts` |
+| Organisation Administration's platform permissions | `packages/definitions/src/organisation-administration/platform-permissions.ts` |
+| The permissions without a system record type; declaration only, not an installable module | `packages/definitions/src/system-core/platform-permissions.ts` |
 | Aggregate platform permission declarations consumed by runtime packages | `packages/definitions/src/platform-permissions.ts` in `@vortex/definitions` |
 | Permission declaration schema only | `packages/platform/src/access/permissions.ts` in `@vortex/platform` |
 
-`@vortex/platform` keeps the permission declaration schema; it does not import `@vortex/definitions`. The `pinnedPermissionId` field preserves an existing permanent ID in these platform declaration sources. `stewardMinimum` marks the 13 permissions required by the permanent-steward safeguard. Authority meaning is represented by the declared fields and permission continuity revision.
+`@vortex/platform` keeps the permission declaration schema; it does not import `@vortex/definitions`. The `pinnedPermissionId` field preserves an existing permanent ID in these platform declaration sources. `stewardMinimum` marks the permissions required by the permanent-steward safeguard. Authority meaning is represented by the declared fields and permission continuity revision.
 
 At organisation creation, one generic registration function reads the seeded declaration table and registers the declared platform permissions. This path does not depend on installing Organisation Administration or another module. It preserves `registration_kind = 'platform'` and the `platform_catalogue` source kind. The current revision 6 is registered from the seeded declarations; the registration function does not embed catalogue JSON.
 
 ### Steward minimum and guard
 
-Exactly the 13 permissions marked `Yes` in the inventory below form the steward's guarded minimum. A migration is refused if it removes the `steward_minimum` field, clears the flag from a protected permission or deletes a flagged declaration. Changing the set requires an explicit, reviewed specification change. The flag describes the required minimum, not every permission a steward may also hold: `platform.organization.connections.manage` is separately added to the current steward setup, but is not part of the guarded 13-permission set.
+Exactly the permissions marked `Yes` in the inventory below form the steward's guarded minimum. A migration is refused if it removes the `steward_minimum` field, clears the flag from a protected permission or deletes a flagged declaration. Changing the set requires an explicit, reviewed specification change. The flag describes the required minimum, not every permission a steward may also hold: `platform.organization.connections.manage` is separately added to the current steward setup, but is not part of the guarded 13-permission set.
 
 ## Permission inventory
 
-Action kinds and permanent identifiers below match the shipped `1.4.0` catalogue. The owning source identifies the declaration location; every permission retains its platform owner.
+Action kinds and permanent identifiers below match the shipped catalogue. The owning source identifies the declaration location; every permission retains its platform owner.
 
 | Permanent permission ID | Key | Action kind | Owning source | Steward minimum |
 | --- | --- | --- | --- | --- |
@@ -69,19 +67,15 @@ Action kinds and permanent identifiers below match the shipped `1.4.0` catalogue
 | `eaade6fd-7390-44d2-a7ef-343324c7384a` | `platform.organization.system_applications.manage` | `manage` | System core | No |
 | `ca1fb1ae-056c-4596-9c70-36a42c0de87b` | `platform.records.views.share` | `manage` | Organisation Administration | No |
 
-## History
+## Expected catalogue and exactness
 
-The shipped `1.4.0` catalogue currently mirrors platform registration revision 6. The current declarations preserve the permanent identities and meanings recorded by earlier revisions. Revision 6 registers the current declared set from the seeded table at organisation creation.
-
-### Expected catalogue and exactness
-
-The private `vortex_access.read_platform_permission_declaration_catalogue_internal(bigint)` producer returns the complete declared platform permission set for revision 6. It requires the fixed platform owner, 23 distinct identifiers and keys, and no named actions; an unsupported or inconsistent set returns no rows.
+The private `vortex_access.read_platform_permission_declaration_catalogue_internal(bigint)` producer returns the complete declared platform permission set for the current revision. It requires the fixed platform owner, distinct identifiers and keys, and no named actions; an unsupported or inconsistent set returns no rows.
 
 The producer is a `STABLE SECURITY DEFINER` owned by `vortex_owner`, with an empty `search_path`. Its explicit `EXECUTE` grant is limited to `postgres`; API and unrelated runtime roles are explicitly revoked. It reads only the existing guarded declaration table at the fixed platform owner scope. It adds no declaration-table grants, schema privileges, or role membership. This full-catalogue producer is distinct from the private guarded-steward-minimum reader.
 
-Revision 6 retains the shipped `1.4.0` catalogue fingerprint as a fixed constant. Current catalogue exactness compares the declared permission fields and the registered entries directly; permission continuity records whether accepted authority remains current.
+Current catalogue exactness compares the declared permission fields and the registered entries directly; permission continuity records whether accepted authority remains current.
 
-The private `platform_permission_catalogue_revision_is_exact(uuid, bigint)` check requires the current active fixed-owner registration, its matching immutable history, the complete declared entry set and the available continuity set at revision 6.
+The private `platform_permission_catalogue_revision_is_exact(uuid, bigint)` check requires the current active fixed-owner registration, its matching immutable history, the complete declared entry set and the available continuity set at the current revision.
 
 ## Registration is not assignment
 

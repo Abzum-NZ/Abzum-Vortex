@@ -1,6 +1,6 @@
 # Application packages, custom components and the installation lifecycle
 
-[Specification index](../README.md) · [Architecture decisions](../../build-plan/architecture-decisions.md) · [Composition and publication](../03-composition-and-publication.md)
+[Specification index](../README.md) · [Architecture decisions](../../architecture/decisions.md) · [Composition and publication](../03-composition-and-publication.md)
 
 An application package is what people install, upgrade, uninstall and share. This appendix defines:
 - what a package contains;
@@ -85,7 +85,7 @@ A custom component belongs to the application or module release that bundles it.
 
 ## Permissions
 
-The current platform permission catalogue is version 1.4.0. Its declaration sources and organisation-creation registration path are described in the [platform permission catalogue](platform-permission-catalogue.md#declaration-ownership-and-registration); the four system-core builder permissions below are part of that current declaration set.
+The declaration sources and organisation-creation registration path of the platform permission catalogue are described in the [platform permission catalogue](platform-permission-catalogue.md#declaration-ownership-and-registration); the four system-core builder permissions below are part of that current declaration set.
 
 | Permission or authority | Allows |
 | --- | --- |

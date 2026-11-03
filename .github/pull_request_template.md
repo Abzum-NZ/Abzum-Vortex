@@ -7,7 +7,7 @@ Describe the behaviour implemented and its scope.
 
 Pages exercised on a local database lane you hold (sign-in, then each affected page), with screenshots when the change is visible.
 
-## Checklist ([target architecture](../docs/build-plan/target-architecture.md))
+## Checklist ([target architecture](../docs/architecture/target-architecture.md))
 
 - [ ] Root cause fixed, not a workaround at the symptom.
 - [ ] No new layer, `V2`/`V3` copy, receipt, fingerprint or other process artefact.

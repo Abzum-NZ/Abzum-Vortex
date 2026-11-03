@@ -25,7 +25,7 @@ The verified Identity result and safe server session may carry `primaryAuthentic
 
 The human organisation context copies those exact derived times. Only when at least one is present does it also carry the already-verified `accessTokenIssuedAt` needed to check their upper bound. Evidence-bearing contexts require that token-time field; ordinary evidence-free contexts retain their existing shape. Existing identity, session, organisation-account and expiry binding remains authoritative. System and public context forms do not gain these fields.
 
-Identity owns provider interpretation; the [single access decision #34](https://github.com/Abzum-NZ/Abzum-Vortex/issues/34) owns whether the evidence meets an action's policy. A strength label is never a confirmation timestamp or proof of recency. Neither a label nor context creation time can manufacture missing evidence.
+Identity owns provider interpretation; the single access decision owns whether the evidence meets an action's policy. A strength label is never a confirmation timestamp or proof of recency. Neither a label nor context creation time can manufacture missing evidence.
 
 The final human context rejects a multi-factor confirmation timestamp paired with `single_factor` strength, matching the verified Identity and session boundaries. The Identity producer emits `multi_factor` for a genuine multi-factor confirmation. TypeScript and database validation enforce the same rule.
 

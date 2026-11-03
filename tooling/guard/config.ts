@@ -165,7 +165,7 @@ export const guardRules = {
     owner: "core-grid",
     reviewBy: "2026-12-15",
     reviewNote:
-      "Introduced with the grid feature definition contract (#3015 C3); review once the fan-out in docs/build-plan/grid-feature-fanout.md is done",
+      "Introduced with the grid feature definition contract; review once every grid feature is declared through it",
     description:
       "A Records table grid feature key spelled outside its definition file in the grid code, a feature setting group without a default that turns it off, a refusal code without exactly one declared sentence, a featureNotPossible that does not name its file's own refusal, a row-action binding without its compiler gate, an eager row-command renderer, or a feature chunk imported outside the UI registry",
   },
