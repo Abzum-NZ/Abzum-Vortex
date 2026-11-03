@@ -35,6 +35,7 @@ import {
   type ApplicationAuthoringToolName,
 } from "../_lib/application-authoring-tools";
 import { previewProblem } from "./studio-refusal-messages";
+import { createStudioPlacementDescriber } from "../_lib/studio-labels";
 import { studioActionTokens, type StudioActionToken } from "../../_lib/studio-action-tokens";
 import type { StudioDraft } from "./use-studio-draft";
 
@@ -337,11 +338,13 @@ export function ApplicationDraftAgentTools({
   const describeNow = useCallback(() => {
     const state = history.getState();
     const context = contextNow();
-    const outline = projectStudioSemanticOutline({
-      rootId: state.rootId,
-      source: applicationSourceDocumentSchema.parse(state.source),
-      catalogue: context.catalogue,
-    });
+    const source = applicationSourceDocumentSchema.parse(state.source);
+    // The agent reads the names the person reads: the one outline describer.
+    const describePlacement = createStudioPlacementDescriber(context.catalogue, source);
+    const outline = projectStudioSemanticOutline(
+      { rootId: state.rootId, source, catalogue: context.catalogue },
+      describePlacement,
+    );
     return {
       draftRevision: state.draftRevision,
       source: state.source,
@@ -351,10 +354,11 @@ export function ApplicationDraftAgentTools({
       pages: collect(outline, "page").flatMap((page) => {
         const places =
           page.kind === "page"
-            ? describeStudioCompositionAddTargets(context, {
-                kind: "page",
-                pageAlias: page.pageAlias,
-              })
+            ? describeStudioCompositionAddTargets(
+                context,
+                { kind: "page", pageAlias: page.pageAlias },
+                describePlacement,
+              )
             : ({ kind: "invalid" } as const);
         return [
           {

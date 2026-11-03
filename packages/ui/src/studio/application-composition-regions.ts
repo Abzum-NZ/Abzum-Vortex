@@ -575,3 +575,11 @@ export const plainSettings = (
   Object.fromEntries(
     Object.entries(settings).map(([key, value]) => [key, plainSourceSettingValue(value)]),
   );
+
+/** A block's own settings (not its name, slots or layout), for naming it to a person. */
+export const settingsOf = (item: SourceItem): Record<string, unknown> =>
+  Object.fromEntries(
+    Object.entries(item.props).filter(
+      ([key, value]) => key !== "id" && key !== "vortex" && !Array.isArray(value),
+    ),
+  );

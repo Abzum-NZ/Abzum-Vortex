@@ -33,9 +33,27 @@ export const fillPreviewAfterRead = (
       { signal: started.controller.signal },
     )
       .then((response) => {
+        // A session that ended (401) is an expected refusal. A 403 is the route's own-site check
+        // (the site address does not match the configured one): a platform fault, logged below.
+        if (response.status === 401) {
+          console.info("[studio] idle preview fill refused", { status: 401 });
+          return;
+        }
         if (!response.ok) throw new Error(`STUDIO_PREVIEW_FILL_HTTP_${response.status}`);
         const kind = isRecord(response.body) ? response.body.kind : undefined;
-        if (kind !== "ready") console.warn("[studio] idle preview fill ended", { kind });
+        // `ready` is success and says nothing. A refusal (the builder's role changed), the preview
+        // following a newer revision, a save that superseded the fill and a draft that cannot run
+        // yet (its own problem is already shown to the person) are expected: each logs once at
+        // info. Any other outcome is a platform fault, logged once at error for the one lease.
+        if (kind === "ready") return;
+        if (
+          kind === "refused" ||
+          kind === "following" ||
+          kind === "conflict" ||
+          kind === "not_runnable"
+        )
+          console.info("[studio] idle preview fill ended", { kind });
+        else console.error("[studio] idle preview fill ended unexpectedly", { kind });
       })
       .catch((error: unknown) => {
         if (!started.controller.signal.aborted)

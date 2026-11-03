@@ -851,7 +851,8 @@ const loadApplicationPageJoined = async (
     services: services.placementServices(context, readSubject),
     permittedApplicationKeys,
     permittedApplications,
-    permittedApplicationsUnavailable: permittedApplicationsRead?.kind === "temporarily_unavailable",
+    permittedApplicationsState:
+      permittedApplicationsRead?.kind === "temporarily_unavailable" ? "unavailable" : "read",
     ...(applicationSurfaces === undefined ? {} : { applicationSurfaces }),
     ...(boardReads === undefined ? {} : { boardReads }),
     ...(tableContinuation === undefined ? {} : { tableContinuation }),

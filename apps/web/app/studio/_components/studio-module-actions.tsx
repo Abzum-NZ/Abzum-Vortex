@@ -1,5 +1,5 @@
 "use client";
-import { StudioLimitNote, StudioReasoned, studioLimitReason } from "@vortex/ui/studio";
+import { StudioLimitNote, Reasoned, studioLimitReason } from "@vortex/ui/studio";
 import { Field, FieldLabel, FieldLegend, FieldSet } from "@vortex/ui/components/field";
 import { Alert, AlertDescription } from "@vortex/ui/components/alert";
 import { useMemo, useState, type FormEvent } from "react";
@@ -352,7 +352,7 @@ export function StudioModuleActions({
     >
       <div className="flex items-center justify-between gap-2">
         <h3 className="text-sm font-semibold">Actions</h3>
-        <StudioReasoned reason={studioLimitReason("actionsPerModule", module.actions.length)}>
+        <Reasoned reason={studioLimitReason("actionsPerModule", module.actions.length)}>
           <Button
             type="button"
             size="sm"
@@ -362,7 +362,7 @@ export function StudioModuleActions({
           >
             Add an action
           </Button>
-        </StudioReasoned>
+        </Reasoned>
       </div>
       <StudioLimitNote
         limit="actionsPerModule"

@@ -936,6 +936,18 @@ export const loadStudioApplicationDraft = async (
                           sortable: field.sortable,
                           filterable: field.filterable,
                           searchable: field.searchPriority !== undefined,
+                          // What a system projection is addressed by is no default column.
+                          ...(recordType.systemProjection !== undefined &&
+                          (sameId(
+                            String(field.fieldId),
+                            String(recordType.systemProjection.organizationFieldId),
+                          ) ||
+                            sameId(
+                              String(field.fieldId),
+                              String(recordType.systemProjection.revisionFieldId),
+                            ))
+                            ? { projectionAddress: true as const }
+                            : {}),
                           linkTargetResolved:
                             field.type !== "link" || field.settings.target.state === "resolved",
                           ...(options === undefined

@@ -1,8 +1,7 @@
 "use client";
 
 import { useLayoutEffect, useRef, type RefObject } from "react";
-import { animate } from "motion/react";
-import { readMotionSeconds, readMotionTiming } from "../navigation/motion-tokens";
+import { readMotionSeconds, readMotionWebTiming } from "../navigation/motion-tokens";
 import { isClientPageChange } from "../navigation/page-hold";
 
 /** The rows that settle one after another; every later row settles with the last of them. */
@@ -32,26 +31,36 @@ export const useRowEntrance = <T extends HTMLElement>(
     const container = containerRef.current;
     if (container === null || keys.length === 0 || !isClientPageChange()) return;
     if (keys.some((key) => previous.has(key))) return;
-    const timing = readMotionTiming(container, "row-settle");
+    const timing = readMotionWebTiming(container, "row-settle");
     const step = readMotionSeconds(container, "row-stagger") ?? 0;
     if (timing === undefined) return;
     const rows = [...container.querySelectorAll<HTMLElement>(rowSelector)];
-    const controls = rows.map((row, index) => {
-      // Hidden before the first paint, so a settling row never flashes at its final place.
-      row.style.opacity = "0";
-      return animate(
-        row,
-        { opacity: [0, 1], y: [3, 0] },
-        { ...timing, delay: Math.min(index, STAGGERED_ROW_LIMIT - 1) * step },
-      );
-    });
+    // The element's own Web Animations API drives the entrance, so it works for rows in any
+    // realm (the Studio canvas draws pages in an iframe). `fill: "backwards"` keeps a row hidden
+    // until its delay has passed without writing any style that something else must undo.
+    const animations = rows.map((row, index) =>
+      row.animate(
+        [
+          { opacity: 0, transform: "translateY(3px)" },
+          { opacity: 1, transform: "none" },
+        ],
+        {
+          duration: timing.duration,
+          easing: timing.easing,
+          delay: Math.min(index, STAGGERED_ROW_LIMIT - 1) * step * 1000,
+          fill: "backwards",
+        },
+      ),
+    );
     // Transformed rows can temporarily extend scroll overflow without resizing their container.
-    // Re-measure that overflow once the whole entrance has settled, including short pages.
-    void Promise.all(controls).then(() =>
-      container.dispatchEvent(new Event("vortex-row-settled", { bubbles: true })),
+    // Re-measure that overflow once the whole entrance has settled, including short pages. A
+    // cancelled entrance (a remount or a new page) rejects and measures nothing.
+    void Promise.all(animations.map((animation) => animation.finished)).then(
+      () => container.dispatchEvent(new Event("vortex-row-settled", { bubbles: true })),
+      () => undefined,
     );
     return () => {
-      for (const control of controls) control.complete();
+      for (const animation of animations) animation.cancel();
     };
   }, [rowSelector, signature]);
   return containerRef;

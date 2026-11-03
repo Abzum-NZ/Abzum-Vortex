@@ -53,8 +53,14 @@ export const studioGridDataSettings = (
     return {};
   const values: Record<string, unknown> = {
     title: query.recordTypePluralLabel ?? query.recordTypeLabel,
-    columns: query.fields.map((field) => ({ field: field.reference, visible: true })),
-    sortable_fields: query.fields.filter((field) => field.sortable).map((field) => field.reference),
+    // A projection's address fields stay available as columns but start hidden, after the rest.
+    columns: [
+      ...query.fields.filter((field) => field.projectionAddress !== true),
+      ...query.fields.filter((field) => field.projectionAddress === true),
+    ].map((field) => ({ field: field.reference, visible: field.projectionAddress !== true })),
+    sortable_fields: query.fields
+      .filter((field) => field.sortable && field.projectionAddress !== true)
+      .map((field) => field.reference),
   };
   return Object.fromEntries(
     Object.entries(values).flatMap(([key, value]) => {

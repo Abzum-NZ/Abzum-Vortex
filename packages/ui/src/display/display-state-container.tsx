@@ -8,6 +8,8 @@ import type { DisplayDataState, DisplayRefusalReason } from "./projected-data";
 /** Safe, data-free presentation text for fixed refusal reasons. */
 const REFUSAL_MESSAGES: Readonly<Record<DisplayRefusalReason, string>> = Object.freeze({
   not_permitted: "You do not have permission to view this content",
+  applications_not_read:
+    "The canvas does not list the applications you can open. Open the preview to see them.",
   access_ended: "Access to this content has ended",
   not_found: "Content not found",
   value_out_of_range:
