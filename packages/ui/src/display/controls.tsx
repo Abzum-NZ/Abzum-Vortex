@@ -52,7 +52,7 @@ export function DisplayHeader({
   const refresh = events?.refresh;
   if (title === undefined && refresh === undefined) return null;
   return (
-    <div className="mt-1 mb-4 flex min-w-0 flex-wrap items-center justify-between gap-[var(--vortex-space-sm)]">
+    <div className="pt-1 mb-4 flex min-w-0 flex-wrap items-center justify-between gap-[var(--vortex-space-sm)]">
       {title === undefined ? null : (
         <h2 className="m-0 min-w-0 break-words font-heading text-lg font-semibold text-foreground">
           {title}
