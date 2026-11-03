@@ -1,4 +1,5 @@
 "use client";
+import { Field, FieldLabel } from "@vortex/ui/components/field";
 import { Item, ItemGroup } from "@vortex/ui/components/item";
 import { Alert, AlertDescription } from "@vortex/ui/components/alert";
 import { useState, type FormEvent } from "react";
@@ -6,7 +7,6 @@ import { deriveQueryKey } from "@vortex/platform/schema";
 import { Button } from "@vortex/ui/components/button";
 import { Checkbox } from "@vortex/ui/components/checkbox";
 import { Input } from "@vortex/ui/components/input";
-import { Label } from "@vortex/ui/components/label";
 import { Icon } from "@vortex/ui";
 import { useStudioDraftText } from "./use-studio-draft-text";
 
@@ -92,7 +92,7 @@ export function StudioQueryInputChoices({
   };
   return (
     <div className="space-y-2">
-      <div className="flex items-center gap-2">
+      <Field orientation="horizontal">
         <Checkbox
           id={`${id}-limited`}
           checked={limited}
@@ -102,10 +102,10 @@ export function StudioQueryInputChoices({
             if (checked !== true && choices !== undefined) apply(undefined);
           }}
         />
-        <Label htmlFor={`${id}-limited`} className="font-normal">
+        <FieldLabel htmlFor={`${id}-limited`} className="font-normal">
           Limit to a list of choices
-        </Label>
-      </div>
+        </FieldLabel>
+      </Field>
       {limited && (
         <>
           <ItemGroup className="gap-1" aria-label={`Choices of ${inputLabel}`}>

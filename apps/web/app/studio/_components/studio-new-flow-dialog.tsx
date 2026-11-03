@@ -12,7 +12,6 @@ import {
   DialogTitle,
 } from "@vortex/ui/components/dialog";
 import { Input } from "@vortex/ui/components/input";
-import { Label } from "@vortex/ui/components/label";
 import { RadioGroup, RadioGroupItem } from "@vortex/ui/components/radio-group";
 import { Textarea } from "@vortex/ui/components/textarea";
 import type { ApplicationSourceDocument } from "@vortex/platform/schema";
@@ -248,26 +247,18 @@ export function StudioNewFlowDialog({
                 value={what}
                 onValueChange={(value) => setWhat(value as "operation" | "message")}
               >
-                <div className="flex items-start gap-2">
-                  <RadioGroupItem
-                    id="new-flow-what-operation"
-                    value="operation"
-                    className="size-4 rounded-full border border-input"
-                  />
-                  <Label htmlFor="new-flow-what-operation" className="font-normal">
+                <Field orientation="horizontal">
+                  <RadioGroupItem id="new-flow-what-operation" value="operation" />
+                  <FieldLabel htmlFor="new-flow-what-operation" className="font-normal">
                     Run an operation
-                  </Label>
-                </div>
-                <div className="flex items-start gap-2">
-                  <RadioGroupItem
-                    id="new-flow-what-message"
-                    value="message"
-                    className="size-4 rounded-full border border-input"
-                  />
-                  <Label htmlFor="new-flow-what-message" className="font-normal">
+                  </FieldLabel>
+                </Field>
+                <Field orientation="horizontal">
+                  <RadioGroupItem id="new-flow-what-message" value="message" />
+                  <FieldLabel htmlFor="new-flow-what-message" className="font-normal">
                     Show a message
-                  </Label>
-                </div>
+                  </FieldLabel>
+                </Field>
               </RadioGroup>
               {what === "operation" &&
                 (choices.operations.length === 0 ? (

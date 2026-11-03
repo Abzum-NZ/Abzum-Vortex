@@ -1,4 +1,5 @@
 "use client";
+import { Field, FieldLabel } from "@vortex/ui/components/field";
 import { Card } from "@vortex/ui/components/card";
 import { StudioReasoned, studioLimitReason } from "@vortex/ui/studio";
 import { useEffect, useRef, useState, type ReactNode } from "react";
@@ -27,7 +28,6 @@ import { StudioPlaceList } from "./studio-used-in";
 import { Badge } from "@vortex/ui/components/badge";
 import { Spinner } from "@vortex/ui/components/spinner";
 import { Button } from "@vortex/ui/components/button";
-import { Label } from "@vortex/ui/components/label";
 import {
   StudioOptionControl,
   StudioFieldTypeIcon,
@@ -443,10 +443,8 @@ function PreviewResults({
               : "From your preview of the saved draft, with your preview access."}
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <Label htmlFor="studio-data-page-size" className="text-sm">
-            Per page
-          </Label>
+        <Field orientation="horizontal" className="w-auto">
+          <FieldLabel htmlFor="studio-data-page-size">Per page</FieldLabel>
           <StudioOptionControl
             id="studio-data-page-size"
             value={String(pageSize)}
@@ -457,7 +455,7 @@ function PreviewResults({
               setPage({});
             }}
           />
-        </div>
+        </Field>
       </div>
       {current === null ? (
         <div role="status" className="flex items-center gap-2 text-sm text-muted-foreground">

@@ -1,5 +1,5 @@
 "use client";
-import { Item, ItemContent, ItemDescription, ItemGroup } from "@vortex/ui/components/item";
+import { Item, ItemContent, ItemGroup } from "@vortex/ui/components/item";
 import { NavigationLink } from "@vortex/ui/routing";
 import { useMemo, useState } from "react";
 import { Button } from "@vortex/ui/components/button";
@@ -149,7 +149,7 @@ export function StudioFlowsPanel({
               return (
                 <Item size="xs" role="listitem" key={use.module} className="p-0">
                   <ItemContent>
-                    <ItemDescription>
+                    <p className="m-0 text-sm text-muted-foreground">
                       The flows of {use.module.split(".").pop()?.replace(/_/g, " ")} belong to{" "}
                       {owner?.name ?? "the application that owns it"}. They run here as published
                       and are changed in the owner&apos;s Studio.
@@ -164,7 +164,7 @@ export function StudioFlowsPanel({
                           </NavigationLink>
                         </>
                       )}
-                    </ItemDescription>
+                    </p>
                   </ItemContent>
                 </Item>
               );

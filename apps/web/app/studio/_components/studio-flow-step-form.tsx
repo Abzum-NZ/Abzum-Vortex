@@ -12,7 +12,6 @@ import { useState } from "react";
 import { Button } from "@vortex/ui/components/button";
 import { Checkbox } from "@vortex/ui/components/checkbox";
 import { Input } from "@vortex/ui/components/input";
-import { Label } from "@vortex/ui/components/label";
 import { Icon } from "@vortex/ui";
 import { Textarea } from "@vortex/ui/components/textarea";
 import type { ConditionNode, FlowFormula, SourceFlow } from "@vortex/platform/schema";
@@ -1160,18 +1159,20 @@ export function StudioFlowStepForm({
         hint="Shown on the canvas in place of the step's summary."
         summary={draft.description === "" ? "None" : draft.description}
       >
-        <Label htmlFor={`${id}-description`}>
-          Description <span className="text-xs text-muted-foreground">Optional</span>
-        </Label>
-        <Textarea
-          id={`${id}-description`}
-          disabled={disabled}
-          maxLength={1_000}
-          value={draft.description}
-          onChange={(event) =>
-            onChange({ ...draft, description: event.target.value }, null, "description")
-          }
-        />
+        <Field>
+          <FieldLabel htmlFor={`${id}-description`}>
+            Description <span className="text-xs text-muted-foreground">Optional</span>
+          </FieldLabel>
+          <Textarea
+            id={`${id}-description`}
+            disabled={disabled}
+            maxLength={1_000}
+            value={draft.description}
+            onChange={(event) =>
+              onChange({ ...draft, description: event.target.value }, null, "description")
+            }
+          />
+        </Field>
       </StudioInspectorGroup>
     </div>
   );

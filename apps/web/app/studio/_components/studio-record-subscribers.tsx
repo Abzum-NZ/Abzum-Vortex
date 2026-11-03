@@ -15,7 +15,6 @@ import {
   ItemHeader,
   ItemTitle,
 } from "@vortex/ui/components/item";
-import { Label } from "@vortex/ui/components/label";
 import { applyStudioFlowCreate, studioRecordSubscribers } from "@vortex/ui/studio";
 import { useStudioPlaceOpener } from "./studio-used-in";
 import { studioEditProblem, type StudioDataEdit } from "../_lib/studio-data-model";
@@ -120,17 +119,17 @@ export function StudioRecordSubscribers({
               }}
             />
           </Field>
-          <div className="flex items-center gap-2">
+          <Field orientation="horizontal">
             <Checkbox
               id="record-subscriber-created"
               checked={onCreate}
               disabled={disabled}
               onCheckedChange={(checked) => setOnCreate(checked === true)}
             />
-            <Label htmlFor="record-subscriber-created">
+            <FieldLabel htmlFor="record-subscriber-created">
               When it is created (otherwise when it is changed)
-            </Label>
-          </div>
+            </FieldLabel>
+          </Field>
           <div className="flex gap-2">
             <Button type="submit" size="sm" disabled={disabled}>
               Add and open the flow

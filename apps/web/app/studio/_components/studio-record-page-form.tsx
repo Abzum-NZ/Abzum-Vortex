@@ -8,7 +8,7 @@ import { Button } from "@vortex/ui/components/button";
 import { Checkbox } from "@vortex/ui/components/checkbox";
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader } from "@vortex/ui/components/empty";
 import { Input } from "@vortex/ui/components/input";
-import { Item, ItemDescription, ItemGroup } from "@vortex/ui/components/item";
+import { Item, ItemContent, ItemGroup } from "@vortex/ui/components/item";
 import {
   StudioOptionControl,
   studioRecordPageChoices,
@@ -230,7 +230,9 @@ export function StudioRecordPageForm({
               <ItemGroup className="gap-1">
                 {current.details.map((detail, index) => (
                   <Item key={index} size="xs" role="listitem" className="p-0">
-                    <ItemDescription>{detail}</ItemDescription>
+                    <ItemContent>
+                      <p className="m-0 text-sm text-muted-foreground">{detail}</p>
+                    </ItemContent>
                   </Item>
                 ))}
               </ItemGroup>

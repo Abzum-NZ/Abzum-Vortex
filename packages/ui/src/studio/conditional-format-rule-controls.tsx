@@ -16,7 +16,6 @@ import {
 import { Badge } from "../components/badge";
 import { Button } from "../components/button";
 import { Input } from "../components/input";
-import { Label } from "../components/label";
 import { StudioOptionControl } from "./studio-setting-basic-controls";
 import { Switch } from "../components/switch";
 import { ToggleGroup, ToggleGroupItem } from "../components/toggle-group";
@@ -191,12 +190,12 @@ function ConditionalFormatSwitchRow({
   onChange: (on: boolean) => void;
 }>): ReactElement {
   return (
-    <div className="flex items-center justify-between gap-2">
-      <Label htmlFor={id} className="text-sm font-normal">
+    <Field orientation="horizontal" className="justify-between">
+      <FieldLabel htmlFor={id} className="text-sm font-normal">
         {label}
-      </Label>
+      </FieldLabel>
       <Switch id={id} checked={checked} disabled={disabled} onCheckedChange={onChange} />
-    </div>
+    </Field>
   );
 }
 

@@ -11,7 +11,6 @@ import { Alert, AlertDescription } from "@vortex/ui/components/alert";
 import { useEffect, useState } from "react";
 import { Checkbox } from "@vortex/ui/components/checkbox";
 import { Input } from "@vortex/ui/components/input";
-import { Label } from "@vortex/ui/components/label";
 import { flowStandardEventKindSchema, workflowValueTypeSchema } from "@vortex/platform/schema";
 import {
   StudioEntryList,
@@ -155,7 +154,7 @@ function TriggerEditor({
       <Field>
         <FieldLabel>Run after</FieldLabel>
         {subscribers.map((subscriber) => (
-          <div key={subscriber.key} className="flex items-center gap-2">
+          <Field key={subscriber.key} orientation="horizontal">
             <Checkbox
               id={`${id}-after-${subscriber.key}`}
               disabled={disabled}
@@ -170,8 +169,8 @@ function TriggerEditor({
                 })
               }
             />
-            <Label htmlFor={`${id}-after-${subscriber.key}`}>{subscriber.label}</Label>
-          </div>
+            <FieldLabel htmlFor={`${id}-after-${subscriber.key}`}>{subscriber.label}</FieldLabel>
+          </Field>
         ))}
       </Field>
     );
@@ -179,16 +178,18 @@ function TriggerEditor({
     return (
       <div className="space-y-3">
         {recordType}
-        <Label htmlFor={`${id}-event`}>After this event</Label>
-        <StudioReferencePicker
-          id={`${id}-event`}
-          disabled={disabled}
-          value={trigger.eventKey}
-          options={events
-            .filter((event) => event.recordType === trigger.recordType)
-            .map((event) => ({ value: event.key, label: event.label }))}
-          onChange={(eventKey) => onChange({ ...trigger, eventKey })}
-        />
+        <Field>
+          <FieldLabel htmlFor={`${id}-event`}>After this event</FieldLabel>
+          <StudioReferencePicker
+            id={`${id}-event`}
+            disabled={disabled}
+            value={trigger.eventKey}
+            options={events
+              .filter((event) => event.recordType === trigger.recordType)
+              .map((event) => ({ value: event.key, label: event.label }))}
+            onChange={(eventKey) => onChange({ ...trigger, eventKey })}
+          />
+        </Field>
         {runAfter}
       </div>
     );
@@ -224,24 +225,24 @@ function TriggerEditor({
   return (
     <div className="space-y-2">
       {recordType}
-      <div className="flex items-center gap-2">
+      <Field orientation="horizontal">
         <Checkbox
           id={`${id}-create`}
           disabled={disabled}
           checked={trigger.operations.includes("create")}
           onCheckedChange={(checked) => covers("create", checked === true)}
         />
-        <Label htmlFor={`${id}-create`}>Before it is created</Label>
-      </div>
-      <div className="flex items-center gap-2">
+        <FieldLabel htmlFor={`${id}-create`}>Before it is created</FieldLabel>
+      </Field>
+      <Field orientation="horizontal">
         <Checkbox
           id={`${id}-update`}
           disabled={disabled}
           checked={trigger.operations.includes("update")}
           onCheckedChange={(checked) => covers("update", checked === true)}
         />
-        <Label htmlFor={`${id}-update`}>Before it is changed</Label>
-      </div>
+        <FieldLabel htmlFor={`${id}-update`}>Before it is changed</FieldLabel>
+      </Field>
     </div>
   );
 }
@@ -311,15 +312,15 @@ function InputSettings({
           )}
         </Field>
       )}
-      <div className="flex items-center gap-2">
+      <Field orientation="horizontal">
         <Checkbox
           id={`${id}-required`}
           disabled={disabled}
           checked={input.required}
           onCheckedChange={(checked) => onChange({ ...input, required: checked === true })}
         />
-        <Label htmlFor={`${id}-required`}>Required</Label>
-      </div>
+        <FieldLabel htmlFor={`${id}-required`}>Required</FieldLabel>
+      </Field>
     </>
   );
 }

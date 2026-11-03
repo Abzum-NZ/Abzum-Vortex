@@ -629,24 +629,26 @@ export function StudioQueryEditor({
               onMove={(by) => change({ sort: moved(query.sort, index, by) })}
               onRemove={() => change({ sort: query.sort.filter((_, at) => at !== index) })}
             >
-              <Label className="text-sm" htmlFor={`query-${queryKey}-sort-${index}`}>
-                Sort by {labelOf(sort.field)}
-              </Label>
-              <StudioOptionControl
-                id={`query-${queryKey}-sort-${index}`}
-                value={sort.direction}
-                disabled={disabled}
-                options={directions}
-                onChange={(direction) =>
-                  change({
-                    sort: query.sort.map((item, at) =>
-                      at === index
-                        ? { ...item, direction: direction as InlineQuerySort["direction"] }
-                        : item,
-                    ),
-                  })
-                }
-              />
+              <Field>
+                <FieldLabel className="text-sm" htmlFor={`query-${queryKey}-sort-${index}`}>
+                  Sort by {labelOf(sort.field)}
+                </FieldLabel>
+                <StudioOptionControl
+                  id={`query-${queryKey}-sort-${index}`}
+                  value={sort.direction}
+                  disabled={disabled}
+                  options={directions}
+                  onChange={(direction) =>
+                    change({
+                      sort: query.sort.map((item, at) =>
+                        at === index
+                          ? { ...item, direction: direction as InlineQuerySort["direction"] }
+                          : item,
+                      ),
+                    })
+                  }
+                />
+              </Field>
             </Entry>
           ))}
         </ItemGroup>
@@ -737,47 +739,49 @@ export function StudioQueryEditor({
                 change({ aggregates: query.aggregates.filter((_, at) => at !== index) })
               }
             >
-              <Label className="text-sm" htmlFor={`query-${queryKey}-total-${index}`}>
-                Total {index + 1}:{" "}
-                {queryTotalLabel(
-                  total.operation,
-                  record.fields.find((field) => field.key === total.field)?.label,
-                )}
-              </Label>
-              <StudioOptionControl
-                id={`query-${queryKey}-total-${index}`}
-                value={total.operation}
-                disabled={disabled}
-                options={(Object.keys(queryTotalOperationLabels) as Operation[]).map(
-                  (operation) => ({
-                    value: operation,
-                    label: queryTotalOperationLabels[operation],
-                  }),
-                )}
-                onChange={(next) => {
-                  const operation = next as Operation;
-                  const field =
-                    operation === "count"
-                      ? undefined
-                      : total.field !== undefined && totalFields(operation).includes(total.field)
-                        ? total.field
-                        : totalFields(operation)[0];
-                  const others = new Set([
-                    ...query.select,
-                    ...query.aggregates.filter((_, at) => at !== index).map((item) => item.alias),
-                  ]);
-                  const replaced = {
-                    operation,
-                    ...(field === undefined ? {} : { field }),
-                    alias: deriveQueryTotalAlias(operation, field, others),
-                  };
-                  change({
-                    aggregates: query.aggregates.map((item, at) =>
-                      at === index ? (replaced as InlineQueryAggregate) : item,
-                    ),
-                  });
-                }}
-              />
+              <Field>
+                <FieldLabel className="text-sm" htmlFor={`query-${queryKey}-total-${index}`}>
+                  Total {index + 1}:{" "}
+                  {queryTotalLabel(
+                    total.operation,
+                    record.fields.find((field) => field.key === total.field)?.label,
+                  )}
+                </FieldLabel>
+                <StudioOptionControl
+                  id={`query-${queryKey}-total-${index}`}
+                  value={total.operation}
+                  disabled={disabled}
+                  options={(Object.keys(queryTotalOperationLabels) as Operation[]).map(
+                    (operation) => ({
+                      value: operation,
+                      label: queryTotalOperationLabels[operation],
+                    }),
+                  )}
+                  onChange={(next) => {
+                    const operation = next as Operation;
+                    const field =
+                      operation === "count"
+                        ? undefined
+                        : total.field !== undefined && totalFields(operation).includes(total.field)
+                          ? total.field
+                          : totalFields(operation)[0];
+                    const others = new Set([
+                      ...query.select,
+                      ...query.aggregates.filter((_, at) => at !== index).map((item) => item.alias),
+                    ]);
+                    const replaced = {
+                      operation,
+                      ...(field === undefined ? {} : { field }),
+                      alias: deriveQueryTotalAlias(operation, field, others),
+                    };
+                    change({
+                      aggregates: query.aggregates.map((item, at) =>
+                        at === index ? (replaced as InlineQueryAggregate) : item,
+                      ),
+                    });
+                  }}
+                />
+              </Field>
               {total.operation === "count" ? null : (
                 <>
                   <ScreenReaderLabel
@@ -901,10 +905,9 @@ export function StudioQueryEditor({
                   </Button>
                 </div>
                 <p className="text-sm text-muted-foreground">Key: {input.key}</p>
-                <ScreenReaderLabel
-                  id={`query-${queryKey}-input-${index}-type`}
-                >{`Type of input ${input.label}`}</ScreenReaderLabel>
                 <StudioInputType
+                  label={`Type of input ${input.label}`}
+                  labelClassName="sr-only"
                   id={`query-${queryKey}-input-${index}-type`}
                   type={input.type}
                   recordTypes={input.type === "record_reference" ? input.record_types : []}

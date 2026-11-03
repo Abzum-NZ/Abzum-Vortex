@@ -24,7 +24,6 @@ import {
   ItemHeader,
   ItemTitle,
 } from "@vortex/ui/components/item";
-import { Label } from "@vortex/ui/components/label";
 import { Textarea } from "@vortex/ui/components/textarea";
 import {
   applyStudioFlowCreate,
@@ -188,24 +187,24 @@ export function StudioRecordRules({
               onChange={(event) => setMessage(event.target.value)}
             />
           </Field>
-          <div className="flex items-center gap-2">
+          <Field orientation="horizontal">
             <Checkbox
               id="record-rule-create"
               checked={onCreate}
               disabled={disabled}
               onCheckedChange={(checked) => setOnCreate(checked === true)}
             />
-            <Label htmlFor="record-rule-create">When it is created</Label>
-          </div>
-          <div className="flex items-center gap-2">
+            <FieldLabel htmlFor="record-rule-create">When it is created</FieldLabel>
+          </Field>
+          <Field orientation="horizontal">
             <Checkbox
               id="record-rule-update"
               checked={onUpdate}
               disabled={disabled}
               onCheckedChange={(checked) => setOnUpdate(checked === true)}
             />
-            <Label htmlFor="record-rule-update">When it is changed</Label>
-          </div>
+            <FieldLabel htmlFor="record-rule-update">When it is changed</FieldLabel>
+          </Field>
           <div className="flex gap-2">
             <Button type="submit" size="sm" disabled={disabled}>
               Add and open the rule
@@ -290,7 +289,9 @@ export function StudioRecordRules({
                 <ItemGroup className="gap-0.5">
                   {rule.effects.map((effect, index) => (
                     <Item key={index} size="xs" role="listitem" className="p-0">
-                      <ItemDescription className="break-words">{effect}</ItemDescription>
+                      <ItemContent>
+                        <p className="m-0 break-words text-sm">{effect}</p>
+                      </ItemContent>
                     </Item>
                   ))}
                 </ItemGroup>

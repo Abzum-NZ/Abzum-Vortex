@@ -27,7 +27,9 @@ const isTransientVerification = (error: unknown): boolean =>
   error.refusalCode === "vortex.identity.authority_unavailable";
 
 const isTransientRead = (error: unknown): boolean => {
-  const code = databaseErrorCode(error);
+  const code = databaseErrorCode(
+    error instanceof Error && error.cause !== undefined ? error.cause : error,
+  );
   return (
     code === "40001" || code === "40P01" || code === "57P01" || code?.startsWith("08") === true
   );

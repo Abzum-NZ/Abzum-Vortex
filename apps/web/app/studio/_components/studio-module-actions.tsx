@@ -34,7 +34,6 @@ import {
   ItemHeader,
   ItemTitle,
 } from "@vortex/ui/components/item";
-import { Label } from "@vortex/ui/components/label";
 import {
   StudioConditionControls,
   projectStudioActionCondition,
@@ -231,17 +230,17 @@ export function ActionDialog({
               </Alert>
             )}
           </FieldSet>
-          <div className="flex items-start gap-2">
+          <Field orientation="horizontal">
             <Checkbox
               id="action-owns"
               checked={ownsChoice}
               onCheckedChange={(checked) => setOwnsChoice(checked === true)}
             />
-            <Label htmlFor="action-owns" className="font-normal">
+            <FieldLabel htmlFor="action-owns" className="font-normal">
               Saving the fixed choice option set by this action runs the action, with its condition
               and permission.
-            </Label>
-          </div>
+            </FieldLabel>
+          </Field>
           <Field>
             <FieldLabel htmlFor="action-permission">Permission</FieldLabel>
             <StudioOptionControl
