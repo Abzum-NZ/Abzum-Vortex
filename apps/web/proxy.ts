@@ -74,8 +74,17 @@ export async function proxy(request: NextRequest) {
   let boundary: ReturnType<typeof createIdentitySessionClient>;
   try {
     const configuration = getIdentityJourneyConfiguration();
-    if (!requestMatchesConfiguredSite(request.headers, request.nextUrl, configuration.siteUrl))
+    if (!requestMatchesConfiguredSite(request.headers, request.nextUrl, configuration.siteUrl)) {
+      // A configuration refusal, not an outage: it is final for the request and never retried.
+      // The host header is client-controlled, so only a plain host is written to the log.
+      const host = request.headers.get("host");
+      const requestHost =
+        host !== null && /^[A-Za-z0-9.\-:[\]]{1,255}$/.test(host) ? host : "(invalid host)";
+      console.error(
+        `[session] request origin ${requestHost} does not match the configured site origin ${new URL(configuration.siteUrl).origin}; open the application at the configured address or correct VORTEX_SITE_URL`,
+      );
       return privateResponse(response);
+    }
     boundary = createIdentitySessionClient(
       request.cookies.getAll().map(({ name, value }) => ({ name, value })),
     );
@@ -96,12 +105,10 @@ export async function proxy(request: NextRequest) {
   }
   if (boundary.stage.initialState.kind === "missing") return responseFor("missing");
 
-  // One retry absorbs a transient provider or key-set fetch failure so the first load after
-  // sign-in is not shown as unavailable; a second failure is still reported as unavailable.
-  const claims = await readIdentitySessionProvider(
-    "get-claims",
-    () => boundary.client.auth.getClaims(),
-    true,
+  // The provider read retries a transient provider or key-set fetch failure once, so the first
+  // load after sign-in is not shown as unavailable; a second failure is reported once.
+  const claims = await readIdentitySessionProvider("get-claims", () =>
+    boundary.client.auth.getClaims(),
   );
   const staged = boundary.stage.snapshot();
   if (staged.refused || (claims.ok ? !claims.data : claims.state === "invalid")) {

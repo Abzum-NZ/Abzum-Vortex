@@ -26,8 +26,11 @@ begin
       message = 'Application purge command is invalid';
   end if;
 
+  -- Purging or deleting needs a recent sign-in, as the installation authority in TypeScript says.
   select locked.* into strict authority
-  from vortex_access.lock_application_installation_authority() as locked;
+  from vortex_access.lock_application_installation_authority(
+    case when p_apply then pg_catalog.jsonb_build_object('kind', 'primary', 'maximumAgeSeconds', 900) end
+  ) as locked;
 
   -- Without a typed name this only reads; with p_apply the typed name is required and proved.
   impact := vortex_definition.purge_application_review_internal(

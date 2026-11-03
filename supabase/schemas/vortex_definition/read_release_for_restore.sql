@@ -62,7 +62,6 @@ begin
       and root.kind = 'application'
     for update;
     if not found
-      or root_row.application_origin_kind is distinct from 'ordinary'
       or root_row.current_release_revision is null then
       raise exception using
         errcode = '42501',

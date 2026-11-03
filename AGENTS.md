@@ -39,6 +39,7 @@ and the error rules. In addition:
 - Migrations: add a new numbered file under `supabase/migrations`; never edit an applied one.
   When a database function changes, its canonical file in `supabase/schemas` and the migration
   must hold the identical definition.
+- A migration that rewrites a stored release (its definition JSON) recomputes that release's `content_fingerprint` and `resolution_fingerprint` in the same migration and states why in its header comment. Prefer rewriting drafts and republishing: a published release stays as released unless a platform fault forces the rewrite.
 - Tenant and organisation isolation, current permission checks, atomic writes, revision checks and
   safe errors are product requirements. Preserve them in every change.
 - Keep secrets out of files, prompts and logs.

@@ -1,4 +1,4 @@
-CREATE OR REPLACE FUNCTION vortex_access.lock_application_installation_authority() RETURNS TABLE(organization_id uuid, organization_account_id uuid, access_version bigint, correlation_id uuid)
+CREATE OR REPLACE FUNCTION vortex_access.lock_application_installation_authority(p_recent_authentication jsonb DEFAULT NULL) RETURNS TABLE(organization_id uuid, organization_account_id uuid, access_version bigint, correlation_id uuid)
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO ''
     AS $$
@@ -39,7 +39,8 @@ begin
         'ownerId', vortex_access.platform_permission_owner_id(),
         'permissionId', vortex_access.platform_permission_id('platform.organization.applications.manage')
       ),
-      'recentAuthentication', pg_catalog.jsonb_build_object('kind', 'none'),
+      -- The caller names the recent authentication its operation needs (a purge needs a recent sign-in).
+      'recentAuthentication', coalesce(p_recent_authentication, pg_catalog.jsonb_build_object('kind', 'none')),
       'authority', pg_catalog.jsonb_build_object('kind', 'permission')
     )
   ) as evaluated;
@@ -82,11 +83,11 @@ begin
 end
 $$;
 
-alter function vortex_access.lock_application_installation_authority() owner to vortex_owner;
+alter function vortex_access.lock_application_installation_authority(jsonb) owner to vortex_owner;
 
-COMMENT ON FUNCTION vortex_access.lock_application_installation_authority() IS 'Access-owned lock and current authority decision for one protected Application installation lifecycle transaction.';
+COMMENT ON FUNCTION vortex_access.lock_application_installation_authority(jsonb) IS 'Access-owned lock and current authority decision for one protected Application installation lifecycle transaction; the caller may name the recent authentication its operation needs.';
 
-REVOKE ALL ON FUNCTION vortex_access.lock_application_installation_authority() FROM PUBLIC;
-GRANT ALL ON FUNCTION vortex_access.lock_application_installation_authority() TO vortex_owner;
+REVOKE ALL ON FUNCTION vortex_access.lock_application_installation_authority(jsonb) FROM PUBLIC;
+GRANT ALL ON FUNCTION vortex_access.lock_application_installation_authority(jsonb) TO vortex_owner;
 
-grant execute on function vortex_access.lock_application_installation_authority() to postgres;
+grant execute on function vortex_access.lock_application_installation_authority(jsonb) to postgres;

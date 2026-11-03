@@ -1,6 +1,7 @@
 "use client";
+import { Card } from "@vortex/ui/components/card";
 import { StudioLimitNote, StudioReasoned, studioLimitReason } from "@vortex/ui/studio";
-import { FieldLegend, FieldSet } from "@vortex/ui/components/field";
+import { Field, FieldLabel, FieldLegend, FieldSet } from "@vortex/ui/components/field";
 import { useState, type FormEvent } from "react";
 import {
   applicationUses,
@@ -43,11 +44,11 @@ import {
   Item,
   ItemActions,
   ItemContent,
+  ItemGroup,
   ItemDescription,
   ItemHeader,
   ItemTitle,
 } from "@vortex/ui/components/item";
-import { Label } from "@vortex/ui/components/label";
 import { StudioOptionControl } from "@vortex/ui/studio";
 import {
   Table,
@@ -118,13 +119,13 @@ function Problems({ issues }: Readonly<{ issues: readonly string[] }>) {
   return issues.length === 0 ? null : (
     <Alert variant="destructive">
       <AlertDescription>
-        <ul className="space-y-1">
+        <ItemGroup className="gap-1">
           {issues.map((issue, index) => (
-            <li key={index} className="break-words">
-              {issue}
-            </li>
+            <Item size="xs" role="listitem" key={index} className="break-words p-0">
+              <ItemContent>{issue}</ItemContent>
+            </Item>
           ))}
-        </ul>
+        </ItemGroup>
       </AlertDescription>
     </Alert>
   );
@@ -208,8 +209,8 @@ function NewPipelineDialog({
               moves and gates once it is added.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-1.5">
-            <Label htmlFor="pipeline-name">Name</Label>
+          <Field>
+            <FieldLabel htmlFor="pipeline-name">Name</FieldLabel>
             <Input
               id="pipeline-name"
               required
@@ -221,9 +222,9 @@ function NewPipelineDialog({
                 setIssues([]);
               }}
             />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="pipeline-field">Stages come from</Label>
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="pipeline-field">Stages come from</FieldLabel>
             <StudioOptionControl
               id="pipeline-field"
               value={stageField}
@@ -240,7 +241,7 @@ function NewPipelineDialog({
             <p className="text-sm text-muted-foreground">
               Options become stages. Filtering is enabled so Boards can show them.
             </p>
-          </div>
+          </Field>
           <Problems issues={issues} />
           <DialogFooter>
             <Button type="button" variant="outline" onClick={onClose}>
@@ -407,8 +408,8 @@ function PipelineDialog({
               which stages need an action. Each change is kept as you make it.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-1.5">
-            <Label htmlFor="pipeline-name">Name</Label>
+          <Field>
+            <FieldLabel htmlFor="pipeline-name">Name</FieldLabel>
             <Input
               id="pipeline-name"
               required
@@ -422,7 +423,7 @@ function PipelineDialog({
                 <AlertDescription>{name.problem}</AlertDescription>
               </Alert>
             )}
-          </div>
+          </Field>
           <div className="space-y-1.5">
             <p className="text-sm font-medium">Stages come from</p>
             <p className="text-sm">
@@ -435,9 +436,9 @@ function PipelineDialog({
 
           <FieldSet className="gap-2">
             <FieldLegend variant="label">Stages, in board order</FieldLegend>
-            <ul className="space-y-2">
+            <ItemGroup className="gap-2">
               {stages.map((stage, index) => (
-                <Item key={stage.option} render={<li />} variant="outline" size="sm">
+                <Item key={stage.option} role="listitem" variant="outline" size="sm">
                   <ItemHeader className="flex-wrap gap-2">
                     <ItemTitle className="gap-2">
                       <StageSwatch tone={toneOf(stage.option)} />
@@ -480,8 +481,8 @@ function PipelineDialog({
                     <p className="space-y-1 text-sm text-muted-foreground">
                       Colours come from the field&apos;s options.
                     </p>
-                    <div className="space-y-1">
-                      <Label htmlFor={`stage-gate-${stage.option}`}>Moving here</Label>
+                    <Field>
+                      <FieldLabel htmlFor={`stage-gate-${stage.option}`}>Moving here</FieldLabel>
                       <StudioOptionControl
                         id={`stage-gate-${stage.option}`}
                         value={gates[stage.option] ?? ""}
@@ -505,7 +506,7 @@ function PipelineDialog({
                           change({ gates: updated });
                         }}
                       />
-                    </div>
+                    </Field>
                     <div className="sm:col-span-2">
                       <StudioUsedIn
                         source={source}
@@ -523,7 +524,7 @@ function PipelineDialog({
                   </ItemContent>
                 </Item>
               ))}
-            </ul>
+            </ItemGroup>
             <p className="text-sm text-muted-foreground">
               A gated stage runs its action wherever the option is saved: a board, a form or a flow
               step. Only people whose access groups hold the action&apos;s permission can move a
@@ -538,7 +539,7 @@ function PipelineDialog({
               Tick each move a record may make. Any other move between two stages is refused. A new
               record without a stage starts at the first stage.
             </p>
-            <div className="overflow-x-auto rounded-xl border">
+            <Card className="gap-0 py-0 overflow-x-auto">
               <Table>
                 <TableHeader className="bg-muted/50">
                   <TableRow>
@@ -587,7 +588,7 @@ function PipelineDialog({
                   ))}
                 </TableBody>
               </Table>
-            </div>
+            </Card>
           </FieldSet>
 
           <Problems issues={issues} />
@@ -730,7 +731,7 @@ export function StudioRecordPipelines({
           </EmptyHeader>
         </Empty>
       )}
-      <ul className="space-y-2">
+      <ItemGroup className="gap-2">
         {record.pipelines.map((pipeline) => {
           const options = optionsOf(record, pipeline.stage_field);
           const label = (value: string) =>
@@ -741,7 +742,7 @@ export function StudioRecordPipelines({
             record.fields.find((field) => field.key === pipeline.stage_field)?.label ??
             pipeline.stage_field;
           return (
-            <Item key={pipeline.key} render={<li />} variant="outline" size="sm">
+            <Item key={pipeline.key} role="listitem" variant="outline" size="sm">
               <ItemHeader className="flex-wrap gap-2">
                 <ItemTitle>{pipeline.name}</ItemTitle>
                 <Badge variant="outline">{fieldLabel}</Badge>
@@ -795,7 +796,7 @@ export function StudioRecordPipelines({
             </Item>
           );
         })}
-      </ul>
+      </ItemGroup>
       {refusal === undefined ? null : (
         <StudioReferencesAlert
           name={refusal.name ?? "The pipeline"}

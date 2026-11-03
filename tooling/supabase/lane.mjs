@@ -1,7 +1,7 @@
-import { spawn, spawnSync } from "node:child_process";
+import { spawnSync } from "node:child_process";
 import { Buffer } from "node:buffer";
 import { randomBytes } from "node:crypto";
-import { closeSync, existsSync, openSync, readdirSync, realpathSync } from "node:fs";
+import { existsSync, readdirSync, realpathSync } from "node:fs";
 import net from "node:net";
 import os from "node:os";
 import { cp, mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
@@ -12,6 +12,7 @@ import { ensureLocalSigningKey } from "./ensure-local-signing-key.mjs";
 import {
   killLateDescendants,
   killRecord,
+  launchHidden,
   processSnapshot,
   processTree,
   recordListeners,
@@ -376,7 +377,9 @@ const excludedPortRanges = () =>
       },
     );
     if (result.error || result.status !== 0) fail("Cannot read the Windows excluded port ranges.");
-    return [...result.stdout.matchAll(/^[ \t]*(\d+)[ \t]+(\d+)/gm)].map((match) => [
+    // Range rows hold only two numbers (an administrator-excluded range ends in `*`); the localized
+    // headings never match.
+    return [...result.stdout.matchAll(/^[ \t]*(\d+)[ \t]+(\d+)[ \t]*\*?[ \t]*$/gm)].map((match) => [
       Number(match[1]),
       Number(match[2]),
     ]);
@@ -786,20 +789,17 @@ const startServer = async (lane, worktreePath, requestedPort) => {
     environment.VORTEX_SESSION_COOKIE_NAME = `vortex-lane-${lane}-${port}-session`;
   const { records: existing } = await pruneServers(lane, snapshot);
   const logPath = path.join(laneDirectory(lane), `server-${port}.log`);
-  const output = openSync(logPath, "w");
-  const child = spawn(process.execPath, [next, "dev", "-H", "localhost", "--port", String(port)], {
+  const pid = launchHidden({
+    command: process.execPath,
+    args: [next, "dev", "-H", "localhost", "--port", String(port)],
     cwd: path.join(worktreePath, "apps", "web"),
     env: environment,
-    detached: true,
-    stdio: ["ignore", output, output],
-    windowsHide: true,
+    logPath,
   });
-  child.unref();
-  closeSync(output);
-  if (child.pid === undefined) fail("The dev server did not start.");
+  if (pid === undefined) fail("The dev server did not start.");
   // Record the process at once, then fill in its creation time, so a crash between never leaves it unrecorded.
   const record = {
-    pid: child.pid,
+    pid,
     processStart: null,
     port,
     role,

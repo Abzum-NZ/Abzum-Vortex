@@ -1,4 +1,4 @@
--- The latest published version of one ordinary Application of the request's organisation, for a
+-- The latest published version of one Application, ordinary or platform system, of the request's organisation, for a
 -- person who may manage the organisation's application installations. Installing and upgrading are
 -- anchored to it; no draft right is needed.
 create or replace function vortex_definition.read_application_latest_release(
@@ -65,8 +65,7 @@ begin
     and release.release_revision = root.current_release_revision
   where root.root_id = p_application_root_id
     and root.organization_id = (checked_context ->> 'organizationId')::uuid
-    and root.kind = 'application'
-    and root.application_origin_kind = 'ordinary';
+    and root.kind = 'application';
   return latest;
 end
 $function$;
@@ -76,5 +75,5 @@ revoke all on function vortex_definition.read_application_latest_release(uuid)
 grant execute on function vortex_definition.read_application_latest_release(uuid)
   to vortex_request, postgres;
 comment on function vortex_definition.read_application_latest_release(uuid) is
-  'Returns the latest published version of one ordinary Application of the request organisation to a caller holding platform.organization.applications.manage, or null when it has none.';
+  'Returns the latest published version of one Application, ordinary or platform system, of the request organisation to a caller holding platform.organization.applications.manage, or null when it has none.';
 alter function vortex_definition.read_application_latest_release(uuid) owner to vortex_owner;

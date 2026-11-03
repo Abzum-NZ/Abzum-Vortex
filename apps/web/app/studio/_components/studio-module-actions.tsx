@@ -1,6 +1,6 @@
 "use client";
 import { StudioLimitNote, StudioReasoned, studioLimitReason } from "@vortex/ui/studio";
-import { FieldLegend, FieldSet } from "@vortex/ui/components/field";
+import { Field, FieldLabel, FieldLegend, FieldSet } from "@vortex/ui/components/field";
 import { Alert, AlertDescription } from "@vortex/ui/components/alert";
 import { useMemo, useState, type FormEvent } from "react";
 import {
@@ -29,11 +29,11 @@ import {
   Item,
   ItemActions,
   ItemContent,
+  ItemGroup,
   ItemDescription,
   ItemHeader,
   ItemTitle,
 } from "@vortex/ui/components/item";
-import { Label } from "@vortex/ui/components/label";
 import {
   StudioConditionControls,
   projectStudioActionCondition,
@@ -188,8 +188,8 @@ export function ActionDialog({
               flow, edited in the flow editor.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-1.5">
-            <Label htmlFor="action-name">Name</Label>
+          <Field>
+            <FieldLabel htmlFor="action-name">Name</FieldLabel>
             <Input
               id="action-name"
               required
@@ -197,7 +197,7 @@ export function ActionDialog({
               value={label}
               onChange={(event) => setLabel(event.target.value)}
             />
-          </div>
+          </Field>
           <StudioActionInputs inputs={inputs} source={source} onChange={changeInputs} />
           <FieldSet className="gap-2">
             <FieldLegend variant="label">Runs only when</FieldLegend>
@@ -230,19 +230,19 @@ export function ActionDialog({
               </Alert>
             )}
           </FieldSet>
-          <div className="flex items-start gap-2">
+          <Field orientation="horizontal">
             <Checkbox
               id="action-owns"
               checked={ownsChoice}
               onCheckedChange={(checked) => setOwnsChoice(checked === true)}
             />
-            <Label htmlFor="action-owns" className="font-normal">
+            <FieldLabel htmlFor="action-owns" className="font-normal">
               Saving the fixed choice option set by this action runs the action, with its condition
               and permission.
-            </Label>
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="action-permission">Permission</Label>
+            </FieldLabel>
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="action-permission">Permission</FieldLabel>
             <StudioOptionControl
               id="action-permission"
               value={permission}
@@ -255,15 +255,17 @@ export function ActionDialog({
               ]}
               onChange={setPermission}
             />
-          </div>
+          </Field>
           {issues.length === 0 ? null : (
             <Alert variant="destructive">
               <AlertDescription>
-                <ul className="space-y-1">
+                <ItemGroup className="gap-1">
                   {issues.map((issue, index) => (
-                    <li key={index}>{issue}</li>
+                    <Item size="xs" role="listitem" key={index} className="p-0">
+                      <ItemContent>{issue}</ItemContent>
+                    </Item>
                   ))}
-                </ul>
+                </ItemGroup>
               </AlertDescription>
             </Alert>
           )}
@@ -370,7 +372,7 @@ export function StudioModuleActions({
       {actions.length === 0 && (
         <p className="text-sm text-muted-foreground">No named actions yet, such as Mark won.</p>
       )}
-      <ul className="space-y-2">
+      <ItemGroup className="gap-2">
         {actions.map((action) => {
           const target = { kind: "action", moduleKey: module.key, actionKey: action.key } as const;
           const unused = applicationUses(source, target).length === 0;
@@ -406,7 +408,7 @@ export function StudioModuleActions({
                     ? "Its permission allows no fields yet. Choose what it reads and changes in Access → Permissions."
                     : undefined;
           return (
-            <Item key={action.key} render={<li />} variant="outline" size="sm">
+            <Item key={action.key} role="listitem" variant="outline" size="sm">
               <ItemHeader className="flex-wrap gap-2">
                 <ItemTitle>{action.label}</ItemTitle>
                 {option === undefined ? null : <Badge variant="outline">Owns {option.label}</Badge>}
@@ -470,7 +472,7 @@ export function StudioModuleActions({
             </Item>
           );
         })}
-      </ul>
+      </ItemGroup>
       {refused === undefined ? null : (
         <StudioReferencesAlert
           key={refusals}
@@ -482,11 +484,13 @@ export function StudioModuleActions({
       {issues.length === 0 ? null : (
         <Alert variant="destructive">
           <AlertDescription>
-            <ul className="space-y-1">
+            <ItemGroup className="gap-1">
               {issues.map((issue, index) => (
-                <li key={index}>{issue}</li>
+                <Item size="xs" role="listitem" key={index} className="p-0">
+                  <ItemContent>{issue}</ItemContent>
+                </Item>
               ))}
-            </ul>
+            </ItemGroup>
           </AlertDescription>
         </Alert>
       )}

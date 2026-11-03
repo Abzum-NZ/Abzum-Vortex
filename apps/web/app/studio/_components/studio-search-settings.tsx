@@ -1,5 +1,6 @@
 "use client";
-import { FieldLegend, FieldSet } from "@vortex/ui/components/field";
+import { Item, ItemContent, ItemGroup } from "@vortex/ui/components/item";
+import { Field, FieldLabel, FieldLegend, FieldSet } from "@vortex/ui/components/field";
 import { Alert, AlertDescription } from "@vortex/ui/components/alert";
 import { useState } from "react";
 import {
@@ -14,7 +15,6 @@ import {
 import { StudioOptionControl, type StudioDataSelection } from "@vortex/ui/studio";
 import { Button } from "@vortex/ui/components/button";
 import { Checkbox } from "@vortex/ui/components/checkbox";
-import { Label } from "@vortex/ui/components/label";
 import { Switch } from "@vortex/ui/components/switch";
 import {
   studioEditProblem,
@@ -135,17 +135,17 @@ export function StudioRecordTypeSearch({
   return (
     <section className="space-y-6" aria-label={`Search for ${record.pluralName}`}>
       <h3 className="text-base font-semibold">Search</h3>
-      <div className="flex items-center gap-2">
+      <Field orientation="horizontal">
         <Switch
           id={`search-${reference}`}
           checked={form.on}
           disabled={disabled}
           onCheckedChange={(on) => change({ on })}
         />
-        <Label htmlFor={`search-${reference}`} className="font-normal">
+        <FieldLabel htmlFor={`search-${reference}`} className="font-normal">
           People can find {record.pluralName.toLowerCase()} in search
-        </Label>
-      </div>
+        </FieldLabel>
+      </Field>
       {!form.on ? null : eligible.length === 0 ? (
         <p role="note" className="text-sm">
           {owned
@@ -159,7 +159,7 @@ export function StudioRecordTypeSearch({
             {eligible.map((field) => {
               const priority = form.fields[field.key];
               return (
-                <div key={field.key} className="flex flex-wrap items-center gap-2">
+                <Field key={field.key} orientation="horizontal" className="flex-wrap">
                   <Checkbox
                     id={`search-${reference}-${field.key}`}
                     checked={priority !== undefined}
@@ -175,12 +175,12 @@ export function StudioRecordTypeSearch({
                       });
                     }}
                   />
-                  <Label
+                  <FieldLabel
                     htmlFor={`search-${reference}-${field.key}`}
                     className="min-w-0 flex-1 font-normal"
                   >
                     {field.label}
-                  </Label>
+                  </FieldLabel>
                   {priority === undefined ? null : (
                     <div className="w-32">
                       <StudioOptionControl
@@ -199,14 +199,14 @@ export function StudioRecordTypeSearch({
                       />
                     </div>
                   )}
-                </div>
+                </Field>
               );
             })}
           </FieldSet>
-          <div className="space-y-2">
-            <Label htmlFor={`search-${reference}-title`} className="text-sm">
+          <Field>
+            <FieldLabel htmlFor={`search-${reference}-title`} className="text-sm">
               A result is named by
-            </Label>
+            </FieldLabel>
             <StudioOptionControl
               id={`search-${reference}-title`}
               value={form.title}
@@ -214,11 +214,11 @@ export function StudioRecordTypeSearch({
               options={options}
               onChange={(title) => change({ title })}
             />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor={`search-${reference}-subtitle`} className="text-sm">
+          </Field>
+          <Field>
+            <FieldLabel htmlFor={`search-${reference}-subtitle`} className="text-sm">
               Under its name it shows
-            </Label>
+            </FieldLabel>
             <StudioOptionControl
               id={`search-${reference}-subtitle`}
               value={form.subtitle}
@@ -227,11 +227,11 @@ export function StudioRecordTypeSearch({
               options={options}
               onChange={(subtitle) => change({ subtitle })}
             />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor={`search-${reference}-page`} className="text-sm">
+          </Field>
+          <Field>
+            <FieldLabel htmlFor={`search-${reference}-page`} className="text-sm">
               A result opens
-            </Label>
+            </FieldLabel>
             {pages.length === 0 ? (
               <p role="note" className="text-sm">
                 {record.name} has no detail page yet. Add one in Structure: a result opens it.
@@ -245,7 +245,7 @@ export function StudioRecordTypeSearch({
                 onChange={(page) => change({ page })}
               />
             )}
-          </div>
+          </Field>
         </>
       )}
       {form.on ? (
@@ -256,13 +256,13 @@ export function StudioRecordTypeSearch({
       {issues.length === 0 ? null : (
         <Alert variant="destructive">
           <AlertDescription>
-            <ul className="space-y-1">
+            <ItemGroup className="gap-1">
               {issues.map((issue, index) => (
-                <li key={index} className="break-words">
-                  {issue}
-                </li>
+                <Item size="xs" role="listitem" key={index} className="break-words p-0">
+                  <ItemContent>{issue}</ItemContent>
+                </Item>
               ))}
-            </ul>
+            </ItemGroup>
           </AlertDescription>
         </Alert>
       )}
@@ -310,42 +310,44 @@ export function StudioSearchOverview({
         </p>
       ) : (
         <>
-          <div className="flex items-center gap-2">
+          <Field orientation="horizontal">
             <Switch
               id="studio-search-enabled"
               checked={search.enabled}
               disabled={disabled}
               onCheckedChange={toggle}
             />
-            <Label htmlFor="studio-search-enabled" className="font-normal">
+            <FieldLabel htmlFor="studio-search-enabled" className="font-normal">
               Search is on
-            </Label>
-          </div>
-          <ul className="m-0 list-none space-y-2 p-0" aria-label="Found in search">
+            </FieldLabel>
+          </Field>
+          <ItemGroup className="gap-2" aria-label="Found in search">
             {found.map(({ reference, module, record }) => (
-              <li key={reference}>
-                {module === undefined || record === undefined ? (
-                  <span className="text-sm">{reference}</span>
-                ) : (
-                  <Button
-                    type="button"
-                    variant="link"
-                    size="sm"
-                    className="dark:text-foreground dark:underline"
-                    onClick={() =>
-                      onSelect({
-                        kind: "record_type",
-                        moduleKey: module.key,
-                        recordKey: record.key,
-                      })
-                    }
-                  >
-                    {record.pluralName}
-                  </Button>
-                )}
-              </li>
+              <Item size="xs" role="listitem" key={reference} className="p-0">
+                <ItemContent>
+                  {module === undefined || record === undefined ? (
+                    <span className="text-sm">{reference}</span>
+                  ) : (
+                    <Button
+                      type="button"
+                      variant="link"
+                      size="sm"
+                      className="dark:text-foreground dark:underline"
+                      onClick={() =>
+                        onSelect({
+                          kind: "record_type",
+                          moduleKey: module.key,
+                          recordKey: record.key,
+                        })
+                      }
+                    >
+                      {record.pluralName}
+                    </Button>
+                  )}
+                </ItemContent>
+              </Item>
             ))}
-          </ul>
+          </ItemGroup>
         </>
       )}
       {problem === "" ? null : (

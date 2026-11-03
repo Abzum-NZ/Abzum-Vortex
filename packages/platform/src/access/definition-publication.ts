@@ -81,20 +81,26 @@ class ExpectedBuilderPublicationRefusal extends Error {
 /** Existing roots never acquire a default classification or a System fallback. */
 const targetFacts: BuilderTargetFactsReader = async (transaction, _scope, rootId) => {
   if (rootId === undefined) throw new PublicationContextRefused("root_missing");
-  if ((await readBuilderApplicationOrigin(transaction, rootId)) !== "ordinary")
-    throw new PublicationContextRefused("application_root_not_ordinary");
-  return { isSystemApplication: false };
+  const origin = await readBuilderApplicationOrigin(transaction, rootId);
+  if (origin === undefined) throw new PublicationContextRefused("root_missing");
+  return { isSystemApplication: origin === "platform_system_application" };
 };
 
 /** Recheck exact decisions after compilation/append and all returned-row verification. */
 const assertLiveCompletion = async (
   permissions: PlatformPermissionSource,
   transaction: RequestDatabaseTransaction,
+  scope: SelectedOrganizationScope,
   context: LiveHumanContext,
+  rootId: string,
   publishedAt?: string,
 ): Promise<void> => {
+  const facts = await targetFacts(transaction, scope, rootId);
   let deadline = Date.parse(context.expiresAt);
-  for (const key of ["platform.organization.definition_releases.manage"]) {
+  for (const key of [
+    "platform.organization.definition_releases.manage",
+    ...(facts.isSystemApplication ? ["platform.organization.system_applications.manage"] : []),
+  ]) {
     const decision = await assertLivePermission(
       transaction,
       platformOrganizationPermissionDeclaration(permissions, key),
@@ -126,6 +132,17 @@ const compilationRefusal = (error: unknown): DefinitionCompilationError | undefi
   return undefined;
 };
 
+/** The located sentence of a database refusal of a protected-surface change, when the failure is one. */
+const databaseSurfaceRefusal = (error: unknown): string | undefined => {
+  let current: unknown = error;
+  for (let depth = 0; depth < 8 && current instanceof Error; depth += 1) {
+    if ((current as { readonly hint?: unknown }).hint === "system_surface_changed")
+      return current.message;
+    current = current.cause;
+  }
+  return undefined;
+};
+
 const classifyFailure = (error: unknown): Failure => {
   if (error instanceof DefinitionError && error.code === "DEFINITION_IDENTITY_RETIRED")
     return {
@@ -133,6 +150,16 @@ const classifyFailure = (error: unknown): Failure => {
       reason: "identity_retired",
       ...(error.sentence === undefined ? {} : { sentence: error.sentence }),
     };
+  if (error instanceof DefinitionError && error.code === "DEFINITION_SYSTEM_SURFACE_CHANGED")
+    return {
+      kind: "refused",
+      reason: "system_surface_changed",
+      ...(error.sentence === undefined ? {} : { sentence: error.sentence }),
+    };
+  // The database refuses the same change when the release it follows moved after the plan was made.
+  const surfaceRefusal = databaseSurfaceRefusal(error);
+  if (surfaceRefusal !== undefined)
+    return { kind: "refused", reason: "system_surface_changed", sentence: surfaceRefusal };
   if (error instanceof DefinitionError && error.code === "DEFINITION_NO_CHANGE")
     return { kind: "no_change", reason: "no_change" };
   if (error instanceof DefinitionError && dependencyCodes.includes(error.code))
@@ -368,7 +395,9 @@ export const createHumanDefinitionPublisher = (
         await assertLiveCompletion(
           dependencies.catalogue.permissions,
           transaction,
+          scope,
           completion,
+          command.rootId,
           value.kind === "published" ? value.publication.publishedAt : undefined,
         );
         return value;

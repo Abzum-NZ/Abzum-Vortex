@@ -43,7 +43,12 @@ export type BuilderConferredPermission = Readonly<{
  * application.
  */
 export type BuilderOperation =
-  | Readonly<{ kind: "draft_change"; rootId?: string }>
+  | Readonly<{
+      kind: "draft_change";
+      rootId?: string;
+      /** True when discarding or restoring a version asks for a recent two-step verification (a system application). */
+      stepUp?: boolean;
+    }>
   | Readonly<{
       kind: "publication";
       /** Absent when only asking whether the person may publish an ordinary application at all. */
@@ -91,6 +96,8 @@ type BuilderRequirements = Readonly<{
   recentAuthentication: boolean;
   /** Every one of these must lie inside the actor's delegated assignment scope. */
   delegatedPermissions: readonly BuilderConferredPermission[];
+  /** True when a recent two-step verification is needed: a system application's publication or discard. */
+  multiFactor: boolean;
   /** True when the operation is refused whatever the actor holds. */
   refused: boolean;
 }>;
@@ -124,7 +131,8 @@ export const deriveBuilderRequirements = (
     case "draft_change":
       return {
         permissionKeys: unique([builderPermissionKeys.definitionDraftsManage, ...system]),
-        recentAuthentication: false,
+        multiFactor: facts.isSystemApplication && operation.stepUp === true,
+        recentAuthentication: facts.isSystemApplication && operation.stepUp === true,
         delegatedPermissions: [],
         refused: false,
       };
@@ -133,6 +141,7 @@ export const deriveBuilderRequirements = (
         permissionKeys: unique([builderPermissionKeys.definitionReleasesManage, ...system]),
         // A person publishing a version every organisation can install is asked, up front, for a
         // recent sign-in; asking only whether they may publish is not.
+        multiFactor: facts.isSystemApplication && operation.stepUp === true,
         recentAuthentication: operation.stepUp === true,
         delegatedPermissions: [],
         refused: false,
@@ -140,6 +149,7 @@ export const deriveBuilderRequirements = (
     case "application_management":
       return {
         permissionKeys: [builderPermissionKeys.applicationsManage],
+        multiFactor: false,
         recentAuthentication: false,
         delegatedPermissions: [],
         refused: false,
@@ -148,6 +158,7 @@ export const deriveBuilderRequirements = (
       const installs = operation.change === "install_or_upgrade";
       const purges = operation.change === "purge";
       return {
+        multiFactor: false,
         permissionKeys: unique([
           builderPermissionKeys.applicationsManage,
           ...(operation.containsCustomComponents ? [builderPermissionKeys.customCodeManage] : []),

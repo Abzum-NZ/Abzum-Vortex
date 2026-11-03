@@ -1,4 +1,6 @@
 "use client";
+import { Card } from "@vortex/ui/components/card";
+import { Item, ItemGroup } from "@vortex/ui/components/item";
 import { Fragment, useMemo, useState, type ReactNode } from "react";
 import { useStudioDraftText } from "./use-studio-draft-text";
 import type { ApplicationSourceDocument } from "@vortex/platform/schema";
@@ -436,7 +438,7 @@ export function StudioAccessRoleEditor({
                 This application has no record types yet. Add them in Data.
               </p>
             ) : (
-              <div className="overflow-hidden rounded-xl border">
+              <Card className="gap-0 py-0">
                 <Table
                   aria-label="Record access"
                   containerClassName="border-0"
@@ -602,12 +604,12 @@ export function StudioAccessRoleEditor({
                     })}
                   </TableBody>
                 </Table>
-              </div>
+              </Card>
             )}
           </Section>
 
           <Section title="Pages" description="Pages with the same permission open together.">
-            <div className="overflow-hidden rounded-xl border">
+            <Card className="gap-0 py-0">
               <Table
                 aria-label="Page access"
                 containerClassName="border-0"
@@ -653,12 +655,12 @@ export function StudioAccessRoleEditor({
                   })}
                 </TableBody>
               </Table>
-            </div>
+            </Card>
           </Section>
 
           {menuEntries.length > 0 && (
             <Section title="Menu" description="Which menu entries this role can see.">
-              <div className="overflow-hidden rounded-xl border">
+              <Card className="gap-0 py-0">
                 <Table
                   aria-label="Menu access"
                   containerClassName="border-0"
@@ -697,7 +699,7 @@ export function StudioAccessRoleEditor({
                     ))}
                   </TableBody>
                 </Table>
-              </div>
+              </Card>
             </Section>
           )}
 
@@ -706,7 +708,7 @@ export function StudioAccessRoleEditor({
               title="Actions"
               description="The application's other permissions, such as buttons and steps that need one."
             >
-              <div className="overflow-hidden rounded-xl border">
+              <Card className="gap-0 py-0">
                 <Table
                   aria-label="Action access"
                   containerClassName="border-0"
@@ -740,7 +742,7 @@ export function StudioAccessRoleEditor({
                     ))}
                   </TableBody>
                 </Table>
-              </div>
+              </Card>
             </Section>
           )}
 
@@ -749,9 +751,9 @@ export function StudioAccessRoleEditor({
               title="From other applications and the platform"
               description="Permissions this role holds that another application or the platform declares."
             >
-              <ul className="space-y-1">
+              <ItemGroup className="gap-1">
                 {elsewhere.map((key) => (
-                  <li key={key} className="flex items-center justify-between gap-2 text-sm">
+                  <Item size="xs" role="listitem" key={key} className="justify-between text-sm">
                     <code className="break-all">{key}</code>
                     <StudioIconButton
                       label={`Remove ${key} from ${role.name}`}
@@ -768,9 +770,9 @@ export function StudioAccessRoleEditor({
                     >
                       <Icon name="close" />
                     </StudioIconButton>
-                  </li>
+                  </Item>
                 ))}
-              </ul>
+              </ItemGroup>
             </Section>
           )}
         </>
@@ -788,7 +790,7 @@ export function StudioAccessRoleEditor({
           </SheetHeader>
           {fieldRow !== undefined && (
             <div className="px-4">
-              <div className="overflow-hidden rounded-xl border">
+              <Card className="gap-0 py-0">
                 <FieldAccess
                   source={source}
                   role={role}
@@ -798,7 +800,7 @@ export function StudioAccessRoleEditor({
                   disabled={disabled}
                   run={run}
                 />
-              </div>
+              </Card>
             </div>
           )}
         </SheetContent>

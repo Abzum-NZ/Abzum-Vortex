@@ -69,12 +69,14 @@ const mapStorageFailure = (error: unknown): OrganizationAccountError => {
       : undefined;
 
   if (databaseCode === "22023" || databaseCode === "23514")
-    return new OrganizationAccountError("INVALID_ORGANIZATION_ACCOUNT_COMMAND");
+    return new OrganizationAccountError("INVALID_ORGANIZATION_ACCOUNT_COMMAND", { cause: error });
   if (databaseCode === "42501")
-    return new OrganizationAccountError("ORGANIZATION_ACCOUNT_CONTEXT_REFUSED");
+    return new OrganizationAccountError("ORGANIZATION_ACCOUNT_CONTEXT_REFUSED", { cause: error });
   if (databaseCode === "40001" || databaseCode === "23503" || databaseCode === "23505")
-    return new OrganizationAccountError("ORGANIZATION_ACCOUNT_STALE_OR_UNAVAILABLE");
-  return new OrganizationAccountError("ORGANIZATION_ACCOUNT_OPERATION_FAILED");
+    return new OrganizationAccountError("ORGANIZATION_ACCOUNT_STALE_OR_UNAVAILABLE", {
+      cause: error,
+    });
+  return new OrganizationAccountError("ORGANIZATION_ACCOUNT_OPERATION_FAILED", { cause: error });
 };
 
 const requireOne = <Row extends DatabaseRow>(rows: readonly Row[]): Row => {

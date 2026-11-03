@@ -148,6 +148,15 @@ export const stringOutcomeOutputs = (outcome: string): FlowRuntimeValues => ({
   outcome: typed("text", outcome),
 });
 
+/** What a task that allows refusal exposes when it was refused: its outcome and the rule's own sentence ("" when none). */
+export const refusalOutputs = (
+  outcome: string,
+  message: string | undefined,
+): FlowRuntimeValues => ({
+  outcome: typed("text", outcome),
+  refusal_message: typed("text", message ?? ""),
+});
+
 export const storeTaskOutputs = (
   activation: Activation,
   taskId: string,

@@ -1,4 +1,5 @@
 "use client";
+import { Item, ItemContent, ItemGroup } from "@vortex/ui/components/item";
 import { NavigationLink } from "@vortex/ui/routing";
 import { useMemo, useState } from "react";
 import { Button } from "@vortex/ui/components/button";
@@ -118,51 +119,57 @@ export function StudioFlowsPanel({
               {query.length > 0 ? "No flow matches." : "No flows yet."}
             </p>
           ) : (
-            <ul className="m-0 list-none space-y-1 p-0">
+            <ItemGroup className="gap-1">
               {group.flows.map((entry) => {
                 const key = studioSemanticSelectionKey(entry.selection);
                 return (
-                  <li key={key}>
-                    <StudioNavItem
-                      label={entry.label}
-                      icon="workflow"
-                      description={entry.trigger}
-                      disabled={disabled}
-                      selected={key === selectedKey}
-                      onClick={() => choose(entry.selection)}
-                    />
-                  </li>
+                  <Item size="xs" role="listitem" key={key} className="p-0">
+                    <ItemContent>
+                      <StudioNavItem
+                        label={entry.label}
+                        icon="workflow"
+                        description={entry.trigger}
+                        disabled={disabled}
+                        selected={key === selectedKey}
+                        onClick={() => choose(entry.selection)}
+                      />
+                    </ItemContent>
+                  </Item>
                 );
               })}
-            </ul>
+            </ItemGroup>
           )}
         </StudioSection>
       ))}
       {source.body.uses.length > 0 && (
         <StudioSection title="Used modules (read-only)">
-          <ul className="m-0 list-none space-y-2 p-0">
+          <ItemGroup className="gap-2">
             {source.body.uses.map((use) => {
               const owner = applications.find((application) => application.key === use.application);
               return (
-                <li key={use.module} className="text-sm text-muted-foreground">
-                  The flows of {use.module.split(".").pop()?.replace(/_/g, " ")} belong to{" "}
-                  {owner?.name ?? "the application that owns it"}. They run here as published and
-                  are changed in the owner&apos;s Studio.
-                  {owner === undefined ? null : (
-                    <>
-                      {" "}
-                      <NavigationLink
-                        className="underline underline-offset-4"
-                        href={`/studio/${encodeURIComponent(organizationId)}/${encodeURIComponent(owner.rootId)}?tab=flows`}
-                      >
-                        Open {owner.name} in Studio
-                      </NavigationLink>
-                    </>
-                  )}
-                </li>
+                <Item size="xs" role="listitem" key={use.module} className="p-0">
+                  <ItemContent>
+                    <p className="m-0 text-sm text-muted-foreground">
+                      The flows of {use.module.split(".").pop()?.replace(/_/g, " ")} belong to{" "}
+                      {owner?.name ?? "the application that owns it"}. They run here as published
+                      and are changed in the owner&apos;s Studio.
+                      {owner === undefined ? null : (
+                        <>
+                          {" "}
+                          <NavigationLink
+                            className="underline underline-offset-4"
+                            href={`/studio/${encodeURIComponent(organizationId)}/${encodeURIComponent(owner.rootId)}?tab=flows`}
+                          >
+                            Open {owner.name} in Studio
+                          </NavigationLink>
+                        </>
+                      )}
+                    </p>
+                  </ItemContent>
+                </Item>
               );
             })}
-          </ul>
+          </ItemGroup>
         </StudioSection>
       )}
       <StudioNewFlowDialog

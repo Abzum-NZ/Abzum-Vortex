@@ -1,5 +1,6 @@
 "use client";
 
+import { Field, FieldLabel } from "../components/field";
 import { useState, type ReactNode } from "react";
 import { Button } from "../components/button";
 import {
@@ -14,7 +15,6 @@ import {
 import { InputGroup } from "../components/input-group";
 import { StudioReferencePicker } from "./studio-reference-picker";
 import { Plus } from "lucide-react";
-import { Label } from "../components/label";
 import { StudioHelp } from "./studio-field";
 import { Textarea } from "../components/textarea";
 import { Input } from "../components/input";
@@ -133,9 +133,9 @@ export function StudioFlowStepPicker({
       </p>
     );
   return (
-    <div className="space-y-2">
+    <Field>
       <div className="flex items-center gap-1">
-        <Label htmlFor={id}>{label}</Label>
+        <FieldLabel htmlFor={id}>{label}</FieldLabel>
         {hint !== undefined && <StudioHelp hint={hint} />}
       </div>
       <Combobox
@@ -184,8 +184,8 @@ export function StudioFlowStepPicker({
         </p>
       )}
       {choices.map((choice) => (
-        <div key={choice.property} className="space-y-1">
-          <Label htmlFor={`${id}-${choice.property}`}>{choice.label}</Label>
+        <Field key={choice.property}>
+          <FieldLabel htmlFor={`${id}-${choice.property}`}>{choice.label}</FieldLabel>
           <StudioReferencePicker
             id={`${id}-${choice.property}`}
             disabled={disabled}
@@ -194,7 +194,7 @@ export function StudioFlowStepPicker({
             options={choice.options}
             onChange={(next) => setPicks({ ...picks, [choice.property]: next })}
           />
-        </div>
+        </Field>
       ))}
       {needsCondition && (
         <StudioConditionControls
@@ -212,10 +212,10 @@ export function StudioFlowStepPicker({
         />
       )}
       {needsExpression && (
-        <div className="space-y-1">
-          <Label htmlFor={`${id}-expression`}>
+        <Field>
+          <FieldLabel htmlFor={`${id}-expression`}>
             {chosen?.type === "for_each" ? "List expression" : "Value expression"}
-          </Label>
+          </FieldLabel>
           {context.renderExpression?.({
             id: `${id}-expression`,
             value: expression ?? { op: "literal", type: "whole_number", value: 0 },
@@ -225,11 +225,11 @@ export function StudioFlowStepPicker({
               setExpressionType(type);
             },
           })}
-        </div>
+        </Field>
       )}
       {chosen?.type === "switch" && (
-        <div className="space-y-1">
-          <Label htmlFor={`${id}-case`}>Case value</Label>
+        <Field>
+          <FieldLabel htmlFor={`${id}-case`}>Case value</FieldLabel>
           {context.renderLiteral?.({
             id: `${id}-case`,
             label: "Case value",
@@ -237,11 +237,11 @@ export function StudioFlowStepPicker({
             value: caseValue,
             onChange: setCaseValue,
           })}
-        </div>
+        </Field>
       )}
       {chosen?.type === "for_each" && (
-        <div className="space-y-1">
-          <Label htmlFor={`${id}-maximum`}>Maximum items</Label>
+        <Field>
+          <FieldLabel htmlFor={`${id}-maximum`}>Maximum items</FieldLabel>
           <Input
             id={`${id}-maximum`}
             type="number"
@@ -251,11 +251,11 @@ export function StudioFlowStepPicker({
             disabled={disabled}
             onChange={(event) => setMaximumItems(Number(event.target.value))}
           />
-        </div>
+        </Field>
       )}
       {chosen?.type === "run_flow" && (
-        <div className="space-y-2">
-          <Label htmlFor={`${id}-flow`}>Flow to run</Label>
+        <Field>
+          <FieldLabel htmlFor={`${id}-flow`}>Flow to run</FieldLabel>
           <StudioReferencePicker
             id={`${id}-flow`}
             value={target}
@@ -285,7 +285,7 @@ export function StudioFlowStepPicker({
                 }),
             }),
           )}
-        </div>
+        </Field>
       )}
       {grouped && (
         <div className="space-y-2">
@@ -318,8 +318,8 @@ export function StudioFlowStepPicker({
         </div>
       )}
       {needsField && (
-        <div className="space-y-2">
-          <Label htmlFor={`${id}-field`}>Field</Label>
+        <Field>
+          <FieldLabel htmlFor={`${id}-field`}>Field</FieldLabel>
           <StudioReferencePicker
             id={`${id}-field`}
             value={field}
@@ -328,18 +328,18 @@ export function StudioFlowStepPicker({
             options={context.fields}
             onChange={setField}
           />
-        </div>
+        </Field>
       )}
       {needsMessage && (
-        <div className="space-y-2">
-          <Label htmlFor={`${id}-message`}>Message</Label>
+        <Field>
+          <FieldLabel htmlFor={`${id}-message`}>Message</FieldLabel>
           <Textarea
             id={`${id}-message`}
             value={message}
             disabled={disabled}
             onChange={(event) => setMessage(event.target.value)}
           />
-        </div>
+        </Field>
       )}
       <Button
         type="button"
@@ -398,6 +398,6 @@ export function StudioFlowStepPicker({
         <Plus />
         {action}
       </Button>
-    </div>
+    </Field>
   );
 }

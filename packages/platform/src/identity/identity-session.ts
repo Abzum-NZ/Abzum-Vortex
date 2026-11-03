@@ -9,12 +9,31 @@ import {
 import type { CorrelationId } from "../catalogue/common";
 import type { RequestDatabaseTransaction } from "../db/request-transaction";
 import { describeFailure } from "../catalogue/runtime-primitives";
+import { databaseErrorCode } from "../definition/definition-error";
 import {
   IdentityVerificationError,
   type IdentityVerificationRefusalCode,
 } from "./identity-verification-error";
 import type { IdentityVerifier } from "./identity-verifier";
 import { ensureIdentityProjection, readIdentityProjection } from "./organization-accounts";
+
+// Transient failures are read once more before the failure is mapped and logged: a refusal that
+// says the authority could not be reached, and a database serialization failure, deadlock, admin
+// shutdown or connection exception (SQLSTATE 40001, 40P01, 57P01, class 08). Nothing else is
+// repeated. A read inside a request transaction (a failed statement leaves it aborted) and a read
+// bounded by an execution deadline (a passed deadline never recovers) is never repeated.
+const isTransientVerification = (error: unknown): boolean =>
+  error instanceof IdentityVerificationError &&
+  error.refusalCode === "vortex.identity.authority_unavailable";
+
+const isTransientRead = (error: unknown): boolean => {
+  const code = databaseErrorCode(
+    error instanceof Error && error.cause !== undefined ? error.cause : error,
+  );
+  return (
+    code === "40001" || code === "40P01" || code === "57P01" || code?.startsWith("08") === true
+  );
+};
 
 const closed = (result: IdentitySessionResolution): IdentitySessionResolution =>
   identitySessionResolutionSchema.parse(result);
@@ -95,14 +114,24 @@ export const createIdentitySessionService = (verifier: IdentityVerifier) => {
     | Readonly<{ ok: false; result: IdentitySessionResolution }>
   > => {
     if (accessToken.trim().length === 0) return { ok: false, result: closed({ kind: "missing" }) };
-    try {
-      verifier.checkpoint?.();
-      const identity = await verifier.verifyAccessToken(accessToken, transaction);
-      verifier.checkpoint?.();
-      return { ok: true, identity };
-    } catch (error) {
-      return { ok: false, result: verificationFailure(error) };
+    let failure: unknown;
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      try {
+        verifier.checkpoint?.();
+        const identity = await verifier.verifyAccessToken(accessToken, transaction);
+        verifier.checkpoint?.();
+        return { ok: true, identity };
+      } catch (error) {
+        failure = error;
+        if (
+          transaction !== undefined ||
+          verifier.checkpoint !== undefined ||
+          !isTransientVerification(error)
+        )
+          break;
+      }
     }
+    return { ok: false, result: verificationFailure(failure) };
   };
 
   const resolveVerified = async (
@@ -111,17 +140,27 @@ export const createIdentitySessionService = (verifier: IdentityVerifier) => {
   ): Promise<Readonly<{ resolution: IdentitySessionResolution; identity?: VerifiedIdentity }>> => {
     const verified = await verify(accessToken, transaction);
     if (!verified.ok) return { resolution: verified.result };
-    try {
-      verifier.checkpoint?.();
-      const projection = await readIdentityProjection(verified.identity, transaction);
-      verifier.checkpoint?.();
-      const resolution = activeResult(verified.identity, projection, clock);
-      return resolution.kind === "active"
-        ? { resolution, identity: verified.identity }
-        : { resolution };
-    } catch (error) {
-      return { resolution: projectionFailure(error) };
+    let failure: unknown;
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      try {
+        verifier.checkpoint?.();
+        const projection = await readIdentityProjection(verified.identity, transaction);
+        verifier.checkpoint?.();
+        const resolution = activeResult(verified.identity, projection, clock);
+        return resolution.kind === "active"
+          ? { resolution, identity: verified.identity }
+          : { resolution };
+      } catch (error) {
+        failure = error;
+        if (
+          transaction !== undefined ||
+          verifier.checkpoint !== undefined ||
+          !isTransientRead(error)
+        )
+          break;
+      }
     }
+    return { resolution: projectionFailure(failure) };
   };
 
   return Object.freeze({
