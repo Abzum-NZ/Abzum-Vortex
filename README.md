@@ -77,6 +77,8 @@ Supabase stack to be running. Never point it at a hosted database.
    pnpm dev
    ```
 
+   On a database lane, start the server with `node tooling/supabase/lane.mjs serve <n> .` instead (see `AGENTS.md`).
+
    Open `http://localhost:3000` (or the origin in `VORTEX_SITE_URL`) and sign in with
    `VORTEX_DEMO_OWNER_EMAIL` and `VORTEX_DEMO_OWNER_PASSWORD`. The Landing Zone lists the installed
    applications; further applications are built in App Studio and installed from the App Store.

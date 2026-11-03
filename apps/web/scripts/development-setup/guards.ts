@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { basename, join } from "node:path";
+import { join } from "node:path";
 import {
   builderKeySchema,
   identityAuthorityIdSchema,
@@ -8,7 +8,7 @@ import {
   type IdentityAuthorityId,
 } from "@vortex/platform/schema";
 import { createClient } from "@supabase/supabase-js";
-import { findRepositoryRoot } from "./state";
+import { findRepositoryRoot, laneOfWorkdir } from "./state";
 
 /**
  * Everything that decides whether the development setup may run at all, and for whom. The setup
@@ -181,11 +181,11 @@ export const requireLocalSupabaseBinding = (): void => {
   const root = findRepositoryRoot();
   const workdir = process.env.VORTEX_SUPABASE_WORKDIR;
   if (workdir) {
-    const lane = /^db(3|4|5|7|8)$/.exec(basename(workdir));
+    const lane = laneOfWorkdir(workdir);
     if (!lane) throw new DevelopmentSetupRefusal("The selected Supabase workdir is not a lane.");
     const lease = spawnSync(
       process.execPath,
-      [join(root, "tooling/supabase/lane.mjs"), "check", lane[1]!, root],
+      [join(root, "tooling/supabase/lane.mjs"), "check", String(lane.lane), root],
       {
         cwd: root,
         stdio: "inherit",
