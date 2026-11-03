@@ -122,11 +122,23 @@ export const regionRemovalCause = (
   if (region.shell !== undefined) return undefined;
   if (!pageContentRegion(region)) return "page_kind";
   const page = region.page;
-  return source.body.public_addresses.some((address) => address.page === page.id) ||
+  // A public address and an experience name their page by its key.
+  return source.body.public_addresses.some((address) => address.page === page.key) ||
     source.body.experiences?.some((experience) => experience.page === page.key)
     ? "public_page"
     : undefined;
 };
+
+/**
+ * Where a block may not be removed from, or undefined: the region's cause (`regionRemovalCause`),
+ * or a repeating slot (a block repeated by a setting). The one rule for the canvas's reasons, the
+ * canvas change that carries a removal (`applyPageDataChange`) and the Remove command.
+ */
+export const removalRule = (
+  regionCause: ReturnType<typeof regionRemovalCause>,
+  repeating: boolean,
+): "page_kind" | "public_page" | "repeating_slot" | undefined =>
+  regionCause ?? (repeating ? "repeating_slot" : undefined);
 
 /** Enumerate native regions; a caller cannot supply a JSON pointer or a guessed step id. */
 export const regions = (source: ApplicationSourceDocument): Region[] => {

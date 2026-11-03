@@ -1,12 +1,6 @@
 "use client";
 
-import {
-  ActionBar,
-  createUsePuck,
-  useGetPuck,
-  type Overrides,
-  type PuckApi,
-} from "@puckeditor/core";
+import { ActionBar, createUsePuck, useGetPuck, type Overrides } from "@puckeditor/core";
 import { StudioOutlineRegion } from "./studio-puck-outline";
 import { Copy } from "lucide-react";
 import {
@@ -86,18 +80,6 @@ function BarAction({ label, reason, onAct, tooltip, stop, onStop, children }: Ba
   );
 }
 
-/** Whether Puck allows an action on a block now; a block that is not on the canvas allows it. */
-const puckAllows = (
-  state: Pick<PuckApi, "getPermissions" | "getSelectorForId" | "getItemById">,
-  id: string,
-  action: "duplicate" | "delete" | "drag",
-): boolean => {
-  // `getSelectorForId` answers undefined exactly when the block is not indexed (`getItemById`
-  // throws then), the lookup the provider's refresh uses too.
-  const item = state.getSelectorForId(id) === undefined ? undefined : state.getItemById(id);
-  return item === undefined ? true : state.getPermissions({ item })[action];
-};
-
 /**
  * The selected block's action bar, drawn in shadcn on the block itself. It is the content of
  * Puck's `componentOverlay` for the selected block, so it is given the block's own id and knows it
@@ -142,11 +124,9 @@ function StudioActionBar({ id, type }: Readonly<{ id: string; type: string }>) {
     };
   }, [view.well]);
   const puck = getPuck();
-  // Puck sets a block's permissions a moment after the reasons change; the bar draws again when they do.
-  const canDuplicate = usePuckSelector((state) => puckAllows(state, id, "duplicate"));
-  const canDelete = usePuckSelector((state) => puckAllows(state, id, "delete"));
-  const canDrag = usePuckSelector((state) => puckAllows(state, id, "drag"));
-  const permissions = { duplicate: canDuplicate, delete: canDelete, drag: canDrag };
+  // The global permissions (read-only, the canvas off, a full application); a block's own reasons
+  // are the references.
+  const permissions = usePuckSelector((state) => state.getPermissions());
   const parent = puck.getParentById(id);
   // The name the outline and the inspector use: the block's own item ("Button: Open").
   const name =
@@ -180,27 +160,6 @@ function StudioActionBar({ id, type }: Readonly<{ id: string; type: string }>) {
   const deleteReason = reasonFor(deleteNamed, permissions.delete);
   const moveNamed = studioCanvasPermissionReason(references, id, "drag");
   const moveReason = reasonFor(moveNamed, permissions.drag);
-  // A denial that neither the draft nor a cause above explains is a defect to find and word, so it
-  // is logged, once per block.
-  const unexplained =
-    knownCause === undefined &&
-    ((!permissions.duplicate && duplicateNamed === undefined) ||
-      (!permissions.delete && deleteNamed === undefined) ||
-      (!permissions.drag && moveNamed === undefined));
-  // Puck sets a block's permissions again a moment after the draft's reasons change (a reason that
-  // has just cleared), so a denial counts as unexplained only when it outlasts that moment.
-  useEffect(() => {
-    if (!unexplained) return;
-    const timer = setTimeout(() => {
-      console.error("[studio] an action is unavailable for no known reason", {
-        id,
-        duplicate: canDuplicate,
-        delete: canDelete,
-        drag: canDrag,
-      });
-    }, 1000);
-    return () => clearTimeout(timer);
-  }, [unexplained, id, canDuplicate, canDelete, canDrag]);
   const inverse = view.scale > 0 ? 1 / view.scale : 1;
   const visible = studioCanvasVisible(view);
   // A tooltip stays inside what the well shows, and is the size of the bar on screen.

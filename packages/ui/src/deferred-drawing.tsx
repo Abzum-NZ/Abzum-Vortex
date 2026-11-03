@@ -18,6 +18,10 @@ import {
 export type DeferredDrawing = Readonly<{
   near: (element: Element) => boolean;
   subscribe: (listener: () => void) => () => void;
+  /** Called before slots are drawn: notes what the person is looking at. */
+  anchor: () => void;
+  /** Called once they are drawn: the view is moved so that what was noted has not moved. */
+  settle: () => void;
 }>;
 
 const DeferredDrawingContext = createContext<DeferredDrawing | null>(null);
@@ -44,12 +48,18 @@ export function DeferredSlot({
   useLayoutEffect(() => {
     if (forced) setPlaced(true);
   }, [forced]);
+  // Drawn above what the person is looking at: the content they look at keeps its place.
+  useLayoutEffect(() => {
+    if (drawn) deferral?.settle();
+  }, [drawn, deferral]);
   // Before the first paint: a slot that is near is never seen waiting (no jump of the page below).
   useLayoutEffect(() => {
     if (drawn || deferral === null) return;
     const check = () => {
       const element = waiting.current;
-      if (element !== null && deferral.near(element)) setPlaced(true);
+      if (element === null || !deferral.near(element)) return;
+      deferral.anchor();
+      setPlaced(true);
     };
     check();
     return deferral.subscribe(check);

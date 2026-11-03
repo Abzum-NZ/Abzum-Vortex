@@ -201,7 +201,9 @@ export type StudioCanvasContextValue = Readonly<{
   /** Why the last canvas change was refused; empty while the draft shows as it was edited. */
   refusal: string;
   /** The document of the canvas's iframe, which Puck's `iframe` override hands to Studio's own. */
-  frameDocument: RefObject<Document | null>;
+  frameDocument: Document | null;
+  /** Set by the iframe override once the canvas document exists. */
+  setFrameDocument: (document: Document | null) => void;
 }>;
 
 const StudioCanvasContext = createContext<StudioCanvasContextValue | null>(null);
@@ -222,12 +224,19 @@ export const useStudioCanvasDragging = (): boolean =>
 /** The Puck iframe the canvas draws the page in; its styles come from the host. */
 const IFRAME = { enabled: true, waitForStyles: true, syncHostStyles: true } as const;
 
-/** Whether a document has an animation with an end that is still running. */
+/**
+ * Whether a document has a script animation (`element.animate`, which is what a drop uses) with an
+ * end that is still running. CSS animations and transitions (a toast, a tooltip, a hover) are not
+ * waited for; they are told apart by their own properties, as the frame document's animations come
+ * from another realm.
+ */
 const animating = (target: Document | null): boolean =>
   target
     ?.getAnimations()
     .some(
       (animation) =>
+        !("animationName" in animation) &&
+        !("transitionProperty" in animation) &&
         animation.playState === "running" &&
         animation.effect?.getComputedTiming().endTime !== Number.POSITIVE_INFINITY,
     ) === true;
@@ -287,7 +296,11 @@ function useStylesheetApplied(): boolean {
  *   at one entry because Puck records its own drags and deletes a moment after they happen.
  * - Puck draws each drawer row twice, a visual copy under the draggable one, and puts its keyboard
  *   attributes on the draggable row: `StudioDrawerItem` hides the copy that mounts first.
- * - A drop animates with the Web Animations API: the page waits for finite animations to end.
+ * - A drop animates with the Web Animations API: the page waits for script animations to end.
+ * - Puck's Outline draws Copy and Trash on every row and has no override for them (`LayerActions`
+ *   follow Puck's per-item permissions, which Studio no longer resolves): a Trash is answered by
+ *   `onAction` (the block's own reason first, else "select it first"), a Copy by the canvas change.
+ *   The Outline also names a root slot by its raw key (accepted).
  * - Puck's `iframe` element is reached through the document its override receives
  *   (`frameElement`) to take it out of the Tab path while blocks are edited.
  * - Puck keeps a 16px drag handle at a selected block's top right corner: the action bar ends
@@ -331,7 +344,7 @@ export function StudioPuckProvider({
   const config = model.config;
   const referencesRef = useRef(references);
   referencesRef.current = references;
-  const frameDocument = useRef<Document | null>(null);
+  const [frameDocument, setFrameDocument] = useState<Document | null>(null);
   const [refused, setRefused] = useState<Readonly<{ area: string; message: string }> | null>(null);
   const [resync, setResync] = useState(0);
   // Puck's callbacks run while Studio shows its own data or selection: they must not echo back.
@@ -429,25 +442,23 @@ export function StudioPuckProvider({
         index: action.index,
         zone: action.zone,
       });
-      if (removed !== null && removed !== now.selectedPlacementAlias) {
+      // Puck's Delete key and the Outline's Trash act on any block; the reason a block cannot be
+      // removed is Studio's and is said first, whichever block Puck was pointed at.
+      const unremovable = removed === null ? undefined : referencesRef.current[removed]?.delete;
+      const notSelected = removed !== null && removed !== now.selectedPlacementAlias;
+      if (removed !== null && (unremovable !== undefined || notSelected)) {
         console.info(
-          `[studio] refused a removal of '${removed}': the selected block is '${String(now.selectedPlacementAlias)}'`,
+          unremovable !== undefined
+            ? `[studio] refused a removal of '${removed}': ${unremovable}`
+            : `[studio] refused a removal of '${removed}': the selected block is '${String(now.selectedPlacementAlias)}'`,
         );
         refusedRemoval.current = removed;
         setResync((generation) => generation + 1);
         setRefused({
           area: shown.area,
-          message: "That block was not deleted: the selection changed. Select it and try again.",
+          message:
+            unremovable ?? "That block was not deleted. Select the block first, then delete it.",
         });
-        return;
-      }
-      // Puck's Delete key acts on any block; the reason a block cannot be removed is Studio's.
-      const unremovable = removed === null ? undefined : referencesRef.current[removed]?.delete;
-      if (removed !== null && unremovable !== undefined) {
-        console.info(`[studio] refused a removal of '${removed}': ${unremovable}`);
-        refusedRemoval.current = removed;
-        setResync((generation) => generation + 1);
-        setRefused({ area: shown.area, message: unremovable });
         return;
       }
       removing.current =
@@ -559,8 +570,8 @@ export function StudioPuckProvider({
   const initial = opened.current.data;
   const refusal = refused?.area === model.area ? refused.message : "";
   const value = useMemo(
-    (): StudioCanvasContextValue => ({ input, model, refusal, frameDocument }),
-    [input, model, refusal],
+    (): StudioCanvasContextValue => ({ input, model, refusal, frameDocument, setFrameDocument }),
+    [input, model, refusal, frameDocument],
   );
   if (!stylesheetApplied) return null;
   return (
@@ -674,7 +685,7 @@ function StudioPuckSync({
 }: Readonly<{
   /** The config the page on the canvas is drawn with. */
   config: Config;
-  frameDocument: RefObject<Document | null>;
+  frameDocument: Document | null;
   data: Data;
   /** The page and step on the canvas. */
   area: string;
@@ -708,6 +719,8 @@ function StudioPuckSync({
   // The config Puck's data was last walked under; Puck walked its first data under `held`.
   const walked = useRef(held);
   const latestData = useRef(data);
+  const frameRef = useRef(frameDocument);
+  frameRef.current = frameDocument;
   latestData.current = data;
   // Studio's draft history is the one undo. Puck records its own drags and deletes and answers
   // Ctrl+Z / Ctrl+Y with its older states, which Studio would then take as new edits, so Puck's
@@ -836,30 +849,71 @@ function StudioPuckSync({
     if (pending === null) return;
     let frames = 0;
     let frame = 0;
+    let ran = false;
     // The drop's own animation runs in the page it lands in (the canvas's document, or this one for
-    // a block dropped from the drawer): the page is left alone while a finite animation of either
+    // a block dropped from the drawer): the page is left alone while a script animation of either
     // document is still running (the Web Animations API, not Puck's markup), for at most 90 frames.
     const settle = () => {
-      if ((animating(document) || animating(frameDocument.current)) && frames++ < 90)
+      if ((animating(document) || animating(frameRef.current)) && frames++ < 90)
         frame = requestAnimationFrame(settle);
-      else pending();
+      else {
+        ran = true;
+        pending();
+      }
     };
     frame = requestAnimationFrame(settle);
-    return () => cancelAnimationFrame(frame);
+    return () => {
+      cancelAnimationFrame(frame);
+      // Another drag began before the request ran: it waits for that drag too.
+      if (!ran) dragGate.current.pending ??= pending;
+    };
   }, [dragging, dragGate]);
 
   // The outline or the inspector selected something, or the canvas came into or left view.
   useEffect(() => {
     select(wanted);
     // Chosen outside the canvas (the outline, the inspector): bring the block into the frame's view.
-    // The block is found by Studio's own attribute on its wrapper (`PlacementBlock`).
-    if (wanted !== null)
-      requestAnimationFrame(() =>
-        frameDocument.current
-          ?.querySelector(`[data-vortex-placement-id="${CSS.escape(wanted)}"]`)
-          ?.scrollIntoView({ block: "nearest" }),
+    // The block is found by Studio's own attribute on its wrapper (`PlacementBlock`). The canvas
+    // document may not exist yet (a block chosen by address at open) and the slots that hold the
+    // block are drawn a frame or two later, so the block is looked for until it is there.
+    if (wanted === null || frameDocument === null) return;
+    let frame = 0;
+    let tries = 0;
+    let observer: ResizeObserver | undefined;
+    let timer = 0;
+    const interactions = ["wheel", "pointerdown", "keydown", "touchstart"] as const;
+    const stop = () => {
+      observer?.disconnect();
+      clearTimeout(timer);
+      for (const name of interactions) frameDocument.removeEventListener(name, stop);
+    };
+    const scroll = () => {
+      const block = frameDocument.querySelector(
+        `[data-vortex-placement-id="${CSS.escape(wanted)}"]`,
       );
-  }, [wanted, select]);
+      if (block === null) {
+        if (tries++ < 600) frame = requestAnimationFrame(scroll);
+        return;
+      }
+      block.scrollIntoView({ block: "nearest" });
+      // The slots around the block are drawn after the scroll (their heights were estimates): the
+      // block is kept in view until the page stops changing size, or the person scrolls.
+      timer = window.setTimeout(stop, 8000);
+      observer = new ResizeObserver(() => {
+        block.scrollIntoView({ block: "nearest" });
+        clearTimeout(timer);
+        timer = window.setTimeout(stop, 4000);
+      });
+      observer.observe(frameDocument.body);
+      for (const name of interactions)
+        frameDocument.addEventListener(name, stop, { passive: true });
+    };
+    frame = requestAnimationFrame(scroll);
+    return () => {
+      cancelAnimationFrame(frame);
+      stop();
+    };
+  }, [wanted, select, frameDocument]);
 
   return null;
 }

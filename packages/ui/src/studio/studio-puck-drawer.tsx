@@ -63,6 +63,8 @@ type DrawerContextValue = Readonly<{
   limitReason: string | undefined;
   limitId: string;
   add: (choice: StudioPaletteChoice) => void;
+  /** The blocks Puck does not let be dropped, read once for the list. */
+  notDroppable: ReadonlySet<string>;
 }>;
 
 const DrawerContext = createContext<DrawerContextValue | null>(null);
@@ -126,8 +128,8 @@ export function StudioDrawerItem({
 }: Readonly<{ children: ReactNode; name: string }>) {
   const drawer = useContext(DrawerContext);
   const underlay = useDrawerRow(name);
-  const draggable = usePuckSelector((state) => state.getPermissions({ type: name }).insert);
   const choice = drawer?.choices.get(name);
+  const draggable = drawer?.notDroppable.has(name) === false;
   if (drawer === null || choice === undefined) return <>{children}</>;
   const reason = drawer.blocked ?? choice.unavailable;
   const addButton = (
@@ -222,9 +224,9 @@ const blockedReason = (
 
 /** One block of the list: Puck's draggable `Drawer.Item`, drawn by `StudioDrawerItem`. */
 function StudioBlockRow({ name }: Readonly<{ name: string }>) {
-  const canInsert = usePuckSelector((state) => state.getPermissions({ type: name }).insert);
+  const drawer = useContext(DrawerContext);
   return (
-    <Drawer.Item name={name} isDragDisabled={!canInsert}>
+    <Drawer.Item name={name} isDragDisabled={drawer?.notDroppable.has(name) === true}>
       {StudioDrawerItem}
     </Drawer.Item>
   );
@@ -391,10 +393,20 @@ function StudioBlocksDrawer({
         : definitionLimitReached("compositionDepth", target.depth)
           ? definitionLimitMessage("compositionDepth")
           : undefined;
+  // Whether a block may be dropped is read once for every block of the list, not once per row.
+  const blockedKey = usePuckSelector((state) =>
+    [...choices.keys()].filter((name) => !state.getPermissions({ type: name }).insert).join(","),
+  );
+  const notDroppable = useMemo(
+    (): ReadonlySet<string> => new Set(blockedKey === "" ? [] : blockedKey.split(",")),
+    [blockedKey],
+  );
   const context = useMemo(
     (): DrawerContextValue | null =>
-      target === undefined ? null : { target, choices, blocked, limitReason, limitId, add },
-    [target, choices, blocked, limitReason, limitId, add],
+      target === undefined
+        ? null
+        : { target, choices, blocked, limitReason, limitId, add, notDroppable },
+    [target, choices, blocked, limitReason, limitId, add, notDroppable],
   );
   if (target === undefined || context === null)
     return (

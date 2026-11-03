@@ -30,7 +30,11 @@ import {
   studioPlacementRemovalReference,
 } from "./composition-references";
 import { pageDataJson } from "./studio-canvas-data";
-import { studioDuplicateRefusal, studioPlacementReferrers } from "./studio-canvas-permissions";
+import {
+  studioDuplicateRefusal,
+  studioPlacementReferrers,
+  studioRemovalRuleRefusal,
+} from "./studio-canvas-permissions";
 
 /** What a change Puck reported on the canvas comes to in the definition. */
 export type StudioCanvasChange =
@@ -108,6 +112,9 @@ export const applyPageDataChange = (
     const kept = dataAliases(edited);
     const removed = new Set([...dataAliases(targetData)].filter((alias) => !kept.has(alias)));
     for (const alias of removed) {
+      // Where a block may not leave from, whichever draft the canvas's reasons were read from.
+      const rule = studioRemovalRuleRefusal(catalogue, current, alias);
+      if (rule !== undefined) return { kind: "refused", message: rule };
       const users = studioPlacementReferrers(current, alias, removed);
       if (users.length > 0)
         return {

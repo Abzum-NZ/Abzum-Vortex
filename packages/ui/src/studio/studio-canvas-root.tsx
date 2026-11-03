@@ -329,13 +329,11 @@ export function StudioCanvasIframe({
   const previewMode = usePuckSelector((state) => state.appState.ui.previewMode);
   // The provider reaches the canvas's document (the drop animation, the scroll to a chosen block)
   // through this override, which Puck hands the document.
-  const { frameDocument: held } = useStudioCanvas();
+  const { setFrameDocument } = useStudioCanvas();
   useEffect(() => {
-    held.current = frameDocument ?? null;
-    return () => {
-      held.current = null;
-    };
-  }, [held, frameDocument]);
+    setFrameDocument(frameDocument ?? null);
+    return () => setFrameDocument(null);
+  }, [setFrameDocument, frameDocument]);
   // While blocks are edited the canvas is a picture of the page, outside Studio's Tab path (blocks
   // are chosen in the Outline); while grids are arranged its column controls need the keyboard.
   useEffect(() => {
@@ -415,12 +413,22 @@ export function StudioCanvasIframe({
   // well's and the page's own scrolls tell the slots that wait, once per frame.
   const viewRef = useRef(view);
   viewRef.current = view;
+  const interactive = previewMode === "interactive";
+  const interactiveRef = useRef(interactive);
+  interactiveRef.current = interactive;
+  const documentRef = useRef(frameDocument);
+  documentRef.current = frameDocument;
   const waiting = useRef(new Set<() => void>());
+  // The block at the top of the view before slots above it are drawn: the well is scrolled by how
+  // far it moved, so what the person is looking at stays where it is.
+  const anchored = useRef<{ element: Element; top: number } | null>(null);
   const deferral = useMemo(
     (): DeferredDrawing => ({
       near: (element) => {
         const visible = studioCanvasVisible(viewRef.current);
         const box = element.getBoundingClientRect();
+        // While grids are arranged their column controls need the keyboard: every slot is drawn.
+        if (interactiveRef.current) return true;
         // Until the well has laid the frame out, the first screens are what is near.
         if (visible === undefined) return box.top < DRAW_AHEAD * 2;
         return box.bottom >= visible.top - DRAW_AHEAD && box.top <= visible.bottom + DRAW_AHEAD;
@@ -428,6 +436,26 @@ export function StudioCanvasIframe({
       subscribe: (listener) => {
         waiting.current.add(listener);
         return () => waiting.current.delete(listener);
+      },
+      anchor: () => {
+        const target = documentRef.current;
+        const visible = studioCanvasVisible(viewRef.current);
+        if (anchored.current !== null || target === undefined || visible === undefined) return;
+        const element = target.elementFromPoint(
+          target.documentElement.clientWidth / 2,
+          Math.max(0, visible.top + 4),
+        );
+        if (element !== null)
+          anchored.current = { element, top: element.getBoundingClientRect().top };
+      },
+      settle: () => {
+        const was = anchored.current;
+        anchored.current = null;
+        // The canvas scrolls in its own document (Puck's frame has the well's height).
+        const scroller = documentRef.current?.scrollingElement;
+        if (was === null || scroller == null || !was.element.isConnected) return;
+        const moved = was.element.getBoundingClientRect().top - was.top;
+        if (moved !== 0) scroller.scrollTop += moved;
       },
     }),
     [],
@@ -443,14 +471,20 @@ export function StudioCanvasIframe({
     };
     well?.addEventListener("scroll", tell, { passive: true });
     frameDocument?.addEventListener("scroll", tell, { passive: true });
+    // The page or the well changes size with no scroll (a block removed or restored, another screen
+    // size, a slot drawn shorter than its placeholder): slots are looked at again.
+    const resize = new ResizeObserver(tell);
+    if (well !== null) resize.observe(well);
+    if (frameDocument !== undefined) resize.observe(frameDocument.body);
     // The frame is laid out or scaled after the first draw: slots are looked at again.
     tell();
     return () => {
       cancelAnimationFrame(frame);
       well?.removeEventListener("scroll", tell);
       frameDocument?.removeEventListener("scroll", tell);
+      resize.disconnect();
     };
-  }, [view.well, view.scale, frameDocument]);
+  }, [view.well, view.scale, frameDocument, interactive]);
   return (
     <DeferredDrawingProvider value={deferral}>
       <div

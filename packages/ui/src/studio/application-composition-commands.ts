@@ -96,6 +96,7 @@ import {
   plainSettings,
   movableRegion,
   regionRemovalCause,
+  removalRule,
 } from "./application-composition-regions";
 import { applyAdd, commandSettings } from "./application-composition-add";
 import { applyWrap } from "./application-composition-wrap";
@@ -553,7 +554,8 @@ const resolveRemoval = (
     const child = parent === undefined ? undefined : itemSlots(catalogue, parent).get(step.slotKey);
     if (declaration === undefined || child === undefined)
       return { kind: "unsupported", reason: "manifest_mismatch" };
-    if (declaration.repeats !== undefined) return { kind: "unsupported", reason: "repeating_slot" };
+    const rule = removalRule(undefined, declaration.repeats !== undefined);
+    if (rule !== undefined) return { kind: "unsupported", reason: rule };
     if (child.items === target.zone.items && declaration.required && child.items.length === 1)
       return { kind: "blocked", reason: "required_slot" };
     zone = child;
