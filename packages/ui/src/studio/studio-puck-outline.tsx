@@ -55,6 +55,17 @@ export function StudioOutlineRegion({ children }: Readonly<{ children: ReactNode
       return;
     }
     const first = index < 0 ? 0 : index;
+    if (index < 0) {
+      // The region itself has the focus: the arrows enter the rows at the near end.
+      const entered =
+        event.key === "ArrowDown" || event.key === "Home"
+          ? moveFocus(rows, 0)
+          : event.key === "ArrowUp" || event.key === "End"
+            ? moveFocus(rows, rows.length - 1)
+            : false;
+      if (entered) event.preventDefault();
+      return;
+    }
     if (event.key === "ArrowDown" && moveFocus(rows, first + 1)) event.preventDefault();
     else if (event.key === "ArrowUp" && moveFocus(rows, first - 1)) event.preventDefault();
     else if (event.key === "Home" && moveFocus(rows, 0)) event.preventDefault();

@@ -3,7 +3,13 @@ import { useState, type ReactNode } from "react";
 import type { StudioSemanticOutline, StudioSemanticOutlineNode } from "@vortex/ui/studio";
 import { StudioPuckOutline } from "@vortex/ui/studio";
 import { useStudioCanvas } from "@vortex/ui/studio/puck-provider";
-import { StudioPanelShell, StudioSearchBox, StudioSection } from "./studio-frame";
+import { cn } from "@vortex/ui/lib/utils";
+import {
+  STUDIO_RAIL_BODY_CLASS,
+  StudioPanelShell,
+  StudioSearchBox,
+  StudioSection,
+} from "./studio-frame";
 import { StudioOutline } from "./studio-outline";
 import { StudioLimitRow } from "./studio-limit";
 
@@ -145,20 +151,22 @@ export function StudioOutlinePanel({
 }>) {
   const canvas = useStudioCanvas();
   return (
-    <StudioPanelShell title="Outline" hidden={hidden}>
-      <StudioPuckOutline open={pageOpen} areaEmpty={canvas.model.slot?.items.length === 0} />
-      {pageOpen && (
-        <section className="space-y-1 px-1 pt-2" aria-label="Application limits">
-          <StudioLimitRow
-            label="Blocks in the application"
-            limit="compositionPlacements"
-            used={countBlocks(outline.children)}
-          />
-          {levels === undefined ? null : (
-            <StudioLimitRow label="Levels on this page" limit="compositionDepth" used={levels} />
-          )}
-        </section>
-      )}
-    </StudioPanelShell>
+    <div hidden={hidden} className={cn("min-h-0 flex-1 flex-col", hidden ? "hidden" : "flex")}>
+      <div className={STUDIO_RAIL_BODY_CLASS} data-studio-rail-body="">
+        <StudioPuckOutline open={pageOpen} areaEmpty={canvas.model.slot?.items.length === 0} />
+        {pageOpen && (
+          <section className="space-y-1" aria-label="Application limits">
+            <StudioLimitRow
+              label="Blocks in the application"
+              limit="compositionPlacements"
+              used={countBlocks(outline.children)}
+            />
+            {levels === undefined ? null : (
+              <StudioLimitRow label="Levels on this page" limit="compositionDepth" used={levels} />
+            )}
+          </section>
+        )}
+      </div>
+    </div>
   );
 }
