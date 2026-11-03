@@ -6,6 +6,7 @@ import {
   StudioDialog,
   StudioField,
   StudioReferencePicker,
+  studioActionBarMore,
   describeStudioCompositionDestinations,
   describeStudioCompositionWrap,
   type StudioCompositionCommand,
@@ -89,6 +90,9 @@ export function StudioBlockDialogs(props: Props) {
     setProblem("");
     onClose();
   };
+  // The block that was acted on takes the focus back: its More button in the action bar.
+  const returnFocus = () =>
+    selection.kind === "placement" ? studioActionBarMore(selection.placementAlias) : null;
   const destinations = move?.kind === "available" ? move.destinations : [];
 
   const moveTo = (key: string) => {
@@ -160,6 +164,7 @@ export function StudioBlockDialogs(props: Props) {
         title="Move to another area"
         description={`Moves ${name}, with what is inside it, to the end of the area you choose in this page or layout. Required content and nesting limits are checked first.`}
         closeLabel="Cancel"
+        finalFocus={returnFocus}
       >
         <StudioField label="Destination">
           {(control) => (
@@ -204,6 +209,7 @@ export function StudioBlockDialogs(props: Props) {
         title="Wrap in container"
         description={`Puts ${name} into a new container that takes its place. The block keeps its name, settings and order. Containers that cannot hold it say why.`}
         closeLabel="Cancel"
+        finalFocus={returnFocus}
       >
         {wrap?.kind === "available" && wrap.containers.length > 0 && (
           <StudioField label="Container">
@@ -236,6 +242,7 @@ export function StudioBlockDialogs(props: Props) {
         }}
         title={`Where ${name} is used`}
         closeLabel="Close"
+        finalFocus={returnFocus}
       >
         {places.length === 0 ? (
           <p role="status" className="text-sm text-muted-foreground">

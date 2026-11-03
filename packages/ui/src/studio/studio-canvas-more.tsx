@@ -1,7 +1,7 @@
 "use client";
 
 import { MoreHorizontal } from "lucide-react";
-import { useMemo, type ReactNode } from "react";
+import { useMemo, useRef, type ReactNode } from "react";
 import { Button } from "../components/button";
 import {
   DropdownMenu,
@@ -44,6 +44,8 @@ function MoreEntry({
     <DropdownMenuItem
       disabled={reason !== undefined}
       variant={destructive === true ? "destructive" : "default"}
+      // Studio chrome is in sentence case; the canvas frame is outside the Studio surface the shared rule reads, and the application style capitalises menu items.
+      className="tracking-normal! normal-case!"
       onClick={onChoose}
     >
       <span className="flex min-w-0 flex-col items-start">
@@ -93,8 +95,18 @@ export function StudioCanvasMore({
   onStop,
   onChoose,
 }: MoreProps) {
+  const chosen = useRef<StudioMoreChoice | null>(null);
   return (
-    <DropdownMenu>
+    <DropdownMenu
+      // The choice acts once the menu has closed and given the focus back to its button: a dialog
+      // opened earlier would lose the focus to that return, which crosses into the canvas frame.
+      onOpenChangeComplete={(open) => {
+        const choice = chosen.current;
+        if (open || choice === null) return;
+        chosen.current = null;
+        onChoose(choice);
+      }}
+    >
       <Tooltip>
         <TooltipTrigger
           render={
@@ -116,8 +128,17 @@ export function StudioCanvasMore({
         </TooltipTrigger>
         <TooltipContent {...tooltip}>More actions</TooltipContent>
       </Tooltip>
-      <DropdownMenuContent align="end" className="min-w-44">
-        <MoreEntries id={id} actions={actions} reasons={reasons} onChoose={onChoose} />
+      <DropdownMenuContent
+        align="end"
+        className="min-w-44"
+        style={{ ...tooltip.style, transformOrigin: "top right" }}
+      >
+        <MoreEntries
+          id={id}
+          actions={actions}
+          reasons={reasons}
+          onChoose={(choice) => (chosen.current = choice)}
+        />
       </DropdownMenuContent>
     </DropdownMenu>
   );
