@@ -5746,6 +5746,22 @@
     padding-left: var(--vs-e0b04b83, calc(var(--spacing, 0.25rem) * 2));
   }
 }
+.cn-button-group {
+  border-radius: var(--radius);
+  & > :not(:first-child) {
+    border-top-left-radius: 0;
+    border-bottom-left-radius: 0;
+  }
+  & > :not(:last-child) {
+    border-top-right-radius: 0;
+    border-bottom-right-radius: 0;
+  }
+}
+.cn-button-group-text {
+  padding-inline: calc(var(--spacing, 0.25rem) * 2.5);
+  font-size: 0.875rem;
+  font-weight: 500;
+}
 .cn-toggle-group {
   border-radius: var(--vs-8db7bb5b, var(--radius));
   &[data-size="sm"] {

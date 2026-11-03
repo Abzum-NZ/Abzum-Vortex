@@ -35,7 +35,9 @@ export const fillPreviewAfterRead = (
       .then((response) => {
         if (!response.ok) throw new Error(`STUDIO_PREVIEW_FILL_HTTP_${response.status}`);
         const kind = isRecord(response.body) ? response.body.kind : undefined;
-        if (kind !== "ready") console.warn("[studio] idle preview fill ended", { kind });
+        // A newer draft revision superseding the fill is an expected race; anything else is not.
+        if (kind === "conflict") console.info("[studio] idle preview fill ended", { kind });
+        else if (kind !== "ready") console.warn("[studio] idle preview fill ended", { kind });
       })
       .catch((error: unknown) => {
         if (!started.controller.signal.aborted)

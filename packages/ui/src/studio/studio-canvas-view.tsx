@@ -1,7 +1,7 @@
 "use client";
 
 import { Puck } from "@puckeditor/core";
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Alert, AlertDescription, AlertTitle } from "../components/alert";
 import { Badge } from "../components/badge";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../components/tooltip";
@@ -12,7 +12,7 @@ import { Label } from "../components/label";
 import { Icon } from "../icons";
 import { studioPageAreaLabel } from "./application-page-layout";
 import type { StudioCompileFailure } from "./compile-failure";
-import { StudioCanvasScaleProvider } from "./studio-canvas-scale";
+import { StudioCanvasViewProvider } from "./studio-canvas-scale";
 import { useStudioScreen } from "./studio-canvas-screen";
 import { StudioReferencePicker } from "./studio-reference-picker";
 import { useStudioCanvas } from "./studio-puck-provider";
@@ -32,8 +32,9 @@ function CanvasEmpty({ title, description }: Readonly<{ title: string; descripti
 }
 
 /**
- * The page canvas: the content area picker, the notices and the
- * workspace's Puck preview (the selected block's actions are Puck's action bar on the block), drawn as a device screen scaled inside its well. It unmounts with the
+ * The page canvas: the content area picker, the notices and the workspace's Puck preview, drawn as
+ * a device screen scaled inside its well. The selected block's actions are drawn on the block. It
+ * unmounts with the
  * rail tabs that do not show a canvas.
  */
 export function StudioCanvasView({
@@ -81,6 +82,7 @@ export function StudioCanvasView({
     observer.observe(well);
     return () => observer.disconnect();
   }, [well, width, onFitZoom]);
+  const canvasView = useMemo(() => ({ scale, well }), [scale, well]);
 
   if (at === undefined || page === undefined)
     return (
@@ -201,9 +203,9 @@ export function StudioCanvasView({
                 visibility: available.width === 0 ? "hidden" : "visible",
               }}
             >
-              <StudioCanvasScaleProvider value={scale}>
+              <StudioCanvasViewProvider value={canvasView}>
                 <Puck.Preview id="vortex-studio-canvas" />
-              </StudioCanvasScaleProvider>
+              </StudioCanvasViewProvider>
             </div>
           </div>
         </div>

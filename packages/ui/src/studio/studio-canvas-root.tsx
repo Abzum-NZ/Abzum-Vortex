@@ -2,15 +2,27 @@
 
 import { createUsePuck, type PuckContext } from "@puckeditor/core";
 import { compiledItemSettings } from "@vortex/platform/schema";
-import { useEffect, useMemo, type CSSProperties, type ReactNode, type SyntheticEvent } from "react";
+import {
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useState,
+  type CSSProperties,
+  type ReactNode,
+  type SyntheticEvent,
+} from "react";
 import { isElement, isHtmlElement } from "../lib/dom";
 import { PagePuckRenderer } from "../page-puck-renderer";
-import { RootSlotGapProvider, SelectedPlacementProvider } from "../puck-config";
+import {
+  createSelectedPlacementStore,
+  RootSlotGapProvider,
+  SelectedPlacementProvider,
+} from "../puck-config";
 import type { SlotGapName } from "../layout-styles";
 import type { FieldInputControlReleaseMap, PlatformComponentRegistry } from "../registry";
 import { createAppearanceRootProps, createThemeRootProps, VortexStyleRoot } from "../theme";
 import { studioCanvasMetadata } from "./studio-canvas-metadata";
-import { useStudioCanvasScale } from "./studio-canvas-scale";
+import { useStudioCanvasView } from "./studio-canvas-scale";
 import { useStudioScreen } from "./studio-canvas-screen";
 import { studioPuckIframeCss } from "./studio-puck-style";
 
@@ -18,10 +30,16 @@ const resolvePageHref = () => "#";
 
 const usePuckSelector = createUsePuck();
 
-/** Tells the page which block is selected, without drawing the page again for anything else. */
+/**
+ * Tells the page which block is selected. The selection travels through a store that each block
+ * reads for itself, so a new selection draws only the block that lost it and the block that
+ * gained it again, not the page.
+ */
 function SelectedBlock({ children }: Readonly<{ children: ReactNode }>) {
+  const [store] = useState(createSelectedPlacementStore);
   const selected = usePuckSelector((state) => state.selectedItem?.props.id);
-  return <SelectedPlacementProvider placementId={selected}>{children}</SelectedPlacementProvider>;
+  useLayoutEffect(() => store.set(selected), [store, selected]);
+  return <SelectedPlacementProvider store={store}>{children}</SelectedPlacementProvider>;
 }
 
 /**
@@ -192,7 +210,7 @@ export function StudioCanvasIframe({
     if (isElement(event.target) && event.target.closest("a[href]") !== null) event.preventDefault();
   };
   // What the canvas draws for the person (empty-slot labels) counter-scales by the zoom, in CSS.
-  const scale = useStudioCanvasScale();
+  const { scale } = useStudioCanvasView();
   return (
     <div
       className="min-h-full"

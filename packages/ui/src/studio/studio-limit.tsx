@@ -1,5 +1,5 @@
 "use client";
-import { cloneElement, useId, type CSSProperties, type ReactElement, type ReactNode } from "react";
+import { cloneElement, useId, type ComponentProps, type ReactElement, type ReactNode } from "react";
 import {
   definitionLimitMessage,
   definitionLimitReached,
@@ -13,6 +13,12 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "../components/tooltip";
 /** The reason a control is unavailable at its limit, or nothing while the limit is not reached. */
 export const studioLimitReason = (limit: CountedLimit, used: number): string | undefined =>
   definitionLimitReached(limit, used) ? definitionLimitMessage(limit) : undefined;
+
+/** What a reasoned control may set on its tooltip. */
+export type ReasonedTooltipProps = Pick<
+  ComponentProps<typeof TooltipContent>,
+  "style" | "collisionBoundary" | "collisionPadding"
+>;
 
 type ReasonedProps = Readonly<{
   "aria-disabled"?: true;
@@ -31,14 +37,14 @@ type ReasonedProps = Readonly<{
 export function StudioReasoned({
   reason,
   describedBy,
-  contentStyle,
+  contentProps,
   children,
 }: Readonly<{
   reason: string | undefined;
   /** The id of an element on the page that already says the reason (one Alert for many controls). */
   describedBy?: string | undefined;
-  /** How the tooltip is drawn where the control is shown scaled (the canvas's action bar). */
-  contentStyle?: CSSProperties | undefined;
+  /** How the tooltip is drawn where the control is shown scaled or clipped (the canvas's action bar). */
+  contentProps?: ReasonedTooltipProps | undefined;
   children: ReactElement<ReasonedProps>;
 }>) {
   const id = useId();
@@ -60,9 +66,7 @@ export function StudioReasoned({
     <>
       <Tooltip>
         <TooltipTrigger render={swallowed}>{inner}</TooltipTrigger>
-        <TooltipContent {...(contentStyle === undefined ? {} : { style: contentStyle })}>
-          {reason}
-        </TooltipContent>
+        <TooltipContent {...contentProps}>{reason}</TooltipContent>
       </Tooltip>
       {describedBy === undefined ? (
         <span id={id} className="sr-only">

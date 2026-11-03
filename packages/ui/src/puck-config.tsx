@@ -224,20 +224,45 @@ export function RootSlotGapProvider({
   );
 }
 
-const SelectedPlacementContext = createContext<string | undefined>(undefined);
+/** Which placement the editor has selected; each placement reads only whether it is that one. */
+export type SelectedPlacementStore = Readonly<{
+  get: () => string | undefined;
+  set: (placementId: string | undefined) => void;
+  subscribe: (listener: () => void) => () => void;
+}>;
+
+export const createSelectedPlacementStore = (): SelectedPlacementStore => {
+  let selected: string | undefined;
+  const listeners = new Set<() => void>();
+  return {
+    get: () => selected,
+    set: (placementId) => {
+      if (placementId === selected) return;
+      selected = placementId;
+      for (const listener of listeners) listener();
+    },
+    subscribe: (listener) => {
+      listeners.add(listener);
+      return () => listeners.delete(listener);
+    },
+  };
+};
+
+/** A live page selects nothing. */
+const NO_SELECTION: SelectedPlacementStore = createSelectedPlacementStore();
+
+const SelectedPlacementContext = createContext<SelectedPlacementStore>(NO_SELECTION);
 
 /**
  * Tells the placements below it which one the editor has selected, so an empty slot of the selected
  * block can show its hint. Only the editor supplies it; a live page never does.
  */
 export function SelectedPlacementProvider({
-  placementId,
+  store,
   children,
-}: Readonly<{ placementId: string | undefined; children: ReactNode }>) {
+}: Readonly<{ store: SelectedPlacementStore; children: ReactNode }>) {
   return (
-    <SelectedPlacementContext.Provider value={placementId}>
-      {children}
-    </SelectedPlacementContext.Provider>
+    <SelectedPlacementContext.Provider value={store}>{children}</SelectedPlacementContext.Provider>
   );
 }
 
@@ -394,8 +419,16 @@ const slotClassName = (editing: boolean, required: boolean, selected: boolean): 
     ? "vortex-puck-slot"
     : `vortex-puck-slot ${required ? "vortex-puck-slot--required" : "vortex-puck-slot--optional"}${selected ? " vortex-puck-slot--selected" : ""}`;
 
+/** A CSS string for the slot's name: backslash and quote escaped, a line break as a CSS escape. */
+const cssString = (text: string): string =>
+  `"${text
+    .replace(/\\/gu, "\\\\")
+    .replace(/"/gu, '\\"')
+    .replace(/\n/gu, "\\A ")
+    .replace(/\p{Cc}/gu, " ")}"`;
+
 const slotLabelStyle = (label: string): CSSProperties =>
-  ({ "--vortex-slot-label": JSON.stringify(label) }) as CSSProperties;
+  ({ "--vortex-slot-label": cssString(label) }) as CSSProperties;
 
 // ---------------------------------------------------------------------------------------------
 // Render
@@ -460,7 +493,12 @@ function PlacementBlock(props: {
   );
   const running = useSyncExternalStore(subscribe, readRunning, () => false);
   const themeTokens = useContext(ThemeTokensContext);
-  const selectedPlacementId = useContext(SelectedPlacementContext);
+  const selection = useContext(SelectedPlacementContext);
+  const selectedHere = useSyncExternalStore(
+    selection.subscribe,
+    () => selection.get() === placementId,
+    () => false,
+  );
   const rootSlotGap = useContext(RootSlotGapContext);
   const breakpoint = metadataIn.breakpoint;
   const responsive = breakpoint === undefined;
@@ -528,11 +566,7 @@ function PlacementBlock(props: {
         hostNode
       ) : StableSlot !== undefined ? (
         <StableSlot
-          className={slotClassName(
-            puck.isEditing,
-            slotRequired,
-            selectedPlacementId === placementId,
-          )}
+          className={slotClassName(puck.isEditing, slotRequired, selectedHere)}
           style={puck.isEditing ? { ...slotStyle, ...slotLabelStyle(slotLabel) } : slotStyle}
         />
       ) : null;

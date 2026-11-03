@@ -153,6 +153,33 @@ const findPuckItem = (
   return undefined;
 };
 
+/**
+ * Where the block named `alias` sits in Puck's data: read from the data itself, never from Puck's
+ * index of it, which can lag behind data that was replaced from outside (an Undo, another page).
+ */
+export const puckSelectorOf = (
+  content: readonly unknown[],
+  alias: string,
+): Required<StudioPuckSelector> | undefined => {
+  const search = (
+    items: readonly unknown[],
+    zone: string,
+  ): Required<StudioPuckSelector> | undefined => {
+    for (const [index, entry] of items.entries()) {
+      const props = (entry as { props?: Record<string, unknown> } | null)?.props;
+      if (props === undefined) continue;
+      if (props.id === alias) return { index, zone };
+      for (const [key, value] of Object.entries(props)) {
+        if (!Array.isArray(value)) continue;
+        const found = search(value, `${String(props.id)}:${key}`);
+        if (found !== undefined) return found;
+      }
+    }
+    return undefined;
+  };
+  return search(content, ROOT_ZONE);
+};
+
 /** The block name Puck's item selector points at in its data, or `null` when it points at no block. */
 export const puckSelectedAlias = (
   content: readonly unknown[],

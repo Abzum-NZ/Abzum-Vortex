@@ -319,12 +319,12 @@ export const LAYOUT_ONLY_STYLES_CSS = `
   > [data-vortex-layout-wrapper] {
   width: auto !important;
 }
-/* An empty slot in the Studio canvas is presented here, in one place (the editor gives each slot its
-   required or optional class and its name in --vortex-slot-label, and draws its text at the
-   canvas zoom's inverse, --vortex-canvas-scale, so it reads at any zoom). A required slot keeps its placeholder.
-   An optional slot, a heading's actions for one, draws nothing and takes no space at rest; while a
-   block is dragged it shows its drop target, and while its own block is selected a small hint, each
-   labelled with the slot's name. */
+/* An empty slot in the Studio canvas is presented here, in one place. The editor gives each slot
+   its required or optional class and its name in --vortex-slot-label, and the text is drawn at
+   the canvas zoom's inverse, --vortex-canvas-scale, so it reads at any zoom. A required slot keeps
+   its placeholder. An optional slot, a heading's actions for one, draws nothing and takes no space
+   at rest; while a block is dragged it shows its drop target, and while its own block is selected
+   a small hint, each labelled with the slot's name. */
 [data-vortex-studio-canvas] .vortex-puck-slot:empty::after {
   content: var(--vortex-slot-label);
   margin: auto;

@@ -21,10 +21,15 @@ function TooltipContent({
   side = "top",
   sideOffset = 4,
   align = "center",
+  collisionBoundary,
+  collisionPadding,
   children,
   ...props
 }: TooltipPrimitive.Popup.Props &
-  Pick<TooltipPrimitive.Positioner.Props, "side" | "sideOffset" | "align">) {
+  Pick<
+    TooltipPrimitive.Positioner.Props,
+    "side" | "sideOffset" | "align" | "collisionBoundary" | "collisionPadding"
+  >) {
   const root = useVortexStylePortalRoot();
   if (root !== null && root.element === null) return null;
   return (
@@ -33,6 +38,8 @@ function TooltipContent({
         side={side}
         sideOffset={sideOffset}
         align={align}
+        {...(collisionBoundary === undefined ? {} : { collisionBoundary })}
+        {...(collisionPadding === undefined ? {} : { collisionPadding })}
         className="isolate z-50"
       >
         <TooltipPrimitive.Popup
