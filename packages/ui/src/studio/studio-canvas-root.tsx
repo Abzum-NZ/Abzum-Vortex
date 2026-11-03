@@ -2,20 +2,27 @@
 
 import { createUsePuck, type PuckContext } from "@puckeditor/core";
 import { compiledItemSettings } from "@vortex/platform/schema";
-import { useEffect, useMemo, type ReactNode, type SyntheticEvent } from "react";
+import { useEffect, useMemo, type CSSProperties, type ReactNode, type SyntheticEvent } from "react";
 import { isElement, isHtmlElement } from "../lib/dom";
 import { PagePuckRenderer } from "../page-puck-renderer";
-import { RootSlotGapProvider } from "../puck-config";
+import { RootSlotGapProvider, SelectedPlacementProvider } from "../puck-config";
 import type { SlotGapName } from "../layout-styles";
 import type { FieldInputControlReleaseMap, PlatformComponentRegistry } from "../registry";
 import { createAppearanceRootProps, createThemeRootProps, VortexStyleRoot } from "../theme";
 import { studioCanvasMetadata } from "./studio-canvas-metadata";
+import { useStudioCanvasScale } from "./studio-canvas-scale";
 import { useStudioScreen } from "./studio-canvas-screen";
 import { studioPuckIframeCss } from "./studio-puck-style";
 
 const resolvePageHref = () => "#";
 
 const usePuckSelector = createUsePuck();
+
+/** Tells the page which block is selected, without drawing the page again for anything else. */
+function SelectedBlock({ children }: Readonly<{ children: ReactNode }>) {
+  const selected = usePuckSelector((state) => state.selectedItem?.props.id);
+  return <SelectedPlacementProvider placementId={selected}>{children}</SelectedPlacementProvider>;
+}
 
 /**
  * The canvas root's render, inside Puck's preview, in every Puck mode. It draws the application's
@@ -51,7 +58,9 @@ export function StudioCanvasRoot({
       aria-label={empty ? "Empty content area" : undefined}
       className={empty ? "relative min-h-48" : "min-h-24"}
     >
-      <RootSlotGapProvider gap={gap}>{children}</RootSlotGapProvider>
+      <RootSlotGapProvider gap={gap}>
+        <SelectedBlock>{children}</SelectedBlock>
+      </RootSlotGapProvider>
       {empty && (
         <p className="pointer-events-none absolute inset-0 flex items-center justify-center px-6 text-center text-sm text-muted-foreground">
           {canDrop ? "Drop a block here, or add one from Blocks." : "Add a block from Blocks."}
@@ -182,8 +191,15 @@ export function StudioCanvasIframe({
   const inert = (event: SyntheticEvent) => {
     if (isElement(event.target) && event.target.closest("a[href]") !== null) event.preventDefault();
   };
+  // What the canvas draws for the person (empty-slot labels) counter-scales by the zoom, in CSS.
+  const scale = useStudioCanvasScale();
   return (
-    <div className="min-h-full" onClickCapture={inert} onAuxClickCapture={inert}>
+    <div
+      className="min-h-full"
+      style={{ "--vortex-canvas-scale": scale } as CSSProperties}
+      onClickCapture={inert}
+      onAuxClickCapture={inert}
+    >
       {children}
     </div>
   );

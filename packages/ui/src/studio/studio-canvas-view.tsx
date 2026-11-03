@@ -12,7 +12,7 @@ import { Label } from "../components/label";
 import { Icon } from "../icons";
 import { studioPageAreaLabel } from "./application-page-layout";
 import type { StudioCompileFailure } from "./compile-failure";
-import { StudioCanvasActions } from "./studio-canvas-actions";
+import { StudioCanvasScaleProvider } from "./studio-canvas-scale";
 import { useStudioScreen } from "./studio-canvas-screen";
 import { StudioReferencePicker } from "./studio-reference-picker";
 import { useStudioCanvas } from "./studio-puck-provider";
@@ -32,8 +32,8 @@ function CanvasEmpty({ title, description }: Readonly<{ title: string; descripti
 }
 
 /**
- * The page canvas: the content area picker, the notices, the selection's actions and the
- * workspace's Puck preview, drawn as a device screen scaled inside its well. It unmounts with the
+ * The page canvas: the content area picker, the notices and the
+ * workspace's Puck preview (the selected block's actions are Puck's action bar on the block), drawn as a device screen scaled inside its well. It unmounts with the
  * rail tabs that do not show a canvas.
  */
 export function StudioCanvasView({
@@ -135,7 +135,7 @@ export function StudioCanvasView({
         aria-busy={disabled}
       >
         {/* The screen size is chosen in Studio's canvas toolbar. One strip of fixed height: the
-            content area, what the canvas does, and the selection's actions. */}
+            content area and what the canvas does. */}
         <div className="flex h-9 shrink-0 items-center gap-3 px-4">
           {picker}
           {model.readOnlyCause !== undefined || breakpoint !== "desktop" ? (
@@ -174,9 +174,7 @@ export function StudioCanvasView({
               arrangeable={model.arrangeable}
               onDone={() => onArrangeGrid?.(false)}
             />
-          ) : (
-            <StudioCanvasActions />
-          )}
+          ) : null}
         </div>
         {compileFailure == null ? null : <CompileFailureNotice failure={compileFailure} />}
         {refusal.length === 0 ? null : (
@@ -203,7 +201,9 @@ export function StudioCanvasView({
                 visibility: available.width === 0 ? "hidden" : "visible",
               }}
             >
-              <Puck.Preview id="vortex-studio-canvas" />
+              <StudioCanvasScaleProvider value={scale}>
+                <Puck.Preview id="vortex-studio-canvas" />
+              </StudioCanvasScaleProvider>
             </div>
           </div>
         </div>

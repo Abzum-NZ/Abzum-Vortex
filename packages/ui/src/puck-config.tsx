@@ -224,6 +224,23 @@ export function RootSlotGapProvider({
   );
 }
 
+const SelectedPlacementContext = createContext<string | undefined>(undefined);
+
+/**
+ * Tells the placements below it which one the editor has selected, so an empty slot of the selected
+ * block can show its hint. Only the editor supplies it; a live page never does.
+ */
+export function SelectedPlacementProvider({
+  placementId,
+  children,
+}: Readonly<{ placementId: string | undefined; children: ReactNode }>) {
+  return (
+    <SelectedPlacementContext.Provider value={placementId}>
+      {children}
+    </SelectedPlacementContext.Provider>
+  );
+}
+
 /** Supplies the application's theme tokens to custom components. */
 export function VortexPuckThemeTokensProvider({
   tokens,
@@ -352,18 +369,33 @@ const slotGapFor = (
 // Fields
 // ---------------------------------------------------------------------------------------------
 
-/** The names of the slot fields a placement of this release has, given its settings. */
-const declaredSlotKeys = (
+/** The slot fields a placement of this release has, given its settings, with their declared name. */
+const declaredSlots = (
   release: PlatformBlockRelease,
   settings: PlacementSettings,
-): readonly string[] =>
+): readonly Readonly<{ key: string; label: string; required: boolean }>[] =>
   release.slots.flatMap((slot) =>
-    slot.repeats === undefined
+    (slot.repeats === undefined
       ? [slot.key]
       : repeatableSlotItemIdentities(slot, settings).map((identity) =>
           repeatableSlotKey(slot.key, identity),
-        ),
+        )
+    ).map((key) => ({ key, label: slot.label, required: slot.required })),
   );
+
+/**
+ * How an empty slot is presented in the editor, in one place (the rules are in the layout styles).
+ * A required slot keeps its placeholder. An optional one draws nothing at rest, shows its drop
+ * target while a block is dragged and a small hint while its own block is selected, each labelled
+ * with the slot's name. A live page has no such presentation.
+ */
+const slotClassName = (editing: boolean, required: boolean, selected: boolean): string =>
+  !editing
+    ? "vortex-puck-slot"
+    : `vortex-puck-slot ${required ? "vortex-puck-slot--required" : "vortex-puck-slot--optional"}${selected ? " vortex-puck-slot--selected" : ""}`;
+
+const slotLabelStyle = (label: string): CSSProperties =>
+  ({ "--vortex-slot-label": JSON.stringify(label) }) as CSSProperties;
 
 // ---------------------------------------------------------------------------------------------
 // Render
@@ -428,6 +460,7 @@ function PlacementBlock(props: {
   );
   const running = useSyncExternalStore(subscribe, readRunning, () => false);
   const themeTokens = useContext(ThemeTokensContext);
+  const selectedPlacementId = useContext(SelectedPlacementContext);
   const rootSlotGap = useContext(RootSlotGapContext);
   const breakpoint = metadataIn.breakpoint;
   const responsive = breakpoint === undefined;
@@ -479,7 +512,10 @@ function PlacementBlock(props: {
   const slots: Record<string, ReactNode> = {};
   const latestSlots = useRef<Record<string, SlotComponent>>({});
   const stableSlots = useRef<Record<string, SlotComponent>>({});
-  for (const slotKey of declaredSlotKeys(release, settings)) {
+  for (const { key: slotKey, label: slotLabel, required: slotRequired } of declaredSlots(
+    release,
+    settings,
+  )) {
     const Slot = componentProps[slotKey];
     const hostNode = componentProps.slotNodes?.[slotKey];
     if (isSlotComponent(Slot)) {
@@ -491,7 +527,14 @@ function PlacementBlock(props: {
       hostNode !== undefined ? (
         hostNode
       ) : StableSlot !== undefined ? (
-        <StableSlot className="vortex-puck-slot" style={slotStyle} />
+        <StableSlot
+          className={slotClassName(
+            puck.isEditing,
+            slotRequired,
+            selectedPlacementId === placementId,
+          )}
+          style={puck.isEditing ? { ...slotStyle, ...slotLabelStyle(slotLabel) } : slotStyle}
+        />
       ) : null;
   }
 

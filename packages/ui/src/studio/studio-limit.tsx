@@ -1,5 +1,5 @@
 "use client";
-import { cloneElement, useId, type ReactElement, type ReactNode } from "react";
+import { cloneElement, useId, type CSSProperties, type ReactElement, type ReactNode } from "react";
 import {
   definitionLimitMessage,
   definitionLimitReached,
@@ -31,11 +31,14 @@ type ReasonedProps = Readonly<{
 export function StudioReasoned({
   reason,
   describedBy,
+  contentStyle,
   children,
 }: Readonly<{
   reason: string | undefined;
   /** The id of an element on the page that already says the reason (one Alert for many controls). */
   describedBy?: string | undefined;
+  /** How the tooltip is drawn where the control is shown scaled (the canvas's action bar). */
+  contentStyle?: CSSProperties | undefined;
   children: ReactElement<ReasonedProps>;
 }>) {
   const id = useId();
@@ -57,7 +60,9 @@ export function StudioReasoned({
     <>
       <Tooltip>
         <TooltipTrigger render={swallowed}>{inner}</TooltipTrigger>
-        <TooltipContent>{reason}</TooltipContent>
+        <TooltipContent {...(contentStyle === undefined ? {} : { style: contentStyle })}>
+          {reason}
+        </TooltipContent>
       </Tooltip>
       {describedBy === undefined ? (
         <span id={id} className="sr-only">

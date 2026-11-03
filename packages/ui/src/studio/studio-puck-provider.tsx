@@ -187,6 +187,9 @@ const OVERRIDES = { ...studioCanvasOverrides, drawerItem: StudioDrawerItem } as 
 /** The Puck iframe the canvas draws the page in; its styles come from the host. */
 const IFRAME = { enabled: true, waitForStyles: true, syncHostStyles: true } as const;
 
+/** Each block's action bar carries a drag handle. */
+const DND = { enableDragHandle: true } as const;
+
 const sameSelector = (
   left: StudioPuckSelector | null | undefined,
   right: StudioPuckSelector | null | undefined,
@@ -395,6 +398,7 @@ export function StudioPuckProvider({
         onChange={change}
         onAction={onAction}
         iframe={IFRAME}
+        dnd={DND}
         viewports={studioViewports}
         ui={studioInitialUi}
         // Puck's own wrapper fills the workspace, so the canvas has the height of its well.
