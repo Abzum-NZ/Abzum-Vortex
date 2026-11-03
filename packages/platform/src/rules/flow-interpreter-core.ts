@@ -20,6 +20,7 @@ import {
   failActivation,
   pushFrame,
   storeTaskOutputs,
+  refusalOutputs,
   stringOutcomeOutputs,
   withFrames,
 } from "./flow-interpreter-state";
@@ -1287,7 +1288,14 @@ export const resumeFlowRun = (
       branchable &&
       !refusalKeepsPlatformGuidance(resume.diagnostic?.code)
     ) {
-      replaceTop(machine, storeTaskOutputs(activation, awaiting.taskId, outputs));
+      replaceTop(
+        machine,
+        storeTaskOutputs(
+          activation,
+          awaiting.taskId,
+          refusalOutputs(resume.outcome, resume.diagnostic?.ruleRefusal?.message),
+        ),
+      );
       return drive(machine, observer);
     }
     replaceTop(

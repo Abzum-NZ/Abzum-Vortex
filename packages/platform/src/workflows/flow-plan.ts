@@ -410,7 +410,7 @@ const inputTypes = (
           (step) => step.id === reference.task,
         );
         types[key] =
-          reference.key === "outcome"
+          reference.key === "outcome" || reference.key === "refusal_message"
             ? "text"
             : ((producer === undefined ? undefined : outputTypes([producer])[key]) ?? "json");
         break;

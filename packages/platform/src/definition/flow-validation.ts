@@ -74,8 +74,9 @@ import {
  *   types; a field path on its values output must select a declared member. A trigger record field
  *   (whose existence the caller checks) and a person's answer to Wait for person stay typed only
  *   at run time;
- * - outputs and error handling: an output's value must fit its declared type, and `outcome` is
- *   readable only from a task that sets `allowRefusal`.
+ * - outputs and error handling: an output's value must fit its declared type, and `outcome` and
+ *   `refusal_message` (the refusing rule's own sentence, empty when it has none) are readable only
+ *   from a task that sets `allowRefusal`.
  *
  * Nothing here requires a refused, validation, conflict or uncertain result to be routed. The
  * default error handler presents those results safely, and `errors` only adds behaviour.
@@ -386,6 +387,8 @@ export function validateFlow(
     const registered = task as Extract<FlowTask, { properties: unknown }>;
     if (key === "outcome" && registered.allowRefusal === true)
       return { known: true as const, type: "choice" as StaticType };
+    if (key === "refusal_message" && registered.allowRefusal === true)
+      return { known: true as const, type: "text" as StaticType };
     const definition: FlowTaskTypeDefinition | undefined = Object.hasOwn(
       flowTaskRegistry,
       task.type,
@@ -552,7 +555,7 @@ export function validateFlow(
             path,
             "vortex.definition.workflow_output_exists",
             "broken_reference",
-            reference.key === "outcome"
+            reference.key === "outcome" || reference.key === "refusal_message"
               ? `Task ${reference.task} can be branched on only when it sets allowRefusal`
               : `Task ${reference.task} has no output ${reference.key}`,
           );

@@ -8070,10 +8070,33 @@
                             "version": "1.1.0",
                             "properties": {
                               "message": {
-                                "kind": "literal",
-                                "literal": {
-                                  "type": "text",
-                                  "value": "The version could not be published. Check the application in Studio before trying again."
+                                "kind": "formula",
+                                "formula": {
+                                  "op": "if",
+                                  "condition": {
+                                    "op": "is_not_empty",
+                                    "arg": {
+                                      "op": "reference",
+                                      "reference": {
+                                        "source": "task_output",
+                                        "task": "publish",
+                                        "key": "refusal_message"
+                                      }
+                                    }
+                                  },
+                                  "then": {
+                                    "op": "reference",
+                                    "reference": {
+                                      "source": "task_output",
+                                      "task": "publish",
+                                      "key": "refusal_message"
+                                    }
+                                  },
+                                  "else": {
+                                    "op": "literal",
+                                    "type": "text",
+                                    "value": "The version could not be published. Check the application in Studio before trying again."
+                                  }
                                 }
                               },
                               "title": {
