@@ -24,6 +24,7 @@ import {
   validateStoredShell,
   validateStoredZone,
 } from "@vortex/platform/schema";
+import { isStudioDraftSnapshot } from "./application-draft-history";
 import { resolveStudioSelectionInspectorContext } from "./selection-inspector";
 import type { StudioSemanticSelection } from "./semantic-selection";
 import type {
@@ -186,6 +187,24 @@ export const itemSlots = (
   catalogue: ImmutablePlatformBlockCatalogue,
   item: SourceItem,
 ): Map<string, Zone> => {
+  // A block of a history snapshot never changes, so its slots are read (and its settings checked)
+  // once, however many ways the Inspector and the canvas ask for them.
+  if (!isStudioDraftSnapshot(item)) return readItemSlots(catalogue, item);
+  let items = readSlots.get(catalogue);
+  if (items === undefined) readSlots.set(catalogue, (items = new WeakMap()));
+  let slots = items.get(item);
+  if (slots === undefined) items.set(item, (slots = readItemSlots(catalogue, item)));
+  return slots;
+};
+const readSlots = new WeakMap<
+  ImmutablePlatformBlockCatalogue,
+  WeakMap<SourceItem, Map<string, Zone>>
+>();
+
+const readItemSlots = (
+  catalogue: ImmutablePlatformBlockCatalogue,
+  item: SourceItem,
+): Map<string, Zone> => {
   const release = releaseFor(catalogue, item);
   const orders = item.props.vortex.slot_orders ?? {};
   const result = new Map<string, Zone>();
@@ -260,13 +279,44 @@ export const manifestMatches = (
   items: readonly SourceItem[],
 ): boolean => sourceItemTree(items).every((item) => pinnedRelease(catalogue, source, item));
 
+/**
+ * The block a selection names, in a copy of the draft the caller may edit. A caller that only
+ * reads (`reading`) is given the draft's own snapshot instead of a copy made by a full parse, so
+ * describing a block costs nothing that grows with the application.
+ */
 export const resolve = (
   context: StudioCompositionContext,
   selection: StudioSemanticSelection | null,
+  reading = false,
 ) => {
   if (!validContext(context) || selection?.kind !== "placement") return undefined;
+  if (!reading || !isStudioDraftSnapshot(context.source))
+    return resolveBlock(context, selection, false);
+  // The Inspector describes the same block several ways for one snapshot; it is found once.
+  const found = readingResolutions.get(context.source) ?? new Map<string, ReadingResolution>();
+  readingResolutions.set(context.source, found);
+  const key = `${context.rootId}|${selection.placementAlias}`;
+  const known = found.get(key);
+  if (known !== undefined && known.catalogue === context.catalogue) return known.resolved;
+  const resolved = resolveBlock(context, selection, true);
+  found.set(key, { catalogue: context.catalogue, resolved });
+  return resolved;
+};
+type ReadingResolution = Readonly<{
+  catalogue: ImmutablePlatformBlockCatalogue;
+  resolved: ReturnType<typeof resolveBlock>;
+}>;
+const readingResolutions = new WeakMap<object, Map<string, ReadingResolution>>();
+
+const resolveBlock = (
+  context: StudioCompositionContext,
+  selection: Extract<StudioSemanticSelection, { kind: "placement" }>,
+  reading: boolean,
+) => {
   const catalogue = context.catalogue;
-  const source = applicationSourceDocumentSchema.parse(context.source);
+  const source = reading
+    ? (context.source as ApplicationSourceDocument)
+    : applicationSourceDocumentSchema.parse(context.source);
   if (
     resolveStudioSelectionInspectorContext({ rootId: context.rootId, source }, selection).status !==
     "resolved"
@@ -450,12 +500,32 @@ export const validateRegion = (
   catalogue: ImmutablePlatformBlockCatalogue,
   region: Region,
 ): void => {
+  // The content of a history snapshot does not change, so a region that passed is not checked
+  // again until an edit makes a new one (the Inspector describes the block several ways per edit).
+  const held = region.shell ?? region.zone.items;
+  const known = isStudioDraftSnapshot(held);
+  const passed = known ? validatedRegions.get(held) : undefined;
+  if (passed?.order === region.zone.order && passed?.catalogues.has(catalogue) === true) return;
   if (region.shell === undefined) validateStoredZone(catalogue, region.zone);
   else validateStoredShell(catalogue, region.shell);
+  if (known) {
+    const catalogues =
+      passed !== undefined && passed.order === region.zone.order
+        ? passed.catalogues
+        : new WeakSet<ImmutablePlatformBlockCatalogue>();
+    catalogues.add(catalogue);
+    validatedRegions.set(held, { order: region.zone.order, catalogues });
+  }
 };
+const validatedRegions = new WeakMap<
+  object,
+  { order: unknown; catalogues: WeakSet<ImmutablePlatformBlockCatalogue> }
+>();
 
 /** Refuse cycles and accessors before recursive schemas read an authored snapshot. */
 export const plainSource = (source: unknown): void => {
+  // A history snapshot is plain by construction (copied from data, frozen, without cycles).
+  if (isStudioDraftSnapshot(source)) return;
   const pending = [{ value: source, exit: false }];
   const ancestors = new Set<object>();
   while (pending.length > 0) {

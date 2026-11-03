@@ -288,10 +288,11 @@ const syncRepeatableSlots = (
 const resolveSettings = (
   context: StudioCompositionContext,
   selection: StudioSemanticSelection | null,
+  reading = false,
 ) => {
   const catalogue = context.catalogue;
   plainSource(context.source);
-  const resolved = resolve(context, selection);
+  const resolved = resolve(context, selection, reading);
   if (resolved === undefined) return { kind: "invalid" } as const;
   const { source, target } = resolved;
   const page = target.region.page;
@@ -319,7 +320,7 @@ export const describeStudioCompositionSettings = (
   selection: StudioSemanticSelection | null,
 ): StudioCompositionSettingsModel => {
   try {
-    const resolved = resolveSettings(context, selection);
+    const resolved = resolveSettings(context, selection, true);
     if (resolved.kind !== "available") return resolved;
     const item = resolved.target.item;
     return {
@@ -534,10 +535,11 @@ type ResolvedRemoval =
 const resolveRemoval = (
   context: StudioCompositionContext,
   selection: StudioSemanticSelection | null,
+  reading = false,
 ): ResolvedRemoval => {
   const catalogue = context.catalogue;
   plainSource(context.source);
-  const resolved = resolve(context, selection);
+  const resolved = resolve(context, selection, reading);
   if (resolved === undefined) return { kind: "invalid" };
   const { source, target, alias } = resolved;
   // Any of a layout's own blocks leaves with everything inside it, as any of them can be added.
@@ -625,7 +627,7 @@ export const describeStudioCompositionRemoval = (
   selection: StudioSemanticSelection | null,
 ): StudioCompositionRemovalModel => {
   try {
-    const resolved = resolveRemoval(context, selection);
+    const resolved = resolveRemoval(context, selection, true);
     return resolved.kind === "available"
       ? {
           kind: "available",
@@ -681,7 +683,7 @@ export const describeStudioCompositionDestinations = (
   selection: StudioSemanticSelection | null,
 ): StudioCompositionDestinationModel => {
   try {
-    const resolved = resolve(context, selection);
+    const resolved = resolve(context, selection, true);
     if (resolved === undefined) return { kind: "invalid" };
     const catalogue = context.catalogue;
     const { target, source, alias } = resolved;
@@ -715,7 +717,7 @@ export const describeStudioCompositionEdit = (
 ): StudioCompositionEditorModel => {
   try {
     if (!breakpointValid(breakpoint)) return { kind: "invalid" };
-    const resolved = resolve(context, selection);
+    const resolved = resolve(context, selection, true);
     if (resolved === undefined) return { kind: "invalid" };
     const catalogue = context.catalogue;
     const { target, source, alias } = resolved;

@@ -61,10 +61,11 @@ type WrapContainer = Readonly<{
 const resolveWrap = (
   context: StudioCompositionContext,
   selection: StudioSemanticSelection | null,
+  reading = false,
 ) => {
   const catalogue = context.catalogue;
   plainSource(context.source);
-  const resolved = resolve(context, selection);
+  const resolved = resolve(context, selection, reading);
   if (resolved === undefined) return { kind: "invalid" } as const;
   const { source, target, alias } = resolved;
   const region = target.region;
@@ -134,7 +135,7 @@ export const describeStudioCompositionWrap = (
   selection: StudioSemanticSelection | null,
 ): StudioCompositionWrapModel => {
   try {
-    const resolved = resolveWrap(context, selection);
+    const resolved = resolveWrap(context, selection, true);
     if (resolved.kind !== "available") return { kind: resolved.kind };
     return {
       kind: "available",

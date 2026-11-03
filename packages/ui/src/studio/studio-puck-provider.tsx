@@ -232,10 +232,16 @@ export function StudioPuckProvider({
   // Why a block's delete, drag or duplicate is unavailable is read once per saved revision (the
   // compiled one), not at every edit. The change itself is checked against the live draft when it
   // is made (`applyStudioCanvasChange`), so a reason that is a moment late refuses nothing wrongly.
-  const references = useMemo(
+  const readReferences = useMemo(
     () => studioCanvasReferences(input.compiledSource, model.catalogue),
     [input.compiledSource, model.catalogue],
   );
+  // A new revision usually leaves every reason as it was (a label changed, say); Puck asks every
+  // block's permissions again for a new object, so the one held stays while the reasons are the same.
+  const heldReferences = useRef(readReferences);
+  if (!sameCompositionValue(heldReferences.current, readReferences))
+    heldReferences.current = readReferences;
+  const references = heldReferences.current;
   const referencesRef = useRef(references);
   referencesRef.current = references;
   // The config remains stable while its permission resolver reads the current draft's map.
