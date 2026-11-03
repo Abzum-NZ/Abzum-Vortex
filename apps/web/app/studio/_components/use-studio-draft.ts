@@ -226,6 +226,23 @@ const releaseIds = (catalogue: StudioCatalogue): string =>
 const catalogueFor = (held: StudioCatalogue, read: StudioCatalogue): StudioCatalogue =>
   held.releases.length > 0 && releaseIds(held) === releaseIds(read) ? held : read;
 
+type FieldInputControls = StudioCompiledView["fieldInputControlReleases"];
+
+/**
+ * The automatic field-input controls the editor draws with, held by the same rule as the
+ * catalogue: kept while the server's map names the same releases, replaced when one is released.
+ */
+const controlsFor = (held: FieldInputControls, read: FieldInputControls): FieldInputControls => {
+  if (held === null || held === undefined) return read;
+  if (read === null || read === undefined) return held;
+  const ids = (controls: NonNullable<FieldInputControls>): string =>
+    Object.entries(controls)
+      .map(([control, release]) => `${control}:${release?.blockId}@${release?.releaseVersion}`)
+      .sort()
+      .join("\n");
+  return ids(held) === ids(read) ? held : read;
+};
+
 /** Revision-bound metadata is replaced; immutable editor resources remain for this visit. */
 const viewOf = (
   { draft, previewShape }: Pick<LoadedResult, "draft" | "previewShape">,
@@ -238,7 +255,10 @@ const viewOf = (
   // changes only when the list of released blocks does, not at every read.
   catalogue: catalogueFor(previous.catalogue, loaded.catalogue),
   themeOptions: loaded.themeOptions ?? previous.themeOptions,
-  fieldInputControlReleases: previous.fieldInputControlReleases ?? loaded.fieldInputControlReleases,
+  fieldInputControlReleases: controlsFor(
+    previous.fieldInputControlReleases,
+    loaded.fieldInputControlReleases,
+  ),
   platformThemeTokens: loaded.platformThemeTokens,
   source: draft.source,
   draftRevision: draft.draftRevision,
@@ -858,14 +878,10 @@ export function useStudioDraft({
       const step = command(currentSource);
       if (step.kind === "keep") return { kind: "done", result: step.result, changed: false };
       if (history.getState().source !== current.source) return stale;
-      if (history.edit(step.source, options.merge))
-        return { kind: "done", result: step.result, changed: true };
-      // The history refuses only another application's source and an edit that changes nothing.
-      if (step.source.key === currentSource.key)
-        return { kind: "done", result: step.result, changed: false };
-      console.error(
-        "[studio] the draft history refused a command's source: STUDIO_DRAFT_EDIT_REFUSED",
-      );
+      const edited = history.edit(step.source, options.merge);
+      if (edited === "edited") return { kind: "done", result: step.result, changed: true };
+      if (edited === "unchanged") return { kind: "done", result: step.result, changed: false };
+      // The history says why it refused (once, with the cause).
       return {
         kind: "blocked",
         message: "The draft did not accept this change, so nothing was changed.",

@@ -68,6 +68,9 @@ const calculationFormula = (
 // ─── What the draft offers a step ────────────────────────────────────────────────────────────
 
 /** An installed application a Navigate step can open, with the keys of its pages. */
+/** Where the Navigate targets stand: they are read beside the editor's first load. */
+export type StudioNavigationApplicationsStatus = "loading" | "ready" | "failed";
+
 export type StudioNavigationApplication = Readonly<{
   key: string;
   label: string;
@@ -114,6 +117,8 @@ export type StudioFlowDraftChoices = Readonly<{
    * Navigate step that opens a page (and record) there.
    */
   applications: readonly StudioNavigationApplication[];
+  /** Whether those applications are still being read, are read, or could not be read. */
+  applicationsStatus: StudioNavigationApplicationsStatus;
 }>;
 
 /**
@@ -149,6 +154,25 @@ const messageTargetOptions: readonly Readonly<{ value: string; label: string }>[
 
 const actionInputType = (type: string): string => type;
 
+const navigationPendingHelp = {
+  loading: "Loading the other applications…",
+  failed: "The other applications could not be read. Reload Studio to try again.",
+} as const;
+
+/** The applications a Navigate step can open; while they load, the one the step already names stays. */
+const navigationApplicationOptions = (
+  choices: Pick<StudioFlowDraftChoices, "applications" | "applicationsStatus">,
+  named: string | undefined,
+): readonly Readonly<{ value: string; label: string }>[] => {
+  const options = choices.applications.map((entry) => ({ value: entry.key, label: entry.label }));
+  return choices.applicationsStatus !== "ready" &&
+    named !== undefined &&
+    named !== "" &&
+    !options.some((entry) => entry.value === named)
+    ? [...options, { value: named, label: named }]
+    : options;
+};
+
 /** Everything a step setting can point at in the draft: record types, pages, forms, module actions, queries and connections. */
 export const projectStudioFlowDraftChoices = (
   draft: Readonly<{
@@ -157,6 +181,7 @@ export const projectStudioFlowDraftChoices = (
     catalogue: ImmutablePlatformBlockCatalogue;
     flow?: SourceFlow;
     applications?: readonly StudioNavigationApplication[];
+    applicationsStatus?: StudioNavigationApplicationsStatus;
   }>,
 ): StudioFlowDraftChoices => {
   const source = draft.source;
@@ -280,6 +305,7 @@ export const projectStudioFlowDraftChoices = (
   return {
     messagePlacements: messagePlacements.filter((entry) => onInvokingPages(entry.alias)),
     applications: draft.applications ?? [],
+    applicationsStatus: draft.applicationsStatus ?? "ready",
     pageValues: Object.entries(boundPages[0]?.values ?? {})
       .filter(([name, declaration]) =>
         boundPages.every((page) => page.values?.[name]?.type === declaration.type),
@@ -899,7 +925,7 @@ export const projectStudioFlowStepForm = (
                     label: `${entry.label} (${entry.kind === "slot" ? "Notice slot" : "inline"})`,
                   }))
                 : task.type === "interface.navigate" && key === "application"
-                  ? choices.applications.map((entry) => ({ value: entry.key, label: entry.label }))
+                  ? navigationApplicationOptions(choices, literalText(task.properties.application))
                   : task.type === "interface.navigate" &&
                       key === "page" &&
                       task.properties.application !== undefined
@@ -931,7 +957,12 @@ export const projectStudioFlowStepForm = (
             : control === "message"
               ? "text"
               : undefined;
-      const hint = help[`${task.type} ${key}`];
+      const hint =
+        task.type === "interface.navigate" &&
+        key === "application" &&
+        choices.applicationsStatus !== "ready"
+          ? navigationPendingHelp[choices.applicationsStatus]
+          : help[`${task.type} ${key}`];
       const actionFlows =
         control === "message_actions"
           ? siblings

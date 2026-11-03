@@ -141,6 +141,9 @@ const loadWorkspacePlace = async (
     organizationId: entry.organizationId,
     applicationRootId,
   });
+  // Both reads run on past a refusal or a throw below; marking them handled keeps a rejection of
+  // either from being unhandled (what the editor receives is unchanged).
+  void Promise.allSettled([standingRead, navigationTargets]);
   const studioResolved =
     studioApplicationEntry === undefined
       ? undefined
@@ -156,8 +159,6 @@ const loadWorkspacePlace = async (
     studioResolved?.kind !== "application_page" ||
     studioResolved.installedContext === undefined
   ) {
-    // The reads started above are no longer wanted; let them finish without an unhandled rejection.
-    void Promise.allSettled([standingRead, navigationTargets]);
     return {
       kind: "refused",
       reason: "Studio is not installed for your account in this organisation.",

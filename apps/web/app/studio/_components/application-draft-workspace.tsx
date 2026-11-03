@@ -46,6 +46,7 @@ import {
   type StudioAccessCommand,
   type StudioAccessResult,
   type StudioNavigationApplication,
+  type StudioNavigationApplicationsStatus,
 } from "@vortex/ui/studio";
 import { Button } from "@vortex/ui/components/button";
 import type { StudioStructureForm } from "./studio-structure-editor";
@@ -91,17 +92,21 @@ export function ApplicationDraftWorkspace(props: WorkspaceProps) {
 function ExistingApplicationWorkspace(props: ExistingProps) {
   const { organizationId, place, applications } = props;
   // The Navigate targets arrive after the editor has opened; the Flows tab lists them from then on.
-  const [navigationTargets, setNavigationTargets] = useState<
-    readonly StudioNavigationApplication[]
-  >([]);
+  const [navigation, setNavigation] = useState<
+    Readonly<{
+      status: StudioNavigationApplicationsStatus;
+      targets: readonly StudioNavigationApplication[];
+    }>
+  >({ status: "loading", targets: [] });
   useEffect(() => {
     let current = true;
     place.navigationTargets.then(
       (targets) => {
-        if (current) setNavigationTargets(targets);
+        if (current) setNavigation({ status: "ready", targets });
       },
       (error: unknown) => {
         console.error("[studio] the Navigate targets could not be read", describeFailure(error));
+        if (current) setNavigation({ status: "failed", targets: [] });
       },
     );
     return () => {
@@ -196,7 +201,8 @@ function ExistingApplicationWorkspace(props: ExistingProps) {
     catalogue,
     labels,
     applications,
-    navigationTargets,
+    navigationTargets: navigation.targets,
+    navigationStatus: navigation.status,
     hidden: tab !== "flows",
     openFlowsTab: () => setTab("flows"),
   });

@@ -219,6 +219,26 @@ export type PagePuckRendererProps = Readonly<{
   contentRegion?: boolean;
 }>;
 
+/**
+ * Puck draws every placement again when its `metadata` is a new object. The renderer is drawn again
+ * for reasons that change none of these fields (a selection in the editor, say), so the metadata of
+ * the last render is returned while every field is the same one. The result depends only on its
+ * fields, so a render of another page that finds a different last one just builds its own.
+ */
+let lastMetadata: VortexPuckMetadata | undefined;
+const stableMetadata = (next: VortexPuckMetadata): VortexPuckMetadata => {
+  const last = lastMetadata;
+  const keys = Object.keys(next) as (keyof VortexPuckMetadata)[];
+  if (
+    last !== undefined &&
+    Object.keys(last).length === keys.length &&
+    keys.every((key) => Object.hasOwn(last, key) && Object.is(last[key], next[key]))
+  )
+    return last;
+  lastMetadata = next;
+  return next;
+};
+
 export function PagePuckRenderer({
   composition,
   breakpoint,
@@ -276,7 +296,7 @@ export function PagePuckRenderer({
   const vortexStyle = resolveVortexStyleSelection(applicationTheme?.selection);
   const themeRootProps = createThemeRootProps(applicationTheme, platformThemeTokens);
   const vortexStyleProps = createVortexStyleRootProps(vortexStyle);
-  const metadata: VortexPuckMetadata = {
+  const metadata = stableMetadata({
     readSettings,
     ...(breakpoint === undefined ? {} : { breakpoint }),
     ...(runtimeInputs === undefined ? {} : { runtimeInputs }),
@@ -288,7 +308,7 @@ export function PagePuckRenderer({
     ...(applicationShellRuntime === undefined ? {} : { applicationShellRuntime }),
     ...(applicationSearch === undefined ? {} : { applicationSearch }),
     ...(applicationSearchPageSubject === undefined ? {} : { applicationSearchPageSubject }),
-  };
+  });
   const guidedSteps = composition.steps;
   const stepIndex =
     activeStepId === undefined

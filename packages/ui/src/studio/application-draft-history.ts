@@ -8,6 +8,7 @@ import {
   type StoredDefinitionDraft,
   platformIdSchema,
 } from "@vortex/platform/schema";
+import { shareSnapshot } from "./draft-snapshot";
 
 export type StudioStoredApplicationDraft = Extract<StoredDefinitionDraft, { kind: "application" }>;
 
@@ -57,13 +58,16 @@ export type StudioApplicationDraftHistoryListener = (
   state: StudioApplicationDraftHistoryState,
 ) => void;
 
+/** What an edit came to: it entered the history, it changed nothing, or the source was refused. */
+export type StudioApplicationDraftEditOutcome = "edited" | "unchanged" | "refused";
+
 export interface StudioApplicationDraftHistoryController {
   getState(): StudioApplicationDraftHistoryState;
   /**
    * Takes one edit. Consecutive edits with the same `merge` key (typing into one field) replace the
    * newest entry instead of adding one, so Undo restores the value from before the whole run.
    */
-  edit(source: ApplicationSourceDocument, merge?: string): boolean;
+  edit(source: ApplicationSourceDocument, merge?: string): StudioApplicationDraftEditOutcome;
   undo(): boolean;
   redo(): boolean;
   save(): Promise<StudioApplicationDraftSaveOutcome>;
@@ -72,63 +76,18 @@ export interface StudioApplicationDraftHistoryController {
   subscribe(listener: StudioApplicationDraftHistoryListener): () => void;
 }
 
-/** Every node a snapshot owns: deeply frozen, free of `undefined` properties, shared between entries. */
-const owned = new WeakSet<object>();
-
 /** Undo and Redo keep at most this many entries; the oldest are dropped. */
 const maximumHistoryEntries = 100;
-
-/**
- * The frozen copy of `value` that shares every node equal to the one at the same place in
- * `previous`, so an edit costs one comparison and the nodes it did not touch keep their identity
- * (memos keyed on a page or slot object keep hitting). Nodes this module already froze are reused
- * without a look. Like the JSON the draft is stored as, an `undefined` property is left out.
- */
-const share = (value: unknown, previous: unknown): unknown => {
-  if (value === null || typeof value !== "object") return value;
-  if (owned.has(value)) return value;
-  if (Array.isArray(value)) {
-    const before = Array.isArray(previous) ? previous : undefined;
-    const items = value.map((item, index) => share(item, before?.[index]));
-    if (
-      before !== undefined &&
-      before.length === items.length &&
-      items.every((item, index) => item === before[index])
-    )
-      return before;
-    owned.add(items);
-    return Object.freeze(items);
-  }
-  const before =
-    previous !== null && typeof previous === "object" && !Array.isArray(previous)
-      ? (previous as Record<string, unknown>)
-      : undefined;
-  const entries = Object.entries(value).filter(([, nested]) => nested !== undefined);
-  const copy: Record<string, unknown> = {};
-  let same = before !== undefined && Object.keys(before).length === entries.length;
-  for (const [key, nested] of entries) {
-    const shared = share(nested, before?.[key]);
-    copy[key] = shared;
-    if (same && !(before !== undefined && Object.hasOwn(before, key) && before[key] === shared))
-      same = false;
-  }
-  if (same && before !== undefined) return before;
-  owned.add(copy);
-  return Object.freeze(copy);
-};
 
 const snapshotSource = (
   source: ApplicationSourceDocument,
   previous?: StudioApplicationSourceSnapshot,
-): StudioApplicationSourceSnapshot => share(source, previous) as StudioApplicationSourceSnapshot;
-
-/** Whether `source` is a snapshot a history holds (frozen, shared) rather than a copy someone made. */
-export const isStudioDraftSnapshot = (source: unknown): boolean =>
-  source !== null && typeof source === "object" && owned.has(source);
+): StudioApplicationSourceSnapshot =>
+  shareSnapshot(source, previous) as StudioApplicationSourceSnapshot;
 
 /**
  * The full parse the platform will run, taken once per save: a mutable copy in the shape the
- * source contract defines. Edits are typed commands' output and are not parsed one by one.
+ * source contract defines.
  */
 const mutableSourceCopy = (source: StudioApplicationSourceSnapshot): ApplicationSourceDocument => {
   const cloned: unknown = structuredClone(source);
@@ -236,6 +195,8 @@ export const createStudioApplicationDraftHistoryController = (
   ];
   let historyIndex = 0;
   let isSaving = false;
+  // The entry that did not pass the full parse at save, so it is not parsed and logged again.
+  let unsavableRevision = -1;
   // The merge key of the newest entry, while the next edit may still extend it.
   let mergeKey: string | undefined;
   let lastSaveOutcome: StudioApplicationDraftSaveOutcome | null = null;
@@ -266,20 +227,60 @@ export const createStudioApplicationDraftHistoryController = (
 
   return Object.freeze({
     getState,
-    edit: (source: ApplicationSourceDocument, merge?: string): boolean => {
-      // A typed command's output is taken as it is: the one comparison below shares every node the
-      // edit did not touch, and the full parse is made when the draft is saved.
-      if (source.key !== key) return false;
+    edit: (
+      source: ApplicationSourceDocument,
+      merge?: string,
+    ): StudioApplicationDraftEditOutcome => {
+      if (source.key !== key) {
+        console.error(
+          "[studio] the draft history refused a command's source: STUDIO_DRAFT_EDIT_REFUSED (another application's key)",
+        );
+        return "refused";
+      }
 
+      // One comparison shares every node the edit did not touch.
       const current = history[historyIndex]!;
-      const next = snapshotSource(source, current.source);
-      if (next === current.source) return false;
+      let next: StudioApplicationSourceSnapshot;
+      try {
+        next = snapshotSource(source, current.source);
+      } catch (error) {
+        console.error(
+          `[studio] the draft history refused a command's source: STUDIO_DRAFT_EDIT_REFUSED (${describeFailure(error)})`,
+        );
+        return "refused";
+      }
+      if (next === current.source) return "unchanged";
+
+      // A discrete command (no merge key) is checked against the source contract here, so a bad
+      // command is refused at the edit and not at the next autosave. A typing run is made of
+      // settings commands, which check the block's own settings; nothing is parsed per keystroke.
+      if (merge === undefined) {
+        const checked = applicationSourceDocumentSchema.safeParse(next);
+        if (!checked.success) {
+          console.error(
+            `[studio] the draft history refused a command's source: STUDIO_DRAFT_EDIT_REFUSED (${describeFailure(checked.error)})`,
+          );
+          return "refused";
+        }
+      }
 
       const extendsNewest =
         merge !== undefined &&
         merge === mergeKey &&
         historyIndex > 0 &&
         historyIndex === history.length - 1;
+      // A typing run that comes back to where it started leaves nothing to save or undo.
+      if (extendsNewest) {
+        const before = history[historyIndex - 1]!;
+        if (snapshotSource(source, before.source) === before.source) {
+          history = history.slice(0, historyIndex);
+          historyIndex -= 1;
+          mergeKey = undefined;
+          lastSaveOutcome = null;
+          notify();
+          return "edited";
+        }
+      }
       history = history.slice(0, extendsNewest ? historyIndex : historyIndex + 1);
       history.push({ source: next, revision: ++revisions });
       if (history.length > maximumHistoryEntries)
@@ -288,7 +289,7 @@ export const createStudioApplicationDraftHistoryController = (
       mergeKey = merge;
       lastSaveOutcome = null;
       notify();
-      return true;
+      return "edited";
     },
     undo: (): boolean => {
       if (historyIndex === 0) return false;
@@ -317,8 +318,8 @@ export const createStudioApplicationDraftHistoryController = (
       notify();
 
       let outcome: StudioApplicationDraftSaveOutcome;
-      try {
-        let command: StudioApplicationDraftSaveCommand;
+      let command: StudioApplicationDraftSaveCommand | undefined;
+      if (submitted.revision !== unsavableRevision) {
         try {
           command = Object.freeze({
             rootId: platformIdSchema.parse(rootId),
@@ -326,14 +327,21 @@ export const createStudioApplicationDraftHistoryController = (
             source: mutableSourceCopy(submitted.source),
           });
         } catch (error) {
+          // A fault of this editor, said once; the same entry is not sent (or logged) again.
+          unsavableRevision = submitted.revision;
           console.error(
             `[studio] the draft does not match the application source contract: ${describeFailure(error)}`,
           );
-          throw Object.assign(new Error("STUDIO_DRAFT_SOURCE_INVALID"), {
-            code: "DEFINITION_CONTEXT_REFUSED",
-            reason: "source_invalid",
-          });
         }
+      }
+      if (command === undefined) {
+        isSaving = false;
+        outcome = Object.freeze({ kind: "failed" });
+        lastSaveOutcome = outcome;
+        notify();
+        return outcome;
+      }
+      try {
         const response = await port.saveDraft(command);
         const parsed = storedDefinitionDraftSchema.safeParse(response);
         if (!parsed.success)

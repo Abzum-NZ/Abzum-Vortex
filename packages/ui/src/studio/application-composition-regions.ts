@@ -24,7 +24,7 @@ import {
   validateStoredShell,
   validateStoredZone,
 } from "@vortex/platform/schema";
-import { isStudioDraftSnapshot } from "./application-draft-history";
+import { isStudioDraftSnapshot } from "./draft-snapshot";
 import { resolveStudioSelectionInspectorContext } from "./selection-inspector";
 import type { StudioSemanticSelection } from "./semantic-selection";
 import type {
@@ -186,7 +186,7 @@ export const releaseFor = (
 export const itemSlots = (
   catalogue: ImmutablePlatformBlockCatalogue,
   item: SourceItem,
-): Map<string, Zone> => {
+): ReadonlyMap<string, Readonly<Zone>> => {
   // A block of a history snapshot never changes, so its slots are read (and its settings checked)
   // once, however many ways the Inspector and the canvas ask for them.
   if (!isStudioDraftSnapshot(item)) return readItemSlots(catalogue, item);
@@ -198,23 +198,24 @@ export const itemSlots = (
 };
 const readSlots = new WeakMap<
   ImmutablePlatformBlockCatalogue,
-  WeakMap<SourceItem, Map<string, Zone>>
+  WeakMap<SourceItem, ReadonlyMap<string, Readonly<Zone>>>
 >();
 
 const readItemSlots = (
   catalogue: ImmutablePlatformBlockCatalogue,
   item: SourceItem,
-): Map<string, Zone> => {
+): ReadonlyMap<string, Readonly<Zone>> => {
   const release = releaseFor(catalogue, item);
   const orders = item.props.vortex.slot_orders ?? {};
-  const result = new Map<string, Zone>();
+  const result = new Map<string, Readonly<Zone>>();
   if (release === undefined) {
     for (const [key, items] of sourceItemChildSlots(item))
-      result.set(key, { items, order: orders[key] });
+      result.set(key, Object.freeze({ items, order: orders[key] }));
     return result;
   }
   for (const [key, slot] of readSourceItem(item, release).slots)
-    if (slot.items !== undefined) result.set(key, { items: slot.items, order: orders[key] });
+    if (slot.items !== undefined)
+      result.set(key, Object.freeze({ items: slot.items, order: orders[key] }));
   return result;
 };
 

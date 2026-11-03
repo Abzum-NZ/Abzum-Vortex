@@ -20,6 +20,7 @@ import {
   createContext,
   useCallback,
   useContext,
+  useDeferredValue,
   useEffect,
   useMemo,
   useRef,
@@ -229,12 +230,14 @@ export function StudioPuckProvider({
   // here, because the model and the metadata that depend on it are made outside the editor.
   const [breakpoint, setBreakpoint] = useState<Breakpoint>(studioInitialBreakpoint);
   const model = useStudioCanvasModel(input, breakpoint);
-  // Why a block's delete, drag or duplicate is unavailable is read once per saved revision (the
-  // compiled one), not at every edit. The change itself is checked against the live draft when it
-  // is made (`applyStudioCanvasChange`), so a reason that is a moment late refuses nothing wrongly.
+  // Why a block's delete, drag or duplicate is unavailable is read from the live draft, so a block
+  // added a moment ago already says what it cannot do, and a reason clears as soon as what caused
+  // it is gone. The read is cheap (it does not grow faster than the page) and is made at lower
+  // priority than typing: the deferred draft is the one a keystroke has not just replaced.
+  const referenceSource = useDeferredValue(input.source);
   const readReferences = useMemo(
-    () => studioCanvasReferences(input.compiledSource, model.catalogue),
-    [input.compiledSource, model.catalogue],
+    () => studioCanvasReferences(referenceSource, model.catalogue),
+    [referenceSource, model.catalogue],
   );
   // A new revision usually leaves every reason as it was (a label changed, say); Puck asks every
   // block's permissions again for a new object, so the one held stays while the reasons are the same.
