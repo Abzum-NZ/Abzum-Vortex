@@ -679,7 +679,8 @@ export function useStudioCanvasTab({
         };
       // A conflict means a newer save replaced this revision: its compile reads again, and what is shown stays meanwhile.
       if (result.kind === "conflict") return { state: "superseded" as const, records: {} };
-      console.error(
+      // A read that is temporarily unavailable is an expected race (logged as information); any other cause is a platform fault.
+      (result.kind === "temporarily_unavailable" ? console.info : console.error)(
         `[studio] the canvas records were not read: STUDIO_CANVAS_RECORDS_${result.kind.toUpperCase()}`,
       );
       return { state: "unavailable" as const, records: {} };
