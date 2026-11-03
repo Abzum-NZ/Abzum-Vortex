@@ -77,10 +77,13 @@ begin
       and root.kind = 'application'
     for update;
     if not found
-      or root_row.application_origin_kind is distinct from 'ordinary'
       or root_row.current_release_revision is null
       or p_target_release_revision > root_row.current_release_revision then
       return null;
+    end if;
+    -- Discarding a change to a platform system Application also needs a recent two-step verification.
+    if root_row.application_origin_kind = 'platform_system_application' then
+      perform vortex_definition.require_system_application_step_up_internal();
     end if;
 
     select draft.*

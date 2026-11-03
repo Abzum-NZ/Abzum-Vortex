@@ -31,6 +31,7 @@ import { applicationModuleKeys } from "./application-module-sources";
 import { peopleDirectory, type PeopleDirectoryOwner } from "./module-links";
 import { selectCurrentModuleRelease } from "./definition-dependency-resolution";
 import { DefinitionError } from "./definition-error";
+import { readBuilderApplicationOrigin } from "../access/builder-authority";
 import { createDraftModuleOverlay } from "./publication/draft-module-overlay";
 import { APPLICATION_PLATFORM_COMPATIBILITY_VERSION } from "./platform-compatibility";
 import {
@@ -273,6 +274,18 @@ const projectDraftConditionContexts = (
   return contexts;
 };
 
+/**
+ * Whether the publication must leave a platform system application's protected surface as it was:
+ * a person's publication of it must, the platform's own refresh (the system caller) is what moves it.
+ */
+const protectsSystemSurface = async (
+  context: SessionContext,
+  transaction: RequestDatabaseTransaction,
+  rootId: string,
+): Promise<boolean> =>
+  context.callerKind !== "system" &&
+  (await readBuilderApplicationOrigin(transaction, rootId)) === "platform_system_application";
+
 const authorize = async (
   authority: BuilderAuthority,
   context: SessionContext,
@@ -464,6 +477,8 @@ export const createDatabaseDefinitionPublicationService = (
           candidate,
           roots,
           preparationReleaseNote,
+          undefined,
+          await protectsSystemSurface(context, requestTransaction, parsedCommand.rootId),
         );
         const inlineRootIds = new Set(
           state.moduleOutputs.map((output) => String(output.canonical.envelope.rootId)),
@@ -705,6 +720,7 @@ export const createDatabaseDefinitionPublicationService = (
           roots,
           parsedCommand.releaseNote,
           confirmation.dependencyManifest,
+          await protectsSystemSurface(context, requestTransaction, confirmation.rootId),
         );
         if (
           fingerprintCanonicalValue(recomputed.confirmation) !==

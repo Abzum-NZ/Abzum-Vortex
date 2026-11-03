@@ -188,7 +188,9 @@ export const createBuilderAuthority = (
       return key === requirements.permissionKeys[0] && requirements.recentAuthentication
         ? organizationAccessDeclarationSchema.parse({
             ...declaration,
-            recentAuthentication: builderRecentAuthentication,
+            recentAuthentication: requirements.multiFactor
+              ? roleAcceptanceAuthentication
+              : builderRecentAuthentication,
           })
         : declaration;
     });

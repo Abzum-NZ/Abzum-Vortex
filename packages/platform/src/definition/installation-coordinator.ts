@@ -971,6 +971,7 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
                 applicationRootId: request.applicationRootId,
                 applicationReleaseRevision: active.releaseRevision,
                 expectedModuleBindings: expectedBindings(active.bindings),
+                replacementApplicationReleaseRevision: request.applicationReleaseRevision,
               }),
               request.organizationId,
               request.applicationRootId,

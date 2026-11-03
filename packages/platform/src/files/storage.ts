@@ -87,9 +87,15 @@ export const applicationInstallationActivationCommandSchema = z
   .object(applicationInstallationLifecycleCommandShape)
   .strict();
 
-/** Exact revision-checked detach of one complete Application binding set. */
+/**
+ * Exact revision-checked detach of one complete Application binding set. A platform system
+ * Application is detached only to be replaced: the replacing release revision says so.
+ */
 export const applicationInstallationDetachCommandSchema = z
-  .object(applicationInstallationLifecycleCommandShape)
+  .object({
+    ...applicationInstallationLifecycleCommandShape,
+    replacementApplicationReleaseRevision: revisionSchema.optional(),
+  })
   .strict();
 
 /** Exact persisted Module binding evidence; never caller-authored readiness. */
