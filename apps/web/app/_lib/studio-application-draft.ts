@@ -64,6 +64,7 @@ import {
   createDatabaseDefinitionPublicationService,
   fingerprintCanonicalValue,
   DefinitionCompilationError,
+  readCurrentOrganizationThemeAfterAuthorization,
 } from "@vortex/platform/server";
 import { studioUsesSignature } from "@vortex/ui/studio/contextual-palette";
 import type {
@@ -621,9 +622,17 @@ export const loadStudioApplicationDraft = async (
               compositionPolicy: IMMUTABLE_PLATFORM_BLOCK_CATALOGUE.compositionPolicy,
               releases: [],
             };
+        // The canvas draws the application as it runs: the draft's theme through the organisation's.
+        const organizationTheme = canvas
+          ? await readCurrentOrganizationThemeAfterAuthorization(transaction)
+          : undefined;
         const resourcesOf = (request: StudioViewRequest): StudioViewResources => ({
           request,
-          themeOptions: request.kind === "theme" ? studioThemeOptions : null,
+          // The Theme tab marks the settings the organisation theme decides where the application chose none.
+          themeOptions:
+            request.kind === "theme"
+              ? { ...studioThemeOptions, organization: organizationTheme?.selection ?? {} }
+              : null,
           fieldInputControlReleases: canvasOf(request) ? FIELD_INPUT_CONTROL_RELEASES : null,
           platformThemeTokens: canvasOf(request) ? (themeRelease?.tokens ?? null) : null,
         });
@@ -676,6 +685,7 @@ export const loadStudioApplicationDraft = async (
                     draft.source.body.pages,
                     compiled.compilation.canonical.content,
                     request.pageAlias,
+                    organizationTheme?.selection,
                   )
                 : null,
             );

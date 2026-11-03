@@ -2,8 +2,14 @@
 import { Spinner } from "@vortex/ui/components/spinner";
 import { Item, ItemContent, ItemGroup } from "@vortex/ui/components/item";
 import { useState } from "react";
-import type { SourceApplicationThemeSelection } from "@vortex/platform/schema";
+import {
+  authoredApplicationThemeSelection,
+  canonicalApplicationThemeSelection,
+  effectiveThemeSelection,
+  type SourceApplicationThemeSelection,
+} from "@vortex/platform/schema";
 import { createVortexStyleRootProps, Icon, VORTEX_STYLES } from "@vortex/ui";
+import { Badge } from "@vortex/ui/components/badge";
 import { Button } from "@vortex/ui/components/button";
 import { FieldLabel } from "@vortex/ui/components/field";
 import { Input } from "@vortex/ui/components/input";
@@ -12,6 +18,7 @@ import { Notice } from "@vortex/ui/components/notice";
 import { RadioGroup, RadioGroupItem } from "@vortex/ui/components/radio-group";
 import { ToggleGroup, ToggleGroupItem } from "@vortex/ui/components/toggle-group";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@vortex/ui/components/tooltip";
+import { NavigationLink } from "@vortex/ui/routing";
 import { studioNotice } from "./studio-save-state";
 import { cn } from "@vortex/ui/lib/utils";
 import {
@@ -174,10 +181,14 @@ function Swatch({
 /**
  * The Theme tab: shadcn create's settings for the whole application, kept in the draft's one theme
  * selection. Each change, a swatch, a pasted preset code or Shuffle, is resolved with the checks
- * publication runs before it reaches the draft, and the canvas then draws it; Studio's own frame
- * keeps its Studio theme. Only options of the pinned shadcn 4.21.0 catalogue are offered.
+ * publication runs before it reaches the draft, and the canvas then draws it. Only options of the
+ * pinned shadcn 4.21.0 catalogue are offered. The organisation theme editor is this same panel: it
+ * passes no `base` and no `onPreset` (an organisation theme is a selection, never a platform
+ * release pin), so the platform theme cards are not offered, and it names its own title and help.
  */
 export function StudioThemePanel({
+  title = "Theme",
+  description = "How every page of this application looks. Changes show on the canvas and save automatically.",
   selection,
   base,
   options,
@@ -185,9 +196,17 @@ export function StudioThemePanel({
   hidden,
   onChange,
   onPreset,
+  organizationThemeHref,
+  shuffle: offerShuffle = true,
 }: Readonly<{
+  /** Whether Shuffle is offered; the organisation editor turns it off (one click would re-theme every application). */
+  shuffle?: boolean;
+  /** Where the organisation theme is edited; offered by an application's Theme tab, not by the editor itself. */
+  organizationThemeHref?: string;
+  title?: string;
+  description?: string;
   selection: SourceApplicationThemeSelection;
-  base: Readonly<{ catalogue_theme_id: string; release_version: string }>;
+  base?: Readonly<{ catalogue_theme_id: string; release_version: string }>;
   options: StudioThemeOptions;
   disabled: boolean;
   hidden: boolean;
@@ -197,7 +216,7 @@ export function StudioThemePanel({
     what: string,
   ) => Promise<StudioThemeChangeOutcome & Readonly<{ problems?: readonly string[] }>>;
   /** Puts a complete theme (its release and selection) in the draft after it resolves. */
-  onPreset: (
+  onPreset?: (
     next: StudioThemePreset,
     what: string,
   ) => Promise<StudioThemeChangeOutcome & Readonly<{ problems?: readonly string[] }>>;
@@ -208,6 +227,28 @@ export function StudioThemePanel({
   const locked = disabled || pending;
   const dimension = (key: StudioThemeDimensionKey) =>
     options.dimensions.find((entry) => entry.key === key)!;
+  // What is drawn: a setting the application left at the platform default follows the organisation.
+  const shown = authoredApplicationThemeSelection(
+    effectiveThemeSelection(canonicalApplicationThemeSelection(selection), options.organization),
+  );
+  const follows = (...keys: StudioThemeDimensionKey[]) =>
+    keys.filter((key) => shown[key] !== selection[key]);
+  /** The marker of a group whose settings follow the organisation, with what they follow. */
+  const followMarker = (...keys: StudioThemeDimensionKey[]) => {
+    const following = follows(...keys);
+    if (following.length === 0) return undefined;
+    const names = following
+      .map((key) => studioThemeOptionLabel(options, key, shown[key]))
+      .join(", ");
+    return (
+      <Tooltip>
+        <TooltipTrigger render={<Badge variant="outline" />}>Organisation</TooltipTrigger>
+        <TooltipContent>
+          Follows the organisation theme ({names}). Choose another value to override.
+        </TooltipContent>
+      </Tooltip>
+    );
+  };
   let current = "";
   try {
     current = encodeStudioThemePreset(selection);
@@ -243,13 +284,16 @@ export function StudioThemePanel({
       `${dimension(key).label} set to ${studioThemeOptionLabel(options, key, id)}`,
     );
   };
-  const selectedPreset = options.presets.find(
-    (preset) =>
-      base.catalogue_theme_id === preset.base.catalogueThemeId &&
-      base.release_version === preset.base.releaseVersion,
-  );
+  const selectedPreset =
+    base === undefined
+      ? undefined
+      : options.presets.find(
+          (preset) =>
+            base.catalogue_theme_id === preset.base.catalogueThemeId &&
+            base.release_version === preset.base.releaseVersion,
+        );
   const applyPreset = async (preset: StudioThemePreset) => {
-    if (locked) return;
+    if (locked || onPreset === undefined) return;
     setPending(true);
     try {
       const outcome = await onPreset(preset, `Theme ${preset.label} applied`);
@@ -304,7 +348,7 @@ export function StudioThemePanel({
       {(control) => (
         <StudioOptionControl
           {...control}
-          value={selection[entry.key]}
+          value={shown[entry.key]}
           options={entry.options.map((option) => ({ value: option.id, label: option.label }))}
           disabled={locked}
           onChange={(id) => pick(entry.key, id)}
@@ -316,7 +360,7 @@ export function StudioThemePanel({
     <ToggleGroup
       aria-label={entry.label}
       variant="outline"
-      value={[selection[entry.key]]}
+      value={[shown[entry.key]]}
       disabled={locked}
       className="max-w-full flex-wrap"
       onValueChange={(next) => {
@@ -337,13 +381,41 @@ export function StudioThemePanel({
 
   return (
     <StudioPanelShell
-      title="Theme"
+      title={title}
       hidden={hidden}
-      description="How every page of this application looks. Changes show on the canvas and save automatically."
+      description={description}
       action={
-        <StudioIconButton label="Shuffle theme" disabled={locked} onClick={() => void shuffle()}>
-          <Icon name="redo" />
-        </StudioIconButton>
+        <div className="flex items-center gap-1">
+          {organizationThemeHref !== undefined && (
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <Button
+                    variant="ghost"
+                    size="icon-xs"
+                    nativeButton={false}
+                    aria-label="Open the organisation theme"
+                    render={<NavigationLink href={organizationThemeHref} />}
+                  />
+                }
+              >
+                <Icon name="palette" />
+              </TooltipTrigger>
+              <TooltipContent>
+                Settings left at the platform default follow the organisation theme. Open it.
+              </TooltipContent>
+            </Tooltip>
+          )}
+          {offerShuffle && (
+            <StudioIconButton
+              label="Shuffle theme"
+              disabled={locked}
+              onClick={() => void shuffle()}
+            >
+              <Icon name="redo" />
+            </StudioIconButton>
+          )}
+        </div>
       }
     >
       {feedback !== null && (
@@ -369,27 +441,29 @@ export function StudioThemePanel({
           Checking the theme…
         </div>
       )}
-      <StudioInspectorGroup title="Themes">
-        <ToggleGroup
-          variant="outline"
-          spacing={3}
-          value={selectedPreset === undefined ? [] : [selectedPreset.key]}
-          disabled={locked}
-          onValueChange={(next) => {
-            const preset = options.presets.find((candidate) => candidate.key === next[0]);
-            if (preset !== undefined) void applyPreset(preset);
-          }}
-          className="grid w-full grid-cols-1 sm:grid-cols-2"
-        >
-          {options.presets.map((preset) => (
-            <ThemePresetItem key={preset.key} preset={preset} />
-          ))}
-        </ToggleGroup>
-      </StudioInspectorGroup>
-      <StudioInspectorGroup title="Style">
+      {onPreset !== undefined && (
+        <StudioInspectorGroup title="Themes">
+          <ToggleGroup
+            variant="outline"
+            spacing={3}
+            value={selectedPreset === undefined ? [] : [selectedPreset.key]}
+            disabled={locked}
+            onValueChange={(next) => {
+              const preset = options.presets.find((candidate) => candidate.key === next[0]);
+              if (preset !== undefined) void applyPreset(preset);
+            }}
+            className="grid w-full grid-cols-1 sm:grid-cols-2"
+          >
+            {options.presets.map((preset) => (
+              <ThemePresetItem key={preset.key} preset={preset} />
+            ))}
+          </ToggleGroup>
+        </StudioInspectorGroup>
+      )}
+      <StudioInspectorGroup title="Style" action={followMarker("style")}>
         <RadioGroup
           aria-label="Style"
-          value={selection.style}
+          value={shown.style}
           disabled={locked}
           onValueChange={(next) => pick("style", String(next))}
           className="grid grid-cols-2 gap-3"
@@ -400,7 +474,7 @@ export function StudioThemePanel({
               data-vortex-focus-group=""
               className={cn(
                 "relative space-y-2 rounded-lg p-2 hover:bg-accent",
-                selection.style === option.id && "ring-2 ring-primary",
+                shown.style === option.id && "ring-2 ring-primary",
                 locked && "opacity-50",
               )}
             >
@@ -432,22 +506,26 @@ export function StudioThemePanel({
         </RadioGroup>
       </StudioInspectorGroup>
       {(["base_color", "theme", "chart_color"] as const).map((key) => (
-        <StudioInspectorGroup key={key} title={dimension(key).label}>
+        <StudioInspectorGroup key={key} title={dimension(key).label} action={followMarker(key)}>
           <Swatch
             dimension={dimension(key)}
-            value={selection[key]}
+            value={shown[key]}
             disabled={locked}
             onPick={(id) => pick(key, id)}
           />
         </StudioInspectorGroup>
       ))}
-      <StudioInspectorGroup title="Radius">{segmented(dimension("radius"))}</StudioInspectorGroup>
-      <StudioInspectorGroup title="Fonts">
+      <StudioInspectorGroup title="Radius" action={followMarker("radius")}>
+        {segmented(dimension("radius"))}
+      </StudioInspectorGroup>
+      <StudioInspectorGroup title="Fonts" action={followMarker("body_font", "heading_font")}>
         {select(dimension("body_font"))}
         {select(dimension("heading_font"))}
       </StudioInspectorGroup>
-      <StudioInspectorGroup title="Icons">{select(dimension("icon_library"))}</StudioInspectorGroup>
-      <StudioInspectorGroup title="Menu">
+      <StudioInspectorGroup title="Icons" action={followMarker("icon_library")}>
+        {select(dimension("icon_library"))}
+      </StudioInspectorGroup>
+      <StudioInspectorGroup title="Menu" action={followMarker("menu_color", "menu_accent")}>
         <div className="space-y-2">
           <p className="text-sm font-medium">Colour</p>
           {segmented(dimension("menu_color"))}
