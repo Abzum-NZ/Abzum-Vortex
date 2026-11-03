@@ -348,14 +348,17 @@ function StudioActionBar({ id, type }: Readonly<{ id: string; type: string }>) {
   const style: CSSProperties = {
     scale: inverse,
     translate: `${shift}px 0`,
-    transformOrigin: below ? "left top" : "left bottom",
+    transformOrigin: below ? "right top" : "right bottom",
+    // Puck keeps an empty drag handle (16px wide on screen) at the block's top right corner; the bar
+    // ends before it, so no action sits under it.
+    right: 16 * inverse,
   };
   const first = parent === undefined ? 0 : 1;
   return (
     <div
       ref={anchor}
       data-vortex-canvas-action-bar-anchor=""
-      className={`absolute left-0 z-20 ${below ? "top-full pt-2" : "bottom-full pb-2"} ${dragging ? "pointer-events-none" : "pointer-events-auto"}`}
+      className={`absolute z-20 ${below ? "top-full pt-2" : "bottom-full pb-2"} ${dragging ? "pointer-events-none" : "pointer-events-auto"}`}
       style={style}
     >
       <ButtonGroup
@@ -393,7 +396,7 @@ function StudioActionBar({ id, type }: Readonly<{ id: string; type: string }>) {
         <StudioCanvasMore
           id={id}
           actions={input.blockActions}
-          reasons={{ move: moveReason, remove: deleteReason }}
+          reasons={{ move: moveReason, wrap: knownCause, remove: deleteReason }}
           tooltip={tooltip}
           onChoose={act}
           {...stop(first + 1)}

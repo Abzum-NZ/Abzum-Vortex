@@ -20,8 +20,12 @@ export type StudioMoreChoice = StudioBlockDialogKind | "remove";
 type MoreProps = Readonly<{
   id: string;
   actions: StudioBlockActions;
-  /** Why Move to and Remove are unavailable (Puck's permissions and the draft's references). */
-  reasons: Readonly<{ move: string | undefined; remove: string | undefined }>;
+  /** Why Move to, Wrap and Remove are unavailable (the screen, Puck permissions and the draft references). */
+  reasons: Readonly<{
+    move: string | undefined;
+    wrap: string | undefined;
+    remove: string | undefined;
+  }>;
   tooltip: ReasonedTooltipProps;
   /** The toolbar's roving tab stop, as the bar's other buttons have. */
   stop: boolean;
@@ -78,7 +82,7 @@ function MoreEntries({
       />
       <MoreEntry
         label="Wrap in container…"
-        reason={available.wrap}
+        reason={reasons.wrap ?? available.wrap}
         onChoose={() => onChoose("wrap")}
       />
       <MoreEntry label="Used in…" reason={undefined} onChoose={() => onChoose("usedIn")} />
