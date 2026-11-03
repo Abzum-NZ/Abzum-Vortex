@@ -23,7 +23,7 @@ import { Icon } from "../icons";
 import { Reasoned, type ReasonedTooltipProps } from "../components/reasoned";
 import { studioLimitReason } from "./studio-limit";
 import { studioCanvasPermissionReason } from "./studio-canvas-permissions";
-import { puckSelectedAlias, puckSelectorOf } from "./studio-canvas-data";
+import { puckNeighbourOf, puckSelectorOf } from "./studio-canvas-data";
 import { studioCanvasVisible, useStudioCanvasView } from "./studio-canvas-scale";
 import { StudioCanvasIframe } from "./studio-canvas-root";
 import { useStudioScreen } from "./studio-canvas-screen";
@@ -31,8 +31,15 @@ import { useStudioCanvas } from "./studio-puck-provider";
 
 const usePuckSelector = createUsePuck();
 
-/** The block whose bar an action chose: that bar takes the keyboard focus when it appears. */
-let focusBarOf: string | null = null;
+/**
+ * The bar an action chose takes the keyboard focus when it appears: the bar of that block, or of
+ * the next one to be selected (`id` null, as after Duplicate, whose copy gets its id from the
+ * draft) within a moment. Never left set: it lapses.
+ */
+let focusBar: { id: string | null; until: number } | null = null;
+const focusBarOn = (id: string | null) => {
+  focusBar = { id, until: Date.now() + 1500 };
+};
 
 type BarActionProps = Readonly<{
   label: string;
@@ -146,12 +153,6 @@ function StudioActionBar({ id, type }: Readonly<{ id: string; type: string }>) {
             ? (input.disabledReason ?? "Studio is busy; try again in a moment.")
             : undefined;
   const unavailable = knownCause ?? "This isn't available for this block.";
-  // A denial no cause above explains is a defect to find and word, so it is logged, once per block.
-  const unexplained = knownCause === undefined && (!permissions.duplicate || !permissions.delete);
-  useEffect(() => {
-    if (unexplained)
-      console.error("[studio] an action is unavailable for no known reason", { id, permissions });
-  }, [unexplained, id]);
   const reasonFor = (reference: string | undefined, allowed: boolean) =>
     reference ?? (allowed ? undefined : unavailable);
   // A full application cannot take another block: Duplicate says so instead of failing on save.
@@ -159,15 +160,22 @@ function StudioActionBar({ id, type }: Readonly<{ id: string; type: string }>) {
     input.palette?.targets.kind === "available"
       ? (input.palette.targets.targets[0]?.placed ?? 0)
       : 0;
-  const duplicateReason = reasonFor(
+  const duplicateNamed =
     studioLimitReason("compositionPlacements", placed) ??
-      studioCanvasPermissionReason(references, id, "duplicate"),
-    permissions.duplicate,
-  );
-  const deleteReason = reasonFor(
-    studioCanvasPermissionReason(references, id, "delete"),
-    permissions.delete,
-  );
+    studioCanvasPermissionReason(references, id, "duplicate");
+  const deleteNamed = studioCanvasPermissionReason(references, id, "delete");
+  const duplicateReason = reasonFor(duplicateNamed, permissions.duplicate);
+  const deleteReason = reasonFor(deleteNamed, permissions.delete);
+  // A denial that neither the draft nor a cause above explains is a defect to find and word, so it
+  // is logged, once per block.
+  const unexplained =
+    knownCause === undefined &&
+    ((!permissions.duplicate && duplicateNamed === undefined) ||
+      (!permissions.delete && deleteNamed === undefined));
+  useEffect(() => {
+    if (unexplained)
+      console.error("[studio] an action is unavailable for no known reason", { id, permissions });
+  }, [unexplained, id]);
   const inverse = view.scale > 0 ? 1 / view.scale : 1;
   const visible = studioCanvasVisible(view);
   // A tooltip stays inside what the well shows, and is the size of the bar on screen.
@@ -235,8 +243,13 @@ function StudioActionBar({ id, type }: Readonly<{ id: string; type: string }>) {
   }, [stopped]);
   // The bar of the block an action chose takes the focus, so the keyboard does not start over.
   useEffect(() => {
-    if (focusBarOf !== id) return;
-    focusBarOf = null;
+    if (
+      focusBar === null ||
+      Date.now() > focusBar.until ||
+      (focusBar.id !== null && focusBar.id !== id)
+    )
+      return;
+    focusBar = null;
     buttons()[0]?.focus({ preventScroll: true });
   }, [id]);
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
@@ -271,7 +284,7 @@ function StudioActionBar({ id, type }: Readonly<{ id: string; type: string }>) {
       const parentSelector =
         parent === undefined ? undefined : puckSelectorOf(content, parent.props.id);
       if (parent !== undefined && parentSelector !== undefined) {
-        focusBarOf = parent.props.id;
+        focusBarOn(parent.props.id);
         current.dispatch({ type: "setUi", ui: { itemSelector: parentSelector } });
       }
       return;
@@ -286,26 +299,13 @@ function StudioActionBar({ id, type }: Readonly<{ id: string; type: string }>) {
         sourceZone: selector.zone,
       });
       // Puck selects the copy; its bar takes the focus.
-      const copy = getPuck();
-      focusBarOf = puckSelectedAlias(copy.appState.data.content, copy.appState.ui.itemSelector);
+      focusBarOn(null);
       return;
     }
-    // After a delete the selection goes to the next block, the one before, or the parent.
-    const zone = { zone: selector.zone };
-    const neighbour =
-      current.getItemBySelector({ ...zone, index: selector.index + 1 }) ??
-      current.getItemBySelector({ ...zone, index: selector.index - 1 }) ??
-      parent;
+    // The selection goes to the neighbour (the provider sees to that for every removal).
+    const neighbour = puckNeighbourOf(content, selector);
+    if (neighbour !== undefined) focusBarOn(neighbour);
     current.dispatch({ type: "remove", index: selector.index, zone: selector.zone });
-    const after = getPuck();
-    const nextSelector =
-      neighbour === undefined
-        ? undefined
-        : puckSelectorOf(after.appState.data.content, neighbour.props.id);
-    if (neighbour !== undefined && nextSelector !== undefined) {
-      focusBarOf = neighbour.props.id;
-      after.dispatch({ type: "setUi", ui: { itemSelector: nextSelector } });
-    }
   };
   const stop = (index: number) => ({ stop: stopped === index, onStop: () => setStopped(index) });
   const style: CSSProperties = {

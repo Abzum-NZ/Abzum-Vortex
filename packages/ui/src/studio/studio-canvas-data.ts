@@ -180,6 +180,37 @@ export const puckSelectorOf = (
   return search(content, ROOT_ZONE);
 };
 
+/** The items of a Puck zone in its data: the page's root zone or a block's slot. */
+const puckZoneItems = (
+  content: readonly unknown[],
+  zone: string,
+): readonly unknown[] | undefined => {
+  if (zone === ROOT_ZONE) return content;
+  const separator = zone.lastIndexOf(":");
+  const slot = findPuckItem(content, zone.slice(0, separator))?.[zone.slice(separator + 1)];
+  return Array.isArray(slot) ? slot : undefined;
+};
+
+/**
+ * The block that takes the selection when the block at `selector` is removed: the next one beside
+ * it, else the one before, else the block holding the slot (the page's own root has none).
+ */
+export const puckNeighbourOf = (
+  content: readonly unknown[],
+  selector: Required<StudioPuckSelector>,
+): string | undefined => {
+  const items = puckZoneItems(content, selector.zone) ?? [];
+  const idOf = (entry: unknown): string | undefined => {
+    const id = (entry as { props?: { id?: unknown } } | null)?.props?.id;
+    return typeof id === "string" ? id : undefined;
+  };
+  const beside = idOf(items[selector.index + 1]) ?? idOf(items[selector.index - 1]);
+  if (beside !== undefined) return beside;
+  return selector.zone === ROOT_ZONE
+    ? undefined
+    : selector.zone.slice(0, selector.zone.lastIndexOf(":"));
+};
+
 /** The block name Puck's item selector points at in its data, or `null` when it points at no block. */
 export const puckSelectedAlias = (
   content: readonly unknown[],

@@ -43,6 +43,7 @@ import {
   destinationOfZone,
   itemsHold,
   puckItemsHold,
+  puckNeighbourOf,
   puckSelectedAlias,
   puckSelectorOf,
   withoutEmptyPuckZones,
@@ -365,6 +366,21 @@ export function StudioPuckProvider({
         else if (outcome === true) setRefused(null);
         if (id !== undefined) inserted.current.delete(id);
       }, 0);
+      return;
+    }
+    // A removed block hands the selection to its neighbour (the next, the one before, or the block
+    // holding the slot), for the Delete key and the action bar alike. Puck keeps its selector as it
+    // was, which would now name the neighbour while Studio still names the removed block.
+    if (action.type === "remove" && now.canvasShown) {
+      const neighbour = puckNeighbourOf(previous.data.content, {
+        index: action.index,
+        zone: action.zone,
+      });
+      queueMicrotask(() => {
+        void latest.current.input.onSelectPlacement(neighbour ?? null).then((accepted) => {
+          if (!accepted) showSelection.current?.(latest.current.input.selectedPlacementAlias);
+        });
+      });
       return;
     }
     if (notSelectionActions.has(action.type) || !now.canvasShown) return;
