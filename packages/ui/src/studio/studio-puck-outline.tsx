@@ -13,7 +13,8 @@ import { useStudioCanvas } from "./studio-puck-provider";
  * Puck's outline in a region of Studio's own: the Puck colour map, an accessible name, a height of its
  * own (Puck's outline scrolls its rows in its own wrapper and draws only the rows in view, so it needs
  * the panel's height less what is drawn below it), and inert while the draft takes no edits, so the
- * outline, the canvas and the bar agree. Puck's rows are native buttons: Tab and Enter reach and select
+ * outline, the canvas and the bar agree. It spans the panel's padding: Puck's rows need more width than the
+ * padded body leaves, and its list scrolls sideways, which clips the selected row's border. Puck's rows are native buttons: Tab and Enter reach and select
  * them. Arrow-key movement, one tab stop and tree roles have no public Puck route (accepted 3 Nov).
  */
 export function StudioOutlineRegion({ children }: Readonly<{ children: ReactNode }>) {
@@ -25,7 +26,7 @@ export function StudioOutlineRegion({ children }: Readonly<{ children: ReactNode
       aria-label="Outline of the canvas blocks"
       inert={inert}
       style={studioPuckStyle}
-      className={cn("flex min-h-0 min-w-0 flex-1 flex-col pr-px", inert && "opacity-60")}
+      className={cn("-mx-4 flex min-h-0 min-w-0 flex-1 flex-col", inert && "opacity-60")}
     >
       {children}
     </div>
