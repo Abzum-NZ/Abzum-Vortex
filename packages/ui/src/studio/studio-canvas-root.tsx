@@ -80,7 +80,7 @@ function CanvasSlot({
       {...(dragging ? { "data-vortex-dragging": "" } : {})}
       {...(breakpoint === "desktop" ? {} : { "data-vortex-view-only": "" })}
       aria-label={empty ? "Empty content area" : undefined}
-      className={empty ? "relative min-h-48" : "min-h-24"}
+      className={empty ? "relative min-h-48 min-w-32" : "min-h-24"}
     >
       <Slot
         style={{
