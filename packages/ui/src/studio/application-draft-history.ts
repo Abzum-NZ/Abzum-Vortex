@@ -72,20 +72,64 @@ export interface StudioApplicationDraftHistoryController {
   subscribe(listener: StudioApplicationDraftHistoryListener): () => void;
 }
 
-const snapshotSource = (source: ApplicationSourceDocument): StudioApplicationSourceSnapshot => {
-  // Definition persists authored source as JSON, which omits optional undefined properties.
-  const serialized: unknown = JSON.parse(JSON.stringify(source));
-  return deepFreeze(applicationSourceDocumentSchema.parse(serialized));
-};
+/** Every node a snapshot owns: deeply frozen, free of `undefined` properties, shared between entries. */
+const owned = new WeakSet<object>();
 
-const deepFreeze = <Value>(value: Value): Readonly<Value> => {
-  if (value !== null && typeof value === "object") {
-    for (const nested of Object.values(value)) deepFreeze(nested);
-    return Object.freeze(value);
+/** Undo and Redo keep at most this many entries; the oldest are dropped. */
+const maximumHistoryEntries = 100;
+
+/**
+ * The frozen copy of `value` that shares every node equal to the one at the same place in
+ * `previous`, so an edit costs one comparison and the nodes it did not touch keep their identity
+ * (memos keyed on a page or slot object keep hitting). Nodes this module already froze are reused
+ * without a look. Like the JSON the draft is stored as, an `undefined` property is left out.
+ */
+const share = (value: unknown, previous: unknown): unknown => {
+  if (value === null || typeof value !== "object") return value;
+  if (owned.has(value)) return value;
+  if (Array.isArray(value)) {
+    const before = Array.isArray(previous) ? previous : undefined;
+    const items = value.map((item, index) => share(item, before?.[index]));
+    if (
+      before !== undefined &&
+      before.length === items.length &&
+      items.every((item, index) => item === before[index])
+    )
+      return before;
+    owned.add(items);
+    return Object.freeze(items);
   }
-  return value;
+  const before =
+    previous !== null && typeof previous === "object" && !Array.isArray(previous)
+      ? (previous as Record<string, unknown>)
+      : undefined;
+  const entries = Object.entries(value).filter(([, nested]) => nested !== undefined);
+  const copy: Record<string, unknown> = {};
+  let same = before !== undefined && Object.keys(before).length === entries.length;
+  for (const [key, nested] of entries) {
+    const shared = share(nested, before?.[key]);
+    copy[key] = shared;
+    if (same && !(before !== undefined && Object.hasOwn(before, key) && before[key] === shared))
+      same = false;
+  }
+  if (same && before !== undefined) return before;
+  owned.add(copy);
+  return Object.freeze(copy);
 };
 
+const snapshotSource = (
+  source: ApplicationSourceDocument,
+  previous?: StudioApplicationSourceSnapshot,
+): StudioApplicationSourceSnapshot => share(source, previous) as StudioApplicationSourceSnapshot;
+
+/** Whether `source` is a snapshot a history holds (frozen, shared) rather than a copy someone made. */
+export const isStudioDraftSnapshot = (source: unknown): boolean =>
+  source !== null && typeof source === "object" && owned.has(source);
+
+/**
+ * The full parse the platform will run, taken once per save: a mutable copy in the shape the
+ * source contract defines. Edits are typed commands' output and are not parsed one by one.
+ */
 const mutableSourceCopy = (source: StudioApplicationSourceSnapshot): ApplicationSourceDocument => {
   const cloned: unknown = structuredClone(source);
   return applicationSourceDocumentSchema.parse(cloned);
@@ -182,8 +226,14 @@ export const createStudioApplicationDraftHistoryController = (
   const organizationId = parsedInitialDraft.organizationId;
   const key = parsedInitialDraft.key;
   let draftRevision = parsedInitialDraft.draftRevision;
+  // The saved source, and the revision number of the history entry that holds it: the draft is
+  // dirty exactly when the entry on screen is not that one, so no state is compared in depth.
   let baseline = snapshotSource(parsedInitialDraft.source);
-  let history = [baseline];
+  let revisions = 0;
+  let baselineRevision = revisions;
+  let history: { source: StudioApplicationSourceSnapshot; revision: number }[] = [
+    { source: baseline, revision: baselineRevision },
+  ];
   let historyIndex = 0;
   let isSaving = false;
   // The merge key of the newest entry, while the next edit may still extend it.
@@ -195,10 +245,10 @@ export const createStudioApplicationDraftHistoryController = (
     Object.freeze({
       rootId,
       draftRevision,
-      source: history[historyIndex]!,
+      source: history[historyIndex]!.source,
       canUndo: historyIndex > 0,
       canRedo: historyIndex < history.length - 1,
-      isDirty: !sameValue(history[historyIndex], baseline),
+      isDirty: history[historyIndex]!.revision !== baselineRevision,
       isSaving,
       lastSaveOutcome,
     });
@@ -217,11 +267,13 @@ export const createStudioApplicationDraftHistoryController = (
   return Object.freeze({
     getState,
     edit: (source: ApplicationSourceDocument, merge?: string): boolean => {
-      const parsed = applicationSourceDocumentSchema.safeParse(source);
-      if (!parsed.success || parsed.data.key !== key) return false;
+      // A typed command's output is taken as it is: the one comparison below shares every node the
+      // edit did not touch, and the full parse is made when the draft is saved.
+      if (source.key !== key) return false;
 
-      const next = snapshotSource(parsed.data);
-      if (sameValue(next, history[historyIndex])) return false;
+      const current = history[historyIndex]!;
+      const next = snapshotSource(source, current.source);
+      if (next === current.source) return false;
 
       const extendsNewest =
         merge !== undefined &&
@@ -229,7 +281,9 @@ export const createStudioApplicationDraftHistoryController = (
         historyIndex > 0 &&
         historyIndex === history.length - 1;
       history = history.slice(0, extendsNewest ? historyIndex : historyIndex + 1);
-      history.push(next);
+      history.push({ source: next, revision: ++revisions });
+      if (history.length > maximumHistoryEntries)
+        history = history.slice(history.length - maximumHistoryEntries);
       historyIndex = history.length - 1;
       mergeKey = merge;
       lastSaveOutcome = null;
@@ -256,12 +310,7 @@ export const createStudioApplicationDraftHistoryController = (
       if (isSaving) return Object.freeze({ kind: "busy" });
 
       const expectedDraftRevision = draftRevision;
-      const submittedSource = history[historyIndex]!;
-      const command: StudioApplicationDraftSaveCommand = Object.freeze({
-        rootId: platformIdSchema.parse(rootId),
-        expectedDraftRevision,
-        source: mutableSourceCopy(submittedSource),
-      });
+      const submitted = history[historyIndex]!;
 
       isSaving = true;
       lastSaveOutcome = null;
@@ -269,12 +318,24 @@ export const createStudioApplicationDraftHistoryController = (
 
       let outcome: StudioApplicationDraftSaveOutcome;
       try {
+        let command: StudioApplicationDraftSaveCommand;
+        try {
+          command = Object.freeze({
+            rootId: platformIdSchema.parse(rootId),
+            expectedDraftRevision,
+            source: mutableSourceCopy(submitted.source),
+          });
+        } catch (error) {
+          console.error(
+            `[studio] the draft does not match the application source contract: ${describeFailure(error)}`,
+          );
+          throw Object.assign(new Error("STUDIO_DRAFT_SOURCE_INVALID"), {
+            code: "DEFINITION_CONTEXT_REFUSED",
+            reason: "source_invalid",
+          });
+        }
         const response = await port.saveDraft(command);
         const parsed = storedDefinitionDraftSchema.safeParse(response);
-        const returnedSource =
-          parsed.success && parsed.data.kind === "application"
-            ? snapshotSource(parsed.data.source)
-            : undefined;
         if (!parsed.success)
           console.error(
             `[studio] application draft save response invalid: ${describeFailure(parsed.error)}`,
@@ -282,12 +343,11 @@ export const createStudioApplicationDraftHistoryController = (
         if (
           !parsed.success ||
           parsed.data.kind !== "application" ||
-          returnedSource === undefined ||
           parsed.data.rootId !== rootId ||
           parsed.data.organizationId !== organizationId ||
           parsed.data.draftRevision !== expectedDraftRevision + 1 ||
           parsed.data.key !== key ||
-          !sameValue(returnedSource, submittedSource)
+          !sameValue(parsed.data.source, command.source)
         ) {
           if (parsed.success)
             console.error(
@@ -296,7 +356,8 @@ export const createStudioApplicationDraftHistoryController = (
           outcome = Object.freeze({ kind: "failed" });
         } else {
           draftRevision = parsed.data.draftRevision;
-          baseline = returnedSource;
+          baseline = snapshotSource(parsed.data.source, submitted.source);
+          baselineRevision = submitted.revision;
           outcome = Object.freeze({ kind: "saved", draftRevision });
         }
       } catch (error) {
@@ -326,12 +387,13 @@ export const createStudioApplicationDraftHistoryController = (
       )
         return false;
 
-      const next = snapshotSource(parsed.source);
-      if (parsed.draftRevision === draftRevision && !sameValue(next, baseline)) return false;
+      const next = snapshotSource(parsed.source, baseline);
+      if (parsed.draftRevision === draftRevision && next !== baseline) return false;
 
       draftRevision = parsed.draftRevision;
       baseline = next;
-      history = [next];
+      baselineRevision = ++revisions;
+      history = [{ source: next, revision: baselineRevision }];
       historyIndex = 0;
       mergeKey = undefined;
       lastSaveOutcome = null;

@@ -3,7 +3,6 @@ import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } fro
 import { whenNotDragging, type StudioDragGate } from "@vortex/ui/studio/puck-provider";
 import {
   applicationSourceDocumentSchema,
-  canonicalJson,
   describeFailure,
   summarizeSourceChange,
   type SourceChangeRow,
@@ -14,6 +13,7 @@ import {
 import {
   createStudioApplicationDraftHistoryController,
   createStudioSemanticSelectionStore,
+  isStudioDraftSnapshot,
   type StudioApplicationDraftHistoryController,
   type StudioApplicationDraftHistoryState,
   type StudioBorrowedChoices,
@@ -207,6 +207,20 @@ type StudioViewCache = Readonly<{
   views: Map<string, LoadedView>;
 }>;
 
+const releaseIds = (catalogue: StudioCatalogue): string =>
+  catalogue.releases
+    .map((release) => `${release.blockId}@${release.releaseVersion}`)
+    .sort()
+    .join("\n");
+
+/**
+ * The catalogue the editor draws with. The one already held stays while the server's has the same
+ * releases (its identity keys the canvas config, so it must not change for nothing); a block
+ * released during the visit is a different list and replaces it.
+ */
+const catalogueFor = (held: StudioCatalogue, read: StudioCatalogue): StudioCatalogue =>
+  held.releases.length > 0 && releaseIds(held) === releaseIds(read) ? held : read;
+
 /** Revision-bound metadata is replaced; immutable editor resources remain for this visit. */
 const viewOf = (
   { draft, previewShape }: Pick<LoadedResult, "draft" | "previewShape">,
@@ -215,9 +229,9 @@ const viewOf = (
   previous: StudioCompiledView,
 ): StudioCompiledView => ({
   request: loaded.request,
-  // Both are constants of the server for the whole visit: once held, a read never replaces them, so
-  // the canvas config (and Puck's walk of the page under it) changes once per visit, not per read.
-  catalogue: previous.catalogue.releases.length > 0 ? previous.catalogue : loaded.catalogue,
+  // The canvas config (and Puck's walk of the page under it) is keyed on the catalogue, so it
+  // changes only when the list of released blocks does, not at every read.
+  catalogue: catalogueFor(previous.catalogue, loaded.catalogue),
   themeOptions: loaded.themeOptions ?? previous.themeOptions,
   fieldInputControlReleases: previous.fieldInputControlReleases ?? loaded.fieldInputControlReleases,
   platformThemeTokens: loaded.platformThemeTokens,
@@ -287,6 +301,9 @@ export function useStudioDraft({
   const parsedCache = useRef(new WeakMap<object, ApplicationSourceDocument>());
   const parsed = useCallback(
     (source: StudioApplicationDraftHistoryState["source"]): ApplicationSourceDocument => {
+      // A history snapshot is already the validated source, frozen and shared between entries:
+      // it is the one object every reader gets, so a memo on one of its pages keeps hitting.
+      if (isStudioDraftSnapshot(source)) return source;
       const known = parsedCache.current.get(source);
       if (known !== undefined) return known;
       const next = applicationSourceDocumentSchema.parse(source);
@@ -607,11 +624,14 @@ export function useStudioDraft({
       );
       return null;
     }
-    const { catalogue } = result;
     const { borrowedChoices } = result.views[0]!;
+    const catalogue = catalogueFor(catalogueRef.current, result.catalogue);
     // Only the immutable catalogue survives the call. Revision-bound choices belong to its caller.
     catalogueRef.current = catalogue;
-    setView((previous) => ({ ...previous, catalogue }));
+    setView((previous) => ({
+      ...previous,
+      catalogue: catalogueFor(previous.catalogue, catalogue),
+    }));
     selection.reconcile({
       rootId: target.rootId,
       source: parsed(history.getState().source),
@@ -835,7 +855,8 @@ export function useStudioDraft({
       if (history.getState().source !== current.source) return stale;
       if (history.edit(step.source, options.merge))
         return { kind: "done", result: step.result, changed: true };
-      if (canonicalJson(step.source) === canonicalJson(currentSource))
+      // The history refuses only another application's source and an edit that changes nothing.
+      if (step.source.key === currentSource.key)
         return { kind: "done", result: step.result, changed: false };
       console.error(
         "[studio] the draft history refused a command's source: STUDIO_DRAFT_EDIT_REFUSED",

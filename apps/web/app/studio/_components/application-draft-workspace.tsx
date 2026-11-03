@@ -1,6 +1,6 @@
 "use client";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { SourceIdentityReservation } from "@vortex/platform/schema";
+import { describeFailure, type SourceIdentityReservation } from "@vortex/platform/schema";
 import {
   StudioFieldProblemsProvider,
   projectStudioSemanticOutline,
@@ -57,8 +57,11 @@ export type StudioWorkspacePlace = Readonly<{
   frame: StudioFrameDefinition;
   /** Where the application stood in the organisation when the editor opened. */
   standing: ApplicationReleaseStanding;
-  /** The other applications a Navigate step can open, with their pages. */
-  navigationTargets: readonly StudioNavigationApplication[];
+  /**
+   * The other applications a Navigate step can open, with their pages. Read beside the editor's
+   * first load and delivered when finished: the Flows tab lists them once they arrive.
+   */
+  navigationTargets: Promise<readonly StudioNavigationApplication[]>;
 }>;
 
 type WorkspaceProps = Readonly<{
@@ -87,6 +90,24 @@ export function ApplicationDraftWorkspace(props: WorkspaceProps) {
  */
 function ExistingApplicationWorkspace(props: ExistingProps) {
   const { organizationId, place, applications } = props;
+  // The Navigate targets arrive after the editor has opened; the Flows tab lists them from then on.
+  const [navigationTargets, setNavigationTargets] = useState<
+    readonly StudioNavigationApplication[]
+  >([]);
+  useEffect(() => {
+    let current = true;
+    place.navigationTargets.then(
+      (targets) => {
+        if (current) setNavigationTargets(targets);
+      },
+      (error: unknown) => {
+        console.error("[studio] the Navigate targets could not be read", describeFailure(error));
+      },
+    );
+    return () => {
+      current = false;
+    };
+  }, [place.navigationTargets]);
   const [tab, setCurrentTab] = useState<StudioRailKey>(
     isStudioRailKey(props.initialTab) ? props.initialTab : "structure",
   );
@@ -175,7 +196,7 @@ function ExistingApplicationWorkspace(props: ExistingProps) {
     catalogue,
     labels,
     applications,
-    navigationTargets: place.navigationTargets,
+    navigationTargets,
     hidden: tab !== "flows",
     openFlowsTab: () => setTab("flows"),
   });

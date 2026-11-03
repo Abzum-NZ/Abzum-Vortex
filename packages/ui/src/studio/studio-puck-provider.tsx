@@ -56,12 +56,17 @@ import {
   studioScreenOfWidth,
   studioViewports,
 } from "./studio-canvas-screen";
-import type { StudioCanvasMetadata, StudioCanvasViewer } from "./studio-canvas-metadata";
+import {
+  StudioCanvasChannelContext,
+  type StudioCanvasMetadata,
+  type StudioCanvasViewer,
+} from "./studio-canvas-metadata";
 import { StudioDrawerItem } from "./studio-puck-drawer";
 import { studioPuckWords } from "./studio-puck-words";
 import type { StudioCanvasRecordsReader } from "./use-studio-canvas-records";
-import { useStudioCanvasMetadata } from "./use-studio-canvas-metadata";
+import { useStudioCanvasChannelValue } from "./use-studio-canvas-channel";
 import { studioCanvasReferences, type StudioCanvasReferences } from "./studio-canvas-permissions";
+import { sameCompositionValue } from "./composition-references";
 
 export { studioScreens, useStudioScreen } from "./studio-canvas-screen";
 export type { StudioCanvasFrame } from "./studio-canvas-projection";
@@ -224,9 +229,12 @@ export function StudioPuckProvider({
   // here, because the model and the metadata that depend on it are made outside the editor.
   const [breakpoint, setBreakpoint] = useState<Breakpoint>(studioInitialBreakpoint);
   const model = useStudioCanvasModel(input, breakpoint);
+  // Why a block's delete, drag or duplicate is unavailable is read once per saved revision (the
+  // compiled one), not at every edit. The change itself is checked against the live draft when it
+  // is made (`applyStudioCanvasChange`), so a reason that is a moment late refuses nothing wrongly.
   const references = useMemo(
-    () => studioCanvasReferences(input.source, model.catalogue),
-    [input.source, model.catalogue],
+    () => studioCanvasReferences(input.compiledSource, model.catalogue),
+    [input.compiledSource, model.catalogue],
   );
   const referencesRef = useRef(references);
   referencesRef.current = references;
@@ -348,15 +356,11 @@ export function StudioPuckProvider({
     });
   }, []);
 
-  const canvasMetadata = useStudioCanvasMetadata(input, model);
+  const channel = useStudioCanvasChannelValue(input, model);
+  // Puck walks this object once for every block it draws: it stays small.
   const metadata = useMemo(
-    (): StudioCanvasMetadata => ({
-      breakpoint,
-      references,
-      readSettings: compiledItemSettings,
-      ...canvasMetadata,
-    }),
-    [breakpoint, canvasMetadata, references],
+    (): StudioCanvasMetadata => ({ breakpoint, readSettings: compiledItemSettings }),
+    [breakpoint],
   );
   // The application holds every block it may: Duplicate and every other insert are off.
   const placed =
@@ -389,40 +393,42 @@ export function StudioPuckProvider({
   );
   return (
     <StudioCanvasContext.Provider value={value}>
-      <Puck
-        config={config}
-        data={initial}
-        onChange={change}
-        onAction={onAction}
-        iframe={IFRAME}
-        viewports={studioViewports}
-        ui={studioInitialUi}
-        // Puck's own wrapper fills the workspace, so the canvas has the height of its well.
-        height="100%"
-        overrides={OVERRIDES}
-        metadata={metadata}
-        permissions={permissions}
-        dictionary={studioPuckWords}
-      >
-        <StudioPuckSync
+      <StudioCanvasChannelContext.Provider value={channel}>
+        <Puck
           config={config}
-          references={references}
-          data={shown}
-          resync={resync}
-          area={model.area}
-          dragGate={dragGate}
-          canvasShown={input.canvasShown}
-          arrangeGrid={input.arrangeGrid === true}
-          onArrangeGrid={input.onArrangeGrid}
-          onArrangeableGrids={input.onArrangeableGrids}
-          arrangeable={model.arrangeable}
-          selectedAlias={input.selectedPlacementAlias}
-          synchronizing={synchronizing}
-          deriving={deriving}
-          showSelection={showSelection}
-        />
-        <div className="flex h-full min-h-0 flex-col">{children}</div>
-      </Puck>
+          data={initial}
+          onChange={change}
+          onAction={onAction}
+          iframe={IFRAME}
+          viewports={studioViewports}
+          ui={studioInitialUi}
+          // Puck's own wrapper fills the workspace, so the canvas has the height of its well.
+          height="100%"
+          overrides={OVERRIDES}
+          metadata={metadata}
+          permissions={permissions}
+          dictionary={studioPuckWords}
+        >
+          <StudioPuckSync
+            config={config}
+            references={references}
+            data={shown}
+            resync={resync}
+            area={model.area}
+            dragGate={dragGate}
+            canvasShown={input.canvasShown}
+            arrangeGrid={input.arrangeGrid === true}
+            onArrangeGrid={input.onArrangeGrid}
+            onArrangeableGrids={input.onArrangeableGrids}
+            arrangeable={model.arrangeable}
+            selectedAlias={input.selectedPlacementAlias}
+            synchronizing={synchronizing}
+            deriving={deriving}
+            showSelection={showSelection}
+          />
+          <div className="flex h-full min-h-0 flex-col">{children}</div>
+        </Puck>
+      </StudioCanvasChannelContext.Provider>
     </StudioCanvasContext.Provider>
   );
 }
@@ -577,8 +583,8 @@ function StudioPuckSync({
     if (held !== config) return;
     const { appState } = getPuck();
     const changed =
-      JSON.stringify(appState.data.content) !== JSON.stringify(data.content) ||
-      JSON.stringify(appState.data.root) !== JSON.stringify(data.root);
+      !sameCompositionValue(appState.data.content, data.content) ||
+      !sameCompositionValue(appState.data.root, data.root);
     if (changed || (walked.current !== held && !appState.ui.isDragging)) walk(data);
     select(wantedRef.current);
     // The draft is shown again every time the canvas comes into view, so nothing Puck held while

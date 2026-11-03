@@ -21,6 +21,7 @@ import {
   type ApplicationRootId,
 } from "@vortex/platform/schema";
 import { humanOrganizationRequests } from "../../../_lib/server-composition";
+import type { StudioNavigationApplication } from "@vortex/ui/studio";
 
 export const dynamic = "force-dynamic";
 
@@ -50,6 +51,14 @@ const loadWorkspacePlace = async (
     );
     return { kind: "refused", reason: "This organisation is not available to your account." };
   }
+  // The installed applications are read beside the settings: neither needs the other.
+  const applicationsRead = loadPermittedApplicationsAtAddress(
+    resolved.session,
+    entry.tenantShortName,
+    entry.organizationShortName,
+  );
+  // A refusal below returns before this read is used; it must not become an unhandled rejection.
+  void applicationsRead.catch(() => undefined);
   // The organisation's settings name the App Store; Studio never assumes one.
   const settings = await humanOrganizationRequests().run(
     resolved.session,
@@ -86,11 +95,7 @@ const loadWorkspacePlace = async (
       reason:
         "This organisation's App Store address is not an application address. An organisation administrator corrects it in the organisation settings.",
     };
-  const applications = await loadPermittedApplicationsAtAddress(
-    resolved.session,
-    entry.tenantShortName,
-    entry.organizationShortName,
-  );
+  const applications = await applicationsRead;
   if (applications.kind !== "available")
     console.error(
       `[studio] installed applications could not be read: ${applications.kind}${applications.kind === "temporarily_unavailable" && applications.cause !== undefined ? ` (${applications.cause})` : ""}`,
@@ -100,6 +105,42 @@ const loadWorkspacePlace = async (
     applications.kind === "available"
       ? applications.applications.find((candidate) => candidate.key === settings.value)
       : undefined;
+  // The Flows tab's Navigate targets are needed after the editor opens, not to open it: their
+  // address reads start now, run beside the reads below, and reach the editor when they finish.
+  const navigationTargets: Promise<readonly StudioNavigationApplication[]> =
+    applications.kind !== "available"
+      ? Promise.resolve([])
+      : Promise.all(
+          applications.applications
+            .filter((candidate) => candidate.key !== applicationKey)
+            .map(async (candidate) => {
+              const addressed = await resolveApplicationAddress(
+                resolved.session,
+                entry.tenantShortName,
+                entry.organizationShortName,
+                candidate.key,
+              );
+              return addressed.kind === "application_page"
+                ? [
+                    {
+                      key: candidate.key,
+                      label: candidate.name,
+                      homePageKey: candidate.homePageKey,
+                      pageKeys: addressed.application.pageKeys,
+                    },
+                  ]
+                : [];
+            }),
+        ).then((targets) => targets.flat());
+  // Where the application stands in the organisation, with whether the builder may open and
+  // install it: the facts the toolbar needs to offer Open the application, Install, Upgrade or none.
+  // It does not wait for the Studio address below.
+  const standingRead = readApplicationReleaseStanding(resolved.session, {
+    tenantShortName: entry.tenantShortName,
+    organizationShortName: entry.organizationShortName,
+    organizationId: entry.organizationId,
+    applicationRootId,
+  });
   const studioResolved =
     studioApplicationEntry === undefined
       ? undefined
@@ -114,54 +155,21 @@ const loadWorkspacePlace = async (
     studioApplicationEntry === undefined ||
     studioResolved?.kind !== "application_page" ||
     studioResolved.installedContext === undefined
-  )
+  ) {
+    // The reads started above are no longer wanted; let them finish without an unhandled rejection.
+    void Promise.allSettled([standingRead, navigationTargets]);
     return {
       kind: "refused",
       reason: "Studio is not installed for your account in this organisation.",
     };
+  }
   const studioInstalled = {
     name: studioApplicationEntry.name,
     homePageKey: studioApplicationEntry.homePageKey,
     context: studioResolved.installedContext,
   };
-  // Where the application stands in the organisation, with whether the builder may open and
-  // install it: the facts the toolbar needs to offer Open the application, Install, Upgrade or none.
-  const standing = await readApplicationReleaseStanding(resolved.session, {
-    tenantShortName: entry.tenantShortName,
-    organizationShortName: entry.organizationShortName,
-    organizationId: entry.organizationId,
-    applicationRootId,
-  });
   // The same read the Releases tab shows, so Studio never calls an installed application installable.
-  // The other applications the builder may open, with the pages they may open there, for a
-  // Navigate step that opens one of them.
-  const navigationTargets =
-    applications.kind !== "available"
-      ? []
-      : (
-          await Promise.all(
-            applications.applications
-              .filter((candidate) => candidate.key !== applicationKey)
-              .map(async (candidate) => {
-                const addressed = await resolveApplicationAddress(
-                  resolved.session,
-                  entry.tenantShortName,
-                  entry.organizationShortName,
-                  candidate.key,
-                );
-                return addressed.kind === "application_page"
-                  ? [
-                      {
-                        key: candidate.key,
-                        label: candidate.name,
-                        homePageKey: candidate.homePageKey,
-                        pageKeys: addressed.application.pageKeys,
-                      },
-                    ]
-                  : [];
-              }),
-          )
-        ).flat();
+  const standing = await standingRead;
   return {
     kind: "available",
     place: {

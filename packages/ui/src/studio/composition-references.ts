@@ -73,21 +73,26 @@ export const sourceNames = (source: ApplicationSourceDocument): Set<string> => {
   return names;
 };
 
+/** What a flow task's target position holds: a placement alias, or something that cannot be resolved. */
+type FlowTarget =
+  "unresolved_target" | Readonly<{ local: string; reason: StudioCompositionRemovalReason }>;
+
 /**
- * The flow task that still targets a placement, read only from declared placement identity
- * positions, never arbitrary literal data. `aliases` is every placement in the application. The
- * placement's own flow bindings are not a reference: they leave with it (removeFlowBindingsOf).
+ * The flow task that targets each placement, read only from declared placement identity
+ * positions, never arbitrary literal data, with one scan of the flows. `aliases` is every
+ * placement in the application. The placement's own flow bindings are not a reference: they leave
+ * with it (removeFlowBindingsOf). The answer for an alias is the first thing the scan found that
+ * names it or cannot be resolved at all (which blocks every placement).
  */
-export const studioPlacementRemovalReference = (
+export const studioPlacementRemovalReferences = (
   source: ApplicationSourceDocument,
-  alias: string,
   aliases: ReadonlySet<string>,
-): StudioPlacementReference | undefined => {
+): ((alias: string) => StudioPlacementReference | undefined) => {
   const target = (
     value: unknown,
     qualified: boolean,
     reason: StudioCompositionRemovalReason,
-  ): StudioCompositionRemovalReason | undefined => {
+  ): FlowTarget => {
     if (typeof value !== "string") return "unresolved_target";
     const separator = value.indexOf(":");
     if (
@@ -101,13 +106,13 @@ export const studioPlacementRemovalReference = (
       !aliases.has(local)
     )
       return "unresolved_target";
-    return local === alias ? reason : undefined;
+    return { local, reason };
   };
   const literalTarget = (
     value: unknown,
     qualified: boolean,
     reason: StudioCompositionRemovalReason,
-  ): StudioCompositionRemovalReason | undefined => {
+  ): FlowTarget => {
     if (
       !isObject(value) ||
       value.kind !== "literal" ||
@@ -121,8 +126,12 @@ export const studioPlacementRemovalReference = (
     if (!Array.isArray(value)) return refuse();
     return value;
   };
+  // Findings in the order the scan made them; the scan ends at the first one that blocks every alias.
+  const hits = new Map<string, { reference: StudioPlacementReference; order: number }>();
+  let blocking: { reference: StudioPlacementReference; order: number } | undefined;
+  let order = 0;
   const definitions = Object.values(flowTaskRegistry);
-  for (const flow of source.body.flows) {
+  scan: for (const flow of source.body.flows) {
     const flowName = studioFlowLabel(flow);
     // These are authored SourceFlow lists, not the compiled Flow body's shape.
     const pending = [...flow.tasks, ...flow.errors, ...flow.finally].map((task) => ({
@@ -132,8 +141,10 @@ export const studioPlacementRemovalReference = (
     let count = 0;
     while (pending.length > 0) {
       const entry = pending.pop()!;
-      if (++count > flowMaximumTaskCount || entry.depth > flowMaximumTaskNestingDepth)
-        return { reason: "unresolved_target", flow: flowName };
+      if (++count > flowMaximumTaskCount || entry.depth > flowMaximumTaskNestingDepth) {
+        blocking = { reference: { reason: "unresolved_target", flow: flowName }, order: order++ };
+        break scan;
+      }
       const task = entry.task;
       const definition = definitions.find((candidate) => candidate.type === task.type);
       const at = (reason: StudioCompositionRemovalReason): StudioPlacementReference => ({
@@ -144,7 +155,13 @@ export const studioPlacementRemovalReference = (
             ? task.description
             : (definition?.title ?? String(task.type)),
       });
-      if (definition === undefined) return at("unresolved_target");
+      const block = (): void => {
+        blocking = { reference: at("unresolved_target"), order: order++ };
+      };
+      if (definition === undefined) {
+        block();
+        break scan;
+      }
       const children: (readonly unknown[])[] = [];
       if (definition.category === "control") {
         switch (task.type) {
@@ -164,11 +181,14 @@ export const studioPlacementRemovalReference = (
           case "stop":
             break;
           default:
-            return at("unresolved_target");
+            block();
+            break scan;
         }
       } else {
-        if (task.version !== definition.version || !isObject(task.properties))
-          return at("unresolved_target");
+        if (task.version !== definition.version || !isObject(task.properties)) {
+          block();
+          break scan;
+        }
         for (const [key, declaration] of Object.entries(definition.properties)) {
           const reason =
             declaration.type === "form_id"
@@ -182,16 +202,33 @@ export const studioPlacementRemovalReference = (
           if (reason === undefined) continue;
           const value = task.properties[key];
           if (value === undefined && !declaration.required) continue;
-          const blocked = literalTarget(value, declaration.type === "form_id", reason);
-          if (blocked !== undefined) return at(blocked);
+          const found = literalTarget(value, declaration.type === "form_id", reason);
+          if (found === "unresolved_target") {
+            block();
+            break scan;
+          }
+          if (!hits.has(found.local))
+            hits.set(found.local, { reference: at(found.reason), order: order++ });
         }
       }
       for (const child of children)
         for (const nested of child) pending.push({ task: object(nested), depth: entry.depth + 1 });
     }
   }
-  return undefined;
+  return (alias) => {
+    const hit = hits.get(alias);
+    if (hit !== undefined && (blocking === undefined || hit.order < blocking.order))
+      return hit.reference;
+    return blocking?.reference;
+  };
 };
+
+/** The flow task that still targets one placement; `studioPlacementRemovalReferences` for many. */
+export const studioPlacementRemovalReference = (
+  source: ApplicationSourceDocument,
+  alias: string,
+  aliases: ReadonlySet<string>,
+): StudioPlacementReference | undefined => studioPlacementRemovalReferences(source, aliases)(alias);
 
 export const sameCompositionValue = (left: unknown, right: unknown): boolean => {
   if (Object.is(left, right)) return true;
