@@ -489,8 +489,27 @@ function StudioPuckSync({
   const recorded = usePuckSelector((state) => state.history.histories.length);
   // The config Puck holds: it takes the page's config a moment after this component sees it.
   const held = usePuckSelector((state) => state.config);
+  // Puck asks for a block's permissions again only when told to. A new config asks for all of them;
+  // new references ask only for the blocks whose reasons changed, so deleting one block of five
+  // hundred does not set every block's permissions again.
+  const permitted = useRef<Readonly<{ held: Config; references: StudioCanvasReferences }> | null>(
+    null,
+  );
   useEffect(() => {
-    getPuck().refreshPermissions();
+    const { refreshPermissions, getSelectorForId, getItemBySelector } = getPuck();
+    const last = permitted.current;
+    permitted.current = { held, references };
+    if (last === null || last.held !== held) {
+      refreshPermissions();
+      return;
+    }
+    for (const alias of new Set([...Object.keys(references), ...Object.keys(last.references)])) {
+      if (sameCompositionValue(references[alias], last.references[alias])) continue;
+      // A block that is not on the canvas (deleted, or on another page) has no selector.
+      const selector = getSelectorForId(alias);
+      const item = selector === undefined ? undefined : getItemBySelector(selector);
+      if (item !== undefined) refreshPermissions({ item }, true);
+    }
   }, [getPuck, held, references]);
   // The config Puck's data was last walked under; Puck walked its first data under `held`.
   const walked = useRef(held);
