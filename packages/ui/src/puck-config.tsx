@@ -20,6 +20,7 @@
 import {
   createContext,
   lazy,
+  memo,
   Suspense,
   useCallback,
   useContext,
@@ -224,6 +225,48 @@ export function RootSlotGapProvider({
   );
 }
 
+/** Which placement the editor has selected; each placement reads only whether it is that one. */
+export type SelectedPlacementStore = Readonly<{
+  get: () => string | undefined;
+  set: (placementId: string | undefined) => void;
+  subscribe: (listener: () => void) => () => void;
+}>;
+
+export const createSelectedPlacementStore = (): SelectedPlacementStore => {
+  let selected: string | undefined;
+  const listeners = new Set<() => void>();
+  return {
+    get: () => selected,
+    set: (placementId) => {
+      if (placementId === selected) return;
+      selected = placementId;
+      for (const listener of listeners) listener();
+    },
+    subscribe: (listener) => {
+      listeners.add(listener);
+      return () => listeners.delete(listener);
+    },
+  };
+};
+
+/** A live page selects nothing. */
+const NO_SELECTION: SelectedPlacementStore = createSelectedPlacementStore();
+
+const SelectedPlacementContext = createContext<SelectedPlacementStore>(NO_SELECTION);
+
+/**
+ * Tells the placements below it which one the editor has selected, so an empty slot of the selected
+ * block can show its hint. Only the editor supplies it; a live page never does.
+ */
+export function SelectedPlacementProvider({
+  store,
+  children,
+}: Readonly<{ store: SelectedPlacementStore; children: ReactNode }>) {
+  return (
+    <SelectedPlacementContext.Provider value={store}>{children}</SelectedPlacementContext.Provider>
+  );
+}
+
 /** Supplies the application's theme tokens to custom components. */
 export function VortexPuckThemeTokensProvider({
   tokens,
@@ -352,18 +395,52 @@ const slotGapFor = (
 // Fields
 // ---------------------------------------------------------------------------------------------
 
-/** The names of the slot fields a placement of this release has, given its settings. */
-const declaredSlotKeys = (
+/**
+ * Whether a slot is what its block is for: a container's content, the content of each tab. The
+ * editor keeps a placeholder in such a slot at rest, as in a slot the release requires, so an
+ * empty container or tabs block can be found and filled. The one place that says which they are.
+ */
+const holdsContent = (slot: PlatformBlockRelease["slots"][number]): boolean =>
+  slot.key === "content" || slot.repeats !== undefined;
+
+/**
+ * The slot fields a placement of this release has, given its settings, with their declared name
+ * and whether the editor keeps a placeholder in them while they are empty.
+ */
+const declaredSlots = (
   release: PlatformBlockRelease,
   settings: PlacementSettings,
-): readonly string[] =>
+): readonly Readonly<{ key: string; label: string; required: boolean }>[] =>
   release.slots.flatMap((slot) =>
-    slot.repeats === undefined
+    (slot.repeats === undefined
       ? [slot.key]
       : repeatableSlotItemIdentities(slot, settings).map((identity) =>
           repeatableSlotKey(slot.key, identity),
-        ),
+        )
+    ).map((key) => ({ key, label: slot.label, required: slot.required || holdsContent(slot) })),
   );
+
+/**
+ * How an empty slot is presented in the editor, in one place (the rules are in the layout styles).
+ * A required slot, or the one that holds its block's content, keeps its placeholder. An optional
+ * one draws nothing at rest, shows its drop target while a block is dragged and a small hint while
+ * its own block is selected, each labelled with the slot's name. A live page has none of this.
+ */
+const slotClassName = (editing: boolean, required: boolean, selected: boolean): string =>
+  !editing
+    ? "vortex-puck-slot"
+    : `vortex-puck-slot ${required ? "vortex-puck-slot--required" : "vortex-puck-slot--optional"}${selected ? " vortex-puck-slot--selected" : ""}`;
+
+/** A CSS string for the slot's name: backslash and quote escaped, a line break as a CSS escape. */
+const cssString = (text: string): string =>
+  `"${text
+    .replace(/\\/gu, "\\\\")
+    .replace(/"/gu, '\\"')
+    .replace(/\n/gu, "\\A ")
+    .replace(/\p{Cc}/gu, " ")}"`;
+
+const slotLabelStyle = (label: string): CSSProperties =>
+  ({ "--vortex-slot-label": cssString(label) }) as CSSProperties;
 
 // ---------------------------------------------------------------------------------------------
 // Render
@@ -408,11 +485,42 @@ export const placementWrapperGeometry = (
   };
 };
 
-function PlacementBlock(props: {
+type PlacementBlockProps = {
   registry: PlatformComponentRegistry;
   componentProps: VortexPuckComponentProps;
   fieldInputControlReleases: FieldInputControlReleases;
-}): ReactElement {
+};
+
+const sameShallow = (left: object, right: object): boolean => {
+  const keys = Object.keys(left);
+  return (
+    keys.length === Object.keys(right).length &&
+    keys.every((key) =>
+      Object.is((left as Record<string, unknown>)[key], (right as Record<string, unknown>)[key]),
+    )
+  );
+};
+
+/**
+ * One placement. Puck calls the render function of every block again when its selection moves,
+ * with the same props; a placement draws again only for a change in its props, or in the context
+ * and stores it reads (its own selection among them).
+ */
+const PlacementBlock = memo(
+  PlacementBlockContent,
+  (previous: PlacementBlockProps, next: PlacementBlockProps) => {
+    const { puck: previousPuck, ...previousRest } = previous.componentProps;
+    const { puck: nextPuck, ...nextRest } = next.componentProps;
+    return (
+      previous.registry === next.registry &&
+      previous.fieldInputControlReleases === next.fieldInputControlReleases &&
+      sameShallow(previousRest, nextRest) &&
+      sameShallow(previousPuck, nextPuck)
+    );
+  },
+);
+
+function PlacementBlockContent(props: PlacementBlockProps): ReactElement {
   const { registry, componentProps, fieldInputControlReleases } = props;
   const { id: placementId, vortex, puck, wrapper } = componentProps;
   const metadataIn = (puck.metadata ?? {}) as VortexPuckMetadata;
@@ -428,6 +536,12 @@ function PlacementBlock(props: {
   );
   const running = useSyncExternalStore(subscribe, readRunning, () => false);
   const themeTokens = useContext(ThemeTokensContext);
+  const selection = useContext(SelectedPlacementContext);
+  const selectedHere = useSyncExternalStore(
+    selection.subscribe,
+    () => selection.get() === placementId,
+    () => false,
+  );
   const rootSlotGap = useContext(RootSlotGapContext);
   const breakpoint = metadataIn.breakpoint;
   const responsive = breakpoint === undefined;
@@ -479,7 +593,10 @@ function PlacementBlock(props: {
   const slots: Record<string, ReactNode> = {};
   const latestSlots = useRef<Record<string, SlotComponent>>({});
   const stableSlots = useRef<Record<string, SlotComponent>>({});
-  for (const slotKey of declaredSlotKeys(release, settings)) {
+  for (const { key: slotKey, label: slotLabel, required: slotRequired } of declaredSlots(
+    release,
+    settings,
+  )) {
     const Slot = componentProps[slotKey];
     const hostNode = componentProps.slotNodes?.[slotKey];
     if (isSlotComponent(Slot)) {
@@ -491,7 +608,10 @@ function PlacementBlock(props: {
       hostNode !== undefined ? (
         hostNode
       ) : StableSlot !== undefined ? (
-        <StableSlot className="vortex-puck-slot" style={slotStyle} />
+        <StableSlot
+          className={slotClassName(puck.isEditing, slotRequired, selectedHere)}
+          style={puck.isEditing ? { ...slotStyle, ...slotLabelStyle(slotLabel) } : slotStyle}
+        />
       ) : null;
   }
 

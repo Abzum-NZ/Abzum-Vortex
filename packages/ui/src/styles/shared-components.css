@@ -3,6 +3,16 @@
  * stylesheet for runtime applications; each application root supplies its own theme variables.
  * The document root is always a style root, so the rules are not wrapped in a scope: a scope adds a
  * scoping-root match to every rule and slows each style recalculation of the page.
+ *
+ * Provenance of the `--vs-<8 hex digits>` hooks. #2248 (13 Oct 2026) replaced the per-style
+ * generated stylesheets (made by the since-removed `styles:emit`, from the pinned shadcn/create
+ * registry) with this one Nova-based stylesheet. Wherever a style's rule differed from Nova in one
+ * declaration, that declaration became `var(--vs-<hash>, <Nova value>)`. The hash is an opaque
+ * 8-digit identifier of the declaration, with no meaning to decode. `theme/style-variables/names.json`
+ * lists every hook, and `theme/style-variables/<style>.json` holds each style's value for the hooks
+ * it changes; a root resets every hook to `initial` and then sets its own style's values
+ * (`theme/vortex-style-variables.ts`). Nothing generates these files now: a shadcn upgrade edits
+ * the stylesheet, `names.json` and the style files together by hand.
  */
 
 /*! tailwindcss v4.3.3 | MIT License | https://tailwindcss.com */
@@ -5745,6 +5755,22 @@
   &:has(*[data-icon="inline-start"]) {
     padding-left: var(--vs-e0b04b83, calc(var(--spacing, 0.25rem) * 2));
   }
+}
+.cn-button-group {
+  border-radius: var(--radius);
+  & > :not(:first-child) {
+    border-top-left-radius: 0;
+    border-bottom-left-radius: 0;
+  }
+  & > :not(:last-child) {
+    border-top-right-radius: 0;
+    border-bottom-right-radius: 0;
+  }
+}
+.cn-button-group-text {
+  padding-inline: calc(var(--spacing, 0.25rem) * 2.5);
+  font-size: 0.875rem;
+  font-weight: 500;
 }
 .cn-toggle-group {
   border-radius: var(--vs-8db7bb5b, var(--radius));

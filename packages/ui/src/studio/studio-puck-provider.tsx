@@ -23,8 +23,10 @@ import {
   useDeferredValue,
   useEffect,
   useMemo,
+  useLayoutEffect,
   useRef,
   useState,
+  useSyncExternalStore,
   type ReactNode,
   type RefObject,
 } from "react";
@@ -39,11 +41,14 @@ import type {
 } from "./application-composition-commands";
 import type { StudioCanvasFrame } from "./studio-canvas-projection";
 import { applyStudioCanvasChange } from "./studio-canvas-change";
+import type { StudioPlacementDescriber } from "./semantic-outline";
 import {
   destinationOfZone,
   itemsHold,
   puckItemsHold,
+  puckNeighbourOf,
   puckSelectedAlias,
+  puckSelectorOf,
   withoutEmptyPuckZones,
   type StudioCanvasCompiledSlot,
   type StudioPuckSelector,
@@ -63,6 +68,7 @@ import {
   type StudioCanvasViewer,
 } from "./studio-canvas-metadata";
 import { StudioDrawerItem } from "./studio-puck-drawer";
+import { studioPuckStyle } from "./studio-puck-style";
 import { studioPuckWords } from "./studio-puck-words";
 import type { StudioCanvasRecordsReader } from "./use-studio-canvas-records";
 import { useStudioCanvasChannelValue } from "./use-studio-canvas-channel";
@@ -116,6 +122,8 @@ export type StudioPuckInput = Readonly<{
   /** Why the saved draft would not compile; the page stays open so the cause can be corrected. */
   compileFailure?: StudioCompileFailure | null | undefined;
   onChange: (expectedSource: ApplicationSourceDocument, source: ApplicationSourceDocument) => void;
+  /** Names a placed block as the outline and the inspector do; the action bar shows it. */
+  describePlacement: StudioPlacementDescriber;
   /** The block selected in the workspace, shown selected on the canvas. */
   selectedPlacementAlias: string | null;
   /** A block clicked on the canvas (`null`: the page itself); `false` keeps the workspace selection. */
@@ -211,6 +219,29 @@ const notSelectionActions: ReadonlySet<PuckAction["type"]> = new Set([
 ]);
 
 /**
+ * Puck decides once per page load, at its first mount, whether its stylesheet is already applied (and
+ * keeps that answer), and injects its
+ * own default styles (which import a third-party font the page's policy refuses) when it is not.
+ * The stylesheet is imported above. On a client navigation into the editor React puts the stylesheet
+ * in the document in the same commit that first renders Puck, so Puck looks too early. The editor
+ * therefore opens one commit after it is mounted by navigation. During hydration the document's head
+ * already holds the stylesheet, and the server render draws the editor, so neither waits.
+ */
+const noSubscription = () => () => {};
+function useStylesheetApplied(): boolean {
+  const hydrating = useSyncExternalStore(
+    noSubscription,
+    () => false,
+    () => true,
+  );
+  const [committed, setCommitted] = useState(false);
+  useLayoutEffect(() => {
+    setCommitted(true);
+  }, []);
+  return hydrating || committed;
+}
+
+/**
  * The one Puck editor of the workspace. Puck holds the page on the canvas as a projection of
  * Studio's draft and is never the source of truth: Studio's draft history is the one undo, its
  * selection store the one selection, and every canvas change goes back through the definition
@@ -228,6 +259,7 @@ export function StudioPuckProvider({
 }>) {
   // The screen is kept by Puck (`ui.viewports.current`); `onAction` reports its breakpoint
   // here, because the model and the metadata that depend on it are made outside the editor.
+  const stylesheetApplied = useStylesheetApplied();
   const [breakpoint, setBreakpoint] = useState<Breakpoint>(studioInitialBreakpoint);
   const model = useStudioCanvasModel(input, breakpoint);
   // Why a block's delete, drag or duplicate is unavailable is read from the live draft, so a block
@@ -280,6 +312,8 @@ export function StudioPuckProvider({
   const showSelection = useRef<((alias: string | null) => void) | null>(null);
   // The name of the interim block Puck holds between an insert from the drawer and Studio's add.
   const inserted = useRef<Set<string>>(new Set());
+  // The block a refused removal named: the change that carries the removal is refused with it.
+  const refusedRemoval = useRef<string | null>(null);
   const permitted = model.editable && input.canvasShown;
   const latest = useRef({ input, model, permitted });
   latest.current = { input, model, permitted };
@@ -289,6 +323,14 @@ export function StudioPuckProvider({
   const change = useCallback((candidate: Data) => {
     const { input: now, model: shown, permitted: allowed } = latest.current;
     if (synchronizing.current) return;
+    const refusedId = refusedRemoval.current;
+    if (refusedId !== null) {
+      refusedRemoval.current = null;
+      if (!puckItemsHold(candidate.content, refusedId)) {
+        setResync((generation) => generation + 1);
+        return;
+      }
+    }
     // A change made while the canvas cannot take edits (hidden, read-only, locked) is never kept:
     // Puck shows the draft again, so the move cannot be committed later.
     if (!allowed) {
@@ -325,6 +367,27 @@ export function StudioPuckProvider({
       setBreakpoint(studioScreenOfWidth(state.ui.viewports.current.width).breakpoint);
     if (synchronizing.current || deriving.current) return;
     const { input: now, model: shown } = latest.current;
+    // A removal acts only on the block that is selected in Studio. Puck's own Delete key and the
+    // action bar both remove what Puck's selector points at; if that is another block (a selection
+    // that lags behind the draft), the removal is refused and the draft shown again.
+    if (action.type === "remove") {
+      const removed = puckSelectedAlias(previous.data.content, {
+        index: action.index,
+        zone: action.zone,
+      });
+      if (removed !== null && removed !== now.selectedPlacementAlias) {
+        console.info(
+          `[studio] refused a removal of '${removed}': the selected block is '${String(now.selectedPlacementAlias)}'`,
+        );
+        refusedRemoval.current = removed;
+        setResync((generation) => generation + 1);
+        setRefused({
+          area: shown.area,
+          message: "That block was not deleted: the selection changed. Select it and try again.",
+        });
+        return;
+      }
+    }
     // A drop or an Add from the drawer: Puck has put an interim block (the release defaults) in its
     // own data; Studio adds the real one.
     if (action.type === "insert") {
@@ -347,6 +410,21 @@ export function StudioPuckProvider({
         else if (outcome === true) setRefused(null);
         if (id !== undefined) inserted.current.delete(id);
       }, 0);
+      return;
+    }
+    // A removed block hands the selection to its neighbour (the next, the one before, or the block
+    // holding the slot), for the Delete key and the action bar alike. Puck keeps its selector as it
+    // was, which would now name the neighbour while Studio still names the removed block.
+    if (action.type === "remove" && now.canvasShown) {
+      const neighbour = puckNeighbourOf(previous.data.content, {
+        index: action.index,
+        zone: action.zone,
+      });
+      queueMicrotask(() => {
+        void latest.current.input.onSelectPlacement(neighbour ?? null).then((accepted) => {
+          if (!accepted) showSelection.current?.(latest.current.input.selectedPlacementAlias);
+        });
+      });
       return;
     }
     if (notSelectionActions.has(action.type) || !now.canvasShown) return;
@@ -400,43 +478,49 @@ export function StudioPuckProvider({
     (): StudioCanvasContextValue => ({ input, model, references, refusal }),
     [input, model, references, refusal],
   );
+  if (!stylesheetApplied) return null;
   return (
     <StudioCanvasContext.Provider value={value}>
       <StudioCanvasChannelContext.Provider value={channel}>
-        <Puck
-          config={config}
-          data={initial}
-          onChange={change}
-          onAction={onAction}
-          iframe={IFRAME}
-          viewports={studioViewports}
-          ui={studioInitialUi}
-          // Puck's own wrapper fills the workspace, so the canvas has the height of its well.
-          height="100%"
-          overrides={OVERRIDES}
-          metadata={metadata}
-          permissions={permissions}
-          dictionary={studioPuckWords}
-        >
-          <StudioPuckSync
+        {/* Puck's own wrapper reads its font and spacing from the tokens too, so the map sits above it.
+          The Outline and Blocks regions repeat it on their own roots: below the wide breakpoint they
+          are drawn in a Sheet outside this element. */}
+        <div className="contents" style={studioPuckStyle}>
+          <Puck
             config={config}
-            references={references}
-            data={shown}
-            resync={resync}
-            area={model.area}
-            dragGate={dragGate}
-            canvasShown={input.canvasShown}
-            arrangeGrid={input.arrangeGrid === true}
-            onArrangeGrid={input.onArrangeGrid}
-            onArrangeableGrids={input.onArrangeableGrids}
-            arrangeable={model.arrangeable}
-            selectedAlias={input.selectedPlacementAlias}
-            synchronizing={synchronizing}
-            deriving={deriving}
-            showSelection={showSelection}
-          />
-          <div className="flex h-full min-h-0 flex-col">{children}</div>
-        </Puck>
+            data={initial}
+            onChange={change}
+            onAction={onAction}
+            iframe={IFRAME}
+            viewports={studioViewports}
+            ui={studioInitialUi}
+            // Puck's own wrapper fills the workspace, so the canvas has the height of its well.
+            height="100%"
+            overrides={OVERRIDES}
+            metadata={metadata}
+            permissions={permissions}
+            dictionary={studioPuckWords}
+          >
+            <StudioPuckSync
+              config={config}
+              references={references}
+              data={shown}
+              resync={resync}
+              area={model.area}
+              dragGate={dragGate}
+              canvasShown={input.canvasShown}
+              arrangeGrid={input.arrangeGrid === true}
+              onArrangeGrid={input.onArrangeGrid}
+              onArrangeableGrids={input.onArrangeableGrids}
+              arrangeable={model.arrangeable}
+              selectedAlias={input.selectedPlacementAlias}
+              synchronizing={synchronizing}
+              deriving={deriving}
+              showSelection={showSelection}
+            />
+            <div className="flex h-full min-h-0 flex-col">{children}</div>
+          </Puck>
+        </div>
       </StudioCanvasChannelContext.Provider>
     </StudioCanvasContext.Provider>
   );
@@ -547,10 +631,18 @@ function StudioPuckSync({
   wantedRef.current = wanted;
   const select = useCallback(
     (alias: string | null) => {
-      const { getSelectorForId, dispatch, appState } = getPuck();
+      const { dispatch, appState } = getPuck();
       // A placement drawn elsewhere (another content area or the frame) clears the canvas selection.
-      const selector = alias === null ? null : (getSelectorForId(alias) ?? null);
-      if (sameSelector(appState.ui.itemSelector, selector)) return;
+      // Where it sits is read from Puck's data, not from Puck's index of it: after data replaced
+      // from outside (an Undo) the index can still name the old place, and the selection would then
+      // point at, and a Delete would remove, another block.
+      const selector =
+        alias === null ? null : (puckSelectorOf(appState.data.content, alias) ?? null);
+      if (
+        sameSelector(appState.ui.itemSelector, selector) &&
+        puckSelectedAlias(appState.data.content, appState.ui.itemSelector) === alias
+      )
+        return;
       deriving.current = true;
       try {
         dispatch({ type: "setUi", ui: { itemSelector: selector } });

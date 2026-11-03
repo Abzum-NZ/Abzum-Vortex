@@ -1,38 +1,5 @@
 /* Remaining per-style component rules recovered from shadcn/create 4.21.0. */
 
-@scope ([data-vortex-style="maia"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="mira"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="luma"], [data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="maia"], [data-vortex-style="mira"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="maia"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="mira"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="luma"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="maia"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="mira"]) to (:scope [data-vortex-style]) {
-}
-
 @scope ([data-vortex-style="luma"], [data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
   :scope .cn-switch {
     &:is(:where(.group\/field-label):has(*:is(:focus-visible)) *) {
@@ -99,9 +66,6 @@
   }
 }
 
-@scope ([data-vortex-style="luma"], [data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
-}
-
 @scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
   :scope .cn-alert-variant-default {
     &::after {
@@ -135,12 +99,6 @@
 @scope ([data-vortex-style="luma"], [data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
   @media (prefers-color-scheme: dark) {
   }
-}
-
-@scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="luma"], [data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
 }
 
 @scope ([data-vortex-style="luma"]) to (:scope [data-vortex-style]) {
@@ -268,23 +226,8 @@
 }
 
 @scope ([data-vortex-style="luma"], [data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="luma"], [data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
   @media (prefers-color-scheme: dark) {
   }
-}
-
-@scope ([data-vortex-style="luma"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
 }
 
 @scope ([data-vortex-style="luma"], [data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
@@ -1309,9 +1252,6 @@
   }
 }
 
-@scope ([data-vortex-style="lyra"]) to (:scope [data-vortex-style]) {
-}
-
 @scope ([data-vortex-style="mira"]) to (:scope [data-vortex-style]) {
   :scope .cn-button-size-icon {
     & svg:not([class*="size-"]) {
@@ -1321,9 +1261,6 @@
   }
 }
 
-@scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
-}
-
 @scope ([data-vortex-style="mira"]) to (:scope [data-vortex-style]) {
   :scope .cn-button-size-icon-lg {
     & svg:not([class*="size-"]) {
@@ -1331,30 +1268,6 @@
       height: calc(var(--spacing, 0.25rem) * 4);
     }
   }
-}
-
-@scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="vega"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="lyra"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="lyra"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
 }
 
 @scope ([data-vortex-style="lyra"]) to (:scope [data-vortex-style]) {
@@ -1372,19 +1285,10 @@
   }
 }
 
-@scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="vega"]) to (:scope [data-vortex-style]) {
-}
-
 @scope ([data-vortex-style="lyra"]) to (:scope [data-vortex-style]) {
   :scope .cn-card-header {
     border-radius: 0;
   }
-}
-
-@scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
 }
 
 @scope ([data-vortex-style="lyra"]) to (:scope [data-vortex-style]) {
@@ -1393,37 +1297,16 @@
   }
 }
 
-@scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
-}
-
 @scope ([data-vortex-style="vega"]) to (:scope [data-vortex-style]) {
   :scope .cn-card {
     --tw-shadow: 0 1px 2px 0 var(--tw-shadow-color, rgb(0 0 0 / 0.05));
   }
 }
 
-@scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="mira"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
-}
-
 @scope ([data-vortex-style="lyra"]) to (:scope [data-vortex-style]) {
   :scope .cn-card-footer {
     border-radius: 0;
   }
-}
-
-@scope ([data-vortex-style="luma"], [data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="luma"], [data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
 }
 
 @scope ([data-vortex-style="maia"]) to (:scope [data-vortex-style]) {
@@ -1438,21 +1321,12 @@
   }
 }
 
-@scope ([data-vortex-style="luma"], [data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
-}
-
 @scope ([data-vortex-style="vega"]) to (:scope [data-vortex-style]) {
   :scope .cn-card-content:has(> [data-slot="questionnaire-choices"]) {
     display: flex;
     flex-direction: column;
     gap: calc(var(--spacing, 0.25rem) * 3);
   }
-}
-
-@scope ([data-vortex-style="luma"], [data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
 }
 
 @scope ([data-vortex-style="vega"]) to (:scope [data-vortex-style]) {
@@ -1462,9 +1336,6 @@
       padding-top: var(--card-spacing);
     }
   }
-}
-
-@scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
 }
 
 @scope ([data-vortex-style="maia"], [data-vortex-style="mira"]) to (:scope [data-vortex-style]) {
@@ -1474,15 +1345,6 @@
       padding-top: var(--card-spacing);
     }
   }
-}
-
-@scope ([data-vortex-style="luma"], [data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="luma"], [data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
 }
 
 @scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
@@ -1820,9 +1682,6 @@
       }
     }
   }
-}
-
-@scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
 }
 
 @scope ([data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
@@ -2357,9 +2216,6 @@
   }
 }
 
-@scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
-}
-
 @scope ([data-vortex-style="luma"]) to (:scope [data-vortex-style]) {
   :scope .cn-native-select {
     @supports (color: color-mix(in lab, red, red)) {
@@ -2546,15 +2402,6 @@
   }
 }
 
-@scope ([data-vortex-style="lyra"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="maia"], [data-vortex-style="mira"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="lyra"]) to (:scope [data-vortex-style]) {
-}
-
 @scope ([data-vortex-style="luma"], [data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
   :scope .cn-combobox-content {
     &:where(
@@ -2598,24 +2445,6 @@
   }
 }
 
-@scope ([data-vortex-style="lyra"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="vega"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="lyra"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="maia"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="mira"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="maia"], [data-vortex-style="mira"]) to (:scope [data-vortex-style]) {
-}
-
 @scope ([data-vortex-style="luma"]) to (:scope [data-vortex-style]) {
   :scope .cn-combobox-item {
     --tw-font-weight: var(--font-weight-medium, 500);
@@ -2623,79 +2452,10 @@
   }
 }
 
-@scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
-}
-
 @scope ([data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
   :scope .cn-combobox-item {
     min-height: calc(var(--spacing, 0.25rem) * 7);
   }
-}
-
-@scope ([data-vortex-style="maia"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="mira"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="maia"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="lyra"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="mira"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="maia"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="lyra"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="mira"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="vega"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="luma"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="vega"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="maia"], [data-vortex-style="mira"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="luma"], [data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="maia"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="mira"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="vega"]) to (:scope [data-vortex-style]) {
 }
 
 @scope ([data-vortex-style="luma"]) to (:scope [data-vortex-style]) {
@@ -2834,9 +2594,6 @@
   }
 }
 
-@scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
-}
-
 @scope ([data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
   :scope .cn-input-group-addon {
     :is(& *) {
@@ -2860,12 +2617,6 @@
   }
 }
 
-@scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
-}
-
 @scope ([data-vortex-style="luma"]) to (:scope [data-vortex-style]) {
   :scope .cn-input-group-button {
     border-radius: calc(var(--radius) * 2.6);
@@ -2878,70 +2629,16 @@
   }
 }
 
-@scope ([data-vortex-style="mira"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="mira"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="mira"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="mira"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="maia"], [data-vortex-style="mira"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
-}
-
 @scope ([data-vortex-style="lyra"]) to (:scope [data-vortex-style]) {
   :scope .cn-dialog-header {
     text-align: left;
   }
 }
 
-@scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
-}
-
 @scope ([data-vortex-style="lyra"]) to (:scope [data-vortex-style]) {
   :scope .cn-dialog-title {
     line-height: var(--tw-leading, var(--text-sm--line-height, calc(1.25 / 0.875)));
   }
-}
-
-@scope ([data-vortex-style="mira"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="mira"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="luma"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="lyra"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="lyra"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
 }
 
 @scope ([data-vortex-style="vega"]) to (:scope [data-vortex-style]) {
@@ -2993,25 +2690,10 @@
   }
 }
 
-@scope ([data-vortex-style="luma"], [data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="maia"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="mira"]) to (:scope [data-vortex-style]) {
-}
-
 @scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
   :scope .cn-dialog-footer {
     gap: calc(var(--spacing, 0.25rem) * 2);
   }
-}
-
-@scope ([data-vortex-style="maia"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="mira"]) to (:scope [data-vortex-style]) {
 }
 
 @scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
@@ -3028,12 +2710,6 @@
     --tw-leading: var(--leading-relaxed, 1.625);
     line-height: var(--leading-relaxed, 1.625);
   }
-}
-
-@scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
 }
 
 @scope ([data-vortex-style="luma"]) to (:scope [data-vortex-style]) {
@@ -3177,12 +2853,6 @@
   }
 }
 
-@scope ([data-vortex-style="mira"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="mira"]) to (:scope [data-vortex-style]) {
-}
-
 @scope ([data-vortex-style="luma"], [data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
   :scope .cn-card-footer {
     padding-inline: var(--card-spacing);
@@ -3190,12 +2860,6 @@
       padding-top: var(--card-spacing);
     }
   }
-}
-
-@scope ([data-vortex-style="luma"], [data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="luma"], [data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
 }
 
 @scope ([data-vortex-style="maia"]) to (:scope [data-vortex-style]) {
@@ -3241,18 +2905,6 @@
   }
 }
 
-@scope ([data-vortex-style="luma"], [data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="luma"], [data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
-}
-
 @scope ([data-vortex-style="mira"]) to (:scope [data-vortex-style]) {
   :scope .cn-dropdown-menu-item {
     min-height: calc(var(--spacing, 0.25rem) * 7);
@@ -3263,9 +2915,6 @@
   :scope .cn-dropdown-menu-checkbox-item {
     min-height: calc(var(--spacing, 0.25rem) * 7);
   }
-}
-
-@scope ([data-vortex-style="luma"], [data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
 }
 
 @scope ([data-vortex-style="mira"]) to (:scope [data-vortex-style]) {
@@ -3354,9 +3003,6 @@
   :scope .cn-empty-description {
     margin-top: calc(var(--spacing, 0.25rem) * 0.5);
   }
-}
-
-@scope ([data-vortex-style="lyra"]) to (:scope [data-vortex-style]) {
 }
 
 @scope ([data-vortex-style="luma"], [data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
@@ -3505,12 +3151,6 @@
   }
 }
 
-@scope ([data-vortex-style="mira"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="mira"]) to (:scope [data-vortex-style]) {
-}
-
 @scope ([data-vortex-style="luma"], [data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
   :scope .cn-breadcrumb-list {
     @media (width >= 40rem) {
@@ -3524,38 +3164,14 @@
   }
 }
 
-@scope ([data-vortex-style="mira"]) to (:scope [data-vortex-style]) {
-}
-
 @scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
   @media (prefers-color-scheme: dark) {
   }
 }
 
-@scope ([data-vortex-style="luma"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="lyra"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="luma"]) to (:scope [data-vortex-style]) {
-}
-
 @scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
   @media (prefers-color-scheme: dark) {
   }
-}
-
-@scope ([data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="luma"]) to (:scope [data-vortex-style]) {
 }
 
 @scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
@@ -3564,9 +3180,6 @@
     letter-spacing: var(--tracking-normal, 0em);
     text-transform: none;
   }
-}
-
-@scope ([data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
 }
 
 @scope ([data-vortex-style="mira"]) to (:scope [data-vortex-style]) {
@@ -3846,24 +3459,6 @@
   }
 }
 
-@scope ([data-vortex-style="mira"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="vega"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="maia"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="luma"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="luma"]) to (:scope [data-vortex-style]) {
-}
-
 @scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
   :scope .cn-input {
     border-bottom-color: var(--input);
@@ -3915,18 +3510,6 @@
   }
 }
 
-@scope ([data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="luma"], [data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
-}
-
 @scope ([data-vortex-style="lyra"]) to (:scope [data-vortex-style]) {
   :scope .cn-item-title {
     line-height: var(--tw-leading, var(--text-xs--line-height, calc(1 / 0.75)));
@@ -3937,24 +3520,6 @@
   :scope .cn-item-description {
     line-height: var(--leading-relaxed, 1.625);
   }
-}
-
-@scope ([data-vortex-style="luma"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="luma"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="luma"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
 }
 
 @scope ([data-vortex-style="maia"]) to (:scope [data-vortex-style]) {
@@ -3971,22 +3536,10 @@
   }
 }
 
-@scope ([data-vortex-style="luma"], [data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
-}
-
 @scope ([data-vortex-style="maia"]) to (:scope [data-vortex-style]) {
   :scope .cn-item-description {
     line-height: var(--tw-leading, var(--text-sm--line-height, calc(1.25 / 0.875)));
   }
-}
-
-@scope ([data-vortex-style="luma"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="luma"], [data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
 }
 
 @scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
@@ -4061,24 +3614,12 @@
   }
 }
 
-@scope ([data-vortex-style="vega"]) to (:scope [data-vortex-style]) {
-}
-
 @scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
   :scope .cn-kbd {
     :where(*[data-slot="input-group"]) & {
       background-color: var(--input);
     }
   }
-}
-
-@scope ([data-vortex-style="luma"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="luma"]) to (:scope [data-vortex-style]) {
 }
 
 @scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
@@ -4134,63 +3675,6 @@
   }
 }
 
-@scope ([data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="mira"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="mira"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="mira"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="mira"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="mira"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="maia"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="maia"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="mira"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="lyra"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="mira"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="vega"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="maia"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="vega"]) to (:scope [data-vortex-style]) {
-}
-
 @scope ([data-vortex-style="luma"], [data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
   :scope .cn-dropdown-menu-content {
     &:where(
@@ -4234,17 +3718,11 @@
   }
 }
 
-@scope ([data-vortex-style="maia"]) to (:scope [data-vortex-style]) {
-}
-
 @scope ([data-vortex-style="luma"]) to (:scope [data-vortex-style]) {
   :scope .cn-dropdown-menu-item {
     --tw-font-weight: var(--font-weight-medium, 500);
     font-weight: var(--font-weight-medium, 500);
   }
-}
-
-@scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
 }
 
 @scope ([data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
@@ -4271,9 +3749,6 @@
     --tw-font-weight: var(--font-weight-medium, 500);
     font-weight: var(--font-weight-medium, 500);
   }
-}
-
-@scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
 }
 
 @scope ([data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
@@ -4329,9 +3804,6 @@
       background-color: color-mix(in oklab, var(--border) 50%, transparent);
     }
   }
-}
-
-@scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
 }
 
 @scope ([data-vortex-style="lyra"]) to (:scope [data-vortex-style]) {
@@ -4731,9 +4203,6 @@
   }
 }
 
-@scope ([data-vortex-style="luma"], [data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
-}
-
 @scope ([data-vortex-style="mira"]) to (:scope [data-vortex-style]) {
   :scope .cn-select-trigger {
     @supports (color: color-mix(in lab, red, red)) {
@@ -4743,12 +4212,6 @@
   }
 }
 
-@scope ([data-vortex-style="luma"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
-}
-
 @scope ([data-vortex-style="vega"]) to (:scope [data-vortex-style]) {
   :scope .cn-select-trigger {
     --tw-shadow: 0 1px 2px 0 var(--tw-shadow-color, rgb(0 0 0 / 0.05));
@@ -4756,12 +4219,6 @@
       var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow),
       var(--tw-ring-shadow), var(--tw-shadow);
   }
-}
-
-@scope ([data-vortex-style="luma"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
 }
 
 @scope ([data-vortex-style="maia"]) to (:scope [data-vortex-style]) {
@@ -4903,12 +4360,6 @@
   }
 }
 
-@scope ([data-vortex-style="luma"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
-}
-
 @scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
   :scope .cn-select-trigger {
     border-bottom-color: var(--input);
@@ -4961,26 +4412,11 @@
   }
 }
 
-@scope ([data-vortex-style="luma"], [data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="luma"], [data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
-}
-
 @scope ([data-vortex-style="mira"]) to (:scope [data-vortex-style]) {
   :scope .cn-select-item {
     min-height: calc(var(--spacing, 0.25rem) * 7);
     padding-inline: calc(var(--spacing, 0.25rem) * 2);
   }
-}
-
-@scope ([data-vortex-style="luma"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="luma"], [data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
 }
 
 @scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
@@ -5001,12 +4437,6 @@
   }
 }
 
-@scope ([data-vortex-style="luma"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
-}
-
 @scope ([data-vortex-style="lyra"]) to (:scope [data-vortex-style]) {
   :scope .cn-sheet-overlay {
     font-size: var(--text-xs, 0.75rem);
@@ -5022,24 +4452,12 @@
   }
 }
 
-@scope ([data-vortex-style="luma"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="luma"], [data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
-}
-
 @scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
   :scope .cn-select-separator {
     @supports (color: color-mix(in lab, red, red)) {
       background-color: color-mix(in oklab, var(--border) 50%, transparent);
     }
   }
-}
-
-@scope ([data-vortex-style="luma"], [data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
 }
 
 @scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
@@ -5056,18 +4474,12 @@
   }
 }
 
-@scope ([data-vortex-style="luma"], [data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
-}
-
 @scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
   :scope .cn-sheet-description {
     margin-top: calc(var(--spacing, 0.25rem) * 0.5);
     --tw-leading: var(--leading-relaxed, 1.625);
     line-height: var(--leading-relaxed, 1.625);
   }
-}
-
-@scope ([data-vortex-style="mira"]) to (:scope [data-vortex-style]) {
 }
 
 @scope ([data-vortex-style="luma"], [data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
@@ -5097,9 +4509,6 @@
   :scope .cn-sidebar-content {
     --radius: var(--radius-xl);
   }
-}
-
-@scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
 }
 
 @scope ([data-vortex-style="mira"]) to (:scope [data-vortex-style]) {
@@ -5249,19 +4658,10 @@
   }
 }
 
-@scope ([data-vortex-style="vega"]) to (:scope [data-vortex-style]) {
-}
-
 @scope ([data-vortex-style="mira"]) to (:scope [data-vortex-style]) {
   :scope .cn-toast {
     border-radius: calc(var(--radius) * 0.8);
   }
-}
-
-@scope ([data-vortex-style="maia"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
 }
 
 @scope ([data-vortex-style="vega"]) to (:scope [data-vortex-style]) {
@@ -5271,9 +4671,6 @@
       var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow),
       var(--tw-ring-shadow), var(--tw-shadow);
   }
-}
-
-@scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
 }
 
 @scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
@@ -5333,9 +4730,6 @@
   }
 }
 
-@scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
-}
-
 @scope ([data-vortex-style="mira"]) to (:scope [data-vortex-style]) {
   @media (prefers-color-scheme: dark) {
   }
@@ -5354,9 +4748,6 @@
 @scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
   @media (prefers-color-scheme: dark) {
   }
-}
-
-@scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
 }
 
 @scope ([data-vortex-style="luma"], [data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
@@ -5380,9 +4771,6 @@
   }
 }
 
-@scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
-}
-
 @scope ([data-vortex-style="mira"]) to (:scope [data-vortex-style]) {
   @media (prefers-color-scheme: dark) {
   }
@@ -5391,9 +4779,6 @@
 @scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
   @media (prefers-color-scheme: dark) {
   }
-}
-
-@scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
 }
 
 @scope ([data-vortex-style="mira"], [data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
@@ -6396,12 +5781,6 @@
   }
 }
 
-@scope ([data-vortex-style="luma"], [data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="luma"], [data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
-}
-
 @scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
   :scope .cn-input-group-input {
     &:is(:where(.group\/input-group):has(> [data-align="inline-end"]) *) {
@@ -6413,9 +5792,6 @@
   }
 }
 
-@scope ([data-vortex-style="mira"]) to (:scope [data-vortex-style]) {
-}
-
 @scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
   @media (prefers-color-scheme: dark) {
   }
@@ -6489,104 +5865,11 @@
 @scope ([data-vortex-style="mira"]) to (:scope [data-vortex-style]) {
   @media (prefers-color-scheme: dark) {
   }
-}
-
-@scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="lyra"]) to (:scope [data-vortex-style]) {
 }
 
 @scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
   @media (hover: hover) {
   }
-}
-
-@scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="luma"], [data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="mira"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="maia"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="luma"], [data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="vega"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="mira"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="luma"], [data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="luma"], [data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="maia"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="vega"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="luma"], [data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="mira"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="luma"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="maia"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="mira"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="vega"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="maia"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="vega"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="luma"], [data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
 }
 
 @scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
@@ -6702,12 +5985,6 @@
   }
 }
 
-@scope ([data-vortex-style="luma"], [data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
-}
-
 @scope ([data-vortex-style="maia"]) to (:scope [data-vortex-style]) {
   :scope .cn-combobox-content-aria {
     :is(& > *) {
@@ -6717,21 +5994,6 @@
       }
     }
   }
-}
-
-@scope ([data-vortex-style="luma"], [data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="luma"], [data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="luma"], [data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="luma"], [data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="maia"]) to (:scope [data-vortex-style]) {
 }
 
 @scope ([data-vortex-style="luma"], [data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
@@ -6775,18 +6037,6 @@
       }
     }
   }
-}
-
-@scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="luma"], [data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="mira"]) to (:scope [data-vortex-style]) {
-}
-
-@scope ([data-vortex-style="luma"], [data-vortex-style="rhea"]) to (:scope [data-vortex-style]) {
 }
 
 @scope ([data-vortex-style="nova"], [data-vortex-style="vega"], [data-vortex-style="lyra"]) to (:scope [data-vortex-style]) {
