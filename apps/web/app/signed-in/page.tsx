@@ -53,27 +53,6 @@ import { resolveOrganizationLandingPath } from "../_lib/organization-landing";
 export const dynamic = "force-dynamic";
 
 /**
- * The first load right after sign-in (for example straight after a database reset) can meet a
- * transient failure in the session or organisation read, so a temporarily unavailable result is
- * read once more before the person is shown the unavailable page. Refusals are never retried, and
- * each retry is logged without any token, cookie or identity value so a lasting failure stays
- * visible.
- */
-const retryOnceWhenTemporarilyUnavailable = async <Result extends Readonly<{ kind: string }>>(
-  read: "session" | "organisations",
-  load: () => Promise<Result>,
-): Promise<Result> => {
-  const first = await load();
-  if (first.kind !== "temporarily_unavailable") return first;
-  console.error(`[signed-in] ${read} read temporarily unavailable; retrying once`);
-  await new Promise((resolve) => setTimeout(resolve, 250));
-  const second = await load();
-  if (second.kind === "temporarily_unavailable")
-    console.error(`[signed-in] ${read} read still temporarily unavailable after one retry`);
-  return second;
-};
-
-/**
  * Closed launcher projection of the person's current organisation entries. Each tile's identity is
  * the organisation's permanent identity, populated with name, description (tenant and account) and icon.
  */
@@ -298,14 +277,10 @@ export default async function SignedInPage({
 }: Readonly<{ searchParams: Promise<{ join?: string | string[] }> }>) {
   const { join } = await searchParams;
   const joinSentence = typeof join === "string" ? joinOutcomeSentences[join] : undefined;
-  const result = await continueSessionOrEnd(
-    await retryOnceWhenTemporarilyUnavailable("session", resolveIdentitySession),
-  );
+  const result = await continueSessionOrEnd(await resolveIdentitySession());
   if (result.kind === "temporarily_unavailable") return organizationsUnavailable;
 
-  const launcher = await retryOnceWhenTemporarilyUnavailable("organisations", () =>
-    loadOrganizationLauncher(result.session),
-  );
+  const launcher = await loadOrganizationLauncher(result.session);
   if (launcher.kind === "temporarily_unavailable") return organizationsUnavailable;
   if (launcher.kind !== "available") return redirectToSessionEnd();
   // Invitations that cannot be read never hide the organisations the person already belongs to.
