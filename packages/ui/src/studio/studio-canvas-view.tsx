@@ -113,7 +113,14 @@ export function StudioCanvasView({
   // A guided page has one canvas per step: the tabs choose the step, nothing else picks a zone.
   const steps =
     model.steps.length < 2 ? null : (
-      <Tabs value={model.step ?? ""} onValueChange={(step) => model.chooseStep(String(step))}>
+      <Tabs
+        value={model.step ?? ""}
+        onValueChange={(step) => {
+          // The selected block belongs to the step that leaves the canvas.
+          void input.onSelectPlacement(null);
+          model.chooseStep(String(step));
+        }}
+      >
         <TabsList aria-label="Steps">
           {model.steps.map((entry) => (
             <TabsTrigger key={entry.id} value={entry.id}>
@@ -142,7 +149,7 @@ export function StudioCanvasView({
         aria-busy={disabled}
       >
         {/* The screen size is chosen in Studio's canvas toolbar. One strip of fixed height: the
-            content area and what the canvas does. */}
+            step tabs and what the canvas does. */}
         <div className="flex h-9 shrink-0 items-center gap-3 px-4">
           {steps}
           {model.readOnlyCause !== undefined || breakpoint !== "desktop" ? (

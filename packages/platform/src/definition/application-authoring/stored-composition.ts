@@ -561,6 +561,14 @@ export const storedPageDataFromPuck = (
   const vortex = closed(props.vortex, ["shell", "slot_orders"], ["root", "props", "vortex"]);
   if (vortex.shell !== baseline.root.props.vortex.shell)
     refuse(["root", "props", "vortex"], "changed the page frame, which the canvas does not edit");
+  // A page in an application shell places its blocks in the shell's content slots, never in the
+  // default zone (a drop there is an expected refusal, not a platform fault).
+  if (
+    baseline.root.props.vortex.shell !== null &&
+    Array.isArray(puck.content) &&
+    puck.content.length > 0
+  )
+    refuse(["content"], "places blocks outside the shell's content slots");
   const zones = sourcePageZones(baseline).map(([key, items]) => ({
     key,
     items,
@@ -675,7 +683,6 @@ export const storedPageDataFromPuck = (
           remapCopiedOrders(children as SourceItem[]);
       }
     };
-    remapCopiedOrders(items);
     remapCopiedOrders(items);
 
     // Declared orders follow their slot's members: a block moved away leaves, a new one joins.

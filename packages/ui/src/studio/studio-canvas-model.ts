@@ -58,6 +58,11 @@ export type StudioCanvasModel = Readonly<{
   zoneKeyList: readonly string[];
   /** By root slot of the page, the key of the shell content slot it is. */
   slotKeys: Readonly<Record<string, string>>;
+  /**
+   * The zone the Blocks panel adds to unless the person chose another: the one that holds the
+   * selected block, else the first zone the shell requires (the main content), else the first.
+   */
+  defaultZoneKey: string | undefined;
   /** Puck's root slot of a page slot address key; `undefined` for the default zone. */
   slotOfZoneKey: (key: string) => string | undefined;
   /** The page slot address key of Puck's root slot, or of the default zone when `undefined`. */
@@ -199,6 +204,22 @@ export const useStudioCanvasModel = (
     (slot: string | undefined) => addresses.find((entry) => entry.slot === slot)?.key ?? "",
     [addresses],
   );
+  const defaultZoneKey = useMemo(() => {
+    if (page === undefined) return undefined;
+    const shell = source.body.shells.find(
+      (entry) => entry.id === pageData?.root.props.vortex.shell,
+    );
+    const holding =
+      selectedPlacementAlias === null
+        ? undefined
+        : addresses.find((entry) =>
+            itemsHold(sourcePageSlotAt(page, entry)?.items ?? [], selectedPlacementAlias),
+          );
+    const required = addresses.find(
+      (entry) => shell?.content_slots.find((slot) => slot.id === entry.slot)?.required === true,
+    );
+    return (holding ?? required ?? addresses[0])?.key;
+  }, [page, source, pageData, addresses, selectedPlacementAlias]);
   const items = useMemo(
     () => (pageData === undefined ? [] : sourcePageZones(pageData).flatMap(([, list]) => list)),
     [pageData],
@@ -322,6 +343,7 @@ export const useStudioCanvasModel = (
       zoneKeys,
       zoneKeyList,
       slotKeys,
+      defaultZoneKey,
       slotOfZoneKey,
       zoneKeyOfSlot,
       items,
@@ -345,6 +367,7 @@ export const useStudioCanvasModel = (
       zoneKeys,
       zoneKeyList,
       slotKeys,
+      defaultZoneKey,
       slotOfZoneKey,
       zoneKeyOfSlot,
       items,

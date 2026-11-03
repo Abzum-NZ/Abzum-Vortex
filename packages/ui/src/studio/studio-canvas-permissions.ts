@@ -45,7 +45,7 @@ export const studioPlacementReferrers = (
 /**
  * Why a block cannot be duplicated, or undefined: a form, or a block holding a field input, because
  * its field inputs cannot be copied. The one rule for Puck's Duplicate button (the references) and
- * for the canvas change that carries a duplicate (`applyStudioCanvasChange`).
+ * for the canvas change that carries a duplicate (`applyPageDataChange`).
  */
 export const studioDuplicateRefusal = (
   catalogue: ImmutablePlatformBlockCatalogue,

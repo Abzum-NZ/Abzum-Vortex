@@ -98,7 +98,7 @@ export type StudioCanvasAddRequest = Readonly<{
 export type StudioCanvasPalette = Readonly<{
   /** The places on the open page a new block can go. */
   targets: StudioCompositionAddTargetsModel;
-  /** Whose blocks the palette adds to: the open page's content areas, or its layout. */
+  /** Whose blocks the palette adds to: the open page's content slots, or its layout. */
   owner: StudioCompositionOwner["kind"];
   message: string;
   /** Adds a block through Studio's one add command; `false` when nothing was added yet. */
@@ -115,7 +115,7 @@ export type StudioPuckInput = Readonly<{
   platformThemeTokens: PlatformThemeTokens | null;
   /** The page on the canvas; `undefined` when the workspace shows no page. */
   pageAlias: string | undefined;
-  /** The compiled items of each content area of this page, keyed by page slot address key. */
+  /** The compiled items of each content slot of this page (or step), keyed by page slot address key. */
   compiledSlots?: Readonly<Record<string, StudioCanvasCompiledSlot>> | undefined;
   disabled: boolean;
   /** Why the draft takes no change now (a conflict, a publication), when `disabled` says it does not. */
@@ -134,7 +134,7 @@ export type StudioPuckInput = Readonly<{
   appearance: "light" | "dark";
   /** The application frame the page is drawn inside, when the draft compiled. */
   frame?: StudioCanvasFrame | undefined;
-  /** Reads the records of one content area's data blocks for the saved revision, once. */
+  /** Reads the records of one content slot's data blocks for the saved revision, once. */
   readRecords?: StudioCanvasRecordsReader | undefined;
   /** A newer saved revision than `compiledSource` is being compiled. */
   updating?: boolean | undefined;
@@ -550,7 +550,7 @@ function StudioPuckSync({
   config: Config;
   references: StudioCanvasReferences;
   data: Data;
-  /** The page and content area on the canvas. */
+  /** The page and step on the canvas. */
   area: string;
   dragGate: RefObject<StudioDragGate>;
   /** Changes when Puck holds a change the draft refused, so the draft is shown again. */
@@ -650,7 +650,7 @@ function StudioPuckSync({
   const select = useCallback(
     (alias: string | null) => {
       const { dispatch, appState } = getPuck();
-      // A placement drawn elsewhere (another content area or the frame) clears the canvas selection.
+      // A placement drawn elsewhere (another page, step or the frame) clears the canvas selection.
       // Where it sits is read from Puck's data, not from Puck's index of it: after data replaced
       // from outside (an Undo) the index can still name the old place, and the selection would then
       // point at, and a Delete would remove, another block.

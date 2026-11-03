@@ -20,8 +20,8 @@ export type StudioCanvasFrame = Readonly<{
   pageId: string;
   pageName: string;
   frame: ProjectedApplicationFrame;
-  /** The shell's own placements around the page's content slots, those slots empty. */
-  outletContent: CompiledLayout;
+  /** Only for a shell with several content slots: its own placements around them, those slots empty. */
+  outletContent?: CompiledLayout;
 }>;
 
 /** A slot's items; a plain list setting is an array too, but of values, not items. */

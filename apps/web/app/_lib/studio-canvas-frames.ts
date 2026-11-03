@@ -46,7 +46,7 @@ export type StudioApplicationCanvasFrames = Readonly<{
          * what a shell with several content slots keeps inside its outlet, where the canvas puts
          * each slot's editor.
          */
-        outletContent: CompiledLayout;
+        outletContent?: CompiledLayout;
       }>
     >
   >;
@@ -66,7 +66,7 @@ export const studioCanvasFramesFor = (
   // serializer send the frame once rather than cloning its layout into every page's props.
   const frames = new Map<
     string | undefined,
-    Readonly<{ frame: ProjectedApplicationFrame; content: CompiledLayout }>
+    Readonly<{ frame: ProjectedApplicationFrame; content: CompiledLayout | undefined }>
   >();
   sourcePages.forEach((sourcePage, index) => {
     if (sourcePage.id !== pageAlias) return;
@@ -92,7 +92,11 @@ export const studioCanvasFramesFor = (
       );
       split = {
         frame: projected.frame,
-        content: projected.content.composition as unknown as CompiledLayout,
+        // Only a shell with several content slots keeps its own placements inside the outlet.
+        content:
+          projected.frame.outlet.kind === "placement"
+            ? (projected.content.composition as unknown as CompiledLayout)
+            : undefined,
       };
       frames.set(shellId, split);
     }
@@ -102,7 +106,7 @@ export const studioCanvasFramesFor = (
       // The frame is the shell alone: its content slots are reserved and empty in the compiled
       // shell, and the canvas draws the page being edited in the outlet they declare.
       frame: split.frame,
-      outletContent: split.content,
+      ...(split.content === undefined ? {} : { outletContent: split.content }),
     };
   });
   return {

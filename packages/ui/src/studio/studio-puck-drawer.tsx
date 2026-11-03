@@ -294,6 +294,7 @@ export function StudioBlocksPanel() {
       message={palette.message}
       onAdd={palette.onAdd}
       slotOfArea={model.slotOfZoneKey}
+      preferredArea={model.defaultZoneKey}
     />
   );
 }
@@ -305,16 +306,19 @@ function StudioBlocksDrawer({
   message,
   onAdd,
   slotOfArea,
+  preferredArea,
 }: Readonly<{
-  /** The places of the content area the canvas shows. */
+  /** The places of the page (or step) the canvas shows. */
   targets: readonly StudioCompositionAddTarget[];
   blocked: string | undefined;
   /** A page's blocks also drag onto the canvas; a layout's blocks are added with Add. */
   owner: "page" | "layout";
   message: string;
   onAdd: (request: StudioCanvasAddRequest) => true | false | string;
-  /** Puck's root slot of a content area's key; `undefined` for the page's default zone. */
+  /** Puck's root slot of a content slot's key; `undefined` for the page's default zone. */
   slotOfArea: (area: string) => string | undefined;
+  /** The content slot the panel adds to until another is chosen. */
+  preferredArea: string | undefined;
 }>) {
   const [search, setSearch] = useState("");
   const [targetId, setTargetId] = useState("");
@@ -324,7 +328,10 @@ function StudioBlocksDrawer({
   const inserts = useRef(0);
   const getPuck = useGetPuck();
   const listed = usePuckSelector((state) => state.appState.ui.componentList);
-  const target = targets.find((candidate) => candidate.id === targetId) ?? targets[0];
+  const target =
+    targets.find((candidate) => candidate.id === targetId) ??
+    targets.find((candidate) => candidate.area === preferredArea) ??
+    targets[0];
   // The page's own top level is level 1: the levels the layout around it holds are not the page's.
   const top = Math.min(...targets.map((candidate) => candidate.depth));
   // Typing stays responsive on a big page: the list follows the search one render behind.
