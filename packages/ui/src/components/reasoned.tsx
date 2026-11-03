@@ -1,6 +1,12 @@
 "use client";
-import { cloneElement, useId, type ReactElement, type ReactNode } from "react";
+import { cloneElement, useId, type ComponentProps, type ReactElement, type ReactNode } from "react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "./tooltip";
+
+/** What a reasoned control may set on its tooltip. */
+export type ReasonedTooltipProps = Pick<
+  ComponentProps<typeof TooltipContent>,
+  "style" | "collisionBoundary" | "collisionPadding"
+>;
 
 type ReasonedProps = Readonly<{
   "aria-disabled"?: true;
@@ -20,6 +26,7 @@ export function Reasoned({
   reason,
   describedBy,
   onRefused,
+  contentProps,
   children,
 }: Readonly<{
   reason: string | undefined;
@@ -27,6 +34,8 @@ export function Reasoned({
   onRefused?: (() => void) | undefined;
   /** The id of an element on the page that already says the reason (one Alert for many controls). */
   describedBy?: string | undefined;
+  /** How the tooltip is drawn where the control is scaled or clipped (the canvas's action bar). */
+  contentProps?: ReasonedTooltipProps | undefined;
   children: ReactElement<ReasonedProps>;
 }>) {
   const id = useId();
@@ -49,7 +58,7 @@ export function Reasoned({
     <>
       <Tooltip>
         <TooltipTrigger render={swallowed}>{inner}</TooltipTrigger>
-        <TooltipContent>{reason}</TooltipContent>
+        <TooltipContent {...contentProps}>{reason}</TooltipContent>
       </Tooltip>
       {describedBy === undefined ? (
         <span id={id} className="sr-only">

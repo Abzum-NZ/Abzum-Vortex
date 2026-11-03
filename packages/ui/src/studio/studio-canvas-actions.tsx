@@ -1,152 +1,428 @@
 "use client";
 
-import { createUsePuck, useGetPuck, type Overrides } from "@puckeditor/core";
-import type { ReactNode } from "react";
-import { StudioCanvasIframe } from "./studio-canvas-root";
+import { ActionBar, createUsePuck, useGetPuck, type Overrides } from "@puckeditor/core";
+import { sourceItemTree } from "@vortex/platform/schema";
 import { StudioOutlineRegion } from "./studio-puck-outline";
 import { Copy, Trash2 } from "lucide-react";
+import {
+  Children,
+  cloneElement,
+  isValidElement,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type KeyboardEvent,
+  type ReactNode,
+} from "react";
 import { Button } from "../components/button";
+import { ButtonGroup, ButtonGroupSeparator, ButtonGroupText } from "../components/button-group";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../components/tooltip";
 import { Icon } from "../icons";
-import { Reasoned, studioLimitReason } from "./studio-limit";
+import { Reasoned, type ReasonedTooltipProps } from "../components/reasoned";
+import { studioLimitReason } from "./studio-limit";
 import { studioCanvasPermissionReason } from "./studio-canvas-permissions";
+import { puckNeighbourOf, puckSelectorOf } from "./studio-canvas-data";
+import { studioCanvasVisible, useStudioCanvasView } from "./studio-canvas-scale";
+import { StudioCanvasIframe } from "./studio-canvas-root";
+import { useStudioScreen } from "./studio-canvas-screen";
 import { useStudioCanvas } from "./studio-puck-provider";
 
 const usePuckSelector = createUsePuck();
 
-/** One selection action: unavailable with its reason as the tooltip, or disabled where Puck forbids it. */
-function BarAction({
-  label,
-  reason,
-  disabled,
-  onAct,
-  children,
-}: Readonly<{
+/**
+ * The bar an action chose takes the keyboard focus when it appears: the bar of that block, or of
+ * the next one to be selected (`id` null, as after Duplicate, whose copy gets its id from the
+ * draft) within a moment. Never left set: it lapses.
+ */
+let focusBar: { id: string | null; until: number } | null = null;
+const focusBarOn = (id: string | null) => {
+  focusBar = { id, until: Date.now() + 1500 };
+};
+
+type BarActionProps = Readonly<{
   label: string;
   reason: string | undefined;
-  disabled: boolean;
   onAct: () => void;
+  tooltip: ReasonedTooltipProps;
+  /** The toolbar's roving tab stop: one button is in the Tab order, the arrow keys move it. */
+  stop: boolean;
+  onStop: () => void;
   children: ReactNode;
-}>) {
+}>;
+
+/** One action of the bar: its label as the tooltip, or its reason while it is unavailable. */
+function BarAction({ label, reason, onAct, tooltip, stop, onStop, children }: BarActionProps) {
+  const button = (
+    <Button
+      type="button"
+      variant="ghost"
+      size="icon-sm"
+      aria-label={label}
+      tabIndex={stop ? 0 : -1}
+      onFocus={onStop}
+      onClick={onAct}
+    />
+  );
   if (reason !== undefined)
     return (
-      <Reasoned reason={reason}>
-        <Button type="button" variant="ghost" size="icon-sm" aria-label={label} onClick={onAct}>
-          {children}
-        </Button>
+      <Reasoned reason={reason} contentProps={tooltip}>
+        {cloneElement(button, undefined, children)}
       </Reasoned>
     );
   return (
     <Tooltip>
-      <TooltipTrigger
-        render={
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-sm"
-            aria-label={label}
-            disabled={disabled}
-            onClick={onAct}
-          />
-        }
-      >
-        {children}
-      </TooltipTrigger>
-      <TooltipContent>{label}</TooltipContent>
+      <TooltipTrigger render={button}>{children}</TooltipTrigger>
+      <TooltipContent {...tooltip}>{label}</TooltipContent>
     </Tooltip>
   );
 }
 
-/** Selection actions live above the scaled page, never over its content. */
-export function StudioCanvasActions() {
-  const selected = usePuckSelector((state) => state.selectedItem);
+/**
+ * The selected block's action bar, drawn in shadcn on the block itself. It is the content of
+ * Puck's `componentOverlay` for the selected block, so it is given the block's own id and knows it
+ * is the selected one, with no reading of Puck's markup and no writing to its elements. The block's
+ * name comes first, then select-parent, Duplicate and Delete. An action Puck's permissions forbid
+ * stays in the bar, unavailable, and says why on hover and on keyboard focus.
+ *
+ * The page frame is scaled by the workspace, so the bar counter-scales to keep its size on screen,
+ * and it moves along the block's edge to stay inside what the well shows (and below the block when
+ * there is no room above it). Alt+F10 moves keyboard focus to it, and inside it the arrow keys move
+ * between the actions.
+ */
+function StudioActionBar({ id, type }: Readonly<{ id: string; type: string }>) {
   const getPuck = useGetPuck();
-  const { input, references } = useStudioCanvas();
-  if (selected === null) return null;
+  const { input, model, references } = useStudioCanvas();
+  const { breakpoint, label: screenLabel } = useStudioScreen();
+  const view = useStudioCanvasView();
+  // While a block is dragged the bar lets the pointer through.
+  const dragging = usePuckSelector((state) => state.appState.ui.isDragging);
+  // The page changed (an Undo, an insert above): a block may have moved without a new size.
+  const data = usePuckSelector((state) => state.appState.data);
+  const anchor = useRef<HTMLDivElement | null>(null);
+  const [stopped, setStopped] = useState(0);
+  const [shift, setShift] = useState(0);
+  const [below, setBelow] = useState(false);
+  // The well scrolled: what it shows changed, so the bar is placed again.
+  const [scrolled, setScrolled] = useState(0);
+  useEffect(() => {
+    const well = view.well;
+    if (well === null) return;
+    let frame = 0;
+    const onScroll = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => setScrolled((count) => count + 1));
+    };
+    well.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      well.removeEventListener("scroll", onScroll);
+      cancelAnimationFrame(frame);
+    };
+  }, [view.well]);
   const puck = getPuck();
-  const permissions = puck.getPermissions({ item: selected });
-  const parent = puck.getParentById(selected.props.id);
-  const label = puck.config.components[selected.type]?.label ?? selected.type;
+  const permissions = puck.getPermissions({ item: puck.getItemById(id) ?? null });
+  const parent = puck.getParentById(id);
+  // The name the outline and the inspector use: the block's own item ("Button: Open").
+  const item =
+    model.slot === undefined
+      ? undefined
+      : sourceItemTree(model.slot.items).find((candidate) => candidate.props.id === id);
+  const name =
+    (item === undefined
+      ? undefined
+      : input.describePlacement({
+          block: item.props.vortex.block,
+          settings: Object.fromEntries(
+            Object.entries(item.props).filter(
+              ([key, value]) => key !== "id" && key !== "vortex" && !Array.isArray(value),
+            ),
+          ),
+        })) ??
+    puck.config.components[type]?.label ??
+    type;
+  // Why a forbidden action is unavailable when the draft itself names no reason.
+  const knownCause =
+    breakpoint !== "desktop"
+      ? `This is the ${screenLabel.toLowerCase()} view. Change blocks on Desktop.`
+      : model.readOnlyCause !== undefined
+        ? "This page is shown read-only, so its blocks can't be changed here."
+        : !input.canvasShown
+          ? "The canvas is not on show."
+          : input.disabled
+            ? (input.disabledReason ?? "Studio is busy; try again in a moment.")
+            : undefined;
+  const unavailable = knownCause ?? "This isn't available for this block.";
+  const reasonFor = (reference: string | undefined, allowed: boolean) =>
+    reference ?? (allowed ? undefined : unavailable);
   // A full application cannot take another block: Duplicate says so instead of failing on save.
   const placed =
     input.palette?.targets.kind === "available"
       ? (input.palette.targets.targets[0]?.placed ?? 0)
       : 0;
-  // The reason an action is unavailable: the application's limit, then what the draft refers to.
-  const duplicateReason =
+  const duplicateNamed =
     studioLimitReason("compositionPlacements", placed) ??
-    studioCanvasPermissionReason(references, selected.props.id, "duplicate");
-  const deleteReason = studioCanvasPermissionReason(references, selected.props.id, "delete");
-  const act = (action: "duplicate" | "remove") => {
-    const current = getPuck();
-    const item = current.selectedItem;
-    if (item === null || item.props.id !== selected.props.id) return;
-    const allowed = current.getPermissions({ item });
-    if (!(action === "duplicate" ? allowed.duplicate : allowed.delete)) return;
-    const selector = current.getSelectorForId(item.props.id);
-    if (selector === undefined) return;
-    current.dispatch(
-      action === "duplicate"
-        ? { type: "duplicate", sourceIndex: selector.index, sourceZone: selector.zone }
-        : { type: "remove", index: selector.index, zone: selector.zone },
-    );
+    studioCanvasPermissionReason(references, id, "duplicate");
+  const deleteNamed = studioCanvasPermissionReason(references, id, "delete");
+  const duplicateReason = reasonFor(duplicateNamed, permissions.duplicate);
+  const deleteReason = reasonFor(deleteNamed, permissions.delete);
+  // A denial that neither the draft nor a cause above explains is a defect to find and word, so it
+  // is logged, once per block.
+  const unexplained =
+    knownCause === undefined &&
+    ((!permissions.duplicate && duplicateNamed === undefined) ||
+      (!permissions.delete && deleteNamed === undefined));
+  useEffect(() => {
+    if (unexplained)
+      console.error("[studio] an action is unavailable for no known reason", { id, permissions });
+  }, [unexplained, id]);
+  const inverse = view.scale > 0 ? 1 / view.scale : 1;
+  const visible = studioCanvasVisible(view);
+  // A tooltip stays inside what the well shows, and is the size of the bar on screen.
+  const tooltip: ReasonedTooltipProps = {
+    style: { scale: inverse },
+    collisionPadding: 4,
+    ...(visible === undefined
+      ? {}
+      : {
+          collisionBoundary: {
+            x: visible.left,
+            y: visible.top,
+            width: visible.right - visible.left,
+            height: visible.bottom - visible.top,
+          },
+        }),
   };
+
+  // Place the bar on its block: counter-scaled, inside the visible part of the page frame.
+  useLayoutEffect(() => {
+    const bar = anchor.current;
+    // Studio's own element around the bar, as big as the block (it fills Puck's overlay of it).
+    const block = bar?.closest("[data-vortex-canvas-overlay]");
+    const shown = studioCanvasVisible(view);
+    if (bar == null || block == null || shown === undefined) return;
+    const box = bar.getBoundingClientRect();
+    const blockBox = block.getBoundingClientRect();
+    // `box` includes the shift in force, so the unshifted edges are found first.
+    const left = box.left - shift;
+    const right = box.right - shift;
+    let next = 0;
+    if (right > shown.right) next = shown.right - right;
+    if (left + next < shown.left) next = shown.left - left;
+    const rounded = Math.round(next);
+    if (rounded !== shift) setShift(rounded);
+    const flip = blockBox.top - box.height < shown.top;
+    if (flip !== below) setBelow(flip);
+  }, [id, view, scrolled, name, shift, below, data]);
+  // The block resizes (a drag, a setting), or the page does (content above it arrives and moves it
+  // down): the bar follows its edges.
+  useEffect(() => {
+    const block = anchor.current?.closest("[data-vortex-canvas-overlay]");
+    if (block == null) return;
+    const observer = new ResizeObserver(() => setScrolled((count) => count + 1));
+    observer.observe(block);
+    observer.observe(block.ownerDocument.body);
+    return () => observer.disconnect();
+  }, [id]);
+
+  const buttons = () => [...(anchor.current?.querySelectorAll("button") ?? [])];
+  // Alt+F10 moves focus to the selected block's bar, as the toolbar convention has it. A key
+  // pressed while focus is inside the canvas frame reaches only its document, so both are heard.
+  useEffect(() => {
+    const own = anchor.current?.ownerDocument;
+    const documents = own === undefined || own === document ? [document] : [document, own];
+    const onKey = (event: globalThis.KeyboardEvent) => {
+      if (!event.altKey || event.key !== "F10") return;
+      event.preventDefault();
+      buttons()[stopped]?.focus();
+    };
+    for (const target of documents) target.addEventListener("keydown", onKey);
+    return () => {
+      for (const target of documents) target.removeEventListener("keydown", onKey);
+    };
+  }, [stopped]);
+  // The bar of the block an action chose takes the focus, so the keyboard does not start over.
+  useEffect(() => {
+    if (
+      focusBar === null ||
+      Date.now() > focusBar.until ||
+      (focusBar.id !== null && focusBar.id !== id)
+    )
+      return;
+    focusBar = null;
+    buttons()[0]?.focus({ preventScroll: true });
+  }, [id]);
+  const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    const all = buttons();
+    const at = all.findIndex((button) => button === event.target);
+    if (at < 0) return;
+    const to =
+      event.key === "ArrowRight"
+        ? (at + 1) % all.length
+        : event.key === "ArrowLeft"
+          ? (at - 1 + all.length) % all.length
+          : event.key === "Home"
+            ? 0
+            : event.key === "End"
+              ? all.length - 1
+              : -1;
+    if (to < 0) return;
+    event.preventDefault();
+    all[to]?.focus();
+  };
+
+  // What the action acts on is found in the data, and must be this bar's own block.
+  const act = (action: "parent" | "duplicate" | "remove") => {
+    const current = getPuck();
+    const content = current.appState.data.content;
+    const selector = puckSelectorOf(content, id);
+    if (selector === undefined || current.getItemBySelector(selector)?.props.id !== id) {
+      console.info(`[studio] the action bar of '${id}' found the block moved; nothing was changed`);
+      return;
+    }
+    if (action === "parent") {
+      const parentSelector =
+        parent === undefined ? undefined : puckSelectorOf(content, parent.props.id);
+      if (parent !== undefined && parentSelector !== undefined) {
+        focusBarOn(parent.props.id);
+        current.dispatch({ type: "setUi", ui: { itemSelector: parentSelector } });
+      }
+      return;
+    }
+    const item = current.getItemBySelector(selector);
+    const allowed = current.getPermissions({ item: item ?? null });
+    if (!(action === "duplicate" ? allowed.duplicate : allowed.delete)) return;
+    if (action === "duplicate") {
+      current.dispatch({
+        type: "duplicate",
+        sourceIndex: selector.index,
+        sourceZone: selector.zone,
+      });
+      // Puck selects the copy; its bar takes the focus.
+      focusBarOn(null);
+      return;
+    }
+    // The selection goes to the neighbour (the provider sees to that for every removal).
+    const neighbour = puckNeighbourOf(content, selector);
+    if (neighbour !== undefined) focusBarOn(neighbour);
+    current.dispatch({ type: "remove", index: selector.index, zone: selector.zone });
+  };
+  const stop = (index: number) => ({ stop: stopped === index, onStop: () => setStopped(index) });
+  const style: CSSProperties = {
+    scale: inverse,
+    translate: `${shift}px 0`,
+    transformOrigin: below ? "left top" : "left bottom",
+  };
+  const first = parent === undefined ? 0 : 1;
   return (
     <div
-      role="toolbar"
-      aria-label="Selected block actions"
-      className="flex shrink-0 items-center gap-1"
+      ref={anchor}
+      data-vortex-canvas-action-bar-anchor=""
+      className={`absolute left-0 z-20 ${below ? "top-full pt-2" : "bottom-full pb-2"} ${dragging ? "pointer-events-none" : "pointer-events-auto"}`}
+      style={style}
     >
-      <span className="mr-1 max-w-40 truncate text-sm font-medium">{label}</span>
-      {parent === undefined ? null : (
-        <Tooltip>
-          <TooltipTrigger
-            render={
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon-sm"
-                aria-label="Select parent block"
-                onClick={() => {
-                  const current = getPuck();
-                  const selector = current.getSelectorForId(parent.props.id);
-                  if (selector !== undefined)
-                    current.dispatch({ type: "setUi", ui: { itemSelector: selector } });
-                }}
-              />
-            }
+      <ButtonGroup
+        role="toolbar"
+        aria-label={`${name} actions`}
+        aria-keyshortcuts="Alt+F10"
+        data-vortex-canvas-action-bar=""
+        // A click in the bar is the bar's own, never a click on the page behind it.
+        onClick={(event) => event.stopPropagation()}
+        onKeyDown={onKeyDown}
+        className="border bg-popover text-popover-foreground shadow-md"
+      >
+        <ButtonGroupText className="max-w-56 truncate">{name}</ButtonGroupText>
+        <ButtonGroupSeparator />
+        {parent === undefined ? null : (
+          <BarAction
+            label="Select parent block"
+            reason={undefined}
+            tooltip={tooltip}
+            onAct={() => act("parent")}
+            {...stop(0)}
           >
             <Icon name="arrow-up" />
-          </TooltipTrigger>
-          <TooltipContent>Select parent block</TooltipContent>
-        </Tooltip>
-      )}
-      <BarAction
-        label="Duplicate block"
-        reason={duplicateReason}
-        disabled={!permissions.duplicate}
-        onAct={() => act("duplicate")}
-      >
-        <Copy aria-hidden="true" />
-      </BarAction>
-      <BarAction
-        label="Delete block"
-        reason={deleteReason}
-        disabled={!permissions.delete}
-        onAct={() => act("remove")}
-      >
-        <Trash2 aria-hidden="true" />
-      </BarAction>
+          </BarAction>
+        )}
+        <BarAction
+          label="Duplicate block"
+          reason={duplicateReason}
+          tooltip={tooltip}
+          onAct={() => act("duplicate")}
+          {...stop(first)}
+        >
+          <Copy aria-hidden="true" />
+        </BarAction>
+        <BarAction
+          label="Delete block"
+          reason={deleteReason}
+          tooltip={tooltip}
+          onAct={() => act("remove")}
+          {...stop(first + 1)}
+        >
+          <Trash2 aria-hidden="true" />
+        </BarAction>
+      </ButtonGroup>
     </div>
   );
 }
 
 /**
- * Replaces Puck's floating action bar with StudioCanvasActions, draws the frame in the iframe, and
- * draws the outline in Studio's labelled region (its colours, height and edit lock).
+ * The overlay Puck draws on every block: its own outline, and the action bar on the selected one.
+ * `componentOverlay` is given the block's id and whether it is selected, which the `actionBar`
+ * override is not.
+ */
+function StudioComponentOverlay({
+  children,
+  isSelected,
+  componentId,
+  componentType,
+}: Readonly<{
+  children: ReactNode;
+  isSelected: boolean;
+  componentId: string;
+  componentType: string;
+}>) {
+  return (
+    <>
+      {children}
+      {isSelected ? (
+        <div data-vortex-canvas-overlay="" className="pointer-events-none absolute inset-0">
+          <StudioActionBar id={componentId} type={componentType} />
+        </div>
+      ) : null}
+    </>
+  );
+}
+
+/**
+ * Puck's own bar draws nothing. What it would have drawn (its Duplicate and Delete) is left out on
+ * purpose; anything else in it, such as an inline rich-text menu, is a block Studio does not have,
+ * so it is reported once instead of silently missing.
+ */
+let reportedBarContent = false;
+function StudioPuckActionBar({ children }: Readonly<{ children?: ReactNode }>) {
+  // Puck's own children are its Duplicate and Delete actions; anything else is content not drawn.
+  const extra = Children.toArray(children).some(
+    (child) => !isValidElement(child) || child.type !== ActionBar.Action,
+  );
+  useEffect(() => {
+    if (!extra || reportedBarContent) return;
+    reportedBarContent = true;
+    console.error(
+      "[studio] Puck's action bar holds content other than its Duplicate and Delete; it is not drawn",
+    );
+  }, [extra]);
+  return <></>;
+}
+
+/**
+ * Puck's overlay, iframe and outline, drawn by Studio: the outline in its labelled region, with
+ * Studio's colours, height and edit lock.
  */
 export const studioCanvasOverrides: Partial<Overrides> = {
-  actionBar: () => <></>,
+  actionBar: StudioPuckActionBar,
+  componentOverlay: StudioComponentOverlay,
   iframe: StudioCanvasIframe,
   outline: StudioOutlineRegion,
 };
