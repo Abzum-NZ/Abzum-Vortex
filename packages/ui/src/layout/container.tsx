@@ -122,10 +122,12 @@ export function Container(props: ContainerProps): ReactElement {
     : geometryCss(scope, { desktop, tablet, phone }[props.breakpoint]);
 
   // In a row, header and menu keep their content width and content fills the remaining space, so
-  // a menu beside page content reads as a sidebar rather than an equal third.
+  // a menu beside page content reads as a sidebar rather than an equal third. A sidebar never takes
+  // more than half the row: a wide block in it (a grid) scrolls inside its own box instead of
+  // leaving the content no width.
   const regionClassName = (key: ContainerRegionKey): string =>
     direction === "row"
-      ? cn("min-w-0", key === "content" ? "flex-1 basis-0" : "flex-none")
+      ? cn("min-w-0", key === "content" ? "flex-1 basis-0" : "max-w-[50%] flex-none")
       : "min-w-0";
 
   const regions: ReactNode[] = [];

@@ -50,9 +50,12 @@ export const studioPuckStyle = {
 /**
  * The same variables for the canvas's iframe: Puck draws its overlay, selection and drop line in
  * the iframe's body, which the host's frame styles do not reach. Puck draws an outline inside the
- * box it outlines, so an edge-to-edge block's outline is not cut off at the iframe's edge. A device
- * screen never scrolls sideways: content wider than it is clipped, and the well scrolls instead.
+ * box it outlines, so an edge-to-edge block's outline is not cut off at the iframe's edge. Puck's
+ * drop zone of the page area stacks its blocks edge to edge, so it takes the root's slot gap the
+ * running page's area has.
  */
-export const studioPuckIframeCss = `html,body{overflow-x:clip}body{${Object.entries(studioPuckStyle)
+export const studioPuckIframeCss = `[data-vortex-studio-canvas]>[data-puck-dropzone]{display:flex;flex-direction:column;gap:var(--vortex-root-slot-gap)}body{${Object.entries(
+  studioPuckStyle,
+)
   .map(([key, value]) => `${key}:${String(value)}`)
   .join(";")}}`;

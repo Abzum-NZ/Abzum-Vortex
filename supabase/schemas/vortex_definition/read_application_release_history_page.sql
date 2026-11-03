@@ -83,6 +83,12 @@ begin
     'releaseVersion', release.release_version,
     'publishedAt', release.published_at,
     'publishedBy', release.published_by,
+    -- A version published under the system context carries the platform's actor, which is no
+    -- organisation account; a person's version carries their organisation account.
+    'publishedByPlatform', not exists (
+      select 1 from vortex_identity.organization_accounts as account
+      where account.organization_account_id = release.published_by
+    ),
     'releaseNote', release.release_note,
     'authoredSourceFingerprint', release.authored_source_fingerprint,
     'authoredSource', release.authored_source,
@@ -123,4 +129,4 @@ grant execute on function vortex_definition.read_application_release_history_pag
   to vortex_request;
 
 comment on function vortex_definition.read_application_release_history_page(uuid, bigint, bigint, text, integer) is
-  'Returns one anchored, bounded newest-first keyset page of an application''s published versions for Studio: metadata and authored source only (never the compilation output), the release just older than the page, and whether newer and older pages exist.';
+  'Returns one anchored, bounded newest-first keyset page of an application''s published versions for Studio: metadata (with whether the platform published each version) and authored source only (never the compilation output), the release just older than the page, and whether newer and older pages exist.';

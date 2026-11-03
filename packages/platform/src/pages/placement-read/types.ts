@@ -129,6 +129,8 @@ export type PlacementReadInput = Readonly<{
     | readonly Readonly<{ applicationRootId: string; key: string; homePageKey: string }>[]
     | undefined;
   permittedApplicationsUnavailable: boolean;
+  /** The Studio canvas never reads the applications the viewer may open; its launchers say so. */
+  permittedApplicationsNotRead?: true;
   /**
    * What the viewer's application surfaces may offer, read once for the placements that declare an
    * application link or capability; absent in every other read.

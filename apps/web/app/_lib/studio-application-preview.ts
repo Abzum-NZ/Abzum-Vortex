@@ -172,10 +172,8 @@ const failure = (error: unknown, reported = false): PreviewFailure => {
 
 /**
  * Reads, in one request under the builder's draft authority, the saved draft at exactly the
- * requested revision and the builder's current preview of its Application. It reads in the
- * installed Application's own scope, which an organisation-wide change (such as a preview's
- * rehearsed publication) does not hold up, and in the organisation's scope for an Application
- * with no installation yet.
+ * requested revision and the builder's current preview of its Application, in the
+ * organisation's scope (an Application with no installation has no scope of its own).
  */
 export const readStudioPreviewState = async (
   session: IdentitySession,
@@ -185,39 +183,35 @@ export const readStudioPreviewState = async (
   readCompilation = false,
 ): Promise<StudioPreviewState> => {
   try {
-    const selection = { organizationId, applicationRootId: rootId };
-    const readOnceMoreOnSerializationConflict = async (
-      selected: Readonly<{ organizationId: OrganizationId; applicationRootId?: ApplicationRootId }>,
-    ) => {
-      const first = await readPreviewStateIn(
-        session,
-        selected,
-        organizationId,
-        rootId,
-        draftRevision,
-        readCompilation,
-      );
-      if (first.kind !== "temporarily_unavailable" || first.databaseCode !== "40001") return first;
-      // A preview move can invalidate this transaction's snapshot. The request service already
-      // logged the SQLSTATE and cause; start one fresh protected transaction for this known race.
+    // The one scope of the read is the organisation's: an Application's own scope exists only for
+    // an installed Application, so asking for it first raised a refusal (42501) in the database
+    // for every Application that was never installed.
+    const selection = { organizationId };
+    const first = await readPreviewStateIn(
+      session,
+      selection,
+      organizationId,
+      rootId,
+      draftRevision,
+      readCompilation,
+    );
+    // A preview move can invalidate this transaction's snapshot. The request service already
+    // logged the SQLSTATE and cause; start one fresh protected transaction for this known race.
+    const retried = first.kind === "temporarily_unavailable" && first.databaseCode === "40001";
+    if (retried)
       console.info(
         "[studio] retrying preview state after serialization conflict: STUDIO_PREVIEW_STATE_RETRY",
       );
-      return readPreviewStateIn(
-        session,
-        selected,
-        organizationId,
-        rootId,
-        draftRevision,
-        readCompilation,
-      );
-    };
-    const inApplication = await readOnceMoreOnSerializationConflict(selection);
-    const read =
-      inApplication.kind === "temporarily_unavailable" ||
-      (inApplication.kind === "available" && inApplication.value.kind !== "refused")
-        ? inApplication
-        : await readOnceMoreOnSerializationConflict({ organizationId });
+    const read = retried
+      ? await readPreviewStateIn(
+          session,
+          selection,
+          organizationId,
+          rootId,
+          draftRevision,
+          readCompilation,
+        )
+      : first;
     if (read.kind === "available") return read.value;
     return read.kind === "temporarily_unavailable"
       ? { kind: "temporarily_unavailable" }

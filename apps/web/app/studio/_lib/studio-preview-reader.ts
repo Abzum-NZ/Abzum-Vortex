@@ -35,10 +35,11 @@ export const fillPreviewAfterRead = (
       .then((response) => {
         if (!response.ok) throw new Error(`STUDIO_PREVIEW_FILL_HTTP_${response.status}`);
         const kind = isRecord(response.body) ? response.body.kind : undefined;
-        // A fill that finishes ready, follows the preview to a newer revision, or loses to a save
-        // that superseded it changes nothing the person sees: those are expected, and they say
-        // nothing. Any other outcome is a fault, logged once for the one lease.
-        if (kind !== "ready" && kind !== "following" && kind !== "conflict")
+        // A fill that finishes ready, follows the preview to a newer revision, loses to a save that
+        // superseded it, or is refused (the builder's role changed) changes nothing the person
+        // sees: those are expected, and they say nothing. Any other outcome is a fault, logged once
+        // for the one lease.
+        if (kind !== "ready" && kind !== "following" && kind !== "conflict" && kind !== "refused")
           console.error("[studio] idle preview fill ended unexpectedly", { kind });
       })
       .catch((error: unknown) => {

@@ -81,8 +81,8 @@ export type StudioApplicationHistoryPage = Readonly<{
   entries: readonly StudioApplicationReleaseEntry[];
   /** The names of the people who published the entries, by lowercase account id, as far as the viewer may see them. */
   publishers: Readonly<Record<string, string>>;
-  /** A platform application's versions are published by the platform, not by a person in this directory. */
-  isSystemApplication: boolean;
+  /** The publishers (lowercase ids) that are the platform itself, not a person in any directory. */
+  platformPublishers: readonly string[];
   hasOlder: boolean;
   hasNewer: boolean;
 }>;
@@ -309,6 +309,7 @@ const sourceEntrySchema = z
     releaseVersion: z.string(),
     publishedAt: z.string(),
     publishedBy: z.string(),
+    publishedByPlatform: z.boolean(),
     releaseNote: z.string(),
     authoredSourceFingerprint: fingerprintSchema,
     authoredSource: z.unknown(),
@@ -463,9 +464,13 @@ export const listStudioApplicationReleaseHistory = async (
           hasOlder: page?.hasOlder ?? false,
           hasNewer: page?.hasNewer ?? false,
           publishers: Object.fromEntries(names),
-          isSystemApplication:
-            (await readBuilderApplicationOrigin(transaction, snapshot.rootId)) ===
-            "platform_system_application",
+          platformPublishers: [
+            ...new Set(
+              (page?.entries ?? [])
+                .filter((entry) => entry.publishedByPlatform)
+                .map((entry) => entry.publishedBy.toLowerCase()),
+            ),
+          ],
         },
         metadata: entries,
       };

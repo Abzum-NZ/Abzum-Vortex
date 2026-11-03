@@ -229,6 +229,7 @@ export type DisplayDetailField = z.output<typeof displayDetailFieldsSchema>[numb
 /** Fixed, data-free refusal reasons; a refused state never carries a value. */
 export const displayRefusalReasons = [
   "not_permitted",
+  "applications_not_read",
   "access_ended",
   "not_found",
   "value_out_of_range",

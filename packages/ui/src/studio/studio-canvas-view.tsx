@@ -144,10 +144,7 @@ export function StudioCanvasView({
       <div className="flex min-h-0 flex-1 flex-col gap-3 px-4">
         {picker}
         <section className="flex min-h-0 flex-1 flex-col gap-3" aria-label="Page canvas">
-          <CanvasEmpty
-            title="Waiting for the canvas"
-            description="Your page appears here after its latest saved changes compile."
-          />
+          {compileFailure == null && refusal.length === 0 ? <StudioCanvasSkeleton /> : null}
           {compileFailure == null ? null : <CompileFailureNotice failure={compileFailure} />}
           {refusal.length === 0 ? null : <p role="status">{refusal}</p>}
         </section>

@@ -10,6 +10,7 @@ import {
   StudioField,
   StudioIconButton,
   StudioInspectorGroup,
+  StudioReasoned,
   StudioReferencePicker,
   type StudioPermissionDeclaration as Declaration,
 } from "@vortex/ui/studio";
@@ -57,6 +58,21 @@ export function StudioPermissionDeclaration({
   const unsupportedScope =
     scope.saved_condition !== undefined ||
     scope.routes.some((route) => route.kind === "relationship");
+  // What stops the permission from being saved, the first thing to do. It shows at a field the
+  // person has left, and at the button that cannot be used yet.
+  const missing = !label.trim()
+    ? ({ field: "label", reason: "Add a label." } as const)
+    : !description.trim()
+      ? ({ field: "description", reason: "Describe what this permission allows." } as const)
+      : recordPermission && record === undefined
+        ? ({ field: "record", reason: "Choose a record type." } as const)
+        : recordPermission && actionKind === "named" && !namedAction.trim()
+          ? ({ field: "action", reason: "Name the action." } as const)
+          : undefined;
+  const [left, setLeft] = useState<ReadonlySet<string>>(new Set());
+  const leave = (field: string) => setLeft((previous) => new Set(previous).add(field));
+  const problem = (field: string, reason: string | undefined) =>
+    reason !== undefined && left.has(field) ? reason : undefined;
   const places =
     permission === undefined
       ? []
@@ -70,6 +86,7 @@ export function StudioPermissionDeclaration({
   const changed = permission !== undefined && permission.administrative !== administrative;
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (missing !== undefined || unsupportedScope) return;
     const target: Declaration["target"] = recordPermission
       ? {
           kind: "record",
@@ -163,6 +180,7 @@ export function StudioPermissionDeclaration({
             <StudioField
               label="Action name"
               hint="For example: Manage. This identity stays fixed after creation."
+              error={problem("action", missing?.field === "action" ? missing.reason : undefined)}
             >
               {(control) => (
                 <Input
@@ -171,6 +189,7 @@ export function StudioPermissionDeclaration({
                   value={namedAction}
                   maxLength={40}
                   disabled={disabled || permission !== undefined}
+                  onBlur={() => leave("action")}
                   onChange={(event) => setNamedAction(event.target.value)}
                 />
               )}
@@ -237,7 +256,10 @@ export function StudioPermissionDeclaration({
           </StudioInspectorGroup>
         </>
       )}
-      <StudioField label="Label">
+      <StudioField
+        label="Label"
+        error={problem("label", missing?.field === "label" ? missing.reason : undefined)}
+      >
         {(control) => (
           <Input
             {...control}
@@ -246,13 +268,17 @@ export function StudioPermissionDeclaration({
             autoFocus
             disabled={disabled}
             value={label}
+            onBlur={() => leave("label")}
             onChange={(event) => setLabel(event.target.value)}
           />
         )}
       </StudioField>
       <StudioField
         label="Description"
-        description="Required: the permission cannot be added until it describes what it allows."
+        error={problem(
+          "description",
+          missing?.field === "description" ? missing.reason : undefined,
+        )}
       >
         {(control) => (
           <Textarea
@@ -261,6 +287,7 @@ export function StudioPermissionDeclaration({
             maxLength={1000}
             disabled={disabled}
             value={description}
+            onBlur={() => leave("description")}
             onChange={(event) => setDescription(event.target.value)}
           />
         )}
@@ -328,22 +355,20 @@ export function StudioPermissionDeclaration({
         )}
       </StudioInspectorGroup>
       <div className="flex items-center gap-2">
-        <Button
-          type="submit"
-          variant="secondary"
-          size="sm"
-          disabled={
-            disabled ||
-            unsupportedScope ||
-            !label.trim() ||
-            !description.trim() ||
-            (recordPermission &&
-              (record === undefined || (actionKind === "named" && !namedAction.trim())))
+        <StudioReasoned
+          reason={
+            unsupportedScope
+              ? "Studio can't edit this permission's record scope here."
+              : missing === undefined
+                ? undefined
+                : missing.reason
           }
         >
-          <Icon name="check" />
-          {permission === undefined ? "Add permission" : "Save permission"}
-        </Button>
+          <Button type="submit" variant="secondary" size="sm" disabled={disabled}>
+            <Icon name="check" />
+            {permission === undefined ? "Add permission" : "Save permission"}
+          </Button>
+        </StudioReasoned>
         <StudioIconButton label="Cancel permission edit" onClick={close}>
           <Icon name="close" />
         </StudioIconButton>

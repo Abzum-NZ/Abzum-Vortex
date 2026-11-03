@@ -54,3 +54,21 @@ export const readMotionTiming = (
     ? undefined
     : { duration, ease };
 };
+
+/**
+ * A platform motion token for the element's own Web Animations API: a duration in milliseconds and
+ * the CSS easing that carries it, read from the theme root this element sits in. A missing or zero
+ * duration (reduced motion) means no motion.
+ */
+export const readMotionWebTiming = (
+  element: Element,
+  name: string,
+  easingName: string = name,
+): Readonly<{ duration: number; easing: string }> | undefined => {
+  const style = getComputedStyle(element);
+  const duration = seconds(style.getPropertyValue(`--vortex-motion-${name}`));
+  const ease = style.getPropertyValue(`--vortex-motion-${easingName}-easing`).trim();
+  return duration === undefined || duration <= 0 || ease === ""
+    ? undefined
+    : { duration: duration * 1000, easing: ease };
+};

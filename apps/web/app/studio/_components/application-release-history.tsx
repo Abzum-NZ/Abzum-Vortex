@@ -376,11 +376,13 @@ export function ApplicationReleaseHistory({
   };
 
   const blocked = pending !== null || page === null;
-  // The platform publishes a system application's versions itself, so its account is not in this
-  // organisation's person directory; it is named as the platform rather than as an invisible person.
+  // A version the platform published itself has no account in any person directory, so it is named
+  // as the platform; a person the viewer cannot see in the directory stays unnamed.
   const author = (entry: StudioApplicationReleaseEntry) =>
     page?.publishers[entry.publishedBy.toLowerCase()] ??
-    (page?.isSystemApplication === true ? "Vortex" : "Someone outside your directory");
+    (page?.platformPublishers.includes(entry.publishedBy.toLowerCase()) === true
+      ? "Vortex"
+      : "Someone outside your directory");
   const rowMenu = (entry: StudioApplicationReleaseEntry) => (
     <DropdownMenu>
       <Tooltip>

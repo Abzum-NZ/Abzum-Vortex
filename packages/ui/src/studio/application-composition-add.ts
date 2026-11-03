@@ -182,6 +182,9 @@ export const addPlaces = (
   const placed = regions(source).reduce((total, each) => total + countBlocks(each.zone.items), 0);
   for (const { region, area, label, admitted } of areas) {
     const hostLevels = regionHostLevels(catalogue, source, region);
+    // A block with slots is named by its kind and its place among blocks of that kind in this
+    // area, never by its alias.
+    const ordinals = new Map<string, number>();
     // A place that would take a block past the composition limits offers every block as unavailable.
     const limited = (
       depth: number,
@@ -234,6 +237,8 @@ export const addPlaces = (
         const release = releaseFor(catalogue, item);
         if (release === undefined) continue;
         const slots = itemSlots(catalogue, item);
+        const ordinal = (ordinals.get(String(release.name)) ?? 0) + 1;
+        ordinals.set(String(release.name), ordinal);
         const childInForm = inForm || release.key === FORM_CONTAINER_KEY;
         for (const declaration of release.slots) {
           if (declaration.repeats !== undefined) continue;
@@ -248,7 +253,7 @@ export const addPlaces = (
               id: `${area}|${parentAlias}|${declaration.key}`,
               area,
               destination: { kind: "child", parentAlias, slotKey: declaration.key },
-              label: `${release.name} ${parentAlias}: ${declaration.label}${outlet === undefined ? "" : ` (page content: ${outlet})`}`,
+              label: `${release.name} ${ordinal}: ${declaration.label}${outlet === undefined ? "" : ` (page content: ${outlet})`}`,
               depth: hostLevels + childSteps.length,
               placed,
               choices:

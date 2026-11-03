@@ -2,11 +2,11 @@
 
 import { createUsePuck, type PuckContext } from "@puckeditor/core";
 import { compiledItemSettings } from "@vortex/platform/schema";
-import { useEffect, useMemo, type ReactNode, type SyntheticEvent } from "react";
+import { useEffect, useMemo, type CSSProperties, type ReactNode, type SyntheticEvent } from "react";
 import { isElement, isHtmlElement } from "../lib/dom";
 import { PagePuckRenderer } from "../page-puck-renderer";
 import { RootSlotGapProvider } from "../puck-config";
-import type { SlotGapName } from "../layout-styles";
+import { slotGapLength, type SlotGapName } from "../layout-styles";
 import type { FieldInputControlReleaseMap, PlatformComponentRegistry } from "../registry";
 import { createAppearanceRootProps, createThemeRootProps, VortexStyleRoot } from "../theme";
 import { studioCanvasMetadata } from "./studio-canvas-metadata";
@@ -49,6 +49,8 @@ export function StudioCanvasRoot({
       data-vortex-editing=""
       {...(breakpoint === "desktop" ? {} : { "data-vortex-view-only": "" })}
       aria-label={empty ? "Empty content area" : undefined}
+      // The page area's blocks are spaced by the root's slot gap, as the running page spaces them.
+      style={{ "--vortex-root-slot-gap": slotGapLength(gap) } as CSSProperties}
       className={empty ? "relative min-h-48" : "min-h-24"}
     >
       <RootSlotGapProvider gap={gap}>{children}</RootSlotGapProvider>

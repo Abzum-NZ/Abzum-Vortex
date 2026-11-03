@@ -10,7 +10,13 @@ import {
   standardPermissionKey,
   type SourceItem,
 } from "@vortex/platform/schema";
-import { columnLimit, columnTypes, listing, lowerFirst } from "./application-record-page-kinds";
+import {
+  columnLimit,
+  columnTypes,
+  isProjectionAddressField,
+  listing,
+  lowerFirst,
+} from "./application-record-page-kinds";
 import { applyStudioFlowCreate } from "./application-flow-create";
 import { bindDefault, flowParts, freshAlias, type Plan } from "./application-record-plan";
 import { ensureStudioRecordQuery } from "./default-record-query";
@@ -244,14 +250,8 @@ export const keyColumns = (
   title: Field,
   readable: ReadonlySet<string>,
 ): Field[] => {
-  const projection = record.system_projection;
-  const technical = new Set(
-    [projection?.organization_field, projection?.revision_field].filter(
-      (key): key is string => typeof key === "string",
-    ),
-  );
   const shown = record.fields.filter(
-    (entry) => readable.has(entry.key) && !technical.has(entry.key),
+    (entry) => readable.has(entry.key) && !isProjectionAddressField(record, entry.key),
   );
   const numbers = shown.filter((entry) => entry.type === "reference_number");
   const state = shown.find((entry) => entry !== title && entry.type === "choice");

@@ -10,6 +10,7 @@ import {
   type RecordsTableBoardFacts,
 } from "@vortex/platform/schema";
 import { PALETTE_GROUP_TITLES } from "../palette-groups";
+import { isProjectionAddressField } from "./application-record-page-kinds";
 import { studioHasSlotStarter } from "./composition-starters";
 import { studioDefaultRecordQuery } from "./default-record-query";
 import { studioGroupedTablePreset, type StudioGroupedTablePreset } from "./grouped-table-preset";
@@ -227,6 +228,8 @@ export type StudioQueryField = Readonly<{
   choiceValues?: readonly string[];
   /** For a calculation or total, the type of the value it produces. */
   resultType?: string;
+  /** The field is what a system projection is addressed by, so no default column shows it. */
+  projectionAddress?: true;
   /** The field is a one-record link from its record type to itself, so a record names its parent. */
   parentLink?: boolean;
   /** The field of the same record type whose chosen record narrows this link's choices. */
@@ -482,6 +485,9 @@ const ownQuery = (
             ) || borrowed?.recordTypes.includes(qualified) === true
           );
         })(),
+      ...(record !== undefined && isProjectionAddressField(record, field.key)
+        ? { projectionAddress: true as const }
+        : {}),
       ...(isParentLink(module.key, recordType, record, field) ? { parentLink: true } : {}),
       ...((field.type === "link" || field.type === "choice") &&
       (field.settings as { options_source?: { parent_field?: string } }).options_source

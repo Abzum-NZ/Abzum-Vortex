@@ -1,4 +1,5 @@
 "use client";
+import { useSearchParams } from "next/navigation";
 import { Alert, AlertDescription } from "@vortex/ui/components/alert";
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
@@ -290,6 +291,14 @@ export function useStudioCanvasTab({
       ? undefined
       : source.body.pages.find((page) => page.id === canvasPageAlias);
   const addressRestored = useRef(false);
+  // The address names a page before the first render (the server draws it too): until the effect
+  // below has selected it, the centre is loading that page, not empty.
+  const requestedPageKey = useSearchParams().get("page");
+  const [addressSettled, setAddressSettled] = useState(false);
+  const pageLoading =
+    !addressSettled &&
+    requestedPageKey !== null &&
+    source.body.pages.some((entry) => entry.key === requestedPageKey);
   useEffect(() => {
     const restore = () => {
       const url = new URL(window.location.href);
@@ -307,6 +316,7 @@ export function useStudioCanvasTab({
     if (!addressRestored.current) {
       addressRestored.current = true;
       restore();
+      setAddressSettled(true);
     } else if (canvasPage !== undefined) {
       const url = new URL(window.location.href);
       url.searchParams.set("page", canvasPage.key);
@@ -1057,17 +1067,21 @@ export function useStudioCanvasTab({
       {selected?.kind === "placement" && canvasPage === undefined && (
         <p>This block is part of a layout. Change it in the inspector.</p>
       )}
-      {canvasPage === undefined && selected?.kind !== "flow" && selected?.kind !== "placement" && (
-        <Empty className="min-h-64 flex-1">
-          <EmptyHeader>
-            <EmptyMedia variant="icon">
-              <Icon name="blocks" />
-            </EmptyMedia>
-            <EmptyTitle>No page open</EmptyTitle>
-            <EmptyDescription>Choose a page in Structure, or add one.</EmptyDescription>
-          </EmptyHeader>
-        </Empty>
-      )}
+      {canvasPage === undefined && pageLoading && <StudioCanvasSkeleton />}
+      {canvasPage === undefined &&
+        !pageLoading &&
+        selected?.kind !== "flow" &&
+        selected?.kind !== "placement" && (
+          <Empty className="min-h-64 flex-1">
+            <EmptyHeader>
+              <EmptyMedia variant="icon">
+                <Icon name="blocks" />
+              </EmptyMedia>
+              <EmptyTitle>No page open</EmptyTitle>
+              <EmptyDescription>Choose a page in Structure, or add one.</EmptyDescription>
+            </EmptyHeader>
+          </Empty>
+        )}
       {canvasPage === undefined && selected?.kind === "application" && needsFirstRecordType && (
         <FirstRecordTypeEmptyState
           action={
@@ -1083,7 +1097,12 @@ export function useStudioCanvasTab({
           <AlertDescription>{theme.problem}</AlertDescription>
         </Alert>
       )}
-      {canvasPage !== undefined && !shown && <StudioCanvasSkeleton />}
+      {canvasPage !== undefined &&
+        (!shown || fieldInputControlReleases === null || platformThemeTokens === null) && (
+          // The page shape stays up until the canvas can draw: the inspector, the field controls
+          // and the theme tokens each load before it, and none of them may leave a blank centre.
+          <StudioCanvasSkeleton />
+        )}
       {shown &&
         canvasPage !== undefined &&
         fieldInputControlReleases !== null &&

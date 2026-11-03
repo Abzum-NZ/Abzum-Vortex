@@ -638,7 +638,7 @@ export function ApplicationSourceImport({
         {notice === null ? null : (
           <Alert
             variant={notice.kind === "error" ? "destructive" : "default"}
-            role={notice.kind === "error" ? "alert" : "status"}
+            {...(notice.kind === "error" ? {} : { role: "status" })}
           >
             <AlertDescription>
               <span className="flex flex-wrap items-center gap-2">
