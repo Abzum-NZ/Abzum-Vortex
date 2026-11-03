@@ -1,8 +1,8 @@
-# Architecture decisions — flows, applications, packages and caching (ADR #1127)
+# Architecture decisions: flows, applications, packages and caching
 
 These are the current architecture decisions behind Vortex's flows, applications, packages and
 runtime caching. The [target architecture](target-architecture.md) is binding and wins where these
-decisions differ. The repository history is the revision record.
+decisions differ.
 
 **Goal:** Vortex is an application builder in which everything a customer uses is a definition that
 generic engines render or execute. This includes Vortex's own administration, identity and access
@@ -85,7 +85,7 @@ user-defined functions, loops or undeclared reads. One evaluator is shared by th
 and a Run flow depth of 3. Cycles between flows are refused at publication. Transaction flows may use
 only pure steps, reads under the saver's authority, and changes to the record being saved.
 
-**Contract 4.3.0.** One `definitionContractVersion` constant and one `assertDefinitionContractPair`
+**One contract version.** One `definitionContractVersion` constant and one `assertDefinitionContractPair`
 govern applications, modules and record types, source and validation. The contract holds only what
 the engine runs. Choice options carry an optional tone from the `PipelineStageTone` vocabulary
 (`neutral`, `primary`, `destructive`, `chart_1` to `chart_5`); pipeline stages carry no tone. The
@@ -266,8 +266,7 @@ Uninstall has these rules for data and access:
 compiled pages and navigation, compiled flows, theme tokens, component registry entries and the access
 plan, in the sections `pages`, `navigation`, `flows`, `theme`, `component_registry` and `access_plan`.
 The compiled flow plans are built from the release and cached with it, never stored. The access plan
-holds the declared permission requirements only; it holds no decisions. The bundle format version is
-3, and the bundle is an index plus parts of under 1 MB each, stored in Postgres.
+holds the declared permission requirements only; it holds no decisions. The bundle format has one version constant, and the bundle is an index plus parts of under 1 MB each, stored in Postgres.
 
 **How it is keyed and read:** bundle keys are immutable — (organisation, installation, revision,
 bundle-format version). A format mismatch triggers a rebuild. Each request reads the installation's
@@ -300,7 +299,7 @@ built in Studio.
 
 ## Decision 11 — Building, installing and system applications are permission-gated
 
-Platform permission catalogue 1.4.0 adds:
+The platform permission catalogue includes:
 
 - `platform.organization.definition_drafts.manage` — change module and application drafts;
 - `platform.organization.definition_releases.manage` — publish releases;
@@ -326,13 +325,12 @@ one installation, no separate copy. Publishing or discarding asks for a recent t
 release cannot add, remove or retarget a protected-operation binding or what feeds or starts it, and
 cannot change the permissions, roles and screens the steward manages access through. Each release is
 compared with the release it follows, in the application and in the publication transaction. After a
-platform refresh the platform's release is the baseline; merging customisations over a refresh
-(compare-and-merge, #721) is not built. The organisation always keeps a working way for its steward
+platform refresh the platform's release is the baseline of the next one; Studio's compare, keep and adopt
+controls for standard pages (#721) handle a page the platform improved, and every other customisation is
+re-applied to the refreshed release. The organisation always keeps a working way for its steward
 to manage access.
 
 ## Decision 12 — shadcn/ui on Base UI is the component base
-
-Owner decision, 26 September 2026.
 
 - **Base.** Vortex interface primitives are [shadcn/ui](https://ui.shadcn.com) components initialised
   with Base UI primitives (`shadcn init --base base`, a `base-*` style), not Radix. They are styled with

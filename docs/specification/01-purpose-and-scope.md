@@ -75,5 +75,5 @@ The first complete release does not include:
 ## Acceptance examples
 
 - A builder can explain whether a requirement belongs to a [module](05-modules-fields-and-relationships.md), an [application](07-applications-pages-and-themes.md), or organisation data in [records](06-records-and-lifecycle.md).
-- A developer can follow links from a product requirement to its [data contract](appendices/data-contracts.md), [code-review acceptance](20-quality-and-acceptance.md), and [build plan](../build-plan/README.md).
+- A developer can follow links from a product requirement to its [data contract](appendices/data-contracts.md), [code-review acceptance](20-quality-and-acceptance.md), and the [architecture documents](../architecture/target-architecture.md).
 - No core feature shares one organisation's private state with another. Organisations exchange information only through copied definition packages, files and connections.
