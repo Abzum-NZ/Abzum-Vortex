@@ -8,15 +8,21 @@ import { DefinitionError } from "./definition-error";
  *
  * - free: the application's name, description, icon and theme, a module's name and description,
  *   flows, bindings and actions that are not protected, and the cosmetic positions named below
- *   (labels, descriptions, message and title text of interface steps, page and field labels);
- * - additive: pages, menu entries, queries, events and platform block dependencies may be added,
- *   never removed or changed.
+ *   (descriptions, the title, message and details of a result message, the label of a message
+ *   action, page text, record type and field labels);
+ * - additive: pages, menu entries (page, heading and external), queries, events and platform block
+ *   dependencies may be added, never removed or changed.
  *
  * A flow is protected when it calls a protected operation, or names a protected flow (a run, a
- * message action or a back-end run), to a fixpoint. A binding is protected when it starts one. A
- * page is the steward's when it holds the control of a protected binding: it is compared as it
- * is, apart from its text. `vortex_definition.system_application_surface_violation` makes the same
- * comparison, with the same sentences, inside the publish transaction.
+ * message action or a back-end run), to a fixpoint. The name of a protected action and the wording
+ * of its confirmation, verification and guided steps are the platform's: only the text of a result
+ * message is free. A binding is protected when it starts a protected flow or sits on a control
+ * that does (the page runs the first binding of an event). A page is the steward's when it holds
+ * the control of a protected binding: it is compared as it is, apart from its text. Content nested
+ * deeper than the comparison bounds is refused. A number beyond 2^53 cannot be told apart from its
+ * neighbour once parsed; the database comparison, which is the gate, refuses that change.
+ * `vortex_definition.system_application_surface_violation` makes the same comparison, with the
+ * same sentences, inside the publish transaction.
  */
 
 type Json = unknown;
@@ -36,7 +42,14 @@ type SurfaceKind =
   | "setting"
   | "module_setting"
   | "module_binding";
-type SurfaceEntry = Readonly<{ kind: SurfaceKind; ident: string; block: string; detail: Json }>;
+type SurfaceEntry = Readonly<{
+  kind: SurfaceKind;
+  ident: string;
+  block: string;
+  detail: Json;
+  /** Nested deeper than the comparison bounds. */
+  deep?: boolean;
+}>;
 
 /** The kinds that may be added to; every other kind is compared as it is. */
 const additiveKinds: ReadonlySet<SurfaceKind> = new Set([
@@ -48,6 +61,8 @@ const additiveKinds: ReadonlySet<SurfaceKind> = new Set([
 ]);
 
 const maximumDepth = 64;
+/** A flow nested deeper than this cannot be told from one past the task bound: it is refused. */
+const maximumFlowLevels = 129;
 const deepMarker = "__too_deeply_nested__";
 
 const isRecord = (value: Json): value is Record<string, Json> =>
@@ -76,33 +91,43 @@ const callsProtectedOperation = (value: Json): boolean =>
     : isRecord(value) &&
       (value.type === "operation.call" || Object.values(value).some(callsProtectedOperation));
 
-const interfaceText = [
-  "title",
-  "message",
-  "details",
-  "choice",
-  "confirm_label",
-  "submit_label",
-  "cancel_label",
-  "working",
-  "steps",
-  "step",
-  "summary",
-];
+/** A result message's text; the wording of a confirmation or verification is the platform's. */
+const messageText = ["title", "message", "details"];
 
-/** A task without its text: an interface step's text properties and its message actions' labels. */
+/** The levels below the root of the deepest item, stopping at the bound. */
+const levelsBelow = (root: Json): number => {
+  let deepest = 0;
+  const stack: [Json, number][] = [[root, 0]];
+  for (let item = stack.pop(); item !== undefined; item = stack.pop()) {
+    const [value, level] = item;
+    if (level > deepest) deepest = level;
+    if (level >= maximumFlowLevels) return level;
+    if (Array.isArray(value)) for (const child of value) stack.push([child, level + 1]);
+    else if (isRecord(value))
+      for (const child of Object.values(value)) stack.push([child, level + 1]);
+  }
+  return deepest;
+};
+
+/** A task without its text: a result message's text and its message actions' labels, nested task lists included. */
 const stripTask = (task: Json, depth: number): Json => {
   if (depth > maximumDepth) return deepMarker;
   if (!isRecord(task)) return task;
   const stripped: Record<string, Json> = Object.fromEntries(
     Object.entries(task).filter(([key]) => key !== "description"),
   );
-  if (text(task.type).startsWith("interface.") && isRecord(task.properties)) {
-    const properties = Object.fromEntries(
-      Object.entries(task.properties).filter(([key]) => !interfaceText.includes(key)),
-    );
-    if (Array.isArray(properties.actions))
-      properties.actions = properties.actions.map((action) => without(action, "label"));
+  if (task.type === "interface.show_message" && isRecord(task.properties)) {
+    const properties = without(task.properties, ...messageText) as Record<string, Json>;
+    const actions = properties.actions;
+    if (isRecord(actions) && actions.kind === "array" && Array.isArray(actions.items))
+      properties.actions = {
+        ...actions,
+        items: actions.items.map((item) =>
+          isRecord(item) && item.kind === "map" && isRecord(item.entries)
+            ? { ...item, entries: without(item.entries, "label") }
+            : item,
+        ),
+      };
     stripped.properties = properties;
   }
   for (const key of ["then", "else", "default", "tasks"])
@@ -119,9 +144,7 @@ const stripTask = (task: Json, depth: number): Json => {
 
 const stripFlow = (flow: Record<string, Json>): Json => {
   const stripped: Record<string, Json> = Object.fromEntries(
-    Object.entries(flow).filter(
-      ([key]) => !["labels", "description", "refusal_feedback"].includes(key),
-    ),
+    Object.entries(flow).filter(([key]) => !["description", "refusal_feedback"].includes(key)),
   );
   for (const key of ["tasks", "errors", "finally"])
     if (Array.isArray(stripped[key]))
@@ -156,13 +179,22 @@ const stripRecordType = (recordType: Record<string, Json>): Json => {
   return stripped;
 };
 
-/** Every page-type menu entry and heading, with the heading each sits under ("root" at the top). */
+/** Whether an entry other than a heading holds entries: the menu is then malformed. */
+const menuMalformed = (value: Json): boolean =>
+  records(value).some(
+    (item) =>
+      (item.type !== "heading" && item.children !== undefined) || menuMalformed(item.children),
+  );
+
+/** Every page, heading and external menu entry, with the heading each sits under ("root" at the top). */
 const navigationEntries = (
   value: Json,
   parent: string,
 ): { item: Record<string, Json>; parent: string }[] =>
   records(value).flatMap((item) => [
-    ...(item.type === "page" || item.type === "heading" ? [{ item, parent }] : []),
+    ...(item.type === "page" || item.type === "heading" || item.type === "external"
+      ? [{ item, parent }]
+      : []),
     ...navigationEntries(item.children, text(item.id) === "" ? parent : text(item.id)),
   ]);
 
@@ -220,7 +252,13 @@ const surfaceOf = (content: Json, kind: "application" | "module"): SurfaceEntry[
   const protectedFlows = flows.filter((flow) => protectedIds.has(lower(flow.id)));
   const flowKeys = new Map(flows.map((flow) => [lower(flow.id), text(flow.key)]));
   for (const flow of protectedFlows)
-    add({ kind: "flow", ident: lower(flow.id), block: text(flow.key), detail: stripFlow(flow) });
+    add({
+      kind: "flow",
+      ident: lower(flow.id),
+      block: text(flow.key),
+      detail: stripFlow(flow),
+      deep: levelsBelow(flow) >= maximumFlowLevels,
+    });
   for (const action of records(body.actions))
     if (action.protectedOperation !== undefined)
       add({
@@ -271,8 +309,13 @@ const surfaceOf = (content: Json, kind: "application" | "module"): SurfaceEntry[
     settings(moduleFree, moduleHandled, "module_setting");
     return entries;
   }
-  const bindings = records(body.flowBindings).filter(
+  const flowBound = records(body.flowBindings).filter(
     (binding) => isRecord(binding.flow) && protectedIds.has(lower(binding.flow.flowId)),
+  );
+  const controls = flowBound.map((binding) => lower(binding.controlId)).filter((id) => id !== "");
+  // Every binding on a protected control is protected: the page runs the first one of an event.
+  const bindings = records(body.flowBindings).filter(
+    (binding) => flowBound.includes(binding) || controls.includes(lower(binding.controlId)),
   );
   for (const binding of bindings) {
     const flow = isRecord(binding.flow) ? binding.flow : {};
@@ -283,7 +326,6 @@ const surfaceOf = (content: Json, kind: "application" | "module"): SurfaceEntry[
       detail: binding,
     });
   }
-  const controls = bindings.map((binding) => lower(binding.controlId)).filter((id) => id !== "");
   const pages = records(body.pages);
   const pageKeys = new Map(pages.map((page) => [lower(page.pageId), text(page.key)]));
   for (const page of pages) {
@@ -310,11 +352,12 @@ const surfaceOf = (content: Json, kind: "application" | "module"): SurfaceEntry[
     add({
       kind: "navigation",
       ident: lower(item.id),
-      block: item.type === "heading" ? text(item.label) : text(pageKeys.get(lower(item.pageId))),
+      block: item.type === "page" ? text(pageKeys.get(lower(item.pageId))) : text(item.label),
       detail: {
         id: item.id ?? null,
         type: item.type,
         pageId: item.pageId ?? null,
+        address: item.address ?? null,
         permissionKey: item.permissionKey ?? null,
         parent,
       },
@@ -382,7 +425,10 @@ const tail = (kind: SurfaceKind): string => {
   }
 };
 
-type Problem = Readonly<{ entry: SurfaceEntry; change: "removed" | "added" | "changed" | "twice" }>;
+type Problem = Readonly<{
+  entry: SurfaceEntry;
+  change: "removed" | "added" | "changed" | "twice" | "deep" | "malformed";
+}>;
 
 const problemsOf = (previous: SurfaceEntry[], next: SurfaceEntry[]): Problem[] => {
   const problems: Problem[] = [];
@@ -406,6 +452,9 @@ const problemsOf = (previous: SurfaceEntry[], next: SurfaceEntry[]): Problem[] =
   for (const [key, entry] of after)
     if (!before.has(key) && !additiveKinds.has(entry.kind))
       problems.push({ entry, change: "added" });
+  for (const entry of next)
+    if (entry.deep === true || canonicalJson(entry.detail).includes(deepMarker))
+      problems.push({ entry, change: "deep" });
   return problems;
 };
 
@@ -429,18 +478,28 @@ const systemApplicationSurfaceViolation = (
   )
     return null;
   const problems = problemsOf(surfaceOf(previous, kind), surfaceOf(next, kind));
+  if (kind === "application" && isRecord(next) && menuMalformed(next.navigation))
+    problems.push({
+      entry: { kind: "navigation", ident: "(menu)", block: "(menu)", detail: null },
+      change: "malformed",
+    });
   problems.sort(
     (left, right) =>
       order(left.entry.kind, right.entry.kind) ||
       order(left.entry.block, right.entry.block) ||
-      order(left.entry.ident, right.entry.ident),
+      order(left.entry.ident, right.entry.ident) ||
+      order(left.change, right.change),
   );
   const first = problems[0];
   if (first === undefined) return null;
   const verb =
     first.change === "twice"
       ? "appears twice"
-      : `would ${first.change === "removed" ? "be removed" : first.change === "added" ? "be added" : first.entry.kind === "page_content" ? "change what it shows" : "change"}`;
+      : first.change === "malformed"
+        ? "is malformed"
+        : first.change === "deep"
+          ? "is nested too deeply to compare"
+          : `would ${first.change === "removed" ? "be removed" : first.change === "added" ? "be added" : first.entry.kind === "page_content" ? "change what it shows" : "change"}`;
   return `${noun[first.entry.kind]} "${first.entry.block}" ${verb}. ${tail(first.entry.kind)}`;
 };
 

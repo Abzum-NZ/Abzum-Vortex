@@ -20,20 +20,21 @@ begin
     return p_task;
   end if;
   result := p_task - 'description';
-  if coalesce(p_task ->> 'type', '') like 'interface.%'
+  if p_task ->> 'type' = 'interface.show_message'
     and pg_catalog.jsonb_typeof(p_task -> 'properties') = 'object' then
-    properties := (p_task -> 'properties') - array[
-      'title', 'message', 'details', 'choice', 'confirm_label', 'submit_label', 'cancel_label',
-      'working', 'steps', 'step', 'summary'
-    ];
-    if pg_catalog.jsonb_typeof(properties -> 'actions') = 'array' then
-      properties := pg_catalog.jsonb_set(properties, '{actions}', coalesce((
+    properties := (p_task -> 'properties') - array['title', 'message', 'details'];
+    if properties -> 'actions' ->> 'kind' = 'array'
+      and pg_catalog.jsonb_typeof(properties -> 'actions' -> 'items') = 'array' then
+      properties := pg_catalog.jsonb_set(properties, '{actions,items}', coalesce((
         select pg_catalog.jsonb_agg(
-          case when pg_catalog.jsonb_typeof(action.value) = 'object' then action.value - 'label'
+          case when pg_catalog.jsonb_typeof(action.value) = 'object'
+              and action.value ->> 'kind' = 'map'
+              and pg_catalog.jsonb_typeof(action.value -> 'entries') = 'object'
+            then action.value #- '{entries,label}'
             else action.value end
           order by action.position
         )
-        from pg_catalog.jsonb_array_elements(properties -> 'actions') with ordinality
+        from pg_catalog.jsonb_array_elements(properties -> 'actions' -> 'items') with ordinality
           as action(value, position)
       ), '[]'::jsonb));
     end if;
@@ -84,4 +85,4 @@ grant execute on function vortex_definition.system_application_strip_task(jsonb,
   to postgres;
 
 comment on function vortex_definition.system_application_strip_task(jsonb, integer) is
-  'Private helper of the system Application surface comparison: a flow task without its description, an interface step''s text properties and its message actions'' labels, nested task lists included (bounded depth).';
+  'Private helper of the system Application surface comparison: a flow task without its description, a result message''s text and its message actions'' labels, nested task lists included (bounded depth).';

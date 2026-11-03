@@ -6,7 +6,7 @@ security invoker
 set search_path = ''
 as $function$
 declare
-  result jsonb := p_flow - array['labels', 'description', 'refusal_feedback'];
+  result jsonb := p_flow - array['description', 'refusal_feedback'];
   list_key text;
 begin
   foreach list_key in array array['tasks', 'errors', 'finally'] loop
@@ -31,4 +31,4 @@ revoke all on function vortex_definition.system_application_strip_flow(jsonb)
 grant execute on function vortex_definition.system_application_strip_flow(jsonb) to postgres;
 
 comment on function vortex_definition.system_application_strip_flow(jsonb) is
-  'Private helper of the system Application surface comparison: a flow without its labels, description and refusal feedback and with its tasks stripped of their text.';
+  'Private helper of the system Application surface comparison: a flow without its description and refusal feedback and with its tasks stripped of their text (the name of a flow and the wording of its confirmations stay).';

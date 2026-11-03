@@ -86,7 +86,7 @@ begin
     join protected_flows as found
       on found.side = reference.side and found.id = reference.to_id
   ),
-  protected_bindings as (
+  flow_bound as (
     select sides.side, binding.value as binding
     from sides
     cross join lateral pg_catalog.jsonb_array_elements(sides.bindings_a) as binding(value)
@@ -99,10 +99,24 @@ begin
       )
   ),
   controls as (
-    select protected_bindings.side,
-      pg_catalog.lower(protected_bindings.binding ->> 'controlId') as control
-    from protected_bindings
-    where coalesce(protected_bindings.binding ->> 'controlId', '') <> ''
+    select flow_bound.side, pg_catalog.lower(flow_bound.binding ->> 'controlId') as control
+    from flow_bound
+    where coalesce(flow_bound.binding ->> 'controlId', '') <> ''
+  ),
+  -- Every binding on a protected control is protected: the page runs the first one of an event.
+  protected_bindings as (
+    select flow_bound.side, flow_bound.binding from flow_bound
+    union
+    select sides.side, binding.value
+    from sides
+    cross join lateral pg_catalog.jsonb_array_elements(sides.bindings_a) as binding(value)
+    where pg_catalog.jsonb_typeof(binding.value) = 'object'
+      and p_kind = 'application'
+      and exists (
+        select 1 from controls
+        where controls.side = sides.side
+          and controls.control = pg_catalog.lower(coalesce(binding.value ->> 'controlId', ''))
+      )
   ),
   surface as (
     select sides.side, entry.kind, entry.ident,
@@ -189,7 +203,7 @@ begin
         )
       union all
       select 'navigation', pg_catalog.lower(coalesce(item.value ->> 'id', '')),
-        case when item.value ->> 'type' = 'heading' then coalesce(item.value ->> 'label', '')
+        case when item.value ->> 'type' <> 'page' then coalesce(item.value ->> 'label', '')
           else coalesce((
             select page.value ->> 'key'
             from pg_catalog.jsonb_array_elements(sides.pages_a) as page(value)
@@ -200,7 +214,7 @@ begin
           ), '') end,
         pg_catalog.jsonb_build_object(
           'id', item.value -> 'id', 'type', item.value -> 'type', 'pageId', item.value -> 'pageId',
-          'permissionKey', item.value -> 'permissionKey',
+          'address', item.value -> 'address', 'permissionKey', item.value -> 'permissionKey',
           'parent', coalesce((
             select heading.value ->> 'id'
             from pg_catalog.jsonb_path_query(
@@ -212,7 +226,8 @@ begin
           ), 'root')
         )
       from pg_catalog.jsonb_path_query(
-        sides.navigation_a, 'strict $.**?(@.type == "page" || @.type == "heading")'
+        sides.navigation_a,
+        'strict $.**?(@.type == "page" || @.type == "heading" || @.type == "external")'
       ) as item(value)
       where p_kind = 'application'
       union all
@@ -282,6 +297,25 @@ begin
         else previous.detail is distinct from next.detail end
       and not (previous.kind is null
         and next.kind in ('page', 'navigation', 'query', 'event', 'block_dependency'))
+    union all
+    -- Content nested deeper than the comparison bounds, and a menu that is not well formed.
+    select 'flow', coalesce(flows.flow ->> 'key', ''), flows.id, 'deep'
+    from flows
+    join protected_flows as found on found.side = flows.side and found.id = flows.id
+    where flows.side = 'next' and pg_catalog.jsonb_path_exists(flows.flow, 'strict $.**{129 to last}')
+    union all
+    select surface.kind, surface.block, surface.ident, 'deep'
+    from surface
+    where surface.side = 'next' and surface.kind <> 'flow'
+      and pg_catalog.strpos(surface.detail::text, '__too_deeply_nested__') > 0
+    union all
+    select 'navigation', '(menu)', '(menu)', 'malformed'
+    from sides
+    where sides.side = 'next' and p_kind = 'application'
+      and pg_catalog.jsonb_path_exists(
+        sides.navigation_a,
+        'strict $.**?((!(exists(@.type)) || @.type != "heading") && exists(@.children))'
+      )
   )
   select pg_catalog.format(
     '%s "%s" %s. %s',
@@ -305,6 +339,8 @@ begin
     case when problem.block = '' then '(unnamed)' else problem.block end,
     case problem.change
       when 'twice' then 'appears twice'
+      when 'malformed' then 'is malformed'
+      when 'deep' then 'is nested too deeply to compare'
       when 'removed' then 'would be removed'
       when 'added' then 'would be added'
       else case when problem.kind = 'page_content' then 'would change what it shows'
@@ -321,7 +357,7 @@ begin
   )
   into violation
   from problems as problem
-  order by problem.kind collate "C", problem.block collate "C", problem.ident collate "C"
+  order by problem.kind collate "C", problem.block collate "C", problem.ident collate "C", problem.change collate "C"
   limit 1;
   return violation;
 end
@@ -336,4 +372,4 @@ grant execute on function vortex_definition.system_application_surface_violation
   to postgres;
 
 comment on function vortex_definition.system_application_surface_violation(jsonb, jsonb, text) is
-  'Private allow-list comparison of two releases of a platform system Application or of a Module it owns: the first change that is not free (cosmetic text, unprotected flows, bindings and actions) or additive (pages, menu entries, queries, events, block dependencies), worded for the person publishing, or null.';
+  'Private allow-list comparison of two releases of a platform system Application or of a Module it owns: the first change that is not free (cosmetic text and result messages, unprotected flows, bindings and actions) or additive (pages, menu entries, queries, events, block dependencies), worded for the person publishing, or null. The name of a protected flow and the wording of its confirmations are compared, every binding on a protected control is protected, and content nested too deeply to compare is refused.';
