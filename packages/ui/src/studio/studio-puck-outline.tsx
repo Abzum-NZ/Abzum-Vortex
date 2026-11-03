@@ -77,16 +77,31 @@ export function StudioOutlineRegion({ children }: Readonly<{ children: ReactNode
     settle();
     // Rows Puck draws later (a row expanded, a page loaded) join the same one tab stop.
     const observer = new MutationObserver((records) => {
-      for (const record of records)
+      for (const record of records) {
+        // Puck's drag and drop sets a row handle's tab stop again when it updates: it stays out.
+        if (
+          record.type === "attributes" &&
+          record.target instanceof HTMLElement &&
+          record.target !== stop.current &&
+          record.target.matches(ROW_STOPS) &&
+          record.target.getAttribute("tabindex") !== "-1"
+        )
+          record.target.setAttribute("tabindex", "-1");
         for (const added of record.addedNodes) {
           if (!(added instanceof HTMLElement)) continue;
           if (added.matches(ROW_STOPS) && added !== stop.current)
             added.setAttribute("tabindex", "-1");
           take(added);
         }
+      }
       settle();
     });
-    observer.observe(root, { childList: true, subtree: true });
+    observer.observe(root, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ["tabindex"],
+    });
     return () => observer.disconnect();
   }, [moveStop]);
 
