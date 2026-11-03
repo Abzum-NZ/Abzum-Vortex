@@ -197,7 +197,7 @@ Correct development data and checked-in definitions at the same owning boundary 
 
 Typed placement visibility and query selection remain first-class properties. Data, form and flow bindings are typed contracts of their own. No setting bag or editor-specific JSON may replace these semantics.
 
-Visible behaviour follows the local application walkthrough in [quality and acceptance](../20-quality-and-acceptance.md), with screenshots included in pull requests.
+Visible behaviour follows [quality and acceptance](../20-quality-and-acceptance.md).
 
 ## HR example policy
 
