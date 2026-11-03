@@ -3,7 +3,6 @@
 import {
   createContext,
   useContext,
-  useEffect,
   useLayoutEffect,
   useRef,
   useState,
@@ -45,7 +44,8 @@ export function DeferredSlot({
   useLayoutEffect(() => {
     if (forced) setPlaced(true);
   }, [forced]);
-  useEffect(() => {
+  // Before the first paint: a slot that is near is never seen waiting (no jump of the page below).
+  useLayoutEffect(() => {
     if (drawn || deferral === null) return;
     const check = () => {
       const element = waiting.current;
