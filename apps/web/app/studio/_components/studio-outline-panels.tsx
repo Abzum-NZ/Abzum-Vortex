@@ -215,75 +215,77 @@ export function StudioOutlinePanel({
         ) : undefined
       }
     >
-      {searching && (
-        <ul className="space-y-1" aria-label="Matching blocks">
-          {matches.slice(0, SEARCH_RESULTS).map((block) => (
-            <li key={block.key}>
-              <Button
-                type="button"
-                variant="ghost"
-                className="w-full justify-start"
-                aria-current={block.key === selectedKey ? true : undefined}
-                onClick={() => {
-                  choose(block);
-                  setQuery("");
-                }}
-              >
-                <span className="truncate">{block.label}</span>
-                {duplicated.has(block.label) && block.selection?.kind === "placement" && (
-                  <span className="truncate text-muted-foreground">
-                    {block.selection.placementAlias}
-                  </span>
-                )}
-              </Button>
-            </li>
-          ))}
-          {matches.length === 0 && (
-            <li className="text-sm text-muted-foreground">No block matches.</li>
-          )}
-          {matches.length > SEARCH_RESULTS && (
-            <li className="text-sm text-muted-foreground">
-              Showing the first {SEARCH_RESULTS} of {matches.length}. Search for more of the name to
-              narrow it.
-            </li>
-          )}
-        </ul>
-      )}
-      {/* Kept drawn while searching: Puck's rows take a moment to draw again on a long page. */}
-      <div hidden={searching}>
-        <StudioPuckOutline open={pageOpen} />
-      </div>
-      {!searching && shownByFlows !== undefined && (
-        <StudioSection title={shownByFlows.label} count={shownByFlows.children.length}>
-          <ul className="space-y-1" aria-label={shownByFlows.label}>
-            {shownByFlows.children.map((block) => (
+      <div className="flex h-full min-h-0 flex-col gap-3">
+        {searching && (
+          <ul className="min-h-0 flex-1 space-y-1 overflow-y-auto" aria-label="Matching blocks">
+            {matches.slice(0, SEARCH_RESULTS).map((block) => (
               <li key={block.key}>
                 <Button
                   type="button"
                   variant="ghost"
                   className="w-full justify-start"
                   aria-current={block.key === selectedKey ? true : undefined}
-                  onClick={() => choose(block)}
+                  onClick={() => {
+                    choose(block);
+                    setQuery("");
+                  }}
                 >
                   <span className="truncate">{block.label}</span>
+                  {duplicated.has(block.label) && block.selection?.kind === "placement" && (
+                    <span className="truncate text-muted-foreground">
+                      {block.selection.placementAlias}
+                    </span>
+                  )}
                 </Button>
               </li>
             ))}
+            {matches.length === 0 && (
+              <li className="text-sm text-muted-foreground">No block matches.</li>
+            )}
+            {matches.length > SEARCH_RESULTS && (
+              <li className="text-sm text-muted-foreground">
+                Showing the first {SEARCH_RESULTS} of {matches.length}. Search for more of the name
+                to narrow it.
+              </li>
+            )}
           </ul>
-        </StudioSection>
-      )}
-      {pageOpen && (
-        <section className="space-y-1" aria-label="Application limits">
-          <StudioLimitRow
-            label="Blocks in the application"
-            limit="compositionPlacements"
-            used={countBlocks(outline.children)}
-          />
-          {levels === undefined ? null : (
-            <StudioLimitRow label="Levels on this page" limit="compositionDepth" used={levels} />
-          )}
-        </section>
-      )}
+        )}
+        {/* Kept drawn while searching: Puck's rows take a moment to draw again on a long page. */}
+        <div className={searching ? "hidden" : "flex min-h-0 flex-1 flex-col"}>
+          <StudioPuckOutline open={pageOpen} />
+        </div>
+        {!searching && shownByFlows !== undefined && (
+          <StudioSection title={shownByFlows.label} count={shownByFlows.children.length}>
+            <ul className="max-h-40 space-y-1 overflow-y-auto" aria-label={shownByFlows.label}>
+              {shownByFlows.children.map((block) => (
+                <li key={block.key}>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    className="w-full justify-start"
+                    aria-current={block.key === selectedKey ? true : undefined}
+                    onClick={() => choose(block)}
+                  >
+                    <span className="truncate">{block.label}</span>
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          </StudioSection>
+        )}
+        {pageOpen && (
+          <section className="shrink-0 space-y-1" aria-label="Application limits">
+            <StudioLimitRow
+              label="Blocks in the application"
+              limit="compositionPlacements"
+              used={countBlocks(outline.children)}
+            />
+            {levels === undefined ? null : (
+              <StudioLimitRow label="Levels on this page" limit="compositionDepth" used={levels} />
+            )}
+          </section>
+        )}
+      </div>
     </StudioPanelShell>
   );
 }
