@@ -1,6 +1,6 @@
 # Module installation and record storage
 
-[Build plan](README.md) · [Storage specification](../specification/17-runtime-storage-and-caching.md) · [Record save sequence](../specification/06-records-and-lifecycle.md#save-sequence)
+[Storage specification](../specification/17-runtime-storage-and-caching.md) · [Record save sequence](../specification/06-records-and-lifecycle.md#save-sequence)
 
 
 ## Installation and storage
@@ -30,7 +30,7 @@
 - Reference allocation starts at one when omitted, honours an explicit start and treats digit width as a minimum. Allocation serializes within its null-safe counter scope.
 - Link values and canonical edges change atomically. Link changes and target deletion lock affected rows and reread the actual link before applying declared behaviour. Optional clearing needs child update authority; dependent deletion needs child delete authority.
 - Restore uses retained data but rechecks current definition, access, required values and fixed-target relationship consistency after locking targets. Full final-value and live-reference checks belong to the complete save operation.
-- These storage primitives do not independently add transfer, retention scheduling, polymorphic links or execution-identity authority. Their current issue owners integrate those capabilities.
+- These storage primitives do not independently add transfer, retention scheduling, polymorphic links or execution-identity authority.
 
 ## Event ownership
 

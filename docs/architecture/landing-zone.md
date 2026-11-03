@@ -1,6 +1,6 @@
 # Landing Zone application
 
-[Build plan](README.md) · [Target architecture](target-architecture.md)
+[Target architecture](target-architecture.md)
 
 The user asked for a personal start page: a rail down one side, and a main area with
 search, favourites accepting drag-and-drop, and a grid of applications.
@@ -15,11 +15,10 @@ verified identity that has not yet chosen an organisation, and exposes no applic
 or permissions. The Landing Zone lives after that choice, inside one organisation, and adds
 nothing to the launcher's entry contract.
 
-## Shipped and installed by default — user decision, 10 September 2026
+## Shipped and installed by default
 
-Every organisation gets the Landing Zone. It joins the platform applications that
-[#72](https://github.com/Abzum-NZ/Abzum-Vortex/issues/72) ships as protected, versioned
-definitions built from ordinary modules, records, pages and permissions. These system applications are customisable through the guarded extension and replacement path in [Architecture Decision 11](architecture-decisions.md#decision-11--building-installing-and-system-applications-are-permission-gated). Organisation
+Every organisation gets the Landing Zone. It joins the other platform applications, which ship as protected, versioned
+definitions built from ordinary modules, records, pages and permissions. These system applications are customisable through the guarded extension and replacement path in [Architecture Decision 11](decisions.md#decision-11--building-installing-and-system-applications-are-permission-gated). Organisation
 provisioning installs it and marks it the organisation's default application through the
 **same protected installation operation** any application uses; provisioning supplies the
 authority and adds no second installation path or backdoor. This reuses an existing concept
@@ -35,12 +34,12 @@ The Landing Zone is an ordinary application. Favourites, bookmarks and the tile
 model are definition semantics owned by that application, not engine behaviour. Four items
 are platform, each because an ordinary definition cannot express it:
 
-| Item | Owner | Why it cannot be an ordinary definition |
-| --- | --- | --- |
-| Permitted-applications read | [#64](https://github.com/Abzum-NZ/Abzum-Vortex/issues/64) | Applications and who may open them are protected Access and Application data, not records. |
-| Organisation default application | [#64](https://github.com/Abzum-NZ/Abzum-Vortex/issues/64) | An application cannot declare itself the organisation's start point; two could claim it, and the choice belongs to the organisation. |
-| Link, launcher and filter blocks | [#376](https://github.com/Abzum-NZ/Abzum-Vortex/issues/376) | Blocks are the platform's presentation vocabulary; customers cannot supply components. A link that opens a platform target is as generic as navigation. |
-| Viewer-safe record link resolution | [#378](https://github.com/Abzum-NZ/Abzum-Vortex/issues/378) | A link field must enumerate its target record types at publication and cannot cover every record type of every installed application; reading an application-contained record from another application's context is refused; and copying the title at pin time is the leak this prevents. |
+| Item | Why it cannot be an ordinary definition |
+| --- | --- |
+| Permitted-applications read | Applications and who may open them are protected Access and Application data, not records. |
+| Organisation default application | An application cannot declare itself the organisation's start point; two could claim it, and the choice belongs to the organisation. |
+| Link, launcher and filter blocks | Blocks are the platform's presentation vocabulary; customers cannot supply components. A link that opens a platform target is as generic as navigation. |
+| Viewer-safe record link resolution | A link field must enumerate its target record types at publication and cannot cover every record type of every installed application; reading an application-contained record from another application's context is refused; and copying the title at pin time is the leak this prevents. |
 
 The Landing Zone's `home_applications` and `all_applications` launcher placements bind to its
 own `landing_zone_applications` Query over the generic `installed_applications` read model. Its
@@ -88,7 +87,7 @@ installed, withdrawn and refused are indistinguishable.
 
 Page-level access is enforced by the destination page on open rather than on the landing
 page. Evaluating every target application's context on each landing-page load is not
-proportionate for the first release, so a tile is honest at application level live and at
+proportionate, so a tile is honest at application level live and at
 page level on open.
 
 A tile is user-authored data. It never grants access to what it names, and no engine reads a
@@ -109,11 +108,8 @@ which removes server-side request forgery and cross-tenant probing at the cause.
 same-origin address pointing at a protected platform route is treated as any other address:
 the destination route applies its own checks and the tile gains no authority over it.
 
-## Recently used — removed, 10 September 2026
+## No recency
 
-The user removed this section from the first release. The platform does not track page
-visits and Activity records no ordinary reads, so recency could only ever have covered
-targets opened through the Landing Zone itself. Rather than ship a partial version of the
-idea, the tile record carries no `last_opened_at` field, there is no recency query, and
-opening a tile performs no write. Opening becomes a pure navigation.
-
+The platform does not track page visits and Activity records no ordinary reads, so the tile record
+carries no `last_opened_at` field and there is no recency query. Opening a tile performs no write:
+it is a pure navigation.

@@ -36,7 +36,7 @@ sorts still name grouping keys, and a summary returns only its declared grouping
 keys and aggregates; adding selected member fields does not add them to summary
 output.
 
-A module-exposed query is this same closed query contract published under a stable module-owned identity and exact release. A flow may invoke only a query exposed by its resolved module dependency; it cannot supply raw SQL, broaden the projection, or infer a query from a label. The query executes for the flow's Access-resolved effective actor. If a different initiating viewer receives its result, the runtime applies the viewer's current readable projection before returning it, and any later write is authorised independently. [Query execution #54](https://github.com/Abzum-NZ/Abzum-Vortex/issues/54) owns the actual protected Query execution and receipt boundary; [record actions and events #50](https://github.com/Abzum-NZ/Abzum-Vortex/issues/50) owns record-operation and event declarations. These target flow semantics do not claim either runtime is delivered.
+A module-exposed query is this same closed query contract published under a stable module-owned identity and exact release. A flow may invoke only a query exposed by its resolved module dependency; it cannot supply raw SQL, broaden the projection, or infer a query from a label. The query executes for the flow's Access-resolved effective actor. If a different initiating viewer receives its result, the runtime applies the viewer's current readable projection before returning it, and any later write is authorised independently. Query execution owns the actual protected Query execution and receipt boundary; record actions and events owns record-operation and event declarations. These target flow semantics do not claim either runtime is delivered.
 
 A flow's Query node publishes exactly one `ProtectedOperationReference`, containing the query's owning Application or Module and its permanent query ID. That reference is part of the node's exact release mapping, so a grant cannot be reused for another node or query.
 
@@ -67,7 +67,7 @@ through a JavaScript floating-point number, including in continuation tokens or
 returned totals. Text fields containing the same characters remain text.
 
 Money results retain both exact amount and resolved currency. Amount comparisons
-follow the [Rule semantics](https://github.com/Abzum-NZ/Abzum-Vortex/issues/44):
+follow the Rule semantics:
 equality includes currency, and ordering amounts across currencies is refused.
 The existing mixed-currency total refusal below remains unchanged. Query, Rule
 and database-backed conditions must agree for the same typed operands. Formatting
@@ -336,4 +336,4 @@ Current person supplies a record reference to the signed-in viewer's directory p
 
 The Data grid can opt into Row editing. The builder chooses stored, editable columns and adds the “When a row is saved” workflow. One row opens all its currently visible, permitted fields together, with typed controls; phone cards hold the same draft inside the card. Save sends only changed fields as one record save with the displayed revision and one command identity. Server validation, before-save rules and current field access apply to the whole change. A refusal writes nothing; a conflict keeps the draft and offers Reload, which discards it before another edit. Cancel discards the draft, and leaving the page with changed values uses the page’s unsaved-work prompt. The active edited row stays mounted when the grid virtualizes its page.
 
-The contract is replaced in place. The catalogue authors Row editing off by default; shipped Opportunities enable it with an explicit save workflow. Reset a disposable development lane explicitly before running `pnpm demo:setup` when adopting this definition change.
+The contract is replaced in place. The catalogue authors Row editing off by default; shipped Opportunities enable it with an explicit save workflow.

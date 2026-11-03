@@ -21,7 +21,7 @@ Every behaviour is a **flow** in the one [flow language](appendices/frontend-rul
 
 A user-facing action always enters a flow through its binding: the exact flow id plus a typed input map. A popup-only or navigation-only flow finishes without a business submission. The default Save of a form is a generated one-task flow, `record.save`. The [flow-first binding rules](appendices/frontend-rule-designer.md#pages-compose-flows-define-actions) separate page composition from behaviour without replacing the owning services.
 
-An interactive flow may collect forms, query data and execute several changing steps in its configured order. Publication and the runtime compile each flow once per release into a plan of page segments and server segments ([Decision 1](../build-plan/architecture-decisions.md)). Page steps run in the browser page runner, and each server segment is one gated request and one transaction through `/api/flows/invoke`; there are no server intents or continuations. Each server segment commits independently; cancellation or later failure does not undo earlier commits. The collect-first pattern remains available: collect all required answers before one record step when no business changes should occur until every form passes. Each protected step revalidates its required path, inputs, current authority and revisions. No database transaction spans human or network waits. See [execution and custom forms](appendices/frontend-rule-designer.md#custom-forms-and-all-or-nothing-submission).
+An interactive flow may collect forms, query data and execute several changing steps in its configured order. Publication and the runtime compile each flow once per release into a plan of page segments and server segments ([Decision 1](../architecture/decisions.md)). Page steps run in the browser page runner, and each server segment is one gated request and one transaction through `/api/flows/invoke`; there are no server intents or continuations. Each server segment commits independently; cancellation or later failure does not undo earlier commits. The collect-first pattern remains available: collect all required answers before one record step when no business changes should occur until every form passes. Each protected step revalidates its required path, inputs, current authority and revisions. No database transaction spans human or network waits. See [execution and custom forms](appendices/frontend-rule-designer.md#custom-forms-and-all-or-nothing-submission).
 
 ## Actions
 
@@ -68,7 +68,7 @@ Relationship traversal is limited and validated. Conditions cannot execute code 
 
 The shared typed Boolean evaluator uses the existing condition contract. It validates the complete tree and declared inputs before evaluating truth: invalid or missing input cannot become an allowance through negation or a short-circuited branch. Values are compared without implicit type conversion, and pure evaluation and PostgreSQL restrictions use the same tested meaning. The condition builder authors conditions with that same implementation.
 
-The current Module contract supplies the [exact-value Rule semantics](https://github.com/Abzum-NZ/Abzum-Vortex/issues/44)
+The current Module contract supplies the exact-value Rule semantics
 needed by its field definitions. Select them from the trusted owning Module
 contract, not from how an incoming value looks or the containing Application's
 version. Keep the same condition tree and error meanings. Decimal and money
@@ -85,7 +85,7 @@ and input mappings must have compatible declared formats. A containing
 Application's format version cannot turn an exact decimal into a floating-point
 number, reinterpret money currency, or turn ordinary text into a number. Compile
 and validate these consumers with the same owning helpers described in the
-[field-value plan](https://github.com/Abzum-NZ/Abzum-Vortex/issues/44).
+field-value plan.
 
 A workflow input bound to a record field retains its declared allowed record
 types. The field's possible targets must fit within that declaration; downstream
@@ -193,7 +193,7 @@ append prerequisite alone is not the complete protected save or dispatcher.
 Ordered delivery, claiming, retries, consumer receipts and recovery are the event dispatcher's.
 
 - The record change, activity and event outbox row are written in the same database transaction. Dispatch starts only after commit; it is not responsible for filling a gap between a committed record and its event.
-- Event preparation and event persistence are distinct. The required Event participant prepares exact occurrence facts; the protected Record database save invokes the private Event append helper unconditionally. Request/runtime roles cannot call that helper directly or fabricate a save-success claim. See the [reviewed save/event boundary](../build-plan/module-record-provisioning.md#event-ownership).
+- Event preparation and event persistence are distinct. The required Event participant prepares exact occurrence facts; the protected Record database save invokes the private Event append helper unconditionally. Request/runtime roles cannot call that helper directly or fabricate a save-success claim. See the [reviewed save/event boundary](../architecture/module-record-storage.md#event-ownership).
 - Reuse BeforeSave flows and the one record writer for business evaluation; do not introduce a second PostgreSQL rules or calculation engine for this handoff. Database-authoritative access, scope, revision, constraints and atomic persistence remain enforced by the owning protected writer.
 - Delivery is at least once; each consumer scopes duplicate protection to its own identity and the event identifier. Flow acceptance additionally includes the exact installation revision, flow and trigger, so one event can start different flows without suppressing either one.
 - Events for the same record are handed to consumers in sequence order.

@@ -166,7 +166,7 @@ The governed [task types in the shared registry](../09-workflows-and-pipelines.m
 | Show message / Show form / Confirm | Form, safe message, defaults and declared outputs |
 | Navigate / Refresh / Open or close panel / Set filter | Semantic target and declared parameters |
 
-Every step's permission, timeout, duplicate protection and redaction policy is executable behaviour and therefore major when changed. Flow-value source, literal, field, record, actor, time or prior-step reference changes are also major. Any change to a custom component bundle that a release carries is major ([Decision 7](../../build-plan/architecture-decisions.md#decision-7--applications-are-delivered-as-packages-and-custom-logic-follows-a-ladder)).
+Every step's permission, timeout, duplicate protection and redaction policy is executable behaviour and therefore major when changed. Flow-value source, literal, field, record, actor, time or prior-step reference changes are also major. Any change to a custom component bundle that a release carries is major ([Decision 7](../../architecture/decisions.md#decision-7--applications-are-delivered-as-packages-and-custom-logic-follows-a-ladder)).
 
 ## Integrity, history, and confirmation
 

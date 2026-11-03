@@ -74,7 +74,7 @@ The platform source is grouped by domain in `packages/platform/src`: `access`, `
 
 Each domain owns its tables and public contract. Another domain calls that contract rather than reading the owner's tables.
 
-The shared [Activity foundation](https://github.com/Abzum-NZ/Abzum-Vortex/issues/252) is a private database composition boundary below these services, not a seventeenth service. It owns the single `vortex_record` activity history store and an owner-only append function. Protected owning operations compose that function inside their transactions; raw runtime/request and Data API roles receive no append or read authority. Later permitted Activity views use this same store through their protected boundary.
+The shared Activity foundation is a private database composition boundary below these services, not a seventeenth service. It owns the single `vortex_record` activity history store and an owner-only append function. Protected owning operations compose that function inside their transactions; raw runtime/request and Data API roles receive no append or read authority. Later permitted Activity views use this same store through their protected boundary.
 
 The Identity service uses the private `vortex_identity` schema. Tenant, organisation, identity-projection, organisation-account, and invitation relations enable and force row-level security, expose no direct policy or table grant, and are inaccessible through Supabase Data API roles. `vortex_runtime` receives Identity schema usage and execution only for exact pre-request operations: ensure a verified identity projection during bootstrap, read that projection without mutation during normal session resolution, return the minimum safe organisation launcher, and resolve one exact active organisation-account scope for Access. Runtime invitation acceptance is available only through the private `vortex_access` schema. Access calls owner-only Identity operations and owns the atomic account-scope plus current-version composition; it never reads Identity relations. Invitation activation/reactivation and the required organisation Access-version change commit or roll back together. The former standalone runtime version read and rich organisation-account list are revoked. `vortex_runtime` receives no Access table, generic increment, initialisation or administrative lifecycle authority. Invitation administration and account lifecycle remain owner-only until protected administration composes their authorisation. `vortex_request` receives no Identity access; it receives Access schema usage and execution only for the exact live human-context validator. Trigger functions remain non-executable by runtime roles.
 
@@ -104,7 +104,7 @@ The durable identity session remains in Supabase Auth; no Vortex database sessio
 - Database row restrictions protect every organisation-owned table for select, insert, update, and delete.
 - Identity, secrets, connections, activity, access-control rows, entitlement policy and other protected platform tables are never visible through a record permission.
 - Request database roles do not own tables and cannot bypass the row restrictions.
-- The trusted backend owns the runtime database connection; browser, import and flow callers receive closed protected commands, never SQL or database credentials. Temporarily selecting a restricted request role is not a sandbox against compromised backend code: [PostgreSQL can restore the connection's session role](https://www.postgresql.org/docs/current/sql-set-role.html). The [Record save handoff](../build-plan/module-record-provisioning.md#protected-save) separates untrusted submitted values from server-computed final changes without duplicating the flow engine in SQL. A genuinely restricted session and a runtime session temporarily using the request role have different trust ceilings; source review must keep that distinction explicit.
+- The trusted backend owns the runtime database connection; browser, import and flow callers receive closed protected commands, never SQL or database credentials. Temporarily selecting a restricted request role is not a sandbox against compromised backend code: [PostgreSQL can restore the connection's session role](https://www.postgresql.org/docs/current/sql-set-role.html). The [Record save handoff](../architecture/module-record-storage.md#protected-save) separates untrusted submitted values from server-computed final changes without duplicating the flow engine in SQL. A genuinely restricted session and a runtime session temporarily using the request role have different trust ceilings; source review must keep that distinction explicit.
 - The Supabase project-owner credential is limited to migration and controlled verification work. The separate non-login Record object owner is callable only through the protected [storage provisioner](#record-storage-provisioning); request roles cannot inherit it.
 - Every protected database transaction establishes one complete context containing the caller kind, Identity Authority identifier, tenant, organisation account where applicable, organisation, optional application, session, authentication strength, issue and expiry times, access version, and correlation identifier before reading organisation data. The cluster-local identity projection and all selected scope rows must be active. Tenant-administrator context alone never satisfies an organisation record policy.
 - Organisation file paths begin with the organisation identifier and are protected by storage policy and server checks.
@@ -184,7 +184,7 @@ Access resolves the exact active tenant, organisation account, organisation and 
 Access version from live private state. The same transaction retains shared locks on the identity,
 account, organisation, tenant and Access-version rows until protected work ends, so a concurrent
 suspension or version change cannot commit between resolution and use. When an application
-is selected, [Central Access #34](https://github.com/Abzum-NZ/Abzum-Vortex/issues/34) additionally
+is selected, Central Access additionally
 verifies its exact active registration in that organisation under the same Access lock,
 before initializing the application-bound context. The organisation-only route remains valid.
 
@@ -246,7 +246,7 @@ journey succeeded through `vortex_runtime`. Production provisioning and proof re
 gated from Testing.
 
 The Supabase CLI development database is the only exception to the hosted transport profile. Local
-uses a loopback endpoint (the database port of `supabase/config.toml`, or of the database lane)
+uses a loopback endpoint (the database port of `supabase/config.toml`)
 and the same restricted `vortex_runtime` role, with a
 fixed disposable Local-only password assigned by the Local seed. The adapter permits this without
 TLS only when the declared environment is Local and refuses owner roles, non-loopback hosts and
@@ -298,7 +298,7 @@ for retry. Activation is atomic and cannot report a usable binding before its
 required mappings, exact Application permission registration and protected
 operations are ready. Published event declarations remain part of the pinned
 immutable definitions; activation does not duplicate them in a second catalogue.
-Detachment retains the stored records. The [coordinated implementation plan](../build-plan/module-record-provisioning.md)
+Detachment retains the stored records. The [coordinated implementation plan](../architecture/module-record-storage.md)
 keeps these responsibilities with the existing Module, Record and Application engines.
 
 ### Record storage provisioning
@@ -325,9 +325,9 @@ explicitly pinned shared Modules, without a general cross-organisation definitio
 lookup. Ordinary discovery does not require installation-management permission
 and grants no record access. It refuses a detached target. Unrelated detached
 history does not invalidate a complete current installation. See the
-[active installation read plan](https://github.com/Abzum-NZ/Abzum-Vortex/issues/43).
+active installation read plan.
 
-The [Application lifecycle permission](https://github.com/Abzum-NZ/Abzum-Vortex/issues/64)
+The Application lifecycle permission
 is the organisation-scoped platform permission
 [`platform.organization.applications.manage`](appendices/platform-permission-catalogue.md#permission-inventory), registered from the platform declarations at organisation creation. The operation binds the exact
 application and additionally checks delegated management of its complete affected
@@ -496,9 +496,9 @@ owns the immutable-definition and resolved-application caches.
 
 ## Builder and cross-cutting delivery foundations
 
-The [page-builder adapter](appendices/page-builder-contracts.md) remains inside the existing Page/Definition/Query/Record/Access boundaries. It introduces no per-application service or separate renderer/database. [Activity append #252](https://github.com/Abzum-NZ/Abzum-Vortex/issues/252), [entitlement decisions #118](https://github.com/Abzum-NZ/Abzum-Vortex/issues/118) and [file-removal eligibility #253](https://github.com/Abzum-NZ/Abzum-Vortex/issues/253) precede their first consuming operation; later privacy/metering work extends those same boundaries.
+The [page-builder adapter](appendices/page-builder-contracts.md) remains inside the existing Page/Definition/Query/Record/Access boundaries. It introduces no per-application service or separate renderer/database. Activity append, entitlement decisions and file-removal eligibility precede their first consuming operation; later privacy/metering work extends those same boundaries.
 
-Realtime channel admission must use credentials accepted by the destination cluster. Do not assume a token issued by a separate Identity Authority project automatically authorises that cluster's Realtime service. [#56](https://github.com/Abzum-NZ/Abzum-Vortex/issues/56) proves access-change invalidation/reauthorisation for local subscriptions; [#156](https://github.com/Abzum-NZ/Abzum-Vortex/issues/156) proves the cross-cluster path. Broadcast only the minimal permitted content-free signal and reload through current access checks.
+Realtime channel admission must use credentials accepted by the destination cluster. Do not assume a token issued by a separate Identity Authority project automatically authorises that cluster's Realtime service. Access-change invalidation and reauthorisation must hold for local and cross-cluster subscriptions. Broadcast only the minimal permitted content-free signal and reload through current access checks.
 
 ## Storage HTTP identity handoff
 
