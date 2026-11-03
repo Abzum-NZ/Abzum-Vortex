@@ -18,7 +18,7 @@ import type { StudioCompositionDestination } from "./application-composition-com
 
 /** One compiled content area: its items, exactly as the published definition holds them. */
 export type StudioCanvasCompiledSlot = readonly CompiledItem[];
-export type StudioCanvasSourceSlot = SourcePageZone;
+type StudioCanvasSourceSlot = SourcePageZone;
 export type StudioCanvasCompiledSettings = Readonly<
   Record<string, Readonly<Record<string, unknown>>>
 >;
@@ -118,10 +118,10 @@ export type StudioPuckSelector = NonNullable<UiState["itemSelector"]>;
 const ROOT_ZONE = "root:default-zone";
 
 /** Puck's name of the zone of a root slot, which holds the blocks of one content slot of the shell. */
-export const rootSlotZone = (slot: string): string => `root:${slot}`;
+const rootSlotZone = (slot: string): string => `root:${slot}`;
 
 /** The root slot a Puck zone is, or `undefined` for the default zone and a block's slot. */
-export const slotOfZone = (zone: string): string | undefined =>
+const slotOfZone = (zone: string): string | undefined =>
   zone !== ROOT_ZONE && zone.startsWith("root:") ? zone.slice("root:".length) : undefined;
 
 /** Whether a Puck zone holds top-level blocks of the page: the default zone or a root slot. */
@@ -159,6 +159,17 @@ export const destinationOfZone = (zone: string): StudioCompositionDestination =>
     parentAlias: zone.slice(0, separator),
     slotKey: zone.slice(separator + 1),
   };
+};
+
+/**
+ * The root slot whose blocks hold the zone: the zone itself when it is a root slot, the slot of the
+ * block that holds a block's slot, or `undefined` when the page's default zone holds it.
+ */
+export const rootSlotHolding = (data: Data, zone: string): string | undefined => {
+  if (isTopZone(zone)) return slotOfZone(zone);
+  const holder = zone.slice(0, zone.lastIndexOf(":"));
+  const top = topZones(data).find(([, items]) => findPuckItem(items, holder) !== undefined);
+  return top === undefined ? undefined : slotOfZone(top[0]);
 };
 
 /** Whether Puck's data holds the block named `alias`, at any depth. */
@@ -289,7 +300,7 @@ export const withoutEmptyPuckZones = (candidate: Data): Data => {
  * `order: undefined`, and optional item metadata may be absent; JSON drops both, so equal zones
  * compare equal and canonicalJson never sees an undefined property.
  */
-export const zoneJson = (zone: StudioCanvasSourceSlot): string =>
+const zoneJson = (zone: StudioCanvasSourceSlot): string =>
   canonicalJson(JSON.parse(JSON.stringify(zone)) as unknown);
 
 /** A page's (or guided step's) data as canonical text, to compare two of them. */

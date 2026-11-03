@@ -226,14 +226,23 @@ export const useStudioCanvasModel = (
       };
     }
   }, [catalogue, compiledSlots, originalPage, addresses]);
-  // The root slots of the page's shell: Puck's config declares one slot field for each.
-  const rootSlots = useMemo(
-    () => (pageData === undefined ? [] : sourcePageRootSlots(pageData).map(([key]) => key)),
-    [pageData],
+  // The root slots of the page's shell, named as the shell labels its content slots: Puck's config
+  // declares one slot field for each, and the Outline lists them by that name.
+  const rootSlotsJson = JSON.stringify(
+    pageData === undefined
+      ? []
+      : sourcePageRootSlots(pageData).map(([key]) => [
+          key,
+          source.body.shells
+            .find((entry) => entry.id === pageData.root.props.vortex.shell)
+            ?.content_slots.find((slot) => slot.id === key)?.label ?? key,
+        ]),
   );
-  const slotKeyList = rootSlots.join("\u0000");
+  const rootSlots = useMemo(
+    () => JSON.parse(rootSlotsJson) as readonly (readonly [string, string])[],
+    [rootSlotsJson],
+  );
   // The application frame is the canvas root, so the page renders in its outlets inside the iframe.
-  // The slot keys are compared by value: a new list of the same keys is the same config.
   const config = useMemo(
     () =>
       fieldInputControlReleases === null
@@ -243,9 +252,9 @@ export const useStudioCanvasModel = (
             registry,
             fieldInputControlReleases,
             catalogue,
-            slotKeyList === "" ? [] : slotKeyList.split("\u0000"),
+            rootSlots,
           ),
-    [registry, fieldInputControlReleases, catalogue, slotKeyList],
+    [registry, fieldInputControlReleases, catalogue, rootSlots],
   );
   // Puck's data is the stored page data itself: the root holds the shell and one slot per outlet.
   const data = useMemo(

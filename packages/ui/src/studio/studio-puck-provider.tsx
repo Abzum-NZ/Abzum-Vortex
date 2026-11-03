@@ -49,7 +49,7 @@ import {
   puckNeighbourOf,
   puckSelectedAlias,
   puckSelectorOf,
-  slotOfZone,
+  rootSlotHolding,
   withoutEmptyPuckZones,
   type StudioCanvasCompiledSlot,
   type StudioPuckSelector,
@@ -395,7 +395,7 @@ export function StudioPuckProvider({
       const id = action.id;
       if (id !== undefined) inserted.current.add(id);
       const request: StudioCanvasAddRequest = {
-        area: shown.zoneKeyOfSlot(slotOfZone(action.destinationZone)),
+        area: shown.zoneKeyOfSlot(rootSlotHolding(state.data, action.destinationZone)),
         destination: destinationOfZone(action.destinationZone),
         index: action.destinationIndex,
         rendererKey: action.componentType,

@@ -398,10 +398,11 @@ export const studioCanvasConfig = (
   registry: PlatformComponentRegistry,
   fieldInputControlReleases: FieldInputControlReleaseMap,
   catalogue: ImmutablePlatformBlockCatalogue,
-  /** The page's root slots: one slot field of the root for each content slot of its shell. */
-  slotKeys: readonly string[],
+  /** The page's root slots with their labels: one slot field of the root for each content slot of its shell. */
+  slots: readonly (readonly [key: string, label: string])[],
 ): Config => {
-  const slotsKey = slotKeys.join(" ");
+  const slotKeys = slots.map(([key]) => key);
+  const slotsKey = JSON.stringify(slots);
   let canvas = canvasConfigs.get(config)?.get(catalogue)?.get(slotsKey);
   if (canvas !== undefined) return canvas;
   const releaseByKey = new Map(
@@ -472,7 +473,7 @@ export const studioCanvasConfig = (
     // page. Puck's data holds only what the stored page holds, so the root has no props of its own
     // (no defaults, no settings) beside one slot per content slot of the page's shell.
     root: {
-      fields: Object.fromEntries(slotKeys.map((key) => [key, { type: "slot" }])),
+      fields: Object.fromEntries(slots.map(([key, label]) => [key, { type: "slot", label }])),
       render: (props: Parameters<typeof StudioCanvasRoot>[0]) => (
         <StudioCanvasRoot
           {...props}

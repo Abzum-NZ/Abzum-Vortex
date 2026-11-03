@@ -65,7 +65,9 @@ export const setSourcePageData = (
 ): boolean => {
   if (sourcePageDataAt(page, step) === undefined) return false;
   if (step === undefined) page.composition = value as typeof page.composition;
-  else (page.composition as { step_content: Record<string, SourcePageData> }).step_content[step] = value;
+  else
+    (page.composition as { step_content: Record<string, SourcePageData> }).step_content[step] =
+      value;
   return true;
 };
 
