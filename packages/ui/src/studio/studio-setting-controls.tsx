@@ -2,7 +2,7 @@
 
 import { Alert, AlertDescription } from "../components/alert";
 import { FieldGroup } from "../components/field";
-import { StudioLimitNote, StudioReasoned, studioLimitReason } from "./studio-limit";
+import { StudioLimitNote, Reasoned, studioLimitReason } from "./studio-limit";
 import { useEffect, useRef, useState, type ReactElement } from "react";
 import {
   canonicalJson,
@@ -644,7 +644,7 @@ function ListControl({
               }}
             />
             <InputGroupAddon align="inline-end">
-              <StudioReasoned reason={fullReason}>
+              <Reasoned reason={fullReason}>
                 <InputGroupButton
                   aria-label={`Add ${itemName}`}
                   size="icon-xs"
@@ -655,7 +655,7 @@ function ListControl({
                 >
                   <Plus />
                 </InputGroupButton>
-              </StudioReasoned>
+              </Reasoned>
             </InputGroupAddon>
           </InputGroup>
         ) : (

@@ -355,7 +355,8 @@ export function readStudioApplicationSourceImport(
     if (parsed.data.key !== key || parsed.data.root_alias !== rootAlias)
       return {
         kind: "invalid",
-        message: "The source must keep this draft's Application key and root alias.",
+        message:
+          "This file is for a different application. Export this application's file and try again.",
       };
     return { kind: "valid", source: parsed.data };
   } catch {

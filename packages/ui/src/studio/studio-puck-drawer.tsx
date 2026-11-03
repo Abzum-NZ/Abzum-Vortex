@@ -39,7 +39,7 @@ import { Icon, resolveVortexIconName, type VortexIconName } from "../icons";
 import { cn } from "../lib/utils";
 import { toast } from "../components/sonner";
 import { definitionLimitMessage, definitionLimitReached } from "@vortex/platform/schema";
-import { StudioLimitNote, StudioReasoned } from "./studio-limit";
+import { StudioLimitNote, Reasoned } from "./studio-limit";
 import type { StudioCompositionAddTarget } from "./application-composition-commands";
 import { studioPaletteComponentLists, type StudioPaletteChoice } from "./contextual-palette";
 import { zoneOfDestination } from "./studio-canvas-data";
@@ -191,12 +191,12 @@ export function StudioDrawerItem({
             <TooltipContent>Add {choice.name}</TooltipContent>
           </Tooltip>
         ) : (
-          <StudioReasoned
+          <Reasoned
             reason={reason}
             describedBy={reason === drawer.limitReason ? drawer.limitId : undefined}
           >
             {addButton}
-          </StudioReasoned>
+          </Reasoned>
         )}
       </ItemActions>
     </Item>

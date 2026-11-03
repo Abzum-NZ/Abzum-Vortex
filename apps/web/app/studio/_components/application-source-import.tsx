@@ -19,7 +19,7 @@ import {
   CollapsibleTrigger,
 } from "@vortex/ui/components/collapsible";
 import { Spinner } from "@vortex/ui/components/spinner";
-import { toast } from "@vortex/ui/components/sonner";
+import { Alert, AlertDescription } from "@vortex/ui/components/alert";
 import { studioNotice } from "./studio-save-state";
 import { Textarea } from "@vortex/ui/components/textarea";
 import {
@@ -53,19 +53,13 @@ import {
   type StudioSourceImportShowMe,
 } from "../_lib/application-source-import";
 
-// The import's notices replace one another: a refusal does not stay on screen through a later
-// successful check or the replace.
-let lastImportNotice: string | undefined;
-const importNotice = (
-  message: string,
-  kind?: "success" | "error" | "info",
-  action?: Readonly<{ label: string; onClick: () => void }>,
-): void => {
-  if (lastImportNotice !== undefined) toast.dismiss(lastImportNotice);
-  const id = `studio-source-import-${crypto.randomUUID()}`;
-  lastImportNotice = id;
-  studioNotice(message, kind, undefined, { id, action });
-};
+// The import's notices replace one another in the dialog itself: a toast over the dialog would cover
+// the Replace the draft button it is telling the person about.
+type ImportNotice = Readonly<{
+  message: string;
+  kind: "success" | "error" | "info";
+  action?: Readonly<{ label: string; onClick: () => void }>;
+}>;
 
 type ReviewedSource = Readonly<{
   snapshot: StudioApplicationSourceImportSnapshot;
@@ -155,6 +149,12 @@ export function ApplicationSourceImport({
   const [diagnostics, setDiagnostics] = useState<SourceDiagnostics | null>(null);
   const [dragging, setDragging] = useState(false);
   const [pasteOpen, setPasteOpen] = useState(false);
+  const [notice, setNotice] = useState<ImportNotice | null>(null);
+  const importNotice = (
+    message: string,
+    kind: ImportNotice["kind"] = "info",
+    action?: Readonly<{ label: string; onClick: () => void }>,
+  ): void => setNotice({ message, kind, ...(action === undefined ? {} : { action }) });
   const raw = useRef("");
   const busy = useRef<"reading" | "reviewing" | null>(null);
   const epoch = useRef(0);
@@ -185,6 +185,11 @@ export function ApplicationSourceImport({
       epoch.current += 1;
     };
   }, []);
+
+  // A notice belongs to the file being checked: reopening the dialog starts clean.
+  useEffect(() => {
+    if (!open) setNotice(null);
+  }, [open]);
 
   const replaceText = (value: string) => {
     epoch.current += 1;
@@ -472,7 +477,8 @@ export function ApplicationSourceImport({
     if (result === "applied") {
       replaceText("");
       onOpenChange(false);
-      importNotice("Imported. Your draft is the imported file now.", "success");
+      // The dialog is gone, so this outcome belongs to the workspace, not to a control in it.
+      studioNotice("Imported. Your draft is the imported file now.", "success");
     } else
       importNotice(
         result === "unchanged"
@@ -632,6 +638,31 @@ export function ApplicationSourceImport({
             </StudioInspectorGroup>
           )}
         </div>
+        {notice === null ? null : (
+          <Alert
+            variant={notice.kind === "error" ? "destructive" : "default"}
+            {...(notice.kind === "error" ? {} : { role: "status" })}
+          >
+            <AlertDescription>
+              <span className="flex flex-wrap items-center gap-2">
+                {notice.message}
+                {notice.action === undefined ? null : (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      notice.action?.onClick();
+                      setNotice(null);
+                    }}
+                  >
+                    {notice.action.label}
+                  </Button>
+                )}
+              </span>
+            </AlertDescription>
+          </Alert>
+        )}
         <DialogFooter>
           <Button
             type="button"
