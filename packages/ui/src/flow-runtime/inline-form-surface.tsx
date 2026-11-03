@@ -47,8 +47,6 @@ export function InlineFormFields({
       noValidate
       onSubmit={(event) => {
         event.preventDefault();
-        if (problems.length > 0)
-          setTypedIn((held) => new Set([...held, ...problems.map((problem) => problem.name)]));
         if (problems.length === 0)
           onSubmit(
             Object.fromEntries(form.fields.map((field) => [field.name, values[field.name] ?? ""])),
@@ -98,7 +96,12 @@ export function InlineFormFields({
         <Button type="button" variant="secondary" onClick={onCancel}>
           Cancel
         </Button>
-        <Reasoned reason={problems[0]?.text}>
+        <Reasoned
+          reason={problems[0]?.text}
+          onRefused={() =>
+            setTypedIn((held) => new Set([...held, ...problems.map((problem) => problem.name)]))
+          }
+        >
           <Button type="submit">{form.submitLabel ?? "Submit"}</Button>
         </Reasoned>
       </div>

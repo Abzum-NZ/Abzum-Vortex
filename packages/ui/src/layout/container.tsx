@@ -124,10 +124,17 @@ export function Container(props: ContainerProps): ReactElement {
     : geometryCss(scope, { desktop, tablet, phone }[props.breakpoint]);
 
   // In a row, header and menu keep their content width and content fills the remaining space, so
-  // a menu beside page content reads as a sidebar rather than an equal third.
+  // a menu beside page content reads as a sidebar rather than an equal third. A sidebar never takes
+  // more than half the row: with per-breakpoint geometry the scoped rule above is the cap, and
+  // this class is the cap for a container without it.
   const regionClassName = (key: ContainerRegionKey): string =>
     direction === "row"
-      ? cn("min-w-0", key === "content" ? "flex-1 basis-0" : "max-w-1/2 flex-none")
+      ? cn(
+          "min-w-0",
+          key === "content"
+            ? "flex-1 basis-0"
+            : cn("flex-none", !menuGeometryDeclared && "max-w-1/2"),
+        )
       : "min-w-0";
 
   const regions: ReactNode[] = [];

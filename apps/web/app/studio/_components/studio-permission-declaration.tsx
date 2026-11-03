@@ -86,12 +86,7 @@ export function StudioPermissionDeclaration({
   const changed = permission !== undefined && permission.administrative !== administrative;
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (missing !== undefined) {
-      // An attempted submit says why at the field that is missing.
-      leave(missing.field);
-      return;
-    }
-    if (unsupportedScope) return;
+    if (missing !== undefined || unsupportedScope) return;
     const target: Declaration["target"] = recordPermission
       ? {
           kind: "record",
@@ -372,6 +367,10 @@ export function StudioPermissionDeclaration({
                 ? undefined
                 : missing.reason
           }
+          onRefused={() => {
+            // An attempted submit says why at the field that is missing.
+            if (missing !== undefined) leave(missing.field);
+          }}
         >
           <Button type="submit" variant="secondary" size="sm" disabled={disabled}>
             <Icon name="check" />

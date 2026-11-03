@@ -63,7 +63,7 @@ const compositionLimitRefusal = (
 
 /** The page was removed or replaced while an edit was in flight: a race, refused like any other change. */
 const pageUnavailable = () =>
-  new StoredCompositionRefusal([], "is no longer available", "The selected page");
+  new StoredCompositionRefusal([], "its page was removed while this change was being made");
 
 /**
  * Every canvas change goes back through the definition: Puck's data is converted to the authored

@@ -33,9 +33,10 @@ export const fillPreviewAfterRead = (
       { signal: started.controller.signal },
     )
       .then((response) => {
-        // A session that ended (401) or a person no longer allowed (403) is an expected refusal.
-        if (response.status === 401 || response.status === 403) {
-          console.info("[studio] idle preview fill refused", { status: response.status });
+        // A session that ended (401) is an expected refusal. A 403 is the route's own-site check
+        // (the site address does not match the configured one): a platform fault, logged below.
+        if (response.status === 401) {
+          console.info("[studio] idle preview fill refused", { status: 401 });
           return;
         }
         if (!response.ok) throw new Error(`STUDIO_PREVIEW_FILL_HTTP_${response.status}`);

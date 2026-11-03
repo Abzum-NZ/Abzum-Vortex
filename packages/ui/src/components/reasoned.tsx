@@ -19,9 +19,12 @@ type ReasonedProps = Readonly<{
 export function Reasoned({
   reason,
   describedBy,
+  onRefused,
   children,
 }: Readonly<{
   reason: string | undefined;
+  /** An attempted use while unavailable; the caller shows the reason where it belongs. */
+  onRefused?: (() => void) | undefined;
   /** The id of an element on the page that already says the reason (one Alert for many controls). */
   describedBy?: string | undefined;
   children: ReactElement<ReasonedProps>;
@@ -38,6 +41,7 @@ export function Reasoned({
     onClick: (event) => {
       event.preventDefault();
       event.stopPropagation();
+      onRefused?.();
     },
     ...(children.props.onCheckedChange === undefined ? {} : { onCheckedChange: () => undefined }),
   });
