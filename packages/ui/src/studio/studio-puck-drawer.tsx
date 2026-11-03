@@ -45,6 +45,7 @@ import { studioPaletteComponentLists, type StudioPaletteChoice } from "./context
 import { zoneOfDestination } from "./studio-canvas-data";
 import { studioScreens, useStudioScreen } from "./studio-canvas-screen";
 import { useStudioCanvas, type StudioCanvasAddRequest } from "./studio-puck-provider";
+import { studioPuckStyle } from "./studio-puck-style";
 
 const usePuckSelector = createUsePuck();
 
@@ -418,7 +419,7 @@ function StudioBlocksDrawer({
       />
     );
   return (
-    <div className="flex flex-col gap-3" data-vortex-studio-palette="">
+    <div className="flex flex-col gap-3" data-vortex-studio-palette="" style={studioPuckStyle}>
       <div className="flex flex-col gap-2">
         <Label htmlFor={targetSelectId}>Add to</Label>
         <Select

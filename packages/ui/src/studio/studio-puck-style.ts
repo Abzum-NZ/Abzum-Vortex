@@ -7,8 +7,8 @@ const mix = (colour: string, share: number, other: string): string =>
   `color-mix(in oklab, ${colour} ${String(share)}%, ${other})`;
 
 /**
- * One of Puck's twelve-step palettes drawn from a theme token: steps 1 to 3 are the token darkened
- * toward the foreground, step 4 is the token itself, and steps 5 to 12 fade it toward the background.
+ * One of Puck's twelve-step palettes drawn from a theme token: steps 1 to 3 mix the token toward the
+ * foreground (more contrast), step 4 is the token itself, and steps 5 to 12 fade it toward the background.
  * Puck's components read some palette steps directly rather than through its semantic aliases.
  */
 const palette = (name: string, token: string): Array<[string, string]> => {
@@ -44,9 +44,11 @@ export const studioPuckStyle = {
   ]),
   "--puck-color-black": "var(--foreground)",
   "--puck-color-white": "var(--background)",
-  "--puck-color-overlay-backdrop": mix("var(--foreground)", 60, "transparent"),
-  // The theme's corner radius, spacing unit, focus width and fonts. Puck's pill and round shapes,
-  // font-size scale, weights, durations and icon sizes have no theme counterpart and stay Puck's.
+  "--puck-color-overlay-backdrop": `light-dark(${mix("var(--foreground)", 60, "transparent")}, ${mix("var(--background)", 60, "transparent")})`,
+  // The theme's corner radius, spacing unit, focus width and fonts. What stays Puck's has no theme
+  // counterpart: the pill and round shapes and `--puck-radius-none`, the font-size scale, weights,
+  // line heights and letter spacing, the border widths (hairline, regular, strong), durations, icon
+  // sizes, and the panel and sidebar widths.
   "--puck-radius-xs": "calc(var(--radius) * 0.25)",
   "--puck-radius-s": "calc(var(--radius) * 0.4)",
   "--puck-radius-m": "var(--radius-sm)",
@@ -55,6 +57,7 @@ export const studioPuckStyle = {
   "--puck-space-2": "calc(var(--spacing, 0.25rem) * 2)",
   "--puck-space-3": "calc(var(--spacing, 0.25rem) * 3)",
   "--puck-space-4": "calc(var(--spacing, 0.25rem) * 4)",
+  "--puck-space-chrome-gutter": "var(--puck-space-4)",
   "--puck-space-5": "calc(var(--spacing, 0.25rem) * 6)",
   "--puck-border-width-focus": "var(--vortex-focus-width)",
   "--puck-font-family-monospaced": "var(--font-mono)",

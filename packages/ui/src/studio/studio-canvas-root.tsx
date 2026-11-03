@@ -136,8 +136,18 @@ export function StudioCanvasIframe({
     const style = frameDocument.createElement("style");
     style.dataset.vortexStudioPuck = "";
     // Studio's own values, read from the host document that Studio's theme styles.
-    style.textContent = studioPuckIframeCss(getComputedStyle(document.documentElement));
+    const copyStudioValues = () => {
+      style.textContent = studioPuckIframeCss(getComputedStyle(document.documentElement));
+    };
+    copyStudioValues();
     frameDocument.head.append(style);
+    // Studio's document root can change its variables while the canvas is open (the theme is applied
+    // again after a navigation); the copy follows.
+    const themeObserver = new MutationObserver(copyStudioValues);
+    themeObserver.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["style", "class"],
+    });
     // Keys pressed while focus is inside the iframe reach only its own document. Studio's shortcuts
     // (Undo, Redo, the inspector, the panel) listen on the host window, so they are passed on there,
     // as Puck passes on pointer moves. Typing in a field is left alone.
@@ -167,6 +177,7 @@ export function StudioCanvasIframe({
     };
     frameDocument.addEventListener("keydown", forward);
     return () => {
+      themeObserver.disconnect();
       style.remove();
       frameDocument.removeEventListener("keydown", forward);
     };

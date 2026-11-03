@@ -208,7 +208,8 @@ const notSelectionActions: ReadonlySet<PuckAction["type"]> = new Set([
 ]);
 
 /**
- * Puck decides once, at its first mount, whether its stylesheet is already applied, and injects its
+ * Puck decides once per page load, at its first mount, whether its stylesheet is already applied (and
+ * keeps that answer), and injects its
  * own default styles (which import a third-party font the page's policy refuses) when it is not.
  * The stylesheet is imported above. On a client navigation into the editor React puts the stylesheet
  * in the document in the same commit that first renders Puck, so Puck looks too early. The editor
@@ -416,7 +417,9 @@ export function StudioPuckProvider({
   if (!stylesheetApplied) return null;
   return (
     <StudioCanvasContext.Provider value={value}>
-      {/* Puck's own wrapper reads its font and spacing from the tokens too, so the map sits above it. */}
+      {/* Puck's own wrapper reads its font and spacing from the tokens too, so the map sits above it.
+          The Outline and Blocks regions repeat it on their own roots: below the wide breakpoint they
+          are drawn in a Sheet outside this element. */}
       <div className="contents" style={studioPuckStyle}>
         <Puck
           config={config}
