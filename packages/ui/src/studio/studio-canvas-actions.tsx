@@ -30,6 +30,7 @@ import { useStudioScreen } from "./studio-canvas-screen";
 import { useStudioCanvas } from "./studio-puck-provider";
 
 const usePuckSelector = createUsePuck();
+type PuckApi = ReturnType<ReturnType<typeof useGetPuck>>;
 
 /**
  * The bar an action chose takes the keyboard focus when it appears: the bar of that block, or of
@@ -91,6 +92,17 @@ function BarAction({ label, reason, onAct, tooltip, stop, onStop, children }: Ba
  * there is no room above it). Alt+F10 moves keyboard focus to it, and inside it the arrow keys move
  * between the actions.
  */
+/** Whether Puck allows an action on a block now; a block that is not on the canvas allows it. */
+const allowed = (
+  state: Pick<PuckApi, "getPermissions" | "getSelectorForId" | "getItemBySelector">,
+  id: string,
+  action: "duplicate" | "delete",
+): boolean => {
+  const selector = state.getSelectorForId(id);
+  const item = selector === undefined ? undefined : state.getItemBySelector(selector);
+  return item === undefined ? true : state.getPermissions({ item })[action];
+};
+
 function StudioActionBar({ id, type }: Readonly<{ id: string; type: string }>) {
   const getPuck = useGetPuck();
   const { input, model, references } = useStudioCanvas();
@@ -121,7 +133,14 @@ function StudioActionBar({ id, type }: Readonly<{ id: string; type: string }>) {
     };
   }, [view.well]);
   const puck = getPuck();
-  const permissions = puck.getPermissions({ item: puck.getItemById(id) ?? null });
+  // Puck sets a block's permissions a moment after the reasons change; the bar draws again when they do.
+  const canDuplicate = usePuckSelector((state) => allowed(state, id, "duplicate"));
+  const canDelete = usePuckSelector((state) => allowed(state, id, "delete"));
+  const permissions = {
+    ...puck.getPermissions({ item: puck.getItemById(id) ?? null }),
+    duplicate: canDuplicate,
+    delete: canDelete,
+  };
   const parent = puck.getParentById(id);
   // The name the outline and the inspector use: the block's own item ("Button: Open").
   const item =
@@ -172,9 +191,14 @@ function StudioActionBar({ id, type }: Readonly<{ id: string; type: string }>) {
     knownCause === undefined &&
     ((!permissions.duplicate && duplicateNamed === undefined) ||
       (!permissions.delete && deleteNamed === undefined));
+  // Puck sets a block's permissions again a moment after the draft's reasons change (a reason that
+  // has just cleared), so a denial counts as unexplained only when it outlasts that moment.
   useEffect(() => {
-    if (unexplained)
+    if (!unexplained) return;
+    const timer = setTimeout(() => {
       console.error("[studio] an action is unavailable for no known reason", { id, permissions });
+    }, 1000);
+    return () => clearTimeout(timer);
   }, [unexplained, id]);
   const inverse = view.scale > 0 ? 1 / view.scale : 1;
   const visible = studioCanvasVisible(view);

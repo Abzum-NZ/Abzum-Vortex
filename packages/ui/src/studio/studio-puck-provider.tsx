@@ -576,28 +576,37 @@ function StudioPuckSync({
   const recorded = usePuckSelector((state) => state.history.histories.length);
   // The config Puck holds: it takes the page's config a moment after this component sees it.
   const held = usePuckSelector((state) => state.config);
-  // Puck asks for a block's permissions again only when told to. A new config asks for all of them;
-  // new references ask only for the blocks whose reasons changed, so deleting one block of five
-  // hundred does not set every block's permissions again.
-  const permitted = useRef<Readonly<{ held: Config; references: StudioCanvasReferences }> | null>(
-    null,
-  );
+  // Puck asks for a block's permissions again only when told to, and keeps what it last worked out
+  // for a block whose data has not changed. A new config asks for all of them; otherwise each block
+  // on the canvas whose reasons differ from the ones Puck last worked out is asked again, so
+  // deleting one block of five hundred does not set every block's permissions again, and a block
+  // that came onto the canvas after its reasons changed (another page opened) is not left stale.
+  const worked = useRef<Readonly<{ held: Config; reasons: StudioCanvasReferences }> | null>(null);
+  // The data Puck holds, which is walked (and its blocks indexed) after the draft's data arrives.
+  const canvasData = usePuckSelector((state) => state.appState.data);
   useEffect(() => {
-    const { refreshPermissions, getSelectorForId, getItemBySelector } = getPuck();
-    const last = permitted.current;
-    permitted.current = { held, references };
+    const { refreshPermissions, getSelectorForId, getItemById } = getPuck();
+    const last = worked.current;
     if (last === null || last.held !== held) {
       refreshPermissions();
+      worked.current = { held, reasons: references };
       return;
     }
-    for (const alias of new Set([...Object.keys(references), ...Object.keys(last.references)])) {
-      if (sameCompositionValue(references[alias], last.references[alias])) continue;
-      // A block that is not on the canvas (deleted, or on another page) has no selector.
+    const reasons: Record<string, StudioCanvasReferences[string]> = { ...last.reasons };
+    for (const alias of new Set([...Object.keys(references), ...Object.keys(last.reasons)])) {
+      if (sameCompositionValue(references[alias] ?? {}, last.reasons[alias] ?? {})) continue;
+      // A block that is not on the canvas (deleted, or on another page) has no selector; it is
+      // asked when it comes onto the canvas.
       const selector = getSelectorForId(alias);
-      const item = selector === undefined ? undefined : getItemBySelector(selector);
-      if (item !== undefined) refreshPermissions({ item }, true);
+      const item = selector === undefined ? undefined : getItemById(alias);
+      if (item === undefined) continue;
+      refreshPermissions({ item }, true);
+      const now = references[alias];
+      if (now === undefined) delete reasons[alias];
+      else reasons[alias] = now;
     }
-  }, [getPuck, held, references]);
+    worked.current = { held, reasons };
+  }, [getPuck, held, references, canvasData]);
   // The config Puck's data was last walked under; Puck walked its first data under `held`.
   const walked = useRef(held);
   const latestData = useRef(data);
