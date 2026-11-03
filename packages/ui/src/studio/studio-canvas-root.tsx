@@ -2,20 +2,45 @@
 
 import { createUsePuck, type PuckContext } from "@puckeditor/core";
 import { compiledItemSettings } from "@vortex/platform/schema";
-import { useEffect, useMemo, type ReactNode, type SyntheticEvent } from "react";
+import {
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useState,
+  type CSSProperties,
+  type ReactNode,
+  type SyntheticEvent,
+} from "react";
 import { isElement, isHtmlElement } from "../lib/dom";
 import { PagePuckRenderer } from "../page-puck-renderer";
-import { RootSlotGapProvider } from "../puck-config";
+import {
+  createSelectedPlacementStore,
+  RootSlotGapProvider,
+  SelectedPlacementProvider,
+} from "../puck-config";
 import type { SlotGapName } from "../layout-styles";
 import type { FieldInputControlReleaseMap, PlatformComponentRegistry } from "../registry";
 import { createAppearanceRootProps, createThemeRootProps, VortexStyleRoot } from "../theme";
 import { studioCanvasMetadata } from "./studio-canvas-metadata";
+import { useStudioCanvasView } from "./studio-canvas-scale";
 import { useStudioScreen } from "./studio-canvas-screen";
 import { studioPuckIframeCss } from "./studio-puck-style";
 
 const resolvePageHref = () => "#";
 
 const usePuckSelector = createUsePuck();
+
+/**
+ * Tells the page which block is selected. The selection travels through a store that each block
+ * reads for itself, so a new selection draws only the block that lost it and the block that
+ * gained it again, not the page.
+ */
+function SelectedBlock({ children }: Readonly<{ children: ReactNode }>) {
+  const [store] = useState(createSelectedPlacementStore);
+  const selected = usePuckSelector((state) => state.selectedItem?.props.id);
+  useLayoutEffect(() => store.set(selected), [store, selected]);
+  return <SelectedPlacementProvider store={store}>{children}</SelectedPlacementProvider>;
+}
 
 /**
  * The canvas root's render, inside Puck's preview, in every Puck mode. It draws the application's
@@ -42,16 +67,21 @@ export function StudioCanvasRoot({
   const { empty } = studio;
   // A layout's blocks are added with Add; only a page's blocks drop onto the canvas.
   const canDrop = usePuckSelector((state) => state.getPermissions().insert);
+  // Studio's own mark of a drag in progress, from Puck's public state, for the empty-slot rules.
+  const dragging = usePuckSelector((state) => state.appState.ui.isDragging);
   const content = (
     <div
       data-vortex-studio-canvas=""
       data-vortex-shell-outlet=""
       data-vortex-editing=""
+      {...(dragging ? { "data-vortex-dragging": "" } : {})}
       {...(breakpoint === "desktop" ? {} : { "data-vortex-view-only": "" })}
       aria-label={empty ? "Empty content area" : undefined}
       className={empty ? "relative min-h-48" : "min-h-24"}
     >
-      <RootSlotGapProvider gap={gap}>{children}</RootSlotGapProvider>
+      <RootSlotGapProvider gap={gap}>
+        <SelectedBlock>{children}</SelectedBlock>
+      </RootSlotGapProvider>
       {empty && (
         <p className="pointer-events-none absolute inset-0 flex items-center justify-center px-6 text-center text-sm text-muted-foreground">
           {canDrop ? "Drop a block here, or add one from Blocks." : "Add a block from Blocks."}
@@ -197,8 +227,15 @@ export function StudioCanvasIframe({
   const inert = (event: SyntheticEvent) => {
     if (isElement(event.target) && event.target.closest("a[href]") !== null) event.preventDefault();
   };
+  // What the canvas draws for the person (empty-slot labels) counter-scales by the zoom, in CSS.
+  const { scale } = useStudioCanvasView();
   return (
-    <div className="min-h-full" onClickCapture={inert} onAuxClickCapture={inert}>
+    <div
+      className="min-h-full"
+      style={{ "--vortex-canvas-scale": scale } as CSSProperties}
+      onClickCapture={inert}
+      onAuxClickCapture={inert}
+    >
       {children}
     </div>
   );

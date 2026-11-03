@@ -319,26 +319,46 @@ export const LAYOUT_ONLY_STYLES_CSS = `
   > [data-vortex-layout-wrapper] {
   width: auto !important;
 }
-[data-vortex-studio-canvas] .vortex-puck-slot:empty {
+/* An empty slot in the Studio canvas is presented here, in one place. The editor gives each slot
+   its required or optional class and its name in --vortex-slot-label, and the text is drawn at
+   the canvas zoom's inverse, --vortex-canvas-scale, so it reads at any zoom. A required slot keeps
+   its placeholder. An optional slot, a heading's actions for one, draws nothing and takes no space
+   at rest; while a block is dragged it shows its drop target, and while its own block is selected
+   a small hint, each labelled with the slot's name. */
+[data-vortex-studio-canvas] .vortex-puck-slot:empty::after {
+  content: var(--vortex-slot-label);
+  margin: auto;
+  padding: 0 0.5rem;
+  color: var(--muted-foreground);
+  font-size: calc(0.75rem / var(--vortex-canvas-scale, 1));
+  line-height: calc(1.25rem / var(--vortex-canvas-scale, 1));
+  white-space: nowrap;
+  pointer-events: none;
+}
+[data-vortex-studio-canvas] .vortex-puck-slot--required:empty {
   min-height: 4rem;
 }
-/* A screen the canvas shows view-only takes no drop, so an empty slot (a heading's or a link
-   tiles block's actions) draws no empty drop box. */
-[data-vortex-studio-canvas][data-vortex-view-only] .vortex-puck-slot:empty {
+[data-vortex-studio-canvas] .vortex-puck-slot--optional:empty {
   display: none;
 }
-[data-vortex-studio-canvas]
-  :is([data-vortex-record-actions], [data-vortex-heading-actions])
-  > .vortex-puck-slot:empty {
-  min-height: 2.25rem;
+[data-vortex-studio-canvas] .vortex-puck-slot--optional.vortex-puck-slot--selected:empty {
+  display: flex;
+  min-height: calc(1.75rem / var(--vortex-canvas-scale, 1));
 }
-/* An empty action row is a place to drop into, not content: Puck draws its box while a block is being
-   dragged (and for the area under the pointer), so every heading does not carry a dashed box. */
-[data-puck-entry]:not([data-puck-dragging])
-  :is([data-vortex-record-actions], [data-vortex-heading-actions])
-  > .vortex-puck-slot:empty:not(:hover) {
-  background: none;
-  outline: none;
+[data-vortex-studio-canvas]
+  .vortex-puck-slot--optional.vortex-puck-slot--selected:empty::after {
+  content: var(--vortex-slot-label) " (empty)";
+}
+[data-vortex-studio-canvas][data-vortex-dragging] .vortex-puck-slot--optional:empty {
+  display: flex;
+  min-height: calc(2.5rem / var(--vortex-canvas-scale, 1));
+}
+[data-vortex-studio-canvas][data-vortex-dragging] .vortex-puck-slot--optional:empty::after {
+  content: var(--vortex-slot-label);
+}
+/* A screen the canvas shows view-only takes no drop, so an empty slot draws no box at all. */
+[data-vortex-studio-canvas][data-vortex-view-only] .vortex-puck-slot:empty {
+  display: none;
 }
 [data-vortex-record-actions] > button {
   order: 1;

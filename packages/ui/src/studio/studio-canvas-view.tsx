@@ -1,7 +1,7 @@
 "use client";
 
 import { Puck } from "@puckeditor/core";
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Alert, AlertDescription, AlertTitle } from "../components/alert";
 import { Badge } from "../components/badge";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../components/tooltip";
@@ -13,7 +13,7 @@ import { Label } from "../components/label";
 import { Icon } from "../icons";
 import { studioPageAreaLabel } from "./application-page-layout";
 import type { StudioCompileFailure } from "./compile-failure";
-import { StudioCanvasActions } from "./studio-canvas-actions";
+import { StudioCanvasViewProvider } from "./studio-canvas-scale";
 import { useStudioScreen } from "./studio-canvas-screen";
 import { StudioReferencePicker } from "./studio-reference-picker";
 import { useStudioCanvas } from "./studio-puck-provider";
@@ -58,9 +58,9 @@ export function StudioCanvasSkeleton() {
 }
 
 /**
- * The page canvas: the content area picker, the notices, the selection's actions and the
- * workspace's Puck preview, drawn as a device screen scaled inside its well. It unmounts with the
- * rail tabs that do not show a canvas.
+ * The page canvas: the content area picker, the notices and the workspace's Puck preview, drawn as
+ * a device screen scaled inside its well. The selected block's actions are drawn on the block. It
+ * unmounts with the rail tabs that do not show a canvas.
  */
 export function StudioCanvasView({
   zoom,
@@ -107,6 +107,7 @@ export function StudioCanvasView({
     observer.observe(well);
     return () => observer.disconnect();
   }, [well, width, onFitZoom]);
+  const canvasView = useMemo(() => ({ scale, well }), [scale, well]);
 
   if (at === undefined || page === undefined)
     return (
@@ -158,7 +159,7 @@ export function StudioCanvasView({
         aria-busy={disabled}
       >
         {/* The screen size is chosen in Studio's canvas toolbar. One strip of fixed height: the
-            content area, what the canvas does, and the selection's actions. */}
+            content area and what the canvas does. */}
         <div className="flex h-9 shrink-0 items-center gap-3 px-4">
           {picker}
           {model.readOnlyCause !== undefined || breakpoint !== "desktop" ? (
@@ -197,9 +198,7 @@ export function StudioCanvasView({
               arrangeable={model.arrangeable}
               onDone={() => onArrangeGrid?.(false)}
             />
-          ) : (
-            <StudioCanvasActions />
-          )}
+          ) : null}
         </div>
         {compileFailure == null ? null : <CompileFailureNotice failure={compileFailure} />}
         {refusal.length === 0 ? null : (
@@ -226,7 +225,9 @@ export function StudioCanvasView({
                 visibility: available.width === 0 ? "hidden" : "visible",
               }}
             >
-              <Puck.Preview id="vortex-studio-canvas" />
+              <StudioCanvasViewProvider value={canvasView}>
+                <Puck.Preview id="vortex-studio-canvas" />
+              </StudioCanvasViewProvider>
             </div>
           </div>
         </div>
