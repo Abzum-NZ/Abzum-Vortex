@@ -6,11 +6,9 @@ organisations through one application, with access enforced by the platform and 
 Generic engines and the Next.js application render and execute those definitions. Application
 flows run in the in-house flow engine; the only back end is its simulated adapter.
 
-Working instructions are in [AGENTS.md](AGENTS.md). The
-[target architecture](docs/architecture/target-architecture.md) is binding, and the
-[specification](docs/specification/README.md) describes product functionality. Current issues,
-dependencies and delivery status are on the
-[GitHub roadmap](https://github.com/orgs/Abzum-NZ/projects/2/views/3).
+The [target architecture](docs/architecture/target-architecture.md) is binding, and the
+[specification](docs/specification/README.md) describes product functionality. Repository rules are
+in [AGENTS.md](AGENTS.md).
 
 ## Documents
 
@@ -24,18 +22,11 @@ dependencies and delivery status are on the
 ## Development
 
 Use Node 24 and the pnpm version pinned in [package.json](package.json). Dependency versions live in
-the workspace catalogue and the lockfile.
+the workspace catalogue and the lockfile. The development server binds to `localhost`.
+Authentication and protected data operations need the environment configuration and database below;
+installing packages alone does not configure them.
 
-```sh
-pnpm install --frozen-lockfile
-pnpm dev
-```
-
-The development server binds to `localhost`. Authentication and protected data operations also need
-the appropriate environment configuration and database; installing packages alone does not configure
-them.
-
-### Local development setup
+### Local setup
 
 A fresh local database has no organisation, so a signed-in developer sees "No organisations
 available". `pnpm demo:setup` is the one-command path: it creates a confirmed local owner account and
@@ -71,8 +62,7 @@ resets the database. Never point it at a hosted database.
    pnpm dev
    ```
 
-   On a database lane, start the server with `node tooling/supabase/lane.mjs serve <n> .` instead
-   (see `AGENTS.md`). Open `http://localhost:3000` (or the origin in `VORTEX_SITE_URL`). The Landing
+   Open `http://localhost:3000` (or the origin in `VORTEX_SITE_URL`). The Landing
    Zone lists the installed applications; further applications are built in App Studio and installed
    from the App Store.
 
@@ -88,13 +78,11 @@ configured manifest is `apps/web/scripts/development-setup/manifest.ts`. Managem
 first sign-in never implies application permission: the account can use only the roles explicitly
 assigned through the protected Access operations.
 
-An interrupted `pnpm setup:local` run resumes from identifiers recorded in the local Supabase
-workdir's `supabase/.temp/development-setup-state.json`; worktrees using the same lane share this
-state. Provisioning and record saves replay by their stable idempotency keys, and re-running setup
+An interrupted `pnpm setup:local` run resumes from identifiers recorded in
+`supabase/.temp/development-setup-state.json`. Provisioning and record saves replay by their stable idempotency keys, and re-running setup
 for the same organisation reuses its releases, installations and role assignments. A different
-nominated account is refused, as is old, mismatched or orphaned state. Reset a lane you hold with
-`node tooling/supabase/lane.mjs reset <n> .` before setting it up again; the reset clears its state
-only after the database reset succeeds. Lane 3 cannot be reset.
+nominated account is refused, as is old, mismatched or orphaned state. Run `pnpm db:reset` before setting
+it up again; the reset clears the state only after the database reset succeeds.
 
 ### Local environment variables
 
@@ -104,17 +92,13 @@ only after the database reset succeeds. Lane 3 cannot be reset.
 value. `pnpm db:start` prints the local API URL and publishable key. Setup commands refuse any
 environment or database that is not the local one.
 
-For a database lane, `node tooling/supabase/lane.mjs env <n>` emits the lane's connection values and
-its persistent, randomly generated Query continuation key. Copy the output into the worktree's
-ignored `apps/web/.env.development.local`; it contains secrets and must not be committed or logged.
 Each environment must set `VORTEX_SESSION_COOKIE_NAME`; Testing and Production use a secure
-host-only name beginning with `__Host-`. A local lane receives its own name from `lane.mjs env`.
+host-only name beginning with `__Host-`.
 
 The custom-component and file pages read additional variables and report a configuration error until
 they are set: `VORTEX_COMPONENT_BUNDLE_ORIGIN`, `VORTEX_FILE_STORAGE_SIGNING_KEY` and
 `VORTEX_FILE_STORAGE_SIGNING_KEY_ID`. For private files, `VORTEX_ENVIRONMENT=local` accepts only a
-loopback HTTP Supabase origin with an explicit port. Set `VORTEX_SUPABASE_WORKDIR` to the Local
-Supabase workdir (a worker's lane directory); file routes use its existing ignored
+loopback HTTP Supabase origin with an explicit port. File routes use the ignored
 `supabase/.temp/signing-keys.json`. Tenant provisioning derives the destination project from
 `VORTEX_SUPABASE_URL` in every environment and persists it in `vortex_platform.storage_destination`
 in the same transaction. The project is immutable after provisioning. `VORTEX_CLUSTER_ID` and
