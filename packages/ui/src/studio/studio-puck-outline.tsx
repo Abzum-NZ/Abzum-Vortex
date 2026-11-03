@@ -5,10 +5,12 @@ import {
   useCallback,
   useEffect,
   useRef,
+  useState,
   type FocusEvent,
   type KeyboardEvent,
   type ReactNode,
 } from "react";
+import { Alert, AlertDescription } from "../components/alert";
 import { cn } from "../lib/utils";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "../components/empty";
 import { Spinner } from "../components/spinner";
@@ -116,6 +118,52 @@ export function StudioOutlineRegion({ children }: Readonly<{ children: ReactNode
     );
   }, [moveStop, selectedAlias, shown]);
 
+  // A drop on a slot that does not admit the block is refused and said: Puck would otherwise place the
+  // block beside the slot's block at the top level, where nobody asked for it.
+  const [refusal, setRefusal] = useState("");
+  useEffect(() => {
+    const root = region.current;
+    if (root === null) return;
+    const refusing = (event: PointerEvent): string | undefined => {
+      if (
+        document.getElementById("preview-frame")?.hasAttribute("data-puck-outline-dragging") !==
+        true
+      )
+        return undefined;
+      const over = document
+        .elementFromPoint(event.clientX, event.clientY)
+        ?.closest<HTMLElement>("[class*=LayerTree-helper]");
+      if (over === null || over === undefined || !root.contains(over)) return undefined;
+      if (over.hasAttribute("data-puck-drop-target")) return undefined;
+      const dragged = root.querySelector(
+        "[class*=Layer--isDragSource] [class*=Layer-name]",
+      )?.textContent;
+      const owner = over.closest<HTMLElement>(ROW);
+      const into = owner === null ? null : selectButton(owner)?.textContent;
+      return `${dragged ?? "This block"} cannot go in ${into ?? "that block"}. Its slot does not allow that kind of block.`;
+    };
+    const onMove = (event: PointerEvent) => {
+      setRefusal(refusing(event) ?? "");
+    };
+    const onUp = (event: PointerEvent) => {
+      const message = refusing(event);
+      if (message === undefined) return;
+      setRefusal(message);
+      // Escape cancels the drag, and the release never reaches it, so Puck drops nothing.
+      event.stopImmediatePropagation();
+      document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    };
+    const onDown = () => setRefusal("");
+    window.addEventListener("pointermove", onMove, true);
+    window.addEventListener("pointerup", onUp, true);
+    window.addEventListener("pointerdown", onDown, true);
+    return () => {
+      window.removeEventListener("pointermove", onMove, true);
+      window.removeEventListener("pointerup", onUp, true);
+      window.removeEventListener("pointerdown", onDown, true);
+    };
+  }, []);
+
   const onFocus = (event: FocusEvent<HTMLDivElement>) => {
     const root = region.current;
     if (root === null || !(event.target instanceof HTMLElement)) return;
@@ -213,6 +261,11 @@ export function StudioOutlineRegion({ children }: Readonly<{ children: ReactNode
       )}
     >
       {children}
+      {refusal !== "" && (
+        <Alert variant="destructive" role="status" className="sticky bottom-2 z-10">
+          <AlertDescription>{refusal}</AlertDescription>
+        </Alert>
+      )}
     </div>
   );
 }
