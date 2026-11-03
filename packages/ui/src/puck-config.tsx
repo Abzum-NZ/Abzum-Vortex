@@ -395,7 +395,18 @@ const slotGapFor = (
 // Fields
 // ---------------------------------------------------------------------------------------------
 
-/** The slot fields a placement of this release has, given its settings, with their declared name. */
+/**
+ * Whether a slot is what its block is for: a container's content, the content of each tab. The
+ * editor keeps a placeholder in such a slot at rest, as in a slot the release requires, so an
+ * empty container or tabs block can be found and filled. The one place that says which they are.
+ */
+const holdsContent = (slot: PlatformBlockRelease["slots"][number]): boolean =>
+  slot.key === "content" || slot.repeats !== undefined;
+
+/**
+ * The slot fields a placement of this release has, given its settings, with their declared name
+ * and whether the editor keeps a placeholder in them while they are empty.
+ */
 const declaredSlots = (
   release: PlatformBlockRelease,
   settings: PlacementSettings,
@@ -406,12 +417,12 @@ const declaredSlots = (
       : repeatableSlotItemIdentities(slot, settings).map((identity) =>
           repeatableSlotKey(slot.key, identity),
         )
-    ).map((key) => ({ key, label: slot.label, required: slot.required })),
+    ).map((key) => ({ key, label: slot.label, required: slot.required || holdsContent(slot) })),
   );
 
 /**
  * How an empty slot is presented in the editor, in one place (the rules are in the layout styles).
- * A required slot keeps its placeholder. An optional one draws nothing at rest, shows its drop
+ * A required slot, or the one that holds its block's content, keeps its placeholder. An optional one draws nothing at rest, shows its drop
  * target while a block is dragged and a small hint while its own block is selected, each labelled
  * with the slot's name. A live page has no such presentation.
  */
