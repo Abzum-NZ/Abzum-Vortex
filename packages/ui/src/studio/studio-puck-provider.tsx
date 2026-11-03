@@ -160,6 +160,8 @@ export const whenNotDragging = (gate: RefObject<StudioDragGate>, apply: () => vo
 export type StudioCanvasContextValue = Readonly<{
   input: StudioPuckInput;
   model: StudioCanvasModel;
+  /** Why a block's delete, drag or duplicate is unavailable, by block name. */
+  references: StudioCanvasReferences;
   /** Why the last canvas change was refused; empty while the draft shows as it was edited. */
   refusal: string;
 }>;
@@ -382,8 +384,8 @@ export function StudioPuckProvider({
   const [initial] = useState(shown);
   const refusal = refused?.area === model.area ? refused.message : "";
   const value = useMemo(
-    (): StudioCanvasContextValue => ({ input, model, refusal }),
-    [input, model, refusal],
+    (): StudioCanvasContextValue => ({ input, model, references, refusal }),
+    [input, model, references, refusal],
   );
   return (
     <StudioCanvasContext.Provider value={value}>

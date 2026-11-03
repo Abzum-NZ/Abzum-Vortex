@@ -83,7 +83,10 @@ export const studioCanvasReferences = (
           })
         )
           reasons.duplicate ??= "A field input cannot be duplicated. Add another field instead.";
-        const outlets = studioLayoutOutletPlacementUses(source, id);
+        // The tooltip names the outlets themselves, not every page bound to them.
+        const outlets = studioLayoutOutletPlacementUses(source, id).filter(
+          (place) => place.open.kind === "shell",
+        );
         if (outlets.length > 0) {
           reasons.delete = `This block holds ${describeApplicationUsers(outlets)}. Retarget the outlet first.`;
           reasons.drag = reasons.delete;
