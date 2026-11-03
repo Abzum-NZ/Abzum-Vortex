@@ -6,6 +6,7 @@ import {
   isReservedTenantSegment,
   readAddressedApplicationFromInstalledBundleAtAddress,
   resolvePermittedApplicationAddress,
+  withOrganizationTheme,
   type AddressedApplicationBundleRead,
   type ApplicationExperience,
   type ApplicationLauncherRead,
@@ -15,11 +16,7 @@ import {
 } from "@vortex/platform/server";
 import { loadPermittedApplicationsAtAddress } from "./organization-context";
 import { getIdentityAuthorityConfiguration } from "../auth/_lib/authority-configuration";
-import type {
-  IdentitySession,
-  OrganizationThemeSelection,
-  ProjectedNavigation,
-} from "@vortex/platform/schema";
+import type { IdentitySession, ProjectedNavigation } from "@vortex/platform/schema";
 import { loadOrganizationTheme } from "./organization-theme";
 import { platformPermissionSource } from "./platform-permission-source";
 import { mapWebError } from "./web-error-mapper";
@@ -94,27 +91,6 @@ const loadAddressedApplicationAtAddress = cache(
     );
   },
 );
-
-/**
- * The installed context with the application's theme resolved through the organisation theme
- * layer. Every consumer of the address (the document root, the frame, the page) reads the theme
- * from the context, so the layer is applied here once and nowhere else.
- */
-const withOrganizationTheme = (
-  context: InstalledRuntimeContext,
-  organization: OrganizationThemeSelection,
-): InstalledRuntimeContext => {
-  const application = context.releaseSet.application;
-  const theme = applyOrganizationTheme(application.content.theme, organization);
-  if (theme === application.content.theme) return context;
-  return {
-    ...context,
-    releaseSet: {
-      ...context.releaseSet,
-      application: { ...application, content: { ...application.content, theme } },
-    },
-  };
-};
 
 export const resolveApplicationAddress = cache(
   async (

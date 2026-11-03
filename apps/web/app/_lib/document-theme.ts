@@ -139,9 +139,10 @@ export async function loadDocumentTheme(): Promise<DocumentTheme> {
     const studio = await loadStudioOrganizationTheme(organization);
     if (studio === undefined)
       return { attributes: studioDocumentAttributes, style: {}, stylesheet: "studio" };
-    const { style: _studioStyle, ...attributes } = studioDocumentThemeOf(studio);
     return {
-      attributes,
+      attributes: Object.fromEntries(
+        Object.entries(studioDocumentThemeOf(studio)).filter(([name]) => name !== "style"),
+      ) as typeof studioDocumentAttributes,
       // Only what differs from the platform rule the document already links.
       style: createDocumentThemeVariables(studio, DEFAULT_PLATFORM_THEME_RELEASE.tokens),
       stylesheet: "studio",
