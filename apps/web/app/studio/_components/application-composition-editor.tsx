@@ -9,7 +9,6 @@ import {
 import type { StudioCompiledFields } from "../_lib/studio-data-model";
 import {
   StudioField,
-  StudioInspectorActions,
   StudioInspectorGroup,
   StudioHelp,
   StudioSegmentedControl,
@@ -52,9 +51,11 @@ import {
   type StudioCompositionSettingsModel,
   type StudioSemanticSelection,
   type StudioSettingChoices,
+  type StudioStoredApplicationDraft,
 } from "@vortex/ui/studio";
 import { useStudioDraftHeld } from "./use-studio-draft-held";
 import { StudioTableAddRecords } from "./studio-table-add-records";
+import { useStudioBlockAccess } from "./studio-block-access";
 
 type Props = Readonly<{
   context: StudioCompositionContext;
@@ -66,6 +67,8 @@ type Props = Readonly<{
   choices: StudioSettingChoices;
   /** The saved draft's compiled fields by record type, for the typed condition controls. */
   compiledFields: StudioCompiledFields | null;
+  /** The saved draft, whose compiled fields a condition can name. */
+  saved: StudioStoredApplicationDraft;
   canvasArrangement?: StudioCanvasGridArrangement | undefined;
   /**
    * Opens the query sheet; `use` chooses the query it made as this block's data. It runs after the
@@ -79,6 +82,8 @@ type Props = Readonly<{
     command: StudioCompositionCommand,
     merge?: string,
   ) => StudioCompositionOutcome;
+  /** One condition of the block (when it shows, is required, is read-only or is enabled). */
+  onReaction: Parameters<typeof useStudioBlockAccess>[0]["onReaction"];
 }>;
 
 type LayoutInputs = Readonly<{
@@ -160,25 +165,60 @@ export function ApplicationCompositionEditor(props: Props) {
   const selectionKey = studioSemanticSelectionKey(props.selection);
   // Input that is not valid yet stays in its control; the draft changing under it (Undo, Redo, another
   // screen size) drops it. The workspace keys this editor by the selected item.
-  const settings = useStudioDraftHeld(settingsInputsFor(settingsModel));
+  const settingsFromDraft = useMemo(() => settingsInputsFor(settingsModel), [settingsModel]);
+  const settings = useStudioDraftHeld(settingsFromDraft);
   const layout = useStudioDraftHeld(model.kind === "available" ? inputsFor(model.layout) : null);
   const [problemArea, setProblemArea] = useState<"settings" | "features">("settings");
   // A success is announced to a screen reader; a refusal stays on screen for everyone.
-  const [message, setMessage] = useState<Readonly<{ text: string; failed: boolean; at: number }>>({
-    text: "",
-    failed: false,
-    at: 0,
-  });
+  const [message, setMessage] = useState<
+    Readonly<{ text: string; failed: boolean; area: "gate" | "layout"; at: number }>
+  >({ text: "", failed: false, area: "layout", at: 0 });
   // The refusal belongs to the draft it was made against: another change by any path clears it.
   const [refusedOn, setRefusedOn] = useState(props.context.source);
   if (message.failed && refusedOn !== props.context.source) {
     setRefusedOn(props.context.source);
     setMessage((previous) => ({ ...previous, text: "", failed: false }));
   }
-  const titleId = useId();
   const hintId = useId();
+  const titleId = useId();
   const settingsId = useId();
   const settingsInputs = settings.value;
+  const command = (
+    next: StudioCompositionCommand,
+    merge?: string,
+    done = "Changed.",
+    fallback = "Nothing changed. Use a valid size or order.",
+  ): boolean => {
+    if (props.disabled) return false;
+    const result = props.onCommand(props.context, props.selection, next, merge);
+    // An expected refusal logs once, at info.
+    if (result.kind !== "applied")
+      console.info("[studio] composition change refused", next.kind, result.kind);
+    setRefusedOn(props.context.source);
+    setMessage((previous) => ({
+      text: result.kind === "applied" ? done : studioOutcomeText(result, fallback),
+      failed: result.kind !== "applied",
+      area: next.kind === "gate" ? "gate" : "layout",
+      at: previous.at + 1,
+    }));
+    return result.kind === "applied";
+  };
+  // Who sees the block and when: its gate and conditions are fields of the Visibility and access group.
+  const { access, dialog: conditionDialog } = useStudioBlockAccess({
+    context: props.context,
+    selection: props.selection,
+    saved: props.saved,
+    disabled: props.disabled,
+    gateProblem: message.failed && message.area === "gate" ? message.text : undefined,
+    onGate: (permission) =>
+      command(
+        { kind: "gate", gate: permission },
+        undefined,
+        "Permission gate changed.",
+        "This block's permission gate could not be changed. Nothing was changed.",
+      ),
+    onReaction: props.onReaction,
+  });
   // The reference settings point at the fields of the data the block reads, or, for a block that
   // reads none, at the application's own fields.
   const fieldsInUse = useMemo(
@@ -269,17 +309,95 @@ export function ApplicationCompositionEditor(props: Props) {
     ],
   );
 
-  if (model.kind !== "available" || layout.value === null)
+  // The selection bindings and the group's refusal follow the settings; the value keeps its identity
+  // until one of them changes, so the fields of the inspector do not draw again for nothing.
+  const showProblem = otherProblem !== "" && problemArea === "settings";
+  const settingsAfter = useMemo(() => {
+    if (settingsModel.kind !== "available") return undefined;
+    const selectionBindings = (["open_with", "record_from"] as const).filter((key) =>
+      settingsModel.properties.some((property) => property.key === key),
+    );
+    if (selectionBindings.length === 0 && !showProblem) return undefined;
     return (
-      <section className="space-y-2">
-        <h3 className="text-sm font-medium">Item order and size</h3>
-        <p role="status" className="text-sm text-muted-foreground">
-          {model.kind === "unsupported"
-            ? "This area uses an item type that cannot be edited here. Nothing was changed."
-            : "This item is not in the current draft."}
-        </p>
+      <>
+        {selectionBindings.map((key) => (
+          <StudioSelectionControlBinding
+            key={key}
+            setting={key}
+            value={settingsInputs.settings[key]}
+            facts={studioQueryBindingFacts(
+              props.context,
+              settingsModel.placementAlias,
+              props.choices.queries,
+            )}
+            disabled={props.disabled}
+            onChange={(value) => {
+              const next = { ...settingsInputs.settings };
+              if (value === undefined) delete next[key];
+              else next[key] = value;
+              editSettings.current({ ...settingsInputs, settings: next });
+            }}
+          />
+        ))}
+        {showProblem && (
+          <Alert variant="destructive">
+            <AlertDescription>{otherProblem}</AlertDescription>
+          </Alert>
+        )}
+      </>
+    );
+  }, [
+    settingsModel,
+    settingsInputs,
+    props.context,
+    props.choices.queries,
+    props.disabled,
+    showProblem,
+    otherProblem,
+  ]);
+
+  const settingsNotice =
+    settingsModel.kind === "available"
+      ? undefined
+      : settingsModel.kind === "unsupported"
+        ? "This item's settings can't be changed here."
+        : "This item's settings can't be read.";
+  // A success is announced to a screen reader, in both the full and the reduced inspector.
+  const announcement = (
+    <p role="status" aria-live="polite" className="sr-only">
+      {message.failed ? "" : message.text}
+    </p>
+  );
+  if (model.kind !== "available" || layout.value === null) {
+    // The block's header and who sees it stay; only its settings, order and size are unavailable.
+    const placementAlias =
+      props.selection.kind === "placement" ? props.selection.placementAlias : "";
+    return (
+      <section aria-labelledby={titleId}>
+        <StudioBlockSettingFields
+          titleId={titleId}
+          choices={choices}
+          disabled={props.disabled}
+          placementAlias={placementAlias}
+          name={studioPlacementLabel(labels, placementAlias) ?? "Block"}
+          actions={[]}
+          releases={props.context.catalogue.releases}
+          access={access}
+          notice={settingsNotice ?? "This item's settings can't be changed here."}
+        />
+        {conditionDialog}
+        {announcement}
+        <div className="space-y-2">
+          <h3 className="text-sm font-medium">Item order and size</h3>
+          <p role="status" className="text-sm text-muted-foreground">
+            {model.kind === "unsupported"
+              ? "This area uses an item type that cannot be edited here. Nothing was changed."
+              : "This item is not in the current draft."}
+          </p>
+        </div>
       </section>
     );
+  }
 
   // A Records table's grid features are edited in their own Features panel, not as a setting group.
   const featuresProperty =
@@ -308,20 +426,6 @@ export function ApplicationCompositionEditor(props: Props) {
   const layoutSummary = `${breakpoint.charAt(0).toUpperCase()}${breakpoint.slice(1)} · ${widthWord}`;
   const orderEditable = breakpoint === "desktop" || model.responsiveOrder;
   const selectedIndex = model.order.indexOf(model.placementAlias);
-  const command = (next: StudioCompositionCommand, merge?: string, done = "Changed."): boolean => {
-    if (props.disabled) return false;
-    const result = props.onCommand(props.context, props.selection, next, merge);
-    setRefusedOn(props.context.source);
-    setMessage((previous) => ({
-      text:
-        result.kind === "applied"
-          ? done
-          : studioOutcomeText(result, "Nothing changed. Use a valid size or order."),
-      failed: result.kind !== "applied",
-      at: previous.at + 1,
-    }));
-    return result.kind === "applied";
-  };
   const changeQuery = (reference: string) => {
     const properties = settingsModel.kind === "available" ? settingsModel.properties : [];
     const query = reference === "" ? null : reference;
@@ -426,79 +530,35 @@ export function ApplicationCompositionEditor(props: Props) {
   };
   return (
     <section aria-labelledby={titleId}>
-      <header className="flex items-start justify-between gap-2 pb-3">
-        <div className="min-w-0">
-          <h2 id={titleId} className="flex min-w-0 items-center gap-2 text-base font-semibold">
-            <Icon name="blocks" className="size-4 shrink-0" />
-            <span className="truncate">
-              {studioPlacementLabel(labels, model.placementAlias) ?? "Block"}
-            </span>
-          </h2>
-          <p className="text-xs text-muted-foreground">Block</p>
-        </div>
-        <StudioInspectorActions
-          actions={[
-            {
-              label: "Move up",
-              disabled: props.disabled || !orderEditable || selectedIndex <= 0,
-              onSelect: () => move(-1),
-            },
-            {
-              label: "Move down",
-              disabled:
-                props.disabled ||
-                !orderEditable ||
-                selectedIndex < 0 ||
-                selectedIndex >= model.order.length - 1,
-              onSelect: () => move(1),
-            },
-          ]}
-        />
-      </header>
-      {settingsModel.kind === "available" ? (
-        <StudioInspectorGroup title="Settings" hint="A setting you leave unset uses its default.">
-          <fieldset className="space-y-4" disabled={props.disabled}>
-            <StudioBlockSettingFields
-              choices={choices}
-              disabled={props.disabled}
-              placementAlias={model.placementAlias}
-              query={queryValue}
-            />
-            {(["open_with", "record_from"] as const)
-              .filter((key) => settingsModel.properties.some((property) => property.key === key))
-              .map((key) => (
-                <StudioSelectionControlBinding
-                  key={key}
-                  setting={key}
-                  value={settingsInputs.settings[key]}
-                  facts={studioQueryBindingFacts(
-                    props.context,
-                    settingsModel.placementAlias,
-                    props.choices.queries,
-                  )}
-                  disabled={props.disabled}
-                  onChange={(value) => {
-                    const next = { ...settingsInputs.settings };
-                    if (value === undefined) delete next[key];
-                    else next[key] = value;
-                    changeSettings({ ...settingsInputs, settings: next });
-                  }}
-                />
-              ))}
-          </fieldset>
-          {otherProblem !== "" && problemArea === "settings" && (
-            <Alert variant="destructive">
-              <AlertDescription>{otherProblem}</AlertDescription>
-            </Alert>
-          )}
-        </StudioInspectorGroup>
-      ) : (
-        <p role="status" className="text-sm text-muted-foreground">
-          {settingsModel.kind === "unsupported"
-            ? "This item's settings can't be changed here."
-            : "This item's settings can't be read."}
-        </p>
-      )}
+      <StudioBlockSettingFields
+        titleId={titleId}
+        choices={choices}
+        disabled={props.disabled}
+        placementAlias={model.placementAlias}
+        name={studioPlacementLabel(labels, model.placementAlias) ?? "Block"}
+        actions={[
+          {
+            label: "Move up",
+            disabled: props.disabled || !orderEditable || selectedIndex <= 0,
+            onSelect: () => move(-1),
+          },
+          {
+            label: "Move down",
+            disabled:
+              props.disabled ||
+              !orderEditable ||
+              selectedIndex < 0 ||
+              selectedIndex >= model.order.length - 1,
+            onSelect: () => move(1),
+          },
+        ]}
+        releases={props.context.catalogue.releases}
+        query={queryValue}
+        access={access}
+        settingsAfter={settingsAfter}
+        notice={settingsNotice}
+      />
+      {conditionDialog}
       {featuresProperty === undefined ? null : (
         <StudioGridFeatures
           idPrefix={`${settingsId}-features`}
@@ -760,10 +820,8 @@ export function ApplicationCompositionEditor(props: Props) {
           )}
         </fieldset>
       </StudioInspectorGroup>
-      <p role="status" aria-live="polite" className="sr-only">
-        {message.failed ? "" : message.text}
-      </p>
-      {message.failed && (
+      {announcement}
+      {message.failed && message.area !== "gate" && (
         <Alert key={message.at} variant="destructive">
           <AlertDescription>{message.text}</AlertDescription>
         </Alert>

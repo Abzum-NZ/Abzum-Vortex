@@ -70,16 +70,22 @@ export function useStudioReactionFields(
   latest.current = props;
   const selectionKey = studioSemanticSelectionKey(props.selection);
   // The fields can be read once the page and the same modules are in the saved draft.
-  const { selection } = props;
   const target = useMemo(
-    () => resolveStudioReactionTarget(props.context.source, selection),
-    [props.context.source, selection],
+    () => resolveStudioReactionTarget(props.context.source, props.selection),
+    [props.context.source, props.selection],
   );
   const savedTarget = useMemo(
-    () => resolveStudioReactionTarget(props.saved.source, selection),
-    [props.saved.source, selection],
+    () => resolveStudioReactionTarget(props.saved.source, props.selection),
+    [props.saved.source, props.selection],
   );
-  const modules = JSON.stringify(applicationModuleKeys(props.context.source));
+  const modules = useMemo(
+    () => JSON.stringify(applicationModuleKeys(props.context.source)),
+    [props.context.source],
+  );
+  const savedModules = useMemo(
+    () => JSON.stringify(applicationModuleKeys(props.saved.source)),
+    [props.saved.source],
+  );
   // A page without a record offers page values and form answers only: nothing to read from the server.
   const needsFields = target !== undefined && target.top && target.recordReference !== "";
   const readable =
@@ -88,7 +94,7 @@ export function useStudioReactionFields(
       (savedTarget !== undefined &&
         target.pageAlias === savedTarget.pageAlias &&
         target.recordReference === savedTarget.recordReference &&
-        modules === JSON.stringify(applicationModuleKeys(props.saved.source))));
+        modules === savedModules));
 
   useEffect(() => {
     if (!enabled || !needsFields) return;

@@ -114,7 +114,7 @@ const RELEASE_ICONS: Readonly<Record<string, VortexIconName>> = {
   heading: "file-text",
   paperclip: "package-plus",
 };
-const releaseIcon = (name: string): VortexIconName =>
+export const studioReleaseIcon = (name: string): VortexIconName =>
   resolveVortexIconName(name) ?? RELEASE_ICONS[name] ?? "blocks";
 
 /**
@@ -155,7 +155,7 @@ export function StudioDrawerItem({
       {...(underlay ? { inert: true, "aria-hidden": true } : {})}
     >
       <ItemMedia variant="icon">
-        <Icon name={releaseIcon(choice.icon)} />
+        <Icon name={studioReleaseIcon(choice.icon)} />
       </ItemMedia>
       <Tooltip>
         <TooltipTrigger render={<ItemContent className="min-w-0" />}>
