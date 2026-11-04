@@ -42,7 +42,7 @@ export const studioCanvasPermissionReason = (
 ): string | undefined => references[alias]?.[action];
 
 /** What still refers to a block, other than blocks that leave with it: query inputs and message targets. */
-export const studioPlacementReferrers = (
+const studioPlacementReferrers = (
   source: ApplicationSourceDocument,
   alias: string,
   leaving: ReadonlySet<string>,
