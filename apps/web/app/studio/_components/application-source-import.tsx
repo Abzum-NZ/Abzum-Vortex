@@ -326,6 +326,7 @@ export function ApplicationSourceImport({
       if (
         result.kind !== "available" &&
         result.kind !== "validation_failed" &&
+        result.kind !== "compile_refused" &&
         result.kind !== "identity_conflict"
       ) {
         importNotice(
@@ -369,6 +370,13 @@ export function ApplicationSourceImport({
           .join(", ");
         importNotice(
           `This file gives names already used in this application to different components: ${names}. Keep each existing component's original id when editing its name, or choose a name that has never been used. Your draft is unchanged.`,
+          "error",
+        );
+        return;
+      }
+      if (result.kind === "compile_refused") {
+        importNotice(
+          `This file does not compile, so the application would draw nothing: ${result.message.replace(/[.\s]+$/u, "")}. Your draft is unchanged.`,
           "error",
         );
         return;

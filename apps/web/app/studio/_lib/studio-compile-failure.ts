@@ -81,7 +81,20 @@ const describeFlowFailure = (
       : findTask([...flow.tasks, ...flow.errors, ...flow.finally], failure.taskId);
   const where =
     task === undefined ? `Flow ${flowName}` : `Flow ${flowName}, step ${stepName(source, task)}`;
-  if (failure.sentence !== undefined) return `${where}: ${failure.sentence}`;
+  if (failure.sentence !== undefined) {
+    // The rule's sentence may open with the step's own title, which `where` already names.
+    const title =
+      task === undefined
+        ? undefined
+        : flowTaskRegistry[task.type as keyof typeof flowTaskRegistry]?.title;
+    const rest =
+      title !== undefined && failure.sentence.startsWith(title)
+        ? failure.sentence.slice(title.length)
+        : undefined;
+    const said =
+      rest !== undefined && /^:?\s/u.test(rest) ? rest.replace(/^:?\s+/u, "") : failure.sentence;
+    return `${where}: ${said}`;
+  }
   if (
     failure.reasonCode === "vortex.definition.workflow_action_inputs" &&
     flow !== undefined &&
@@ -126,6 +139,21 @@ export const describeStudioCompileFailure = (
       message: `Page ${page?.name ?? ruleWords(failure.pageKey)}: ${failure.sentence ?? "This page cannot be used as it is set up."}`,
       selection: null,
     };
+  }
+  if (
+    failure.reasonCode === "vortex.definition.missing_identity" &&
+    failure.recordTypeKey !== undefined &&
+    failure.fieldKey !== undefined
+  ) {
+    const record = source.body.modules
+      .filter((item) => failure.moduleKey === undefined || item.key === failure.moduleKey)
+      .flatMap((item) => item.record_types)
+      .find((item) => item.key === failure.recordTypeKey);
+    if (record !== undefined && !record.fields.some((item) => item.key === failure.fieldKey))
+      return {
+        message: `The application names the field ${failure.fieldKey} of ${record.plural_name}, which does not exist. Choose one of its fields.`,
+        selection: null,
+      };
   }
   // A rule with its own business sentence says it as it is, exactly as Studio showed it beforehand.
   if (failure.sentence !== undefined) return { message: failure.sentence, selection: null };
