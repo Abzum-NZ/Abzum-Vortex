@@ -238,7 +238,7 @@ export type SelectedPlacementStore = Readonly<{
 }>;
 
 /** A placement that holds the selected one, and the key of its slot the selection is in. */
-export type SelectionHolder = Readonly<{ id: string; slot: string }>;
+type SelectionHolder = Readonly<{ id: string; slot: string }>;
 
 export const createSelectedPlacementStore = (): SelectedPlacementStore => {
   let selected: string | undefined;
