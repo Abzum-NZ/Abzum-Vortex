@@ -82,7 +82,7 @@ export function StudioCanvasView({
     arrangeGrid,
     onArrangeGrid,
   } = input;
-  const { page, shown } = model;
+  const { open, shown } = model;
   const [well, setWell] = useState<HTMLDivElement | null>(null);
   // The canvas is a device screen: the iframe is as wide as the chosen screen and as tall as the
   // well, in the iframe's own pixels. The zoom only scales the iframe as a whole.
@@ -106,9 +106,12 @@ export function StudioCanvasView({
   }, [well, width, onFitZoom]);
   const canvasView = useMemo(() => ({ scale, well }), [scale, well]);
 
-  if (page === undefined)
+  if (!open)
     return (
-      <CanvasEmpty title="Page unavailable" description="Choose another page to keep working." />
+      <CanvasEmpty
+        title={model.owner === "layout" ? "Layout unavailable" : "Page unavailable"}
+        description="Choose another page to keep working."
+      />
     );
   // A guided page has one canvas per step: the tabs choose the step, nothing else picks a zone.
   const steps =

@@ -11,7 +11,7 @@ import {
   sourceSlotBreakpointOrders,
   type SourceApplicationShell,
   type SourceItem,
-  type SourcePageData,
+  type SourceZonedData,
   type SourceSlotOrder,
 } from "../application-composition/source-composition";
 import {
@@ -354,7 +354,7 @@ export const validateStoredZone = (
 };
 
 /** The reserved targets of a shell: each content slot's parent placement and slot. */
-const storedShellReservations = (shell: SourceApplicationShell): StoredReservations => {
+export const storedShellReservations = (shell: SourceApplicationShell): StoredReservations => {
   const reservations = new Map<string, Set<string>>();
   for (const slot of shell.content_slots) {
     const keys = reservations.get(slot.parent_placement) ?? new Set<string>();
@@ -541,33 +541,38 @@ const childSlotsOf = (props: Record<string, unknown>): [string, unknown[]][] =>
 
 /**
  * The stored page data a canvas edit produced. Puck's data is the stored page data itself: the page
- * (or guided step) data with `root.props.vortex` and one root slot per shell content slot. Puck
- * only adds, on Duplicate, generated ids. Generated ids become unique block names, a copied block's
+ * (or guided step) data with `root.props.vortex` and one root slot per shell content slot, or a
+ * layout, whose blocks are all in `content` and whose `reservations` (its content slots' targets)
+ * must stay empty. Puck only adds, on Duplicate, generated ids. Generated ids become unique block names, a copied block's
  * slot orders follow its copied children, and every declared tablet and phone order keeps its
  * authored sequence while blocks join or leave its zone. Each zone is judged like any stored slot,
  * the root may change only in its slot arrays, and every copy Duplicate made is named, with each
  * copied descendant, beside its original.
  */
-export const storedPageDataFromPuck = (
+export const storedPageDataFromPuck = <Zoned extends SourceZonedData>(
   catalogue: ImmutablePlatformBlockCatalogue,
-  baseline: SourcePageData,
+  baseline: Zoned,
   candidate: unknown,
-): Readonly<{ data: SourcePageData; copies: ReadonlyMap<string, string> }> => {
+  reservations: StoredReservations = new Map(),
+): Readonly<{ data: Zoned; copies: ReadonlyMap<string, string> }> => {
   const puck = closed(candidate, ["root", "content", "zones"], []);
   const root = closed(puck.root, ["props", "readOnly"], ["root"]);
   if (root.readOnly !== undefined) closed(root.readOnly, [], ["root", "readOnly"]);
   if (puck.zones !== undefined) closed(puck.zones, [], ["zones"]);
   const props = closed(root.props, Object.keys(baseline.root.props), ["root", "props"]);
-  const vortex = closed(props.vortex, ["shell", "slot_orders"], ["root", "props", "vortex"]);
-  if (vortex.shell !== baseline.root.props.vortex.shell)
+  // A layout has no shell of its own; a page names the one that frames it (or none).
+  const framed = "shell" in baseline.root.props.vortex;
+  const baselineShell = (baseline.root.props.vortex as { shell?: string | null }).shell;
+  const vortex = closed(
+    props.vortex,
+    framed ? ["shell", "slot_orders"] : ["slot_orders"],
+    ["root", "props", "vortex"],
+  );
+  if (framed && vortex.shell !== baselineShell)
     refuse(["root", "props", "vortex"], "changed the page frame, which the canvas does not edit");
   // A page in an application shell places its blocks in the shell's content slots, never in the
   // default zone (a drop there is an expected refusal, not a platform fault).
-  if (
-    baseline.root.props.vortex.shell !== null &&
-    Array.isArray(puck.content) &&
-    puck.content.length > 0
-  )
+  if (framed && baselineShell !== null && Array.isArray(puck.content) && puck.content.length > 0)
     refuse(["content"], "places blocks outside the shell's content slots");
   const zones = sourcePageZones(baseline).map(([key, items]) => ({
     key,
@@ -713,6 +718,7 @@ export const storedPageDataFromPuck = (
     const checked = validateStoredZone(
       catalogue,
       order === undefined ? { items } : { items, order },
+      reservations,
     );
     if (zone.key === "content") data.content = checked.items;
     else data.root.props[zone.key] = checked.items;

@@ -1,7 +1,11 @@
 "use client";
 
 import { createUsePuck, type PuckContext } from "@puckeditor/core";
-import { compiledItemSettings, type ShellOutletLocation } from "@vortex/platform/schema";
+import {
+  compiledItemSettings,
+  type CompiledLayout,
+  type ShellOutletLocation,
+} from "@vortex/platform/schema";
 import {
   useEffect,
   useLayoutEffect,
@@ -14,7 +18,7 @@ import {
 } from "react";
 import { isElement, isHtmlElement } from "../lib/dom";
 import { DeferredDrawingProvider, type DeferredDrawing } from "../deferred-drawing";
-import { PagePuckRenderer } from "../page-puck-renderer";
+import { PagePuckRenderer, type PagePuckRendererProps } from "../page-puck-renderer";
 import {
   createSelectedPlacementStore,
   PAGE_ROOT_GAP,
@@ -31,6 +35,19 @@ import { studioPuckIframeCss } from "./studio-puck-style";
 import { useStudioCanvas, useStudioCanvasDragging } from "./studio-puck-provider";
 
 const resolvePageHref = () => "#";
+
+/**
+ * The frame of a layout on the canvas: the shell's chrome with nothing in it, and one outlet at its
+ * root where Puck's content (the layout's own blocks) is drawn. One object, as the renderer keeps
+ * what it resolved for it.
+ */
+const LAYOUT_FRAME: PagePuckRendererProps["composition"] = {
+  composition: {
+    root: { props: { vortex: { slotOrders: { content: { tablet: [], phone: [] } } } } },
+    content: [],
+  } as unknown as CompiledLayout,
+};
+const LAYOUT_OUTLET: ShellOutletLocation = { kind: "root" };
 
 /** How far past what the canvas shows (in the page's pixels) a waiting slot is drawn. */
 const DRAW_AHEAD = 1200;
@@ -91,7 +108,6 @@ function CanvasSlot({
   label: string;
   breakpoint: Breakpoint;
 }>) {
-  // A layout's blocks are added with Add; only a page's blocks drop onto the canvas.
   const canDrop = usePuckSelector((state) => state.getPermissions().insert);
   // Studio's own mark of a drag in progress, from Puck's public state, for the empty-slot rules.
   const dragging = useStudioCanvasDragging();
@@ -252,7 +268,12 @@ export function StudioCanvasRoot({
       <SelectedBlock>
         <RootSlotGapProvider gap={PAGE_ROOT_GAP}>
           {rootSlots.length === 0 ? (
-            <CanvasSlot content={children} name={undefined} label="page" breakpoint={breakpoint} />
+            <CanvasSlot
+              content={children}
+              name={undefined}
+              label={studio.layout ? "layout" : "page"}
+              breakpoint={breakpoint}
+            />
           ) : (
             rootSlots.map((name) => (
               <CanvasSlot
@@ -298,7 +319,8 @@ export function StudioCanvasRoot({
       ) : (
         <PagePuckRenderer
           readSettings={compiledItemSettings}
-          composition={frame.frame}
+          // A layout is drawn from Puck's content inside the shell's chrome, not from the saved frame.
+          composition={studio.layout ? LAYOUT_FRAME : frame.frame}
           breakpoint={breakpoint}
           registry={registry}
           fieldInputControlReleases={fieldInputControlReleases}
@@ -311,7 +333,7 @@ export function StudioCanvasRoot({
           // The switcher names only the application being designed.
           applicationSwitcherSource={applicationSwitcherSource}
           applicationShellRuntime={applicationShellRuntime}
-          outlet={{ location: frame.frame.outlet, content }}
+          outlet={{ location: studio.layout ? LAYOUT_OUTLET : frame.frame.outlet, content }}
         />
       )}
     </div>

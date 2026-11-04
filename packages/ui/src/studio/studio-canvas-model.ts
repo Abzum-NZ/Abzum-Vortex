@@ -9,11 +9,14 @@ import {
   sourcePageSlotAddresses,
   sourcePageSlotAt,
   sourcePageZones,
+  shellLayoutZone,
   storedItemRelease,
+  storedShellReservations,
   type ApplicationSourceDocument,
   type ImmutablePlatformBlockCatalogue,
+  type PageSlotAddress,
   type SourceItem,
-  type SourcePageData,
+  type SourceZonedData,
 } from "@vortex/platform/schema";
 import { createPlatformComponentRegistryForReleases } from "../combined-registry";
 import type { Breakpoint } from "../definition-error";
@@ -36,8 +39,8 @@ type SourcePage = ApplicationSourceDocument["body"]["pages"][number];
 const NO_COMPONENTS = { components: {} } as unknown as Config;
 
 /**
- * The open page (or the open step of a guided page) the canvas shows, with everything the canvas
- * needs to draw and check it: the Puck config for its root slots, its stored data, the compiled
+ * The open page (or the open step of a guided page, or the selected layout) the canvas shows, with
+ * everything the canvas needs to draw and check it: the Puck config for its root slots, its stored data, the compiled
  * settings of its blocks, the data Puck is given and whether it may be arranged on the canvas.
  */
 export type StudioCanvasModel = Readonly<{
@@ -47,6 +50,11 @@ export type StudioCanvasModel = Readonly<{
   config: Config;
   /** The keys of the root slots the config declares: Puck is opened again when they change. */
   slotsKey: string;
+  /** What the canvas shows the blocks of: the open page, or the selected layout (its blocks are Puck's content). */
+  owner: "page" | "layout";
+  /** Whether the page or layout to show exists in the draft. */
+  open: boolean;
+  /** The open page; `undefined` when a layout is shown. */
   page: SourcePage | undefined;
   /** The guided steps of the open page, or none; the tabs above the canvas choose among them. */
   steps: readonly Readonly<{ id: string; name: string }>[];
@@ -69,6 +77,11 @@ export type StudioCanvasModel = Readonly<{
   slotOfZoneKey: (key: string) => string | undefined;
   /** The page slot address key of Puck's root slot, or of the default zone when `undefined`. */
   zoneKeyOfSlot: (slot: string | undefined) => string;
+  /**
+   * With a layout on the canvas, the content slots it declares by the block and slot each one
+   * targets: the canvas draws "Page content" there. Empty for a page.
+   */
+  contentTargets: Readonly<Record<string, Readonly<Record<string, string>>>>;
   /** Every block of the page data on the canvas, in every zone. */
   items: readonly SourceItem[];
   /** The same blocks in the compiled revision. */
@@ -93,6 +106,7 @@ export const useStudioCanvasModel = (
     platformBlockCatalogue,
     fieldInputControlReleases,
     pageAlias,
+    layoutAlias,
     compiledSlots,
     disabled,
     selectedPlacementAlias,
@@ -102,6 +116,8 @@ export const useStudioCanvasModel = (
     platformBlockCatalogue: ImmutablePlatformBlockCatalogue;
     fieldInputControlReleases: FieldInputControlReleaseMap | null;
     pageAlias: string | undefined;
+    /** The selected layout: the canvas shows its blocks, and the page above only frames them. */
+    layoutAlias: string | undefined;
     compiledSlots?: Readonly<Record<string, StudioCanvasCompiledSlot>> | undefined;
     disabled: boolean;
     selectedPlacementAlias: string | null;
@@ -129,7 +145,13 @@ export const useStudioCanvasModel = (
       }),
     [registry],
   );
-  const page = source.body.pages.find((candidate) => candidate.id === pageAlias);
+  const layout = layoutAlias !== undefined;
+  const shell = layout
+    ? source.body.shells.find((candidate) => candidate.id === layoutAlias)
+    : undefined;
+  const page = layout
+    ? undefined
+    : source.body.pages.find((candidate) => candidate.id === pageAlias);
   const steps = useMemo(
     () =>
       page === undefined || page.type !== "guided_form"
@@ -162,35 +184,50 @@ export const useStudioCanvasModel = (
     steps.length === 0
       ? undefined
       : (steps.find((entry) => entry.id === chosenStep) ?? holding ?? steps[0])?.id;
-  const area = `${pageAlias ?? ""}:${step ?? ""}`;
+  const area = layout ? `layout:${layoutAlias}` : `${pageAlias ?? ""}:${step ?? ""}`;
   // The data is read fresh from its page, so it is kept per page object and step.
   const pageData = useMemo(
-    (): SourcePageData | undefined =>
-      page === undefined ? undefined : sourcePageDataAt(page, step),
-    [page, step],
+    (): SourceZonedData | undefined =>
+      layout ? shell?.layout : page === undefined ? undefined : sourcePageDataAt(page, step),
+    [layout, shell?.layout, page, step],
   );
-  const originalPage = compiledSource.body.pages.find((candidate) => candidate.id === pageAlias);
+  const originalPage = layout
+    ? undefined
+    : compiledSource.body.pages.find((candidate) => candidate.id === pageAlias);
+  const originalShell = layout
+    ? compiledSource.body.shells.find((candidate) => candidate.id === layoutAlias)
+    : undefined;
   const originalData = useMemo(
-    (): SourcePageData | undefined =>
-      originalPage === undefined ? undefined : sourcePageDataAt(originalPage, step),
-    [originalPage, step],
+    (): SourceZonedData | undefined =>
+      layout
+        ? originalShell?.layout
+        : originalPage === undefined
+          ? undefined
+          : sourcePageDataAt(originalPage, step),
+    [layout, originalShell?.layout, originalPage, step],
   );
-  // The page's content slots (its zones) by address key: the canvas shows all of them at once.
+  // The page's content slots (its zones) by address key, or the layout's one zone: the canvas shows all of them at once.
+  const layoutOpen = shell !== undefined;
   const addresses = useMemo(
-    () =>
-      page === undefined
-        ? []
-        : sourcePageSlotAddresses(page).filter((entry) => entry.step === step),
-    [page, step],
+    (): readonly PageSlotAddress[] =>
+      layout
+        ? layoutOpen
+          ? [{ key: shellLayoutZone }]
+          : []
+        : page === undefined
+          ? []
+          : sourcePageSlotAddresses(page).filter((entry) => entry.step === step),
+    [layout, layoutOpen, page, step],
   );
   const zoneKeyList = useMemo(() => addresses.map((entry) => entry.key), [addresses]);
   const zoneKeys = useMemo(() => new Set(zoneKeyList), [zoneKeyList]);
   // Kept by value: the shells are a new object after every edit of the draft.
+  const frameAlias = (data: SourceZonedData | undefined): string | null =>
+    (data?.root.props.vortex as { shell?: string | null } | undefined)?.shell ?? null;
   const shellSlotsJson = JSON.stringify(
     Object.fromEntries(
       (
-        source.body.shells.find((entry) => entry.id === pageData?.root.props.vortex.shell)
-          ?.content_slots ?? []
+        source.body.shells.find((entry) => entry.id === frameAlias(pageData))?.content_slots ?? []
       ).map((slot) => [slot.id, slot.key]),
     ),
   );
@@ -207,10 +244,9 @@ export const useStudioCanvasModel = (
     [addresses],
   );
   const defaultZoneKey = useMemo(() => {
+    if (layout) return addresses[0]?.key;
     if (page === undefined) return undefined;
-    const shell = source.body.shells.find(
-      (entry) => entry.id === pageData?.root.props.vortex.shell,
-    );
+    const shell = source.body.shells.find((entry) => entry.id === frameAlias(pageData));
     const holding =
       selectedPlacementAlias === null
         ? undefined
@@ -221,7 +257,19 @@ export const useStudioCanvasModel = (
       (entry) => shell?.content_slots.find((slot) => slot.id === entry.slot)?.required === true,
     );
     return (holding ?? required ?? addresses[0])?.key;
-  }, [page, source, pageData, addresses, selectedPlacementAlias]);
+  }, [layout, page, source, pageData, addresses, selectedPlacementAlias]);
+  // Kept by value: the shells are a new object after every edit of the draft.
+  const contentTargetsJson = JSON.stringify(
+    shell === undefined
+      ? []
+      : shell.content_slots.map((slot) => [slot.parent_placement, slot.parent_slot, slot.label]),
+  );
+  const contentTargets = useMemo(() => {
+    const targets: Record<string, Record<string, string>> = {};
+    for (const [placement, slot, label] of JSON.parse(contentTargetsJson) as string[][])
+      (targets[placement!] ??= {})[slot!] = label!;
+    return targets;
+  }, [contentTargetsJson]);
   const items = useMemo(
     () => (pageData === undefined ? [] : sourcePageZones(pageData).flatMap(([, list]) => list)),
     [pageData],
@@ -233,11 +281,13 @@ export const useStudioCanvasModel = (
   );
   // The compiled version is read once per compile; a mismatch keeps the canvas closed.
   const compiled = useMemo((): { settings?: StudioCanvasCompiledSettings; problem?: string } => {
-    if (originalPage === undefined || addresses.length === 0) return {};
+    if ((layout ? originalShell : originalPage) === undefined || addresses.length === 0) return {};
     try {
       const settings: StudioCanvasCompiledSettings = {};
       for (const entry of addresses) {
-        const original = sourcePageSlotAt(originalPage, entry);
+        const original = layout
+          ? { items: originalShell!.layout.content }
+          : sourcePageSlotAt(originalPage!, entry);
         const compiledSlot = compiledSlots?.[entry.key];
         if (original === undefined || compiledSlot === undefined) return {};
         Object.assign(settings, compiledSettingsFor(catalogue, original.items, compiledSlot));
@@ -248,7 +298,7 @@ export const useStudioCanvasModel = (
         problem: `STUDIO_CANVAS_COMPILED_MISMATCH: ${error instanceof Error ? error.message : String(error)}`,
       };
     }
-  }, [catalogue, compiledSlots, originalPage, addresses]);
+  }, [catalogue, compiledSlots, layout, originalShell, originalPage, addresses]);
   // The root slots of the page's shell, named as the shell labels its content slots: Puck's config
   // declares one slot field for each, and the Outline lists them by that name.
   const rootSlotsJson = JSON.stringify(
@@ -257,7 +307,7 @@ export const useStudioCanvasModel = (
       : sourcePageRootSlots(pageData).map(([key]) => [
           key,
           source.body.shells
-            .find((entry) => entry.id === pageData.root.props.vortex.shell)
+            .find((entry) => entry.id === frameAlias(pageData))
             ?.content_slots.find((slot) => slot.id === key)?.label ?? key,
         ]),
   );
@@ -295,8 +345,12 @@ export const useStudioCanvasModel = (
     () =>
       pageData === undefined || compiled.settings === undefined
         ? (compiled.problem ?? "STUDIO_CANVAS_COMPILED_PENDING: no compiled version to draw from")
-        : storedDataProblem(catalogue, pageData),
-    [catalogue, pageData, compiled],
+        : storedDataProblem(
+            catalogue,
+            pageData,
+            layout && shell !== undefined ? storedShellReservations(shell) : undefined,
+          ),
+    [catalogue, pageData, compiled, layout, shell],
   );
   useEffect(() => {
     if (
@@ -340,6 +394,8 @@ export const useStudioCanvasModel = (
       registry,
       config,
       slotsKey,
+      owner: layout ? ("layout" as const) : ("page" as const),
+      open: layout ? layoutOpen : page !== undefined,
       page,
       steps,
       step,
@@ -351,6 +407,7 @@ export const useStudioCanvasModel = (
       defaultZoneKey,
       slotOfZoneKey,
       zoneKeyOfSlot,
+      contentTargets,
       items,
       originalItems,
       compiledSettings: compiled.settings,
@@ -365,6 +422,8 @@ export const useStudioCanvasModel = (
       registry,
       config,
       slotsKey,
+      layout,
+      layoutOpen,
       page,
       steps,
       step,
@@ -376,6 +435,7 @@ export const useStudioCanvasModel = (
       defaultZoneKey,
       slotOfZoneKey,
       zoneKeyOfSlot,
+      contentTargets,
       items,
       originalItems,
       compiled.settings,
