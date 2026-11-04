@@ -2,15 +2,12 @@ import {
   flowTaskRegistry,
   readSourceItem,
   reservedItemPropKeys,
-  sourceItemChildSlots,
   sourcePageRootSlots,
-  sourcePageZones,
   type ApplicationRootId,
   type ApplicationSourceDocument,
   type ImmutablePlatformBlockCatalogue,
   type SourceItem,
   type SourcePageData,
-  isStudioDraftSnapshot,
 } from "@vortex/platform/schema";
 
 /**
