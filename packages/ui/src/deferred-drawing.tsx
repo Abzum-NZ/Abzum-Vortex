@@ -16,7 +16,7 @@ import {
  * scroll). A live page supplies none, so it draws everything.
  */
 export type DeferredDrawing = Readonly<{
-  near: (element: Element) => boolean;
+  near: (element: Element, holder: string) => boolean;
   subscribe: (listener: () => void) => () => void;
   /** Called before slots are drawn: notes what the person is looking at. */
   anchor: () => void;
@@ -32,15 +32,21 @@ export const DeferredDrawingProvider = DeferredDrawingContext.Provider;
 const WAITING_SLOT: CSSProperties = { minHeight: "10rem" };
 
 /**
- * A block's slot on the editor's canvas. Puck draws and registers every block of a slot it is given
+ * A block's slot on the editor's canvas (`holder` is the block). Puck draws and registers every block of a slot it is given
  * to draw, which for a page of hundreds of blocks is most of the time it takes to open: a slot is
  * drawn once it comes near what the canvas shows (or holds the selected block), and then stays
  * drawn. A page that is not being edited draws every slot at once.
  */
 export function DeferredSlot({
+  holder,
   forced,
   children,
-}: Readonly<{ forced: boolean; children: ReactNode }>): ReactNode {
+}: Readonly<{
+  /** The placement whose slot this is. */
+  holder: string;
+  forced: boolean;
+  children: ReactNode;
+}>): ReactNode {
   const deferral = useContext(DeferredDrawingContext);
   const [placed, setPlaced] = useState(deferral === null);
   const waiting = useRef<HTMLDivElement>(null);
@@ -57,7 +63,7 @@ export function DeferredSlot({
     if (drawn || deferral === null) return;
     const check = () => {
       const element = waiting.current;
-      if (element === null || !deferral.near(element)) return;
+      if (element === null || !deferral.near(element, holder)) return;
       deferral.anchor();
       setPlaced(true);
     };

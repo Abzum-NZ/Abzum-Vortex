@@ -109,6 +109,7 @@ import { LinkInput } from "./controls/link-input";
 import { NumberInput } from "./controls/number-input";
 import { RichTextInput } from "./controls/rich-text-input";
 import { Tabs } from "./controls/tabs";
+import { RevealedSlotContext } from "./controls/revealed-slot";
 import { AttachmentInput } from "./controls/attachment-input";
 import { ConnectionSecretInput } from "./controls/connection-secret-input";
 import { TableInput } from "./controls/table-input";
@@ -264,6 +265,20 @@ export const createSelectedPlacementStore = (): SelectedPlacementStore => {
     },
   };
 };
+
+/**
+ * The keys of the repeating slots (tabs) Puck has indexed under the config it holds, or undefined
+ * where every slot is drawn (a live page). The editor supplies it: a slot Puck has not indexed
+ * yet is drawn as an unknown drop zone, which Puck warns about, so it is drawn one render later.
+ */
+const IndexedSlotsContext = createContext<ReadonlySet<string> | undefined>(undefined);
+
+export function IndexedSlotsProvider({
+  keys,
+  children,
+}: Readonly<{ keys: ReadonlySet<string> | undefined; children: ReactNode }>) {
+  return <IndexedSlotsContext.Provider value={keys}>{children}</IndexedSlotsContext.Provider>;
+}
 
 /** A live page selects nothing. */
 const NO_SELECTION: SelectedPlacementStore = createSelectedPlacementStore();
@@ -429,14 +444,19 @@ const holdsContent = (slot: PlatformBlockRelease["slots"][number]): boolean =>
 const declaredSlots = (
   release: PlatformBlockRelease,
   settings: PlacementSettings,
-): readonly Readonly<{ key: string; label: string; required: boolean }>[] =>
+): readonly Readonly<{ key: string; label: string; required: boolean; repeating: boolean }>[] =>
   release.slots.flatMap((slot) =>
     (slot.repeats === undefined
       ? [slot.key]
       : repeatableSlotItemIdentities(slot, settings).map((identity) =>
           repeatableSlotKey(slot.key, identity),
         )
-    ).map((key) => ({ key, label: slot.label, required: slot.required || holdsContent(slot) })),
+    ).map((key) => ({
+      key,
+      label: slot.label,
+      required: slot.required || holdsContent(slot),
+      repeating: slot.repeats !== undefined,
+    })),
   );
 
 /**
@@ -574,6 +594,7 @@ function PlacementBlockContent(props: PlacementBlockProps): ReactElement {
   );
   const [revealedSlot, setRevealedSlot] = useState<string | undefined>(undefined);
   if (selectionSlot !== undefined && selectionSlot !== revealedSlot) setRevealedSlot(selectionSlot);
+  const indexedSlots = useContext(IndexedSlotsContext);
   const rootSlotGap = useContext(RootSlotGapContext);
   const breakpoint = metadataIn.breakpoint;
   const responsive = breakpoint === undefined;
@@ -623,25 +644,10 @@ function PlacementBlockContent(props: PlacementBlockProps): ReactElement {
 
   const slotStyle: CSSProperties = { gap: slotGapFor(release, settings, rootSlotGap, location) };
   const declared = declaredSlots(release, settings);
-  // The builder draws the tab that holds the selected block (and keeps it until a block of another
-  // tab is selected), because its tab strip takes no pointer: through the block's own projected
-  // active tab.
-  const family = release.slots.find((slot) => slot.repeats !== undefined)?.key;
-  const revealed =
-    puck.isEditing &&
-    Implementation === Tabs &&
-    family !== undefined &&
-    declared.some((slot) => slot.key === revealedSlot)
-      ? revealedSlot?.slice(family.length + 1)
-      : undefined;
-  const inputs: PlatformBlockRuntimeInputs =
-    revealed === undefined
-      ? parsedInputs
-      : { ...parsedInputs, data: { status: "ready", values: { activeTab: revealed } } };
   const slots: Record<string, ReactNode> = {};
   const latestSlots = useRef<Record<string, SlotComponent>>({});
   const stableSlots = useRef<Record<string, SlotComponent>>({});
-  for (const { key: slotKey, label: slotLabel, required: slotRequired } of declared) {
+  for (const { key: slotKey, label: slotLabel, required: slotRequired, repeating } of declared) {
     const Slot = componentProps[slotKey];
     const hostNode = componentProps.slotNodes?.[slotKey];
     if (isSlotComponent(Slot)) {
@@ -652,8 +658,8 @@ function PlacementBlockContent(props: PlacementBlockProps): ReactElement {
     slots[slotKey] =
       hostNode !== undefined ? (
         hostNode
-      ) : StableSlot !== undefined ? (
-        <DeferredSlot forced={!puck.isEditing || holdsSelected || selectedHere}>
+      ) : StableSlot !== undefined && (!repeating || indexedSlots?.has(slotKey) !== false) ? (
+        <DeferredSlot holder={placementId} forced={holdsSelected || selectedHere}>
           <StableSlot
             className={slotClassName(puck.isEditing, slotRequired, selectedHere)}
             style={puck.isEditing ? { ...slotStyle, ...slotLabelStyle(slotLabel) } : slotStyle}
@@ -711,36 +717,38 @@ function PlacementBlockContent(props: PlacementBlockProps): ReactElement {
       {visible ? (
         <FlowRuntimeStateContext.Provider value={metadataIn.runtimeState}>
           <PlacementReactionsContext.Provider value={reactions}>
-            <Implementation
-              {...inputs}
-              placementId={placementId}
-              settings={settings}
-              slots={slots}
-              breakpoint={activeBreakpoint}
-              responsiveLayout={responsive}
-              metadata={release}
-              fieldInputControlReleases={fieldInputControlReleases}
-              themeTokens={themeTokens}
-              {...availability}
-              {...(metadataIn.projectedNavigation === undefined
-                ? {}
-                : { projectedNavigation: metadataIn.projectedNavigation })}
-              {...(metadataIn.resolvePageHref === undefined
-                ? {}
-                : { resolvePageHref: metadataIn.resolvePageHref })}
-              {...(metadataIn.currentPageId === undefined
-                ? {}
-                : { currentPageId: metadataIn.currentPageId })}
-              {...(metadataIn.componentBundleOrigin === undefined
-                ? {}
-                : { componentBundleOrigin: metadataIn.componentBundleOrigin })}
-              {...(metadataIn.applicationSearch === undefined
-                ? {}
-                : { applicationSearch: metadataIn.applicationSearch })}
-              {...(metadataIn.applicationSearchPageSubject === undefined
-                ? {}
-                : { applicationSearchPageSubject: metadataIn.applicationSearchPageSubject })}
-            />
+            <RevealedSlotContext.Provider value={puck.isEditing ? revealedSlot : undefined}>
+              <Implementation
+                {...parsedInputs}
+                placementId={placementId}
+                settings={settings}
+                slots={slots}
+                breakpoint={activeBreakpoint}
+                responsiveLayout={responsive}
+                metadata={release}
+                fieldInputControlReleases={fieldInputControlReleases}
+                themeTokens={themeTokens}
+                {...availability}
+                {...(metadataIn.projectedNavigation === undefined
+                  ? {}
+                  : { projectedNavigation: metadataIn.projectedNavigation })}
+                {...(metadataIn.resolvePageHref === undefined
+                  ? {}
+                  : { resolvePageHref: metadataIn.resolvePageHref })}
+                {...(metadataIn.currentPageId === undefined
+                  ? {}
+                  : { currentPageId: metadataIn.currentPageId })}
+                {...(metadataIn.componentBundleOrigin === undefined
+                  ? {}
+                  : { componentBundleOrigin: metadataIn.componentBundleOrigin })}
+                {...(metadataIn.applicationSearch === undefined
+                  ? {}
+                  : { applicationSearch: metadataIn.applicationSearch })}
+                {...(metadataIn.applicationSearchPageSubject === undefined
+                  ? {}
+                  : { applicationSearchPageSubject: metadataIn.applicationSearchPageSubject })}
+              />
+            </RevealedSlotContext.Provider>
             <InlineMessage placementId={`retry:${placementId}`} />
           </PlacementReactionsContext.Provider>
         </FlowRuntimeStateContext.Provider>
@@ -755,7 +763,7 @@ function PlacementBlockContent(props: PlacementBlockProps): ReactElement {
 
 type VortexComponentConfig = ComponentConfig<Record<string, unknown>>;
 
-const releasesByRendererKey = (registry: PlatformComponentRegistry) => {
+export const releasesByRendererKey = (registry: PlatformComponentRegistry) => {
   const releaseByKey = new Map<string, PlatformBlockRelease>();
   for (const { metadata } of registry.list()) {
     if (releaseByKey.has(metadata.rendererKey))
@@ -815,7 +823,9 @@ export function withRepeatingSlots(
     const declarations = release.slots.filter((slot) => slot.repeats !== undefined);
     // Puck lists a block's slots in the reverse of its fields' order (it puts each slot field
     // first in turn), so the keys are declared last first, and the Outline shows the tabs in the
-    // order the page holds them.
+    // order the page holds them (with blocks that hold the same keys in different orders, the first
+    // block's order). If a Puck upgrade lists the slots in field order, drop the reverse: the "listed
+    // in the order" check of walks/STUDIO-CANVAS-TABS/tabs.cjs catches it.
     for (const key of Object.keys(fields))
       if (declarations.some((slot) => key.startsWith(slot.key + "_"))) delete fields[key];
     for (const key of [...keys].reverse()) {

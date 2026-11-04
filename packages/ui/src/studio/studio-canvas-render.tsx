@@ -2,7 +2,11 @@
 
 import { Item, ItemContent, ItemDescription, ItemTitle } from "../components/item";
 import { Component, useMemo, type ReactElement, type ReactNode } from "react";
-import { placementWrapperGeometry, withRepeatingSlots } from "../puck-config";
+import {
+  placementWrapperGeometry,
+  releasesByRendererKey,
+  withRepeatingSlots,
+} from "../puck-config";
 import type { ComponentConfig, Config, Field, PuckContext } from "@puckeditor/core";
 import {
   canonicalResponsivePlacement,
@@ -468,9 +472,13 @@ function CanvasBlock({
   );
 }
 
+/** By base config and catalogue, then by root slots: the latest config built with the repeating keys then held. */
 const canvasConfigs = new WeakMap<
   Config,
-  WeakMap<ImmutablePlatformBlockCatalogue, Map<string, Config>>
+  WeakMap<
+    ImmutablePlatformBlockCatalogue,
+    Map<string, Readonly<{ repeatingKey: string; config: Config }>>
+  >
 >();
 
 /**
@@ -495,13 +503,12 @@ export const studioCanvasConfig = (
   repeating: ReadonlyMap<string, readonly string[]>,
 ): Config => {
   const slotKeys = slots.map(([key]) => key);
-  const slotsKey = JSON.stringify([slots, [...repeating]]);
-  let canvas = canvasConfigs.get(baseConfig)?.get(catalogue)?.get(slotsKey);
-  if (canvas !== undefined) return canvas;
+  const slotsKey = JSON.stringify(slots);
+  const repeatingKey = JSON.stringify([...repeating]);
+  const cached = canvasConfigs.get(baseConfig)?.get(catalogue)?.get(slotsKey);
+  if (cached?.repeatingKey === repeatingKey) return cached.config;
   const config = withRepeatingSlots(registry, baseConfig, repeating);
-  const releaseByKey = new Map(
-    registry.list().map(({ metadata }) => [metadata.rendererKey, metadata]),
-  );
+  const releaseByKey = releasesByRendererKey(registry);
   const choices = studioPaletteChoices(catalogue, catalogue.releases);
   const notCreatable = new Set(
     choices
@@ -562,7 +569,7 @@ export const studioCanvasConfig = (
       },
     ]),
   );
-  canvas = {
+  const canvas = {
     ...config,
     components,
     // The application frame is the canvas root: it draws the theme, appearance and shell around the
@@ -584,8 +591,10 @@ export const studioCanvasConfig = (
     },
   } as unknown as Config;
   const byCatalogue = canvasConfigs.get(baseConfig) ?? new WeakMap();
-  const bySlots = byCatalogue.get(catalogue) ?? new Map<string, Config>();
-  bySlots.set(slotsKey, canvas);
+  const bySlots =
+    byCatalogue.get(catalogue) ??
+    new Map<string, Readonly<{ repeatingKey: string; config: Config }>>();
+  bySlots.set(slotsKey, { repeatingKey, config: canvas });
   byCatalogue.set(catalogue, bySlots);
   canvasConfigs.set(baseConfig, byCatalogue);
   return canvas;

@@ -1,5 +1,6 @@
 "use client";
 
+import { IndexedSlotsProvider } from "../puck-config";
 import {
   Puck,
   createUsePuck,
@@ -678,6 +679,12 @@ export function StudioPuckProvider({
     };
   }
   const initial = opened.current.data;
+  // The repeating slots (tabs) Puck has indexed: a slot is drawn only once its zone is known.
+  const [indexedJson, setIndexedJson] = useState<string | undefined>(undefined);
+  const indexedSlots = useMemo(
+    () => (indexedJson === undefined ? undefined : new Set(JSON.parse(indexedJson) as string[])),
+    [indexedJson],
+  );
   const refusal = refused?.area === model.area ? refused.message : "";
   const value = useMemo(
     (): StudioCanvasContextValue => ({ input, model, refusal, frameDocument }),
@@ -692,42 +699,46 @@ export function StudioPuckProvider({
           The Outline and Blocks regions repeat it on their own roots: below the wide breakpoint they
           are drawn in a Sheet outside this element. */}
           <div className="contents" style={studioPuckStyle}>
-            <Puck
-              key={model.slotsKey}
-              config={config}
-              data={initial}
-              onChange={change}
-              onAction={onAction}
-              iframe={IFRAME}
-              viewports={studioViewports}
-              ui={opened.current.ui}
-              // Puck's own wrapper fills the workspace, so the canvas has the height of its well.
-              height="100%"
-              overrides={studioCanvasOverrides}
-              metadata={metadata}
-              permissions={permissions}
-              dictionary={studioPuckWords}
-            >
-              <StudioPuckSync
+            <IndexedSlotsProvider keys={indexedSlots}>
+              <Puck
+                key={model.slotsKey}
                 config={config}
-                frameDocument={frameDocument}
-                data={shown}
-                resync={resync}
-                area={model.area}
-                dragGate={dragGate}
-                canvasShown={input.canvasShown}
-                arrangeGrid={input.arrangeGrid === true}
-                onArrangeGrid={input.onArrangeGrid}
-                onArrangeableGrids={input.onArrangeableGrids}
-                arrangeable={model.arrangeable}
-                selectedAlias={input.selectedPlacementAlias}
-                synchronizing={synchronizing}
-                deriving={deriving}
-                showSelection={showSelection}
-                getPuckRef={getPuckRef}
-              />
-              <div className="flex h-full min-h-0 flex-col">{children}</div>
-            </Puck>
+                data={initial}
+                onChange={change}
+                onAction={onAction}
+                iframe={IFRAME}
+                viewports={studioViewports}
+                ui={opened.current.ui}
+                // Puck's own wrapper fills the workspace, so the canvas has the height of its well.
+                height="100%"
+                overrides={studioCanvasOverrides}
+                metadata={metadata}
+                permissions={permissions}
+                dictionary={studioPuckWords}
+              >
+                <StudioPuckSync
+                  config={config}
+                  repeatingKeys={model.repeatingKeys}
+                  onIndexed={setIndexedJson}
+                  frameDocument={frameDocument}
+                  data={shown}
+                  resync={resync}
+                  area={model.area}
+                  dragGate={dragGate}
+                  canvasShown={input.canvasShown}
+                  arrangeGrid={input.arrangeGrid === true}
+                  onArrangeGrid={input.onArrangeGrid}
+                  onArrangeableGrids={input.onArrangeableGrids}
+                  arrangeable={model.arrangeable}
+                  selectedAlias={input.selectedPlacementAlias}
+                  synchronizing={synchronizing}
+                  deriving={deriving}
+                  showSelection={showSelection}
+                  getPuckRef={getPuckRef}
+                />
+                <div className="flex h-full min-h-0 flex-col">{children}</div>
+              </Puck>
+            </IndexedSlotsProvider>
           </div>
         </StudioCanvasChannelContext.Provider>
       </StudioCanvasContext.Provider>
@@ -781,6 +792,8 @@ const restoreFocus = (final: boolean): void => {
  */
 function StudioPuckSync({
   config,
+  repeatingKeys,
+  onIndexed,
   frameDocument,
   data,
   resync,
@@ -799,6 +812,10 @@ function StudioPuckSync({
 }: Readonly<{
   /** The config the page on the canvas is drawn with. */
   config: Config;
+  /** The repeating slot keys that config declares. */
+  repeatingKeys: readonly string[];
+  /** Told the repeating slot keys Puck has indexed. */
+  onIndexed: (keys: string) => void;
   frameDocument: Document | null;
   data: Data;
   /** The page and step on the canvas. */
@@ -949,6 +966,8 @@ function StudioPuckSync({
       !sameCompositionValue(appState.data.content, data.content, true) ||
       !sameCompositionValue(appState.data.root, data.root, true);
     if (changed || (walked.current !== held && !appState.ui.isDragging)) walk(data);
+    // Puck has indexed the data under this config, so its tabs may be drawn.
+    if (walked.current === held) onIndexed(JSON.stringify(repeatingKeys));
     select(wantedRef.current);
     // The draft is shown again every time the canvas comes into view, so nothing Puck held while
     // it was hidden survives.

@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   definitionLimits,
   immutablePlatformBlockCatalogueSchema,
-  sourceItemTree,
+  sourceItemChildSlots,
   sourcePageDataAt,
   sourcePageRootSlots,
   sourcePageSlotAddresses,
@@ -36,6 +36,9 @@ import { studioCanvasConfig } from "./studio-canvas-render";
 
 type SourcePage = ApplicationSourceDocument["body"]["pages"][number];
 
+/** How long the keys of a page's tabs stay unchanged before the canvas config follows them (ms). */
+const REPEATING_KEYS_PAUSE = 300;
+
 /** What Puck holds before a page is drawn: no page, so no blocks. */
 const NO_COMPONENTS = { components: {} } as unknown as Config;
 
@@ -51,6 +54,8 @@ export type StudioCanvasModel = Readonly<{
   config: Config;
   /** The keys of the root slots the config declares: Puck is opened again when they change. */
   slotsKey: string;
+  /** The keys of the repeating slots (tabs) the config declares. */
+  repeatingKeys: readonly string[];
   /** What the canvas shows the blocks of: the open page, or the selected layout (its blocks are Puck's content). */
   owner: "page" | "layout";
   /** Whether the page or layout to show exists in the draft. */
@@ -98,6 +103,8 @@ export type StudioCanvasModel = Readonly<{
   editable: boolean;
   /** Whether a data grid of the page has columns the person can arrange. */
   arrangeable: boolean;
+  /** The blocks that are a data grid or hold one: the slots grid arranging draws at once. */
+  gridHolders: ReadonlySet<string>;
 }>;
 
 export const useStudioCanvasModel = (
@@ -319,15 +326,29 @@ export const useStudioCanvasModel = (
   // Puck is opened again only when the set of root slots changes; a label alone changes the config.
   const slotsKey = useMemo(() => rootSlots.map(([key]) => key).join(" "), [rootSlots]);
   // The keys of the repeating slots the page holds (a tab is `tab_<key>`), by renderer key: Puck
-  // finds a slot only through the config's static fields, so the config declares these. Kept by
-  // value, so the config changes only when a block gains or loses a key.
-  const repeatingJson = JSON.stringify(
-    [...repeatingSlotKeys(catalogue, items)].map(([renderer, keys]) => [renderer, [...keys]]),
+  // finds a slot only through the config's static fields, so the config declares these. Read when
+  // the page's blocks change and kept by value. A key is an identity typed one character at a time,
+  // so a change of keys reaches the config after a pause in typing (at once for another page), not
+  // once per character: each change of config walks the page again.
+  const heldRepeatingJson = useMemo(
+    () => JSON.stringify([...repeatingSlotKeys(catalogue, items)]),
+    [catalogue, items],
   );
+  const [repeatingState, setRepeatingState] = useState({ area, json: heldRepeatingJson });
+  if (repeatingState.area !== area) setRepeatingState({ area, json: heldRepeatingJson });
+  useEffect(() => {
+    if (repeatingState.json === heldRepeatingJson) return;
+    const timer = window.setTimeout(
+      () => setRepeatingState({ area, json: heldRepeatingJson }),
+      REPEATING_KEYS_PAUSE,
+    );
+    return () => window.clearTimeout(timer);
+  }, [area, heldRepeatingJson, repeatingState.json]);
   const repeating = useMemo(
-    () => new Map(JSON.parse(repeatingJson) as [string, string[]][]),
-    [repeatingJson],
+    () => new Map(JSON.parse(repeatingState.json) as [string, string[]][]),
+    [repeatingState.json],
   );
+  const repeatingKeys = useMemo(() => [...repeating.values()].flat(), [repeating]);
   // The application frame is the canvas root, so the page renders in its outlets inside the iframe.
   const config = useMemo(
     () =>
@@ -381,18 +402,28 @@ export const useStudioCanvasModel = (
     () => (data === undefined ? undefined : puckDataForBreakpoint(data, breakpoint)),
     [data, breakpoint],
   );
-  const arrangeable = useMemo(
-    () =>
-      sourceItemTree(items).some((item) => {
+  // The blocks that are a data grid or hold one at any depth: while grids are arranged only the
+  // slots of these are drawn at once.
+  const gridHolders = useMemo(() => {
+    const holders = new Set<string>();
+    const visit = (list: readonly SourceItem[]): boolean => {
+      let any = false;
+      for (const item of list) {
         const settings = compiled.settings?.[item.props.id];
-        return (
+        let holds =
           settings !== undefined &&
           studioCanvasGridSetup(item.props, settings, storedItemRelease(catalogue, item)) !==
-            undefined
-        );
-      }),
-    [items, catalogue, compiled],
-  );
+            undefined;
+        for (const [, children] of sourceItemChildSlots(item)) if (visit(children)) holds = true;
+        if (holds) holders.add(item.props.id);
+        any ||= holds;
+      }
+      return any;
+    };
+    visit(items);
+    return holders;
+  }, [items, catalogue, compiled]);
+  const arrangeable = gridHolders.size > 0;
   const chooseStep = useCallback(
     (next: string) => {
       if (pageAlias !== undefined) setChosen({ page: pageAlias, step: next });
@@ -406,6 +437,7 @@ export const useStudioCanvasModel = (
       registry,
       config,
       slotsKey,
+      repeatingKeys,
       owner: layout ? ("layout" as const) : ("page" as const),
       open: layout ? layoutOpen : page !== undefined,
       page,
@@ -428,12 +460,14 @@ export const useStudioCanvasModel = (
       readOnlyCause,
       editable,
       arrangeable,
+      gridHolders,
     }),
     [
       catalogue,
       registry,
       config,
       slotsKey,
+      repeatingKeys,
       layout,
       layoutOpen,
       page,
@@ -456,6 +490,7 @@ export const useStudioCanvasModel = (
       readOnlyCause,
       editable,
       arrangeable,
+      gridHolders,
     ],
   );
 };

@@ -122,6 +122,19 @@ export type StudioPuckSelector = NonNullable<UiState["itemSelector"]>;
 /** Puck's name of the page's default zone, which holds the blocks of a page in the default frame. */
 const ROOT_ZONE = "root:default-zone";
 
+const repeatingReleases = new WeakMap<ImmutablePlatformBlockCatalogue, boolean>();
+const hasRepeatingRelease = (catalogue: ImmutablePlatformBlockCatalogue): boolean => {
+  let has = repeatingReleases.get(catalogue);
+  if (has === undefined)
+    repeatingReleases.set(
+      catalogue,
+      (has = catalogue.releases.some((release) =>
+        release.slots.some((slot) => slot.repeats !== undefined),
+      )),
+    );
+  return has;
+};
+
 /**
  * The keys of the repeating slots the items hold (a tab is stored as `tab_<key>`), by renderer key,
  * in the order the items hold them. The canvas config declares a slot field for each, because Puck
@@ -132,6 +145,7 @@ export const repeatingSlotKeys = (
   items: readonly SourceItem[],
 ): ReadonlyMap<string, readonly string[]> => {
   const found = new Map<string, Set<string>>();
+  if (!hasRepeatingRelease(catalogue)) return new Map();
   for (const item of sourceItemTree(items)) {
     const release = storedItemRelease(catalogue, item);
     if (release === undefined || release.slots.every((slot) => slot.repeats === undefined))

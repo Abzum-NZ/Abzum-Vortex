@@ -14,6 +14,7 @@ import {
 } from "react";
 import { isElement, isHtmlElement } from "../lib/dom";
 import { DeferredDrawingProvider, type DeferredDrawing } from "../deferred-drawing";
+import { slotGapLength } from "../layout-styles";
 import { PagePuckRenderer, type PagePuckRendererProps } from "../page-puck-renderer";
 import {
   createSelectedPlacementStore,
@@ -28,7 +29,11 @@ import { studioCanvasMetadata, useStudioCanvasChannel } from "./studio-canvas-me
 import { studioCanvasVisible, useStudioCanvasView } from "./studio-canvas-scale";
 import { useStudioScreen } from "./studio-canvas-screen";
 import { studioPuckIframeCss } from "./studio-puck-style";
-import { useStudioCanvasDragging, useStudioFrameDocumentSetter } from "./studio-puck-provider";
+import {
+  useStudioCanvas,
+  useStudioCanvasDragging,
+  useStudioFrameDocumentSetter,
+} from "./studio-puck-provider";
 
 const resolvePageHref = () => "#";
 
@@ -61,27 +66,22 @@ function SelectedBlock({ children }: Readonly<{ children: ReactNode }>) {
   // The blocks that hold the selected one, nearest first, each with the key of its slot the
   // selection is in (a block of tabs shows the tab that holds it).
   const holders = usePuckSelector((state) => {
-    const chain: string[] = [];
+    const chain: [id: string, slot: string][] = [];
     let child = selected;
     let parent = child === undefined ? undefined : state.getParentById(child);
     while (child !== undefined && parent !== undefined && parent !== null) {
       const zone = state.getSelectorForId(child)?.zone ?? "";
-      chain.push(parent.props.id + "\n" + zone.slice(zone.indexOf(":") + 1));
+      chain.push([parent.props.id, zone.slice(zone.indexOf(":") + 1)]);
       child = parent.props.id;
       parent = state.getParentById(child);
     }
-    return chain.join("\n\n");
+    return JSON.stringify(chain);
   });
   useLayoutEffect(
     () =>
       store.set(
         selected,
-        holders === ""
-          ? []
-          : holders.split("\n\n").map((entry) => {
-              const [id = "", slot = ""] = entry.split("\n");
-              return { id, slot };
-            }),
+        (JSON.parse(holders) as [string, string][]).map(([id, slot]) => ({ id, slot })),
       ),
     [store, selected, holders],
   );
@@ -98,6 +98,14 @@ type RootSlot = (props?: { className?: string; style?: CSSProperties }) => React
  */
 const OUTLET_STYLE: CSSProperties = { gap: "inherit" };
 const SLOT_STYLE: CSSProperties = { display: "flex", flexDirection: "column", gap: "inherit" };
+/**
+ * A layout's top level is Puck's default zone, which takes no style from Studio: the blocks stacked
+ * in it are spaced by the page root's gap, as the running frame spaces them (see the layout styles).
+ */
+const LAYOUT_OUTLET_STYLE: CSSProperties = {
+  ...OUTLET_STYLE,
+  ["--vortex-layout-gap" as string]: slotGapLength(PAGE_ROOT_GAP),
+};
 
 /**
  * One content slot of the page on the canvas: Studio's own element around the slot's content (Puck's
@@ -110,9 +118,12 @@ function CanvasSlot({
   name,
   label,
   breakpoint,
+  layout = false,
 }: Readonly<{
   content: ReactNode;
   name: string | undefined;
+  /** The top level of a layout (not of a page). */
+  layout?: boolean;
   /** What the shell calls the slot; each empty slot is named for it. */
   label: string;
   breakpoint: Breakpoint;
@@ -137,7 +148,8 @@ function CanvasSlot({
       {...(breakpoint === "desktop" ? {} : { "data-vortex-view-only": "" })}
       aria-label={empty ? `Empty ${label}` : undefined}
       className={empty ? "relative min-h-48 min-w-32" : "min-h-24"}
-      style={OUTLET_STYLE}
+      {...(layout ? { "data-vortex-layout-root": "" } : {})}
+      style={layout ? LAYOUT_OUTLET_STYLE : OUTLET_STYLE}
     >
       {content}
       {empty && (
@@ -282,6 +294,7 @@ export function StudioCanvasRoot({
               name={undefined}
               label={studio.layout ? "layout" : "page"}
               breakpoint={breakpoint}
+              layout={studio.layout}
             />
           ) : (
             rootSlots.map((name) => (
@@ -519,9 +532,12 @@ export function StudioCanvasIframe({
   // well's and the page's own scrolls tell the slots that wait, once per frame.
   const viewRef = useRef(view);
   viewRef.current = view;
+  const { gridHolders } = useStudioCanvas().model;
   const interactive = previewMode === "interactive";
   const interactiveRef = useRef(interactive);
   interactiveRef.current = interactive;
+  const gridHoldersRef = useRef(gridHolders);
+  gridHoldersRef.current = gridHolders;
   const documentRef = useRef(frameDocument);
   documentRef.current = frameDocument;
   const waiting = useRef(new Set<() => void>());
@@ -530,10 +546,10 @@ export function StudioCanvasIframe({
   const anchored = useRef<{ element: Element; top: number } | null>(null);
   const deferral = useMemo(
     (): DeferredDrawing => ({
-      near: (element) => {
-        // While grids are arranged their column controls need the keyboard: every slot is drawn
-        // (a one-time cost, the page as it was before slots waited).
-        if (interactiveRef.current) return true;
+      near: (element, holder) => {
+        // While grids are arranged their column controls need the keyboard: the slots that hold a
+        // grid are drawn at once; the others wait as they do when blocks are edited.
+        if (interactiveRef.current && gridHoldersRef.current.has(holder)) return true;
         const visible = studioCanvasVisible(viewRef.current);
         const box = element.getBoundingClientRect();
         // Until the well has laid the frame out, the first screens are what is near.

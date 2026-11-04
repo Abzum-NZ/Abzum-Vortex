@@ -80,6 +80,30 @@ import {
 import { FORM_CONTAINER_KEY, NESTED_FORM_REASON } from "./application-composition-forms";
 import type { StudioPlacementDescriber } from "./semantic-outline";
 
+/**
+ * What the author calls the entry of a repeating slot (a tab) that is stored under `slotKey`: its
+ * label, else its key, as the block itself shows it.
+ */
+const repeatingEntryName = (
+  item: SourceItem,
+  declaration: Readonly<{
+    key: string;
+    repeats?: Readonly<{ items: string; identity: string }> | undefined;
+  }>,
+  slotKey: string,
+): string => {
+  const identity = slotKey.slice(declaration.key.length + 1);
+  const entries = declaration.repeats === undefined ? [] : item.props[declaration.repeats.items];
+  const entry = (Array.isArray(entries) ? entries : []).find(
+    (candidate: unknown) =>
+      typeof candidate === "object" &&
+      candidate !== null &&
+      (candidate as Record<string, unknown>)[declaration.repeats!.identity] === identity,
+  ) as Record<string, unknown> | undefined;
+  const label = entry?.label;
+  return typeof label === "string" && label.trim().length > 0 ? label : identity;
+};
+
 const blockCounts = new WeakMap<ImmutablePlatformBlockCatalogue, WeakMap<SourceItem, number>>();
 const countBlocks = (catalogue: ImmutablePlatformBlockCatalogue, items: readonly SourceItem[]) => {
   let total = 0;
@@ -275,7 +299,7 @@ export const addPlaces = (
                 id: `${area}|${parentAlias}|${slotKey}`,
                 area,
                 destination: { kind: "child", parentAlias, slotKey },
-                label: `${describePlacement?.({ block: item.props.vortex.block, settings: settingsOf(item) }) ?? `${release.name} ${ordinal}`}: ${declaration.label}${declaration.repeats === undefined ? "" : ` (${slotKey.slice(declaration.key.length + 1)})`}${outlet === undefined ? "" : ` (page content: ${outlet})`}`,
+                label: `${describePlacement?.({ block: item.props.vortex.block, settings: settingsOf(item) }) ?? `${release.name} ${ordinal}`}: ${declaration.label}${declaration.repeats === undefined ? "" : ` (${repeatingEntryName(item, declaration, slotKey)})`}${outlet === undefined ? "" : ` (page content: ${outlet})`}`,
                 depth: hostLevels + childSteps.length,
                 placed,
                 choices:
