@@ -26,7 +26,7 @@ import { puckNeighbourOf, puckSelectorOf, studioBlockName } from "./studio-canva
 import { StudioCanvasMore, type StudioMoreChoice } from "./studio-canvas-more";
 import { studioCanvasVisible, useStudioCanvasView } from "./studio-canvas-scale";
 import { StudioCanvasIframe } from "./studio-canvas-root";
-import { useStudioScreen } from "./studio-canvas-screen";
+import { studioCrossSlotReason, useStudioScreen } from "./studio-canvas-screen";
 import { useStudioCanvasChannel } from "./studio-canvas-metadata";
 import { useStudioCanvas, useStudioCanvasDragging } from "./studio-puck-provider";
 import { studioFieldTypes } from "./studio-puck-field-types";
@@ -136,14 +136,14 @@ function StudioActionBar({ id, type }: Readonly<{ id: string; type: string }>) {
     type;
   // Why a forbidden action is unavailable when the draft itself names no reason.
   const knownCause =
-    breakpoint !== "desktop"
-      ? `This is the ${screenLabel.toLowerCase()} view. Change blocks on Desktop.`
-      : model.readOnlyCause !== undefined
-        ? "This page is shown read-only, so its blocks can't be changed here."
-        : !input.canvasShown
-          ? "The canvas is not on show."
-          : input.disabled
-            ? (input.disabledReason ?? "Studio is busy; try again in a moment.")
+    model.readOnlyCause !== undefined
+      ? "This page is shown read-only, so its blocks can't be changed here."
+      : !input.canvasShown
+        ? "The canvas is not on show."
+        : input.disabled
+          ? (input.disabledReason ?? "Studio is busy; try again in a moment.")
+          : breakpoint !== "desktop"
+            ? `This is the ${screenLabel.toLowerCase()} view. Change blocks on Desktop.`
             : undefined;
   const unavailable = knownCause ?? "This isn't available for this block.";
   const reasonFor = (reference: string | undefined, permitted: boolean) =>
@@ -157,7 +157,11 @@ function StudioActionBar({ id, type }: Readonly<{ id: string; type: string }>) {
   const duplicateReason = reasonFor(duplicateNamed, permissions.duplicate);
   const deleteReason = reasonFor(deleteNamed, permissions.delete);
   const moveNamed = studioCanvasPermissionReason(references, id, "drag");
-  const moveReason = reasonFor(moveNamed, permissions.drag);
+  // Move to goes to another slot: a smaller screen keeps only the order within one.
+  const moveReason =
+    breakpoint === "desktop"
+      ? reasonFor(moveNamed, permissions.drag)
+      : (moveNamed ?? (permissions.drag ? studioCrossSlotReason(breakpoint) : unavailable));
   const inverse = view.scale > 0 ? 1 / view.scale : 1;
   const visible = studioCanvasVisible(view);
   // A tooltip stays inside what the well shows, and is the size of the bar on screen.

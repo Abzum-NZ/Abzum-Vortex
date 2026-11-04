@@ -87,6 +87,7 @@ import type { StudioCanvasRecordsReader } from "./use-studio-canvas-records";
 import { useStudioCanvasChannelValue } from "./use-studio-canvas-channel";
 import { studioCanvasReferences } from "./studio-canvas-permissions";
 import { sameCompositionValue } from "./composition-references";
+import { createSlotLockStore, SlotLockProvider, type SlotLockStore } from "../slot-lock";
 
 export { studioScreens, useStudioScreen } from "./studio-canvas-screen";
 export type { StudioCanvasFrame } from "./studio-canvas-projection";
@@ -387,17 +388,29 @@ export function StudioPuckProvider({
   const refusedRemoval = useRef<string | null>(null);
   // The data actions Puck ran since it last reported its data: the report is classified from them.
   const pending = useRef<PuckAction[]>([]);
+  // Where a block sat when it was pressed, so a drag on Tablet or Phone offers only its own slot.
+  const slotLock = useMemo(
+    () =>
+      createSlotLockStore({
+        zoneOf: (alias) => getPuckRef.current?.().getSelectorForId(alias)?.zone,
+        armed: () => latest.current.breakpoint !== "desktop" && latest.current.reorderable,
+      }),
+    [],
+  );
   // Puck's own reader of where a block sits, set by `StudioPuckSync`.
   const getPuckRef = useRef<(() => { getSelectorForId: StudioPuckLocate }) | null>(null);
   // Typing into one field of one block is a run of edits, so one Undo; a new run starts when the
   // focused field or the selected block changes.
   const run = useRef({ focus: null as string | null, selector: "", count: 0 });
   const permitted = model.editable && input.canvasShown;
+  // A drag inside one slot is taken on every screen (it writes that screen's order); the rest of
+  // the page's edits stay on the desktop.
+  const reorderable = model.orderable && input.canvasShown;
   // Settings are not per screen and do not need the page to be arrangeable: only a locked or
   // hidden canvas stops them.
   const settingsPermitted = !input.disabled && input.canvasShown;
-  const latest = useRef({ input, model, permitted, settingsPermitted });
-  latest.current = { input, model, permitted, settingsPermitted };
+  const latest = useRef({ input, model, permitted, reorderable, settingsPermitted, breakpoint });
+  latest.current = { input, model, permitted, reorderable, settingsPermitted, breakpoint };
 
   // Every canvas change goes back through the definition: the Puck actions that made it say what
   // it is (`classifyCanvasChange`), and the one command route places it in the current draft and
@@ -407,7 +420,9 @@ export function StudioPuckProvider({
       input: now,
       model: shown,
       permitted: allowed,
+      reorderable: arrangeAllowed,
       settingsPermitted: settingsAllowed,
+      breakpoint: screen,
     } = latest.current;
     const actions = pending.current;
     pending.current = [];
@@ -441,6 +456,8 @@ export function StudioPuckProvider({
       selected: now.selectedPlacementAlias,
       locate: (alias) => getPuckRef.current?.().getSelectorForId(alias),
       permitted: allowed,
+      reorderable: arrangeAllowed,
+      breakpoint: screen,
       settingsPermitted: settingsAllowed,
     });
     if (classified.kind === "unchanged") return;
@@ -646,13 +663,13 @@ export function StudioPuckProvider({
   const full = definitionLimitReached("compositionPlacements", placed);
   const permissions = useMemo(
     () => ({
-      drag: permitted,
+      drag: reorderable,
       duplicate: permitted && !full,
       delete: permitted,
       edit: settingsPermitted,
       insert: permitted && !full,
     }),
-    [permitted, settingsPermitted, full],
+    [permitted, reorderable, settingsPermitted, full],
   );
   const empty = useMemo((): Data => ({ root: { props: {} }, content: [] }), []);
   const shown = model.shown ?? empty;
@@ -692,42 +709,45 @@ export function StudioPuckProvider({
           The Outline and Blocks regions repeat it on their own roots: below the wide breakpoint they
           are drawn in a Sheet outside this element. */}
           <div className="contents" style={studioPuckStyle}>
-            <Puck
-              key={model.slotsKey}
-              config={config}
-              data={initial}
-              onChange={change}
-              onAction={onAction}
-              iframe={IFRAME}
-              viewports={studioViewports}
-              ui={opened.current.ui}
-              // Puck's own wrapper fills the workspace, so the canvas has the height of its well.
-              height="100%"
-              overrides={studioCanvasOverrides}
-              metadata={metadata}
-              permissions={permissions}
-              dictionary={studioPuckWords}
-            >
-              <StudioPuckSync
+            <SlotLockProvider store={slotLock}>
+              <Puck
+                key={model.slotsKey}
                 config={config}
-                frameDocument={frameDocument}
-                data={shown}
-                resync={resync}
-                area={model.area}
-                dragGate={dragGate}
-                canvasShown={input.canvasShown}
-                arrangeGrid={input.arrangeGrid === true}
-                onArrangeGrid={input.onArrangeGrid}
-                onArrangeableGrids={input.onArrangeableGrids}
-                arrangeable={model.arrangeable}
-                selectedAlias={input.selectedPlacementAlias}
-                synchronizing={synchronizing}
-                deriving={deriving}
-                showSelection={showSelection}
-                getPuckRef={getPuckRef}
-              />
-              <div className="flex h-full min-h-0 flex-col">{children}</div>
-            </Puck>
+                data={initial}
+                onChange={change}
+                onAction={onAction}
+                iframe={IFRAME}
+                viewports={studioViewports}
+                ui={opened.current.ui}
+                // Puck's own wrapper fills the workspace, so the canvas has the height of its well.
+                height="100%"
+                overrides={studioCanvasOverrides}
+                metadata={metadata}
+                permissions={permissions}
+                dictionary={studioPuckWords}
+              >
+                <StudioPuckSync
+                  config={config}
+                  frameDocument={frameDocument}
+                  data={shown}
+                  resync={resync}
+                  area={model.area}
+                  dragGate={dragGate}
+                  canvasShown={input.canvasShown}
+                  arrangeGrid={input.arrangeGrid === true}
+                  onArrangeGrid={input.onArrangeGrid}
+                  onArrangeableGrids={input.onArrangeableGrids}
+                  arrangeable={model.arrangeable}
+                  selectedAlias={input.selectedPlacementAlias}
+                  synchronizing={synchronizing}
+                  deriving={deriving}
+                  showSelection={showSelection}
+                  getPuckRef={getPuckRef}
+                  slotLock={slotLock}
+                />
+                <div className="flex h-full min-h-0 flex-col">{children}</div>
+              </Puck>
+            </SlotLockProvider>
           </div>
         </StudioCanvasChannelContext.Provider>
       </StudioCanvasContext.Provider>
@@ -796,6 +816,7 @@ function StudioPuckSync({
   deriving,
   showSelection,
   getPuckRef,
+  slotLock,
 }: Readonly<{
   /** The config the page on the canvas is drawn with. */
   config: Config;
@@ -820,6 +841,7 @@ function StudioPuckSync({
   showSelection: RefObject<((alias: string | null) => void) | null>;
   /** Lets the provider ask Puck where a block sits. */
   getPuckRef: RefObject<(() => { getSelectorForId: StudioPuckLocate }) | null>;
+  slotLock: SlotLockStore;
 }>) {
   const getPuck = useGetPuck();
   useLayoutEffect(() => {
@@ -964,6 +986,9 @@ function StudioPuckSync({
       select(wantedRef.current);
     }
   }, [dragging]);
+  useEffect(() => {
+    slotLock.drag(dragging);
+  }, [dragging, slotLock]);
   useEffect(() => {
     dragGate.current.dragging = dragging;
     if (dragging) return;

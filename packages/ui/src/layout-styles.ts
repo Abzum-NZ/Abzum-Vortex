@@ -356,8 +356,9 @@ export const LAYOUT_ONLY_STYLES_CSS = `
 [data-vortex-studio-canvas][data-vortex-dragging] .vortex-puck-slot--optional:empty::after {
   content: var(--vortex-slot-label);
 }
-/* A screen the canvas shows view-only takes no drop, so an empty slot draws no box at all. */
-[data-vortex-studio-canvas][data-vortex-view-only] .vortex-puck-slot:empty {
+/* On Tablet and Phone a block only reorders within its slot, so an empty slot, which takes no
+   drop there, draws no box. */
+[data-vortex-studio-canvas][data-vortex-order-only] .vortex-puck-slot:empty {
   display: none;
 }
 [data-vortex-record-actions] > button {

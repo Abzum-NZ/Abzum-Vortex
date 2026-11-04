@@ -31,6 +31,7 @@ import {
   type ReactNode,
 } from "react";
 import type { FlowRuntimeState } from "./flow-runtime/flow-runtime";
+import { LockableSlot, useSlotLockPress } from "./slot-lock";
 import { FlowRuntimeStateContext } from "./flow-runtime/flow-runtime-state-context";
 import { InlineMessage } from "./flow-runtime/inline-message";
 import {
@@ -557,6 +558,7 @@ function PlacementBlockContent(props: PlacementBlockProps): ReactElement {
     () => false,
   );
   const rootSlotGap = useContext(RootSlotGapContext);
+  const pressBlock = useSlotLockPress();
   const breakpoint = metadataIn.breakpoint;
   const responsive = breakpoint === undefined;
   const activeBreakpoint: Breakpoint = breakpoint ?? "desktop";
@@ -623,7 +625,9 @@ function PlacementBlockContent(props: PlacementBlockProps): ReactElement {
         hostNode
       ) : StableSlot !== undefined ? (
         <DeferredSlot forced={!puck.isEditing || holdsSelected || selectedHere}>
-          <StableSlot
+          <LockableSlot
+            Slot={StableSlot}
+            zone={`${placementId}:${slotKey}`}
             className={slotClassName(puck.isEditing, slotRequired, selectedHere)}
             style={puck.isEditing ? { ...slotStyle, ...slotLabelStyle(slotLabel) } : slotStyle}
           />
@@ -659,6 +663,18 @@ function PlacementBlockContent(props: PlacementBlockProps): ReactElement {
   return (
     <div
       ref={puck.dragRef ?? undefined}
+      // Only the innermost block under the pointer is the one a drag starts from.
+      onPointerDown={
+        puck.isEditing
+          ? (event) => {
+              if (
+                (event.target as Element).closest("[data-vortex-placement-id]") ===
+                event.currentTarget
+              )
+                pressBlock(placementId, event.currentTarget.ownerDocument);
+            }
+          : undefined
+      }
       data-vortex-layout-wrapper=""
       data-vortex-placement-id={placementId}
       data-vortex-block-id={release.blockId}

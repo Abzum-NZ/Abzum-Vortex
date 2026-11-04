@@ -119,15 +119,20 @@ export function StudioBlockSetupDialog({
   const initializedData = useRef<{ request: StudioBlockSetupRequest | null; query: string } | null>(
     null,
   );
+  // The one place the data's own settings (a grid's columns) are written: when the chosen query
+  // changes, by the person or by the dialog's own choice. Choosing the data already chosen
+  // changes nothing.
   useEffect(() => {
     if (initializedData.current?.request === request && initializedData.current.query === query)
       return;
     initializedData.current = { request, query };
-    if (request === null || queryChoice === undefined) return;
+    if (request === null) return;
     setValues({
       ...setupDefaults(request.choice),
       ...studioGridDataSettings(request.choice.setup, queryChoice),
     });
+    setGrouped(false);
+    setGroupValues({});
   }, [request, query, queryChoice]);
   const choosePreset = (next: StudioCompositionSettings) => {
     const preset = next["presentation"];
@@ -221,9 +226,6 @@ export function StudioBlockSetupDialog({
               onChange={(next) => {
                 setTouched(true);
                 setQuery(next);
-                setValues(setupDefaults(choice));
-                setGrouped(false);
-                setGroupValues({});
                 setProblem("");
               }}
             />
