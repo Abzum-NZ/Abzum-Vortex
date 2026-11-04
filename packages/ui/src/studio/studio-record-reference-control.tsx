@@ -89,8 +89,7 @@ export function StudioRecordReferenceControl({
       <StudioReferencePicker
         id={`${id}-record-type`}
         aria-label="Kind of record"
-        aria-describedby={describedBy}
-        aria-invalid={invalid}
+        {...(recordType === "" ? { "aria-describedby": describedBy, "aria-invalid": invalid } : {})}
         disabled={disabled}
         value={recordType}
         unset={
@@ -117,6 +116,8 @@ export function StudioRecordReferenceControl({
             recordId={recordId}
             read={read}
             disabled={disabled}
+            aria-describedby={describedBy}
+            aria-invalid={invalid}
             onPick={(next) => onChange(next === "" ? undefined : { recordType, recordId: next })}
           />
         ))}
@@ -132,6 +133,8 @@ function StudioRecordChoices(
     recordId: string | undefined;
     read: StudioRecordReader;
     disabled: boolean;
+    "aria-describedby"?: string | undefined;
+    "aria-invalid"?: boolean | undefined;
     onPick: (recordId: string) => void;
   }>,
 ): ReactElement {
@@ -153,8 +156,12 @@ function StudioRecordChoicesPage({
   disabled,
   onPick,
   onRetry,
+  "aria-describedby": describedBy,
+  "aria-invalid": invalid,
 }: Readonly<{
   id: string;
+  "aria-describedby"?: string | undefined;
+  "aria-invalid"?: boolean | undefined;
   recordType: string;
   recordId: string | undefined;
   read: StudioRecordReader;
@@ -194,7 +201,8 @@ function StudioRecordChoicesPage({
         aria-label="Record"
         value={recordId ?? ""}
         disabled={disabled || pager.loading}
-        aria-invalid={!known && settled && pager.next === undefined}
+        aria-describedby={describedBy}
+        aria-invalid={invalid === true || (!known && settled && pager.next === undefined)}
         unset={pager.loading ? "Reading records" : "Choose a record"}
         options={[
           ...(!known && recordId !== undefined

@@ -416,6 +416,7 @@ export function StudioPuckProvider({
       const keys = edit === undefined ? [] : settingKeysOf(edit.keys);
       if (edit !== undefined && keys.length > 0) {
         // Only the selected block's settings are edited here.
+        const before = now.blockActions.mark();
         const outcome: StudioCompositionOutcome =
           edit.alias === now.selectedPlacementAlias
             ? now.onSettingsEdit(
@@ -425,8 +426,9 @@ export function StudioPuckProvider({
             : { kind: "invalid" };
         if (outcome.kind === "applied") {
           setRefused(null);
-          // A later change of any kind withdraws the removal's Undo offer.
-          toast.dismiss(REMOVED_TOAST);
+          // A later change of any kind withdraws the removal's Undo offer; an edit that changed
+          // nothing leaves the draft, and so the offer, as it was.
+          if (now.blockActions.mark() !== before) toast.dismiss(REMOVED_TOAST);
           return;
         }
         if (outcome.kind === "refused" || outcome.kind === "unsupported")
