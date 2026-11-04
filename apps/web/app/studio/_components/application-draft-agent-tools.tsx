@@ -23,8 +23,7 @@ import {
   type StudioCompositionDestination,
   type StudioSemanticOutlineNode,
   type StudioSemanticSelection,
-  studioPlacementReferenceSentence,
-  studioPlacementUsersSentence,
+  studioRemovalIndex,
 } from "@vortex/ui/studio";
 import { z } from "zod";
 import { WebMcpAdapter, type WebMcpToolDescriptor } from "../../_components/webmcp-adapter";
@@ -346,6 +345,8 @@ export function ApplicationDraftAgentTools({
       { rootId: state.rootId, source, catalogue: context.catalogue },
       describePlacement,
     );
+    // Every placement's removal is read against one index of the draft, not one scan each.
+    const removalIndex = studioRemovalIndex(context.catalogue, context.source);
     return {
       draftRevision: state.draftRevision,
       source: state.source,
@@ -391,7 +392,7 @@ export function ApplicationDraftAgentTools({
       queries: actions.current.readQueries(authoring.current?.borrowedChoices ?? null),
       placements: collect(outline, "placement").map((placement) => {
         const settings = describeStudioCompositionSettings(context, placement);
-        const removal = describeStudioCompositionRemoval(context, placement);
+        const removal = describeStudioCompositionRemoval(context, placement, removalIndex);
         return {
           placement,
           settings:
@@ -406,9 +407,9 @@ export function ApplicationDraftAgentTools({
           removable:
             removal.kind === "available"
               ? true
-              : removal.kind === "invalid"
-                ? false
-                : `${removal.kind}: ${removal.reason}`,
+              : removal.kind === "refused"
+                ? removal.reason
+                : false,
         };
       }),
     };
@@ -747,22 +748,6 @@ export function ApplicationDraftAgentTools({
             message: "That placement is not in the current draft. Call read_application_draft.",
           };
         if (found.name === "remove_placement") {
-          const removal = describeStudioCompositionRemoval(contextNow(), placement);
-          if (removal.kind === "blocked")
-            return {
-              outcome: "blocked",
-              reason: removal.reason,
-              message:
-                removal.reason === "required_slot"
-                  ? "This slot requires its remaining placement."
-                  : removal.reason === "content_outlet"
-                    ? "This placement holds a content outlet of its layout. Retarget the outlet first."
-                    : removal.reason === "unresolved_target"
-                      ? "A declared placement target cannot be resolved safely. Removal is unavailable."
-                      : removal.reason === "placement_users"
-                        ? studioPlacementUsersSentence(removal.users)
-                        : `${studioPlacementReferenceSentence({ ...removal, reason: removal.reason })} Removal is unavailable.`,
-            };
           return commandOutcome(
             applyCommand(placement, { kind: "remove" }),
             "remove_placement",

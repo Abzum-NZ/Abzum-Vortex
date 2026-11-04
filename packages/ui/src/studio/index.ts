@@ -53,7 +53,7 @@ export type { StudioCompileFailure, StudioPreviewNotRunnable } from "./compile-f
 export * from "./studio-setting-controls";
 export * from "./studio-setting-model";
 export { followFieldLabels } from "./follow-field-labels";
-export { applySettingsEdit, type StudioSettingsEdit } from "./studio-settings-edit";
+export { settingsChangeOfPuckEdit, type StudioSettingsEdit } from "./studio-settings-edit";
 export * from "./studio-setting-basic-controls";
 export * from "./studio-query-picker";
 export * from "./studio-grid-features";
@@ -106,9 +106,6 @@ export {
 export { StudioQueryBindings, StudioSelectionControlBinding } from "./studio-query-bindings";
 export { studioQueryBindingFacts, studioRecordBindingFields } from "./query-binding-facts";
 export * from "./application-flow-background";
-export {
-  studioCanvasPermissionReason,
-  studioPlacementUsersSentence,
-} from "./studio-canvas-permissions";
+export { studioCanvasPermissionReason, studioRemovalIndex } from "./studio-canvas-permissions";
 export { studioActionBarMore } from "./studio-action-bar-focus";
 export type { StudioCanvasAction, StudioCanvasReferences } from "./studio-canvas-permissions";

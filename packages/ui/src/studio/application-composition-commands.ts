@@ -1,8 +1,4 @@
-import {
-  sameCompositionValue as sameValue,
-  sourceNames,
-  studioPlacementRemovalReferences,
-} from "./composition-references";
+import { sameCompositionValue as sameValue, sourceNames } from "./composition-references";
 import {
   type ImmutablePlatformBlockCatalogue,
   applicationSourceDocumentSchema,
@@ -34,7 +30,6 @@ import { StructureRefusal } from "./application-structure-common";
 import { resolveStudioDataQuery } from "./default-record-query";
 import { ensureStudioRecordSheet } from "./application-record-sheet";
 import { placed } from "./application-record-page-shared";
-import { studioLayoutOutletPlacementUses } from "./application-layout-outlets";
 import { createStudioDiscoveryAdapter } from "./discovery-adapter";
 import {
   studioOwnsSetting,
@@ -48,17 +43,18 @@ import {
   validateStoredApplicationOutlets,
   removeFlowBindingsOf,
 } from "@vortex/platform/schema";
-import {
-  studioFormChangeRefusal,
-  studioFormFieldsInUse,
-  studioFormShapeRefusal,
-} from "./application-composition-forms";
+import { studioFormChangeRefusal, studioFormFieldsInUse } from "./application-composition-forms";
 import {
   pruneStudioGridFeatureColumns,
   restoreStudioGridFeatureBindings,
   studioGridDataSettings,
 } from "./grid-features";
-import { studioPlacementUsersSentence, studioRemovalReference } from "./studio-canvas-permissions";
+import {
+  releaseKey,
+  studioRemovalIndex,
+  studioRemovalRefusalAt,
+  type StudioRemovalIndex,
+} from "./studio-canvas-permissions";
 import type { StudioSemanticSelection } from "./semantic-selection";
 import type {
   StudioCompositionBreakpoint,
@@ -77,7 +73,6 @@ import {
   type SlotStep,
   type Target,
   refuse,
-  regions,
   releaseFor,
   itemSlots,
   itemReading,
@@ -97,8 +92,6 @@ import {
   plainSource,
   plainSettings,
   movableRegion,
-  regionRemovalCause,
-  removalRule,
   publishedPage,
   slotDeclaration,
 } from "./application-composition-regions";
@@ -130,7 +123,8 @@ const effective = <Value>(
       ? (values.tablet ?? values.desktop)
       : (values.phone ?? values.tablet ?? values.desktop);
 
-const sameContext = (
+/** Whether two readings of the draft are the same: the runner asks inside the draft's envelope. */
+export const sameStudioCompositionContext = (
   expected: StudioCompositionContext,
   current: StudioCompositionContext,
 ): boolean =>
@@ -576,8 +570,6 @@ type Removal = {
   /** Releases no block uses once the block and everything inside it leave the draft. */
   unusedReleases: readonly string[];
 };
-const releaseKey = (block: { block_id: string; release_version: string }): string =>
-  `${block.block_id}@${block.release_version}`;
 type ResolvedRemoval =
   | { kind: "available"; removal: Removal }
   | Exclude<StudioCompositionRemovalModel, { kind: "available" }>;
@@ -585,16 +577,16 @@ const resolveRemoval = (
   context: StudioCompositionContext,
   selection: StudioSemanticSelection | null,
   reading = false,
+  known?: StudioRemovalIndex,
 ): ResolvedRemoval => {
   const catalogue = context.catalogue;
   plainSource(context.source);
   const resolved = resolve(context, selection, reading);
   if (resolved === undefined) return { kind: "invalid" };
   const { source, target, alias } = resolved;
-  // A layout's blocks leave with everything inside them; a page removes only from its editable
-  // content (the one rule, shared with the canvas's permissions).
-  // The steps to the block are walked once: inside a repeating area (a tab) a block cannot leave
-  // either, and a step that is not in the manifest is a mismatch (said after the rule).
+  // The steps to the block are walked once: inside a repeating area (a tab) a block cannot leave,
+  // and a slot may need its last block. A step not in the manifest is a mismatch, said before any
+  // removal sentence (the canvas has no mismatch to show).
   let repeating = false;
   let mismatch = false;
   let last:
@@ -615,8 +607,6 @@ const resolveRemoval = (
     last = { declaration, child };
     zone = child;
   }
-  const rule = removalRule(regionRemovalCause(source, target.region), repeating);
-  if (rule !== undefined) return { kind: "unsupported", reason: rule };
   if (
     mismatch ||
     releaseFor(catalogue, target.item) === undefined ||
@@ -625,47 +615,31 @@ const resolveRemoval = (
   )
     return { kind: "unsupported", reason: "manifest_mismatch" };
   validateRegion(catalogue, target.region);
-  if (studioLayoutOutletPlacementUses(source, alias).length > 0)
-    return { kind: "blocked", reason: "content_outlet" };
-  if (
-    last !== undefined &&
-    last.child.items === target.zone.items &&
-    last.declaration.required &&
-    last.child.items.length === 1
-  )
-    return { kind: "blocked", reason: "required_slot" };
+  // A block's own flow bindings leave with it (see applyRemoval); the one removal refusal says
+  // why it cannot leave, as for the action bar, the Delete key, the Outline and the canvas change.
+  const index = known ?? studioRemovalIndex(catalogue, source);
+  // A block name used twice is not a draft this command edits, whatever else is said about it.
+  if (index.placed !== index.aliases.size) return { kind: "invalid" };
   const removed = sourceItemTree([target.item]);
-  const aliases = new Set<string>();
-  const releaseUses = new Map<string, number>();
-  for (const region of regions(source))
-    for (const item of sourceItemTree(region.zone.items)) {
-      const id = item.props.id;
-      if (aliases.has(id)) return { kind: "invalid" };
-      aliases.add(id);
-      const key = releaseKey(item.props.vortex.block);
-      releaseUses.set(key, (releaseUses.get(key) ?? 0) + 1);
-    }
-  // A block's own flow bindings leave with it (see applyRemoval); a flow step, query or message
-  // that still names it refuses the removal.
-  const leaving = new Set(removed.map((item) => item.props.id));
-  const reference = studioRemovalReference(
+  const reason = studioRemovalRefusalAt(
+    catalogue,
     source,
-    leaving,
-    studioPlacementRemovalReferences(source, aliases),
+    {
+      region: target.region,
+      alias,
+      repeating,
+      required: last?.declaration.required === true && last.child.items === target.zone.items,
+      siblings: target.zone.items,
+    },
+    new Set(removed.map((item) => item.props.id)),
+    index,
   );
-  if (reference !== undefined) return { kind: "blocked", ...reference };
+  if (reason !== undefined) return { kind: "refused", reason };
+  const releaseUses = new Map(index.releaseUses);
   for (const item of removed) {
     const key = releaseKey(item.props.vortex.block);
     releaseUses.set(key, releaseUses.get(key)! - 1);
   }
-  const broken = studioFormChangeRefusal(
-    catalogue,
-    source,
-    target.region.zone.items,
-    regionAfter(target, alias),
-  );
-  if (broken !== undefined)
-    return studioFormShapeRefusal(broken) ? { kind: "invalid" } : { kind: "blocked", ...broken };
   return {
     kind: "available",
     removal: {
@@ -677,12 +651,17 @@ const resolveRemoval = (
   };
 };
 
+/**
+ * Whether the selected block can leave the draft, and if not why. `index` is built once by a
+ * caller that asks for many blocks of one source (the agent's draft read).
+ */
 export const describeStudioCompositionRemoval = (
   context: StudioCompositionContext,
   selection: StudioSemanticSelection | null,
+  index?: StudioRemovalIndex,
 ): StudioCompositionRemovalModel => {
   try {
-    const resolved = resolveRemoval(context, selection, true);
+    const resolved = resolveRemoval(context, selection, true, index);
     return resolved.kind === "available"
       ? {
           kind: "available",
@@ -703,11 +682,7 @@ const applyRemoval = (
 ): StudioCompositionCommandResult => {
   closedPlain(command, ["kind"]);
   const resolved = resolveRemoval(current, selection);
-  if (resolved.kind === "blocked" && resolved.reason === "placement_users")
-    return {
-      kind: "refused",
-      reason: studioPlacementUsersSentence(resolved.users),
-    };
+  if (resolved.kind === "refused") return resolved;
   if (resolved.kind !== "available")
     return { kind: resolved.kind === "invalid" ? "invalid" : "unsupported" };
   const { source, target, alias, unusedReleases } = resolved.removal;
@@ -834,30 +809,22 @@ export const describeStudioCompositionEdit = (
   }
 };
 
-/** Return one whole native source. The workspace rechecks this context before one history.edit. */
+/**
+ * Return one whole native source. The runner checks the context inside the draft's envelope before
+ * one history.edit.
+ */
 export const applyStudioCompositionCommand = (
   current: StudioCompositionContext,
-  expected: StudioCompositionContext,
   selection: StudioSemanticSelection | null,
   command: StudioCompositionCommand,
 ): StudioCompositionCommandResult => {
   try {
-    if (!sameContext(expected, current)) return { kind: "stale" };
     const catalogue = current.catalogue;
     const kind = Object.getOwnPropertyDescriptor(command, "kind");
     if (kind === undefined || kind.get !== undefined || kind.set !== undefined)
       return { kind: "invalid" };
     if (command.kind === "add") return applyAdd(current, command);
     if (command.kind === "remove") {
-      if (
-        selection?.kind === "placement" &&
-        studioLayoutOutletPlacementUses(current.source, selection.placementAlias).length > 0
-      )
-        return {
-          kind: "refused",
-          reason:
-            "This block holds a content outlet of its layout. Retarget the outlet in the Layout inspector before removing the block.",
-        };
       return applyRemoval(current, selection, command);
     }
     if (command.kind === "settings") return applySettings(current, selection, command);

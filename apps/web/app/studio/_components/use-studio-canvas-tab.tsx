@@ -3,7 +3,6 @@ import { useSearchParams } from "next/navigation";
 import { Alert, AlertDescription } from "@vortex/ui/components/alert";
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
-  applicationSourceDocumentSchema,
   describeFailure,
   holdsPermission,
   type ApplicationSourceDocument,
@@ -11,8 +10,6 @@ import {
   type NavigationPermissionDecisions,
 } from "@vortex/platform/schema";
 import {
-  applyStudioCompositionCommand,
-  applyStudioReactionCondition,
   describeStudioCompositionAddTargets,
   describeStudioCompositionDestinations,
   describeStudioCompositionWrap,
@@ -22,23 +19,15 @@ import {
   studioSemanticSelectionKey,
   studioPlacedBlocks,
   studioPlacementOwner,
-  type StudioCompositionCommand,
   type StudioCompositionContext,
   type StudioCompositionDestination,
-  type StudioCompositionOutcome,
-  studioBlockChoices,
-  applySettingsEdit,
-  type StudioSettingsEdit,
   type StudioCompositionOwner,
   type StudioBorrowedChoices,
-  type StudioRecordReader,
   type StudioSemanticOutline,
-  type StudioSemanticSelection,
   reduceStudioCanvasGrid,
   studioCanvasGridArrangement,
   studioCanvasGridReads,
   type StudioCanvasGridChange,
-  type StudioCanvasGridRead,
   type StudioCanvasGridState,
   studioPageNestingLevels,
 } from "@vortex/ui/studio";
@@ -63,15 +52,7 @@ import type {
   StudioPuckInput,
 } from "@vortex/ui/studio/puck-provider";
 import { FirstRecordTypeEmptyState } from "../../_components/first-record-type-empty-state";
-import { readStudioCanvasRecords, readStudioDataRecords } from "../_lib/studio-preview-reader";
-import { readWhenPreviewReady } from "../_lib/studio-preview-gate";
-import {
-  applyStudioItemLabels,
-  applyStudioPageValue,
-  type StudioPageValueCommand,
-  type StudioPageValueResult,
-  type StudioPlacementDescriber,
-} from "@vortex/ui/studio";
+import type { StudioPlacementDescriber } from "@vortex/ui/studio";
 import { studioDraftNavigation } from "../_lib/studio-draft-navigation";
 import { studioUseTargetOf } from "../_lib/studio-places";
 import { pageUsingLayout } from "../_lib/studio-view-request";
@@ -91,7 +72,9 @@ import { StudioUsedIn } from "./studio-used-in";
 import type { StudioModuleOwnerApplication } from "./module-fields-editor";
 import { StudioOutlinePanel } from "./studio-outline-panels";
 import { railShowsCanvas, type StudioRailKey } from "./studio-rail-tabs";
-import type { StudioDraft, StudioDraftStep } from "./use-studio-draft";
+import type { StudioDraft } from "./use-studio-draft";
+import { useStudioCanvasCommands } from "./use-studio-canvas-commands";
+import { useStudioCanvasRecords } from "./use-studio-canvas-records";
 import { StudioPageValuesPanel } from "./studio-page-values-panel";
 import type { useStudioDraftTheme } from "./use-studio-draft-theme";
 
@@ -385,127 +368,25 @@ export function useStudioCanvasTab({
       view.borrowedChoices,
     ],
   );
-  const liveContext = (): StudioCompositionContext => {
-    const current = draft.history.getState();
-    return {
+  const { readRecordChoices, applicationName, draftChoices, blockChoices, readCanvasRecords } =
+    useStudioCanvasRecords({
+      draft,
       organizationId,
-      rootId: current.rootId,
-      key,
-      draftRevision: current.draftRevision,
-      localLifetime: draft.lifetime,
-      catalogue: draft.readCatalogue(),
-      source: current.source,
-      borrowed: draft.view.borrowedChoices,
-    };
-  };
+      rootId,
+      applications,
+      canvasPage,
+      canvasPageRef,
+    });
+  const commands = useStudioCanvasCommands({
+    draft,
+    organizationId,
+    key,
+    blockChoices,
+    canvasPageRef,
+    setNotice,
+  });
+  const { runAdd, commandComposition, commandPageValue, commandReaction } = commands;
 
-  // The one composition edit: the item editor's controls, the Data tab's placements, the agent tools and the canvas settings fields (applyPuckSettingsEdit, below) all come through here.
-  const commandComposition = (
-    expected: StudioCompositionContext,
-    expectedSelection: StudioSemanticSelection,
-    command: StudioCompositionCommand,
-    merge?: string,
-  ): StudioCompositionOutcome => {
-    const now = draft.selection.getSelection();
-    if (
-      now === null ||
-      studioSemanticSelectionKey(now) !== studioSemanticSelectionKey(expectedSelection)
-    )
-      return { kind: "stale" };
-    const outcome = draft.run(
-      ():
-        | {
-            kind: "edit";
-            source: ApplicationSourceDocument;
-            result: StudioCompositionOutcome;
-          }
-        | { kind: "keep"; result: StudioCompositionOutcome } => {
-        const result = applyStudioCompositionCommand(liveContext(), expected, now, command);
-        return result.kind === "applied"
-          ? { kind: "edit", source: result.source, result: { kind: "applied" } }
-          : {
-              kind: "keep",
-              result:
-                result.kind === "refused"
-                  ? { kind: "refused", reason: result.reason }
-                  : { kind: result.kind },
-            };
-      },
-      { merge },
-    );
-    return outcome.kind === "done" ? outcome.result : { kind: "refused", reason: outcome.message };
-  };
-
-  // The canvas settings fields' edit: the same command route, from the draft as it is now.
-  const applyPuckSettingsEdit = (
-    edit: StudioSettingsEdit,
-    merge: string,
-  ): StudioCompositionOutcome => {
-    const outcome = draft.run(
-      ():
-        | {
-            kind: "edit";
-            source: ApplicationSourceDocument;
-            result: StudioCompositionOutcome;
-          }
-        | { kind: "keep"; result: StudioCompositionOutcome } => {
-        const result = applySettingsEdit(
-          liveContext(),
-          (query) => studioBlockChoices(blockChoices, query),
-          edit,
-        );
-        return result.kind === "applied"
-          ? { kind: "edit", source: result.source, result: { kind: "applied" } }
-          : {
-              kind: "keep",
-              result:
-                result.kind === "refused"
-                  ? { kind: "refused", reason: result.reason }
-                  : { kind: result.kind },
-            };
-      },
-      { merge },
-    );
-    return outcome.kind === "done" ? outcome.result : { kind: "refused", reason: outcome.message };
-  };
-
-  // The one add path for a new block: a drop on the canvas, the palette's Add button and the setup dialog.
-  const runAdd = (command: Extract<StudioCompositionCommand, { kind: "add" }>): string | true => {
-    const after: { added?: string | undefined } = {};
-    const outcome = draft.run(
-      ():
-        | {
-            kind: "edit";
-            source: ApplicationSourceDocument;
-            result: string | true;
-          }
-        | { kind: "keep"; result: string | true } => {
-        const context = liveContext();
-        const result = applyStudioCompositionCommand(
-          context,
-          context,
-          draft.selection.getSelection(),
-          command,
-        );
-        if (result.kind === "refused") return { kind: "keep", result: result.reason };
-        if (result.kind !== "applied") {
-          console.error(
-            `[studio] adding a block was refused: STUDIO_ADD_${result.kind.toUpperCase()}`,
-          );
-          return {
-            kind: "keep",
-            result: "The block could not be added, so the draft is unchanged.",
-          };
-        }
-        after.added = result.placementAlias;
-        return { kind: "edit", source: result.source, result: true };
-      },
-    );
-    if (outcome.kind === "blocked") return outcome.message;
-    if (outcome.result === true && after.added !== undefined)
-      draft.select({ kind: "placement", placementAlias: after.added });
-    return outcome.result;
-  };
   // The places a block can go are worked out when the palette is drawn or a block is added, once
   // per draft: an edit that neither does reads nothing of them.
   const addTargets = useMemo(() => {
@@ -577,237 +458,6 @@ export function useStudioCanvasTab({
     return outcome;
   };
 
-  // A drag on the canvas: the canvas edits the draft it was drawn from, so any change in between makes it stale.
-  const applyPuckPageEdit = (
-    expectedSource: ApplicationSourceDocument,
-    nextSource: ApplicationSourceDocument,
-  ) => {
-    if (canvasPageRef.current === undefined) return;
-    const parsed = applicationSourceDocumentSchema.safeParse(nextSource);
-    if (!parsed.success) {
-      console.error("Failed to validate Puck page changes", parsed.error);
-      setNotice("This page change could not be applied. Your draft is unchanged.");
-      return;
-    }
-    if (parsed.data.key !== key || parsed.data.root_alias !== state.source.root_alias) return;
-    const outcome = draft.run(() => ({ kind: "edit", source: parsed.data, result: true }), {
-      expected: expectedSource,
-    });
-    setNotice(outcome.kind === "blocked" ? outcome.message : "");
-  };
-
-  // What reference settings and the query picker offer: queries that already exist (own, then borrowed), fields and pages.
-  // A record reference picks a record of the builder's preview of the saved draft, read 40 at a
-  // time with their preview access through the same reader as the Data tab's results, once the
-  // preview runs the saved revision's data shape.
-  const readRecordChoices = useCallback<StudioRecordReader>(
-    async ({ recordType, after }, signal) => {
-      const separator = recordType.indexOf(":");
-      const result = await readWhenPreviewReady(
-        draft.preview,
-        view.draftRevision,
-        view.previewShape,
-        signal,
-        () =>
-          readStudioDataRecords(
-            organizationId,
-            {
-              rootId,
-              draftRevision: view.draftRevision,
-              moduleKey: recordType.slice(0, separator),
-              recordKey: recordType.slice(separator + 1),
-              pageSize: 40,
-              ...(after === undefined ? {} : { continuationToken: after }),
-            },
-            signal,
-          ),
-      );
-      switch (result.kind) {
-        case "available": {
-          const title = result.titleColumn;
-          return {
-            kind: "available",
-            records: result.rows.map((row) => ({
-              recordId: row.id,
-              label: (title === undefined ? undefined : row.cells[title]) || "Untitled record",
-            })),
-            ...(result.next === undefined ? {} : { next: result.next }),
-          };
-        }
-        case "not_saved":
-          return { kind: "not_saved" };
-        // The preview did not reach the saved revision; the picker reads again when opened again.
-        case "following":
-          return { kind: "temporarily_unavailable" };
-        // The saved draft moved on; the next save's revision reads again.
-        case "conflict":
-          return { kind: "temporarily_unavailable" };
-        case "no_query":
-          return { kind: "no_list" };
-        // A record type is read through a plain query, never a summary.
-        case "summary":
-          return { kind: "no_list" };
-        case "query_refused":
-          console.error(
-            `[studio] record choices were refused: STUDIO_RECORD_CHOICES_REFUSED reason=${result.reason}`,
-          );
-          return { kind: "refused" };
-        case "refused":
-          return { kind: "refused" };
-        // The draft cannot run yet; the picker reads again once it can.
-        case "not_runnable":
-        case "temporarily_unavailable":
-          return { kind: "temporarily_unavailable" };
-      }
-    },
-    [organizationId, rootId, view.draftRevision, view.previewShape, draft.preview],
-  );
-  const applicationName = useCallback(
-    (application: string) =>
-      applications.find((candidate) => candidate.key === application)?.name ??
-      "another application",
-    [applications],
-  );
-  const draftChoices = useMemo(
-    () => studioDraftChoices(source, view.borrowedChoices, readRecordChoices, applicationName),
-    [source, view.borrowedChoices, readRecordChoices, applicationName],
-  );
-  // The values the selected block's page declares, which a display can show.
-  const blockChoices = useMemo(
-    () => ({
-      ...draftChoices,
-      pageValues: Object.entries(canvasPage?.values ?? {}).map(([key, declaration]) => ({
-        key,
-        label: declaration.label,
-        ...(declaration.currency === undefined ? {} : { currency: declaration.currency }),
-      })),
-    }),
-    [draftChoices, canvasPage],
-  );
-  // The records of the canvas's data blocks, read once per area for the compiled saved revision,
-  // when the builder's preview runs that revision's data shape.
-  const readCanvasRecords = useCallback(
-    async (
-      area: string,
-      signal: AbortSignal,
-      controlValues: Readonly<Record<string, string>>,
-      tableStates: Readonly<Record<string, StudioCanvasGridRead>>,
-    ) => {
-      const pageAlias = canvasPageRef.current;
-      if (pageAlias === undefined) return { state: "unavailable" as const, records: {} };
-      const result = await readWhenPreviewReady(
-        draft.preview,
-        view.draftRevision,
-        view.previewShape,
-        signal,
-        () =>
-          readStudioCanvasRecords(
-            organizationId,
-            {
-              rootId,
-              draftRevision: view.draftRevision,
-              sourceFingerprint: view.sourceFingerprint,
-              pageAlias,
-              area,
-              controlValues,
-              tableStates,
-            },
-            signal,
-          ),
-      );
-      if (
-        result.kind === "available" &&
-        result.draftRevision === view.draftRevision &&
-        result.sourceFingerprint === view.sourceFingerprint &&
-        result.pageAlias === pageAlias &&
-        result.area === area
-      )
-        return {
-          state: "ready" as const,
-          records: result.records,
-          ...(result.sample === undefined ? {} : { sample: result.sample }),
-        };
-      if (result.kind === "refused") return { state: "refused" as const, records: {} };
-      if (result.kind === "not_runnable")
-        return {
-          state: "not_runnable" as const,
-          sentence: result.sentence,
-          refusal: result.refusal,
-          records: {},
-        };
-      // A conflict means a newer save replaced this revision: its compile reads again, and what is shown stays meanwhile.
-      if (result.kind === "conflict") return { state: "superseded" as const, records: {} };
-      // A read that is temporarily unavailable is an expected race (logged as information); any other cause is a platform fault.
-      (result.kind === "temporarily_unavailable" ? console.info : console.error)(
-        `[studio] the canvas records were not read: STUDIO_CANVAS_RECORDS_${result.kind.toUpperCase()}`,
-      );
-      return { state: "unavailable" as const, records: {} };
-    },
-    [
-      organizationId,
-      rootId,
-      view.draftRevision,
-      view.sourceFingerprint,
-      view.previewShape,
-      draft.preview,
-    ],
-  );
-
-  // The page's declared values, added, changed and removed as one undoable edit each.
-  const commandPageValue = (command: StudioPageValueCommand): StudioPageValueResult => {
-    const outcome = draft.run((current): StudioDraftStep<StudioPageValueResult> => {
-      const result = applyStudioPageValue(current, command);
-      return result.kind === "applied"
-        ? { kind: "edit", source: result.source, result }
-        : { kind: "keep", result };
-    });
-    return outcome.kind === "blocked"
-      ? { kind: "refused", reason: outcome.message }
-      : outcome.result;
-  };
-
-  const commandReaction: Parameters<typeof ApplicationCompositionEditor>[0]["onReaction"] = (
-    expected,
-    expectedSelection,
-    metadata,
-    condition,
-    slot,
-  ) => {
-    const currentSelection = draft.selection.getSelection();
-    if (
-      currentSelection?.kind !== "placement" ||
-      expectedSelection.kind !== "placement" ||
-      currentSelection.placementAlias !== expectedSelection.placementAlias
-    )
-      return { kind: "stale" };
-    const outcome = draft.run(
-      ():
-        | {
-            kind: "edit";
-            source: ApplicationSourceDocument;
-            result: ReturnType<typeof applyStudioReactionCondition>;
-          }
-        | {
-            kind: "keep";
-            result: ReturnType<typeof applyStudioReactionCondition>;
-          } => {
-        const result = applyStudioReactionCondition(
-          expected,
-          liveContext(),
-          currentSelection,
-          metadata,
-          condition,
-          slot,
-        );
-        return result.kind === "applied"
-          ? { kind: "edit", source: result.source, result }
-          : { kind: "keep", result };
-      },
-      { merge: `${slot}:${currentSelection.placementAlias}` },
-    );
-    return outcome.kind === "done" ? outcome.result : { kind: "stale" };
-  };
-
   // The application's and a page's name and description, typed straight into the draft.
   const selectedPage =
     selected?.kind === "page"
@@ -816,28 +466,22 @@ export function useStudioCanvasTab({
   const editable =
     inspector.status === "resolved" &&
     (selected?.kind === "application" || selectedPage !== undefined);
+  // The inspector's name and description of the selected item: a run of typing is one Undo step.
   const setLabels = (name: string, description: string): string | true => {
-    const outcome = draft.run<string | true>(
-      (current) => {
-        const applied = applyStudioItemLabels(
-          current,
-          draft.selection.getSelection(),
-          name,
-          description,
-        );
-        return applied.kind === "applied"
-          ? { kind: "edit", source: applied.source, result: true as const }
-          : {
-              kind: "keep",
-              result:
-                applied.kind === "invalid"
-                  ? "Enter a name and description within their length limits."
-                  : "This item is not in the draft any more.",
-            };
-      },
-      { merge: `labels:${selectionKey}` },
+    const selection = draft.selection.getSelection();
+    const result = commands.setLabels(
+      selection,
+      name,
+      description,
+      `labels:${selection === null ? "" : studioSemanticSelectionKey(selection)}`,
     );
-    return outcome.kind === "blocked" ? outcome.message : outcome.result;
+    return result.kind === "applied"
+      ? true
+      : result.kind === "blocked"
+        ? result.message
+        : result.kind === "invalid"
+          ? "Enter a name and description within their length limits."
+          : "This item is not in the draft any more.";
   };
 
   const previewAs = (roleKey: string) => {
@@ -1270,8 +914,8 @@ export function useStudioCanvasTab({
             draft.select({ kind: "page", pageAlias: canvasPageRef.current }),
     ),
   );
-  const onPageEdit = useStable(applyPuckPageEdit);
-  const onSettingsEdit = useStable(applyPuckSettingsEdit);
+  const onPageEdit = useStable(commands.applyPuckPageEdit);
+  const onSettingsEdit = useStable(commands.onSettingsEdit);
   const onAddBlock = useStable(addBlock);
   const blockActions = useMemo<StudioBlockActions>(
     () => ({

@@ -8,7 +8,6 @@ import type {
   sourcePlacementLayoutSchema,
 } from "@vortex/platform/schema";
 import type { StudioBorrowedChoices, StudioPaletteChoice } from "./contextual-palette";
-import type { StudioCompositionRemovalReason } from "./composition-references";
 
 export type StudioCompositionBreakpoint = "desktop" | "tablet" | "phone";
 export type StudioCompositionLayout = ReturnType<typeof sourcePlacementLayoutSchema.parse>;
@@ -149,32 +148,19 @@ export type StudioCompositionCommandResult =
   | Readonly<{ kind: "refused"; reason: string }>
   | Readonly<{ kind: "invalid" | "stale" | "unsupported" }>;
 
-/** What became of one command in the workspace: its kind, and for a refusal why. */
+/** What became of one command in the workspace: its kind, why if refused, the new block if added. */
 export type StudioCompositionOutcome = Readonly<{
   kind: StudioCompositionCommandResult["kind"];
   reason?: string;
+  placementAlias?: string;
 }>;
 
+/** `refused` carries the one sentence that says why (`studioRemovalRefusalAt`). */
 export type StudioCompositionRemovalModel =
   | Readonly<{ kind: "available"; placementAlias: string; willRemoveUnusedRelease: boolean }>
-  | Readonly<{
-      kind: "blocked";
-      reason: Exclude<StudioCompositionRemovalReason, "placement_users">;
-      /** The flow, and its step, that still names this item. */
-      flow?: string;
-      step?: string;
-    }>
-  | Readonly<{
-      kind: "blocked";
-      reason: "placement_users";
-      /** The queries and messages that still use the block. */
-      users: string;
-    }>
-  | Readonly<{ kind: "unsupported"; reason: StudioCompositionRemovalUnsupportedReason }>
+  | Readonly<{ kind: "refused"; reason: string }>
+  | Readonly<{ kind: "unsupported"; reason: "manifest_mismatch" }>
   | Readonly<{ kind: "invalid" }>;
-
-export type StudioCompositionRemovalUnsupportedReason =
-  "page_kind" | "public_page" | "manifest_mismatch" | "repeating_slot";
 
 export type StudioCompositionEditorModel =
   | Readonly<{

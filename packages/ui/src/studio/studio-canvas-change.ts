@@ -29,18 +29,9 @@ import {
   studioFormChangeRefusal,
   studioFormChangeRefusalSentence,
 } from "./application-composition-forms";
-import {
-  studioPlacementReferenceSentence,
-  studioPlacementRemovalReferences,
-} from "./composition-references";
+import { studioPlacementReferenceSentence } from "./composition-references";
 import { pageDataJson } from "./studio-canvas-data";
-import {
-  studioDuplicateRefusal,
-  studioOutletHostRefusal,
-  studioPlacementUsersSentence,
-  studioRemovalReference,
-  studioRemovalRuleRefusal,
-} from "./studio-canvas-permissions";
+import { studioDuplicateRefusal, studioRemovalRefusal } from "./studio-canvas-permissions";
 
 /** What a change Puck reported on the canvas comes to in the definition. */
 export type StudioCanvasChange =
@@ -156,35 +147,11 @@ export const applyPageDataChange = (
         throw unavailable(owner);
     }
     const removed = new Set([...before].filter((alias) => !kept.has(alias)));
-    // Where a block may not leave from, whichever draft the canvas's reasons were read from.
-    const rule =
-      removed.size === 0 ? undefined : studioRemovalRuleRefusal(catalogue, current, removed);
-    if (rule !== undefined) return { kind: "refused", message: rule };
-    // A layout block that holds a content outlet stays until the outlet is retargeted.
-    for (const alias of removed) {
-      const host = studioOutletHostRefusal(current, alias);
-      if (host !== undefined) return { kind: "refused", message: host };
-    }
-    // A flow step first, then queries and messages, by the one rule every route shares.
-    const aliasesOfCurrent = new Set(
-      regions(current).flatMap((region) =>
-        sourceItemTree(region.zone.items).map((item) => item.props.id),
-      ),
-    );
-    const reference = studioRemovalReference(
-      current,
-      removed,
-      studioPlacementRemovalReferences(current, aliasesOfCurrent),
-    );
-    if (reference !== undefined)
-      return {
-        kind: "refused",
-        message:
-          reference.reason === "placement_users"
-            ? studioPlacementUsersSentence(reference.users)
-            : `${studioPlacementReferenceSentence(reference)} The item stays on the ${subject}.`,
-      };
-    // Deleting and dragging keep every form whole, by the same rule as Remove and Move.
+    // Where a block may not leave from, whichever draft the canvas's reasons were read from: the
+    // one refusal every removal route shares.
+    const gone = removed.size === 0 ? undefined : studioRemovalRefusal(catalogue, current, removed);
+    if (gone !== undefined) return { kind: "refused", message: gone };
+    // Dragging keeps every form whole, by the same rule as Move.
     const broken = studioFormChangeRefusal(
       catalogue,
       current,
@@ -194,7 +161,7 @@ export const applyPageDataChange = (
     if (broken !== undefined)
       return {
         kind: "refused",
-        message: `${studioFormChangeRefusalSentence(broken, studioPlacementReferenceSentence)} The ${subject} stays as it was.`,
+        message: studioFormChangeRefusalSentence(broken, studioPlacementReferenceSentence),
       };
     next.body.flow_bindings = withCopiedFlowBindings(next.body.flow_bindings, copies);
     removeFlowBindingsOf(next.body, removed);
