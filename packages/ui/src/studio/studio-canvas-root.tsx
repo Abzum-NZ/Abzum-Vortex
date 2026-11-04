@@ -58,18 +58,31 @@ const usePuckSelector = createUsePuck();
 function SelectedBlock({ children }: Readonly<{ children: ReactNode }>) {
   const [store] = useState(createSelectedPlacementStore);
   const selected = usePuckSelector((state) => state.selectedItem?.props.id);
-  // The blocks that hold the selected one, nearest first (a slot that holds it is drawn at once).
+  // The blocks that hold the selected one, nearest first, each with the key of its slot the
+  // selection is in (a block of tabs shows the tab that holds it).
   const holders = usePuckSelector((state) => {
     const chain: string[] = [];
-    let parent = selected === undefined ? undefined : state.getParentById(selected);
-    while (parent !== undefined && parent !== null) {
-      chain.push(parent.props.id);
-      parent = state.getParentById(parent.props.id);
+    let child = selected;
+    let parent = child === undefined ? undefined : state.getParentById(child);
+    while (child !== undefined && parent !== undefined && parent !== null) {
+      const zone = state.getSelectorForId(child)?.zone ?? "";
+      chain.push(parent.props.id + "\n" + zone.slice(zone.indexOf(":") + 1));
+      child = parent.props.id;
+      parent = state.getParentById(child);
     }
-    return chain.join("\n");
+    return chain.join("\n\n");
   });
   useLayoutEffect(
-    () => store.set(selected, holders === "" ? [] : holders.split("\n")),
+    () =>
+      store.set(
+        selected,
+        holders === ""
+          ? []
+          : holders.split("\n\n").map((entry) => {
+              const [id = "", slot = ""] = entry.split("\n");
+              return { id, slot };
+            }),
+      ),
     [store, selected, holders],
   );
   return <SelectedPlacementProvider store={store}>{children}</SelectedPlacementProvider>;

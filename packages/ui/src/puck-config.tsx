@@ -25,6 +25,7 @@ import {
   useCallback,
   useContext,
   useRef,
+  useState,
   useSyncExternalStore,
   type CSSProperties,
   type ReactElement,
@@ -229,23 +230,32 @@ export type SelectedPlacementStore = Readonly<{
   get: () => string | undefined;
   /** Whether the placement holds the selected one, at any depth. */
   holds: (placementId: string) => boolean;
-  /** The selected placement and the placements that hold it (nearest first). */
-  set: (placementId: string | undefined, holders?: readonly string[]) => void;
+  /** The key of the slot of the placement that holds the selected one, or undefined. */
+  slotOf: (placementId: string) => string | undefined;
+  /** The selected placement and the placements that hold it (nearest first), each with the slot that holds it. */
+  set: (placementId: string | undefined, holders?: readonly SelectionHolder[]) => void;
   subscribe: (listener: () => void) => () => void;
 }>;
 
+/** A placement that holds the selected one, and the key of its slot the selection is in. */
+export type SelectionHolder = Readonly<{ id: string; slot: string }>;
+
 export const createSelectedPlacementStore = (): SelectedPlacementStore => {
   let selected: string | undefined;
-  let holders: ReadonlySet<string> = new Set();
+  let holders: ReadonlyMap<string, string> = new Map();
   const listeners = new Set<() => void>();
   return {
     get: () => selected,
     holds: (placementId) => holders.has(placementId),
+    slotOf: (placementId) => holders.get(placementId),
     set: (placementId, holding = []) => {
-      const same = placementId === selected && holding.join("\n") === [...holders].join("\n");
+      const same =
+        placementId === selected &&
+        holding.map(({ id, slot }) => id + " " + slot).join("\n") ===
+          [...holders].map(([id, slot]) => id + " " + slot).join("\n");
       if (same) return;
       selected = placementId;
-      holders = new Set(holding);
+      holders = new Map(holding.map(({ id, slot }) => [id, slot]));
       for (const listener of listeners) listener();
     },
     subscribe: (listener) => {
@@ -556,6 +566,14 @@ function PlacementBlockContent(props: PlacementBlockProps): ReactElement {
     () => selection.holds(placementId),
     () => false,
   );
+  // The slot of this placement the selection is in; a block of tabs shows that tab (see below).
+  const selectionSlot = useSyncExternalStore(
+    selection.subscribe,
+    () => selection.slotOf(placementId),
+    () => undefined,
+  );
+  const [revealedSlot, setRevealedSlot] = useState<string | undefined>(undefined);
+  if (selectionSlot !== undefined && selectionSlot !== revealedSlot) setRevealedSlot(selectionSlot);
   const rootSlotGap = useContext(RootSlotGapContext);
   const breakpoint = metadataIn.breakpoint;
   const responsive = breakpoint === undefined;
@@ -604,13 +622,26 @@ function PlacementBlockContent(props: PlacementBlockProps): ReactElement {
       : registration.parsePayload(suppliedInputs, location);
 
   const slotStyle: CSSProperties = { gap: slotGapFor(release, settings, rootSlotGap, location) };
+  const declared = declaredSlots(release, settings);
+  // The builder draws the tab that holds the selected block (and keeps it until a block of another
+  // tab is selected), because its tab strip takes no pointer: through the block's own projected
+  // active tab.
+  const family = release.slots.find((slot) => slot.repeats !== undefined)?.key;
+  const revealed =
+    puck.isEditing &&
+    Implementation === Tabs &&
+    family !== undefined &&
+    declared.some((slot) => slot.key === revealedSlot)
+      ? revealedSlot?.slice(family.length + 1)
+      : undefined;
+  const inputs: PlatformBlockRuntimeInputs =
+    revealed === undefined
+      ? parsedInputs
+      : { ...parsedInputs, data: { status: "ready", values: { activeTab: revealed } } };
   const slots: Record<string, ReactNode> = {};
   const latestSlots = useRef<Record<string, SlotComponent>>({});
   const stableSlots = useRef<Record<string, SlotComponent>>({});
-  for (const { key: slotKey, label: slotLabel, required: slotRequired } of declaredSlots(
-    release,
-    settings,
-  )) {
+  for (const { key: slotKey, label: slotLabel, required: slotRequired } of declared) {
     const Slot = componentProps[slotKey];
     const hostNode = componentProps.slotNodes?.[slotKey];
     if (isSlotComponent(Slot)) {
@@ -681,7 +712,7 @@ function PlacementBlockContent(props: PlacementBlockProps): ReactElement {
         <FlowRuntimeStateContext.Provider value={metadataIn.runtimeState}>
           <PlacementReactionsContext.Provider value={reactions}>
             <Implementation
-              {...parsedInputs}
+              {...inputs}
               placementId={placementId}
               settings={settings}
               slots={slots}
@@ -744,13 +775,20 @@ const rendererKeysByCategory = (releaseByKey: ReadonlyMap<string, PlatformBlockR
   return keysByCategory;
 };
 
-/** Puck's slot field of one declared slot: its name and the blocks it takes. */
+/**
+ * Puck's slot field of one declared slot under the key it is stored by: its name (the Outline's
+ * row for a tab names the tab's key) and the blocks it takes.
+ */
 const slotField = (
   slot: PlatformBlockRelease["slots"][number],
+  key: string,
   keysByCategory: ReadonlyMap<string, readonly string[]>,
 ): Field => ({
   type: "slot",
-  label: slot.label,
+  label:
+    slot.repeats === undefined
+      ? slot.label
+      : slot.label + " (" + key.slice(slot.key.length + 1) + ")",
   allow: slot.allowedChildCategories.flatMap((category) => keysByCategory.get(category) ?? []),
 });
 
@@ -774,11 +812,15 @@ export function withRepeatingSlots(
     const component = components[rendererKey];
     if (release === undefined || component === undefined) continue;
     const fields = { ...component.fields } as Record<string, Field>;
-    for (const key of keys) {
-      const declaration = release.slots.find(
-        (slot) => slot.repeats !== undefined && key.startsWith(`${slot.key}_`),
-      );
-      if (declaration !== undefined) fields[key] = slotField(declaration, keysByCategory);
+    const declarations = release.slots.filter((slot) => slot.repeats !== undefined);
+    // Puck lists a block's slots in the reverse of its fields' order (it puts each slot field
+    // first in turn), so the keys are declared last first, and the Outline shows the tabs in the
+    // order the page holds them.
+    for (const key of Object.keys(fields))
+      if (declarations.some((slot) => key.startsWith(slot.key + "_"))) delete fields[key];
+    for (const key of [...keys].reverse()) {
+      const declaration = declarations.find((slot) => key.startsWith(slot.key + "_"));
+      if (declaration !== undefined) fields[key] = slotField(declaration, key, keysByCategory);
     }
     components[rendererKey] = { ...component, fields };
   }
@@ -813,7 +855,7 @@ function createVortexPuckConfig(
           : repeatableSlotItemIdentities(slot, settings).map((identity) =>
               repeatableSlotKey(slot.key, identity),
             );
-      for (const key of keys) fields[key] = slotField(slot, keysByCategory);
+      for (const key of keys) fields[key] = slotField(slot, key, keysByCategory);
     }
     return fields;
   };

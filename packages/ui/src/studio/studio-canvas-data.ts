@@ -124,7 +124,7 @@ const ROOT_ZONE = "root:default-zone";
 
 /**
  * The keys of the repeating slots the items hold (a tab is stored as `tab_<key>`), by renderer key,
- * sorted: the canvas config declares a slot field for each, because Puck finds slots only there.
+ * in the order the items hold them: the canvas config declares a slot field for each, because Puck finds slots only there.
  */
 export const repeatingSlotKeys = (
   catalogue: ImmutablePlatformBlockCatalogue,
@@ -133,14 +133,13 @@ export const repeatingSlotKeys = (
   const found = new Map<string, Set<string>>();
   for (const item of sourceItemTree(items)) {
     const release = storedItemRelease(catalogue, item);
-    if (release === undefined || release.slots.every((slot) => slot.repeats === undefined)) continue;
+    if (release === undefined || release.slots.every((slot) => slot.repeats === undefined))
+      continue;
     for (const [key] of readSourceItem(item, release).slots)
       if (slotDeclaration(release, key)?.repeats !== undefined)
         (found.get(item.type) ?? found.set(item.type, new Set()).get(item.type)!).add(key);
   }
-  return new Map(
-    [...found].sort(([a], [b]) => a.localeCompare(b)).map(([type, keys]) => [type, [...keys].sort()]),
-  );
+  return new Map([...found].map(([type, keys]) => [type, [...keys]]));
 };
 
 /** Puck's name of the zone of a root slot, which holds the blocks of one content slot of the shell. */

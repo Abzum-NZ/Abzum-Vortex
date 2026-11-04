@@ -74,6 +74,7 @@ import {
   plainSettings,
   settingsOf,
   PUBLISHED_PAGE_ADD_REASON,
+  declarationSlotKeys,
   publishedPage,
 } from "./application-composition-regions";
 import { FORM_CONTAINER_KEY, NESTED_FORM_REASON } from "./application-composition-forms";
@@ -261,47 +262,47 @@ export const addPlaces = (
         const ordinal = (ordinals.get(String(release.name)) ?? 0) + 1;
         ordinals.set(String(release.name), ordinal);
         const childInForm = inForm || release.key === FORM_CONTAINER_KEY;
-        for (const declaration of release.slots) {
-          if (declaration.repeats !== undefined) continue;
-          const parentAlias = item.props.id;
-          const childSteps = [...steps, { parentAlias, slotKey: declaration.key }];
-          const outlet = outlets.get(`${parentAlias}|${declaration.key}`);
-          places.push({
-            region,
-            steps: childSteps,
-            ...(outlet === undefined ? {} : { outlet }),
-            target: Object.freeze<StudioCompositionAddTarget>({
-              id: `${area}|${parentAlias}|${declaration.key}`,
-              area,
-              destination: { kind: "child", parentAlias, slotKey: declaration.key },
-              label: `${describePlacement?.({ block: item.props.vortex.block, settings: settingsOf(item) }) ?? `${release.name} ${ordinal}`}: ${declaration.label}${outlet === undefined ? "" : ` (page content: ${outlet})`}`,
-              depth: hostLevels + childSteps.length,
-              placed,
-              choices:
-                outlet === undefined
-                  ? limited(
-                      hostLevels + childSteps.length,
-                      formChoices(
-                        childInForm,
-                        studioPaletteChoices(
-                          catalogue,
-                          discovery.getPlacementChoices({
-                            kind: "slot",
-                            parent: {
-                              blockId: release.blockId,
-                              releaseVersion: release.releaseVersion,
-                            },
-                            slotKey: declaration.key,
-                          }),
+        for (const declaration of release.slots)
+          for (const slotKey of declarationSlotKeys(declaration, slots.keys())) {
+            const parentAlias = item.props.id;
+            const childSteps = [...steps, { parentAlias, slotKey }];
+            const outlet = outlets.get(`${parentAlias}|${slotKey}`);
+            places.push({
+              region,
+              steps: childSteps,
+              ...(outlet === undefined ? {} : { outlet }),
+              target: Object.freeze<StudioCompositionAddTarget>({
+                id: `${area}|${parentAlias}|${slotKey}`,
+                area,
+                destination: { kind: "child", parentAlias, slotKey },
+                label: `${describePlacement?.({ block: item.props.vortex.block, settings: settingsOf(item) }) ?? `${release.name} ${ordinal}`}: ${declaration.label}${declaration.repeats === undefined ? "" : ` (${slotKey.slice(declaration.key.length + 1)})`}${outlet === undefined ? "" : ` (page content: ${outlet})`}`,
+                depth: hostLevels + childSteps.length,
+                placed,
+                choices:
+                  outlet === undefined
+                    ? limited(
+                        hostLevels + childSteps.length,
+                        formChoices(
+                          childInForm,
+                          studioPaletteChoices(
+                            catalogue,
+                            discovery.getPlacementChoices({
+                              kind: "slot",
+                              parent: {
+                                blockId: release.blockId,
+                                releaseVersion: release.releaseVersion,
+                              },
+                              slotKey,
+                            }),
+                          ),
                         ),
-                      ),
-                    )
-                  : [],
-            }),
-          });
-          const child = slots.get(declaration.key);
-          if (child !== undefined) visit(child.items, childSteps, childInForm);
-        }
+                      )
+                    : [],
+              }),
+            });
+            const child = slots.get(slotKey);
+            if (child !== undefined) visit(child.items, childSteps, childInForm);
+          }
       }
     };
     visit(region.zone.items, [], false);

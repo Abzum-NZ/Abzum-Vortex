@@ -720,6 +720,18 @@ export const settingsOf = (item: SourceItem): Record<string, unknown> =>
   );
 
 /**
+ * The keys an item stores the slot of one declaration under: the declared key, or a `family_<identity>`
+ * key for each entry of a repeating declaration the item holds (a tab), in the item's order.
+ */
+export const declarationSlotKeys = (
+  declaration: Readonly<{ key: string; repeats?: unknown }>,
+  held: Iterable<string>,
+): readonly string[] =>
+  declaration.repeats === undefined
+    ? [declaration.key]
+    : [...held].filter((key) => slotDeclaration({ slots: [declaration] }, key) !== undefined);
+
+/**
  * The declaration of a slot of an item's release by the key the item stores it under: the exact key,
  * or the repeating declaration whose key and an underscore begin it (a tab is stored as
  * `tab_<key>`), as the platform reader splits them.

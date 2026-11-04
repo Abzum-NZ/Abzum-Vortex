@@ -336,7 +336,7 @@ export const LAYOUT_ONLY_STYLES_CSS = `
   pointer-events: none;
 }
 [data-vortex-studio-canvas] .vortex-puck-slot--required:empty {
-  min-height: 4rem;
+  min-height: calc(4rem / var(--vortex-canvas-scale, 1));
 }
 [data-vortex-studio-canvas] .vortex-puck-slot--optional:empty {
   display: none;
