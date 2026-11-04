@@ -284,9 +284,18 @@ export function applicationControlBindingRule(
             !bound.has("action");
       if (!unbound) continue;
       const placementKey = builderKeySchema.safeParse(alias);
+      const name = boundedBindingName(alias);
       failures.push({
         ruleCode: "vortex.definition.application_control_binding",
         family: "required_value",
+        sentence:
+          blockKey !== formContainerBlockKey
+            ? `Button ${name} does nothing: bind it to a flow, give it a link, or disable it.`
+            : pageType !== "guided_form"
+              ? `Form ${name} submits nothing: bind its submit to a flow.`
+              : summaryForms.has(alias)
+                ? `Form ${name} on the summary step submits nothing: bind it to a flow.`
+                : `Form ${name} does not change step: bind its step change to a flow.`,
         location: {
           documentKind: "application",
           documentKey: source.key,

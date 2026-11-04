@@ -72,7 +72,7 @@ const describeCause = (cause: unknown): string => {
 };
 
 /** A definition rule refusing the draft (a validation answer) somewhere in this cause chain. */
-const isValidationRefusal = (cause: unknown): boolean => {
+export const isValidationRefusal = (cause: unknown): boolean => {
   let current: unknown = cause;
   for (let depth = 0; depth < 8 && current instanceof Error; depth += 1) {
     if (current.name === "DefinitionCompilationError") return true;

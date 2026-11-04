@@ -39,7 +39,11 @@ import {
 } from "../db/request-transaction";
 
 import { databaseClockOf } from "./live-context";
-import { classifyDatabaseError, DefinitionError } from "../definition/definition-error";
+import {
+  classifyDatabaseError,
+  DefinitionError,
+  isValidationRefusal,
+} from "../definition/definition-error";
 
 type ResolvedRequestTransactionRunner = <Scope, Result>(
   resolve: (transaction: RequestDatabaseTransaction) => Promise<ResolvedRequestContext<Scope>>,
@@ -432,7 +436,14 @@ export const createHumanOrganizationRequestService = (
         code === "42501" &&
         error instanceof Error &&
         error.message.startsWith("permission denied for ");
+      // A compiler refusal of the draft (a rule naming what to fix): the definition source already
+      // logged it once, and the answer to the person is a refusal.
+      const compilationRefusal =
+        error instanceof DefinitionError &&
+        error.code === "DEFINITION_PUBLICATION_FAILED" &&
+        isValidationRefusal(error.cause);
       const refused =
+        compilationRefusal ||
         (address !== undefined && code === "P0002") ||
         (code === "42501" && !missingPrivilege) ||
         recentAuthenticationRequired ||
@@ -455,9 +466,9 @@ export const createHumanOrganizationRequestService = (
       const alreadyLogged =
         error instanceof DefinitionError &&
         error.code === "DEFINITION_PUBLICATION_FAILED" &&
-        error.cause instanceof z.ZodError;
+        (error.cause instanceof z.ZodError || compilationRefusal);
       if (alreadyLogged) {
-        // Publication storage logged the schema failure at its source.
+        // The definition source already logged it once: a stored-schema failure at error, a compiler refusal at info.
       } else if (abandoned) console.info(`[access] human organisation request stopped: ${cause}`);
       else if (classifyDatabaseError(error) === "conflict")
         console.info(`[access] human organisation request temporarily unavailable: ${cause}`);

@@ -301,10 +301,12 @@ export function useStudioReleasesTab({
     setPreviewPending(true);
     const starting = (async () => {
       let problem = "The preview could not be started. Your changes are kept.";
+      let refused = false;
       try {
         if (!(await latest.current.flush())) {
           problem =
             "Your latest change is not saved. Open the save-state chip to resolve it, then try Preview again.";
+          refused = true;
           throw new Error(problem);
         }
         const state = history.getState();
@@ -314,13 +316,16 @@ export function useStudioReleasesTab({
         });
         if (result.kind !== "provisioned") {
           problem = previewProblem(result);
+          refused = true;
           throw new Error(problem);
         }
         const opened = previewTab !== null && !previewTab.closed;
         if (opened) previewTab.location.href = result.href;
         return { href: result.href, opened };
       } catch (error) {
-        console.error("[studio] the preview could not be started", describeFailure(error));
+        // A refusal is the answer the person gets as a notice; the server logs its own faults.
+        if (refused) console.info("[studio] the preview was not started", problem);
+        else console.error("[studio] the preview could not be started", describeFailure(error));
         previewTab?.close();
         throw new Error(problem, { cause: error });
       } finally {

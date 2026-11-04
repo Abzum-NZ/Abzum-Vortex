@@ -250,11 +250,7 @@ export function useStudioAccessTab({
     </div>
   );
   const title =
-    view === "pages"
-      ? "Pages and menu"
-      : view === "permissions"
-        ? "Permissions"
-        : `Role: ${role?.name ?? ""}`;
+    view === "pages" ? "Pages and menu" : view === "permissions" ? "Permissions" : "Role";
   return {
     panel,
     centre,

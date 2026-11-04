@@ -82,6 +82,8 @@ const displayRowSchema = z
       .array(
         z
           .object({
+            /** What the link opens: the Studio editor or the App Store upgrade page; a renderer picks its icon from it. */
+            kind: z.enum(["studio", "upgrade"]),
             label: displayTextSchema,
             href: z
               .string()
@@ -106,6 +108,8 @@ const displayRowSchema = z
   .strict()
   .readonly();
 export type DisplayRow = z.output<typeof displayRowSchema>;
+/** One internal link of a row. */
+export type DisplayRowLink = NonNullable<DisplayRow["links"]>[number];
 
 /** Projected rows, each record once. */
 export const displayRowsSchema = z
