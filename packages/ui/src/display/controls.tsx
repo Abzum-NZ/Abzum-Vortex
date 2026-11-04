@@ -10,6 +10,7 @@ import { Spinner } from "../components/spinner";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../components/tooltip";
 import { usePendingGesture } from "../controls/pending-gesture";
 import { Icon } from "../icons/icon";
+import type { VortexIconName } from "../icons/icon-names";
 import type { DisplayEventHandlers, DisplayRow, DisplaySemanticEvent } from "./projected-data";
 
 /** The refresh control bound to the declared `refresh` event. */
@@ -235,6 +236,7 @@ export function RowActionControl({
   name,
   eventId,
   label,
+  icon,
   events,
 }: Readonly<{
   recordId: string;
@@ -242,6 +244,8 @@ export function RowActionControl({
   name: string;
   eventId: string;
   label?: string;
+  /** Draws the control as an icon button whose tooltip is the label. */
+  icon?: VortexIconName;
   events: DisplayEventHandlers | undefined;
 }>): ReactElement | null {
   // The command's flow keeps the button busy until it settles, like every flow button.
@@ -250,10 +254,10 @@ export function RowActionControl({
   if (onRowAction === undefined) return null;
   const text = label ?? "Open";
   const identity = { recordId, ...(revision === undefined ? {} : { revision }) };
-  return (
+  const button = (
     <Button
       variant="outline"
-      size="sm"
+      size={icon === undefined ? "sm" : "icon-sm"}
       aria-label={`${text} ${name}`}
       className="min-h-6 min-w-6 [@media(pointer:coarse)]:min-h-11 [@media(pointer:coarse)]:min-w-11"
       disabled={gesture.pending}
@@ -265,8 +269,16 @@ export function RowActionControl({
       }}
     >
       {gesture.pending ? <Spinner data-icon="inline-start" aria-hidden="true" /> : null}
-      {text}
+      {icon === undefined ? text : gesture.pending ? null : <Icon name={icon} aria-hidden="true" />}
     </Button>
+  );
+  return icon === undefined ? (
+    button
+  ) : (
+    <Tooltip>
+      <TooltipTrigger render={button} />
+      <TooltipContent>{text}</TooltipContent>
+    </Tooltip>
   );
 }
 

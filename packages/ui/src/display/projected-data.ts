@@ -28,6 +28,7 @@ export {
   type DisplayDetailField,
   type DisplayRefusalReason,
   type DisplayRow,
+  type DisplayRowLink,
   type DisplayScalarCell,
   type DisplayTableBulkRun,
   type DisplayTableExportRun,

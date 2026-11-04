@@ -698,7 +698,7 @@ export function StudioFlowCanvas({
             nodeTypes={nodeTypes}
             edgeTypes={edgeTypes}
             colorMode={appearance}
-            className="bg-background! [&_.react-flow__attribution]:bg-card/80! [&_.react-flow__attribution_a]:text-muted-foreground!"
+            className="bg-background! [&_.react-flow\_\_attribution]:bg-card/80! [&_.react-flow\_\_attribution_a]:text-muted-foreground!"
             fitView
             fitViewOptions={{ maxZoom: 1 }}
             nodesDraggable={false}
