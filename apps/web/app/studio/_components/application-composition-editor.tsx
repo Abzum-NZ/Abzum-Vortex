@@ -360,6 +360,12 @@ export function ApplicationCompositionEditor(props: Props) {
       : settingsModel.kind === "unsupported"
         ? "This item's settings can't be changed here."
         : "This item's settings can't be read.";
+  // A success is announced to a screen reader, in both the full and the reduced inspector.
+  const announcement = (
+    <p role="status" aria-live="polite" className="sr-only">
+      {message.failed ? "" : message.text}
+    </p>
+  );
   if (model.kind !== "available" || layout.value === null) {
     // The block's header and who sees it stay; only its settings, order and size are unavailable.
     const placementAlias =
@@ -378,6 +384,7 @@ export function ApplicationCompositionEditor(props: Props) {
           notice={settingsNotice ?? "This item's settings can't be changed here."}
         />
         {conditionDialog}
+        {announcement}
         <div className="space-y-2">
           <h3 className="text-sm font-medium">Item order and size</h3>
           <p role="status" className="text-sm text-muted-foreground">
@@ -811,9 +818,7 @@ export function ApplicationCompositionEditor(props: Props) {
           )}
         </fieldset>
       </StudioInspectorGroup>
-      <p role="status" aria-live="polite" className="sr-only">
-        {message.failed ? "" : message.text}
-      </p>
+      {announcement}
       {message.failed && message.area !== "gate" && (
         <Alert key={message.at} variant="destructive">
           <AlertDescription>{message.text}</AlertDescription>
