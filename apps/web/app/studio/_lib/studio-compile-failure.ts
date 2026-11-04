@@ -145,8 +145,8 @@ export const describeStudioCompileFailure = (
     failure.recordTypeKey !== undefined &&
     failure.fieldKey !== undefined
   ) {
-    const owner = source.body.modules.find((item) => item.key === failure.moduleKey);
-    const record = (owner === undefined ? source.body.modules : [owner])
+    const record = source.body.modules
+      .filter((item) => failure.moduleKey === undefined || item.key === failure.moduleKey)
       .flatMap((item) => item.record_types)
       .find((item) => item.key === failure.recordTypeKey);
     if (record !== undefined && !record.fields.some((item) => item.key === failure.fieldKey))
