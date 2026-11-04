@@ -1,6 +1,6 @@
-import {
-  type ApplicationSourceDocument,
-  type ImmutablePlatformBlockCatalogue,
+import type {
+  ApplicationSourceDocument,
+  ImmutablePlatformBlockCatalogue,
 } from "@vortex/platform/schema";
 import {
   studioSemanticSelectionKey,
