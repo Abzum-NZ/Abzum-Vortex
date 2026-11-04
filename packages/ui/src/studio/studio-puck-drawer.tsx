@@ -162,7 +162,7 @@ export function StudioDrawerItem({
           <ItemTitle>{choice.name}</ItemTitle>
           <ItemDescription className="line-clamp-2">{choice.description}</ItemDescription>
         </TooltipTrigger>
-        <TooltipContent>{reason ?? choice.description}</TooltipContent>
+        <TooltipContent className="max-w-prose">{choice.description}</TooltipContent>
       </Tooltip>
       <ItemActions>
         {reason === undefined ? (
