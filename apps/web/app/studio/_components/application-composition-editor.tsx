@@ -167,11 +167,9 @@ export function ApplicationCompositionEditor(props: Props) {
   const layout = useStudioDraftHeld(model.kind === "available" ? inputsFor(model.layout) : null);
   const [problemArea, setProblemArea] = useState<"settings" | "features">("settings");
   // A success is announced to a screen reader; a refusal stays on screen for everyone.
-  const [message, setMessage] = useState<Readonly<{ text: string; failed: boolean; at: number }>>({
-    text: "",
-    failed: false,
-    at: 0,
-  });
+  const [message, setMessage] = useState<
+    Readonly<{ text: string; failed: boolean; area: "gate" | "layout"; at: number }>
+  >({ text: "", failed: false, area: "layout", at: 0 });
   // The refusal belongs to the draft it was made against: another change by any path clears it.
   const [refusedOn, setRefusedOn] = useState(props.context.source);
   if (message.failed && refusedOn !== props.context.source) {
@@ -179,18 +177,25 @@ export function ApplicationCompositionEditor(props: Props) {
     setMessage((previous) => ({ ...previous, text: "", failed: false }));
   }
   const hintId = useId();
+  const titleId = useId();
   const settingsId = useId();
   const settingsInputs = settings.value;
-  const command = (next: StudioCompositionCommand, merge?: string, done = "Changed."): boolean => {
+  const command = (
+    next: StudioCompositionCommand,
+    merge?: string,
+    done = "Changed.",
+    fallback = "Nothing changed. Use a valid size or order.",
+  ): boolean => {
     if (props.disabled) return false;
     const result = props.onCommand(props.context, props.selection, next, merge);
+    // An expected refusal logs once, at info.
+    if (result.kind !== "applied")
+      console.info("[studio] composition change refused", next.kind, result.kind);
     setRefusedOn(props.context.source);
     setMessage((previous) => ({
-      text:
-        result.kind === "applied"
-          ? done
-          : studioOutcomeText(result, "Nothing changed. Use a valid size or order."),
+      text: result.kind === "applied" ? done : studioOutcomeText(result, fallback),
       failed: result.kind !== "applied",
+      area: next.kind === "gate" ? "gate" : "layout",
       at: previous.at + 1,
     }));
     return result.kind === "applied";
@@ -201,8 +206,14 @@ export function ApplicationCompositionEditor(props: Props) {
     selection: props.selection,
     saved: props.saved,
     disabled: props.disabled,
+    gateProblem: message.failed && message.area === "gate" ? message.text : undefined,
     onGate: (permission) =>
-      command({ kind: "gate", gate: permission }, undefined, "Permission gate changed."),
+      command(
+        { kind: "gate", gate: permission },
+        undefined,
+        "Permission gate changed.",
+        "This block's permission gate could not be changed. Nothing was changed.",
+      ),
     onReaction: props.onReaction,
   });
   // The reference settings point at the fields of the data the block reads, or, for a block that
@@ -294,6 +305,53 @@ export function ApplicationCompositionEditor(props: Props) {
       choices.pages,
     ],
   );
+
+  // The selection bindings and the group's refusal follow the settings; the value keeps its identity
+  // until one of them changes, so the fields of the inspector do not draw again for nothing.
+  const showProblem = otherProblem !== "" && problemArea === "settings";
+  const settingsAfter = useMemo(() => {
+    if (settingsModel.kind !== "available") return undefined;
+    const selectionBindings = (["open_with", "record_from"] as const).filter((key) =>
+      settingsModel.properties.some((property) => property.key === key),
+    );
+    if (selectionBindings.length === 0 && !showProblem) return undefined;
+    return (
+      <>
+        {selectionBindings.map((key) => (
+          <StudioSelectionControlBinding
+            key={key}
+            setting={key}
+            value={settingsInputs.settings[key]}
+            facts={studioQueryBindingFacts(
+              props.context,
+              settingsModel.placementAlias,
+              props.choices.queries,
+            )}
+            disabled={props.disabled}
+            onChange={(value) => {
+              const next = { ...settingsInputs.settings };
+              if (value === undefined) delete next[key];
+              else next[key] = value;
+              editSettings.current({ ...settingsInputs, settings: next });
+            }}
+          />
+        ))}
+        {showProblem && (
+          <Alert variant="destructive">
+            <AlertDescription>{otherProblem}</AlertDescription>
+          </Alert>
+        )}
+      </>
+    );
+  }, [
+    settingsModel,
+    settingsInputs,
+    props.context,
+    props.choices.queries,
+    props.disabled,
+    showProblem,
+    otherProblem,
+  ]);
 
   if (model.kind !== "available" || layout.value === null)
     return (
@@ -436,45 +494,10 @@ export function ApplicationCompositionEditor(props: Props) {
     next.splice(nextIndex, 0, moved);
     command({ kind: "order", breakpoint, order: next }, undefined, "Order changed.");
   };
-  const selectionBindings =
-    settingsModel.kind === "available"
-      ? (["open_with", "record_from"] as const).filter((key) =>
-          settingsModel.properties.some((property) => property.key === key),
-        )
-      : [];
-  const showProblem = otherProblem !== "" && problemArea === "settings";
-  const settingsAfter =
-    settingsModel.kind === "available" && (selectionBindings.length > 0 || showProblem) ? (
-      <>
-        {selectionBindings.map((key) => (
-          <StudioSelectionControlBinding
-            key={key}
-            setting={key}
-            value={settingsInputs.settings[key]}
-            facts={studioQueryBindingFacts(
-              props.context,
-              settingsModel.placementAlias,
-              props.choices.queries,
-            )}
-            disabled={props.disabled}
-            onChange={(value) => {
-              const next = { ...settingsInputs.settings };
-              if (value === undefined) delete next[key];
-              else next[key] = value;
-              changeSettings({ ...settingsInputs, settings: next });
-            }}
-          />
-        ))}
-        {showProblem && (
-          <Alert variant="destructive">
-            <AlertDescription>{otherProblem}</AlertDescription>
-          </Alert>
-        )}
-      </>
-    ) : undefined;
   return (
-    <section aria-label={`${names.get(model.placementAlias) ?? "Block"} inspector`}>
+    <section aria-labelledby={titleId}>
       <StudioBlockSettingFields
+        titleId={titleId}
         choices={choices}
         disabled={props.disabled}
         placementAlias={model.placementAlias}
@@ -500,13 +523,11 @@ export function ApplicationCompositionEditor(props: Props) {
         access={access}
         settingsAfter={settingsAfter}
         notice={
-          settingsModel.kind === "available" ? undefined : (
-            <p role="status" className="text-sm text-muted-foreground">
-              {settingsModel.kind === "unsupported"
-                ? "This item's settings can't be changed here."
-                : "This item's settings can't be read."}
-            </p>
-          )
+          settingsModel.kind === "available"
+            ? undefined
+            : settingsModel.kind === "unsupported"
+              ? "This item's settings can't be changed here."
+              : "This item's settings can't be read."
         }
       />
       {conditionDialog}
@@ -774,7 +795,7 @@ export function ApplicationCompositionEditor(props: Props) {
       <p role="status" aria-live="polite" className="sr-only">
         {message.failed ? "" : message.text}
       </p>
-      {message.failed && (
+      {message.failed && message.area !== "gate" && (
         <Alert key={message.at} variant="destructive">
           <AlertDescription>{message.text}</AlertDescription>
         </Alert>

@@ -66,6 +66,8 @@ export type StudioSettingFieldsValue = Readonly<{
   access?: StudioAccessFieldValue | undefined;
   /** What follows the settings in their group: the selection bindings and the group's refusal. */
   settingsAfter?: ReactNode;
+  /** Said in the Settings group in place of the settings when the block's settings cannot be drawn. */
+  notice?: string | undefined;
 }>;
 
 /** The permission gate and the four conditions of the selected block, edited through the inspector's commands. */
@@ -80,6 +82,8 @@ export type StudioAccessFieldValue = Readonly<{
         permission: string;
         /** Sets the gate (null clears it); answers whether the draft took it. */
         onChange: (permission: string | null) => boolean;
+        /** Why the draft refused the last change, shown at the field until the draft changes. */
+        problem?: string | undefined;
       }>
     | Readonly<{ kind: "refused"; reason: string }>;
   /** One row per condition, or the reason they cannot be changed here. */
@@ -340,15 +344,17 @@ function StudioGateField({ readOnly }: Readonly<{ readOnly: boolean }>) {
     <StudioField
       label="Permission gate"
       optional
+      error={gate.problem}
       hint="Show this block only to people who hold its permission. Page and menu permissions still apply. Clearing this gate adds no block permission requirement. Create permissions in Access."
     >
       {(control) => (
         <StudioGateSelect
           id={control.id}
           aria-describedby={control["aria-describedby"]}
+          aria-invalid={control["aria-invalid"]}
           source={gate.source}
           value={gate.permission}
-          label="Who can see this block"
+          label="Permission gate"
           disabled={context.disabled || readOnly}
           onGate={(next) => next.kind === "existing" && gate.onChange(next.key)}
           onClear={() => gate.onChange(null)}

@@ -1002,7 +1002,7 @@ export function useStudioCanvasTab({
         flowsInspector}
       {selected?.kind === "placement" && inspector.status === "resolved" && (
         <ApplicationCompositionEditor
-          key={selectionKey}
+          key={`${draft.lifetime}:${selectionKey}`}
           context={compositionContext}
           selection={selected}
           disabled={draft.locked}

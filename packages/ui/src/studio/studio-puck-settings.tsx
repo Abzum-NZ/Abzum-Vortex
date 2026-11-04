@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useContext, useId, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useContext, useMemo, useRef, useState, type ReactNode } from "react";
 import { Puck, type ComponentConfig, type Field } from "@puckeditor/core";
 import {
   canonicalJson,
@@ -76,6 +76,16 @@ const studioFieldSettings = (
 
 const noProps: Readonly<Record<string, unknown>> = {};
 
+/** Who sees the block and when: the fields of the Visibility and access group. */
+const addAccessFields = (fields: Record<string, Field>): void => {
+  fields[studioGateFieldName] = studioGateField;
+  for (const reaction of studioReactionSlots)
+    fields[studioConditionFieldName(reaction.slot)] = studioConditionField(
+      reaction.slot,
+      reaction.title,
+    );
+};
+
 /** The fields of one placement: its shown settings first, every other prop hidden from the inspector. */
 const studioSettingFields = (
   release: PlatformBlockRelease,
@@ -94,13 +104,7 @@ const studioSettingFields = (
     if (values !== undefined && !componentSettingApplies(property, values)) continue;
     fields[property.key] = studioSettingField(release, property, release.properties as never);
   }
-  // Who sees the block and when: the fields of the Visibility and access group.
-  fields[studioGateFieldName] = studioGateField;
-  for (const reaction of studioReactionSlots)
-    fields[studioConditionFieldName(reaction.slot)] = studioConditionField(
-      reaction.slot,
-      reaction.title,
-    );
+  addAccessFields(fields);
   for (const [key, field] of Object.entries(base))
     if (fields[key] === undefined) fields[key] = { ...field, visible: false } as Field;
   return fields;
@@ -123,12 +127,11 @@ function StudioInspectorFieldGroups({
   const selectedId = props.id as string | undefined;
   const decided = useRef<{ id: string | undefined; keys: ReadonlySet<string> } | null>(null);
   const release = releaseOf(props);
-  if (release === undefined) return null;
   if (decided.current === null || decided.current.id !== selectedId) {
     decided.current = {
       id: selectedId,
       keys: new Set(
-        studioFieldSettings(release.properties as never)
+        studioFieldSettings((release?.properties ?? []) as never)
           .filter((property) => {
             const value = props[property.key];
             return (
@@ -146,7 +149,7 @@ function StudioInspectorFieldGroups({
     .filter(
       ([key, node]) =>
         node !== undefined &&
-        (key === studioQueryFieldName || release.properties.some((p) => p.key === key)),
+        (key === studioQueryFieldName || release?.properties.some((p) => p.key === key)),
     )
     .map(([key, node]) => ({ key, node: <div key={key}>{node}</div> }));
   const more = controls.filter((control) => decided.current?.keys.has(control.key) === true);
@@ -154,10 +157,18 @@ function StudioInspectorFieldGroups({
   const access = context?.access;
   return (
     <>
-      {(primary.length > 0 || context?.settingsAfter) && (
+      {(primary.length > 0 || context?.settingsAfter || context?.notice) && (
         <StudioInspectorGroup title="Settings" hint="A setting you leave unset uses its default.">
-          {primary.map((control) => control.node)}
-          {context?.settingsAfter}
+          {context?.notice === undefined ? (
+            <>
+              {primary.map((control) => control.node)}
+              {context?.settingsAfter}
+            </>
+          ) : (
+            <p role="status" className="text-sm text-muted-foreground">
+              {context.notice}
+            </p>
+          )}
         </StudioInspectorGroup>
       )}
       {more.length > 0 && (
@@ -225,9 +236,11 @@ export const withSettingFields = (
         ...(resolveBase === undefined ? base : resolveBase(data, params)),
         vortex: studioVortexField,
       };
-      return release === undefined
-        ? hidden(resolved)
-        : studioSettingFields(release, resolved, data.props);
+      if (release !== undefined) return studioSettingFields(release, resolved, data.props);
+      // A block whose release the catalogue lacks still shows who sees it and when.
+      const fields = hidden(resolved);
+      addAccessFields(fields);
+      return fields;
     },
     renderFields: ({ fields }: { fields: Partial<Record<string, ReactNode>> }) => (
       <StudioInspectorFieldGroups releaseOf={releaseOf} fields={fields} />
@@ -240,10 +253,12 @@ export const withSettingFields = (
  * description as help, and the More menu. The block's own settings follow it in groups.
  */
 function StudioBlockHeader({
+  titleId,
   name,
   actions,
   releases,
 }: Readonly<{
+  titleId: string;
   name: string;
   actions: readonly StudioInspectorAction[];
   releases: readonly PlatformBlockRelease[];
@@ -255,9 +270,8 @@ function StudioBlockHeader({
     (candidate) =>
       candidate.blockId === block?.block_id && candidate.releaseVersion === block?.release_version,
   );
-  const titleId = useId();
   return (
-    <header className="flex items-start justify-between gap-2 pb-3" aria-labelledby={titleId}>
+    <header className="flex items-start justify-between gap-2 pb-3">
       <div className="min-w-0">
         <h2 id={titleId} className="flex min-w-0 items-center gap-2 text-base font-semibold">
           <Icon name={studioReleaseIcon(release?.icon ?? "")} className="size-4 shrink-0" />
@@ -275,20 +289,21 @@ function StudioBlockHeader({
 
 /** The selected block's inspector: its header, then its settings and access in Puck's fields. */
 export function StudioBlockSettingFields({
+  titleId,
   choices,
   disabled,
   query,
   access,
   settingsAfter,
+  notice,
   placementAlias,
   name,
   actions,
   releases,
-  notice,
 }: Readonly<
   StudioSettingFieldsValue & {
-    /** Said in place of the fields when the block's settings cannot be drawn. */
-    notice?: ReactNode;
+    /** The id of the heading that names the inspector: its section is labelled by it. */
+    titleId: string;
     /** The block the inspector names; only that block's settings are drawn. */
     placementAlias: string;
     /** The name of this instance, and its More menu. */
@@ -319,16 +334,17 @@ export function StudioBlockSettingFields({
       query,
       access,
       settingsAfter,
+      notice,
       scope,
       touched: touched.scope === scope ? touched.keys : noKeys,
       touch,
     }),
-    [choices, disabled, query, access, settingsAfter, scope, touched, touch],
+    [choices, disabled, query, access, settingsAfter, notice, scope, touched, touch],
   );
   return (
     <StudioSettingFieldsContext.Provider value={value}>
-      <StudioBlockHeader name={name} actions={actions} releases={releases} />
-      {notice ?? (scope === placementAlias && <Puck.Fields wrapFields={false} />)}
+      <StudioBlockHeader titleId={titleId} name={name} actions={actions} releases={releases} />
+      {scope === placementAlias && <Puck.Fields wrapFields={false} />}
     </StudioSettingFieldsContext.Provider>
   );
 }

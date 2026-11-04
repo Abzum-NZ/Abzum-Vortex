@@ -27,6 +27,7 @@ export function StudioGateSelect({
 }: Readonly<{
   id?: string | undefined;
   "aria-describedby"?: string | undefined;
+  "aria-invalid"?: boolean | undefined;
   source: ApplicationSourceDocument;
   value: string;
   label: string;
