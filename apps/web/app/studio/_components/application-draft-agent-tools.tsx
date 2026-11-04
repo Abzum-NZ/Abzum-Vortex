@@ -15,6 +15,7 @@ import {
   describeStudioCompositionSettings,
   projectStudioSemanticOutline,
   type StudioCompositionOutcome,
+  type StudioItemLabelResult,
   type StudioBorrowedChoices,
   type StudioQueryChoice,
   type StudioCompositionCommand,
@@ -27,7 +28,6 @@ import {
 } from "@vortex/ui/studio";
 import { z } from "zod";
 import { WebMcpAdapter, type WebMcpToolDescriptor } from "../../_components/webmcp-adapter";
-import { applyStudioItemLabels } from "@vortex/ui/studio";
 import { previewStudioApplication } from "../preview-actions";
 import { reviewStudioApplicationAuthoring } from "../application-authoring-actions";
 import {
@@ -223,7 +223,7 @@ const applicationTools: readonly StudioApplicationTool[] = [
   ),
   tool(
     "remove_placement",
-    "Remove an unreferenced released placement, the same edit as the Remove placement control. Studio saves the change automatically.",
+    "Remove a placement, the same edit as the Remove placement control. A placement the application still uses (a query, message, flow step or required field reads it) or that its page does not allow removing is refused with outcome refused and the sentence that names why; nothing changes. Studio saves the change automatically.",
     z
       .object({ placementAlias: alias("The placement alias from read_application_draft.") })
       .strict(),
@@ -280,6 +280,7 @@ const trimOutline = (node: StudioSemanticOutlineNode): object => ({
 export function ApplicationDraftAgentTools({
   draft,
   command,
+  rename,
   readQueries,
   readSavedDraft,
   startAction,
@@ -291,6 +292,12 @@ export function ApplicationDraftAgentTools({
     expectedSelection: StudioSemanticSelection,
     command: StudioCompositionCommand,
   ) => StudioCompositionOutcome;
+  /** The inspector's rename over the one draft; the agent passes no `merge`, so it is its own Undo step. */
+  rename: (
+    selection: StudioSemanticSelection,
+    name: string,
+    description: string,
+  ) => StudioItemLabelResult | Readonly<{ kind: "blocked"; message: string }>;
   /** The application's queries and the borrowed choices read for this invocation, with their display names. */
   readQueries: (borrowed: StudioBorrowedChoices | null) => readonly StudioQueryChoice[];
   /** The saved draft the preview runs; null while edits or requests are pending. */
@@ -306,12 +313,14 @@ export function ApplicationDraftAgentTools({
   latest.current = draft;
   const actions = useRef({
     command,
+    rename,
     readQueries,
     readSavedDraft,
     startAction,
   });
   actions.current = {
     command,
+    rename,
     readQueries,
     readSavedDraft,
     startAction,
@@ -589,7 +598,7 @@ export function ApplicationDraftAgentTools({
                 "Preview needs the saved draft, and the latest edits are not saved. Call read_application_draft.",
             };
           if (input.draftRevision !== context.draftRevision) {
-            console.error("[studio] agent preview refused: STUDIO_AGENT_PREVIEW_STALE_REVISION");
+            console.info("[studio] agent preview refused: STUDIO_AGENT_PREVIEW_STALE_REVISION");
             return {
               outcome: "conflict",
               message: `The saved draft is at revision ${context.draftRevision}, not ${input.draftRevision}. Nothing was previewed. Call read_application_draft.`,
@@ -604,7 +613,7 @@ export function ApplicationDraftAgentTools({
           const current = actions.current.readSavedDraft();
           if (result.kind !== "provisioned") {
             const reason = result.kind === "refused" ? result.reason : undefined;
-            console.error(
+            console.info(
               `[studio] agent preview unavailable: STUDIO_AGENT_PREVIEW_${result.kind.toUpperCase()}${reason === undefined ? "" : `:${reason}`}`,
             );
             return {
@@ -618,7 +627,7 @@ export function ApplicationDraftAgentTools({
             current.rootId !== context.rootId ||
             current.draftRevision !== context.draftRevision
           ) {
-            console.error("[studio] agent preview refused: STUDIO_AGENT_PREVIEW_DRAFT_CHANGED");
+            console.info("[studio] agent preview refused: STUDIO_AGENT_PREVIEW_DRAFT_CHANGED");
             return {
               outcome: "conflict",
               message:
@@ -652,8 +661,12 @@ export function ApplicationDraftAgentTools({
               outcome: "not_found",
               message: "That page is not in the current draft. Call read_application_draft.",
             };
-          const result = applyStudioItemLabels(
-            history.getState().source,
+          if (!select(target))
+            return {
+              outcome: "invalid",
+              message: "That item cannot be selected, so nothing was changed.",
+            };
+          const result = actions.current.rename(
             target,
             input.name,
             input.description ?? history.getState().source.body.description,
@@ -669,15 +682,9 @@ export function ApplicationDraftAgentTools({
               issues: result.issues,
               message: "Enter a valid non-empty label and description within their limits.",
             };
-          const edited = select(target)
-            ? latest.current.run(() => ({ kind: "edit", source: result.source, result: true }))
-            : null;
-          if (edited?.kind !== "done") {
-            console.error("[studio] agent rename was not accepted by the draft history");
-            return {
-              outcome: "invalid",
-              message: edited?.message ?? "That item cannot be selected, so nothing was changed.",
-            };
+          if (result.kind === "blocked") {
+            console.info("[studio] agent rename refused: STUDIO_AGENT_RENAME_BLOCKED");
+            return { outcome: "refused", message: result.message };
           }
           return {
             outcome: "applied",
@@ -751,7 +758,7 @@ export function ApplicationDraftAgentTools({
           return commandOutcome(
             applyCommand(placement, { kind: "remove" }),
             "remove_placement",
-            "Removal is available only for supported presentation placements in a layout or in private list, detail or dashboard main regions. Nothing changed.",
+            "That placement cannot be removed. Nothing changed.",
           );
         }
         // change_placement_settings: the Settings form sends the complete set, so merge onto the current one.

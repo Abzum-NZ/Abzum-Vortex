@@ -382,6 +382,7 @@ function ExistingApplicationWorkspace(props: ExistingProps) {
           <ApplicationDraftAgentTools
             draft={draft}
             command={canvas.commandComposition}
+            rename={canvas.renameItem}
             readQueries={canvas.readQueries}
             {...releases.agent}
           />
