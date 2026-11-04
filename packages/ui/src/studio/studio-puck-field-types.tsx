@@ -43,6 +43,11 @@ import {
   type StudioSettingValues,
 } from "./studio-setting-model";
 import { studioTotalMeasureProperty } from "./grid-features/totals";
+import {
+  StudioLayoutField,
+  StudioOrderField,
+  type StudioLayoutFieldValue,
+} from "./studio-layout-fields";
 
 /**
  * Studio's Puck field types, drawn through `overrides.fieldTypes.custom`. Every field of a block
@@ -64,6 +69,8 @@ export type StudioSettingFieldsValue = Readonly<{
   query?: StudioQueryFieldValue | undefined;
   /** Who sees the block and when: its permission gate and conditions. */
   access?: StudioAccessFieldValue | undefined;
+  /** The block's size and order on the canvas screen, and the commands that change them. */
+  layout?: StudioLayoutFieldValue | undefined;
   /** What follows the settings in their group: the selection bindings and the group's refusal. */
   settingsAfter?: ReactNode;
   /** Said in the Settings group in place of the settings when the block's settings cannot be drawn. */
@@ -132,6 +139,9 @@ export const studioQueryFieldName = "vortexQuery";
 
 /** The inspector fields that hold the block's access: its permission gate and each condition. */
 export const studioGateFieldName = "vortexGate";
+/** The inspector fields of the Layout group: the block's size and its order on the canvas screen. */
+export const studioLayoutFieldName = "vortexLayout";
+export const studioOrderFieldName = "vortexOrder";
 export const studioConditionFieldName = (slot: StudioReactionSlot) => `vortexCondition-${slot}`;
 
 type SettingKind = Readonly<{
@@ -143,7 +153,7 @@ type SettingKind = Readonly<{
 /** What a Studio field carries: the setting and the control that edits it, or the block's data choice. */
 type StudioFieldKind =
   | SettingKind
-  | Readonly<{ kind: "query" | "gate" }>
+  | Readonly<{ kind: "query" | "gate" | "layout" | "order" }>
   | Readonly<{ kind: "condition"; slot: StudioReactionSlot }>;
 
 /** Studio's data travels in Puck's public field `metadata`; Puck's own render is not used. */
@@ -176,6 +186,14 @@ export const studioQueryField: Field = studioCustomField("Data", studioQueryFiel
 /** The field that holds the block's permission gate. */
 export const studioGateField: Field = studioCustomField("Permission gate", studioGateFieldName, {
   kind: "gate",
+});
+
+/** The fields of the Layout group; they hold no prop of the block and write through its resize and order commands. */
+export const studioLayoutField: Field = studioCustomField("Size", studioLayoutFieldName, {
+  kind: "layout",
+});
+export const studioOrderField: Field = studioCustomField("Order", studioOrderFieldName, {
+  kind: "order",
 });
 
 /** The field of one condition (when the block shows, is required, is read-only or is enabled). */
@@ -399,6 +417,21 @@ function StudioConditionField({
   );
 }
 
+/** The size or the order of the block: the inspector's layout value drawn by the Layout fields. */
+function StudioLayoutKind({
+  kind,
+  readOnly,
+}: Readonly<{ kind: "layout" | "order"; readOnly: boolean }>) {
+  const context = useContext(StudioSettingFieldsContext);
+  if (context?.layout === undefined) return null;
+  const disabled = context.disabled || readOnly;
+  return kind === "layout" ? (
+    <StudioLayoutField value={context.layout} disabled={disabled} />
+  ) : (
+    <StudioOrderField value={context.layout} disabled={disabled} />
+  );
+}
+
 type CustomFieldRenderer = NonNullable<NonNullable<Overrides["fieldTypes"]>["custom"]>;
 
 const StudioCustomField: CustomFieldRenderer = (props) => {
@@ -414,6 +447,9 @@ const StudioCustomField: CustomFieldRenderer = (props) => {
       return <StudioGateField readOnly={readOnly} />;
     case "condition":
       return <StudioConditionField slot={studio.slot} readOnly={readOnly} />;
+    case "layout":
+    case "order":
+      return <StudioLayoutKind kind={studio.kind} readOnly={readOnly} />;
     case "setting":
       return (
         <StudioSettingField

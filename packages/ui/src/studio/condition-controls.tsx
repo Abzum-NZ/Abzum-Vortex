@@ -665,7 +665,11 @@ export function StudioConditionControls({
         </Alert>
       ) : !current ? (
         <div className="space-y-2">
-          <p className="text-muted-foreground">No condition has been configured.</p>
+          <p className="text-muted-foreground">
+            {initial
+              ? "No condition has been configured."
+              : "No condition has been configured, and this page offers nothing for one to test yet."}
+          </p>
           <Button
             type="button"
             variant="ghost"

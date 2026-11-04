@@ -289,7 +289,7 @@ export function ApplicationReactionConditionEditor(props: Props) {
           </AlertDescription>
         </Alert>
       )}
-      <p role="status" aria-live="polite">
+      <p role="status" aria-live="polite" className="sr-only">
         {message}
       </p>
     </div>

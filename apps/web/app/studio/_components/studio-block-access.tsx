@@ -136,6 +136,7 @@ export function useStudioBlockAccess({
       title={slotInfo.title}
       description={slotInfo.help}
       closeLabel="Done"
+      focusDialog
     >
       {editing && (
         <ApplicationReactionConditionEditor

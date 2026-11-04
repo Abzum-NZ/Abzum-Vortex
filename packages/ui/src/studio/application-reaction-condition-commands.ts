@@ -27,7 +27,6 @@ import {
   type SourcePageData,
   applicationModuleKeys,
   isRecord,
-  isStudioDraftSnapshot,
 } from "@vortex/platform/schema";
 import {
   validateStudioCondition,
@@ -291,12 +290,8 @@ export function resolveStudioReactionTarget(
   source: ApplicationSourceDocument,
   selection: StudioSemanticSelection | null,
 ): StudioReactionTarget | undefined {
-  // A history snapshot is the validated source already; any other source is parsed.
-  if (
-    selection?.kind !== "placement" ||
-    !(isStudioDraftSnapshot(source) || applicationSourceDocumentSchema.safeParse(source).success)
-  )
-    return undefined;
+  // The draft source is validated at the draft boundary, never again on a read.
+  if (selection?.kind !== "placement") return undefined;
   const placementAlias = selection.placementAlias;
   const seen: {
     placement: SourceItemVortex;

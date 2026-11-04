@@ -1,5 +1,4 @@
 "use client";
-import { FieldLegend } from "@vortex/ui/components/field";
 import { Alert, AlertDescription } from "@vortex/ui/components/alert";
 import {
   plainSourceSettingValue,
@@ -7,17 +6,8 @@ import {
   type SourceBlockPropertyValueContract,
 } from "@vortex/platform/schema";
 import type { StudioCompiledFields } from "../_lib/studio-data-model";
-import {
-  StudioField,
-  StudioInspectorGroup,
-  StudioHelp,
-  StudioSegmentedControl,
-} from "@vortex/ui/studio";
-import { Icon } from "@vortex/ui";
-import { studioScreens, useStudioScreen } from "@vortex/ui/studio/puck-provider";
-import { Switch } from "@vortex/ui/components/switch";
-import { Button } from "@vortex/ui/components/button";
-import { Input } from "@vortex/ui/components/input";
+import { StudioInspectorGroup } from "@vortex/ui/studio";
+import { useStudioScreen } from "@vortex/ui/studio/puck-provider";
 
 import { useId, useMemo, useRef, useState } from "react";
 import { studioPlacementLabel } from "../_lib/studio-labels";
@@ -45,15 +35,15 @@ import {
   type StudioQueryChoice,
   type StudioCompositionCommand,
   type StudioCompositionContext,
-  type StudioCompositionLayout,
   type StudioCompositionOutcome,
+  type StudioLayoutFieldValue,
   type StudioCompositionSettings,
   type StudioCompositionSettingsModel,
   type StudioSemanticSelection,
   type StudioSettingChoices,
   type StudioStoredApplicationDraft,
 } from "@vortex/ui/studio";
-import { useStudioDraftHeld } from "./use-studio-draft-held";
+import { useStudioDraftHeld } from "@vortex/ui/studio";
 import { StudioTableAddRecords } from "./studio-table-add-records";
 import { useStudioBlockAccess } from "./studio-block-access";
 
@@ -86,62 +76,12 @@ type Props = Readonly<{
   onReaction: Parameters<typeof useStudioBlockAccess>[0]["onReaction"];
 }>;
 
-type LayoutInputs = Readonly<{
-  visible: boolean;
-  width: "content" | "fill" | "grid";
-  startColumn: string;
-  span: string;
-  height: "content" | "bounded";
-  units: string;
-}>;
-const inputsFor = (layout: StudioCompositionLayout): LayoutInputs => ({
-  visible: layout.visible,
-  width: layout.width.kind,
-  startColumn: layout.width.kind === "grid" ? String(layout.width.start_column) : "1",
-  span: layout.width.kind === "grid" ? String(layout.width.span) : "12",
-  height: layout.height.kind,
-  units: layout.height.kind === "bounded" ? String(layout.height.units) : "1",
-});
-const columnNumber = (text: string): number | undefined => {
-  const value = Number(text);
-  return text.trim() !== "" && Number.isInteger(value) && value >= 1 && value <= 12
-    ? value
-    : undefined;
-};
-/** The layout the inputs describe, or the problem that keeps them from the draft. */
-const layoutOf = (
-  inputs: LayoutInputs,
-): Readonly<{ layout: StudioCompositionLayout } | { problem: string }> => {
-  const start = columnNumber(inputs.startColumn);
-  const span = columnNumber(inputs.span);
-  const units = Number(inputs.units);
-  if (inputs.width === "grid" && (start === undefined || span === undefined))
-    return { problem: "Columns are whole numbers from 1 to 12." };
-  if (
-    inputs.height === "bounded" &&
-    (inputs.units.trim() === "" || !Number.isFinite(units) || units < 0)
-  )
-    return { problem: "A fixed height is a number of zero or more." };
-  return {
-    layout: {
-      visible: inputs.visible,
-      width:
-        inputs.width === "grid"
-          ? { kind: "grid", start_column: start!, span: span! }
-          : inputs.width === "content"
-            ? { kind: "content" }
-            : { kind: "fill" },
-      height: inputs.height === "bounded" ? { kind: "bounded", units } : { kind: "content" },
-    } as StudioCompositionLayout,
-  };
-};
 /** The settings form's input: the block's set settings and the query it reads. */
 type SettingsInputs = Readonly<{ settings: StudioCompositionSettings; query: string | null }>;
 const settingsInputsFor = (model: StudioCompositionSettingsModel): SettingsInputs =>
   model.kind === "available"
     ? { settings: model.settings, query: model.query }
     : { settings: {}, query: null };
-const fieldClass = "w-full";
 const chooseDataProblem = "Choose the data this block shows.";
 const noQueries: readonly StudioQueryChoice[] = [];
 
@@ -167,42 +107,82 @@ export function ApplicationCompositionEditor(props: Props) {
   // screen size) drops it. The workspace keys this editor by the selected item.
   const settingsFromDraft = useMemo(() => settingsInputsFor(settingsModel), [settingsModel]);
   const settings = useStudioDraftHeld(settingsFromDraft);
-  const layout = useStudioDraftHeld(model.kind === "available" ? inputsFor(model.layout) : null);
   const [problemArea, setProblemArea] = useState<"settings" | "features">("settings");
   // A success is announced to a screen reader; a refusal stays on screen for everyone.
   const [message, setMessage] = useState<
-    Readonly<{ text: string; failed: boolean; area: "gate" | "layout"; at: number }>
-  >({ text: "", failed: false, area: "layout", at: 0 });
+    Readonly<{ text: string; failed: boolean; area: "gate" | "settings"; at: number }>
+  >({ text: "", failed: false, area: "settings", at: 0 });
   // The refusal belongs to the draft it was made against: another change by any path clears it.
   const [refusedOn, setRefusedOn] = useState(props.context.source);
   if (message.failed && refusedOn !== props.context.source) {
     setRefusedOn(props.context.source);
     setMessage((previous) => ({ ...previous, text: "", failed: false }));
   }
-  const hintId = useId();
   const titleId = useId();
   const settingsId = useId();
   const settingsInputs = settings.value;
+  /**
+   * Runs one composition command; answers the words of its refusal, or undefined once the draft
+   * took it. A size or an order says its refusal at its own field (`atField`).
+   */
   const command = (
     next: StudioCompositionCommand,
     merge?: string,
     done = "Changed.",
     fallback = "Nothing changed. Use a valid size or order.",
-  ): boolean => {
-    if (props.disabled) return false;
+    atField = false,
+  ): string | undefined => {
+    if (props.disabled) return fallback;
     const result = props.onCommand(props.context, props.selection, next, merge);
     // An expected refusal logs once, at info.
     if (result.kind !== "applied")
       console.info("[studio] composition change refused", next.kind, result.kind);
+    const text = result.kind === "applied" ? undefined : studioOutcomeText(result, fallback);
     setRefusedOn(props.context.source);
     setMessage((previous) => ({
-      text: result.kind === "applied" ? done : studioOutcomeText(result, fallback),
-      failed: result.kind !== "applied",
-      area: next.kind === "gate" ? "gate" : "layout",
+      text: text ?? done,
+      failed: text !== undefined && !atField,
+      area: next.kind === "gate" ? "gate" : "settings",
       at: previous.at + 1,
     }));
-    return result.kind === "applied";
+    return text;
   };
+  // The layout fields call the latest handler, so their value keeps its identity between renders.
+  const run = useRef(command);
+  run.current = command;
+  const layoutValue = useMemo<StudioLayoutFieldValue>(
+    () =>
+      model.kind === "available"
+        ? {
+            kind: "available",
+            model,
+            labelOf: (alias) => studioPlacementLabel(labels, alias) ?? "Item",
+            onResize: (next) =>
+              run.current(
+                { kind: "resize", breakpoint, layout: next },
+                next === null ? undefined : `size:${selectionKey}:${breakpoint}`,
+                "Size changed.",
+                undefined,
+                true,
+              ),
+            onOrder: (next) =>
+              run.current(
+                { kind: "order", breakpoint, order: next },
+                undefined,
+                "Order changed.",
+                undefined,
+                true,
+              ),
+          }
+        : {
+            kind: "refused",
+            reason:
+              model.kind === "unsupported"
+                ? "This area uses an item type that cannot be edited here. Nothing was changed."
+                : "This item is not in the current draft.",
+          },
+    [model, labels, breakpoint, selectionKey],
+  );
   // Who sees the block and when: its gate and conditions are fields of the Visibility and access group.
   const { access, dialog: conditionDialog } = useStudioBlockAccess({
     context: props.context,
@@ -216,7 +196,7 @@ export function ApplicationCompositionEditor(props: Props) {
         undefined,
         "Permission gate changed.",
         "This block's permission gate could not be changed. Nothing was changed.",
-      ),
+      ) === undefined,
     onReaction: props.onReaction,
   });
   // The reference settings point at the fields of the data the block reads, or, for a block that
@@ -368,7 +348,7 @@ export function ApplicationCompositionEditor(props: Props) {
       {message.failed ? "" : message.text}
     </p>
   );
-  if (model.kind !== "available" || layout.value === null) {
+  if (model.kind !== "available") {
     // The block's header and who sees it stay; only its settings, order and size are unavailable.
     const placementAlias =
       props.selection.kind === "placement" ? props.selection.placementAlias : "";
@@ -383,18 +363,11 @@ export function ApplicationCompositionEditor(props: Props) {
           actions={[]}
           releases={props.context.catalogue.releases}
           access={access}
+          layout={layoutValue}
           notice={settingsNotice ?? "This item's settings can't be changed here."}
         />
         {conditionDialog}
         {announcement}
-        <div className="space-y-2">
-          <h3 className="text-sm font-medium">Item order and size</h3>
-          <p role="status" className="text-sm text-muted-foreground">
-            {model.kind === "unsupported"
-              ? "This area uses an item type that cannot be edited here. Nothing was changed."
-              : "This item is not in the current draft."}
-          </p>
-        </div>
       </section>
     );
   }
@@ -416,14 +389,6 @@ export function ApplicationCompositionEditor(props: Props) {
         ]),
       ),
     );
-  const inputs = layout.value;
-  const widthWord =
-    inputs.width === "fill"
-      ? "Full width"
-      : inputs.width === "content"
-        ? "Fits content"
-        : `${inputs.span} columns`;
-  const layoutSummary = `${breakpoint.charAt(0).toUpperCase()}${breakpoint.slice(1)} · ${widthWord}`;
   const orderEditable = breakpoint === "desktop" || model.responsiveOrder;
   const selectedIndex = model.order.indexOf(model.placementAlias);
   const changeQuery = (reference: string) => {
@@ -452,22 +417,6 @@ export function ApplicationCompositionEditor(props: Props) {
     });
   };
   chooseQuery.current = changeQuery;
-  const changeLayout = (next: LayoutInputs) => {
-    const described = layoutOf(next);
-    if ("problem" in described) {
-      layout.hold(next, described.problem);
-      return;
-    }
-    if (
-      command(
-        { kind: "resize", breakpoint, layout: described.layout },
-        `size:${selectionKey}:${breakpoint}`,
-        "Size changed.",
-      )
-    )
-      layout.applied(next);
-    else layout.hold(next, "");
-  };
   const changeSettings = (next: SettingsInputs, area: "settings" | "features" = "settings") => {
     setProblemArea(area);
     if (settingsModel.kind !== "available") return;
@@ -512,7 +461,7 @@ export function ApplicationCompositionEditor(props: Props) {
         { kind: "settings", settings: next.settings, query: next.query },
         `settings:${selectionKey}`,
         "Settings changed.",
-      )
+      ) === undefined
     )
       settings.applied(next);
     else settings.hold(next, "");
@@ -555,6 +504,7 @@ export function ApplicationCompositionEditor(props: Props) {
         releases={props.context.catalogue.releases}
         query={queryValue}
         access={access}
+        layout={layoutValue}
         settingsAfter={settingsAfter}
         notice={settingsNotice}
       />
@@ -630,198 +580,8 @@ export function ApplicationCompositionEditor(props: Props) {
           }
         />
       )}
-      <StudioInspectorGroup title="Layout" defaultOpen={false} summary={layoutSummary}>
-        <StudioField label="Screen size">
-          {() => (
-            <StudioSegmentedControl
-              label="Screen size"
-              value={breakpoint}
-              disabled={props.disabled}
-              onChange={chooseScreen}
-              options={studioScreens.map((screen) => ({
-                value: screen.breakpoint,
-                label: screen.label,
-                icon: <Icon name={screen.icon} />,
-              }))}
-            />
-          )}
-        </StudioField>
-        <fieldset
-          className="space-y-2"
-          disabled={props.disabled || !orderEditable}
-          aria-describedby={hintId}
-        >
-          <FieldLegend variant="label" className="flex items-center gap-1">
-            Order among its neighbours
-            <StudioHelp
-              id={hintId}
-              hint={
-                breakpoint !== "desktop" && !model.responsiveOrder
-                  ? "This area uses one order at every screen size."
-                  : model.explicitOrder
-                    ? "This order is set for this screen size."
-                    : "This order is inherited from the larger screen size."
-              }
-            />
-          </FieldLegend>
-          <ol className="space-y-px">
-            {model.order.map((alias, index) => (
-              <li
-                key={alias}
-                aria-current={alias === model.placementAlias ? "true" : undefined}
-                className={
-                  alias === model.placementAlias
-                    ? "flex items-center gap-2 rounded-md bg-muted px-2 py-1 text-sm font-medium"
-                    : "flex items-center gap-2 rounded-md px-2 py-1 text-sm"
-                }
-              >
-                <span className="w-4 text-xs text-muted-foreground tabular-nums">{index + 1}</span>
-                <span className="truncate">{studioPlacementLabel(labels, alias) ?? "Item"}</span>
-              </li>
-            ))}
-          </ol>
-          {breakpoint !== "desktop" && (
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              disabled={!model.explicitOrder}
-              onClick={() => {
-                command({ kind: "order", breakpoint, order: null }, undefined, "Order changed.");
-              }}
-            >
-              <Icon name="undo" />
-              Use the larger screen&apos;s order
-            </Button>
-          )}
-        </fieldset>
-        <fieldset className="space-y-4" disabled={props.disabled}>
-          <FieldLegend variant="label" className="flex items-center gap-1">
-            Size
-            <StudioHelp
-              hint={
-                model.explicitLayout
-                  ? "This size is set for this screen size."
-                  : "This size is inherited from the larger screen size."
-              }
-            />
-          </FieldLegend>
-          <label className="flex items-center justify-between gap-2 text-sm">
-            Shown at this screen size
-            <Switch
-              checked={inputs.visible}
-              disabled={props.disabled || !model.capabilities.responsiveVisibility}
-              onCheckedChange={(checked) => changeLayout({ ...inputs, visible: checked })}
-            />
-          </label>
-          <StudioField label="Width">
-            {() => (
-              <StudioSegmentedControl
-                label="Width"
-                value={inputs.width}
-                disabled={props.disabled}
-                onChange={(width) => changeLayout({ ...inputs, width })}
-                options={[
-                  { value: "content", label: "Content" },
-                  { value: "fill", label: "Fill" },
-                  ...(model.capabilities.gridWidth
-                    ? [{ value: "grid" as const, label: "Columns" }]
-                    : []),
-                ]}
-              />
-            )}
-          </StudioField>
-          {inputs.width === "grid" && (
-            <div className="grid grid-cols-2 gap-2">
-              <StudioField label="Starts at column">
-                {(control) => (
-                  <Input
-                    {...control}
-                    className={fieldClass}
-                    type="number"
-                    required
-                    min={1}
-                    max={12}
-                    step={1}
-                    value={inputs.startColumn}
-                    onChange={(event) =>
-                      changeLayout({ ...inputs, startColumn: event.target.value })
-                    }
-                  />
-                )}
-              </StudioField>
-              <StudioField label="Number of columns">
-                {(control) => (
-                  <Input
-                    {...control}
-                    className={fieldClass}
-                    type="number"
-                    required
-                    min={1}
-                    max={12}
-                    step={1}
-                    value={inputs.span}
-                    onChange={(event) => changeLayout({ ...inputs, span: event.target.value })}
-                  />
-                )}
-              </StudioField>
-            </div>
-          )}
-          <StudioField label="Height">
-            {() => (
-              <StudioSegmentedControl
-                label="Height"
-                value={inputs.height}
-                disabled={props.disabled}
-                onChange={(height) => changeLayout({ ...inputs, height })}
-                options={[
-                  { value: "content", label: "Content" },
-                  ...(model.capabilities.height === "content_or_bounded"
-                    ? [{ value: "bounded" as const, label: "Fixed height" }]
-                    : []),
-                ]}
-              />
-            )}
-          </StudioField>
-          {inputs.height === "bounded" && (
-            <StudioField label="Fixed height">
-              {(control) => (
-                <Input
-                  {...control}
-                  className={fieldClass}
-                  type="number"
-                  required
-                  min={0}
-                  step="any"
-                  value={inputs.units}
-                  onChange={(event) => changeLayout({ ...inputs, units: event.target.value })}
-                />
-              )}
-            </StudioField>
-          )}
-          {layout.problem !== "" && (
-            <Alert variant="destructive">
-              <AlertDescription>{layout.problem}</AlertDescription>
-            </Alert>
-          )}
-          {breakpoint !== "desktop" && (
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              disabled={props.disabled || !model.explicitLayout}
-              onClick={() => {
-                command({ kind: "resize", breakpoint, layout: null }, undefined, "Size changed.");
-              }}
-            >
-              <Icon name="undo" />
-              Use the larger screen&apos;s size
-            </Button>
-          )}
-        </fieldset>
-      </StudioInspectorGroup>
       {announcement}
-      {message.failed && message.area !== "gate" && (
+      {message.failed && message.area === "settings" && (
         <Alert key={message.at} variant="destructive">
           <AlertDescription>{message.text}</AlertDescription>
         </Alert>

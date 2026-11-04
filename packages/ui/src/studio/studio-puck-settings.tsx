@@ -17,6 +17,10 @@ import {
   studioConditionFieldName,
   studioGateField,
   studioGateFieldName,
+  studioLayoutField,
+  studioLayoutFieldName,
+  studioOrderField,
+  studioOrderFieldName,
   studioQueryField,
   studioQueryFieldName,
   studioSettingField,
@@ -28,6 +32,8 @@ import { studioGridFeaturesProperty } from "./studio-grid-features";
 import { StudioHelp } from "./studio-field";
 import { StudioInspectorGroup } from "./studio-inspector-group";
 import { StudioInspectorActions, type StudioInspectorAction } from "./studio-inspector-actions";
+import { studioLayoutSummary } from "./studio-layout-fields";
+import { useStudioScreen } from "./studio-canvas-screen";
 import { studioReleaseIcon } from "./studio-puck-drawer";
 import { studioReactionSlots } from "./application-reaction-condition-commands";
 import { studioBlockReadsQuery } from "./application-composition-commands";
@@ -76,8 +82,10 @@ const studioFieldSettings = (
 
 const noProps: Readonly<Record<string, unknown>> = {};
 
-/** Who sees the block and when: the fields of the Visibility and access group. */
-const addAccessFields = (fields: Record<string, Field>): void => {
+/** Who sees the block and when, and its size and order: the fields of the Visibility and access and Layout groups. */
+const addInspectorFields = (fields: Record<string, Field>): void => {
+  fields[studioLayoutFieldName] = studioLayoutField;
+  fields[studioOrderFieldName] = studioOrderField;
   fields[studioGateFieldName] = studioGateField;
   for (const reaction of studioReactionSlots)
     fields[studioConditionFieldName(reaction.slot)] = studioConditionField(
@@ -104,7 +112,7 @@ const studioSettingFields = (
     if (values !== undefined && !componentSettingApplies(property, values)) continue;
     fields[property.key] = studioSettingField(release, property, release.properties as never);
   }
-  addAccessFields(fields);
+  addInspectorFields(fields);
   for (const [key, field] of Object.entries(base))
     if (fields[key] === undefined) fields[key] = { ...field, visible: false } as Field;
   return fields;
@@ -156,6 +164,8 @@ function StudioInspectorFieldGroups({
   const more = controls.filter((control) => decided.current?.keys.has(control.key) === true);
   const primary = controls.filter((control) => !more.includes(control));
   const access = context?.access;
+  const layout = context?.layout;
+  const { breakpoint } = useStudioScreen();
   return (
     <>
       {(primary.length > 0 || context?.settingsAfter || context?.notice) && (
@@ -202,6 +212,16 @@ function StudioInspectorFieldGroups({
           )}
         </StudioInspectorGroup>
       )}
+      {layout !== undefined && (
+        <StudioInspectorGroup
+          title="Layout"
+          defaultOpen={false}
+          summary={studioLayoutSummary(layout, breakpoint)}
+        >
+          {fields[studioLayoutFieldName]}
+          {fields[studioOrderFieldName]}
+        </StudioInspectorGroup>
+      )}
     </>
   );
 }
@@ -240,7 +260,7 @@ export const withSettingFields = (
       if (release !== undefined) return studioSettingFields(release, resolved, data.props);
       // A block whose release the catalogue lacks still shows who sees it and when.
       const fields = hidden(resolved);
-      addAccessFields(fields);
+      addInspectorFields(fields);
       return fields;
     },
     renderFields: ({ fields }: { fields: Partial<Record<string, ReactNode>> }) => (
@@ -295,6 +315,7 @@ export function StudioBlockSettingFields({
   disabled,
   query,
   access,
+  layout,
   settingsAfter,
   notice,
   placementAlias,
@@ -334,13 +355,14 @@ export function StudioBlockSettingFields({
       disabled,
       query,
       access,
+      layout,
       settingsAfter,
       notice,
       scope,
       touched: touched.scope === scope ? touched.keys : noKeys,
       touch,
     }),
-    [choices, disabled, query, access, settingsAfter, notice, scope, touched, touch],
+    [choices, disabled, query, access, layout, settingsAfter, notice, scope, touched, touch],
   );
   return (
     <StudioSettingFieldsContext.Provider value={value}>
