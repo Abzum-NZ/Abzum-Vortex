@@ -511,12 +511,14 @@ export function useStudioCanvasTab({
   const addTargets = useMemo(() => {
     if (canvasPage === undefined || addOwner === undefined) return null;
     let held: ReturnType<typeof describeStudioCompositionAddTargets> | undefined;
-    return () => (held ??= describeStudioCompositionAddTargets(compositionContext, addOwner, describePlacement));
+    return () =>
+      (held ??= describeStudioCompositionAddTargets(
+        compositionContext,
+        addOwner,
+        describePlacement,
+      ));
   }, [compositionContext, canvasPage?.id, addOwnerKey, describePlacement]);
-  const placedBlocks = useMemo(
-    () => studioPlacedBlocks(catalogue, source),
-    [catalogue, source],
-  );
+  const placedBlocks = useMemo(() => studioPlacedBlocks(catalogue, source), [catalogue, source]);
   // A block for one place: added at once, or after its setup when it needs settings or data.
   const addBlock = (request: StudioCanvasAddRequest): true | false | string => {
     const owner = addOwnerRef.current;

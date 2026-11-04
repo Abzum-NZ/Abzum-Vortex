@@ -462,10 +462,7 @@ type SourceItemReading = Readonly<{
  * reading, and the release is the catalogue's own object; an item someone may still change is read
  * afresh each time. Callers treat a reading as read-only.
  */
-const frozenReadings = new WeakMap<
-  SourceItem,
-  WeakMap<PlatformBlockRelease, SourceItemReading>
->();
+const frozenReadings = new WeakMap<SourceItem, WeakMap<PlatformBlockRelease, SourceItemReading>>();
 
 export const readSourceItem = (
   item: SourceItem,

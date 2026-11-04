@@ -391,7 +391,10 @@ const targetInCopy = (
     const holder = zone.items.find((item) => item.props.id === step.parentAlias);
     const children = holder?.props[step.slotKey];
     if (holder === undefined || !Array.isArray(children)) return undefined;
-    zone = { items: children as SourceItem[], order: holder.props.vortex.slot_orders?.[step.slotKey] };
+    zone = {
+      items: children as SourceItem[],
+      order: holder.props.vortex.slot_orders?.[step.slotKey],
+    };
   }
   const item = zone.items.find((each) => each.props.id === target.item.props.id);
   return item === undefined
@@ -608,8 +611,7 @@ export const validateRegion = (
   const known = isStudioDraftSnapshot(held);
   const passed = known ? validatedRegions.get(held) : undefined;
   if (passed?.order === region.zone.order && passed?.catalogues.has(catalogue) === true) return;
-  if (region.shell === undefined)
-    validateStoredZone(catalogue, region.zone, undefined, known);
+  if (region.shell === undefined) validateStoredZone(catalogue, region.zone, undefined, known);
   else validateStoredShell(catalogue, region.shell);
   if (known) {
     const catalogues =

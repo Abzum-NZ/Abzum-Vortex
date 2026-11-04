@@ -351,7 +351,9 @@ export function ApplicationCompositionEditor(props: Props) {
         <div className="min-w-0">
           <h2 id={titleId} className="flex min-w-0 items-center gap-2 text-base font-semibold">
             <Icon name="blocks" className="size-4 shrink-0" />
-            <span className="truncate">{studioPlacementLabel(labels, model.placementAlias) ?? "Block"}</span>
+            <span className="truncate">
+              {studioPlacementLabel(labels, model.placementAlias) ?? "Block"}
+            </span>
           </h2>
           <p className="text-xs text-muted-foreground">Block</p>
         </div>

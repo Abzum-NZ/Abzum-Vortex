@@ -274,7 +274,9 @@ export const studioPlacementOwner = (
     if (holds(shell.layout.content)) return { kind: "shell", shellAlias: shell.id };
   for (const page of source.body.pages) {
     const datas =
-      page.type === "guided_form" ? Object.values(page.composition.step_content) : [page.composition];
+      page.type === "guided_form"
+        ? Object.values(page.composition.step_content)
+        : [page.composition];
     for (const data of datas)
       for (const [, items] of sourcePageZones(data))
         if (holds(items)) return { kind: "page", pageAlias: page.id };

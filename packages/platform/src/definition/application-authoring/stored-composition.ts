@@ -210,7 +210,10 @@ const parseItems = (
  * hold, against one catalogue, with the names of the block and of every block under it. A typing
  * run edits one block, so the rest of the page is not judged again.
  */
-const verifiedBlocks = new WeakMap<ImmutablePlatformBlockCatalogue, WeakMap<SourceItem, string[]>>();
+const verifiedBlocks = new WeakMap<
+  ImmutablePlatformBlockCatalogue,
+  WeakMap<SourceItem, string[]>
+>();
 
 /**
  * Judges one stored slot against the catalogue the way publication does: every item names a

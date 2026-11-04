@@ -79,7 +79,9 @@ export function StudioBlockDialogs(props: Props) {
     [open, source, selection],
   );
   const name =
-    selection.kind === "placement" ? (studioPlacementLabel(labels, selection.placementAlias) ?? "Block") : "Block";
+    selection.kind === "placement"
+      ? (studioPlacementLabel(labels, selection.placementAlias) ?? "Block")
+      : "Block";
   const close = () => {
     setProblem("");
     onClose();
