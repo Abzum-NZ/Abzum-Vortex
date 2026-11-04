@@ -87,10 +87,12 @@ const describeFlowFailure = (
       task === undefined
         ? undefined
         : flowTaskRegistry[task.type as keyof typeof flowTaskRegistry]?.title;
+    const rest =
+      title !== undefined && failure.sentence.startsWith(title)
+        ? failure.sentence.slice(title.length)
+        : undefined;
     const said =
-      title !== undefined && failure.sentence.startsWith(`${title}: `)
-        ? failure.sentence.slice(title.length + 2)
-        : failure.sentence;
+      rest !== undefined && /^:?\s/u.test(rest) ? rest.replace(/^:?\s+/u, "") : failure.sentence;
     return `${where}: ${said}`;
   }
   if (
@@ -143,12 +145,13 @@ export const describeStudioCompileFailure = (
     failure.recordTypeKey !== undefined &&
     failure.fieldKey !== undefined
   ) {
-    const record = source.body.modules
+    const owner = source.body.modules.find((item) => item.key === failure.moduleKey);
+    const record = (owner === undefined ? source.body.modules : [owner])
       .flatMap((item) => item.record_types)
       .find((item) => item.key === failure.recordTypeKey);
     if (record !== undefined && !record.fields.some((item) => item.key === failure.fieldKey))
       return {
-        message: `A block or query names the field ${failure.fieldKey} of ${record.plural_name}, which does not exist. Choose one of its fields.`,
+        message: `The application names the field ${failure.fieldKey} of ${record.plural_name}, which does not exist. Choose one of its fields.`,
         selection: null,
       };
   }

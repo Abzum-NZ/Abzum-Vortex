@@ -300,6 +300,46 @@ const authorize = async (
 };
 
 /**
+ * The uncached body of every Application draft compile: the inline Modules and the Application
+ * compiled in memory, the output judged an Application of this platform, and its condition
+ * contexts projected. The canvas read retains its result; a file import compiles a candidate source
+ * through it and retains nothing.
+ */
+const compileApplicationCandidate = async (
+  context: SessionContext,
+  overlay: DefinitionPublicationTransaction,
+  catalogue: DefinitionPublicationCatalogue,
+  candidate: DefinitionDraftCandidate | DefinitionPublicationCandidate,
+) => {
+  const source = candidate.draft.source;
+  if (source.kind !== "application") return refuse("DEFINITION_DRAFT_STALE_OR_MISSING");
+  // The draft's own inline Modules are compiled from the draft, in memory, by the
+  // publication's own steps; nothing is written.
+  const compiled = await compileApplicationWithInlineModules(
+    context,
+    overlay,
+    catalogue,
+    candidate,
+  );
+  const compilation = compiled.output;
+  if (
+    compilation.kind !== "application" ||
+    compilation.platformCompatibilityVersion !== APPLICATION_PLATFORM_COMPATIBILITY_VERSION
+  )
+    return refuse("DEFINITION_COMPILATION_REFUSED");
+  return {
+    compiled,
+    compilation,
+    conditionContexts: projectDraftConditionContexts(
+      source,
+      candidate.draft.sourceFingerprint,
+      compiled.dependencies,
+      compiled.resolution,
+    ),
+  };
+};
+
+/**
  * The one compile of a saved Application revision, shared by the builder's canvas, the preview
  * plan and its retention. It is a pure function of the draft and the stored definitions it reads:
  * its own inline Modules' roots as staging leaves them and the current release of every Module it
@@ -343,20 +383,12 @@ const compileDraftSnapshotOver = async (
       : [directoryPage.rootId, directoryPage.anchorReleaseRevision],
   ]);
   return compileApplicationDraftOnce(cacheKey, async () => {
-    // The draft's own inline Modules are compiled from the draft, in memory, by the
-    // publication's own steps; nothing is written.
-    const compiled = await compileApplicationWithInlineModules(
+    const { compiled, compilation, conditionContexts } = await compileApplicationCandidate(
       context,
       overlay,
       catalogue,
       candidate,
     );
-    const compilation = compiled.output;
-    if (
-      compilation.kind !== "application" ||
-      compilation.platformCompatibilityVersion !== APPLICATION_PLATFORM_COMPATIBILITY_VERSION
-    )
-      return refuse("DEFINITION_COMPILATION_REFUSED");
     let directory = compiled.dependencies.modules.find(
       (release) => release.key === peopleDirectory.module,
     );
@@ -380,12 +412,7 @@ const compileDraftSnapshotOver = async (
       compilation,
       releasePlan: compiled,
       moduleReleases: compiled.dependencies.modules,
-      conditionContexts: projectDraftConditionContexts(
-        source,
-        candidate.draft.sourceFingerprint,
-        compiled.dependencies,
-        compiled.resolution,
-      ),
+      conditionContexts,
       currentReleaseRevision: candidate.draft.publishedRevision ?? null,
       peopleDirectory: directory === undefined ? null : peopleDirectoryOwnerOf(directory),
     });
@@ -393,34 +420,40 @@ const compileDraftSnapshotOver = async (
 };
 
 /**
- * The compile of a saved Application revision over the overlay, or over a fresh one when preview
- * preparation staged the draft's inline Modules between the compile's reads of their roots and
- * drafts (the reads see each commit): that refusal is a moved snapshot, not a stale draft, so the
- * compile reads them once more. A second refusal is the answer.
+ * `compile` over the overlay, or over a fresh one when preview preparation staged the draft's
+ * inline Modules between the compile's reads of their roots and drafts (the reads see each
+ * commit): that refusal is a moved snapshot, not a stale draft, so the compile reads them once
+ * more. A second refusal is the answer.
  */
-const compileDraftSnapshot = async (
+const compileOverRestagedOverlay = async <Result>(
   context: SessionContext,
   reader: DefinitionPublicationReader,
   overlay: DefinitionPublicationTransaction,
-  catalogue: DefinitionPublicationCatalogue,
   candidate: DefinitionDraftCandidate | DefinitionPublicationCandidate,
-): Promise<ApplicationDraftCompilation> => {
+  compile: (overlay: DefinitionPublicationTransaction) => Promise<Result>,
+): Promise<Result> => {
   try {
-    return await compileDraftSnapshotOver(context, overlay, catalogue, candidate);
+    return await compile(overlay);
   } catch (error) {
     if (!(error instanceof DefinitionError) || error.code !== "DEFINITION_DRAFT_STALE_OR_MISSING")
       throw error;
     console.info(
       "[definition] inline Modules were staged during the draft compile: DEFINITION_DRAFT_COMPILE_RESTAGED",
     );
-    return compileDraftSnapshotOver(
-      context,
-      createDraftModuleOverlay(reader, context, candidate.draft),
-      catalogue,
-      candidate,
-    );
+    return compile(createDraftModuleOverlay(reader, context, candidate.draft));
   }
 };
+
+const compileDraftSnapshot = (
+  context: SessionContext,
+  reader: DefinitionPublicationReader,
+  overlay: DefinitionPublicationTransaction,
+  catalogue: DefinitionPublicationCatalogue,
+  candidate: DefinitionDraftCandidate | DefinitionPublicationCandidate,
+): Promise<ApplicationDraftCompilation> =>
+  compileOverRestagedOverlay(context, reader, overlay, candidate, (over) =>
+    compileDraftSnapshotOver(context, over, catalogue, candidate),
+  );
 
 /**
  * Publication orchestration over the request transaction. Preparation exposes only safe JSON
@@ -557,8 +590,8 @@ export const createDatabaseDefinitionPublicationService = (
     /**
      * Compiles `source` in place of the caller organisation's Application draft at the expected
      * revision, over the same stored definitions and with the identities a save would record for
-     * it. It is the compile a file import is judged by: it throws the compiler's own refusal, writes
-     * nothing, and neither reads nor replaces the saved draft's retained compile.
+     * it, through the compile body the canvas read uses. It throws the compiler's own refusal,
+     * writes nothing, and neither reads nor replaces the saved draft's retained compile.
      */
     compileApplicationSource: async (
       context: SessionContext,
@@ -576,11 +609,18 @@ export const createDatabaseDefinitionPublicationService = (
           parsedCommand,
         );
         if (saved.draft.kind !== "application") return refuse("DEFINITION_DRAFT_STALE_OR_MISSING");
-        await compileApplicationWithInlineModules(context, reader, catalogue, {
+        const candidate = {
           ...saved,
           draft: { ...saved.draft, source, sourceFingerprint: fingerprintCanonicalValue(source) },
           identities: identityAssignments(String(saved.draft.rootId), source, saved.identities),
-        });
+        };
+        await compileOverRestagedOverlay(
+          context,
+          reader,
+          createDraftModuleOverlay(reader, context, candidate.draft),
+          candidate,
+          (overlay) => compileApplicationCandidate(context, overlay, catalogue, candidate),
+        );
       });
     },
 

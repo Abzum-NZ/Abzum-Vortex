@@ -31,8 +31,8 @@ const compareText = (left: string, right: string): number =>
   left < right ? -1 : left > right ? 1 : 0;
 
 /**
- * The identities a definition source names: each recorded one keeps its identifier, and each one not
- * recorded yet gets the identifier the database will record for it.
+ * The identities a definition source names: each recorded one keeps its identifier, and each one
+ * not recorded yet gets the identifier the database will record for it.
  */
 export const identityAssignments = (
   rootId: string,

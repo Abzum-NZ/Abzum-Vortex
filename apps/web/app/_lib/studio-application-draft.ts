@@ -1201,13 +1201,15 @@ export const loadStudioApplicationDraft = async (
 export type StudioApplicationSourceCompile =
   | Readonly<{ kind: "compiles" }>
   | Readonly<{ kind: "compile_refused"; failure: StudioCompileFailure }>
+  | Readonly<{ kind: "conflict" }>
   | Readonly<{ kind: "refused" }>
   | Readonly<{ kind: "temporarily_unavailable" }>;
 
 /**
- * Whether an imported file would compile as the application's draft, judged by the compiler a save
- * and a canvas read use. A file the compiler refuses is an expected answer (logged at info); a
- * compile that fails for any other reason is a platform fault (logged once at error).
+ * Whether an imported file would compile as the application's draft, judged by the compile a canvas
+ * read uses. A file the compiler refuses is an expected answer (logged at info), and so is a draft
+ * saved since it was loaded; a compile that fails for any other reason is a platform fault (logged
+ * once at error).
  */
 export const compileStudioApplicationSource = async (
   organizationId: string,
@@ -1243,6 +1245,13 @@ export const compileStudioApplicationSource = async (
           return { kind: "compiles" };
         } catch (error) {
           if (builderRefusalReason(error) !== undefined) return { kind: "refused" };
+          if (
+            error instanceof DefinitionError &&
+            error.code === "DEFINITION_DRAFT_STALE_OR_MISSING"
+          ) {
+            console.info("STUDIO_SOURCE_IMPORT_COMPILE_STALE", error.code);
+            return { kind: "conflict" };
+          }
           const failure = studioCompileFailure(error);
           if (failure.family === "unexpected") {
             console.error("STUDIO_SOURCE_IMPORT_COMPILE_FAILED", failure.reasonCode, error);
