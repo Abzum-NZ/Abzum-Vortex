@@ -37,6 +37,7 @@ import {
   type StudioConditionValidationIssue,
 } from "./condition-model";
 import type { StudioCompositionContext } from "./application-composition-commands";
+import { isStudioDraftSnapshot } from "./draft-snapshot";
 import { projectStudioFlowDraftChoices } from "./application-flow-step-form";
 import { studioDraftRecordType } from "./application-flow-values";
 import type { StudioSemanticSelection } from "./semantic-selection";
@@ -290,7 +291,11 @@ export function resolveStudioReactionTarget(
   source: ApplicationSourceDocument,
   selection: StudioSemanticSelection | null,
 ): StudioReactionTarget | undefined {
-  if (selection?.kind !== "placement" || !applicationSourceDocumentSchema.safeParse(source).success)
+  // A history snapshot is the validated source already; any other source is parsed.
+  if (
+    selection?.kind !== "placement" ||
+    !(isStudioDraftSnapshot(source) || applicationSourceDocumentSchema.safeParse(source).success)
+  )
     return undefined;
   const placementAlias = selection.placementAlias;
   const seen: {

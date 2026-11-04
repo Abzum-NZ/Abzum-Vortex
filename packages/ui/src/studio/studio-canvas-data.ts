@@ -17,6 +17,7 @@ import {
   type SourcePageZone,
 } from "@vortex/platform/schema";
 import type { StudioCompositionDestination } from "./application-composition-commands";
+import { isStudioDraftSnapshot } from "./draft-snapshot";
 import type { StudioPlacementDescriber } from "./semantic-outline";
 
 /** One compiled zone of the page (a content slot, or the default zone): its items, exactly as the published definition holds them. */
@@ -324,6 +325,12 @@ export const storedDataProblem = (
   try {
     for (const [key, items] of sourcePageZones(data)) {
       const zone = { items, order: data.root.props.vortex.slot_orders[key] };
+      // The content of a history snapshot is the parsed source already: it is judged against the
+      // catalogue and cannot read back differently.
+      if (isStudioDraftSnapshot(items)) {
+        validateStoredZone(catalogue, zone, reservations, true);
+        continue;
+      }
       if (zoneJson(validateStoredZone(catalogue, zone, reservations)) !== zoneJson(zone))
         return "STUDIO_CANVAS_STORED_DATA_MISMATCH: the stored content reads back differently";
     }

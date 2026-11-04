@@ -230,19 +230,35 @@ export const studioPlacementRemovalReference = (
   aliases: ReadonlySet<string>,
 ): StudioPlacementReference | undefined => studioPlacementRemovalReferences(source, aliases)(alias);
 
-export const sameCompositionValue = (left: unknown, right: unknown): boolean => {
+/**
+ * Whether two values hold the same data. With `emptyListIsAbsent`, a list with nothing in it and a
+ * property that is not there are the same (Puck fills every slot it knows with an empty list, so
+ * Puck's data and the draft's data for one page differ in nothing else).
+ */
+export const sameCompositionValue = (
+  left: unknown,
+  right: unknown,
+  emptyListIsAbsent = false,
+): boolean => {
   if (Object.is(left, right)) return true;
   if (Array.isArray(left) || Array.isArray(right))
     return (
       Array.isArray(left) &&
       Array.isArray(right) &&
       left.length === right.length &&
-      left.every((value: unknown, index: number) => sameCompositionValue(value, right[index]))
+      left.every((value: unknown, index: number) =>
+        sameCompositionValue(value, right[index], emptyListIsAbsent),
+      )
     );
   if (!isObject(left) || !isObject(right)) return false;
-  const keys = Object.keys(left).filter((key) => left[key] !== undefined);
+  const present = (value: unknown): boolean =>
+    value !== undefined && !(emptyListIsAbsent && Array.isArray(value) && value.length === 0);
+  const keys = Object.keys(left).filter((key) => present(left[key]));
   return (
-    keys.length === Object.keys(right).filter((key) => right[key] !== undefined).length &&
-    keys.every((key) => Object.hasOwn(right, key) && sameCompositionValue(left[key], right[key]))
+    keys.length === Object.keys(right).filter((key) => present(right[key])).length &&
+    keys.every(
+      (key) =>
+        Object.hasOwn(right, key) && sameCompositionValue(left[key], right[key], emptyListIsAbsent),
+    )
   );
 };

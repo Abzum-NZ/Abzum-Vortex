@@ -148,10 +148,7 @@ function StudioActionBar({ id, type }: Readonly<{ id: string; type: string }>) {
   const reasonFor = (reference: string | undefined, permitted: boolean) =>
     reference ?? (permitted ? undefined : unavailable);
   // A full application cannot take another block: Duplicate says so instead of failing on save.
-  const placed =
-    input.palette?.targets.kind === "available"
-      ? (input.palette.targets.targets[0]?.placed ?? 0)
-      : 0;
+  const placed = input.palette?.placed ?? 0;
   const duplicateNamed =
     studioLimitReason("compositionPlacements", placed) ??
     studioCanvasPermissionReason(references, id, "duplicate");

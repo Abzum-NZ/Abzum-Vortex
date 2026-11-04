@@ -374,12 +374,48 @@ type ReadingResolution = Readonly<{
 }>;
 const readingResolutions = new WeakMap<object, Map<string, ReadingResolution>>();
 
+/**
+ * The block in a copy of a history snapshot, found by the region's place and the path of block
+ * names to it, so the copy's items are not read again to find what the snapshot already says.
+ */
+const targetInCopy = (
+  snapshot: ApplicationSourceDocument,
+  copy: ApplicationSourceDocument,
+  target: Target,
+): Target | undefined => {
+  const index = regions(snapshot).findIndex((each) => each.zone.items === target.region.zone.items);
+  const region = index < 0 ? undefined : regions(copy)[index];
+  if (region === undefined) return undefined;
+  let zone: Zone = region.zone;
+  for (const step of target.steps) {
+    const holder = zone.items.find((item) => item.props.id === step.parentAlias);
+    const children = holder?.props[step.slotKey];
+    if (holder === undefined || !Array.isArray(children)) return undefined;
+    zone = { items: children as SourceItem[], order: holder.props.vortex.slot_orders?.[step.slotKey] };
+  }
+  const item = zone.items.find((each) => each.props.id === target.item.props.id);
+  return item === undefined
+    ? undefined
+    : { region, zone, item, steps: target.steps, responsiveOrder: target.responsiveOrder };
+};
+
 const resolveBlock = (
   context: StudioCompositionContext,
   selection: Extract<StudioSemanticSelection, { kind: "placement" }>,
   reading: boolean,
 ) => {
   const catalogue = context.catalogue;
+  const alias = selection.placementAlias;
+  if (!reading && isStudioDraftSnapshot(context.source)) {
+    // A history snapshot is the validated source: the block is found in it (read once per
+    // snapshot) and carried into the copy the command edits.
+    const snapshot = context.source as ApplicationSourceDocument;
+    const found = resolve(context, selection, true);
+    if (found === undefined) return undefined;
+    const source = structuredClone(snapshot);
+    const target = targetInCopy(snapshot, source, found.target);
+    return target === undefined ? undefined : { source, target, alias };
+  }
   const source = reading
     ? (context.source as ApplicationSourceDocument)
     : applicationSourceDocumentSchema.parse(context.source);
@@ -388,8 +424,8 @@ const resolveBlock = (
     "resolved"
   )
     return undefined;
-  const target = targetFor(catalogue, source, selection.placementAlias);
-  return target === undefined ? undefined : { source, target, alias: selection.placementAlias };
+  const target = targetFor(catalogue, source, alias);
+  return target === undefined ? undefined : { source, target, alias };
 };
 
 export const sameSteps = (left: readonly SlotStep[], right: readonly SlotStep[]): boolean =>
@@ -572,7 +608,8 @@ export const validateRegion = (
   const known = isStudioDraftSnapshot(held);
   const passed = known ? validatedRegions.get(held) : undefined;
   if (passed?.order === region.zone.order && passed?.catalogues.has(catalogue) === true) return;
-  if (region.shell === undefined) validateStoredZone(catalogue, region.zone);
+  if (region.shell === undefined)
+    validateStoredZone(catalogue, region.zone, undefined, known);
   else validateStoredShell(catalogue, region.shell);
   if (known) {
     const catalogues =

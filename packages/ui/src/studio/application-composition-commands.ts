@@ -46,9 +46,7 @@ import {
 import {
   adjustedSlotOrder,
   StoredCompositionRefusal,
-  validateStoredShell,
   validateStoredApplicationOutlets,
-  validateStoredZone,
   removeFlowBindingsOf,
 } from "@vortex/platform/schema";
 import { studioFormChangeRefusal, studioFormShapeRefusal } from "./application-composition-forms";
@@ -57,6 +55,7 @@ import {
   restoreStudioGridFeatureBindings,
   studioGridDataSettings,
 } from "./grid-features";
+import { isStudioDraftSnapshot } from "./draft-snapshot";
 import type { StudioSemanticSelection } from "./semantic-selection";
 import type {
   StudioCompositionBreakpoint,
@@ -110,7 +109,10 @@ export {
   studioPlacementReferenceSentence,
   type StudioCompositionRemovalReason,
 } from "./composition-references";
-export { describeStudioCompositionAddTargets } from "./application-composition-add";
+export {
+  describeStudioCompositionAddTargets,
+  studioPlacedBlocks,
+} from "./application-composition-add";
 export { describeStudioCompositionWrap } from "./application-composition-wrap";
 
 const breakpointValid = (value: unknown): value is StudioCompositionBreakpoint =>
@@ -292,7 +294,15 @@ const resolveSettings = (
   const release = releaseFor(catalogue, target.item);
   if (release === undefined || !manifestMatches(catalogue, source, target.region.zone.items))
     return { kind: "unsupported" } as const;
-  validateRegion(catalogue, target.region);
+  // The region is judged as the draft holds it: the copy a command edits is made from a snapshot
+  // whose region has been judged before (the Inspector reads it first), so only a block that
+  // changed since is judged again.
+  validateRegion(
+    catalogue,
+    reading || !isStudioDraftSnapshot(context.source)
+      ? target.region
+      : (resolve(context, selection, true)?.target.region ?? target.region),
+  );
   return { kind: "available", ...resolved, release } as const;
 };
 
@@ -737,8 +747,7 @@ export const describeStudioCompositionEdit = (
     )
       return { kind: "unsupported" };
     // Validate the complete original region and reserved shell targets before offering controls.
-    if (target.region.shell) validateStoredShell(catalogue, target.region.shell);
-    else validateStoredZone(catalogue, target.region.zone);
+    validateRegion(catalogue, target.region);
     const release = releaseFor(catalogue, target.item);
     if (release === undefined) return { kind: "unsupported" };
     const responsive = target.item.props.vortex.responsive;

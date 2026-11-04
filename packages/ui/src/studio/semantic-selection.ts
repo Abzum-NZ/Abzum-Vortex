@@ -2,13 +2,16 @@ import {
   flowTaskRegistry,
   readSourceItem,
   reservedItemPropKeys,
+  sourceItemChildSlots,
   sourcePageRootSlots,
+  sourcePageZones,
   type ApplicationRootId,
   type ApplicationSourceDocument,
   type ImmutablePlatformBlockCatalogue,
   type SourceItem,
   type SourcePageData,
 } from "@vortex/platform/schema";
+import { isStudioDraftSnapshot } from "./draft-snapshot";
 
 /**
  * The editable Application source, its permanent Definition root identity and the block catalogue
@@ -243,6 +246,40 @@ const itemPropsByRole = (catalogue: ImmutablePlatformBlockCatalogue, item: Sourc
     ),
   );
   return { slots, settings };
+};
+
+/** Every block name in an item's subtree, kept for items of a history snapshot, which never change. */
+const subtreeAliases = new WeakMap<SourceItem, ReadonlySet<string>>();
+const aliasesOf = (item: SourceItem): ReadonlySet<string> => {
+  const held = subtreeAliases.get(item);
+  if (held !== undefined) return held;
+  const aliases = new Set([item.props.id]);
+  for (const [, children] of sourceItemChildSlots(item))
+    for (const child of children) for (const alias of aliasesOf(child)) aliases.add(alias);
+  if (isStudioDraftSnapshot(item)) subtreeAliases.set(item, aliases);
+  return aliases;
+};
+
+/**
+ * The page or layout that holds a block, or undefined when none does. Unchanged blocks of an edited
+ * draft keep their identity, so only the blocks on the path to the edit are read again.
+ */
+export const studioPlacementOwner = (
+  source: ApplicationSourceDocument,
+  placementAlias: string,
+): StudioSemanticPlacementOwner | undefined => {
+  const holds = (items: readonly SourceItem[]) =>
+    items.some((item) => aliasesOf(item).has(placementAlias));
+  for (const shell of source.body.shells)
+    if (holds(shell.layout.content)) return { kind: "shell", shellAlias: shell.id };
+  for (const page of source.body.pages) {
+    const datas =
+      page.type === "guided_form" ? Object.values(page.composition.step_content) : [page.composition];
+    for (const data of datas)
+      for (const [, items] of sourcePageZones(data))
+        if (holds(items)) return { kind: "page", pageAlias: page.id };
+  }
+  return undefined;
 };
 
 /** A flow's name as a person reads it: its authored name label, else its readable key. */

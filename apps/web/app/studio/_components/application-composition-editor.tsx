@@ -17,7 +17,7 @@ import { Button } from "@vortex/ui/components/button";
 import { Input } from "@vortex/ui/components/input";
 
 import { useId, useMemo, useRef, useState } from "react";
-import { studioPlacementLabels } from "../_lib/studio-labels";
+import { studioPlacementLabel } from "../_lib/studio-labels";
 import {
   describeStudioCompositionEdit,
   describeStudioCompositionSettings,
@@ -55,6 +55,8 @@ import { StudioTableAddRecords } from "./studio-table-add-records";
 type Props = Readonly<{
   context: StudioCompositionContext;
   selection: StudioSemanticSelection;
+  /** Selection key to the label Studio shows, from the draft's one outline. */
+  labels: ReadonlyMap<string, string>;
   disabled: boolean;
   /** What reference settings can point at, read from the draft being edited. */
   choices: StudioSettingChoices;
@@ -140,7 +142,7 @@ const fieldClass = "w-full";
 export function ApplicationCompositionEditor(props: Props) {
   // The screen is the canvas screen: one state, kept by Puck.
   const { breakpoint, choose: chooseScreen } = useStudioScreen();
-  const names = useMemo(() => studioPlacementLabels(props.context), [props.context]);
+  const { labels } = props;
   const model = useMemo(
     () => describeStudioCompositionEdit(props.context, props.selection, breakpoint),
     [props.context, props.selection, breakpoint],
@@ -349,7 +351,7 @@ export function ApplicationCompositionEditor(props: Props) {
         <div className="min-w-0">
           <h2 id={titleId} className="flex min-w-0 items-center gap-2 text-base font-semibold">
             <Icon name="blocks" className="size-4 shrink-0" />
-            <span className="truncate">{names.get(model.placementAlias) ?? "Block"}</span>
+            <span className="truncate">{studioPlacementLabel(labels, model.placementAlias) ?? "Block"}</span>
           </h2>
           <p className="text-xs text-muted-foreground">Block</p>
         </div>
@@ -584,7 +586,7 @@ export function ApplicationCompositionEditor(props: Props) {
                 }
               >
                 <span className="w-4 text-xs text-muted-foreground tabular-nums">{index + 1}</span>
-                <span className="truncate">{names.get(alias) ?? "Item"}</span>
+                <span className="truncate">{studioPlacementLabel(labels, alias) ?? "Item"}</span>
               </li>
             ))}
           </ol>

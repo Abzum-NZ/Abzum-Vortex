@@ -456,7 +456,37 @@ type SourceItemReading = Readonly<{
   }>[];
 }>;
 
+/**
+ * Readings of frozen items (the draft's snapshots share every node an edit did not touch, so an
+ * unchanged block is read once for the whole session). A frozen item cannot change under its
+ * reading, and the release is the catalogue's own object; an item someone may still change is read
+ * afresh each time. Callers treat a reading as read-only.
+ */
+const frozenReadings = new WeakMap<
+  SourceItem,
+  WeakMap<PlatformBlockRelease, SourceItemReading>
+>();
+
 export const readSourceItem = (
+  item: SourceItem,
+  release: PlatformBlockRelease,
+): SourceItemReading => {
+  if (!Object.isFrozen(item) || !Object.isFrozen(item.props))
+    return readSourceItemFresh(item, release);
+  let byRelease = frozenReadings.get(item);
+  if (byRelease === undefined) {
+    byRelease = new WeakMap();
+    frozenReadings.set(item, byRelease);
+  }
+  let reading = byRelease.get(release);
+  if (reading === undefined) {
+    reading = readSourceItemFresh(item, release);
+    byRelease.set(release, reading);
+  }
+  return reading;
+};
+
+const readSourceItemFresh = (
   item: SourceItem,
   release: PlatformBlockRelease,
 ): SourceItemReading => {

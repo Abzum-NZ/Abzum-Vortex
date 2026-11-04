@@ -105,8 +105,10 @@ export type StudioCanvasAddRequest = Readonly<{
 
 /** Studio's block palette: where a new block can go and how Studio adds it. */
 export type StudioCanvasPalette = Readonly<{
-  /** The places on the open page a new block can go. */
-  targets: StudioCompositionAddTargetsModel;
+  /** The places on the open page a new block can go, worked out when first asked for a draft. */
+  targets: () => StudioCompositionAddTargetsModel;
+  /** The blocks the application holds, which the composition limit counts. */
+  placed: number;
   /** Whose blocks the palette adds to: the open page's content slots, or the selected layout. */
   owner: StudioCompositionOwner["kind"];
   message: string;
@@ -608,10 +610,7 @@ export function StudioPuckProvider({
     [breakpoint],
   );
   // The application holds every block it may: Duplicate and every other insert are off.
-  const placed =
-    input.palette?.targets.kind === "available"
-      ? (input.palette.targets.targets[0]?.placed ?? 0)
-      : 0;
+  const placed = input.palette?.placed ?? 0;
   const full = definitionLimitReached("compositionPlacements", placed);
   const permissions = useMemo(
     () => ({
@@ -901,9 +900,10 @@ function StudioPuckSync({
     // Puck does not hold the page's config yet; this runs again once it does.
     if (held !== config) return;
     const { appState } = getPuck();
+    // Puck gives every slot it knows an empty list: those are not a difference.
     const changed =
-      !sameCompositionValue(appState.data.content, data.content) ||
-      !sameCompositionValue(appState.data.root, data.root);
+      !sameCompositionValue(appState.data.content, data.content, true) ||
+      !sameCompositionValue(appState.data.root, data.root, true);
     if (changed || (walked.current !== held && !appState.ui.isDragging)) walk(data);
     select(wantedRef.current);
     // The draft is shown again every time the canvas comes into view, so nothing Puck held while

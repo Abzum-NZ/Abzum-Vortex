@@ -19,7 +19,7 @@ import {
   type StudioSettingChoices,
 } from "@vortex/ui/studio";
 import type { StudioBlockDialogKind } from "@vortex/ui/studio/puck-provider";
-import { studioPlacementLabels } from "../_lib/studio-labels";
+import { studioPlacementLabel } from "../_lib/studio-labels";
 import { StudioBlockSetupDialog, type StudioBlockSetupRequest } from "./studio-block-setup-dialog";
 import { StudioPlaceList } from "./studio-used-in";
 import { studioNotice } from "./studio-save-state";
@@ -31,6 +31,8 @@ type Props = Readonly<{
   context: StudioCompositionContext;
   selection: StudioSemanticSelection;
   source: ApplicationSourceDocument;
+  /** Selection key to the label Studio shows, from the draft's one outline. */
+  labels: ReadonlyMap<string, string>;
   disabled: boolean;
   choices: StudioSettingChoices;
   onCommand: (
@@ -56,10 +58,9 @@ const destinationOptionKey = (destination: {
  * bar; a refusal is said in the dialog and the dialog stays open.
  */
 export function StudioBlockDialogs(props: Props) {
-  const { open, onClose, context, selection, source, disabled, choices, onCommand } = props;
+  const { open, onClose, context, selection, source, labels, disabled, choices, onCommand } = props;
   const [problem, setProblem] = useState("");
   const [setup, setSetup] = useState<StudioBlockSetupRequest | null>(null);
-  const names = useMemo(() => studioPlacementLabels(context), [context]);
   // The places a block can move to are worked out when the dialog is open: each is a check of the
   // whole content area.
   const move = useMemo(
@@ -78,7 +79,7 @@ export function StudioBlockDialogs(props: Props) {
     [open, source, selection],
   );
   const name =
-    selection.kind === "placement" ? (names.get(selection.placementAlias) ?? "Block") : "Block";
+    selection.kind === "placement" ? (studioPlacementLabel(labels, selection.placementAlias) ?? "Block") : "Block";
   const close = () => {
     setProblem("");
     onClose();
@@ -179,7 +180,7 @@ export function StudioBlockDialogs(props: Props) {
                 value: destinationOptionKey(item.destination),
                 label:
                   item.destination.kind === "child"
-                    ? `${names.get(item.destination.parentAlias) ?? "Block"} / ${item.label.slice(item.label.indexOf(" / ") + 3)}`
+                    ? `${studioPlacementLabel(labels, item.destination.parentAlias) ?? "Block"} / ${item.label.slice(item.label.indexOf(" / ") + 3)}`
                     : item.label,
               }))}
               onChange={(next) => {

@@ -4,7 +4,7 @@ import { Item, ItemContent, ItemGroup } from "@vortex/ui/components/item";
 import { Alert, AlertDescription } from "@vortex/ui/components/alert";
 import { Button } from "@vortex/ui/components/button";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { applicationModuleKeys, type ConditionNode } from "@vortex/platform/schema";
 import {
   StudioConditionControls,
@@ -70,8 +70,15 @@ export function useStudioReactionFields(
   latest.current = props;
   const selectionKey = studioSemanticSelectionKey(props.selection);
   // The fields can be read once the page and the same modules are in the saved draft.
-  const target = resolveStudioReactionTarget(props.context.source, props.selection);
-  const savedTarget = resolveStudioReactionTarget(props.saved.source, props.selection);
+  const { selection } = props;
+  const target = useMemo(
+    () => resolveStudioReactionTarget(props.context.source, selection),
+    [props.context.source, selection],
+  );
+  const savedTarget = useMemo(
+    () => resolveStudioReactionTarget(props.saved.source, selection),
+    [props.saved.source, selection],
+  );
   const modules = JSON.stringify(applicationModuleKeys(props.context.source));
   // A page without a record offers page values and form answers only: nothing to read from the server.
   const needsFields = target !== undefined && target.top && target.recordReference !== "";

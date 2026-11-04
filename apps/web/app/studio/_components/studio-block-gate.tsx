@@ -62,7 +62,10 @@ export function StudioBlockVisibility({
     () => describeStudioCompositionGate(context, selection),
     [context, selection],
   );
-  const target = resolveStudioReactionTarget(context.source, selection);
+  const target = useMemo(
+    () => resolveStudioReactionTarget(context.source, selection),
+    [context.source, selection],
+  );
   const [feedback, setFeedback] = useState<StudioCompositionOutcome | null>(null);
   const [slot, setSlot] = useState<StudioReactionSlot>("visibility_condition");
   const [editing, setEditing] = useState(false);
