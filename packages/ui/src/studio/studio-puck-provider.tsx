@@ -41,7 +41,7 @@ import type {
   StudioCompositionOwner,
 } from "./application-composition-commands";
 import type { StudioCanvasFrame } from "./studio-canvas-projection";
-import { applyPageDataChange } from "./studio-canvas-change";
+import { applyPageDataChange, type StudioCanvasOwner } from "./studio-canvas-change";
 import type { StudioPlacementDescriber } from "./semantic-outline";
 import {
   destinationOfZone,
@@ -101,7 +101,7 @@ export type StudioCanvasAddRequest = Readonly<{
 export type StudioCanvasPalette = Readonly<{
   /** The places on the open page a new block can go. */
   targets: StudioCompositionAddTargetsModel;
-  /** Whose blocks the palette adds to: the open page's content slots, or its layout. */
+  /** Whose blocks the palette adds to: the open page's content slots, or the selected layout. */
   owner: StudioCompositionOwner["kind"];
   message: string;
   /** Adds a block through Studio's one add command; `false` when nothing was added yet. */
@@ -134,8 +134,10 @@ export type StudioPuckInput = Readonly<{
   /** Absent until the draft's canvas view has loaded. */
   fieldInputControlReleases: FieldInputControlReleaseMap | null;
   platformThemeTokens: PlatformThemeTokens | null;
-  /** The page on the canvas; `undefined` when the workspace shows no page. */
+  /** The page on the canvas, or the page that frames the selected layout; `undefined` when the workspace shows none. */
   pageAlias: string | undefined;
+  /** The selected layout, whose blocks are then the canvas's: the page above only draws the frame around them. */
+  layoutAlias: string | undefined;
   /** The compiled items of each content slot of this page (or step), keyed by page slot address key. */
   compiledSlots?: Readonly<Record<string, StudioCanvasCompiledSlot>> | undefined;
   disabled: boolean;
@@ -383,14 +385,22 @@ export function StudioPuckProvider({
       setResync((generation) => generation + 1);
       return;
     }
-    if (now.pageAlias === undefined || shown.data === undefined) return;
+    if (shown.data === undefined) return;
+    const owner: StudioCanvasOwner | undefined =
+      shown.owner === "layout"
+        ? now.layoutAlias === undefined
+          ? undefined
+          : { kind: "layout", shellAlias: now.layoutAlias }
+        : now.pageAlias === undefined
+          ? undefined
+          : { kind: "page", pageAlias: now.pageAlias, step: shown.step };
+    if (owner === undefined) return;
     // A block inserted from the drawer is added by Studio's add command, not by this edit.
     for (const id of inserted.current) if (puckItemsHold(candidate, id)) return;
     const result = applyPageDataChange(
       shown.catalogue,
       now.source,
-      now.pageAlias,
-      shown.step,
+      owner,
       withoutEmptyPuckZones(candidate),
     );
     if (result.kind === "unchanged") return;
@@ -539,10 +549,9 @@ export function StudioPuckProvider({
       duplicate: permitted && !full,
       delete: permitted,
       edit: false,
-      // The drawer's blocks drag onto the canvas; a layout's blocks are added with Add.
-      insert: permitted && !full && input.palette?.owner !== "layout",
+      insert: permitted && !full,
     }),
-    [permitted, full, input.palette?.owner],
+    [permitted, full],
   );
   const empty = useMemo((): Data => ({ root: { props: {} }, content: [] }), []);
   const shown = model.shown ?? empty;

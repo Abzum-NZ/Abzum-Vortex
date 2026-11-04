@@ -63,6 +63,11 @@ export type StudioCanvasFrameMetadata = Readonly<{
    * editor in the frame; empty for a page in the platform's default frame.
    */
   slotKeys: Readonly<Record<string, string>>;
+  /**
+   * Whether the canvas shows a layout: its blocks are Puck's content, drawn inside the shell's
+   * chrome, and the page it frames is not drawn.
+   */
+  layout: boolean;
 }>;
 
 /**
@@ -92,6 +97,11 @@ export type StudioCanvasChannel = Readonly<{
   compiled: StudioCanvasCompiledSettings;
   /** Why a block's delete, drag or duplicate is unavailable, by block name; the action bar says it. */
   references: StudioCanvasReferences;
+  /**
+   * With a layout on the canvas, by block name and slot key, the label of the content slot that
+   * slot is reserved for: the block draws "Page content" there and takes no block of the layout.
+   */
+  contentTargets: Readonly<Record<string, Readonly<Record<string, string>>>>;
   /** The records of the canvas's data blocks. */
   records: StudioCanvasRecords;
   /** The role the canvas previews, or `null` for the design view. */

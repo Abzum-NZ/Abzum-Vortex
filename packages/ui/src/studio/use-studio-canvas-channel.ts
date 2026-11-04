@@ -44,6 +44,7 @@ export const useStudioCanvasChannelValue = (
     // and frame, never before, so one read serves the final revision.
     visible:
       input.canvasShown &&
+      model.owner === "page" &&
       model.shown !== undefined &&
       input.platformThemeTokens !== null &&
       input.fieldInputControlReleases !== null,
@@ -66,13 +67,23 @@ export const useStudioCanvasChannelValue = (
             appearance,
             platformThemeTokens,
             slotKeys: model.slotKeys,
+            layout: model.owner === "layout",
           },
-    [frame, appearance, platformThemeTokens, model.slotKeys],
+    [frame, appearance, platformThemeTokens, model.slotKeys, model.owner],
   );
   const viewer = input.viewer ?? null;
   const compiled = model.compiledSettings ?? NO_COMPILED_SETTINGS;
   return useMemo(
-    () => ({ compiled, references, records, viewer, controls, grid, frame: frameMetadata }),
-    [compiled, references, records, viewer, controls, grid, frameMetadata],
+    () => ({
+      compiled,
+      references,
+      contentTargets: model.contentTargets,
+      records,
+      viewer,
+      controls,
+      grid,
+      frame: frameMetadata,
+    }),
+    [compiled, references, model.contentTargets, records, viewer, controls, grid, frameMetadata],
   );
 };
