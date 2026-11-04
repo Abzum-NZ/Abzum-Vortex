@@ -119,8 +119,9 @@ export function StudioBlockSetupDialog({
   const initializedData = useRef<{ request: StudioBlockSetupRequest | null; query: string } | null>(
     null,
   );
-  // The one place the data's own settings (a grid's columns) are written: whenever the chosen
-  // query changes, the chosen one included when the dialog picked it itself.
+  // The one place the data's own settings (a grid's columns) are written: when the chosen query
+  // changes, by the person or by the dialog's own choice. Choosing the data already chosen
+  // changes nothing.
   useEffect(() => {
     if (initializedData.current?.request === request && initializedData.current.query === query)
       return;

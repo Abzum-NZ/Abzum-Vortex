@@ -97,9 +97,7 @@ export function StudioReferencePicker({
       <InputGroup>
         <ComboboxInput
           id={id}
-          placeholder={
-            selected !== null && selected.value !== "" ? selected.label : (unset ?? "Search…")
-          }
+          placeholder={selected?.label ?? "Search…"}
           {...accessibility}
           onFocus={startSearch}
           onPointerDown={startSearch}
