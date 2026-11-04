@@ -145,7 +145,8 @@ function StudioInspectorFieldGroups({
       ),
     };
   }
-  const controls = Object.entries(fields)
+  // A block whose settings cannot be changed draws no setting control: its notice stands for them.
+  const controls = (context?.notice !== undefined ? [] : Object.entries(fields))
     .filter(
       ([key, node]) =>
         node !== undefined &&

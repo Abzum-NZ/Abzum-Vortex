@@ -329,7 +329,7 @@ function StudioQueryField({ readOnly }: Readonly<{ readOnly: boolean }>) {
   );
 }
 
-/** Who can see the block: the permission it needs. A refusal is announced by the inspector, not here. */
+/** Who can see the block: the permission it needs. A refusal shows at the field until the draft changes. */
 function StudioGateField({ readOnly }: Readonly<{ readOnly: boolean }>) {
   const context = useContext(StudioSettingFieldsContext);
   const gate = context?.access?.gate;

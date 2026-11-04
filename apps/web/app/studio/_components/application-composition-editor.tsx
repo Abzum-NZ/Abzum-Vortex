@@ -163,7 +163,8 @@ export function ApplicationCompositionEditor(props: Props) {
   const selectionKey = studioSemanticSelectionKey(props.selection);
   // Input that is not valid yet stays in its control; the draft changing under it (Undo, Redo, another
   // screen size) drops it. The workspace keys this editor by the selected item.
-  const settings = useStudioDraftHeld(settingsInputsFor(settingsModel));
+  const settingsFromDraft = useMemo(() => settingsInputsFor(settingsModel), [settingsModel]);
+  const settings = useStudioDraftHeld(settingsFromDraft);
   const layout = useStudioDraftHeld(model.kind === "available" ? inputsFor(model.layout) : null);
   const [problemArea, setProblemArea] = useState<"settings" | "features">("settings");
   // A success is announced to a screen reader; a refusal stays on screen for everyone.
@@ -353,17 +354,41 @@ export function ApplicationCompositionEditor(props: Props) {
     otherProblem,
   ]);
 
-  if (model.kind !== "available" || layout.value === null)
+  const settingsNotice =
+    settingsModel.kind === "available"
+      ? undefined
+      : settingsModel.kind === "unsupported"
+        ? "This item's settings can't be changed here."
+        : "This item's settings can't be read.";
+  if (model.kind !== "available" || layout.value === null) {
+    // The block's header and who sees it stay; only its settings, order and size are unavailable.
+    const placementAlias =
+      props.selection.kind === "placement" ? props.selection.placementAlias : "";
     return (
-      <section className="space-y-2">
-        <h3 className="text-sm font-medium">Item order and size</h3>
-        <p role="status" className="text-sm text-muted-foreground">
-          {model.kind === "unsupported"
-            ? "This area uses an item type that cannot be edited here. Nothing was changed."
-            : "This item is not in the current draft."}
-        </p>
+      <section aria-labelledby={titleId}>
+        <StudioBlockSettingFields
+          titleId={titleId}
+          choices={choices}
+          disabled={props.disabled}
+          placementAlias={placementAlias}
+          name={names.get(placementAlias) ?? "Block"}
+          actions={[]}
+          releases={props.context.catalogue.releases}
+          access={access}
+          notice={settingsNotice ?? "This item's settings can't be changed here."}
+        />
+        {conditionDialog}
+        <div className="space-y-2">
+          <h3 className="text-sm font-medium">Item order and size</h3>
+          <p role="status" className="text-sm text-muted-foreground">
+            {model.kind === "unsupported"
+              ? "This area uses an item type that cannot be edited here. Nothing was changed."
+              : "This item is not in the current draft."}
+          </p>
+        </div>
       </section>
     );
+  }
 
   // A Records table's grid features are edited in their own Features panel, not as a setting group.
   const featuresProperty =
@@ -522,13 +547,7 @@ export function ApplicationCompositionEditor(props: Props) {
         query={queryValue}
         access={access}
         settingsAfter={settingsAfter}
-        notice={
-          settingsModel.kind === "available"
-            ? undefined
-            : settingsModel.kind === "unsupported"
-              ? "This item's settings can't be changed here."
-              : "This item's settings can't be read."
-        }
+        notice={settingsNotice}
       />
       {conditionDialog}
       {featuresProperty === undefined ? null : (
