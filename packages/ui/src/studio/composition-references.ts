@@ -27,8 +27,6 @@ export type StudioPlacementReferenceReason =
   | "content_outlet"
   | "unresolved_target";
 
-export type StudioCompositionRemovalReason = StudioPlacementReferenceReason | "placement_users";
-
 /** What still names a placement, with the flow and step that do when one does. */
 export type StudioPlacementReference = Readonly<{
   reason: StudioPlacementReferenceReason;

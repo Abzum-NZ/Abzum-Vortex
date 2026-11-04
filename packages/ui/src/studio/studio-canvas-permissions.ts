@@ -15,6 +15,7 @@ import {
   regions,
   slotDeclaration,
   releaseFor,
+  type Region,
 } from "./application-composition-regions";
 import { studioLayoutOutletPlacementUses } from "./application-layout-outlets";
 import {
@@ -52,26 +53,8 @@ const studioPlacementReferrers = (
     ...applicationUses(source, { kind: "message_target", placementAlias: alias }),
   ].filter((place) => place.open.kind !== "placement" || !leaving.has(place.open.placementAlias));
 
-/** The one sentence for a block that queries or messages still use. */
-export const studioPlacementUsersSentence = (users: string): string =>
+const studioPlacementUsersSentence = (users: string): string =>
   `This block is used by ${users}. Change that reference first.`;
-
-/** What still names blocks that leave together: a flow step first, then queries and messages. */
-export const studioRemovalReference = (
-  source: ApplicationSourceDocument,
-  leaving: ReadonlySet<string>,
-  flowReference: (alias: string) => StudioPlacementReference | undefined,
-):
-  StudioPlacementReference | Readonly<{ reason: "placement_users"; users: string }> | undefined => {
-  for (const alias of leaving) {
-    const flow = flowReference(alias);
-    if (flow !== undefined) return flow;
-  }
-  const users = [...leaving].flatMap((alias) => studioPlacementReferrers(source, alias, leaving));
-  return users.length > 0
-    ? { reason: "placement_users", users: describeApplicationUsers(users) }
-    : undefined;
-};
 
 /**
  * Why a block cannot be duplicated, or undefined: a form, or a block holding a field input, because
@@ -106,50 +89,14 @@ const REMOVAL_RULE_REASONS = {
   repeating_slot: "This block sits in a repeating area and can't be removed here.",
 } as const;
 
-/**
- * Why a block cannot be removed from where it sits (the page's kind, a public address, a repeating
- * area), or undefined. The canvas change that carries a removal asks this once, for the removed
- * blocks that are not inside another removed block, so a block the references do not know yet (just
- * restored, copied or added) is held too. One walk of the application; a removed block is not
- * entered.
- */
-export const studioRemovalRuleRefusal = (
-  catalogue: ImmutablePlatformBlockCatalogue,
-  source: ApplicationSourceDocument,
-  removed: ReadonlySet<string>,
-): string | undefined => {
-  for (const region of regions(source)) {
-    const cause = regionRemovalCause(source, region);
-    const visit = (items: readonly SourceItem[], repeating: boolean): string | undefined => {
-      for (const item of items) {
-        if (removed.has(item.props.id)) {
-          const rule = removalRule(cause, repeating);
-          if (rule !== undefined) return REMOVAL_RULE_REASONS[rule];
-          continue;
-        }
-        const release = releaseFor(catalogue, item);
-        for (const [key, slot] of itemSlots(catalogue, item)) {
-          const found = visit(
-            slot.items,
-            repeating || slotDeclaration(release, key)?.repeats !== undefined,
-          );
-          if (found !== undefined) return found;
-        }
-      }
-      return undefined;
-    };
-    const found = visit(region.zone.items, false);
-    if (found !== undefined) return found;
-  }
-  return undefined;
-};
+const REQUIRED_SLOT_REASON = "This block fills a required slot.";
 
 /**
  * Why a block cannot be removed or moved because it holds a layout's content outlet (the outlet
- * reserves it or a block inside it), or undefined. The one sentence for the canvas's reasons and
- * the canvas change; it names the outlets themselves, not every page bound to them.
+ * reserves it or a block inside it), or undefined. It names the outlets themselves, not every page
+ * bound to them, and covers the block's subtree, so it is asked of the top block only.
  */
-export const studioOutletHostRefusal = (
+const studioOutletHostRefusal = (
   source: ApplicationSourceDocument,
   alias: string,
 ): string | undefined => {
@@ -161,23 +108,144 @@ export const studioOutletHostRefusal = (
     : `This block holds ${describeApplicationUsers(outlets)}. Retarget the outlet first.`;
 };
 
+/**
+ * What a removal reads from the whole application, built once per source: every block name, the
+ * flow steps that name a block, and the forms of a content area (read only for an area that holds
+ * a form, and once per area).
+ */
+export type StudioRemovalIndex = Readonly<{
+  aliases: ReadonlySet<string>;
+  flowReference: (alias: string) => StudioPlacementReference | undefined;
+  /** Keyed by the area's `zone.items`: separate `regions()` calls share that identity, not the region. */
+  forms: (region: Region) => ReturnType<typeof studioRegionForms> | undefined;
+}>;
+
+export const studioRemovalIndex = (
+  catalogue: ImmutablePlatformBlockCatalogue,
+  source: ApplicationSourceDocument,
+): StudioRemovalIndex => {
+  const aliases = new Set(
+    regions(source).flatMap((region) =>
+      sourceItemTree(region.zone.items).map((item) => item.props.id),
+    ),
+  );
+  const read = new WeakMap<readonly SourceItem[], ReturnType<typeof studioRegionForms> | null>();
+  return {
+    aliases,
+    // The flows are scanned once for every block, not once per block.
+    flowReference: studioPlacementRemovalReferences(source, aliases),
+    forms: (region) => {
+      const items = region.zone.items;
+      let held = read.get(items);
+      if (held === undefined) {
+        held = holdsForm(catalogue, items) ? studioRegionForms(catalogue, items) : null;
+        read.set(items, held);
+      }
+      return held ?? undefined;
+    },
+  };
+};
+
+/**
+ * Why one removed block, with everything inside it (`removed`), cannot leave the place it is in,
+ * or undefined. The one place a removal sentence is made, with one order of checks for the action
+ * bar, the Delete key, the Outline, the canvas reasons, the canvas change and the agent: the
+ * removal rule (page kind, public address, repeating area), a layout outlet the block holds, a
+ * required slot it fills, the queries and messages that use it, a flow step that names it, and a
+ * form that would lose an input it needs.
+ */
+export const studioRemovalRefusalAt = (
+  catalogue: ImmutablePlatformBlockCatalogue,
+  source: ApplicationSourceDocument,
+  place: Readonly<{
+    region: Region;
+    /** The removed block that is not inside another removed block. */
+    alias: string;
+    repeating: boolean;
+    /** Whether the slot the block sits in must keep a block. */
+    required: boolean;
+    siblings: readonly SourceItem[];
+  }>,
+  removed: ReadonlySet<string>,
+  index: StudioRemovalIndex,
+): string | undefined => {
+  const rule = removalRule(regionRemovalCause(source, place.region), place.repeating);
+  if (rule !== undefined) return REMOVAL_RULE_REASONS[rule];
+  const host = studioOutletHostRefusal(source, place.alias);
+  if (host !== undefined) return host;
+  if (place.required && place.siblings.every((sibling) => removed.has(sibling.props.id)))
+    return REQUIRED_SLOT_REASON;
+  const users = [...removed].flatMap((alias) => studioPlacementReferrers(source, alias, removed));
+  if (users.length > 0) return studioPlacementUsersSentence(describeApplicationUsers(users));
+  for (const alias of removed) {
+    const flow = index.flowReference(alias);
+    if (flow !== undefined) return studioPlacementReferenceSentence(flow);
+  }
+  const forms = index.forms(place.region);
+  const broken =
+    forms === undefined ? undefined : studioRemovalFormRefusal(catalogue, source, forms, removed);
+  return broken === undefined
+    ? undefined
+    : studioFormChangeRefusalSentence(broken, studioPlacementReferenceSentence);
+};
+
+/**
+ * Why the blocks in `removed` cannot leave the application as it is, or undefined. For a change
+ * that carries a removal (the canvas change): one walk finds the place of each removed block that
+ * is not inside another removed block, so a block the references do not know yet (just restored,
+ * copied or added) is held too. A removed block is not entered.
+ */
+export const studioRemovalRefusal = (
+  catalogue: ImmutablePlatformBlockCatalogue,
+  source: ApplicationSourceDocument,
+  removed: ReadonlySet<string>,
+  index: StudioRemovalIndex = studioRemovalIndex(catalogue, source),
+): string | undefined => {
+  for (const region of regions(source)) {
+    const visit = (
+      items: readonly SourceItem[],
+      required: boolean,
+      repeating: boolean,
+    ): string | undefined => {
+      for (const item of items) {
+        if (removed.has(item.props.id)) {
+          const refusal = studioRemovalRefusalAt(
+            catalogue,
+            source,
+            { region, alias: item.props.id, repeating, required, siblings: items },
+            removed,
+            index,
+          );
+          if (refusal !== undefined) return refusal;
+          continue;
+        }
+        const release = releaseFor(catalogue, item);
+        for (const [key, slot] of itemSlots(catalogue, item)) {
+          const declaration = slotDeclaration(release, key);
+          const found = visit(
+            slot.items,
+            declaration?.required === true,
+            repeating || declaration?.repeats !== undefined,
+          );
+          if (found !== undefined) return found;
+        }
+      }
+      return undefined;
+    };
+    const found = visit(region.zone.items, false, false);
+    if (found !== undefined) return found;
+  }
+  return undefined;
+};
+
 /** Build the references once for a draft; the values are plain metadata. */
 export const studioCanvasReferences = (
   source: ApplicationSourceDocument,
   catalogue: ImmutablePlatformBlockCatalogue,
 ): StudioCanvasReferences => {
-  const allRegions = regions(source);
-  const aliases = new Set(
-    allRegions.flatMap((region) => sourceItemTree(region.zone.items).map((item) => item.props.id)),
-  );
-  // The flows are scanned once for every block, not once per block.
-  const flowReference = studioPlacementRemovalReferences(source, aliases);
+  const index = studioRemovalIndex(catalogue, source);
   const result: Record<string, Partial<Record<StudioCanvasAction, string>>> = {};
-  for (const region of allRegions) {
-    // Only a page that holds a form can break one by removing a block; its forms are read once.
-    const regionHoldsForm = holdsForm(catalogue, region.zone.items);
-    const forms = regionHoldsForm ? studioRegionForms(catalogue, region.zone.items) : undefined;
-    const regionCause = regionRemovalCause(source, region);
+  for (const region of regions(source)) {
     const published =
       region.shell === undefined && region.page !== undefined && publishedPage(source, region.page);
     const visit = (items: readonly SourceItem[], required: boolean, repeating: boolean) => {
@@ -189,30 +257,17 @@ export const studioCanvasReferences = (
         const release = releaseFor(catalogue, item);
         const duplicate = studioDuplicateRefusal(catalogue, item, descendants);
         if (duplicate !== undefined) reasons.duplicate = duplicate;
+        else if (published) reasons.duplicate = PUBLISHED_PAGE_ADD_REASON;
         const host = studioOutletHostRefusal(source, id);
-        if (host !== undefined) {
-          reasons.delete = host;
-          reasons.drag = host;
-        }
-        const reference = studioRemovalReference(source, removed, flowReference);
-        if (reference !== undefined)
-          reasons.delete ??=
-            reference.reason === "placement_users"
-              ? studioPlacementUsersSentence(reference.users)
-              : studioPlacementReferenceSentence(reference);
-        if (required && items.length === 1) reasons.delete ??= "This block fills a required slot.";
-        if (published) reasons.duplicate ??= PUBLISHED_PAGE_ADD_REASON;
-        const rule = removalRule(regionCause, repeating);
-        if (rule !== undefined) reasons.delete ??= REMOVAL_RULE_REASONS[rule];
-        const broken =
-          forms === undefined
-            ? undefined
-            : studioRemovalFormRefusal(catalogue, source, forms, removed);
-        if (broken !== undefined)
-          reasons.delete ??= studioFormChangeRefusalSentence(
-            broken,
-            studioPlacementReferenceSentence,
-          );
+        if (host !== undefined) reasons.drag = host;
+        const refusal = studioRemovalRefusalAt(
+          catalogue,
+          source,
+          { region, alias: id, repeating, required, siblings: items },
+          removed,
+          index,
+        );
+        if (refusal !== undefined) reasons.delete = refusal;
         result[id] = reasons;
         for (const [key, slot] of itemSlots(catalogue, item)) {
           const declaration = slotDeclaration(release, key);

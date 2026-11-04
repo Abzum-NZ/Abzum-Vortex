@@ -1,11 +1,8 @@
 import type { Data } from "@puckeditor/core";
 import { typedSourceSettingValue } from "@vortex/platform/schema";
-import {
-  applyStudioCompositionCommand,
-  describeStudioCompositionSettings,
-} from "./application-composition-commands";
+import { describeStudioCompositionSettings } from "./application-composition-commands";
 import type {
-  StudioCompositionCommandResult,
+  StudioCompositionCommand,
   StudioCompositionContext,
 } from "./application-composition-model";
 import { followFieldLabels } from "./follow-field-labels";
@@ -124,19 +121,23 @@ export const singleBlockPropsEdit = (
 };
 
 /**
- * The source after the settings of one block changed: each changed value is written whole, the
- * settings that no longer apply are dropped and the ones that now apply take their declared
- * default, copied field labels follow their field, and the result goes through the one settings
- * command. A changed prop that is not a setting, or a value that does not read as its
- * declaration, is refused as `invalid`: a settings edit never reaches the page write.
+ * The settings change for one block's edit in the inspector: each changed value is written whole,
+ * the settings that no longer apply are dropped and the ones that now apply take their declared
+ * default, copied field labels follow their field. A changed prop that is not a setting, or a value
+ * that does not read as its declaration, is `invalid`: a settings edit never reaches the page
+ * write. The runner applies the change to the context it was read from.
  */
-export const applySettingsEdit = (
+export const settingsChangeOfPuckEdit = (
   context: StudioCompositionContext,
   choices: (query: string | null) => StudioSettingChoices,
   edit: StudioSettingsEdit,
-): StudioCompositionCommandResult => {
-  const selection = { kind: "placement", placementAlias: edit.alias } as const;
-  const model = describeStudioCompositionSettings(context, selection);
+):
+  | Extract<StudioCompositionCommand, { kind: "settings" }>
+  | Readonly<{ kind: "invalid" | "unsupported" }> => {
+  const model = describeStudioCompositionSettings(context, {
+    kind: "placement",
+    placementAlias: edit.alias,
+  });
   if (model.kind !== "available") return { kind: model.kind };
   let values: StudioSettingValues = model.settings;
   for (const key of edit.keys) {
@@ -150,9 +151,5 @@ export const applySettingsEdit = (
   }
   const fields = choices(model.query).fields;
   values = followFieldLabels(model.properties, values, model.settings, fields, fields);
-  return applyStudioCompositionCommand(context, context, selection, {
-    kind: "settings",
-    settings: values,
-    query: model.query,
-  });
+  return { kind: "settings", settings: values, query: model.query };
 };
