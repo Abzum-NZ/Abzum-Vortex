@@ -52,6 +52,14 @@ export const studioScreenOfBreakpoint = (breakpoint: Breakpoint) => {
   return screen;
 };
 
+/**
+ * Why a block cannot leave its slot on a smaller screen: Tablet and Phone each keep an order of the
+ * blocks within a slot, and nothing else. Said on a refused drop and by Move to.
+ */
+export const studioCrossSlotReason = (breakpoint: Breakpoint): string =>
+  `On ${studioScreenOfBreakpoint(breakpoint).label} a block can only be reordered within ` +
+  "its slot. Move it to another slot on Desktop.";
+
 /** The breakpoint of the screen Puck starts on. */
 export const studioInitialBreakpoint: Breakpoint = studioScreens[0]!.breakpoint;
 
