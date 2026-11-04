@@ -36,12 +36,18 @@ import type { FieldInputControlReleaseMap } from "../registry";
 import type { PlatformThemeTokens } from "../theme";
 import type { StudioCompileFailure } from "./compile-failure";
 import type {
+  StudioCompositionOutcome,
   StudioCompositionAddTargetsModel,
   StudioCompositionDestination,
   StudioCompositionOwner,
 } from "./application-composition-commands";
 import type { StudioCanvasFrame } from "./studio-canvas-projection";
 import { applyPageDataChange, type StudioCanvasOwner } from "./studio-canvas-change";
+import {
+  settingKeysOf,
+  singleBlockPropsEdit,
+  type StudioSettingsEdit,
+} from "./studio-settings-edit";
 import type { StudioPlacementDescriber } from "./semantic-outline";
 import {
   destinationOfZone,
@@ -146,6 +152,11 @@ export type StudioPuckInput = Readonly<{
   /** Why the saved draft would not compile; the page stays open so the cause can be corrected. */
   compileFailure?: StudioCompileFailure | null | undefined;
   onChange: (expectedSource: ApplicationSourceDocument, source: ApplicationSourceDocument) => void;
+  /**
+   * One block's settings edited in the inspector, run against the draft as it is now through the
+   * one composition command route; `merge` joins a run of edits to one value into one Undo step.
+   */
+  onSettingsEdit: (edit: StudioSettingsEdit, merge: string) => StudioCompositionOutcome;
   /** Names a placed block as the outline and the inspector do; the action bar shows it. */
   describePlacement: StudioPlacementDescriber;
   /** The block selected in the workspace, shown selected on the canvas. */
@@ -360,14 +371,25 @@ export function StudioPuckProvider({
   // The name of the block Puck has just removed (its Delete key or the bar's Remove): once the
   // draft takes the removal, the Undo toast names it.
   const removing = useRef<string | null>(null);
+  // Typing into one field of one block is a run of edits, so one Undo; a new run starts when the
+  // focused field or the selected block changes.
+  const run = useRef({ focus: null as string | null, selector: "", count: 0 });
   const permitted = model.editable && input.canvasShown;
-  const latest = useRef({ input, model, permitted });
-  latest.current = { input, model, permitted };
+  // Settings are not per screen and do not need the page to be arrangeable: only a locked or
+  // hidden canvas stops them.
+  const settingsPermitted = !input.disabled && input.canvasShown;
+  const latest = useRef({ input, model, permitted, settingsPermitted });
+  latest.current = { input, model, permitted, settingsPermitted };
 
   // Every canvas change goes back through the definition: it is placed in the current draft and
   // validated before the history takes it. A refused change is shown as the draft still is.
   const change = useCallback((candidate: Data) => {
-    const { input: now, model: shown, permitted: allowed } = latest.current;
+    const {
+      input: now,
+      model: shown,
+      permitted: allowed,
+      settingsPermitted: settingsAllowed,
+    } = latest.current;
     if (synchronizing.current) return;
     const removed = removing.current;
     removing.current = null;
@@ -376,6 +398,50 @@ export function StudioPuckProvider({
       refusedRemoval.current = null;
       if (!puckItemsHold(candidate, refusedId)) {
         setResync((generation) => generation + 1);
+        return;
+      }
+    }
+    // One block's settings edited in the inspector (a page's or a layout's block): the settings
+    // command writes them, on every screen, and a run of edits to one field is one Undo step. A settings edit never falls
+    // through to the page write; only an edit that changes nothing but the slot order does.
+    if (
+      settingsAllowed &&
+      (now.pageAlias !== undefined || now.layoutAlias !== undefined) &&
+      shown.shown !== undefined
+    ) {
+      // Puck holds the screen's own order (Tablet and Phone reorder slots for display), so a
+      // settings edit is found against what Puck was given; the settings command writes from the
+      // live draft, so the screen order is kept.
+      const edit = singleBlockPropsEdit(shown.shown, candidate);
+      const keys = edit === undefined ? [] : settingKeysOf(edit.keys);
+      if (edit !== undefined && keys.length > 0) {
+        // Only the selected block's settings are edited here.
+        const before = now.blockActions.mark();
+        const outcome: StudioCompositionOutcome =
+          edit.alias === now.selectedPlacementAlias
+            ? now.onSettingsEdit(
+                { ...edit, keys },
+                `settings:${edit.alias}:${keys.join(",")}:${run.current.count}`,
+              )
+            : { kind: "invalid" };
+        if (outcome.kind === "applied") {
+          setRefused(null);
+          // A later change of any kind withdraws the removal's Undo offer; an edit that changed
+          // nothing leaves the draft, and so the offer, as it was.
+          if (now.blockActions.mark() !== before) toast.dismiss(REMOVED_TOAST);
+          return;
+        }
+        if (outcome.kind === "refused" || outcome.kind === "unsupported")
+          console.info("[studio] a setting change was refused:", outcome.kind);
+        else console.error("[studio] the settings command failed:", outcome.kind);
+        setResync((generation) => generation + 1);
+        setRefused({
+          area: shown.area,
+          message:
+            outcome.kind === "refused" && outcome.reason !== undefined
+              ? outcome.reason
+              : "That setting could not be changed. The block stays as it was.",
+        });
         return;
       }
     }
@@ -436,6 +502,10 @@ export function StudioPuckProvider({
   }, []);
 
   const onAction = useCallback((action: PuckAction, state: AppState, previous: AppState) => {
+    const focus = state.ui.field.focus ?? null;
+    const selector = JSON.stringify(state.ui.itemSelector ?? null);
+    if (focus !== run.current.focus || selector !== run.current.selector)
+      run.current = { focus, selector, count: run.current.count + 1 };
     // The screen changed: the model and metadata follow in the same render as Puck's own state.
     if (
       action.type === "setUi" &&
@@ -548,10 +618,10 @@ export function StudioPuckProvider({
       drag: permitted,
       duplicate: permitted && !full,
       delete: permitted,
-      edit: false,
+      edit: settingsPermitted,
       insert: permitted && !full,
     }),
-    [permitted, full],
+    [permitted, settingsPermitted, full],
   );
   const empty = useMemo((): Data => ({ root: { props: {} }, content: [] }), []);
   const shown = model.shown ?? empty;

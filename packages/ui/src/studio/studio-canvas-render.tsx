@@ -17,6 +17,7 @@ import {
   type ResponsivePlacement,
 } from "@vortex/platform/schema";
 import { studioPaletteChoices } from "./contextual-palette";
+import { studioVortexField, withSettingFields } from "./studio-puck-settings";
 import type { FieldInputControlReleaseMap, PlatformComponentRegistry } from "../registry";
 import { useStudioCanvasGridEvents } from "./studio-canvas-grid";
 import {
@@ -112,6 +113,17 @@ const releaseOf = (
   const block = ((props.vortex ?? {}) as StoredVortex).block;
   return typeof block?.block_id === "string" && typeof block.release_version === "string"
     ? registry.get(block.block_id, block.release_version)?.metadata
+    : undefined;
+};
+
+/** The catalogue release a placed block's props name. */
+const placedRelease = (
+  releases: ReadonlyMap<string, PlatformBlockRelease>,
+  props: Readonly<Record<string, unknown>>,
+): PlatformBlockRelease | undefined => {
+  const block = ((props.vortex ?? {}) as StoredVortex).block;
+  return typeof block?.block_id === "string" && typeof block.release_version === "string"
+    ? releases.get(`${block.block_id}@${block.release_version}`)
     : undefined;
 };
 
@@ -474,6 +486,9 @@ export const studioCanvasConfig = (
       .filter((choice) => choice.setup.length > 0 || choice.needsQuery)
       .map((choice) => choice.rendererKey),
   );
+  const releases = new Map(
+    catalogue.releases.map((release) => [`${release.blockId}@${release.releaseVersion}`, release]),
+  );
   const components = Object.fromEntries(
     Object.entries(
       config.components as Record<string, ComponentConfig<Record<string, unknown>>>,
@@ -496,11 +511,12 @@ export const studioCanvasConfig = (
         },
         // Every canvas component is measured and dragged by its own root element.
         inline: true,
-        fields: (component.fields ?? {}) as Record<string, Field>,
-        ...(component.resolveFields === undefined
-          ? {}
-          : {
-              resolveFields: (data: { props: Record<string, unknown> }, params: unknown) => {
+        ...withSettingFields(
+          component,
+          (props) => placedRelease(releases, props),
+          component.resolveFields === undefined
+            ? undefined
+            : (data, params) => {
                 const props = renderProps(data.props, releaseOf(registry, data.props), undefined);
                 const resolve = component.resolveFields as unknown as (
                   data: { props: Record<string, unknown> },
@@ -508,7 +524,7 @@ export const studioCanvasConfig = (
                 ) => Record<string, Field>;
                 return resolve({ ...data, props }, params);
               },
-            }),
+        ),
         render: (props: Record<string, unknown>) => (
           <CanvasBlockBoundary settings={props.vortex} props={props}>
             <CanvasBlock component={component} registry={registry} props={props} />
@@ -527,7 +543,10 @@ export const studioCanvasConfig = (
     // page. Puck's data holds only what the stored page holds, so the root has no props of its own
     // (no defaults, no settings) beside one slot per content slot of the page's shell.
     root: {
-      fields: Object.fromEntries(slots.map(([key, label]) => [key, { type: "slot", label }])),
+      fields: {
+        ...Object.fromEntries(slots.map(([key, label]) => [key, { type: "slot", label }])),
+        vortex: studioVortexField,
+      },
       render: (props: Parameters<typeof StudioCanvasRoot>[0]) => (
         <StudioCanvasRoot
           {...props}

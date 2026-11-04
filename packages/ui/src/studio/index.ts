@@ -52,6 +52,8 @@ export * from "./application-reaction-condition-commands";
 export type { StudioCompileFailure, StudioPreviewNotRunnable } from "./compile-failure";
 export * from "./studio-setting-controls";
 export * from "./studio-setting-model";
+export { followFieldLabels } from "./follow-field-labels";
+export { applySettingsEdit, type StudioSettingsEdit } from "./studio-settings-edit";
 export * from "./studio-setting-basic-controls";
 export * from "./studio-query-picker";
 export * from "./studio-grid-features";
@@ -85,6 +87,7 @@ export * from "./studio-icon-buttons";
 export * from "./studio-limit";
 export { studioPageNestingLevels } from "./studio-composition-depth";
 export { StudioPuckOutline } from "./studio-puck-outline";
+export { StudioBlockSettingFields } from "./studio-puck-settings";
 export * from "./studio-inspector-actions";
 export * from "./studio-field-type-icon";
 export {

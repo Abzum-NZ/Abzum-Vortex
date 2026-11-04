@@ -151,7 +151,14 @@ const richTextWords = (document: RichTextDocument): string =>
  * Formatted text written as plain paragraphs. The stored document is kept as it is until the
  * person changes the words; an edit stores one paragraph per non-blank line.
  */
-export function RichTextControl({ id, value, onChange, disabled }: ControlProps): ReactElement {
+export function RichTextControl({
+  id,
+  value,
+  onChange,
+  disabled,
+  descriptionId,
+  invalid,
+}: ControlProps): ReactElement {
   const current = value?.kind === "rich_text" ? richTextWords(value.value) : "";
   const [draft, setDraft] = useState(current);
   const [seen, setSeen] = useState(current);
@@ -162,6 +169,8 @@ export function RichTextControl({ id, value, onChange, disabled }: ControlProps)
   return (
     <Textarea
       id={id}
+      aria-describedby={descriptionId}
+      aria-invalid={invalid || undefined}
       disabled={disabled}
       value={draft}
       onChange={(event) => {

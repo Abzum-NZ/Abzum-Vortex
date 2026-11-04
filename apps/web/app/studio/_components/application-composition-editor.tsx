@@ -24,6 +24,7 @@ import {
   studioOutcomeText,
   studioSemanticSelectionKey,
   studioBlockChoices,
+  followFieldLabels,
   studioGridDataSettings,
   studioSettingProblems,
   StudioQueryPicker,
@@ -31,13 +32,12 @@ import {
   StudioSelectionControlBinding,
   studioQueryBindingFacts,
   studioRecordBindingFields,
-  StudioSettingFields,
+  StudioBlockSettingFields,
   StudioGridFeatures,
   boardModeOf,
   boardSettingChoices,
   studioBoardPipelines,
   studioGridFeaturesProperty,
-  studioOwnsSetting,
   studioCanvasGridKey,
   type StudioCanvasGridArrangement,
   type StudioCompositionCommand,
@@ -155,7 +155,18 @@ export function ApplicationCompositionEditor(props: Props) {
   const settings = useStudioDraftHeld(settingsInputsFor(settingsModel));
   const layout = useStudioDraftHeld(model.kind === "available" ? inputsFor(model.layout) : null);
   const [problemArea, setProblemArea] = useState<"settings" | "features">("settings");
-  const [message, setMessage] = useState("");
+  // A success is announced to a screen reader; a refusal stays on screen for everyone.
+  const [message, setMessage] = useState<Readonly<{ text: string; failed: boolean; at: number }>>({
+    text: "",
+    failed: false,
+    at: 0,
+  });
+  // The refusal belongs to the draft it was made against: another change by any path clears it.
+  const [refusedOn, setRefusedOn] = useState(props.context.source);
+  if (message.failed && refusedOn !== props.context.source) {
+    setRefusedOn(props.context.source);
+    setMessage((previous) => ({ ...previous, text: "", failed: false }));
+  }
   const titleId = useId();
   const hintId = useId();
   const settingsId = useId();
@@ -168,8 +179,6 @@ export function ApplicationCompositionEditor(props: Props) {
   );
   // The query sheet answers after the draft changed: it chooses through the latest settings.
   const chooseQuery = useRef<(reference: string) => void>(() => undefined);
-  // The optional settings nobody has set go to "More settings", decided once for this block.
-  const moreSettings = useRef<ReadonlySet<string> | null>(null);
 
   if (model.kind !== "available" || layout.value === null)
     return (
@@ -209,40 +218,6 @@ export function ApplicationCompositionEditor(props: Props) {
         ]),
       ),
     );
-  const listed =
-    settingsModel.kind === "available"
-      ? settingsModel.properties.filter(
-          (property) =>
-            property !== featuresProperty &&
-            property.key !== "query_parameters" &&
-            property.key !== "row_actions" &&
-            property.key !== "open_with" &&
-            property.key !== "record_from" &&
-            !(
-              addsFromList &&
-              (property.key === "inline_create" || property.key === "create_page")
-            ) &&
-            !studioOwnsSetting(property.key),
-        )
-      : [];
-  moreSettings.current ??= new Set(
-    listed
-      .filter((property) => {
-        const value = settingsInputs.settings[property.key];
-        return (
-          !property.required &&
-          (value === undefined ||
-            (property.defaultValue !== undefined &&
-              JSON.stringify(plainSourceSettingValue(value)) ===
-                JSON.stringify(
-                  plainSourceSettingValue(
-                    property.defaultValue as Parameters<typeof plainSourceSettingValue>[0],
-                  ),
-                )))
-        );
-      })
-      .map((property) => property.key),
-  );
   const inputs = layout.value;
   const widthWord =
     inputs.width === "fill"
@@ -256,31 +231,42 @@ export function ApplicationCompositionEditor(props: Props) {
   const command = (next: StudioCompositionCommand, merge?: string, done = "Changed."): boolean => {
     if (props.disabled) return false;
     const result = props.onCommand(props.context, props.selection, next, merge);
-    setMessage(
-      result.kind === "applied"
-        ? done
-        : studioOutcomeText(result, "Nothing changed. Use a valid size or order."),
-    );
+    setRefusedOn(props.context.source);
+    setMessage((previous) => ({
+      text:
+        result.kind === "applied"
+          ? done
+          : studioOutcomeText(result, "Nothing changed. Use a valid size or order."),
+      failed: result.kind !== "applied",
+      at: previous.at + 1,
+    }));
     return result.kind === "applied";
   };
-  const changeQuery = (reference: string) =>
-    changeSettings({
-      query: reference === "" ? null : reference,
-      settings: {
-        ...settingsInputs.settings,
-        // The settings command decides whether the title follows the new data.
-        ...Object.fromEntries(
-          Object.entries(
-            studioGridDataSettings(
-              settingsModel.kind === "available" ? settingsModel.properties : [],
-              [...props.choices.queries, ...(props.choices.recordQueries ?? [])].find(
-                (query) => query.reference === reference,
-              ),
-            ),
-          ).filter(([key]) => key !== "title"),
+  const changeQuery = (reference: string) => {
+    const properties = settingsModel.kind === "available" ? settingsModel.properties : [];
+    const query = reference === "" ? null : reference;
+    const data = Object.fromEntries(
+      Object.entries(
+        studioGridDataSettings(
+          properties,
+          [...props.choices.queries, ...(props.choices.recordQueries ?? [])].find(
+            (candidate) => candidate.reference === reference,
+          ),
         ),
-      },
+      ).filter(([key]) => key !== "title"),
+    );
+    // A label copied from the old data's field follows the field the new data offers.
+    changeSettings({
+      query,
+      settings: followFieldLabels(
+        properties,
+        { ...settingsInputs.settings, ...data },
+        settingsInputs.settings,
+        studioBlockChoices(props.choices, query).fields,
+        choices.fields,
+      ),
     });
+  };
   chooseQuery.current = changeQuery;
   const changeLayout = (next: LayoutInputs) => {
     const described = layoutOf(next);
@@ -441,14 +427,10 @@ export function ApplicationCompositionEditor(props: Props) {
                 }}
               />
             )}
-            <StudioSettingFields
-              idPrefix={settingsId}
-              moreKeys={moreSettings.current ?? undefined}
-              properties={listed}
-              values={settingsInputs.settings}
+            <StudioBlockSettingFields
               choices={choices}
               disabled={props.disabled}
-              onChange={(settings) => changeSettings({ ...settingsInputs, settings })}
+              placementAlias={model.placementAlias}
             />
             {(["open_with", "record_from"] as const)
               .filter((key) => settingsModel.properties.some((property) => property.key === key))
@@ -746,9 +728,14 @@ export function ApplicationCompositionEditor(props: Props) {
           )}
         </fieldset>
       </StudioInspectorGroup>
-      <p role="status" aria-live="polite" className={message === "" ? "sr-only" : "py-2 text-sm"}>
-        {message}
+      <p role="status" aria-live="polite" className="sr-only">
+        {message.failed ? "" : message.text}
       </p>
+      {message.failed && (
+        <Alert key={message.at} variant="destructive">
+          <AlertDescription>{message.text}</AlertDescription>
+        </Alert>
+      )}
     </section>
   );
 }
