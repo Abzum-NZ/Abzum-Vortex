@@ -1,20 +1,21 @@
 "use client";
 import { useMemo, useState, type FormEvent } from "react";
 import type { ApplicationSourceDocument } from "@vortex/platform/schema";
-import { Button } from "@vortex/ui/components/button";
-import { Input } from "@vortex/ui/components/input";
+import { Button } from "../components/button";
+import { Input } from "../components/input";
 import {
   studioAccessGateChoices,
   studioAccessPermissions,
-  StudioReferencePicker,
   type StudioAccessGate,
-} from "@vortex/ui/studio";
+} from "./application-access-commands";
 import { StudioField } from "./studio-field";
+import { StudioReferencePicker } from "./studio-reference-picker";
 
 const newChoice = "__new__";
 
 /** The one permission picker for page, menu and block gates, including naming a new permission. */
 export function StudioGateSelect({
+  id,
   source,
   value,
   label,
@@ -22,7 +23,11 @@ export function StudioGateSelect({
   onGate,
   onClear,
   allowCreate = true,
+  ...accessibility
 }: Readonly<{
+  id?: string | undefined;
+  "aria-describedby"?: string | undefined;
+  "aria-invalid"?: boolean | undefined;
   source: ApplicationSourceDocument;
   value: string;
   label: string;
@@ -49,6 +54,8 @@ export function StudioGateSelect({
   return (
     <div className="space-y-2">
       <StudioReferencePicker
+        {...accessibility}
+        id={id}
         aria-label={label}
         value={creating ? newChoice : value}
         disabled={disabled}

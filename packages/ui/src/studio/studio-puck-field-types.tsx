@@ -17,14 +17,19 @@ import {
   type Overrides,
 } from "@puckeditor/core";
 import {
+  type ApplicationSourceDocument,
   plainSourceSettingValue,
   typedSourceSettingValue,
   type BlockPropertySchemaContract,
   type QueryBindingPageFacts,
   type SourceBlockPropertyValueContract,
 } from "@vortex/platform/schema";
+import { Item } from "../components/item";
 import type { StudioQueryChoice } from "./contextual-palette";
 import { StudioField } from "./studio-field";
+import { StudioEditButton } from "./studio-icon-buttons";
+import { StudioGateSelect } from "./studio-gate-select";
+import type { StudioReactionSlot } from "./application-reaction-condition-commands";
 import { StudioSettingControl } from "./studio-setting-controls";
 import { StudioQueryBindings } from "./studio-query-bindings";
 import { StudioQueryPicker } from "./studio-query-picker";
@@ -57,6 +62,42 @@ export type StudioSettingFieldsValue = Readonly<{
   disabled: boolean;
   /** The data the block reads, when it reads any: its picker, New query and input bindings. */
   query?: StudioQueryFieldValue | undefined;
+  /** Who sees the block and when: its permission gate and conditions. */
+  access?: StudioAccessFieldValue | undefined;
+  /** What follows the settings in their group: the selection bindings and the group's refusal. */
+  settingsAfter?: ReactNode;
+  /** Said in the Settings group in place of the settings when the block's settings cannot be drawn. */
+  notice?: string | undefined;
+}>;
+
+/** The permission gate and the four conditions of the selected block, edited through the inspector's commands. */
+export type StudioAccessFieldValue = Readonly<{
+  /** The group's one-line summary while it is closed. */
+  summary: string;
+  gate:
+    | Readonly<{
+        kind: "available";
+        source: ApplicationSourceDocument;
+        /** The permission key the block needs, or an empty text. */
+        permission: string;
+        /** Sets the gate (null clears it); answers whether the draft took it. */
+        onChange: (permission: string | null) => boolean;
+        /** Why the draft refused the last change, shown at the field until the draft changes. */
+        problem?: string | undefined;
+      }>
+    | Readonly<{ kind: "refused"; reason: string }>;
+  /** One row per condition, or the reason they cannot be changed here. */
+  conditions:
+    | Readonly<{
+        kind: "available";
+        rows: readonly Readonly<{
+          slot: StudioReactionSlot;
+          title: string;
+          words: string;
+          onEdit: () => void;
+        }>[];
+      }>
+    | Readonly<{ kind: "refused"; reason: string }>;
 }>;
 
 /** The block's data choice and the bindings of its inputs, edited through the inspector's commands. */
@@ -89,6 +130,10 @@ export const StudioSettingFieldsContext = createContext<StudioSettingFieldsConte
 /** The name of the inspector field that holds the block's data choice (it is not a prop of the block). */
 export const studioQueryFieldName = "vortexQuery";
 
+/** The inspector fields that hold the block's access: its permission gate and each condition. */
+export const studioGateFieldName = "vortexGate";
+export const studioConditionFieldName = (slot: StudioReactionSlot) => `vortexCondition-${slot}`;
+
 type SettingKind = Readonly<{
   kind: "setting";
   property: BlockPropertySchemaContract;
@@ -96,7 +141,10 @@ type SettingKind = Readonly<{
 }>;
 
 /** What a Studio field carries: the setting and the control that edits it, or the block's data choice. */
-type StudioFieldKind = SettingKind | Readonly<{ kind: "query" }>;
+type StudioFieldKind =
+  | SettingKind
+  | Readonly<{ kind: "query" | "gate" }>
+  | Readonly<{ kind: "condition"; slot: StudioReactionSlot }>;
 
 /** Studio's data travels in Puck's public field `metadata`; Puck's own render is not used. */
 const studioCustomField = (label: string, key: string, studio: StudioFieldKind): Field =>
@@ -124,6 +172,15 @@ export const studioSettingField = (
 export const studioQueryField: Field = studioCustomField("Data", studioQueryFieldName, {
   kind: "query",
 });
+
+/** The field that holds the block's permission gate. */
+export const studioGateField: Field = studioCustomField("Permission gate", studioGateFieldName, {
+  kind: "gate",
+});
+
+/** The field of one condition (when the block shows, is required, is read-only or is enabled). */
+export const studioConditionField = (slot: StudioReactionSlot, title: string): Field =>
+  studioCustomField(title, studioConditionFieldName(slot), { kind: "condition", slot });
 
 const noProps: Readonly<Record<string, unknown>> = {};
 
@@ -272,6 +329,76 @@ function StudioQueryField({ readOnly }: Readonly<{ readOnly: boolean }>) {
   );
 }
 
+/** Who can see the block: the permission it needs. A refusal shows at the field until the draft changes. */
+function StudioGateField({ readOnly }: Readonly<{ readOnly: boolean }>) {
+  const context = useContext(StudioSettingFieldsContext);
+  const gate = context?.access?.gate;
+  if (context === null || gate === undefined) return null;
+  if (gate.kind === "refused")
+    return (
+      <p role="status" className="text-sm text-muted-foreground">
+        {gate.reason}
+      </p>
+    );
+  return (
+    <StudioField
+      label="Permission gate"
+      optional
+      error={gate.problem}
+      hint="Show this block only to people who hold its permission. Page and menu permissions still apply. Clearing this gate adds no block permission requirement. Create permissions in Access."
+    >
+      {(control) => (
+        <StudioGateSelect
+          id={control.id}
+          aria-describedby={control["aria-describedby"]}
+          aria-invalid={control["aria-invalid"]}
+          source={gate.source}
+          value={gate.permission}
+          label="Permission gate"
+          disabled={context.disabled || readOnly}
+          onGate={(next) => next.kind === "existing" && gate.onChange(next.key)}
+          onClear={() => gate.onChange(null)}
+          allowCreate={false}
+        />
+      )}
+    </StudioField>
+  );
+}
+
+/** One condition of the block as a row: its title, the rule in words and an Edit button. */
+function StudioConditionField({
+  slot,
+  readOnly,
+}: Readonly<{ slot: StudioReactionSlot; readOnly: boolean }>) {
+  const context = useContext(StudioSettingFieldsContext);
+  const conditions = context?.access?.conditions;
+  if (context === null || conditions === undefined) return null;
+  const row = conditions.kind === "available" ? conditions.rows.find((r) => r.slot === slot) : null;
+  // One notice stands for the four conditions: the first row says it.
+  if (conditions.kind === "refused")
+    return slot === "visibility_condition" ? (
+      <p role="status" className="text-sm text-muted-foreground">
+        {conditions.reason}
+      </p>
+    ) : null;
+  if (row === null || row === undefined) return null;
+  return (
+    <Item size="xs" role="listitem" className="justify-between" data-vortex-condition={slot}>
+      <span className="min-w-0">
+        <span className="block text-sm">{row.title}</span>
+        <span className="block truncate text-xs text-muted-foreground" title={row.words}>
+          {row.words}
+        </span>
+      </span>
+      <StudioEditButton
+        label={`Edit ${row.title.toLowerCase()} condition`}
+        disabled={context.disabled || readOnly}
+        onClick={row.onEdit}
+      />
+    </Item>
+  );
+}
+
 type CustomFieldRenderer = NonNullable<NonNullable<Overrides["fieldTypes"]>["custom"]>;
 
 const StudioCustomField: CustomFieldRenderer = (props) => {
@@ -279,15 +406,23 @@ const StudioCustomField: CustomFieldRenderer = (props) => {
   // A custom field Studio did not declare keeps Puck's own render.
   if (studio === undefined)
     return (props.field as unknown as CustomField<unknown>).render(props as never);
-  return studio.kind === "query" ? (
-    <StudioQueryField readOnly={props.readOnly === true} />
-  ) : (
-    <StudioSettingField
-      key={(props.field as { key?: string }).key}
-      setting={studio}
-      field={props as SettingFieldRenderProps}
-    />
-  );
+  const readOnly = props.readOnly === true;
+  switch (studio.kind) {
+    case "query":
+      return <StudioQueryField readOnly={readOnly} />;
+    case "gate":
+      return <StudioGateField readOnly={readOnly} />;
+    case "condition":
+      return <StudioConditionField slot={studio.slot} readOnly={readOnly} />;
+    case "setting":
+      return (
+        <StudioSettingField
+          key={(props.field as { key?: string }).key}
+          setting={studio}
+          field={props as SettingFieldRenderProps}
+        />
+      );
+  }
 };
 
 /** Puck's `overrides.fieldTypes` for the inspector: Studio draws every field it declares. */
