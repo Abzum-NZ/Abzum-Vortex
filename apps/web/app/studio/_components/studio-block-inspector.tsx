@@ -6,7 +6,6 @@ import {
   type SourceBlockPropertyValueContract,
 } from "@vortex/platform/schema";
 import type { StudioCompiledFields } from "../_lib/studio-data-model";
-import { StudioInspectorGroup } from "@vortex/ui/studio";
 import { useStudioScreen } from "@vortex/ui/studio/puck-provider";
 
 import { useId, useMemo, useRef, useState, type ReactNode } from "react";
@@ -96,7 +95,7 @@ const noQueries: readonly StudioQueryChoice[] = [];
  */
 export function StudioBlockInspector(props: Props) {
   // The screen is the canvas screen: one state, kept by Puck.
-  const { breakpoint, choose: chooseScreen } = useStudioScreen();
+  const { breakpoint } = useStudioScreen();
   const { labels } = props;
   const model = useMemo(
     () => describeStudioCompositionEdit(props.context, props.selection, breakpoint),

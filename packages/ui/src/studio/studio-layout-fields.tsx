@@ -123,15 +123,20 @@ export function StudioLayoutField({
       </p>
     );
   const inputs = held.value;
+  // A problem with an input is said at that input; a refusal by the draft stands under the fields.
+  const columnsProblem = held.problem.startsWith("Columns") ? held.problem : undefined;
+  const heightProblem = held.problem.startsWith("A fixed height") ? held.problem : undefined;
+  const spanInvalid = columnsProblem !== undefined && columnNumber(inputs.span) === undefined;
+  const refusal = columnsProblem === undefined && heightProblem === undefined ? held.problem : "";
   const change = (next: LayoutInputs) => {
     const described = layoutOf(next);
     if ("problem" in described) {
       held.hold(next, described.problem);
       return;
     }
-    const refusal = value.onResize(described.layout);
-    if (refusal === undefined) held.applied(next);
-    else held.hold(next, refusal);
+    const reason = value.onResize(described.layout);
+    if (reason === undefined) held.applied(next);
+    else held.hold(next, reason);
   };
   return (
     <div className="space-y-4" data-vortex-layout-field>
@@ -188,7 +193,7 @@ export function StudioLayoutField({
         </StudioField>
         {inputs.width === "grid" && (
           <div className="grid grid-cols-2 gap-2">
-            <StudioField label="Starts at column">
+            <StudioField label="Starts at column" error={spanInvalid ? undefined : columnsProblem}>
               {(control) => (
                 <Input
                   {...control}
@@ -203,7 +208,7 @@ export function StudioLayoutField({
                 />
               )}
             </StudioField>
-            <StudioField label="Number of columns">
+            <StudioField label="Number of columns" error={spanInvalid ? columnsProblem : undefined}>
               {(control) => (
                 <Input
                   {...control}
@@ -237,7 +242,7 @@ export function StudioLayoutField({
           )}
         </StudioField>
         {inputs.height === "bounded" && (
-          <StudioField label="Fixed height">
+          <StudioField label="Fixed height" error={heightProblem}>
             {(control) => (
               <Input
                 {...control}
@@ -252,9 +257,9 @@ export function StudioLayoutField({
             )}
           </StudioField>
         )}
-        {held.problem !== "" && (
+        {refusal !== "" && (
           <Alert variant="destructive" role="alert">
-            <AlertDescription>{held.problem}</AlertDescription>
+            <AlertDescription>{refusal}</AlertDescription>
           </Alert>
         )}
         {breakpoint !== "desktop" && (
@@ -264,8 +269,8 @@ export function StudioLayoutField({
             size="sm"
             disabled={disabled || !model.explicitLayout}
             onClick={() => {
-              const refusal = value.onResize(null);
-              if (refusal !== undefined) held.hold(inputs, refusal);
+              const reason = value.onResize(null);
+              if (reason !== undefined) held.hold(inputs, reason);
             }}
           >
             <Icon name="undo" />
