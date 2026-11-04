@@ -14,8 +14,11 @@ import {
  * draws Puck's own `allow` prop (an empty list accepts nothing). A live page never supplies one.
  */
 export type SlotLockStore = Readonly<{
-  /** The zone a block was pressed in, noted before Puck starts the drag; ignored unless armed. */
-  press: (placementId: string) => void;
+  /**
+   * The zone a block was pressed in, noted before Puck starts the drag; ignored unless armed. A
+   * press belongs to one pointer gesture: it is forgotten when that gesture ends in `doc`.
+   */
+  press: (placementId: string, doc: Document) => void;
   /** Puck's drag began or ended: the pressed zone locks the other slots, or everything is open. */
   drag: (dragging: boolean) => void;
   /** The zone whose slot alone takes a drop, or `null` when every slot does. */
@@ -38,13 +41,20 @@ export const createSlotLockStore = ({
   let locked: string | null = null;
   const listeners = new Set<() => void>();
   return {
-    press: (placementId) => {
+    press: (placementId, doc) => {
       pressed = armed() ? (zoneOf(placementId) ?? null) : null;
+      const end = new AbortController();
+      const forget = () => {
+        pressed = null;
+        end.abort();
+      };
+      // The drag has locked its slots by now (Puck reports it on activation), so this leaves them.
+      for (const type of ["pointerup", "pointercancel"])
+        doc.addEventListener(type, forget, { capture: true, signal: end.signal });
     },
     drag: (dragging) => {
-      const next = dragging ? pressed : null;
-      // The press belongs to one drag: a drag that starts elsewhere (the Outline) has none.
-      if (!dragging) pressed = null;
+      // A drag that starts with no press (the Blocks drawer, the Outline) locks nothing.
+      const next = dragging && armed() ? pressed : null;
       if (next === locked) return;
       locked = next;
       for (const listener of listeners) listener();
@@ -69,7 +79,7 @@ export function SlotLockProvider({
   return <SlotLockContext.Provider value={store}>{children}</SlotLockContext.Provider>;
 }
 
-/** The press handler of a block's wrapper: only the innermost block under the pointer is the one. */
+/** The press handler of a block's wrapper: only the innermost block under the pointer counts. */
 export const useSlotLockPress = () => useContext(SlotLockContext).press;
 
 type SlotProps = Readonly<{ className?: string; style?: CSSProperties }>;

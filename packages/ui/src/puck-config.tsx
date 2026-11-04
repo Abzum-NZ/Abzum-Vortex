@@ -671,7 +671,7 @@ function PlacementBlockContent(props: PlacementBlockProps): ReactElement {
                 (event.target as Element).closest("[data-vortex-placement-id]") ===
                 event.currentTarget
               )
-                pressBlock(placementId);
+                pressBlock(placementId, event.currentTarget.ownerDocument);
             }
           : undefined
       }

@@ -16,7 +16,7 @@ import {
   withoutEmptyPuckZones,
   type StudioPuckLocate,
 } from "./studio-canvas-data";
-import { studioCrossSlotReason } from "./studio-canvas-screen";
+import { studioCrossSlotReason, studioScreenOfBreakpoint } from "./studio-canvas-screen";
 import { changedProps, type PuckItem, type StudioSettingsEdit } from "./studio-settings-edit";
 
 /** The Puck actions that change the page's data; Studio's classifier reads these, in order. */
@@ -191,7 +191,9 @@ export const classifyCanvasChange = ({
     console.info(`[studio] a change on ${breakpoint} did not match the canvas; shown again`);
     return {
       kind: "refused",
-      message: `That change could not be read. The ${breakpoint} order is shown as it was.`,
+      message:
+        `That change could not be read on ${studioScreenOfBreakpoint(breakpoint).label}, ` +
+        "so the page is shown as it was.",
     };
   };
 
