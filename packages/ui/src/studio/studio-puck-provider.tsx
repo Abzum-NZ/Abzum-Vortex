@@ -36,12 +36,15 @@ import type { FieldInputControlReleaseMap } from "../registry";
 import type { PlatformThemeTokens } from "../theme";
 import type { StudioCompileFailure } from "./compile-failure";
 import type {
+  StudioCompositionContext,
   StudioCompositionAddTargetsModel,
   StudioCompositionDestination,
   StudioCompositionOwner,
 } from "./application-composition-commands";
 import type { StudioCanvasFrame } from "./studio-canvas-projection";
 import { applyPageDataChange } from "./studio-canvas-change";
+import { applySettingsEdit, singleBlockPropsEdit } from "./studio-settings-edit";
+import type { StudioSettingChoices } from "./studio-setting-model";
 import type { StudioPlacementDescriber } from "./semantic-outline";
 import {
   destinationOfZone,
@@ -143,7 +146,16 @@ export type StudioPuckInput = Readonly<{
   disabledReason?: string | undefined;
   /** Why the saved draft would not compile; the page stays open so the cause can be corrected. */
   compileFailure?: StudioCompileFailure | null | undefined;
-  onChange: (expectedSource: ApplicationSourceDocument, source: ApplicationSourceDocument) => void;
+  /** `merge` joins a run of edits to one value (typing into a field) into one Undo step. */
+  onChange: (
+    expectedSource: ApplicationSourceDocument,
+    source: ApplicationSourceDocument,
+    merge?: string,
+  ) => void;
+  /** The draft as it is now, for the composition commands a settings edit runs. */
+  compositionContext: () => StudioCompositionContext;
+  /** What reference settings can point at, for a block reading `query` (or none). */
+  blockChoices: (query: string | null) => StudioSettingChoices;
   /** Names a placed block as the outline and the inspector do; the action bar shows it. */
   describePlacement: StudioPlacementDescriber;
   /** The block selected in the workspace, shown selected on the canvas. */
@@ -358,6 +370,8 @@ export function StudioPuckProvider({
   // The name of the block Puck has just removed (its Delete key or the bar's Remove): once the
   // draft takes the removal, the Undo toast names it.
   const removing = useRef<string | null>(null);
+  // The field Puck's inspector has focused: typing into it is one run of edits, so one Undo.
+  const focusedField = useRef<string | null>(null);
   const permitted = model.editable && input.canvasShown;
   const latest = useRef({ input, model, permitted });
   latest.current = { input, model, permitted };
@@ -386,6 +400,34 @@ export function StudioPuckProvider({
     if (now.pageAlias === undefined || shown.data === undefined) return;
     // A block inserted from the drawer is added by Studio's add command, not by this edit.
     for (const id of inserted.current) if (puckItemsHold(candidate, id)) return;
+    // One block's settings edited in the inspector: the settings command writes them, and a run of
+    // edits to one field is one Undo step.
+    const edit = singleBlockPropsEdit(shown.data, candidate);
+    if (edit !== undefined) {
+      const context = now.compositionContext();
+      const outcome = applySettingsEdit(context, now.blockChoices, edit);
+      if (outcome?.kind === "applied") {
+        setRefused(null);
+        now.onChange(
+          context.source,
+          outcome.source,
+          `settings:${edit.alias}:${focusedField.current ?? edit.keys.join(",")}`,
+        );
+        return;
+      }
+      if (outcome !== undefined) {
+        console.info("[studio] a setting change was not applied:", outcome.kind);
+        setResync((generation) => generation + 1);
+        setRefused({
+          area: shown.area,
+          message:
+            outcome.kind === "refused"
+              ? outcome.reason
+              : "That setting could not be changed. The block stays as it was.",
+        });
+        return;
+      }
+    }
     const result = applyPageDataChange(
       shown.catalogue,
       now.source,
@@ -426,6 +468,7 @@ export function StudioPuckProvider({
   }, []);
 
   const onAction = useCallback((action: PuckAction, state: AppState, previous: AppState) => {
+    focusedField.current = state.ui.field.focus ?? null;
     // The screen changed: the model and metadata follow in the same render as Puck's own state.
     if (
       action.type === "setUi" &&
@@ -538,7 +581,7 @@ export function StudioPuckProvider({
       drag: permitted,
       duplicate: permitted && !full,
       delete: permitted,
-      edit: false,
+      edit: permitted,
       // The drawer's blocks drag onto the canvas; a layout's blocks are added with Add.
       insert: permitted && !full && input.palette?.owner !== "layout",
     }),

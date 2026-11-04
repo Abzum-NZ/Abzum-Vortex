@@ -419,6 +419,8 @@ function StudioPuckActionBar({ children }: Readonly<{ children?: ReactNode }>) {
 export const studioCanvasOverrides: Partial<Overrides> = {
   actionBar: StudioPuckActionBar,
   componentOverlay: StudioComponentOverlay,
+  // Each setting field draws its own label, hint and message (StudioField): Puck's label is not drawn.
+  fieldLabel: ({ children }) => <>{children}</>,
   iframe: StudioCanvasIframe,
   outline: StudioOutlineRegion,
 };

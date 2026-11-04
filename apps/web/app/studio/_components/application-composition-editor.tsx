@@ -31,13 +31,12 @@ import {
   StudioSelectionControlBinding,
   studioQueryBindingFacts,
   studioRecordBindingFields,
-  StudioSettingFields,
+  StudioBlockSettingFields,
   StudioGridFeatures,
   boardModeOf,
   boardSettingChoices,
   studioBoardPipelines,
   studioGridFeaturesProperty,
-  studioOwnsSetting,
   studioCanvasGridKey,
   type StudioCanvasGridArrangement,
   type StudioCompositionCommand,
@@ -168,8 +167,6 @@ export function ApplicationCompositionEditor(props: Props) {
   );
   // The query sheet answers after the draft changed: it chooses through the latest settings.
   const chooseQuery = useRef<(reference: string) => void>(() => undefined);
-  // The optional settings nobody has set go to "More settings", decided once for this block.
-  const moreSettings = useRef<ReadonlySet<string> | null>(null);
 
   if (model.kind !== "available" || layout.value === null)
     return (
@@ -209,40 +206,6 @@ export function ApplicationCompositionEditor(props: Props) {
         ]),
       ),
     );
-  const listed =
-    settingsModel.kind === "available"
-      ? settingsModel.properties.filter(
-          (property) =>
-            property !== featuresProperty &&
-            property.key !== "query_parameters" &&
-            property.key !== "row_actions" &&
-            property.key !== "open_with" &&
-            property.key !== "record_from" &&
-            !(
-              addsFromList &&
-              (property.key === "inline_create" || property.key === "create_page")
-            ) &&
-            !studioOwnsSetting(property.key),
-        )
-      : [];
-  moreSettings.current ??= new Set(
-    listed
-      .filter((property) => {
-        const value = settingsInputs.settings[property.key];
-        return (
-          !property.required &&
-          (value === undefined ||
-            (property.defaultValue !== undefined &&
-              JSON.stringify(plainSourceSettingValue(value)) ===
-                JSON.stringify(
-                  plainSourceSettingValue(
-                    property.defaultValue as Parameters<typeof plainSourceSettingValue>[0],
-                  ),
-                )))
-        );
-      })
-      .map((property) => property.key),
-  );
   const inputs = layout.value;
   const widthWord =
     inputs.width === "fill"
@@ -441,15 +404,7 @@ export function ApplicationCompositionEditor(props: Props) {
                 }}
               />
             )}
-            <StudioSettingFields
-              idPrefix={settingsId}
-              moreKeys={moreSettings.current ?? undefined}
-              properties={listed}
-              values={settingsInputs.settings}
-              choices={choices}
-              disabled={props.disabled}
-              onChange={(settings) => changeSettings({ ...settingsInputs, settings })}
-            />
+            <StudioBlockSettingFields choices={choices} disabled={props.disabled} />
             {(["open_with", "record_from"] as const)
               .filter((key) => settingsModel.properties.some((property) => property.key === key))
               .map((key) => (
@@ -746,7 +701,7 @@ export function ApplicationCompositionEditor(props: Props) {
           )}
         </fieldset>
       </StudioInspectorGroup>
-      <p role="status" aria-live="polite" className={message === "" ? "sr-only" : "py-2 text-sm"}>
+      <p role="status" aria-live="polite" className="sr-only">
         {message}
       </p>
     </section>

@@ -25,6 +25,7 @@ import {
   type StudioCompositionContext,
   type StudioCompositionDestination,
   type StudioCompositionOutcome,
+  studioBlockChoices,
   type StudioCompositionOwner,
   type StudioBorrowedChoices,
   type StudioRecordReader,
@@ -541,6 +542,7 @@ export function useStudioCanvasTab({
   const applyPuckPageEdit = (
     expectedSource: ApplicationSourceDocument,
     nextSource: ApplicationSourceDocument,
+    merge?: string,
   ) => {
     if (canvasPageRef.current === undefined) return;
     const parsed = applicationSourceDocumentSchema.safeParse(nextSource);
@@ -552,6 +554,7 @@ export function useStudioCanvasTab({
     if (parsed.data.key !== key || parsed.data.root_alias !== state.source.root_alias) return;
     const outcome = draft.run(() => ({ kind: "edit", source: parsed.data, result: true }), {
       expected: expectedSource,
+      merge,
     });
     setNotice(outcome.kind === "blocked" ? outcome.message : "");
   };
@@ -1235,6 +1238,10 @@ export function useStudioCanvasTab({
     ),
   );
   const onPageEdit = useStable(applyPuckPageEdit);
+  const liveComposition = useStable(liveContext);
+  const choicesOfBlock = useStable((query: string | null) =>
+    studioBlockChoices(blockChoices, query),
+  );
   const onAddBlock = useStable(addBlock);
   const blockActions = useMemo<StudioBlockActions>(
     () => ({
@@ -1307,6 +1314,8 @@ export function useStudioCanvasTab({
       disabledReason: draft.locked ? draft.blockedReason() : undefined,
       compileFailure: view.failure,
       onChange: onPageEdit,
+      compositionContext: liveComposition,
+      blockChoices: choicesOfBlock,
       readRecords: readCanvasRecords,
       arrangeGrid,
       onArrangeGrid: setArrangeGrid,
@@ -1335,6 +1344,8 @@ export function useStudioCanvasTab({
       draft.locked,
       view.failure,
       onPageEdit,
+      liveComposition,
+      choicesOfBlock,
       readCanvasRecords,
       arrangeGrid,
       onGridChange,

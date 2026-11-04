@@ -1,7 +1,21 @@
 "use client";
 
-import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { createUsePuck, useGetPuck, type ComponentConfig, type Field } from "@puckeditor/core";
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
+import {
+  createUsePuck,
+  Puck,
+  useGetPuck,
+  type ComponentConfig,
+  type Field,
+} from "@puckeditor/core";
 import {
   componentSettingApplies,
   plainSettingValue,
@@ -42,7 +56,6 @@ export type StudioSettingFieldsValue = Readonly<{
 }>;
 
 const StudioSettingFieldsContext = createContext<StudioSettingFieldsValue | null>(null);
-export const StudioSettingFieldsProvider = StudioSettingFieldsContext.Provider;
 
 const usePuckSelector = createUsePuck();
 
@@ -51,7 +64,7 @@ const usePuckSelector = createUsePuck();
  * own: the Records table's features, the query bindings, row actions, the selection bindings and
  * the add-records switch; and the settings Studio owns.
  */
-export const studioFieldSettings = (
+const studioFieldSettings = (
   properties: readonly BlockPropertySchemaContract[],
 ): readonly BlockPropertySchemaContract[] => {
   const features = studioGridFeaturesProperty(properties);
@@ -71,7 +84,7 @@ export const studioFieldSettings = (
 };
 
 /** The typed settings a block's plain props hold; a prop that is not a valid value of its declaration is left out. */
-export const studioTypedSettings = (
+const studioTypedSettings = (
   props: Readonly<Record<string, unknown>>,
   properties: readonly BlockPropertySchemaContract[],
 ): StudioSettingValues => {
@@ -179,7 +192,6 @@ function StudioSettingField({
         ? undefined
         : typedSourceSettingValue(plain, property, [property.key], []),
     // The plain value is compared by content: Puck hands over a fresh object for the same setting.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [plainKey, property],
   );
   if (context === null) return null;
@@ -187,7 +199,12 @@ function StudioSettingField({
   const props = getPuck().selectedItem?.props ?? {};
   const values = studioTypedSettings(props, properties);
   const change = (next: SettingValue) => {
-    const settled = settleStudioSetting(properties, studioTypedSettings(getPuck().selectedItem?.props ?? {}, properties), property.key, next);
+    const settled = settleStudioSetting(
+      properties,
+      studioTypedSettings(getPuck().selectedItem?.props ?? {}, properties),
+      property.key,
+      next,
+    );
     const problems = studioSettingProblems(settled, properties, choices);
     if (problems.length > 0) {
       setHeld({ value: next, problem: problems.join(" ") });
@@ -254,13 +271,14 @@ const settingField = (
   }) as unknown as Field;
 
 /** The fields of one placement: its shown settings first, every other prop hidden from the inspector. */
-export const studioSettingFields = (
+const studioSettingFields = (
   release: PlatformBlockRelease,
   base: Readonly<Record<string, Field>>,
   props: Readonly<Record<string, unknown>> | undefined,
 ): Record<string, Field> => {
   const listed = studioFieldSettings(release.properties as readonly BlockPropertySchemaContract[]);
-  const values = props === undefined ? undefined : studioTypedSettings(props, release.properties as never);
+  const values =
+    props === undefined ? undefined : studioTypedSettings(props, release.properties as never);
   const fields: Record<string, Field> = {};
   for (const property of listed) {
     if (values !== undefined && !componentSettingApplies(property, values)) continue;
@@ -277,14 +295,19 @@ export const studioSettingFields = (
  * typed into.
  */
 function StudioSettingFieldList({
-  release,
+  releaseOf,
   fields,
-}: Readonly<{ release: PlatformBlockRelease; fields: Partial<Record<string, ReactNode>> }>) {
+}: Readonly<{
+  releaseOf: StudioSettingRelease;
+  fields: Partial<Record<string, ReactNode>>;
+}>) {
   const selectedId = usePuckSelector((state) => state.selectedItem?.props.id as string | undefined);
   const getPuck = useGetPuck();
   const decided = useRef<{ id: string | undefined; keys: ReadonlySet<string> } | null>(null);
+  const props = getPuck().selectedItem?.props ?? {};
+  const release = releaseOf(props);
+  if (release === undefined) return null;
   if (decided.current === null || decided.current.id !== selectedId) {
-    const props = getPuck().selectedItem?.props ?? {};
     decided.current = {
       id: selectedId,
       keys: new Set(
@@ -309,29 +332,53 @@ function StudioSettingFieldList({
   return <div className="space-y-4">{splitMoreSettings(controls, decided.current.keys)}</div>;
 }
 
+/** The release a placed block's props name, when the catalogue holds it. */
+export type StudioSettingRelease = (
+  props: Readonly<Record<string, unknown>>,
+) => PlatformBlockRelease | undefined;
+
+const hidden = (fields: Readonly<Record<string, Field>>): Record<string, Field> =>
+  Object.fromEntries(
+    Object.entries(fields).map(([key, field]) => [key, { ...field, visible: false } as Field]),
+  );
+
 /**
- * A canvas component with its settings declared as Puck fields: `fields` for the block as stored,
- * `resolveFields` for the settings that apply to the values it holds, and `renderFields` laying
- * them out.
+ * A canvas component with its settings declared as Puck fields: `fields` hides every prop until
+ * the block is resolved, `resolveFields` gives the settings that apply to the values the block
+ * holds, and `renderFields` lays them out.
  */
 export const withSettingFields = (
   component: ComponentConfig<Record<string, unknown>>,
-  release: PlatformBlockRelease | undefined,
-  resolveBase: ((data: { props: Record<string, unknown> }, params: unknown) => Record<string, Field>) | undefined,
+  releaseOf: StudioSettingRelease,
+  resolveBase:
+    | ((data: { props: Record<string, unknown> }, params: unknown) => Record<string, Field>)
+    | undefined,
 ): Partial<ComponentConfig<Record<string, unknown>>> => {
-  if (release === undefined) return { fields: (component.fields ?? {}) as Record<string, Field> };
   const base = (component.fields ?? {}) as Record<string, Field>;
   return {
-    fields: studioSettingFields(release, base, undefined),
-    resolveFields: (data: { props: Record<string, unknown> }, params: unknown) =>
-      studioSettingFields(
-        release,
-        resolveBase === undefined ? base : resolveBase(data, params),
-        data.props,
-      ),
+    fields: hidden(base),
+    resolveFields: (data: { props: Record<string, unknown> }, params: unknown) => {
+      const release = releaseOf(data.props);
+      const resolved = resolveBase === undefined ? base : resolveBase(data, params);
+      return release === undefined
+        ? hidden(resolved)
+        : studioSettingFields(release, resolved, data.props);
+    },
     renderFields: ({ fields }: { fields: Partial<Record<string, ReactNode>> }) => (
-      <StudioSettingFieldList release={release} fields={fields} />
+      <StudioSettingFieldList releaseOf={releaseOf} fields={fields} />
     ),
   } as never;
 };
 
+/** The selected block's settings in the inspector: Puck's fields, drawn by Studio's setting controls. */
+export function StudioBlockSettingFields({
+  choices,
+  disabled,
+}: Readonly<StudioSettingFieldsValue>): ReactNode {
+  const value = useMemo(() => ({ choices, disabled }), [choices, disabled]);
+  return (
+    <StudioSettingFieldsContext.Provider value={value}>
+      <Puck.Fields wrapFields={false} />
+    </StudioSettingFieldsContext.Provider>
+  );
+}
