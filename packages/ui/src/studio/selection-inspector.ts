@@ -8,6 +8,7 @@ import {
   type SourceItem,
   type SourcePageData,
   isRecord,
+  isStudioDraftSnapshot,
 } from "@vortex/platform/schema";
 import {
   studioFlowLabel,
@@ -225,9 +226,14 @@ export const resolveStudioSelectionInspectorContext = (
     const parsedRoot = applicationRootIdSchema.safeParse(draft.rootId);
     if (!parsedRoot.success) return refused("invalid_context");
 
-    const parsedSource = applicationSourceDocumentSchema.safeParse(draft.source);
-    if (!parsedSource.success) return refused("invalid_context");
-    const source = parsedSource.data;
+    // A history snapshot is the validated source already; any other source is parsed.
+    let source: ApplicationSourceDocument;
+    if (isStudioDraftSnapshot(draft.source)) source = draft.source as ApplicationSourceDocument;
+    else {
+      const parsedSource = applicationSourceDocumentSchema.safeParse(draft.source);
+      if (!parsedSource.success) return refused("invalid_context");
+      source = parsedSource.data;
+    }
     const parsedSelection = parseSelection(selection);
     if (parsedSelection === undefined) return refused("invalid_selection");
     if (parsedSelection === null) return result({ status: "empty" });

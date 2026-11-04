@@ -1,5 +1,7 @@
 import { z } from "zod";
+import { isStudioDraftSnapshot } from "../application-authoring/draft-snapshot";
 import { jsonValueSchema, labelSchema } from "../../catalogue/common";
+import { deepFreeze } from "../../catalogue/runtime-primitives";
 import { applicationAudienceSchema } from "../../catalogue/application-link";
 import { builderKeySchema, namespacedKeySchema } from "../../catalogue/identifiers";
 import {
@@ -456,7 +458,33 @@ type SourceItemReading = Readonly<{
   }>[];
 }>;
 
+/**
+ * Readings of snapshot items (the draft's snapshots share every node an edit did not touch, so an
+ * unchanged block is read once for the whole session). A snapshot item is deeply frozen and cannot
+ * change under its reading, and the release is the catalogue's own object; an item someone may
+ * still change is read afresh each time. A cached reading is frozen, so a write to it throws.
+ */
+const frozenReadings = new WeakMap<SourceItem, WeakMap<PlatformBlockRelease, SourceItemReading>>();
+
 export const readSourceItem = (
+  item: SourceItem,
+  release: PlatformBlockRelease,
+): SourceItemReading => {
+  if (!isStudioDraftSnapshot(item)) return readSourceItemFresh(item, release);
+  let byRelease = frozenReadings.get(item);
+  if (byRelease === undefined) {
+    byRelease = new WeakMap();
+    frozenReadings.set(item, byRelease);
+  }
+  let reading = byRelease.get(release);
+  if (reading === undefined) {
+    reading = deepFreeze(readSourceItemFresh(item, release));
+    byRelease.set(release, reading);
+  }
+  return reading;
+};
+
+const readSourceItemFresh = (
   item: SourceItem,
   release: PlatformBlockRelease,
 ): SourceItemReading => {

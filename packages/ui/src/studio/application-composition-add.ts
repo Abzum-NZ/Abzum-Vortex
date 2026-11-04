@@ -15,6 +15,7 @@ import {
   type BlockPropertySchemaContract,
   type SourceBlockPropertyValueContract,
   type SourceItem,
+  isStudioDraftSnapshot,
 } from "@vortex/platform/schema";
 import {
   definitionLimitMessage,
@@ -77,6 +78,36 @@ import {
 } from "./application-composition-regions";
 import { FORM_CONTAINER_KEY, NESTED_FORM_REASON } from "./application-composition-forms";
 import type { StudioPlacementDescriber } from "./semantic-outline";
+
+const blockCounts = new WeakMap<ImmutablePlatformBlockCatalogue, WeakMap<SourceItem, number>>();
+const countBlocks = (catalogue: ImmutablePlatformBlockCatalogue, items: readonly SourceItem[]) => {
+  let total = 0;
+  for (const item of items) {
+    const held = blockCounts.get(catalogue)?.get(item);
+    if (held !== undefined) {
+      total += held;
+      continue;
+    }
+    let count = 1;
+    for (const child of itemSlots(catalogue, item).values())
+      count += countBlocks(catalogue, child.items);
+    // A block of a history snapshot never changes, so an unchanged block is counted once.
+    if (isStudioDraftSnapshot(item)) {
+      let counts = blockCounts.get(catalogue);
+      if (counts === undefined) blockCounts.set(catalogue, (counts = new WeakMap()));
+      counts.set(item, count);
+    }
+    total += count;
+  }
+  return total;
+};
+
+/** The composition limit counts every block of the application: its pages and its layouts. */
+export const studioPlacedBlocks = (
+  catalogue: ImmutablePlatformBlockCatalogue,
+  source: ApplicationSourceDocument,
+): number =>
+  regions(source).reduce((total, each) => total + countBlocks(catalogue, each.zone.items), 0);
 
 /** One place on a page or layout where a new block can go, as the palette and the add command know it. */
 type AddPlace = {
@@ -168,19 +199,7 @@ export const addPlaces = (
     }
   }
   const places: AddPlace[] = [];
-  const countBlocks = (items: readonly SourceItem[]): number =>
-    items.reduce(
-      (total, item) =>
-        total +
-        1 +
-        [...itemSlots(catalogue, item).values()].reduce(
-          (inner, child) => inner + countBlocks(child.items),
-          0,
-        ),
-      0,
-    );
-  // The composition limit counts every block of the application: its pages and its layouts.
-  const placed = regions(source).reduce((total, each) => total + countBlocks(each.zone.items), 0);
+  const placed = studioPlacedBlocks(catalogue, source);
   for (const { region, area, label, admitted } of areas) {
     const hostLevels = regionHostLevels(catalogue, source, region);
     // A block with slots is named as the outline names it (display name and item label); only
@@ -496,7 +515,7 @@ export const applyAdd = (
     placeItem(catalogue, source, place, input.index, item);
   } catch (error) {
     if (error instanceof StoredCompositionRefusal) {
-      console.error("[studio] composition add refused", {
+      console.info("[studio] composition add refused", {
         part: error.location,
         reason: error.reason,
       });

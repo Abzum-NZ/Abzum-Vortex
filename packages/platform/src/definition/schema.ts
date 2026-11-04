@@ -60,6 +60,7 @@ export * from "./platform-compatibility";
 export * from "./application-page-slots";
 export * from "./application-launcher-read";
 export * from "./application-authoring/stored-composition";
+export { isStudioDraftSnapshot } from "./application-authoring/draft-snapshot";
 export * from "./application-authoring/application-menu-commands";
 export * from "./application-authoring/application-structure";
 export * from "./application-authoring/studio-words";

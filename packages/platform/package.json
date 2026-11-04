@@ -6,6 +6,7 @@
   "sideEffects": false,
   "exports": {
     "./schema": "./src/schema.ts",
+    "./draft-snapshot": "./src/definition/application-authoring/draft-snapshot.ts",
     "./server": "./src/server.ts"
   },
   "scripts": {

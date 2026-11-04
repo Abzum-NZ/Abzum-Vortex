@@ -10,7 +10,7 @@ import {
 import { removeFlowBindingsOf } from "@vortex/platform/schema";
 import {
   studioPlacementRemovalReference,
-  type StudioCompositionRemovalReason,
+  type StudioPlacementReferenceReason,
 } from "./application-composition-commands";
 import { sourceNames, type StudioPlacementReference } from "./composition-references";
 import { settingsOf } from "./application-composition-regions";
@@ -97,7 +97,7 @@ const withoutPageEntries = (items: Navigation, pageKey: string): Navigation =>
     return children.length === 0 ? [] : [{ ...item, children }];
   });
 
-const flowReferenceWords: Readonly<Record<StudioCompositionRemovalReason, string>> = {
+const flowReferenceWords: Readonly<Record<StudioPlacementReferenceReason, string>> = {
   flow_input: "supplies an input a flow reads",
   flow_form: "is the form a flow waits for",
   flow_component: "is refreshed or filtered by a flow",
