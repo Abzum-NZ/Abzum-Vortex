@@ -570,6 +570,9 @@ const issuePlace = (path: ConditionPath): string => {
   return place.charAt(0).toUpperCase() + place.slice(1);
 };
 
+const noOperandsSentence =
+  "No condition has been configured, and nothing here offers a value or field to test yet.";
+
 export type StudioConditionControlsProps = Readonly<{
   value?: ConditionNode;
   context: StudioConditionControlsContext;
@@ -666,9 +669,7 @@ export function StudioConditionControls({
       ) : !current ? (
         <div className="space-y-2">
           <p className="text-muted-foreground">
-            {initial
-              ? "No condition has been configured."
-              : "No condition has been configured, and this page offers nothing for one to test yet."}
+            {initial ? "No condition has been configured." : noOperandsSentence}
           </p>
           <Button
             type="button"

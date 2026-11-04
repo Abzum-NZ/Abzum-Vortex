@@ -175,10 +175,13 @@ export function ApplicationReactionConditionEditor(props: Props) {
   const selectionKey = studioSemanticSelectionKey(props.selection);
   const { metadata, status, needsFields, target, reload } = useStudioReactionFields(props);
 
-  const model =
-    target === undefined || (needsFields && metadata === null)
-      ? null
-      : projectStudioReactionEditor(props.context, props.selection, metadata, props.slot);
+  const model = useMemo(
+    () =>
+      target === undefined || (needsFields && metadata === null)
+        ? null
+        : projectStudioReactionEditor(props.context, props.selection, metadata, props.slot),
+    [target, needsFields, metadata, props.context, props.selection, props.slot],
+  );
   // The draft changing under held input (Undo, Redo, another edit of this item) drops it.
   const shown = model?.kind === "available" ? JSON.stringify(model.condition ?? null) : "";
   useEffect(() => {

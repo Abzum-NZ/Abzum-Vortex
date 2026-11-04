@@ -35,6 +35,7 @@ import {
   type StudioCompositionContext,
   type StudioCompositionOutcome,
   type StudioGridFeaturesProps,
+  studioOrderMoves,
   type StudioLayoutFieldValue,
   type StudioCompositionSettings,
   type StudioCompositionSettingsModel,
@@ -153,6 +154,29 @@ export function StudioBlockInspector(props: Props) {
   // The layout fields call the latest handler, so their value keeps its identity between renders.
   const run = useRef(command);
   run.current = command;
+  // The order says the draft's refusal at its own field, until the draft changes.
+  const [orderRefusal, setOrderRefusal] = useState<Readonly<{ on: unknown; text: string }> | null>(
+    null,
+  );
+  const draftSource = useRef(props.context.source);
+  draftSource.current = props.context.source;
+  const orderProblem =
+    orderRefusal !== null && orderRefusal.on === props.context.source
+      ? orderRefusal.text
+      : undefined;
+  const changeOrder = (order: readonly string[] | null): string | undefined => {
+    const text = run.current(
+      { kind: "order", breakpoint, order },
+      undefined,
+      "Order changed.",
+      undefined,
+      true,
+    );
+    setOrderRefusal(text === undefined ? null : { on: draftSource.current, text });
+    return text;
+  };
+  const changeOrderRef = useRef(changeOrder);
+  changeOrderRef.current = changeOrder;
   const layoutValue = useMemo<StudioLayoutFieldValue>(
     () =>
       model.kind === "available"
@@ -168,23 +192,28 @@ export function StudioBlockInspector(props: Props) {
                 undefined,
                 true,
               ),
-            onOrder: (next) =>
-              run.current(
-                { kind: "order", breakpoint, order: next },
-                undefined,
-                "Order changed.",
-                undefined,
-                true,
-              ),
+            onOrder: (next) => changeOrderRef.current(next),
+            onMove: (direction) => {
+              const index = model.order.indexOf(model.placementAlias);
+              const to = index + direction;
+              if (index < 0 || to < 0 || to >= model.order.length) return undefined;
+              const next = [...model.order];
+              const [moved] = next.splice(index, 1);
+              next.splice(to, 0, moved!);
+              return changeOrderRef.current(next);
+            },
+            orderProblem,
           }
         : {
             kind: "refused",
             reason:
-              model.kind === "unsupported"
-                ? "This area uses an item type that cannot be edited here. Nothing was changed."
-                : "This item is not in the current draft.",
+              model.kind === "refused"
+                ? model.reason
+                : model.kind === "unsupported"
+                  ? "This area uses an item type that cannot be edited here. Nothing was changed."
+                  : "This item is not in the current draft.",
           },
-    [model, labels, breakpoint, selectionKey],
+    [model, labels, breakpoint, selectionKey, orderProblem],
   );
   // Who sees the block and when: its gate and conditions are fields of the Visibility and access group.
   const { access, dialog: conditionDialog } = useStudioBlockAccess({
@@ -339,6 +368,102 @@ export function StudioBlockInspector(props: Props) {
     otherProblem,
   ]);
 
+  // A Records table's grid features are edited in their own Features field, not as a setting group.
+  const featuresProperty =
+    settingsModel.kind === "available"
+      ? studioGridFeaturesProperty(settingsModel.properties)
+      : undefined;
+  // A canvas arrangement belongs to the query, columns and density it was made for.
+  const canvasMatches =
+    props.canvasArrangement?.key ===
+    studioCanvasGridKey(
+      settingsInputs.query,
+      Object.fromEntries(
+        Object.entries(settingsInputs.settings).map(([key, value]) => [
+          key,
+          plainSourceSettingValue(value),
+        ]),
+      ),
+    );
+  const queryOfSettings = props.choices.queries.find(
+    (candidate) => candidate.reference === settingsInputs.query,
+  );
+  const presentationSetting =
+    settingsInputs.settings.presentation ??
+    (settingsModel.kind === "available"
+      ? settingsModel.properties.find((property) => property.key === "presentation")?.defaultValue
+      : undefined);
+  // The features edit goes through the latest settings handler, so the value keeps its identity.
+  const changeFeatures = useRef<(next: SourceBlockPropertyValueContract) => void>(() => undefined);
+  const features = useMemo<StudioGridFeaturesProps | undefined>(
+    () =>
+      featuresProperty === undefined
+        ? undefined
+        : {
+            idPrefix: `${settingsId}-features`,
+            property: featuresProperty,
+            problem: problemArea === "features" ? settings.problem : "",
+            tableSettings: settingsInputs.settings,
+            canvasArrangement: canvasMatches ? props.canvasArrangement?.state : undefined,
+            canvasStale: props.canvasArrangement !== undefined && !canvasMatches,
+            signedIn: settingsModel.kind === "available" && settingsModel.signedIn,
+            value: settingsInputs.settings[featuresProperty.key],
+            presentation: (() => {
+              if (
+                presentationSetting?.kind !== "choice" ||
+                (presentationSetting.value !== "grid" && presentationSetting.value !== "cards")
+              )
+                throw new Error("Data grid preset is missing its declared setting");
+              return presentationSetting.value;
+            })(),
+            query: queryOfSettings,
+            compiledFields:
+              queryOfSettings === undefined
+                ? undefined
+                : props.compiledFields?.recordTypes[queryOfSettings.recordType],
+            choices,
+            boardChoices: boardSettingChoices(props.choices, boardModeOf(settingsInputs.settings)),
+            pipelines: studioBoardPipelines(
+              props.context.source,
+              settingsModel.kind === "available" ? settingsModel.placementAlias : undefined,
+            ),
+            related: {
+              queries: props.choices.queries,
+              relationships: props.choices.relationships,
+              recordTypeLabel: (recordType) =>
+                props.choices.recordTypes.find((candidate) => candidate.key === recordType)
+                  ?.label ?? "A removed item",
+              page: studioQueryBindingFacts(
+                props.context,
+                settingsModel.kind === "available" ? settingsModel.placementAlias : "",
+                props.choices.queries,
+              ),
+              rowFields: studioRecordBindingFields(
+                props.context.source,
+                queryOfSettings?.recordType ?? "",
+              ),
+            },
+            disabled: props.disabled,
+            onChange: (next) => changeFeatures.current(next),
+          },
+    [
+      featuresProperty,
+      settingsId,
+      problemArea,
+      settings.problem,
+      settingsInputs.settings,
+      canvasMatches,
+      props.canvasArrangement,
+      settingsModel,
+      presentationSetting,
+      queryOfSettings,
+      props.compiledFields,
+      choices,
+      props.choices,
+      props.context,
+      props.disabled,
+    ],
+  );
   const settingsNotice =
     settingsModel.kind === "available"
       ? undefined
@@ -377,25 +502,6 @@ export function StudioBlockInspector(props: Props) {
     );
   }
 
-  // A Records table's grid features are edited in their own Features field, not as a setting group.
-  const featuresProperty =
-    settingsModel.kind === "available"
-      ? studioGridFeaturesProperty(settingsModel.properties)
-      : undefined;
-  // A canvas arrangement belongs to the query, columns and density it was made for.
-  const canvasMatches =
-    props.canvasArrangement?.key ===
-    studioCanvasGridKey(
-      settingsInputs.query,
-      Object.fromEntries(
-        Object.entries(settingsInputs.settings).map(([key, value]) => [
-          key,
-          plainSourceSettingValue(value),
-        ]),
-      ),
-    );
-  const orderEditable = breakpoint === "desktop" || model.responsiveOrder;
-  const selectedIndex = model.order.indexOf(model.placementAlias);
   const changeQuery = (reference: string) => {
     const properties = settingsModel.kind === "available" ? settingsModel.properties : [];
     const query = reference === "" ? null : reference;
@@ -472,82 +578,18 @@ export function StudioBlockInspector(props: Props) {
     else settings.hold(next, "");
   };
   editSettings.current = (next) => changeSettings(next);
-  const queryOfSettings = props.choices.queries.find(
-    (candidate) => candidate.reference === settingsInputs.query,
-  );
-  const presentationSetting =
-    settingsInputs.settings.presentation ??
-    (settingsModel.kind === "available"
-      ? settingsModel.properties.find((property) => property.key === "presentation")?.defaultValue
-      : undefined);
-  // The Records table's grid features: the panel's facts and the edit it makes.
-  const features: StudioGridFeaturesProps | undefined =
-    featuresProperty === undefined
-      ? undefined
-      : {
-          idPrefix: `${settingsId}-features`,
-          property: featuresProperty,
-          problem: problemArea === "features" ? settings.problem : "",
-          tableSettings: settingsInputs.settings,
-          canvasArrangement: canvasMatches ? props.canvasArrangement?.state : undefined,
-          canvasStale: props.canvasArrangement !== undefined && !canvasMatches,
-          signedIn: settingsModel.kind === "available" && settingsModel.signedIn,
-          value: settingsInputs.settings[featuresProperty.key],
-          presentation: (() => {
-            if (
-              presentationSetting?.kind !== "choice" ||
-              (presentationSetting.value !== "grid" && presentationSetting.value !== "cards")
-            )
-              throw new Error("Data grid preset is missing its declared setting");
-            return presentationSetting.value;
-          })(),
-          query: queryOfSettings,
-          compiledFields:
-            queryOfSettings === undefined
-              ? undefined
-              : props.compiledFields?.recordTypes[queryOfSettings.recordType],
-          choices,
-          boardChoices: boardSettingChoices(props.choices, boardModeOf(settingsInputs.settings)),
-          pipelines: studioBoardPipelines(
-            props.context.source,
-            settingsModel.kind === "available" ? settingsModel.placementAlias : undefined,
-          ),
-          related: {
-            queries: props.choices.queries,
-            relationships: props.choices.relationships,
-            recordTypeLabel: (recordType) =>
-              props.choices.recordTypes.find((candidate) => candidate.key === recordType)?.label ??
-              "A removed item",
-            page: studioQueryBindingFacts(
-              props.context,
-              settingsModel.kind === "available" ? settingsModel.placementAlias : "",
-              props.choices.queries,
-            ),
-            rowFields: studioRecordBindingFields(
-              props.context.source,
-              queryOfSettings?.recordType ?? "",
-            ),
-          },
-          disabled: props.disabled,
-          onChange: (next) =>
-            changeSettings(
-              {
-                ...settingsInputs,
-                settings: { ...settingsInputs.settings, [featuresProperty.key]: next },
-              },
-              "features",
-            ),
-        };
-  const move = (direction: -1 | 1) => {
-    if (!orderEditable || selectedIndex < 0) return;
-    const nextIndex = selectedIndex + direction;
-    if (nextIndex < 0 || nextIndex >= model.order.length) return;
-    const next = [...model.order];
-    const moved = next.splice(selectedIndex, 1)[0];
-    if (moved === undefined) return;
-    next.splice(nextIndex, 0, moved);
-    command({ kind: "order", breakpoint, order: next }, undefined, "Order changed.");
-  };
+  changeFeatures.current = (next) =>
+    changeSettings(
+      {
+        ...settingsInputs,
+        settings: {
+          ...settingsInputs.settings,
+          ...(featuresProperty === undefined ? {} : { [featuresProperty.key]: next }),
+        },
+      },
+      "features",
+    );
+  const moves = studioOrderMoves(model, breakpoint);
   return (
     <section aria-labelledby={titleId}>
       <StudioBlockSettingFields
@@ -559,17 +601,13 @@ export function StudioBlockInspector(props: Props) {
         actions={[
           {
             label: "Move up",
-            disabled: props.disabled || !orderEditable || selectedIndex <= 0,
-            onSelect: () => move(-1),
+            disabled: props.disabled || !moves.up,
+            onSelect: () => void (layoutValue.kind === "available" && layoutValue.onMove(-1)),
           },
           {
             label: "Move down",
-            disabled:
-              props.disabled ||
-              !orderEditable ||
-              selectedIndex < 0 ||
-              selectedIndex >= model.order.length - 1,
-            onSelect: () => move(1),
+            disabled: props.disabled || !moves.down,
+            onSelect: () => void (layoutValue.kind === "available" && layoutValue.onMove(1)),
           },
         ]}
         releases={props.context.catalogue.releases}

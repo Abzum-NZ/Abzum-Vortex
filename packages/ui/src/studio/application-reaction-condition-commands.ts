@@ -903,10 +903,14 @@ export function applyStudioReactionCondition(
       issues: [{ path: base, message: "The authored condition is invalid." }],
     };
   const candidate = structuredClone(current.source) as ApplicationSourceDocument;
-  const target = resolveStudioReactionTarget(candidate, selection);
-  if (target === undefined) return { kind: "stale" };
-  if (authored === undefined) delete target.placement[slot];
-  else target.placement[slot] = authored;
+  // The clone has the draft's shape: the placement is where the target already found it.
+  let placement: unknown = candidate;
+  for (const part of model.target.path)
+    placement = (placement as Record<string | number, unknown>)[part];
+  if (typeof placement !== "object" || placement === null) return { kind: "stale" };
+  const vortex = placement as SourceItemVortex;
+  if (authored === undefined) delete vortex[slot];
+  else vortex[slot] = authored;
   const parsed = applicationSourceDocumentSchema.safeParse(candidate);
   if (!parsed.success)
     return {

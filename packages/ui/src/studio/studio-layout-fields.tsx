@@ -1,8 +1,8 @@
 "use client";
 
-import { useId, useState } from "react";
+import { useId } from "react";
+import { ArrowDown, ArrowUp, Undo2 } from "lucide-react";
 import { Alert, AlertDescription } from "../components/alert";
-import { Button } from "../components/button";
 import { FieldLegend } from "../components/field";
 import { Input } from "../components/input";
 import { Switch } from "../components/switch";
@@ -12,6 +12,7 @@ import type {
   StudioCompositionLayout,
 } from "./application-composition-model";
 import { studioScreens, useStudioScreen } from "./studio-canvas-screen";
+import { StudioIconButton } from "./studio-entry-list";
 import { StudioField, StudioHelp } from "./studio-field";
 import { StudioSegmentedControl } from "./studio-segmented-control";
 import { useStudioDraftHeld } from "./use-studio-draft-held";
@@ -23,17 +24,33 @@ import { useStudioDraftHeld } from "./use-studio-draft-held";
  * see them as any other edit.
  */
 
-/** What the Layout fields need from the inspector: the block's model at the canvas screen, and the two commands. */
+/**
+ * What the Layout fields need from the inspector: the block's model at the canvas screen, and the
+ * commands that change its size and order.
+ */
 export type StudioLayoutFieldValue =
   | Readonly<{
       kind: "available";
       model: Extract<StudioCompositionEditorModel, { kind: "available" }>;
       /** The name the outline gives a block of this area. */
       labelOf: (alias: string) => string;
-      /** Sets the size on this screen (null returns it to the larger screen's); the refusal's words, or undefined once the draft took it. */
+      /**
+       * Sets the size on this screen (null returns it to the larger screen's); answers the
+       * refusal's words, or undefined once the draft took it.
+       */
       onResize: (layout: StudioCompositionLayout | null) => string | undefined;
-      /** Sets the order on this screen (null returns it to the larger screen's); the refusal's words, or undefined once the draft took it. */
+      /**
+       * Sets the order on this screen (null returns it to the larger screen's); answers as
+       * onResize.
+       */
       onOrder: (order: readonly string[] | null) => string | undefined;
+      /** Moves the block one place on this screen; answers as onResize. */
+      onMove: (direction: -1 | 1) => string | undefined;
+      /**
+       * Why the draft refused the last order change; the inspector clears it when the draft
+       * changes.
+       */
+      orderProblem?: string | undefined;
     }>
   | Readonly<{ kind: "refused"; reason: string }>;
 
@@ -62,20 +79,34 @@ const columnNumber = (text: string): number | undefined => {
     : undefined;
 };
 
+/** The problem of each input that keeps the inputs from the draft. */
+const layoutProblems = (
+  inputs: LayoutInputs,
+): Readonly<{ start?: string; span?: string; height?: string }> => {
+  const units = Number(inputs.units);
+  const grid = inputs.width === "grid";
+  return {
+    ...(grid && columnNumber(inputs.startColumn) === undefined
+      ? { start: "Columns are whole numbers from 1 to 12." }
+      : {}),
+    ...(grid && columnNumber(inputs.span) === undefined
+      ? { span: "Columns are whole numbers from 1 to 12." }
+      : {}),
+    ...(inputs.height === "bounded" &&
+    (inputs.units.trim() === "" || !Number.isFinite(units) || units < 0)
+      ? { height: "A fixed height is a number of zero or more." }
+      : {}),
+  };
+};
+
 /** The layout the inputs describe, or the problem that keeps them from the draft. */
 const layoutOf = (
   inputs: LayoutInputs,
 ): Readonly<{ layout: StudioCompositionLayout } | { problem: string }> => {
+  const found = [...new Set(Object.values(layoutProblems(inputs)))];
+  if (found.length > 0) return { problem: found.join(" ") };
   const start = columnNumber(inputs.startColumn);
   const span = columnNumber(inputs.span);
-  const units = Number(inputs.units);
-  if (inputs.width === "grid" && (start === undefined || span === undefined))
-    return { problem: "Columns are whole numbers from 1 to 12." };
-  if (
-    inputs.height === "bounded" &&
-    (inputs.units.trim() === "" || !Number.isFinite(units) || units < 0)
-  )
-    return { problem: "A fixed height is a number of zero or more." };
   return {
     layout: {
       visible: inputs.visible,
@@ -85,8 +116,24 @@ const layoutOf = (
           : inputs.width === "content"
             ? { kind: "content" }
             : { kind: "fill" },
-      height: inputs.height === "bounded" ? { kind: "bounded", units } : { kind: "content" },
+      height:
+        inputs.height === "bounded"
+          ? { kind: "bounded", units: Number(inputs.units) }
+          : { kind: "content" },
     } as StudioCompositionLayout,
+  };
+};
+
+/** Whether the block can move up and down in the order of the screen the canvas shows. */
+export const studioOrderMoves = (
+  model: Extract<StudioCompositionEditorModel, { kind: "available" }>,
+  breakpoint: string,
+): Readonly<{ up: boolean; down: boolean }> => {
+  const index = model.order.indexOf(model.placementAlias);
+  const editable = breakpoint === "desktop" || model.responsiveOrder;
+  return {
+    up: editable && index > 0,
+    down: editable && index >= 0 && index < model.order.length - 1,
   };
 };
 
@@ -124,10 +171,8 @@ export function StudioLayoutField({
     );
   const inputs = held.value;
   // A problem with an input is said at that input; a refusal by the draft stands under the fields.
-  const columnsProblem = held.problem.startsWith("Columns") ? held.problem : undefined;
-  const heightProblem = held.problem.startsWith("A fixed height") ? held.problem : undefined;
-  const spanInvalid = columnsProblem !== undefined && columnNumber(inputs.span) === undefined;
-  const refusal = columnsProblem === undefined && heightProblem === undefined ? held.problem : "";
+  const problems = held.problem === "" ? {} : layoutProblems(inputs);
+  const refusal = Object.keys(problems).length === 0 ? held.problem : "";
   const change = (next: LayoutInputs) => {
     const described = layoutOf(next);
     if ("problem" in described) {
@@ -193,7 +238,7 @@ export function StudioLayoutField({
         </StudioField>
         {inputs.width === "grid" && (
           <div className="grid grid-cols-2 gap-2">
-            <StudioField label="Starts at column" error={spanInvalid ? undefined : columnsProblem}>
+            <StudioField label="Starts at column" error={problems.start}>
               {(control) => (
                 <Input
                   {...control}
@@ -208,7 +253,7 @@ export function StudioLayoutField({
                 />
               )}
             </StudioField>
-            <StudioField label="Number of columns" error={spanInvalid ? columnsProblem : undefined}>
+            <StudioField label="Number of columns" error={problems.span}>
               {(control) => (
                 <Input
                   {...control}
@@ -242,7 +287,7 @@ export function StudioLayoutField({
           )}
         </StudioField>
         {inputs.height === "bounded" && (
-          <StudioField label="Fixed height" error={heightProblem}>
+          <StudioField label="Fixed height" error={problems.height}>
             {(control) => (
               <Input
                 {...control}
@@ -263,38 +308,36 @@ export function StudioLayoutField({
           </Alert>
         )}
         {breakpoint !== "desktop" && (
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
+          <StudioIconButton
+            label="Use the larger screen's size"
             disabled={disabled || !model.explicitLayout}
             onClick={() => {
               const reason = value.onResize(null);
               if (reason !== undefined) held.hold(inputs, reason);
             }}
           >
-            <Icon name="undo" />
-            Use the larger screen&apos;s size
-          </Button>
+            <Undo2 />
+          </StudioIconButton>
         )}
       </fieldset>
     </div>
   );
 }
 
-/** The selected block among its neighbours on the canvas screen, and the way back to the larger screen's order. */
+/**
+ * The selected block among its neighbours on the canvas screen, and the way back to the larger
+ * screen's order.
+ */
 export function StudioOrderField({
   value,
   disabled,
 }: Readonly<{ value: StudioLayoutFieldValue; disabled: boolean }>) {
   const { breakpoint } = useStudioScreen();
   const hintId = useId();
-  // A refusal belongs to the order it was made against: any change of the order drops it.
-  const [refused, setRefused] = useState<Readonly<{ on: string; text: string }> | null>(null);
   if (value.kind !== "available") return null;
   const { model } = value;
   const editable = breakpoint === "desktop" || model.responsiveOrder;
-  const orderKey = `${breakpoint}:${model.explicitOrder}:${model.order.join(",")}`;
+  const moves = studioOrderMoves(model, breakpoint);
   return (
     <fieldset
       className="space-y-2"
@@ -331,24 +374,34 @@ export function StudioOrderField({
           </li>
         ))}
       </ol>
-      {breakpoint !== "desktop" && (
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          disabled={!model.explicitOrder}
-          onClick={() => {
-            const text = value.onOrder(null);
-            if (text !== undefined) setRefused({ on: orderKey, text });
-          }}
+      <div className="flex items-center gap-1">
+        <StudioIconButton
+          label="Move up"
+          disabled={!moves.up}
+          onClick={() => void value.onMove(-1)}
         >
-          <Icon name="undo" />
-          Use the larger screen&apos;s order
-        </Button>
-      )}
-      {refused?.on === orderKey && (
+          <ArrowUp />
+        </StudioIconButton>
+        <StudioIconButton
+          label="Move down"
+          disabled={!moves.down}
+          onClick={() => void value.onMove(1)}
+        >
+          <ArrowDown />
+        </StudioIconButton>
+        {breakpoint !== "desktop" && (
+          <StudioIconButton
+            label="Use the larger screen's order"
+            disabled={!model.explicitOrder}
+            onClick={() => void value.onOrder(null)}
+          >
+            <Undo2 />
+          </StudioIconButton>
+        )}
+      </div>
+      {value.orderProblem !== undefined && (
         <Alert variant="destructive" role="alert">
-          <AlertDescription>{refused.text}</AlertDescription>
+          <AlertDescription>{value.orderProblem}</AlertDescription>
         </Alert>
       )}
     </fieldset>

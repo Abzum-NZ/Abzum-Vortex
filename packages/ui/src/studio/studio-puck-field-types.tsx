@@ -72,19 +72,24 @@ export type StudioSettingFieldsValue = Readonly<{
   access?: StudioAccessFieldValue | undefined;
   /** The block's size and order on the canvas screen, and the commands that change them. */
   layout?: StudioLayoutFieldValue | undefined;
-  /** The Records table's grid features (board, formatting, export, inline edit, row actions, row edit). */
+  /**
+   * The Records table's grid features (board, formatting, export, inline edit, row actions, row
+   * edit).
+   */
   features?: StudioGridFeaturesProps | undefined;
-  /** The block's flow bindings, drawn by the Workflows group. */
-  workflows?: ReactNode;
-  /** Where the block is used, drawn by the Used in group. */
-  usedIn?: ReactNode;
   /** What follows the settings in their group: the selection bindings and the group's refusal. */
   settingsAfter?: ReactNode;
-  /** Said in the Settings group in place of the settings when the block's settings cannot be drawn. */
+  /**
+   * Said in the Settings group in place of the settings when the block's settings cannot be
+   * drawn.
+   */
   notice?: string | undefined;
 }>;
 
-/** The permission gate and the four conditions of the selected block, edited through the inspector's commands. */
+/**
+ * The permission gate and the four conditions of the selected block, edited through the
+ * inspector's commands.
+ */
 export type StudioAccessFieldValue = Readonly<{
   /** The group's one-line summary while it is closed. */
   summary: string;
@@ -114,7 +119,10 @@ export type StudioAccessFieldValue = Readonly<{
     | Readonly<{ kind: "refused"; reason: string }>;
 }>;
 
-/** The block's data choice and the bindings of its inputs, edited through the inspector's commands. */
+/**
+ * The block's data choice and the bindings of its inputs, edited through the inspector's
+ * commands.
+ */
 type StudioQueryFieldValue = Readonly<{
   value: string;
   queries: readonly StudioQueryChoice[];
@@ -133,7 +141,10 @@ type StudioQueryFieldValue = Readonly<{
   after?: ReactNode;
 }>;
 
-/** The settings the person has edited since the selected block was chosen (the label note reads them). */
+/**
+ * The settings the person has edited since the selected block was chosen (the label note reads
+ * them).
+ */
 type StudioSettingFieldsContextValue = StudioSettingFieldsValue &
   Readonly<{ scope: string; touched: ReadonlySet<string>; touch: (key: string) => void }>;
 
@@ -141,15 +152,23 @@ export const StudioSettingFieldsContext = createContext<StudioSettingFieldsConte
   null,
 );
 
-/** The name of the inspector field that holds the block's data choice (it is not a prop of the block). */
+/**
+ * The name of the inspector field that holds the block's data choice (it is not a prop of the
+ * block).
+ */
 export const studioQueryFieldName = "vortexQuery";
 
 /** The inspector fields that hold the block's access: its permission gate and each condition. */
 export const studioGateFieldName = "vortexGate";
-/** The inspector fields of the Layout group: the block's size and its order on the canvas screen. */
+/**
+ * The inspector fields of the Layout group: the block's size and its order on the canvas screen.
+ */
 export const studioLayoutFieldName = "vortexLayout";
 export const studioOrderFieldName = "vortexOrder";
-/** The inspector field that holds the Records table's grid features (they are one setting group, drawn as one panel). */
+/**
+ * The inspector field that holds the Records table's grid features (they are one setting group,
+ * drawn as one panel).
+ */
 export const studioFeaturesFieldName = "vortexGridFeatures";
 export const studioConditionFieldName = (slot: StudioReactionSlot) => `vortexCondition-${slot}`;
 
@@ -159,7 +178,10 @@ type SettingKind = Readonly<{
   properties: readonly BlockPropertySchemaContract[];
 }>;
 
-/** What a Studio field carries: the setting and the control that edits it, or the block's data choice. */
+/**
+ * What a Studio field carries: the setting and the control that edits it, or the block's data
+ * choice.
+ */
 type StudioFieldKind =
   | SettingKind
   | Readonly<{ kind: "query" | "gate" | "layout" | "order" | "features" }>
@@ -197,7 +219,10 @@ export const studioGateField: Field = studioCustomField("Permission gate", studi
   kind: "gate",
 });
 
-/** The fields of the Layout group; they hold no prop of the block and write through its resize and order commands. */
+/**
+ * The fields of the Layout group; they hold no prop of the block and write through its resize and
+ * order commands.
+ */
 export const studioLayoutField: Field = studioCustomField("Size", studioLayoutFieldName, {
   kind: "layout",
 });
@@ -216,7 +241,10 @@ export const studioConditionField = (slot: StudioReactionSlot, title: string): F
 
 const noProps: Readonly<Record<string, unknown>> = {};
 
-/** The typed settings a block's plain props hold; a prop that is not a valid value of its declaration is left out. */
+/**
+ * The typed settings a block's plain props hold; a prop that is not a valid value of its
+ * declaration is left out.
+ */
 export const studioTypedSettings = (
   props: Readonly<Record<string, unknown>>,
   properties: readonly BlockPropertySchemaContract[],
@@ -237,7 +265,10 @@ type SettingFieldRenderProps = Readonly<{
   readOnly?: boolean | undefined;
 }>;
 
-/** One setting as a field: its label, hint and message around its control; held input stays in the control. */
+/**
+ * One setting as a field: its label, hint and message around its control; held input stays in the
+ * control.
+ */
 function StudioSettingField({
   setting,
   field,
@@ -361,7 +392,10 @@ function StudioQueryField({ readOnly }: Readonly<{ readOnly: boolean }>) {
   );
 }
 
-/** Who can see the block: the permission it needs. A refusal shows at the field until the draft changes. */
+/**
+ * Who can see the block: the permission it needs. A refusal shows at the field until the draft
+ * changes.
+ */
 function StudioGateField({ readOnly }: Readonly<{ readOnly: boolean }>) {
   const context = useContext(StudioSettingFieldsContext);
   const gate = context?.access?.gate;
@@ -431,7 +465,10 @@ function StudioConditionField({
   );
 }
 
-/** The grid features of a Records table: the existing feature editors, edited through the inspector's settings command. */
+/**
+ * The grid features of a Records table: the existing feature editors, edited through the
+ * inspector's settings command.
+ */
 function StudioFeaturesField({ readOnly }: Readonly<{ readOnly: boolean }>) {
   const features = useContext(StudioSettingFieldsContext)?.features;
   if (features === undefined) return null;

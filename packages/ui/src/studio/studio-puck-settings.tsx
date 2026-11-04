@@ -1,6 +1,14 @@
 "use client";
 
-import { useCallback, useContext, useMemo, useRef, useState, type ReactNode } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import { Puck, type ComponentConfig, type Field } from "@puckeditor/core";
 import {
   canonicalJson,
@@ -84,7 +92,10 @@ const studioFieldSettings = (
 
 const noProps: Readonly<Record<string, unknown>> = {};
 
-/** Who sees the block and when, and its size and order: the fields of the Visibility and access and Layout groups. */
+/**
+ * The fields that are not settings: the grid features, the size and order, the permission gate and
+ * the conditions, drawn in the Grid features, Layout and Visibility and access groups.
+ */
 const addInspectorFields = (fields: Record<string, Field>): void => {
   fields[studioFeaturesFieldName] = studioFeaturesField;
   fields[studioLayoutFieldName] = studioLayoutField;
@@ -97,7 +108,10 @@ const addInspectorFields = (fields: Record<string, Field>): void => {
     );
 };
 
-/** The fields of one placement: its shown settings first, every other prop hidden from the inspector. */
+/**
+ * The fields of one placement: its shown settings first, every other prop hidden from the
+ * inspector.
+ */
 const studioSettingFields = (
   release: PlatformBlockRelease,
   base: Readonly<Record<string, Field>>,
@@ -120,6 +134,24 @@ const studioSettingFields = (
     if (fields[key] === undefined) fields[key] = { ...field, visible: false } as Field;
   return fields;
 };
+
+/**
+ * The block's flow bindings and where it is used: sections that are not Puck fields. They have a
+ * context of their own, so their churn draws only them and not the fields.
+ */
+const StudioInspectorSectionsContext = createContext<
+  Readonly<{ workflows: ReactNode; usedIn: ReactNode }>
+>({ workflows: null, usedIn: null });
+
+function StudioInspectorSections() {
+  const { workflows, usedIn } = useContext(StudioInspectorSectionsContext);
+  return (
+    <>
+      {workflows}
+      {usedIn}
+    </>
+  );
+}
 
 /**
  * Lays the inspector out in groups: the settings in use first, the optional ones nobody has set in
@@ -168,7 +200,6 @@ function StudioInspectorFieldGroups({
   const primary = controls.filter((control) => !more.includes(control));
   const access = context?.access;
   const layout = context?.layout;
-  const { workflows, usedIn } = context ?? {};
   const { breakpoint } = useStudioScreen();
   return (
     <>
@@ -227,8 +258,7 @@ function StudioInspectorFieldGroups({
           {fields[studioOrderFieldName]}
         </StudioInspectorGroup>
       )}
-      {workflows}
-      {usedIn}
+      <StudioInspectorSections />
     </>
   );
 }
@@ -343,6 +373,10 @@ export function StudioBlockSettingFields({
     actions: readonly StudioInspectorAction[];
     /** The catalogue's releases, for the block's kind and description. */
     releases: readonly PlatformBlockRelease[];
+    /** The block's flow bindings, drawn by the Workflows group. */
+    workflows: ReactNode;
+    /** Where the block is used, drawn by the Used in group. */
+    usedIn: ReactNode;
   }
 >): ReactNode {
   const scope =
@@ -367,8 +401,6 @@ export function StudioBlockSettingFields({
       access,
       layout,
       features,
-      workflows,
-      usedIn,
       settingsAfter,
       notice,
       scope,
@@ -382,8 +414,6 @@ export function StudioBlockSettingFields({
       access,
       layout,
       features,
-      workflows,
-      usedIn,
       settingsAfter,
       notice,
       scope,
@@ -391,10 +421,13 @@ export function StudioBlockSettingFields({
       touch,
     ],
   );
+  const sections = useMemo(() => ({ workflows, usedIn }), [workflows, usedIn]);
   return (
     <StudioSettingFieldsContext.Provider value={value}>
-      <StudioBlockHeader titleId={titleId} name={name} actions={actions} releases={releases} />
-      {scope === placementAlias && <Puck.Fields wrapFields={false} />}
+      <StudioInspectorSectionsContext.Provider value={sections}>
+        <StudioBlockHeader titleId={titleId} name={name} actions={actions} releases={releases} />
+        {scope === placementAlias && <Puck.Fields wrapFields={false} />}
+      </StudioInspectorSectionsContext.Provider>
     </StudioSettingFieldsContext.Provider>
   );
 }

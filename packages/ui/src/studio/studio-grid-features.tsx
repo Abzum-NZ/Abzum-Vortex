@@ -95,7 +95,10 @@ export const studioGridFeaturesProperty = (
     : undefined;
 };
 
-/** What the Features panel of a Records table is drawn from: the draft's facts, and the edit it makes. */
+/**
+ * What the Features panel of a Records table is drawn from: the draft's facts, and the edit it
+ * makes.
+ */
 export type StudioGridFeaturesProps = Readonly<{
   idPrefix: string;
   /** The inspector's held problem after a features change; shown in the changed feature. */
@@ -107,7 +110,10 @@ export type StudioGridFeaturesProps = Readonly<{
   presentation: "grid" | "cards";
   /** The query the table reads, or undefined until one is chosen. */
   query: StudioQueryChoice | undefined;
-  /** The saved draft's compiled fields of the record type the query reads; undefined before a save. */
+  /**
+   * The saved draft's compiled fields of the record type the query reads; undefined before a
+   * save.
+   */
   compiledFields: readonly ModuleField[] | undefined;
   /** The block's choices: the bound query's fields by business name. */
   tableSettings: StudioSettingValues;
@@ -127,9 +133,11 @@ export type StudioGridFeaturesProps = Readonly<{
 
 /**
  * The Features panel of a Records table: one compact row per grid feature with its switch and its
- * capability check beside it, "Available" or "Not possible" with the business sentence. The check is
+ * capability check beside it, "Available" or "Not possible" with the business sentence. The check
+ * is
  * the registry's own, run on the draft's facts of the bound query, so it says exactly what
- * publication will say. Switching a feature on reveals its settings; switching it off keeps only the
+ * publication will say. Switching a feature on reveals its settings; switching it off keeps only
+ * the
  * switch, so a feature that is off compiles to nothing.
  */
 export function StudioGridFeatures({
@@ -276,7 +284,9 @@ export function StudioGridFeatures({
     onChange(normalized ?? candidate);
   };
 
-  /** The value a feature's switch writes when it is turned on: its defaults and starting settings. */
+  /**
+   * The value a feature's switch writes when it is turned on: its defaults and starting settings.
+   */
   const enabledValue = (key: RecordsTableFeatureKey): GroupValue => {
     const declaration = property.properties.find((feature) => feature.key === key);
     return {
