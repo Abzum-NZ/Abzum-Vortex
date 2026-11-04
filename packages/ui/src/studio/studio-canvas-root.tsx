@@ -28,7 +28,11 @@ import { studioCanvasMetadata, useStudioCanvasChannel } from "./studio-canvas-me
 import { studioCanvasVisible, useStudioCanvasView } from "./studio-canvas-scale";
 import { useStudioScreen } from "./studio-canvas-screen";
 import { studioPuckIframeCss } from "./studio-puck-style";
-import { useStudioCanvas, useStudioCanvasDragging } from "./studio-puck-provider";
+import {
+  useStudioCanvas,
+  useStudioCanvasDragging,
+  useStudioFrameDocumentSetter,
+} from "./studio-puck-provider";
 
 const resolvePageHref = () => "#";
 
@@ -347,7 +351,7 @@ export function StudioCanvasIframe({
   const previewMode = usePuckSelector((state) => state.appState.ui.previewMode);
   // The provider reaches the canvas's document (the drop animation, the scroll to a chosen block)
   // through this override, which Puck hands the document.
-  const { setFrameDocument } = useStudioCanvas();
+  const setFrameDocument = useStudioFrameDocumentSetter();
   useEffect(() => {
     setFrameDocument(frameDocument ?? null);
     return () => setFrameDocument(null);
