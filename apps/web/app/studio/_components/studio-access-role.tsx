@@ -5,8 +5,8 @@ import { Fragment, useMemo, useState, type ReactNode } from "react";
 import { useStudioDraftText } from "./use-studio-draft-text";
 import type { ApplicationSourceDocument } from "@vortex/platform/schema";
 import { Icon } from "@vortex/ui";
+import { Badge } from "@vortex/ui/components/badge";
 import { Button } from "@vortex/ui/components/button";
-import { Alert, AlertDescription } from "@vortex/ui/components/alert";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -28,7 +28,6 @@ import { Checkbox } from "@vortex/ui/components/checkbox";
 import { useConfirm } from "@vortex/ui/components/confirm-dialog";
 import { Input } from "@vortex/ui/components/input";
 import { Label } from "@vortex/ui/components/label";
-import { Notice } from "@vortex/ui/components/notice";
 import {
   Table,
   TableBody,
@@ -49,7 +48,7 @@ import {
   type StudioAccessPermission,
 } from "@vortex/ui/studio";
 import { StudioField } from "./studio-field";
-import { StudioIconButton, StudioOptionControl } from "@vortex/ui/studio";
+import { StudioHelp, StudioIconButton, StudioOptionControl } from "@vortex/ui/studio";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@vortex/ui/components/tooltip";
 
 type Role = ApplicationSourceDocument["body"]["roles"][number];
@@ -63,9 +62,9 @@ function Section({
 }: Readonly<{ title: string; description: string; children: ReactNode }>) {
   return (
     <section aria-label={title} className="space-y-2">
-      <div>
+      <div className="flex items-center gap-1">
         <h3 className="text-base font-semibold">{title}</h3>
-        <p className="text-sm text-muted-foreground">{description}</p>
+        <StudioHelp hint={description} />
       </div>
       {children}
     </section>
@@ -172,10 +171,6 @@ function FieldAccess({
         <p className="text-sm text-muted-foreground">{access.message}</p>
       ) : (
         <>
-          <p className="text-sm text-muted-foreground">
-            Can see reflects the selected Read permission. Other grants can provide additional
-            access. Can change reflects Create and Update.
-          </p>
           <Table
             aria-label={`Field access for ${recordName}`}
             containerClassName="border-0"
@@ -184,7 +179,10 @@ function FieldAccess({
             <TableHeader>
               <TableRow>
                 <TableHead>Field</TableHead>
-                <TableHead className="w-20 text-center">Can see</TableHead>
+                <TableHead className="w-28 text-center">
+                  Can see
+                  <StudioHelp hint="Can see reflects the selected Read permission. Other grants can provide additional access. Can change reflects Create and Update." />
+                </TableHead>
                 <TableHead className="w-20 text-center">Can change</TableHead>
               </TableRow>
             </TableHeader>
@@ -318,6 +316,12 @@ export function StudioAccessRoleEditor({
         ) : (
           <div className="flex min-w-0 items-center gap-2">
             <h2 className="truncate text-xl font-semibold tracking-tight">{role.name}</h2>
+            {role.default_member === true && (
+              <>
+                <Badge variant="outline">Default</Badge>
+                <StudioHelp hint="Default member role: offered to the person who first installs the application." />
+              </>
+            )}
             <StudioIconButton
               label={`Rename ${role.name}`}
               disabled={disabled}
@@ -375,14 +379,6 @@ export function StudioAccessRoleEditor({
           </DropdownMenu>
         </div>
       </div>
-      {role.default_member === true && (
-        <Alert variant="info" className="border-0 bg-transparent">
-          <Icon name="info" />
-          <AlertDescription>
-            Default member role: offered to the person who first installs the application.
-          </AlertDescription>
-        </Alert>
-      )}
       <div className="max-w-sm">
         <StudioField label="Starts on" hint="The page its people see first.">
           {(control) => (
@@ -402,11 +398,7 @@ export function StudioAccessRoleEditor({
       </div>
 
       {wildcard ? (
-        <div className="space-y-2">
-          <Notice
-            severity="info"
-            content={`${role.name} holds every permission of the application that is not administrative. To choose them one by one, list them first.`}
-          />
+        <div className="flex items-center gap-1">
           <Button
             type="button"
             size="sm"
@@ -421,11 +413,13 @@ export function StudioAccessRoleEditor({
           >
             List its permissions one by one
           </Button>
-          {compiledGrants === undefined && (
-            <p className="text-sm text-muted-foreground">
-              They are listed once your latest change is saved.
-            </p>
-          )}
+          <StudioHelp
+            hint={`${role.name} holds every permission of the application that is not administrative. To choose them one by one, list them first.${
+              compiledGrants === undefined
+                ? " They are listed once your latest change is saved."
+                : ""
+            }`}
+          />
         </div>
       ) : (
         <>

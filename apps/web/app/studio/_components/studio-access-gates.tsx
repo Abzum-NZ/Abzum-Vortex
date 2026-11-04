@@ -18,6 +18,7 @@ import {
   studioAccessPermissions,
   studioStandardFieldPolicy,
   StudioGateSelect,
+  StudioHelp,
   StudioIconButton,
 } from "@vortex/ui/studio";
 import { StudioPermissionDeclaration } from "./studio-permission-declaration";
@@ -49,11 +50,9 @@ export function StudioAccessPageGates({
   const external = entries.filter((entry) => entry.type === "external");
   return (
     <section aria-label="Pages and menu" className="space-y-4">
-      <h2 className="text-xl font-semibold tracking-tight">Pages and menu</h2>
-      <p className="text-sm text-muted-foreground">
-        A page opens for people who hold its permission, and a menu entry shows for people who hold
-        its own. Give the permission to roles in each role&apos;s page.
-      </p>
+      <div className="flex justify-end">
+        <StudioHelp hint="A page opens for people who hold its permission, and a menu entry shows for people who hold its own. Give the permission to roles in each role's page." />
+      </div>
       <Card className="gap-0 py-0">
         <Table
           containerClassName="border-0"
@@ -170,8 +169,7 @@ export function StudioAccessPermissionList({
   };
   return (
     <section aria-label="Permissions" className="space-y-6">
-      <div className="flex items-center justify-between gap-2">
-        <h2 className="text-xl font-semibold tracking-tight">Permissions</h2>
+      <div className="flex items-center justify-end gap-2">
         <StudioIconButton
           label="New permission"
           disabled={disabled}

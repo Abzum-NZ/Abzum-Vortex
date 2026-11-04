@@ -1,4 +1,5 @@
 "use client";
+import { Icon } from "@vortex/ui";
 import { Card, CardContent } from "@vortex/ui/components/card";
 import { Field, FieldLabel } from "@vortex/ui/components/field";
 import { Alert, AlertDescription } from "@vortex/ui/components/alert";
@@ -6,10 +7,16 @@ import { useEffect, useId, useMemo, useState, type FormEvent } from "react";
 import type { ApplicationSourceDocument } from "@vortex/platform/schema";
 import { Button } from "@vortex/ui/components/button";
 import { Checkbox } from "@vortex/ui/components/checkbox";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@vortex/ui/components/collapsible";
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader } from "@vortex/ui/components/empty";
 import { Input } from "@vortex/ui/components/input";
 import { Item, ItemContent, ItemGroup } from "@vortex/ui/components/item";
 import {
+  StudioHelp,
   StudioOptionControl,
   studioRecordPageChoices,
   studioRecordPageKinds,
@@ -146,7 +153,14 @@ export function StudioRecordPageForm({
           </StudioField>
           <StudioField
             label="Page"
-            hint={availableKinds.find((entry) => entry.kind === effectiveKind)?.hint}
+            hint={[
+              availableKinds.find((entry) => entry.kind === effectiveKind)?.hint,
+              boardUnavailable
+                ? "Board pages need a pipeline: add one on a choice field in Data first."
+                : undefined,
+            ]
+              .filter((part) => part !== undefined)
+              .join(" ")}
             error={
               availableKinds.length === 0
                 ? "Enable Read under Standard actions in Data before adding pages."
@@ -163,11 +177,6 @@ export function StudioRecordPageForm({
               />
             )}
           </StudioField>
-          {boardUnavailable && (
-            <p className="text-xs text-muted-foreground">
-              Board pages need a pipeline: add one on a choice field in Data first.
-            </p>
-          )}
           {(effectiveKind === "list" || effectiveKind === "board") && (
             <StudioField
               label="Page name"
@@ -210,16 +219,16 @@ export function StudioRecordPageForm({
               <FieldLabel htmlFor={`${menuId}-menu`}>Show it in the menu</FieldLabel>
             </Field>
           ) : (
-            <p className="text-sm text-muted-foreground">
-              It opens one record, so it is reached from the list, not the menu.
-            </p>
+            <div className="flex items-center gap-1 text-sm text-muted-foreground">
+              Not a menu entry
+              <StudioHelp hint="It opens one record, so it is reached from the list, not the menu." />
+            </div>
           )}
           <section
             aria-label="What will be added"
             aria-busy={current === undefined}
             className="space-y-1 rounded-md bg-muted p-2"
           >
-            <p className="text-sm font-medium">What will be added</p>
             {current === undefined ? (
               <p className="text-sm text-muted-foreground">Working it out…</p>
             ) : current.kind === "refused" ? (
@@ -227,15 +236,32 @@ export function StudioRecordPageForm({
                 <AlertDescription>{current.message}</AlertDescription>
               </Alert>
             ) : (
-              <ItemGroup className="gap-1">
-                {current.details.map((detail, index) => (
-                  <Item key={index} size="xs" role="listitem" className="p-0">
-                    <ItemContent>
-                      <p className="m-0 text-sm text-muted-foreground">{detail}</p>
-                    </ItemContent>
-                  </Item>
-                ))}
-              </ItemGroup>
+              <Collapsible>
+                <CollapsibleTrigger
+                  render={
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="w-full justify-start"
+                    />
+                  }
+                >
+                  <Icon name="chevron-down" />
+                  What will be added ({current.details.length})
+                </CollapsibleTrigger>
+                <CollapsibleContent className="pt-1">
+                  <ItemGroup className="gap-1">
+                    {current.details.map((detail, index) => (
+                      <Item key={index} size="xs" role="listitem" className="p-0">
+                        <ItemContent>
+                          <p className="m-0 text-sm text-muted-foreground">{detail}</p>
+                        </ItemContent>
+                      </Item>
+                    ))}
+                  </ItemGroup>
+                </CollapsibleContent>
+              </Collapsible>
             )}
           </section>
           <div className="flex gap-2">

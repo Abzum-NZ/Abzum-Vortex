@@ -82,6 +82,8 @@ const displayRowSchema = z
       .array(
         z
           .object({
+            /** What the link is for: the tile draws its icon and shows the label as its tooltip. */
+            kind: z.enum(["studio", "upgrade"]),
             label: displayTextSchema,
             href: z
               .string()

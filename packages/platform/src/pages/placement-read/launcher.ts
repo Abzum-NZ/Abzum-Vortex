@@ -260,14 +260,14 @@ const withApplicationLinks = (
   return rows.map((row) => {
     const entry = byKey.get(row.recordId.toLowerCase());
     if (entry === undefined) return row;
-    const links: { label: string; href: string }[] = [];
+    const links: { kind: "studio" | "upgrade"; label: string; href: string }[] = [];
     if (labels.studio !== undefined) {
       const href = surfaces.link("studio_editor", entry.application);
-      if (href !== undefined) links.push({ label: labels.studio, href });
+      if (href !== undefined) links.push({ kind: "studio", label: labels.studio, href });
     }
     if (labels.upgrade !== undefined && entry.application.status === "update_available") {
       const href = surfaces.link("app_store_upgrade", entry.application);
-      if (href !== undefined) links.push({ label: labels.upgrade, href });
+      if (href !== undefined) links.push({ kind: "upgrade", label: labels.upgrade, href });
     }
     return links.length === 0 ? row : { ...row, links: Object.freeze(links) };
   });

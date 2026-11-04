@@ -1,7 +1,7 @@
 "use client";
 
 import type { ReactElement } from "react";
-import { Icon, resolveVortexIconName } from "../icons";
+import { Icon, resolveVortexIconName, type VortexIconName } from "../icons";
 import { Button } from "../components/button";
 import { Card, CardDescription, CardFooter, CardHeader, CardTitle } from "../components/card";
 import { Empty, EmptyHeader, EmptyMedia, EmptyTitle } from "../components/empty";
@@ -10,6 +10,7 @@ import { DisplayHeader, RowActionControl } from "../display/controls";
 import { rowActionEventIdOf } from "../display/context";
 import { DisplayStateContainer } from "../display/display-state-container";
 import type { DisplayDetailCell } from "../display/projected-data";
+import { Tooltip, TooltipContent, TooltipTrigger } from "../components/tooltip";
 import { cn } from "../lib/utils";
 import { NavigationLink } from "../routing/navigation-link";
 import {
@@ -17,6 +18,12 @@ import {
   resolveLauncherListContext,
   type LauncherRenderProps,
 } from "./launcher-context";
+
+/** The icon each kind of row link is drawn with; its label is the tooltip. */
+const linkIcons: Readonly<Record<"studio" | "upgrade", VortexIconName>> = {
+  studio: "pencil",
+  upgrade: "arrow-up",
+};
 
 const cellText = (cells: Readonly<Record<string, DisplayDetailCell>>, key: string): string => {
   const cell = cells[key];
@@ -142,35 +149,41 @@ export function ApplicationLauncher(props: LauncherRenderProps): ReactElement {
                               </div>
                             </div>
                           </CardHeader>
-                          {openable ? (
-                            <CardFooter className="mt-auto">
-                              <RowActionControl
-                                recordId={row.recordId}
-                                name={name}
-                                eventId={rowActionEventId}
-                                events={context.events}
-                                label={actionLabel}
-                              />
-                            </CardFooter>
-                          ) : null}
-                          {row.links === undefined || row.links.length === 0 ? null : (
+                          {!openable &&
+                          (row.links === undefined || row.links.length === 0) ? null : (
                             <CardFooter className="mt-auto flex flex-wrap gap-1">
-                              {row.links.map((link) => (
-                                <Button
-                                  key={link.href}
-                                  variant="ghost"
-                                  size="sm"
-                                  nativeButton={false}
-                                  render={
-                                    <NavigationLink
-                                      href={link.href}
-                                      onClick={(event) => event.stopPropagation()}
-                                    />
-                                  }
-                                >
-                                  {link.label}
-                                  <span className="sr-only">: {name}</span>
-                                </Button>
+                              {openable ? (
+                                <RowActionControl
+                                  recordId={row.recordId}
+                                  name={name}
+                                  eventId={rowActionEventId}
+                                  events={context.events}
+                                  label={actionLabel}
+                                  icon="app-window"
+                                />
+                              ) : null}
+                              {(row.links ?? []).map((link) => (
+                                <Tooltip key={link.href}>
+                                  <TooltipTrigger
+                                    render={
+                                      <Button
+                                        variant="ghost"
+                                        size="icon-sm"
+                                        nativeButton={false}
+                                        aria-label={`${link.label}: ${name}`}
+                                        render={
+                                          <NavigationLink
+                                            href={link.href}
+                                            onClick={(event) => event.stopPropagation()}
+                                          />
+                                        }
+                                      />
+                                    }
+                                  >
+                                    <Icon name={linkIcons[link.kind]} aria-hidden="true" />
+                                  </TooltipTrigger>
+                                  <TooltipContent>{link.label}</TooltipContent>
+                                </Tooltip>
                               ))}
                             </CardFooter>
                           )}
