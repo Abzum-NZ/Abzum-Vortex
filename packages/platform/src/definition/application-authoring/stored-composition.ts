@@ -563,11 +563,11 @@ export const storedPageDataFromPuck = <Zoned extends SourceZonedData>(
   // A layout has no shell of its own; a page names the one that frames it (or none).
   const framed = "shell" in baseline.root.props.vortex;
   const baselineShell = (baseline.root.props.vortex as { shell?: string | null }).shell;
-  const vortex = closed(
-    props.vortex,
-    framed ? ["shell", "slot_orders"] : ["slot_orders"],
-    ["root", "props", "vortex"],
-  );
+  const vortex = closed(props.vortex, framed ? ["shell", "slot_orders"] : ["slot_orders"], [
+    "root",
+    "props",
+    "vortex",
+  ]);
   if (framed && vortex.shell !== baselineShell)
     refuse(["root", "props", "vortex"], "changed the page frame, which the canvas does not edit");
   // A page in an application shell places its blocks in the shell's content slots, never in the
