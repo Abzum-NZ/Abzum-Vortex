@@ -217,7 +217,7 @@ export function useStudioCanvasTab({
     try {
       const next = reduceStudioCanvasGrid(held.get(change.placementAlias), change);
       if (next !== undefined && "kind" in next) {
-        console.error("[studio] a canvas grid change was refused", {
+        console.info("[studio] a canvas grid change was refused", {
           code: next.code,
           cause: next.cause,
         });
@@ -252,10 +252,11 @@ export function useStudioCanvasTab({
   );
   const selectionKey = selected === null ? "" : studioSemanticSelectionKey(selected);
   // The page or layout that holds each block: the canvas draws a block's page, the Outline lists its owner's blocks.
-  const selectedOwner =
-    selected?.kind === "placement"
-      ? studioPlacementOwner(source, selected.placementAlias)
-      : undefined;
+  const selectedAlias = selected?.kind === "placement" ? selected.placementAlias : undefined;
+  const selectedOwner = useMemo(
+    () => (selectedAlias === undefined ? undefined : studioPlacementOwner(source, selectedAlias)),
+    [source, selectedAlias],
+  );
   // A menu entry shows the page it opens; the Menu and Theme tabs otherwise show the home page, so
   // their changes are seen in the application's frame.
   const selectedEntry =

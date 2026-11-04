@@ -1,7 +1,6 @@
 import type { Data } from "@puckeditor/core";
 import {
   applicationSourceDocumentSchema,
-  describeApplicationUsers,
   definitionLimitMessage,
   definitionLimits,
   removeFlowBindingsOf,
@@ -32,13 +31,14 @@ import {
 } from "./application-composition-forms";
 import {
   studioPlacementReferenceSentence,
-  studioPlacementRemovalReference,
+  studioPlacementRemovalReferences,
 } from "./composition-references";
 import { pageDataJson } from "./studio-canvas-data";
 import {
   studioDuplicateRefusal,
   studioOutletHostRefusal,
-  studioPlacementReferrers,
+  studioPlacementUsersSentence,
+  studioRemovalReference,
   studioRemovalRuleRefusal,
 } from "./studio-canvas-permissions";
 
@@ -165,14 +165,25 @@ export const applyPageDataChange = (
       const host = studioOutletHostRefusal(current, alias);
       if (host !== undefined) return { kind: "refused", message: host };
     }
-    for (const alias of removed) {
-      const users = studioPlacementReferrers(current, alias, removed);
-      if (users.length > 0)
-        return {
-          kind: "refused",
-          message: `This block is used by ${describeApplicationUsers(users)}. Change that reference first.`,
-        };
-    }
+    // A flow step first, then queries and messages, by the one rule every route shares.
+    const aliasesOfCurrent = new Set(
+      regions(current).flatMap((region) =>
+        sourceItemTree(region.zone.items).map((item) => item.props.id),
+      ),
+    );
+    const reference = studioRemovalReference(
+      current,
+      removed,
+      studioPlacementRemovalReferences(current, aliasesOfCurrent),
+    );
+    if (reference !== undefined)
+      return {
+        kind: "refused",
+        message:
+          reference.reason === "placement_users"
+            ? studioPlacementUsersSentence(reference.users)
+            : `${studioPlacementReferenceSentence(reference)} The item stays on the ${subject}.`,
+      };
     // Deleting and dragging keep every form whole, by the same rule as Remove and Move.
     const broken = studioFormChangeRefusal(
       catalogue,
@@ -187,20 +198,6 @@ export const applyPageDataChange = (
       };
     next.body.flow_bindings = withCopiedFlowBindings(next.body.flow_bindings, copies);
     removeFlowBindingsOf(next.body, removed);
-    // A flow step that still names a removed block (the form it shows) keeps it on the page.
-    const aliases = new Set(
-      regions(current).flatMap((region) =>
-        sourceItemTree(region.zone.items).map((item) => item.props.id),
-      ),
-    );
-    for (const alias of removed) {
-      const reference = studioPlacementRemovalReference(next, alias, aliases);
-      if (reference === undefined) continue;
-      return {
-        kind: "refused",
-        message: `${studioPlacementReferenceSentence(reference)} The item stays on the ${subject}.`,
-      };
-    }
     syncStoredBlockDependencies(next);
     const parsed = applicationSourceDocumentSchema.safeParse(next);
     if (!parsed.success) throw parsed.error;

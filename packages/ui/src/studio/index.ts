@@ -104,6 +104,9 @@ export {
 export { StudioQueryBindings, StudioSelectionControlBinding } from "./studio-query-bindings";
 export { studioQueryBindingFacts, studioRecordBindingFields } from "./query-binding-facts";
 export * from "./application-flow-background";
-export { studioCanvasPermissionReason } from "./studio-canvas-permissions";
+export {
+  studioCanvasPermissionReason,
+  studioPlacementUsersSentence,
+} from "./studio-canvas-permissions";
 export { studioActionBarMore } from "./studio-action-bar-focus";
 export type { StudioCanvasAction, StudioCanvasReferences } from "./studio-canvas-permissions";

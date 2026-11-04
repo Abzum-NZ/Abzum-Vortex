@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { isStudioDraftSnapshot } from "../application-authoring/draft-snapshot";
 import { jsonValueSchema, labelSchema } from "../../catalogue/common";
+import { deepFreeze } from "../../catalogue/runtime-primitives";
 import { applicationAudienceSchema } from "../../catalogue/application-link";
 import { builderKeySchema, namespacedKeySchema } from "../../catalogue/identifiers";
 import {
@@ -477,9 +478,7 @@ export const readSourceItem = (
   }
   let reading = byRelease.get(release);
   if (reading === undefined) {
-    reading = readSourceItemFresh(item, release);
-    Object.freeze(reading.settings);
-    Object.freeze(reading);
+    reading = deepFreeze(readSourceItemFresh(item, release));
     byRelease.set(release, reading);
   }
   return reading;

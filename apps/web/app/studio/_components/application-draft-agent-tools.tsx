@@ -24,6 +24,7 @@ import {
   type StudioSemanticOutlineNode,
   type StudioSemanticSelection,
   studioPlacementReferenceSentence,
+  studioPlacementUsersSentence,
 } from "@vortex/ui/studio";
 import { z } from "zod";
 import { WebMcpAdapter, type WebMcpToolDescriptor } from "../../_components/webmcp-adapter";
@@ -759,7 +760,7 @@ export function ApplicationDraftAgentTools({
                     : removal.reason === "unresolved_target"
                       ? "A declared placement target cannot be resolved safely. Removal is unavailable."
                       : removal.reason === "placement_users"
-                        ? `This placement is used by ${removal.users}. Change that reference first.`
+                        ? studioPlacementUsersSentence(removal.users)
                         : `${studioPlacementReferenceSentence({ ...removal, reason: removal.reason })} Removal is unavailable.`,
             };
           return commandOutcome(

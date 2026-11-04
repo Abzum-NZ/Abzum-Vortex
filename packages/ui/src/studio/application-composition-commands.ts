@@ -1,12 +1,11 @@
 import {
   sameCompositionValue as sameValue,
   sourceNames,
-  studioPlacementRemovalReference,
+  studioPlacementRemovalReferences,
 } from "./composition-references";
 import {
   type ImmutablePlatformBlockCatalogue,
   applicationSourceDocumentSchema,
-  describeApplicationUsers,
   sourceItemTree,
   sourcePlacementLayoutSchema,
   sourceSlotBreakpointOrders,
@@ -59,7 +58,7 @@ import {
   restoreStudioGridFeatureBindings,
   studioGridDataSettings,
 } from "./grid-features";
-import { studioPlacementReferrers } from "./studio-canvas-permissions";
+import { studioPlacementUsersSentence, studioRemovalReference } from "./studio-canvas-permissions";
 import type { StudioSemanticSelection } from "./semantic-selection";
 import type {
   StudioCompositionBreakpoint,
@@ -646,18 +645,19 @@ const resolveRemoval = (
       const key = releaseKey(item.props.vortex.block);
       releaseUses.set(key, (releaseUses.get(key) ?? 0) + 1);
     }
-  // A block's own flow bindings leave with it (see applyRemoval); a flow step that still names it
-  // refuses the removal.
+  // A block's own flow bindings leave with it (see applyRemoval); a flow step, query or message
+  // that still names it refuses the removal.
+  const leaving = new Set(removed.map((item) => item.props.id));
+  const reference = studioRemovalReference(
+    source,
+    leaving,
+    studioPlacementRemovalReferences(source, aliases),
+  );
+  if (reference !== undefined) return { kind: "blocked", ...reference };
   for (const item of removed) {
-    const reference = studioPlacementRemovalReference(source, item.props.id, aliases);
-    if (reference !== undefined) return { kind: "blocked", ...reference };
     const key = releaseKey(item.props.vortex.block);
     releaseUses.set(key, releaseUses.get(key)! - 1);
   }
-  const leaving = new Set(removed.map((item) => item.props.id));
-  const users = [...leaving].flatMap((id) => studioPlacementReferrers(source, id, leaving));
-  if (users.length > 0)
-    return { kind: "blocked", reason: "placement_users", users: describeApplicationUsers(users) };
   const broken = studioFormChangeRefusal(
     catalogue,
     source,
@@ -706,7 +706,7 @@ const applyRemoval = (
   if (resolved.kind === "blocked" && resolved.reason === "placement_users")
     return {
       kind: "refused",
-      reason: `This block is used by ${resolved.users}. Change that reference first.`,
+      reason: studioPlacementUsersSentence(resolved.users),
     };
   if (resolved.kind !== "available")
     return { kind: resolved.kind === "invalid" ? "invalid" : "unsupported" };

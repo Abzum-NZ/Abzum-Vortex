@@ -159,12 +159,16 @@ export type StudioCompositionRemovalModel =
   | Readonly<{ kind: "available"; placementAlias: string; willRemoveUnusedRelease: boolean }>
   | Readonly<{
       kind: "blocked";
-      reason: StudioCompositionRemovalReason;
+      reason: Exclude<StudioCompositionRemovalReason, "placement_users">;
       /** The flow, and its step, that still names this item. */
       flow?: string;
       step?: string;
-      /** The queries and messages that still use the block, when the reason is placement_users. */
-      users?: string;
+    }>
+  | Readonly<{
+      kind: "blocked";
+      reason: "placement_users";
+      /** The queries and messages that still use the block. */
+      users: string;
     }>
   | Readonly<{ kind: "unsupported"; reason: StudioCompositionRemovalUnsupportedReason }>
   | Readonly<{ kind: "invalid" }>;

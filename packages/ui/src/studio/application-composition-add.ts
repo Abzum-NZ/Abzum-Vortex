@@ -515,7 +515,7 @@ export const applyAdd = (
     placeItem(catalogue, source, place, input.index, item);
   } catch (error) {
     if (error instanceof StoredCompositionRefusal) {
-      console.error("[studio] composition add refused", {
+      console.info("[studio] composition add refused", {
         part: error.location,
         reason: error.reason,
       });
