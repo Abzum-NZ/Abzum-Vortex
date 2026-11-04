@@ -17,7 +17,7 @@ import {
   type ResponsivePlacement,
 } from "@vortex/platform/schema";
 import { studioPaletteChoices } from "./contextual-palette";
-import { withSettingFields } from "./studio-puck-settings";
+import { studioVortexField, withSettingFields } from "./studio-puck-settings";
 import type { FieldInputControlReleaseMap, PlatformComponentRegistry } from "../registry";
 import { useStudioCanvasGridEvents } from "./studio-canvas-grid";
 import {
@@ -543,7 +543,10 @@ export const studioCanvasConfig = (
     // page. Puck's data holds only what the stored page holds, so the root has no props of its own
     // (no defaults, no settings) beside one slot per content slot of the page's shell.
     root: {
-      fields: Object.fromEntries(slots.map(([key, label]) => [key, { type: "slot", label }])),
+      fields: {
+        ...Object.fromEntries(slots.map(([key, label]) => [key, { type: "slot", label }])),
+        vortex: studioVortexField,
+      },
       render: (props: Parameters<typeof StudioCanvasRoot>[0]) => (
         <StudioCanvasRoot
           {...props}

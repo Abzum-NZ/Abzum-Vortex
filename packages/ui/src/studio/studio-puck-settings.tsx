@@ -50,6 +50,13 @@ import { studioOwnsSetting } from "./contextual-palette";
  * valid yet stays in the control with its message at the field and never reaches Puck.
  */
 
+/**
+ * Studio's own `vortex` prop (placement, screen sizes and orders) is declared as an object with no
+ * fields, so Puck's data walk takes its keys (`slot_orders` names slots) for nothing but data and
+ * never reads a stored screen order as the content of the slot it is named after.
+ */
+export const studioVortexField = { type: "object", objectFields: {}, visible: false } as Field;
+
 /** What the setting controls need that a field's own value does not hold. */
 export type StudioSettingFieldsValue = Readonly<{
   /** What reference settings can point at, for the selected block's data. */
@@ -309,12 +316,15 @@ export const withSettingFields = (
     | ((data: { props: Record<string, unknown> }, params: unknown) => Record<string, Field>)
     | undefined,
 ): Partial<ComponentConfig<Record<string, unknown>>> => {
-  const base = (component.fields ?? {}) as Record<string, Field>;
+  const base = { ...(component.fields ?? {}), vortex: studioVortexField } as Record<string, Field>;
   return {
     fields: hidden(base),
     resolveFields: (data: { props: Record<string, unknown> }, params: unknown) => {
       const release = releaseOf(data.props);
-      const resolved = resolveBase === undefined ? base : resolveBase(data, params);
+      const resolved = {
+        ...(resolveBase === undefined ? base : resolveBase(data, params)),
+        vortex: studioVortexField,
+      };
       return release === undefined
         ? hidden(resolved)
         : studioSettingFields(release, resolved, data.props);
