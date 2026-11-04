@@ -9,11 +9,11 @@ import {
   type ApplicationSourceDocument,
   type PeopleDirectoryOwner,
   type SourceIdentityReservation,
+  isStudioDraftSnapshot,
 } from "@vortex/platform/schema";
 import {
   createStudioApplicationDraftHistoryController,
   createStudioSemanticSelectionStore,
-  isStudioDraftSnapshot,
   type StudioApplicationDraftHistoryController,
   type StudioApplicationDraftHistoryState,
   type StudioBorrowedChoices,

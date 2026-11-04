@@ -1,4 +1,5 @@
 import { definitionLimits } from "../definition-limits";
+import { isStudioDraftSnapshot } from "./draft-snapshot";
 import {
   isSourceItemShape,
   readSourceItem,
@@ -206,6 +207,16 @@ const parseItems = (
 };
 
 /**
+ * The blocks of a history snapshot (they never change) that passed `validateTree` with all they
+ * hold, against one catalogue, with the names of the block and of every block under it. A typing
+ * run edits one block, so the rest of the page is not judged again.
+ */
+const verifiedBlocks = new WeakMap<
+  ImmutablePlatformBlockCatalogue,
+  WeakMap<SourceItem, string[]>
+>();
+
+/**
  * Judges one stored slot against the catalogue the way publication does: every item names a
  * catalogue release whose renderer it uses and whose palette its parent slot admits, every prop is
  * a declared setting or slot, settings read as their declared kinds, required slots are filled,
@@ -218,6 +229,9 @@ const validateTree = (
   location: Location,
 ): void => {
   const seen = new Set<string>();
+  // A layout's reserved slots are judged against its own tree, so only a page's slot reuses what
+  // an earlier check found.
+  const reusable = reservations.size === 0;
   const visit = (
     items: readonly SourceItem[],
     order: SourceSlotOrder | undefined,
@@ -235,6 +249,7 @@ const validateTree = (
       const itemAt = [...at, index];
       const alias = item.props.id;
       if (seen.has(alias)) refuse([...itemAt, "props", "id"], `repeats the block name '${alias}'`);
+      const first = seen.size;
       seen.add(alias);
       const release = storedItemRelease(catalogue, item);
       if (release === undefined)
@@ -251,6 +266,16 @@ const validateTree = (
         !parentDeclaration.allowedChildCategories.includes(release.paletteGroup)
       )
         refuse(itemAt, "is not allowed in this slot", subject);
+      // A block that passed before, with everything under it, passes again: only the names it
+      // holds are set against the rest of the slot's tree.
+      const known = reusable ? verifiedBlocks.get(catalogue)?.get(item) : undefined;
+      if (known !== undefined) {
+        for (const name of known.slice(1)) {
+          if (seen.has(name)) refuse(itemAt, `repeats the block name '${name}'`, subject);
+          seen.add(name);
+        }
+        continue;
+      }
       const reading = readSourceItem(item, release);
       if (reading.unknownKeys.length > 0)
         refuse(
@@ -327,19 +352,31 @@ const validateTree = (
             release.capabilities.responsiveOrder,
           );
       }
+      if (reusable && isStudioDraftSnapshot(item)) {
+        let verified = verifiedBlocks.get(catalogue);
+        if (verified === undefined) verifiedBlocks.set(catalogue, (verified = new WeakMap()));
+        verified.set(item, [...seen].slice(first));
+      }
     }
   };
   visit(zone.items, zone.order, location);
 };
 
-/** Parses and judges one raw stored slot `{ items, order }`; it throws a located refusal. */
+/**
+ * Parses and judges one raw stored slot `{ items, order }`; it throws a located refusal. The items
+ * of a history snapshot are already the parsed source (the draft is parsed when it is loaded and at
+ * every command), so only the contract parse is skipped: their depth, count and shape are still
+ * bounded, and they are judged against the catalogue.
+ */
 export const validateStoredZone = (
   catalogue: ImmutablePlatformBlockCatalogue,
   candidate: unknown,
   reservations: StoredReservations = new Map(),
 ): StoredZone => {
   const zone = closed(candidate, ["items", "order"], []);
-  const items = parseItems(catalogue, zone.items, []);
+  const items = isStudioDraftSnapshot(zone.items)
+    ? (boundItems(catalogue, zone.items, []), zone.items as SourceItem[])
+    : parseItems(catalogue, zone.items, []);
   const order =
     zone.order === undefined
       ? undefined

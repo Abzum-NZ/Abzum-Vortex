@@ -20,7 +20,7 @@ import { Button } from "@vortex/ui/components/button";
 import { Input } from "@vortex/ui/components/input";
 
 import { useId, useMemo, useRef, useState } from "react";
-import { studioPlacementLabels } from "../_lib/studio-labels";
+import { studioPlacementLabel } from "../_lib/studio-labels";
 import {
   describeStudioCompositionEdit,
   describeStudioCompositionSettings,
@@ -60,6 +60,8 @@ import { useStudioBlockAccess } from "./studio-block-access";
 type Props = Readonly<{
   context: StudioCompositionContext;
   selection: StudioSemanticSelection;
+  /** Selection key to the label Studio shows, from the draft's one outline. */
+  labels: ReadonlyMap<string, string>;
   disabled: boolean;
   /** What reference settings can point at, read from the draft being edited. */
   choices: StudioSettingChoices;
@@ -151,7 +153,7 @@ const noQueries: readonly StudioQueryChoice[] = [];
 export function ApplicationCompositionEditor(props: Props) {
   // The screen is the canvas screen: one state, kept by Puck.
   const { breakpoint, choose: chooseScreen } = useStudioScreen();
-  const names = useMemo(() => studioPlacementLabels(props.context), [props.context]);
+  const { labels } = props;
   const model = useMemo(
     () => describeStudioCompositionEdit(props.context, props.selection, breakpoint),
     [props.context, props.selection, breakpoint],
@@ -377,7 +379,7 @@ export function ApplicationCompositionEditor(props: Props) {
           choices={choices}
           disabled={props.disabled}
           placementAlias={placementAlias}
-          name={names.get(placementAlias) ?? "Block"}
+          name={studioPlacementLabel(labels, placementAlias) ?? "Block"}
           actions={[]}
           releases={props.context.catalogue.releases}
           access={access}
@@ -533,7 +535,7 @@ export function ApplicationCompositionEditor(props: Props) {
         choices={choices}
         disabled={props.disabled}
         placementAlias={model.placementAlias}
-        name={names.get(model.placementAlias) ?? "Block"}
+        name={studioPlacementLabel(labels, model.placementAlias) ?? "Block"}
         actions={[
           {
             label: "Move up",
@@ -674,7 +676,7 @@ export function ApplicationCompositionEditor(props: Props) {
                 }
               >
                 <span className="w-4 text-xs text-muted-foreground tabular-nums">{index + 1}</span>
-                <span className="truncate">{names.get(alias) ?? "Item"}</span>
+                <span className="truncate">{studioPlacementLabel(labels, alias) ?? "Item"}</span>
               </li>
             ))}
           </ol>

@@ -19,15 +19,15 @@ import {
   type SourceItem,
   type SourcePageZone,
   type SourceSlotOrder,
+  isStudioDraftSnapshot,
 } from "@vortex/platform/schema";
 import {
   storedItemRelease,
   validateStoredShell,
   validateStoredZone,
 } from "@vortex/platform/schema";
-import { isStudioDraftSnapshot } from "./draft-snapshot";
 import { resolveStudioSelectionInspectorContext } from "./selection-inspector";
-import type { StudioSemanticSelection } from "./semantic-selection";
+import type { StudioSemanticPlacementOwner, StudioSemanticSelection } from "./semantic-selection";
 import type {
   StudioCompositionContext,
   StudioCompositionOwner,
@@ -210,6 +210,36 @@ export const regions = (source: ApplicationSourceDocument): Region[] => {
   return result;
 };
 
+/** Every block name in an item's subtree, kept for items of a history snapshot, which never change. */
+const subtreeAliases = new WeakMap<SourceItem, ReadonlySet<string>>();
+const aliasesOf = (item: SourceItem): ReadonlySet<string> => {
+  const held = subtreeAliases.get(item);
+  if (held !== undefined) return held;
+  const aliases = new Set([item.props.id]);
+  for (const [, children] of sourceItemChildSlots(item))
+    for (const child of children) for (const alias of aliasesOf(child)) aliases.add(alias);
+  if (isStudioDraftSnapshot(item)) subtreeAliases.set(item, aliases);
+  return aliases;
+};
+
+/**
+ * The page or layout that holds a block, or undefined when none does. Unchanged blocks of an edited
+ * draft keep their identity, so only the blocks on the path to the edit are read again.
+ */
+export const studioPlacementOwner = (
+  source: ApplicationSourceDocument,
+  placementAlias: string,
+): StudioSemanticPlacementOwner | undefined => {
+  const region = regions(source).find((each) =>
+    each.zone.items.some((item) => aliasesOf(item).has(placementAlias)),
+  );
+  return region?.shell !== undefined
+    ? { kind: "shell", shellAlias: region.shell.id }
+    : region?.page !== undefined
+      ? { kind: "page", pageAlias: region.page.id }
+      : undefined;
+};
+
 /**
  * How many blocks sit above a region's first level: the blocks of its layout that host it. A page
  * shown in a layout is nested inside the layout's container, so the platform's depth limit counts
@@ -374,12 +404,51 @@ type ReadingResolution = Readonly<{
 }>;
 const readingResolutions = new WeakMap<object, Map<string, ReadingResolution>>();
 
+/**
+ * The block in a copy of a history snapshot, found by the region's place and the path of block
+ * names to it, so the copy's items are not read again to find what the snapshot already says.
+ */
+const targetInCopy = (
+  snapshot: ApplicationSourceDocument,
+  copy: ApplicationSourceDocument,
+  target: Target,
+): Target | undefined => {
+  const index = regions(snapshot).findIndex((each) => each.zone.items === target.region.zone.items);
+  const region = index < 0 ? undefined : regions(copy)[index];
+  if (region === undefined) return undefined;
+  let zone: Zone = region.zone;
+  for (const step of target.steps) {
+    const holder = zone.items.find((item) => item.props.id === step.parentAlias);
+    const children = holder?.props[step.slotKey];
+    if (holder === undefined || !Array.isArray(children)) return undefined;
+    zone = {
+      items: children as SourceItem[],
+      order: holder.props.vortex.slot_orders?.[step.slotKey],
+    };
+  }
+  const item = zone.items.find((each) => each.props.id === target.item.props.id);
+  return item === undefined
+    ? undefined
+    : { region, zone, item, steps: target.steps, responsiveOrder: target.responsiveOrder };
+};
+
 const resolveBlock = (
   context: StudioCompositionContext,
   selection: Extract<StudioSemanticSelection, { kind: "placement" }>,
   reading: boolean,
 ) => {
   const catalogue = context.catalogue;
+  const alias = selection.placementAlias;
+  if (!reading && isStudioDraftSnapshot(context.source)) {
+    // A history snapshot is the validated source: the block is found in it (read once per
+    // snapshot) and carried into the copy the command edits.
+    const snapshot = context.source as ApplicationSourceDocument;
+    const found = resolve(context, selection, true);
+    if (found === undefined) return undefined;
+    const source = structuredClone(snapshot);
+    const target = targetInCopy(snapshot, source, found.target);
+    return target === undefined ? undefined : { source, target, alias };
+  }
   const source = reading
     ? (context.source as ApplicationSourceDocument)
     : applicationSourceDocumentSchema.parse(context.source);
@@ -388,8 +457,8 @@ const resolveBlock = (
     "resolved"
   )
     return undefined;
-  const target = targetFor(catalogue, source, selection.placementAlias);
-  return target === undefined ? undefined : { source, target, alias: selection.placementAlias };
+  const target = targetFor(catalogue, source, alias);
+  return target === undefined ? undefined : { source, target, alias };
 };
 
 export const sameSteps = (left: readonly SlotStep[], right: readonly SlotStep[]): boolean =>

@@ -1,13 +1,11 @@
 import {
   sameCompositionValue as sameValue,
   sourceNames,
-  studioPlacementRemovalReference,
+  studioPlacementRemovalReferences,
 } from "./composition-references";
 import {
   type ImmutablePlatformBlockCatalogue,
   applicationSourceDocumentSchema,
-  applicationUses,
-  describeApplicationUsers,
   sourceItemTree,
   sourcePlacementLayoutSchema,
   sourceSlotBreakpointOrders,
@@ -21,6 +19,7 @@ import {
   type PlatformBlockRelease,
   type SourceBlockPropertyValueContract,
   type SourceItem,
+  isStudioDraftSnapshot,
 } from "@vortex/platform/schema";
 import {
   boardModeOf,
@@ -46,9 +45,7 @@ import {
 import {
   adjustedSlotOrder,
   StoredCompositionRefusal,
-  validateStoredShell,
   validateStoredApplicationOutlets,
-  validateStoredZone,
   removeFlowBindingsOf,
 } from "@vortex/platform/schema";
 import {
@@ -61,6 +58,7 @@ import {
   restoreStudioGridFeatureBindings,
   studioGridDataSettings,
 } from "./grid-features";
+import { studioPlacementUsersSentence, studioRemovalReference } from "./studio-canvas-permissions";
 import type { StudioSemanticSelection } from "./semantic-selection";
 import type {
   StudioCompositionBreakpoint,
@@ -112,9 +110,12 @@ export type * from "./application-composition-model";
 export {
   studioPlacementRemovalReference,
   studioPlacementReferenceSentence,
-  type StudioCompositionRemovalReason,
+  type StudioPlacementReferenceReason,
 } from "./composition-references";
-export { describeStudioCompositionAddTargets } from "./application-composition-add";
+export {
+  describeStudioCompositionAddTargets,
+  studioPlacedBlocks,
+} from "./application-composition-add";
 export { describeStudioCompositionWrap } from "./application-composition-wrap";
 
 const breakpointValid = (value: unknown): value is StudioCompositionBreakpoint =>
@@ -296,7 +297,15 @@ const resolveSettings = (
   const release = releaseFor(catalogue, target.item);
   if (release === undefined || !manifestMatches(catalogue, source, target.region.zone.items))
     return { kind: "unsupported" } as const;
-  validateRegion(catalogue, target.region);
+  // The region is judged as the draft holds it: the copy a command edits is made from a snapshot
+  // whose region has been judged before (the Inspector reads it first), so only a block that
+  // changed since is judged again.
+  validateRegion(
+    catalogue,
+    reading || !isStudioDraftSnapshot(context.source)
+      ? target.region
+      : (resolve(context, selection, true)?.target.region ?? target.region),
+  );
   return { kind: "available", ...resolved, release } as const;
 };
 
@@ -482,7 +491,7 @@ const applySettings = (
     validateStoredApplicationOutlets(current.catalogue, source);
   } catch (error) {
     if (error instanceof StoredCompositionRefusal) {
-      console.error("[studio] composition settings refused", {
+      console.info("[studio] composition settings refused", {
         part: error.location,
         reason: error.reason,
       });
@@ -636,11 +645,16 @@ const resolveRemoval = (
       const key = releaseKey(item.props.vortex.block);
       releaseUses.set(key, (releaseUses.get(key) ?? 0) + 1);
     }
-  // A block's own flow bindings leave with it (see applyRemoval); a flow step that still names it
-  // refuses the removal.
+  // A block's own flow bindings leave with it (see applyRemoval); a flow step, query or message
+  // that still names it refuses the removal.
+  const leaving = new Set(removed.map((item) => item.props.id));
+  const reference = studioRemovalReference(
+    source,
+    leaving,
+    studioPlacementRemovalReferences(source, aliases),
+  );
+  if (reference !== undefined) return { kind: "blocked", ...reference };
   for (const item of removed) {
-    const reference = studioPlacementRemovalReference(source, item.props.id, aliases);
-    if (reference !== undefined) return { kind: "blocked", ...reference };
     const key = releaseKey(item.props.vortex.block);
     releaseUses.set(key, releaseUses.get(key)! - 1);
   }
@@ -689,6 +703,11 @@ const applyRemoval = (
 ): StudioCompositionCommandResult => {
   closedPlain(command, ["kind"]);
   const resolved = resolveRemoval(current, selection);
+  if (resolved.kind === "blocked" && resolved.reason === "placement_users")
+    return {
+      kind: "refused",
+      reason: studioPlacementUsersSentence(resolved.users),
+    };
   if (resolved.kind !== "available")
     return { kind: resolved.kind === "invalid" ? "invalid" : "unsupported" };
   const { source, target, alias, unusedReleases } = resolved.removal;
@@ -792,8 +811,7 @@ export const describeStudioCompositionEdit = (
     )
       return { kind: "unsupported" };
     // Validate the complete original region and reserved shell targets before offering controls.
-    if (target.region.shell) validateStoredShell(catalogue, target.region.shell);
-    else validateStoredZone(catalogue, target.region.zone);
+    validateRegion(catalogue, target.region);
     const release = releaseFor(catalogue, target.item);
     if (release === undefined) return { kind: "unsupported" };
     const responsive = target.item.props.vortex.responsive;
@@ -839,18 +857,6 @@ export const applyStudioCompositionCommand = (
           kind: "refused",
           reason:
             "This block holds a content outlet of its layout. Retarget the outlet in the Layout inspector before removing the block.",
-        };
-      const messageUsers =
-        selection?.kind === "placement"
-          ? applicationUses(current.source, {
-              kind: "message_target",
-              placementAlias: selection.placementAlias,
-            })
-          : [];
-      if (messageUsers.length > 0)
-        return {
-          kind: "refused",
-          reason: `This block is where ${describeApplicationUsers(messageUsers)} show${messageUsers.length === 1 ? "s" : ""} a message, so it was not removed. Change that first.`,
         };
       return applyRemoval(current, selection, command);
     }
@@ -976,9 +982,11 @@ export const applyStudioCompositionCommand = (
     if (sameValue(parsed, current.source)) return { kind: "invalid" };
     return { kind: "applied", source: parsed };
   } catch (error) {
-    console.error("[studio] composition command could not be applied", error);
-    if (error instanceof StoredCompositionRefusal || error instanceof StructureRefusal)
+    if (error instanceof StoredCompositionRefusal || error instanceof StructureRefusal) {
+      console.info("[studio] composition command refused", error.message);
       return { kind: "refused", reason: error.message };
+    }
+    console.error("[studio] composition command could not be applied", error);
     return { kind: "invalid" };
   }
 };

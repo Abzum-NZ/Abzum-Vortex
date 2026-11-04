@@ -284,13 +284,15 @@ export function StudioBlocksPanel() {
         description={`Blocks can be added once this ${palette.owner} has a compiled version, which follows shortly after your latest change is saved.`}
       />
     );
-  if (palette.targets.kind !== "available")
+  // The places are worked out when the panel is drawn, not on every edit of the draft.
+  const places = palette.targets();
+  if (places.kind !== "available")
     return (
       <BlocksEmpty
         title="Blocks unavailable"
         description={
-          palette.targets.kind === "unsupported"
-            ? palette.targets.reason === "published"
+          places.kind === "unsupported"
+            ? places.reason === "published"
               ? PUBLISHED_PAGE_ADD_REASON
               : "Blocks can't be added to this kind of page in Studio yet."
             : `This ${palette.owner} is not in the current draft.`
@@ -299,7 +301,7 @@ export function StudioBlocksPanel() {
     );
   return (
     <StudioBlocksDrawer
-      targets={palette.targets.targets.filter((target) => model.zoneKeys.has(target.area))}
+      targets={places.targets.filter((target) => model.zoneKeys.has(target.area))}
       blocked={blockedReason(model.editable, model.readOnlyCause, screen, input.disabledReason)}
       owner={palette.owner}
       message={palette.message}
