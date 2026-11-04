@@ -62,7 +62,10 @@ export const isNoOpCanvasAction = (
 export type StudioCanvasClassification =
   /** The data Puck reports is the draft it was given (after Undo, Redo, a save or an echo). */
   | Readonly<{ kind: "unchanged" }>
-  /** The canvas takes no such edit now (hidden, read-only, locked, or not the desktop screen). */
+  /**
+   * The canvas takes no such edit now (hidden, read-only, locked, or, for anything but a drag
+   * inside one slot, not the desktop screen).
+   */
   | Readonly<{ kind: "forbidden" }>
   /** The change breaks a rule of the definition or is one the canvas cannot make (`message`). */
   | Readonly<{ kind: "refused"; message: string }>
@@ -121,9 +124,12 @@ export const classifyCanvasChange = ({
   /** The block selected in Studio. */
   selected: string | null;
   locate: StudioPuckLocate;
-  /** Whether the canvas takes edits of the page (desktop, editable). */
+  /**
+   * Whether the canvas takes edits of the page other than a reorder within one slot (desktop,
+   * editable).
+   */
   permitted: boolean;
-  /** Whether a drag inside one slot is taken: on any screen, while the canvas is shown and unlocked. */
+  /** Whether a drag inside one slot is taken: any screen, canvas shown and unlocked. */
   reorderable: boolean;
   /** The screen the canvas shows: a drag inside one slot is that screen's order. */
   breakpoint: Breakpoint;
@@ -175,8 +181,23 @@ export const classifyCanvasChange = ({
     }
   };
 
+  /**
+   * A report the typed rules cannot read: the whole data on the desktop; on a smaller screen only
+   * a reorder is taken, so it is shown again with a sentence.
+   */
+  const unreadable = (): StudioCanvasClassification => {
+    if (breakpoint === "desktop") return pageData();
+    if (!reorderable) return { kind: "forbidden" };
+    console.info(`[studio] a change on ${breakpoint} did not match the canvas; shown again`);
+    return {
+      kind: "refused",
+      message: `That change could not be read. The ${breakpoint} order is shown as it was.`,
+    };
+  };
+
   const [action, ...more] = actions;
-  if (action === undefined || more.length > 0) return pageData();
+  if (action === undefined) return pageData();
+  if (more.length > 0) return unreadable();
   switch (action.type) {
     case "insert":
       // A block from the drawer is added by Studio's add command, not by this report.
@@ -224,7 +245,7 @@ export const classifyCanvasChange = ({
         was === undefined ||
         order[action.destinationIndex] !== moved.props.id
       )
-        return pageData();
+        return unreadable();
       if (order.length === was.length && order.every((id, index) => id === was[index]))
         return { kind: "unchanged" };
       return {

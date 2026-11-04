@@ -16,6 +16,20 @@ import { StudioCanvasViewProvider } from "./studio-canvas-scale";
 import { useStudioScreen } from "./studio-canvas-screen";
 import { useStudioCanvas } from "./studio-puck-provider";
 
+const READ_ONLY_HINT =
+  "Shown read-only to keep it exactly as it is. " +
+  "Its blocks can still be changed in the inspector.";
+
+/** What the badge of a smaller screen says: only the order within a slot is arranged there. */
+const smallerScreenHint = (label: string): string =>
+  `This is the ${label.toLowerCase()} layout and order. ` +
+  "Drag a block within its slot to reorder it here; change anything else on Desktop.";
+
+const HELP_ICON_CLASS =
+  "flex size-8 shrink-0 items-center justify-center rounded-md text-muted-foreground";
+
+const WELL_CLASS = "min-h-0 flex-1 bg-muted/40 p-4 [scrollbar-gutter:stable_both-edges]";
+
 function CanvasEmpty({ title, description }: Readonly<{ title: string; description: string }>) {
   return (
     <Empty role="status" className="min-h-64 flex-1">
@@ -56,9 +70,9 @@ export function StudioCanvasSkeleton() {
 }
 
 /**
- * The page canvas: the step tabs of a guided page, the notices and the workspace's Puck preview, drawn as
- * a device screen scaled inside its well. The selected block's actions are drawn on the block. It
- * unmounts with the rail tabs that do not show a canvas.
+ * The page canvas: the step tabs of a guided page, the notices and the workspace's Puck preview,
+ * drawn as a device screen scaled inside its well. The selected block's actions are drawn on the
+ * block. It unmounts with the rail tabs that do not show a canvas.
  */
 export function StudioCanvasView({
   zoom,
@@ -165,9 +179,7 @@ export function StudioCanvasView({
                 {model.readOnlyCause !== undefined ? "Read-only" : `${label} view`}
               </TooltipTrigger>
               <TooltipContent>
-                {model.readOnlyCause !== undefined
-                  ? "Shown read-only to keep it exactly as it is. Its blocks can still be changed in the inspector."
-                  : `This is the ${label.toLowerCase()} layout and order. Drag a block within its slot to reorder it here; change anything else on Desktop.`}
+                {model.readOnlyCause !== undefined ? READ_ONLY_HINT : smallerScreenHint(label)}
               </TooltipContent>
             </Tooltip>
           ) : (
@@ -178,7 +190,7 @@ export function StudioCanvasView({
                     tabIndex={0}
                     role="img"
                     aria-label="How the canvas works"
-                    className="flex size-8 shrink-0 items-center justify-center rounded-md text-muted-foreground"
+                    className={HELP_ICON_CLASS}
                   />
                 }
               >
@@ -208,7 +220,7 @@ export function StudioCanvasView({
           ref={setWell}
           data-vortex-studio-canvas-well=""
           // Fit shows the whole screen, so it never has anything to scroll to.
-          className={`min-h-0 flex-1 bg-muted/40 p-4 [scrollbar-gutter:stable_both-edges] ${zoom === "fit" ? "overflow-hidden" : "overflow-auto"}`}
+          className={`${WELL_CLASS} ${zoom === "fit" ? "overflow-hidden" : "overflow-auto"}`}
         >
           <div className="mx-auto" style={{ width: width * scale, height: available.height }}>
             <div
