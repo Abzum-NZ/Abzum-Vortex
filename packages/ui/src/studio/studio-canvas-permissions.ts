@@ -172,7 +172,8 @@ export const studioRemovalIndex = (
       const item = byAlias.get(alias);
       if (item === undefined) return undefined;
       describe ??= createStudioPlacementDescriber(catalogue, source);
-      return studioBlockName(describe, [item], alias);
+      // The sentence ends with its own full stop, so a name that ends in one (a message) loses it.
+      return studioBlockName(describe, [item], alias)?.replace(/[.!?]+$/, "");
     },
     host: (alias) => {
       let held = hosts.get(alias);
