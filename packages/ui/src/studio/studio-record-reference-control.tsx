@@ -64,10 +64,13 @@ export function StudioRecordReferenceControl({
   recordTypes,
   read,
   disabled,
+  label,
   "aria-describedby": describedBy,
   "aria-invalid": invalid,
 }: Readonly<{
   id: string;
+  /** The name of the setting or input this picks for: both pickers are named after it. */
+  label: string;
   "aria-describedby"?: string | undefined;
   "aria-invalid"?: boolean | undefined;
   value: RecordValue | undefined;
@@ -87,8 +90,8 @@ export function StudioRecordReferenceControl({
   return (
     <div className="space-y-2">
       <StudioReferencePicker
-        id={`${id}-record-type`}
-        aria-label="Kind of record"
+        id={id}
+        aria-label={`${label}: kind of record`}
         {...(recordType === "" ? { "aria-describedby": describedBy, "aria-invalid": invalid } : {})}
         disabled={disabled}
         value={recordType}
@@ -111,7 +114,8 @@ export function StudioRecordReferenceControl({
         ) : (
           <StudioRecordChoices
             key={recordType}
-            id={id}
+            id={`${id}-record`}
+            label={label}
             recordType={recordType}
             recordId={recordId}
             read={read}
@@ -129,6 +133,7 @@ export function StudioRecordReferenceControl({
 function StudioRecordChoices(
   props: Readonly<{
     id: string;
+    label: string;
     recordType: string;
     recordId: string | undefined;
     read: StudioRecordReader;
@@ -150,6 +155,7 @@ function StudioRecordChoices(
 
 function StudioRecordChoicesPage({
   id,
+  label,
   recordType,
   recordId,
   read,
@@ -160,6 +166,7 @@ function StudioRecordChoicesPage({
   "aria-invalid": invalid,
 }: Readonly<{
   id: string;
+  label: string;
   "aria-describedby"?: string | undefined;
   "aria-invalid"?: boolean | undefined;
   recordType: string;
@@ -173,8 +180,8 @@ function StudioRecordChoicesPage({
   const pager = useRecordChoicePager<StudioRecordChoice>({
     open: true,
     search: "",
-    read: async (_search, after) => {
-      const page = await read({ recordType, ...(after === undefined ? {} : { after }) });
+    read: async (_search, after, signal) => {
+      const page = await read({ recordType, ...(after === undefined ? {} : { after }) }, signal);
       if (page.kind !== "available") {
         setRefusal(page.kind);
         return page.kind === "temporarily_unavailable" ? undefined : { items: [] };
@@ -198,7 +205,7 @@ function StudioRecordChoicesPage({
     <>
       <StudioReferencePicker
         id={id}
-        aria-label="Record"
+        aria-label={`${label}: record`}
         value={recordId ?? ""}
         disabled={disabled || pager.loading}
         aria-describedby={describedBy}

@@ -49,6 +49,8 @@ export type StudioSettingChoices = Readonly<{
   records: StudioRecordReader | null;
   /** The values the page of the selected block declares, which a display can show. */
   pageValues: readonly Readonly<{ key: string; label: string; currency?: string }>[];
+  /** The field keys other inputs in the selected input's form already show; a form holds one input per field. */
+  fieldsInUse?: ReadonlySet<string>;
 }>;
 
 /**

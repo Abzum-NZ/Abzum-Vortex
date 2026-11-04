@@ -7,9 +7,15 @@ import {
   useId,
   useMemo,
   useState,
-  type ReactElement,
+  type ReactNode,
 } from "react";
-import { createUsePuck, useGetPuck, type Field, type Overrides } from "@puckeditor/core";
+import {
+  createUsePuck,
+  useGetPuck,
+  type CustomField,
+  type Field,
+  type Overrides,
+} from "@puckeditor/core";
 import {
   plainSourceSettingValue,
   typedSourceSettingValue,
@@ -19,6 +25,7 @@ import {
 } from "@vortex/platform/schema";
 import type { StudioQueryChoice } from "./contextual-palette";
 import { StudioField } from "./studio-field";
+import { StudioSettingControl } from "./studio-setting-controls";
 import { StudioQueryBindings } from "./studio-query-bindings";
 import { StudioQueryPicker } from "./studio-query-picker";
 import { StudioSettingNote } from "./studio-setting-controls";
@@ -26,7 +33,6 @@ import {
   conditionalRequiredMessage,
   settleStudioSetting,
   studioSettingProblems,
-  type ControlProps,
   type SettingValue,
   type StudioSettingChoices,
   type StudioSettingValues,
@@ -58,6 +64,8 @@ type StudioQueryFieldValue = Readonly<{
   value: string;
   queries: readonly StudioQueryChoice[];
   recordQueries: readonly StudioQueryChoice[];
+  /** Why the data is not valid yet (the block needs some). */
+  problem?: string | undefined;
   onChange: (reference: string) => void;
   /** Opens the New-query sheet; it comes back with the new query chosen. */
   onNewQuery?: (() => void) | undefined;
@@ -66,10 +74,12 @@ type StudioQueryFieldValue = Readonly<{
     facts: QueryBindingPageFacts;
     onChange: (value: SourceBlockPropertyValueContract) => void;
   }>;
+  /** What follows the data and its bindings: a Records table's add-records control. */
+  after?: ReactNode;
 }>;
 
 /** The settings the person has edited since the selected block was chosen (the label note reads them). */
-export type StudioSettingFieldsContextValue = StudioSettingFieldsValue &
+type StudioSettingFieldsContextValue = StudioSettingFieldsValue &
   Readonly<{ scope: string; touched: ReadonlySet<string>; touch: (key: string) => void }>;
 
 export const StudioSettingFieldsContext = createContext<StudioSettingFieldsContextValue | null>(
@@ -79,32 +89,35 @@ export const StudioSettingFieldsContext = createContext<StudioSettingFieldsConte
 /** The name of the inspector field that holds the block's data choice (it is not a prop of the block). */
 export const studioQueryFieldName = "vortexQuery";
 
-type SettingControl = (props: ControlProps) => ReactElement;
-
 type SettingKind = Readonly<{
   kind: "setting";
   property: BlockPropertySchemaContract;
   properties: readonly BlockPropertySchemaContract[];
-  control: SettingControl;
 }>;
 
 /** What a Studio field carries: the setting and the control that edits it, or the block's data choice. */
 type StudioFieldKind = SettingKind | Readonly<{ kind: "query" }>;
 
+/** Studio's data travels in Puck's public field `metadata`; Puck's own render is not used. */
 const studioCustomField = (label: string, key: string, studio: StudioFieldKind): Field =>
-  ({ type: "custom", label, key, studio, render: () => null }) as unknown as Field;
+  ({
+    type: "custom",
+    label,
+    key,
+    metadata: { studio },
+    render: () => null as never,
+  }) satisfies CustomField<unknown>;
 
-/** The field of a declared setting, edited with `control`. */
+/** The field of a declared setting. */
 export const studioSettingField = (
   release: Readonly<{ blockId: string; releaseVersion: number | string }>,
   property: BlockPropertySchemaContract,
   properties: readonly BlockPropertySchemaContract[],
-  control: SettingControl,
 ): Field =>
   studioCustomField(
     property.label,
     `${release.blockId}@${release.releaseVersion}:${property.key}`,
-    { kind: "setting", property, properties, control },
+    { kind: "setting", property, properties },
   );
 
 /** The field that chooses the data a block reads. */
@@ -140,7 +153,7 @@ function StudioSettingField({
   setting,
   field,
 }: Readonly<{ setting: SettingKind; field: SettingFieldRenderProps }>) {
-  const { property, properties, control: Control } = setting;
+  const { property, properties } = setting;
   const context = useContext(StudioSettingFieldsContext);
   const getPuck = useGetPuck();
   // The selected block's values, subscribed to: the label note and the total measure depend on the
@@ -201,7 +214,7 @@ function StudioSettingField({
         error={error}
       >
         {(control) => (
-          <Control
+          <StudioSettingControl
             id={control.id}
             descriptionId={control["aria-describedby"]}
             invalid={control["aria-invalid"] === true}
@@ -244,6 +257,7 @@ function StudioQueryField({ readOnly }: Readonly<{ readOnly: boolean }>) {
         disabled={disabled}
         onNewQuery={query.onNewQuery}
         onChange={query.onChange}
+        error={query.problem}
       />
       <StudioQueryBindings
         choices={context.choices}
@@ -253,6 +267,7 @@ function StudioQueryField({ readOnly }: Readonly<{ readOnly: boolean }>) {
         disabled={disabled}
         onChange={query.bindings.onChange}
       />
+      {query.after}
     </div>
   );
 }
@@ -260,8 +275,10 @@ function StudioQueryField({ readOnly }: Readonly<{ readOnly: boolean }>) {
 type CustomFieldRenderer = NonNullable<NonNullable<Overrides["fieldTypes"]>["custom"]>;
 
 const StudioCustomField: CustomFieldRenderer = (props) => {
-  const studio = (props.field as unknown as { studio?: StudioFieldKind }).studio;
-  if (studio === undefined) return null;
+  const studio = (props.field.metadata as { studio?: StudioFieldKind } | undefined)?.studio;
+  // A custom field Studio did not declare keeps Puck's own render.
+  if (studio === undefined)
+    return (props.field as unknown as CustomField<unknown>).render(props as never);
   return studio.kind === "query" ? (
     <StudioQueryField readOnly={props.readOnly === true} />
   ) : (

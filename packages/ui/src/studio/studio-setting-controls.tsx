@@ -58,6 +58,7 @@ import {
  * commands, which judge them as stored data.
  */
 
+/** The control of one setting, by its declared kind. */
 export function StudioSettingControl(props: ControlProps): ReactElement {
   const { id, property, value, onChange, choices, disabled, descriptionId, invalid } = props;
   switch (property.kind) {

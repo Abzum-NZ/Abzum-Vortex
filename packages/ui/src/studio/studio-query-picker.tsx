@@ -1,6 +1,6 @@
 "use client";
 
-import { FieldDescription } from "../components/field";
+import { FieldDescription, FieldError } from "../components/field";
 import type { ReactElement } from "react";
 import { Button } from "../components/button";
 import { Plus } from "lucide-react";
@@ -43,6 +43,7 @@ export function StudioQueryPicker({
   onChange,
   onNewQuery,
   disabled,
+  error,
 }: Readonly<{
   id: string;
   queries: readonly StudioQueryChoice[];
@@ -51,7 +52,10 @@ export function StudioQueryPicker({
   onChange: (reference: string) => void;
   onNewQuery?: (() => void) | undefined;
   disabled: boolean;
+  /** Why the data is not valid yet; shown at the field and named by the picker. */
+  error?: string | undefined;
 }>): ReactElement {
+  const messageId = `${id}-message`;
   return (
     <div className="space-y-2" data-vortex-setting="query">
       <div className="flex items-center justify-between gap-2">
@@ -72,6 +76,8 @@ export function StudioQueryPicker({
         disabled={disabled}
         unset="Choose data"
         onChange={onChange}
+        aria-invalid={error === undefined ? undefined : true}
+        aria-describedby={messageId}
         options={[
           ...recordQueries.map((query) => ({
             value: query.reference,
@@ -85,8 +91,9 @@ export function StudioQueryPicker({
           })),
         ]}
       />
+      {error !== undefined && <FieldError id={messageId}>{error}</FieldError>}
       {queries.length === 0 && recordQueries.length === 0 && (
-        <FieldDescription>
+        <FieldDescription id={error === undefined ? messageId : undefined}>
           {onNewQuery === undefined
             ? "Add a query in the Data tab first."
             : "Add a query with New query."}

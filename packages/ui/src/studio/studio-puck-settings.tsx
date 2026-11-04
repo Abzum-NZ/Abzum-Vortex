@@ -19,15 +19,10 @@ import {
   usePuckSelector,
   type StudioSettingFieldsValue,
 } from "./studio-puck-field-types";
-import {
-  StudioFieldPickerControl,
-  StudioRecordControl,
-  StudioReferenceControl,
-} from "./studio-reference-controls";
 import { studioGridFeaturesProperty } from "./studio-grid-features";
 import { splitMoreSettings } from "./studio-more-settings";
-import { StudioSettingControl } from "./studio-setting-controls";
-import { studioOwnsSetting, studioReleaseReadsQuery } from "./contextual-palette";
+import { studioBlockReadsQuery } from "./application-composition-commands";
+import { studioOwnsSetting } from "./contextual-palette";
 
 /**
  * A block's settings are Puck fields: each declared setting is a custom field whose control is
@@ -72,25 +67,6 @@ const studioFieldSettings = (
 
 const noProps: Readonly<Record<string, unknown>> = {};
 
-/** The control that edits a setting of this kind. */
-const controlOf = (property: BlockPropertySchemaContract) => {
-  switch (property.kind) {
-    case "field_reference":
-      return StudioFieldPickerControl;
-    case "record_reference":
-      return StudioRecordControl;
-    case "total_reference":
-    case "query_reference":
-    case "page_reference":
-    case "record_type_reference":
-    case "action_reference":
-    case "relationship_reference":
-      return StudioReferenceControl;
-    default:
-      return StudioSettingControl;
-  }
-};
-
 /** The fields of one placement: its shown settings first, every other prop hidden from the inspector. */
 const studioSettingFields = (
   release: PlatformBlockRelease,
@@ -101,20 +77,13 @@ const studioSettingFields = (
   const values =
     props === undefined ? undefined : studioTypedSettings(props, release.properties as never);
   // A block that reads data chooses it first, and the bindings of its inputs follow.
-  const readsQuery =
-    studioReleaseReadsQuery(release) ||
-    (props?.vortex as { query?: unknown } | undefined)?.query !== undefined;
+  const readsQuery = props !== undefined && studioBlockReadsQuery(release, props);
   const fields: Record<string, Field> = readsQuery
     ? { [studioQueryFieldName]: studioQueryField }
     : {};
   for (const property of listed) {
     if (values !== undefined && !componentSettingApplies(property, values)) continue;
-    fields[property.key] = studioSettingField(
-      release,
-      property,
-      release.properties as never,
-      controlOf(property),
-    );
+    fields[property.key] = studioSettingField(release, property, release.properties as never);
   }
   for (const [key, field] of Object.entries(base))
     if (fields[key] === undefined) fields[key] = { ...field, visible: false } as Field;

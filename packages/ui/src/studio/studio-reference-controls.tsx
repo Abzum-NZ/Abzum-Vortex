@@ -95,7 +95,8 @@ export function StudioReferenceControl({
         "Its records have no relationships",
       );
     default:
-      throw new TypeError(`${property.kind} is not a reference this control picks by name.`);
+      // The settings switch calls this only for the six kinds above.
+      return <></>;
   }
 }
 
@@ -122,10 +123,20 @@ export function StudioFieldPickerControl({
           ? "Choose the data first"
           : studioUnsetLabel(property, undefined)
       }
-      options={studioFittingFields(property, choices.fields).map((field) => ({
-        value: field.reference,
-        label: field.label,
-      }))}
+      options={studioFittingFields(property, choices.fields).map((field) => {
+        const taken =
+          property.derivesFieldInput === true &&
+          field.reference !== (value?.kind === "field_reference" ? value.field : "") &&
+          choices.fieldsInUse?.has(field.reference.slice(field.reference.lastIndexOf(".") + 1)) ===
+            true;
+        return {
+          value: field.reference,
+          label: field.label,
+          ...(taken
+            ? { disabled: true, description: "Already used by another input in this form" }
+            : {}),
+        };
+      })}
       onChange={(next) =>
         onChange(next === "" ? undefined : { kind: "field_reference", field: next })
       }
@@ -136,6 +147,7 @@ export function StudioFieldPickerControl({
 /** One record of a record type, read 40 at a time. */
 export function StudioRecordControl({
   id,
+  property,
   value,
   onChange,
   choices,
@@ -146,6 +158,7 @@ export function StudioRecordControl({
   return (
     <StudioRecordReferenceControl
       id={id}
+      label={property.label}
       aria-describedby={descriptionId}
       aria-invalid={invalid || undefined}
       disabled={disabled}
