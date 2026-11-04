@@ -7,6 +7,7 @@ import {
   publishDefinitionResultSchema,
   type PublishDefinitionResult,
   type StoredDefinitionDraft,
+  type StoredDefinitionSource,
 } from "../definition-store-contracts";
 import { moduleVersionImpactHistoryEntrySchema } from "../version-impact";
 import { fingerprintCanonicalValue } from "../canonical-json-definition";
@@ -30,12 +31,12 @@ const compareText = (left: string, right: string): number =>
   left < right ? -1 : left > right ? 1 : 0;
 
 /**
- * The identities a Module source names: each recorded one keeps its identifier, and each one not
+ * The identities a definition source names: each recorded one keeps its identifier, and each one not
  * recorded yet gets the identifier the database will record for it.
  */
-const identityAssignments = (
+export const identityAssignments = (
   rootId: string,
-  source: ModuleSourceDocument,
+  source: StoredDefinitionSource,
   recorded: IdentityAssignments,
 ): IdentityAssignments => {
   const scoped = new Map<string, Set<string>>();

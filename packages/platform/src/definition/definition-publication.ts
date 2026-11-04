@@ -32,7 +32,7 @@ import { peopleDirectory, type PeopleDirectoryOwner } from "./module-links";
 import { selectCurrentModuleRelease } from "./definition-dependency-resolution";
 import { DefinitionError } from "./definition-error";
 import { readBuilderApplicationOrigin } from "../access/builder-authority";
-import { createDraftModuleOverlay } from "./publication/draft-module-overlay";
+import { createDraftModuleOverlay, identityAssignments } from "./publication/draft-module-overlay";
 import { APPLICATION_PLATFORM_COMPATIBILITY_VERSION } from "./platform-compatibility";
 import {
   requireBuilderAuthority,
@@ -551,6 +551,36 @@ export const createDatabaseDefinitionPublicationService = (
           catalogue,
           candidate,
         );
+      });
+    },
+
+    /**
+     * Compiles `source` in place of the caller organisation's Application draft at the expected
+     * revision, over the same stored definitions and with the identities a save would record for
+     * it. It is the compile a file import is judged by: it throws the compiler's own refusal, writes
+     * nothing, and neither reads nor replaces the saved draft's retained compile.
+     */
+    compileApplicationSource: async (
+      context: SessionContext,
+      input: unknown,
+      source: ApplicationSourceDocument,
+    ): Promise<void> => {
+      const command = prepareDefinitionPublicationCommandSchema.safeParse(input);
+      if (!command.success) refuse("INVALID_DEFINITION_PUBLICATION_COMMAND");
+      const parsedCommand = command.data as PrepareDefinitionPublicationCommand;
+      await authorize(authority, context, { kind: "draft_change", rootId: parsedCommand.rootId });
+      await storage.read(context, async (reader) => {
+        const saved = validateDraftCandidate(
+          context,
+          await reader.readDraftCandidate(parsedCommand.rootId),
+          parsedCommand,
+        );
+        if (saved.draft.kind !== "application") return refuse("DEFINITION_DRAFT_STALE_OR_MISSING");
+        await compileApplicationWithInlineModules(context, reader, catalogue, {
+          ...saved,
+          draft: { ...saved.draft, source, sourceFingerprint: fingerprintCanonicalValue(source) },
+          identities: identityAssignments(String(saved.draft.rootId), source, saved.identities),
+        });
       });
     },
 

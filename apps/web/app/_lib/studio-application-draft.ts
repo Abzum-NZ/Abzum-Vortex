@@ -31,6 +31,7 @@ import {
   compiledItemSlots,
   compiledPageShellId,
   type ApplicationContent,
+  type ApplicationSourceDocument,
   type CompiledItem,
   type PageComposition,
   sourcePageSlotAddresses,
@@ -1194,5 +1195,67 @@ export const loadStudioApplicationDraft = async (
     );
   } catch (error) {
     return loadFailure("application-draft", error);
+  }
+};
+
+export type StudioApplicationSourceCompile =
+  | Readonly<{ kind: "compiles" }>
+  | Readonly<{ kind: "compile_refused"; failure: StudioCompileFailure }>
+  | Readonly<{ kind: "refused" }>
+  | Readonly<{ kind: "temporarily_unavailable" }>;
+
+/**
+ * Whether an imported file would compile as the application's draft, judged by the compiler a save
+ * and a canvas read use. A file the compiler refuses is an expected answer (logged at info); a
+ * compile that fails for any other reason is a platform fault (logged once at error).
+ */
+export const compileStudioApplicationSource = async (
+  organizationId: string,
+  rootId: string,
+  expectedDraftRevision: number,
+  source: ApplicationSourceDocument,
+): Promise<StudioApplicationSourceCompile> => {
+  try {
+    const resolved = await resolveIdentitySession();
+    if (resolved.kind !== "active") return { kind: "refused" };
+    const result = await humanOrganizationRequests().run(
+      resolved.session,
+      { organizationId: organizationIdSchema.parse(organizationId) },
+      async (transaction, scope, issuedAt): Promise<StudioApplicationSourceCompile> => {
+        const authority = createBuilderAuthority({
+          transaction,
+          scope,
+          targetFacts: studioDraftTargetFacts,
+          permissions: platformPermissionSource,
+        });
+        try {
+          await requireBuilderAuthority(authority, { kind: "draft_change", rootId });
+          const context = await readLiveHumanContext(transaction, {
+            scope,
+            session: resolved.session,
+            issuedAt,
+          });
+          await createDatabaseDefinitionPublicationService(
+            installedReleaseCatalogue,
+            transaction,
+            authority,
+          ).compileApplicationSource(context, { rootId, expectedDraftRevision }, source);
+          return { kind: "compiles" };
+        } catch (error) {
+          if (builderRefusalReason(error) !== undefined) return { kind: "refused" };
+          const failure = studioCompileFailure(error);
+          if (failure.family === "unexpected") {
+            console.error("STUDIO_SOURCE_IMPORT_COMPILE_FAILED", failure.reasonCode, error);
+            return { kind: "temporarily_unavailable" };
+          }
+          console.info("STUDIO_SOURCE_IMPORT_COMPILE_REFUSED", failure.reasonCode, failure.family);
+          return { kind: "compile_refused", failure };
+        }
+      },
+    );
+    return result.kind === "available" ? result.value : { kind: "temporarily_unavailable" };
+  } catch (error) {
+    console.error("STUDIO_SOURCE_IMPORT_COMPILE_FAILED", describeFailure(error));
+    return { kind: "temporarily_unavailable" };
   }
 };

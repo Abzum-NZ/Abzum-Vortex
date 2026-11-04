@@ -31,7 +31,11 @@ import { humanOrganizationRequests } from "../_lib/server-composition";
 import { loadOrganizationTheme } from "../_lib/organization-theme";
 import { saveHumanApplicationDraft } from "../_lib/definition-draft-write";
 import { mapWebError } from "../_lib/web-error-mapper";
-import { loadStudioApplicationDraft } from "../_lib/studio-application-draft";
+import {
+  compileStudioApplicationSource,
+  loadStudioApplicationDraft,
+} from "../_lib/studio-application-draft";
+import { describeStudioCompileFailure } from "./_lib/studio-compile-failure";
 import { resolveIdentitySession } from "../auth/_lib/session-server";
 import { readSavedStudioApplicationConditionContext } from "../_lib/studio-application-condition-context";
 import type { StudioApplicationConditionContextResult } from "@vortex/ui/studio";
@@ -121,6 +125,21 @@ export async function reviewStudioApplicationSource(
           },
         }),
       });
+    // A file the compiler refuses would leave an application that draws nothing: say why before
+    // the draft is replaced.
+    const compiled = await compileStudioApplicationSource(
+      organizationId,
+      draft.rootId,
+      draft.draftRevision,
+      source,
+    );
+    if (compiled.kind === "compile_refused")
+      return studioApplicationSourceReviewResultSchema.parse({
+        kind: "compile_refused",
+        ...binding,
+        message: describeStudioCompileFailure(compiled.failure, source).message,
+      });
+    if (compiled.kind !== "compiles") return compiled;
     const session = await resolveIdentitySession();
     if (session.kind !== "active") return { kind: "refused" };
     const identities = await createHumanApplicationDraftWriter({
