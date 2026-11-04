@@ -32,6 +32,20 @@ begin
     case when p_apply then pg_catalog.jsonb_build_object('kind', 'primary', 'maximumAgeSeconds', 900) end
   ) as locked;
 
+  -- Purging an installed Application that places custom components uninstalls custom code.
+  if p_apply and exists (
+    select 1
+    from vortex_definition.installation_bindings as binding
+    where binding.organization_id = authority.organization_id
+      and binding.application_root_id = p_application_root_id
+      and binding.state <> 'detached'
+      and vortex_definition.application_release_contains_custom_components_internal(
+        binding.application_root_id, binding.application_release_revision
+      )
+  ) then
+    perform vortex_definition.require_custom_code_manage_internal(false);
+  end if;
+
   -- Without a typed name this only reads; with p_apply the typed name is required and proved.
   impact := vortex_definition.purge_application_review_internal(
     authority.organization_id,

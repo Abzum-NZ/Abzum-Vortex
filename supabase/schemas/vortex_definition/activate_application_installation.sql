@@ -68,6 +68,14 @@ begin
     and release.compilation_output #>> '{canonical,envelope,rootId}' = p_application_root_id::text
     and release.compilation_output #>> '{validationContractVersion}' = any (vortex_definition.accepted_contract_version('application'));
 
+  -- An Application that places custom components needs the custom code permission and a recent
+  -- sign-in, decided here from the stored release and not only by the TypeScript installer.
+  if vortex_definition.application_release_contains_custom_components_internal(
+    p_application_root_id, p_application_release_revision
+  ) then
+    perform vortex_definition.require_custom_code_manage_internal(true);
+  end if;
+
   select pg_catalog.count(*)::integer into pin_count
   from vortex_definition.reachable_module_dependency_edges(
     p_application_root_id, p_application_release_revision
