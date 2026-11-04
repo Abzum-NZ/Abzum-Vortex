@@ -156,10 +156,17 @@ export function ApplicationCompositionEditor(props: Props) {
   const layout = useStudioDraftHeld(model.kind === "available" ? inputsFor(model.layout) : null);
   const [problemArea, setProblemArea] = useState<"settings" | "features">("settings");
   // A success is announced to a screen reader; a refusal stays on screen for everyone.
-  const [message, setMessage] = useState<Readonly<{ text: string; failed: boolean }>>({
+  const [message, setMessage] = useState<Readonly<{ text: string; failed: boolean; at: number }>>({
     text: "",
     failed: false,
+    at: 0,
   });
+  // The refusal belongs to the draft it was made against: another change by any path clears it.
+  const [refusedOn, setRefusedOn] = useState(props.context.source);
+  if (message.failed && refusedOn !== props.context.source) {
+    setRefusedOn(props.context.source);
+    setMessage((previous) => ({ ...previous, text: "", failed: false }));
+  }
   const titleId = useId();
   const hintId = useId();
   const settingsId = useId();
@@ -224,14 +231,15 @@ export function ApplicationCompositionEditor(props: Props) {
   const command = (next: StudioCompositionCommand, merge?: string, done = "Changed."): boolean => {
     if (props.disabled) return false;
     const result = props.onCommand(props.context, props.selection, next, merge);
-    setMessage(
-      result.kind === "applied"
-        ? { text: done, failed: false }
-        : {
-            text: studioOutcomeText(result, "Nothing changed. Use a valid size or order."),
-            failed: true,
-          },
-    );
+    setRefusedOn(props.context.source);
+    setMessage((previous) => ({
+      text:
+        result.kind === "applied"
+          ? done
+          : studioOutcomeText(result, "Nothing changed. Use a valid size or order."),
+      failed: result.kind !== "applied",
+      at: previous.at + 1,
+    }));
     return result.kind === "applied";
   };
   const changeQuery = (reference: string) => {
@@ -419,7 +427,11 @@ export function ApplicationCompositionEditor(props: Props) {
                 }}
               />
             )}
-            <StudioBlockSettingFields choices={choices} disabled={props.disabled} />
+            <StudioBlockSettingFields
+              choices={choices}
+              disabled={props.disabled}
+              placementAlias={model.placementAlias}
+            />
             {(["open_with", "record_from"] as const)
               .filter((key) => settingsModel.properties.some((property) => property.key === key))
               .map((key) => (
@@ -720,7 +732,7 @@ export function ApplicationCompositionEditor(props: Props) {
         {message.failed ? "" : message.text}
       </p>
       {message.failed && (
-        <Alert variant="destructive">
+        <Alert key={message.at} variant="destructive">
           <AlertDescription>{message.text}</AlertDescription>
         </Alert>
       )}

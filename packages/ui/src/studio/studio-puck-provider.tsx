@@ -36,15 +36,18 @@ import type { FieldInputControlReleaseMap } from "../registry";
 import type { PlatformThemeTokens } from "../theme";
 import type { StudioCompileFailure } from "./compile-failure";
 import type {
-  StudioCompositionContext,
+  StudioCompositionOutcome,
   StudioCompositionAddTargetsModel,
   StudioCompositionDestination,
   StudioCompositionOwner,
 } from "./application-composition-commands";
 import type { StudioCanvasFrame } from "./studio-canvas-projection";
 import { applyPageDataChange } from "./studio-canvas-change";
-import { applySettingsEdit, settingKeysOf, singleBlockPropsEdit } from "./studio-settings-edit";
-import type { StudioSettingChoices } from "./studio-setting-model";
+import {
+  settingKeysOf,
+  singleBlockPropsEdit,
+  type StudioSettingsEdit,
+} from "./studio-settings-edit";
 import type { StudioPlacementDescriber } from "./semantic-outline";
 import {
   destinationOfZone,
@@ -146,16 +149,12 @@ export type StudioPuckInput = Readonly<{
   disabledReason?: string | undefined;
   /** Why the saved draft would not compile; the page stays open so the cause can be corrected. */
   compileFailure?: StudioCompileFailure | null | undefined;
-  /** `merge` joins a run of edits to one value (typing into a field) into one Undo step. */
-  onChange: (
-    expectedSource: ApplicationSourceDocument,
-    source: ApplicationSourceDocument,
-    merge?: string,
-  ) => void;
-  /** The draft as it is now, for the composition commands a settings edit runs. */
-  compositionContext: () => StudioCompositionContext;
-  /** What reference settings can point at, for a block reading `query` (or none). */
-  blockChoices: (query: string | null) => StudioSettingChoices;
+  onChange: (expectedSource: ApplicationSourceDocument, source: ApplicationSourceDocument) => void;
+  /**
+   * One block's settings edited in the inspector, run against the draft as it is now through the
+   * one composition command route; `merge` joins a run of edits to one value into one Undo step.
+   */
+  onSettingsEdit: (edit: StudioSettingsEdit, merge: string) => StudioCompositionOutcome;
   /** Names a placed block as the outline and the inspector do; the action bar shows it. */
   describePlacement: StudioPlacementDescriber;
   /** The block selected in the workspace, shown selected on the canvas. */
@@ -403,22 +402,25 @@ export function StudioPuckProvider({
     // One block's settings edited in the inspector: the settings command writes them, on every
     // screen, and a run of edits to one field is one Undo step. A settings edit never falls
     // through to the page write; only an edit that changes nothing but the slot order does.
-    if (settingsAllowed && now.pageAlias !== undefined && shown.data !== undefined) {
-      const edit = singleBlockPropsEdit(shown.data, candidate);
+    if (settingsAllowed && now.pageAlias !== undefined && shown.shown !== undefined) {
+      // Puck holds the screen's own order (Tablet and Phone reorder slots for display), so a
+      // settings edit is found against what Puck was given; the settings command writes from the
+      // live draft, so the screen order is kept.
+      const edit = singleBlockPropsEdit(shown.shown, candidate);
       const keys = edit === undefined ? [] : settingKeysOf(edit.keys);
       if (edit !== undefined && keys.length > 0) {
-        const context = now.compositionContext();
-        const outcome = applySettingsEdit(context, now.blockChoices, { ...edit, keys });
+        // Only the selected block's settings are edited here.
+        const outcome: StudioCompositionOutcome =
+          edit.alias === now.selectedPlacementAlias
+            ? now.onSettingsEdit(
+                { ...edit, keys },
+                `settings:${edit.alias}:${keys.join(",")}:${run.current.count}`,
+              )
+            : { kind: "invalid" };
         if (outcome.kind === "applied") {
           setRefused(null);
-          const before = now.blockActions.mark();
-          now.onChange(
-            context.source,
-            outcome.source,
-            `settings:${edit.alias}:${keys.join(",")}:${run.current.count}`,
-          );
           // A later change of any kind withdraws the removal's Undo offer.
-          if (now.blockActions.mark() !== before) toast.dismiss(REMOVED_TOAST);
+          toast.dismiss(REMOVED_TOAST);
           return;
         }
         if (outcome.kind === "refused" || outcome.kind === "unsupported")
@@ -428,7 +430,7 @@ export function StudioPuckProvider({
         setRefused({
           area: shown.area,
           message:
-            outcome.kind === "refused"
+            outcome.kind === "refused" && outcome.reason !== undefined
               ? outcome.reason
               : "That setting could not be changed. The block stays as it was.",
         });

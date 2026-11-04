@@ -26,6 +26,8 @@ import {
   type StudioCompositionDestination,
   type StudioCompositionOutcome,
   studioBlockChoices,
+  applySettingsEdit,
+  type StudioSettingsEdit,
   type StudioCompositionOwner,
   type StudioBorrowedChoices,
   type StudioRecordReader,
@@ -400,7 +402,7 @@ export function useStudioCanvasTab({
     };
   };
 
-  // The one composition edit: the item editor's controls, the Data tab's placements and the agent tools all come through here.
+  // The one composition edit: the item editor's controls, the Data tab's placements, the agent tools and the canvas settings fields (applyPuckSettingsEdit, below) all come through here.
   const commandComposition = (
     expected: StudioCompositionContext,
     expectedSelection: StudioSemanticSelection,
@@ -422,6 +424,39 @@ export function useStudioCanvasTab({
           }
         | { kind: "keep"; result: StudioCompositionOutcome } => {
         const result = applyStudioCompositionCommand(liveContext(), expected, now, command);
+        return result.kind === "applied"
+          ? { kind: "edit", source: result.source, result: { kind: "applied" } }
+          : {
+              kind: "keep",
+              result:
+                result.kind === "refused"
+                  ? { kind: "refused", reason: result.reason }
+                  : { kind: result.kind },
+            };
+      },
+      { merge },
+    );
+    return outcome.kind === "done" ? outcome.result : { kind: "refused", reason: outcome.message };
+  };
+
+  // The canvas settings fields' edit: the same command route, from the draft as it is now.
+  const applyPuckSettingsEdit = (
+    edit: StudioSettingsEdit,
+    merge: string,
+  ): StudioCompositionOutcome => {
+    const outcome = draft.run(
+      ():
+        | {
+            kind: "edit";
+            source: ApplicationSourceDocument;
+            result: StudioCompositionOutcome;
+          }
+        | { kind: "keep"; result: StudioCompositionOutcome } => {
+        const result = applySettingsEdit(
+          liveContext(),
+          (query) => studioBlockChoices(blockChoices, query),
+          edit,
+        );
         return result.kind === "applied"
           ? { kind: "edit", source: result.source, result: { kind: "applied" } }
           : {
@@ -542,7 +577,6 @@ export function useStudioCanvasTab({
   const applyPuckPageEdit = (
     expectedSource: ApplicationSourceDocument,
     nextSource: ApplicationSourceDocument,
-    merge?: string,
   ) => {
     if (canvasPageRef.current === undefined) return;
     const parsed = applicationSourceDocumentSchema.safeParse(nextSource);
@@ -554,7 +588,6 @@ export function useStudioCanvasTab({
     if (parsed.data.key !== key || parsed.data.root_alias !== state.source.root_alias) return;
     const outcome = draft.run(() => ({ kind: "edit", source: parsed.data, result: true }), {
       expected: expectedSource,
-      merge,
     });
     setNotice(outcome.kind === "blocked" ? outcome.message : "");
   };
@@ -1238,10 +1271,7 @@ export function useStudioCanvasTab({
     ),
   );
   const onPageEdit = useStable(applyPuckPageEdit);
-  const liveComposition = useStable(liveContext);
-  const choicesOfBlock = useStable((query: string | null) =>
-    studioBlockChoices(blockChoices, query),
-  );
+  const onSettingsEdit = useStable(applyPuckSettingsEdit);
   const onAddBlock = useStable(addBlock);
   const blockActions = useMemo<StudioBlockActions>(
     () => ({
@@ -1314,8 +1344,7 @@ export function useStudioCanvasTab({
       disabledReason: draft.locked ? draft.blockedReason() : undefined,
       compileFailure: view.failure,
       onChange: onPageEdit,
-      compositionContext: liveComposition,
-      blockChoices: choicesOfBlock,
+      onSettingsEdit,
       readRecords: readCanvasRecords,
       arrangeGrid,
       onArrangeGrid: setArrangeGrid,
@@ -1344,8 +1373,7 @@ export function useStudioCanvasTab({
       draft.locked,
       view.failure,
       onPageEdit,
-      liveComposition,
-      choicesOfBlock,
+      onSettingsEdit,
       readCanvasRecords,
       arrangeGrid,
       onGridChange,

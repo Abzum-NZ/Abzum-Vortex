@@ -64,8 +64,12 @@ export function StudioRecordReferenceControl({
   recordTypes,
   read,
   disabled,
+  "aria-describedby": describedBy,
+  "aria-invalid": invalid,
 }: Readonly<{
   id: string;
+  "aria-describedby"?: string | undefined;
+  "aria-invalid"?: boolean | undefined;
   value: RecordValue | undefined;
   onChange: (value: RecordValue | undefined) => void;
   recordTypes: readonly Readonly<{ key: string; label: string }>[];
@@ -85,6 +89,8 @@ export function StudioRecordReferenceControl({
       <StudioReferencePicker
         id={`${id}-record-type`}
         aria-label="Kind of record"
+        aria-describedby={describedBy}
+        aria-invalid={invalid}
         disabled={disabled}
         value={recordType}
         unset={

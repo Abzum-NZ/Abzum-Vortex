@@ -169,7 +169,6 @@ export function StudioSettingControl(props: ControlProps): ReactElement {
             id={id}
             label={property.label}
             aria-describedby={descriptionId}
-            aria-invalid={invalid || undefined}
             disabled={disabled}
             value={value?.kind === "choice" ? value.value : defaultKey}
             options={property.options.map((option) => ({ value: option.key, label: option.label }))}
@@ -287,6 +286,8 @@ export function StudioSettingControl(props: ControlProps): ReactElement {
       return (
         <BorrowableReferenceControl
           id={id}
+          aria-describedby={descriptionId}
+          aria-invalid={invalid || undefined}
           disabled={disabled}
           choices={choices.actions}
           value={value?.kind === "action_reference" ? value.action : ""}
@@ -304,6 +305,8 @@ export function StudioSettingControl(props: ControlProps): ReactElement {
       return (
         <BorrowableReferenceControl
           id={id}
+          aria-describedby={descriptionId}
+          aria-invalid={invalid || undefined}
           disabled={disabled}
           choices={choices.relationships}
           value={value?.kind === "relationship_reference" ? value.relationship : ""}
@@ -323,6 +326,8 @@ export function StudioSettingControl(props: ControlProps): ReactElement {
       return (
         <StudioRecordReferenceControl
           id={id}
+          aria-describedby={descriptionId}
+          aria-invalid={invalid || undefined}
           disabled={disabled}
           recordTypes={choices.recordTypes}
           read={choices.records}
@@ -392,8 +397,12 @@ function BorrowableReferenceControl({
   unset,
   disabled,
   onChange,
+  "aria-describedby": describedBy,
+  "aria-invalid": invalid,
 }: Readonly<{
   id: string;
+  "aria-describedby"?: string | undefined;
+  "aria-invalid"?: boolean | undefined;
   value: string;
   choices: readonly Readonly<{
     reference: string;
@@ -411,6 +420,8 @@ function BorrowableReferenceControl({
       disabled={disabled}
       unset={unset}
       onChange={onChange}
+      aria-describedby={describedBy}
+      aria-invalid={invalid}
       options={choices.map(borrowableOption)}
     />
   );

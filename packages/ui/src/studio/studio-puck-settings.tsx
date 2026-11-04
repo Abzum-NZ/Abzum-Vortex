@@ -258,10 +258,9 @@ function StudioSettingFieldList({
   releaseOf: StudioSettingRelease;
   fields: Partial<Record<string, ReactNode>>;
 }>) {
-  const selectedId = usePuckSelector((state) => state.selectedItem?.props.id as string | undefined);
-  const getPuck = useGetPuck();
+  const props = usePuckSelector((state) => state.selectedItem?.props) ?? noProps;
+  const selectedId = props.id as string | undefined;
   const decided = useRef<{ id: string | undefined; keys: ReadonlySet<string> } | null>(null);
-  const props = getPuck().selectedItem?.props ?? {};
   const release = releaseOf(props);
   if (release === undefined) return null;
   if (decided.current === null || decided.current.id !== selectedId) {
@@ -330,7 +329,13 @@ export const withSettingFields = (
 export function StudioBlockSettingFields({
   choices,
   disabled,
-}: Readonly<StudioSettingFieldsValue>): ReactNode {
+  placementAlias,
+}: Readonly<
+  StudioSettingFieldsValue & {
+    /** The block the inspector names; only that block's settings are drawn. */
+    placementAlias: string;
+  }
+>): ReactNode {
   const scope =
     usePuckSelector((state) => state.selectedItem?.props.id as string | undefined) ?? "";
   const [touched, setTouched] = useState<{ scope: string; keys: ReadonlySet<string> }>({
@@ -357,7 +362,7 @@ export function StudioBlockSettingFields({
   );
   return (
     <StudioSettingFieldsContext.Provider value={value}>
-      <Puck.Fields wrapFields={false} />
+      {scope === placementAlias && <Puck.Fields wrapFields={false} />}
     </StudioSettingFieldsContext.Provider>
   );
 }

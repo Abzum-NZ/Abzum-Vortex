@@ -53,6 +53,7 @@ export type { StudioCompileFailure, StudioPreviewNotRunnable } from "./compile-f
 export * from "./studio-setting-controls";
 export * from "./studio-setting-model";
 export { followFieldLabels } from "./follow-field-labels";
+export { applySettingsEdit, type StudioSettingsEdit } from "./studio-settings-edit";
 export * from "./studio-setting-basic-controls";
 export * from "./studio-query-picker";
 export * from "./studio-grid-features";

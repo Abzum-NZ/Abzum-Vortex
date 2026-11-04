@@ -92,6 +92,13 @@ const changedKeys = (before: PuckItem, after: PuckItem): string[] => {
 export const settingKeysOf = (keys: readonly string[]): string[] =>
   keys.filter((key) => key !== "vortex" && key !== "id");
 
+/** One block's settings edit: the block, the keys that changed and its props as Puck holds them. */
+export type StudioSettingsEdit = Readonly<{
+  alias: string;
+  keys: readonly string[];
+  props: Readonly<Record<string, unknown>>;
+}>;
+
 /**
  * The one block whose own props differ between two states of the page, when nothing else about
  * the page differs (no block added, removed or moved): a settings edit in the inspector.
@@ -99,16 +106,12 @@ export const settingKeysOf = (keys: readonly string[]): string[] =>
 export const singleBlockPropsEdit = (
   shown: Data,
   candidate: Data,
-):
-  | Readonly<{ alias: string; keys: readonly string[]; props: Readonly<Record<string, unknown>> }>
-  | undefined => {
+): StudioSettingsEdit | undefined => {
   const before = indexItems(shown);
   const after = indexItems(candidate);
   if (before === undefined || after === undefined || before.size !== after.size) return undefined;
   if (pageSkeleton(shown) !== pageSkeleton(candidate)) return undefined;
-  let found:
-    | { alias: string; keys: readonly string[]; props: Readonly<Record<string, unknown>> }
-    | undefined;
+  let found: StudioSettingsEdit | undefined;
   for (const [alias, item] of after) {
     const was = before.get(alias);
     if (was === undefined) return undefined;
@@ -130,7 +133,7 @@ export const singleBlockPropsEdit = (
 export const applySettingsEdit = (
   context: StudioCompositionContext,
   choices: (query: string | null) => StudioSettingChoices,
-  edit: NonNullable<ReturnType<typeof singleBlockPropsEdit>>,
+  edit: StudioSettingsEdit,
 ): StudioCompositionCommandResult => {
   const selection = { kind: "placement", placementAlias: edit.alias } as const;
   const model = describeStudioCompositionSettings(context, selection);
