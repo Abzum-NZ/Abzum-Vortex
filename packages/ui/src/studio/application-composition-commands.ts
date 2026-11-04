@@ -6,7 +6,6 @@ import {
 import {
   type ImmutablePlatformBlockCatalogue,
   applicationSourceDocumentSchema,
-  applicationUses,
   describeApplicationUsers,
   sourceItemTree,
   sourcePlacementLayoutSchema,
@@ -60,6 +59,7 @@ import {
   studioGridDataSettings,
 } from "./grid-features";
 import { isStudioDraftSnapshot } from "./draft-snapshot";
+import { studioPlacementReferrers } from "./studio-canvas-permissions";
 import type { StudioSemanticSelection } from "./semantic-selection";
 import type {
   StudioCompositionBreakpoint,
@@ -849,18 +849,22 @@ export const applyStudioCompositionCommand = (
           reason:
             "This block holds a content outlet of its layout. Retarget the outlet in the Layout inspector before removing the block.",
         };
-      const messageUsers =
-        selection?.kind === "placement"
-          ? applicationUses(current.source, {
-              kind: "message_target",
-              placementAlias: selection.placementAlias,
-            })
-          : [];
-      if (messageUsers.length > 0)
-        return {
-          kind: "refused",
-          reason: `This block is where ${describeApplicationUsers(messageUsers)} show${messageUsers.length === 1 ? "s" : ""} a message, so it was not removed. Change that first.`,
-        };
+      if (selection?.kind === "placement") {
+        const held = regions(current.source)
+          .flatMap((region) => sourceItemTree(region.zone.items))
+          .find((item) => item.props.id === selection.placementAlias);
+        const leaving = new Set(
+          sourceItemTree(held === undefined ? [] : [held]).map((item) => item.props.id),
+        );
+        const users = [...leaving].flatMap((id) =>
+          studioPlacementReferrers(current.source, id, leaving),
+        );
+        if (users.length > 0)
+          return {
+            kind: "refused",
+            reason: `This block is used by ${describeApplicationUsers(users)}. Change that reference first.`,
+          };
+      }
       return applyRemoval(current, selection, command);
     }
     if (command.kind === "settings") return applySettings(current, selection, command);
