@@ -124,6 +124,13 @@ const layoutOf = (
   };
 };
 
+/** How many neighbours the order field draws on each side of the selected block. */
+const orderNeighbours = 2;
+
+/** The selected block and up to two neighbours on each side: the order field never draws a whole slot. */
+export const studioOrderWindow = (order: readonly string[], index: number): readonly string[] =>
+  index < 0 ? [] : order.slice(Math.max(0, index - orderNeighbours), index + orderNeighbours + 1);
+
 /** Whether the block can move up and down in the order of the screen the canvas shows. */
 export const studioOrderMoves = (
   model: Extract<StudioCompositionEditorModel, { kind: "available" }>,
@@ -338,6 +345,7 @@ export function StudioOrderField({
   const { model } = value;
   const editable = breakpoint === "desktop" || model.responsiveOrder;
   const moves = studioOrderMoves(model, breakpoint);
+  const index = model.order.indexOf(model.placementAlias);
   return (
     <fieldset
       className="space-y-2"
@@ -359,7 +367,7 @@ export function StudioOrderField({
         />
       </FieldLegend>
       <ol className="space-y-px">
-        {model.order.map((alias, index) => (
+        {studioOrderWindow(model.order, index).map((alias, at) => (
           <li
             key={alias}
             aria-current={alias === model.placementAlias ? "true" : undefined}
@@ -369,11 +377,16 @@ export function StudioOrderField({
                 : "flex items-center gap-2 rounded-md px-2 py-1 text-sm"
             }
           >
-            <span className="w-4 text-xs text-muted-foreground tabular-nums">{index + 1}</span>
+            <span className="w-6 text-xs text-muted-foreground tabular-nums">
+              {Math.max(0, index - orderNeighbours) + at + 1}
+            </span>
             <span className="truncate">{value.labelOf(alias)}</span>
           </li>
         ))}
       </ol>
+      <p className="text-xs text-muted-foreground">
+        {index + 1} of {model.order.length}
+      </p>
       <div className="flex items-center gap-1">
         <StudioIconButton
           label="Move up"

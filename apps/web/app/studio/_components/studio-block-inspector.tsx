@@ -2,6 +2,7 @@
 import { Alert, AlertDescription } from "@vortex/ui/components/alert";
 import {
   plainSourceSettingValue,
+  canonicalJson,
   recordsTableBoardFeature,
   type SourceBlockPropertyValueContract,
 } from "@vortex/platform/schema";
@@ -36,6 +37,7 @@ import {
   type StudioCompositionOutcome,
   type StudioGridFeaturesProps,
   studioOrderMoves,
+  studioOrderWindow,
   type StudioLayoutFieldValue,
   type StudioCompositionSettings,
   type StudioCompositionSettingsModel,
@@ -177,13 +179,40 @@ export function StudioBlockInspector(props: Props) {
   };
   const changeOrderRef = useRef(changeOrder);
   changeOrderRef.current = changeOrder;
+  // The layout value keeps its identity while what the fields draw is the same: the model, the
+  // names of the blocks near this one and the refusal. A keystroke elsewhere in the draft then
+  // draws none of the Layout fields.
+  const modelRef = useRef(model);
+  modelRef.current = model;
+  const labelsRef = useRef(labels);
+  labelsRef.current = labels;
+  const layoutKey = useMemo(() => {
+    if (model.kind !== "available")
+      return canonicalJson({
+        kind: model.kind,
+        reason: model.kind === "refused" ? model.reason : "",
+      });
+    const index = model.order.indexOf(model.placementAlias);
+    return canonicalJson({
+      model: { ...model, order: [] },
+      breakpoint,
+      selectionKey,
+      index,
+      count: model.order.length,
+      near: studioOrderWindow(model.order, index).map((alias) => [
+        alias,
+        studioPlacementLabel(labels, alias) ?? "Item",
+      ]),
+      orderProblem: orderProblem ?? null,
+    });
+  }, [model, labels, breakpoint, selectionKey, orderProblem]);
   const layoutValue = useMemo<StudioLayoutFieldValue>(
     () =>
-      model.kind === "available"
+      modelRef.current.kind === "available"
         ? {
             kind: "available",
-            model,
-            labelOf: (alias) => studioPlacementLabel(labels, alias) ?? "Item",
+            model: modelRef.current,
+            labelOf: (alias) => studioPlacementLabel(labelsRef.current, alias) ?? "Item",
             onResize: (next) =>
               run.current(
                 { kind: "resize", breakpoint, layout: next },
@@ -194,10 +223,12 @@ export function StudioBlockInspector(props: Props) {
               ),
             onOrder: (next) => changeOrderRef.current(next),
             onMove: (direction) => {
-              const index = model.order.indexOf(model.placementAlias);
+              const current = modelRef.current;
+              if (current.kind !== "available") return undefined;
+              const index = current.order.indexOf(current.placementAlias);
               const to = index + direction;
-              if (index < 0 || to < 0 || to >= model.order.length) return undefined;
-              const next = [...model.order];
+              if (index < 0 || to < 0 || to >= current.order.length) return undefined;
+              const next = [...current.order];
               const [moved] = next.splice(index, 1);
               next.splice(to, 0, moved!);
               return changeOrderRef.current(next);
@@ -207,13 +238,14 @@ export function StudioBlockInspector(props: Props) {
         : {
             kind: "refused",
             reason:
-              model.kind === "refused"
-                ? model.reason
-                : model.kind === "unsupported"
+              modelRef.current.kind === "refused"
+                ? modelRef.current.reason
+                : modelRef.current.kind === "unsupported"
                   ? "This area uses an item type that cannot be edited here. Nothing was changed."
                   : "This item is not in the current draft.",
           },
-    [model, labels, breakpoint, selectionKey, orderProblem],
+    // The key says when the value changes.
+    [layoutKey],
   );
   // Who sees the block and when: its gate and conditions are fields of the Visibility and access group.
   const { access, dialog: conditionDialog } = useStudioBlockAccess({

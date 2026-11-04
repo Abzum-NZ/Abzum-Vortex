@@ -134,11 +134,9 @@ export type StudioGridFeaturesProps = Readonly<{
 /**
  * The Features panel of a Records table: one compact row per grid feature with its switch and its
  * capability check beside it, "Available" or "Not possible" with the business sentence. The check
- * is
- * the registry's own, run on the draft's facts of the bound query, so it says exactly what
+ * is the registry's own, run on the draft's facts of the bound query, so it says exactly what
  * publication will say. Switching a feature on reveals its settings; switching it off keeps only
- * the
- * switch, so a feature that is off compiles to nothing.
+ * the switch, so a feature that is off compiles to nothing.
  */
 export function StudioGridFeatures({
   idPrefix,

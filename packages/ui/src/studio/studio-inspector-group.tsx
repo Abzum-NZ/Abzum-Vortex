@@ -15,6 +15,7 @@ export function StudioInspectorGroup({
   children,
   defaultOpen = true,
   persist = true,
+  forceOpen = false,
   hint,
   summary,
   action,
@@ -23,6 +24,8 @@ export function StudioInspectorGroup({
   children: ReactNode;
   defaultOpen?: boolean;
   persist?: boolean;
+  /** The section stays open while this holds (a refusal inside it must be seen). */
+  forceOpen?: boolean;
   /** Instruction text for the whole section, shown in an info tooltip. */
   hint?: string;
   /** A short muted text after the title while the section is closed. */
@@ -30,7 +33,8 @@ export function StudioInspectorGroup({
   /** One icon button at the right of the header. */
   action?: ReactNode;
 }>) {
-  const [open, setOpen] = useState(defaultOpen);
+  const [opened, setOpen] = useState(defaultOpen);
+  const open = opened || forceOpen;
   const summaryId = useId();
   const key = "vortex:studio:inspector:v2:" + title;
   useEffect(() => {

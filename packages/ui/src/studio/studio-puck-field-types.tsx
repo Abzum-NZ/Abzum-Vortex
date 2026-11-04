@@ -2,6 +2,7 @@
 
 import {
   createContext,
+  memo,
   useContext,
   useEffect,
   useId,
@@ -145,8 +146,21 @@ type StudioQueryFieldValue = Readonly<{
  * The settings the person has edited since the selected block was chosen (the label note reads
  * them).
  */
-type StudioSettingFieldsContextValue = StudioSettingFieldsValue &
+type StudioSettingFieldsContextValue = Omit<StudioSettingFieldsValue, "access" | "layout"> &
   Readonly<{ scope: string; touched: ReadonlySet<string>; touch: (key: string) => void }>;
+
+/**
+ * Who sees the block, and its size and order, each in a context of its own: they change with the
+ * draft far more often than the settings do, and only their own fields read them.
+ */
+export const StudioAccessFieldContext = createContext<Readonly<{
+  access: StudioAccessFieldValue | undefined;
+  disabled: boolean;
+}> | null>(null);
+export const StudioLayoutFieldContext = createContext<Readonly<{
+  layout: StudioLayoutFieldValue | undefined;
+  disabled: boolean;
+}> | null>(null);
 
 export const StudioSettingFieldsContext = createContext<StudioSettingFieldsContextValue | null>(
   null,
@@ -396,8 +410,10 @@ function StudioQueryField({ readOnly }: Readonly<{ readOnly: boolean }>) {
  * Who can see the block: the permission it needs. A refusal shows at the field until the draft
  * changes.
  */
-function StudioGateField({ readOnly }: Readonly<{ readOnly: boolean }>) {
-  const context = useContext(StudioSettingFieldsContext);
+const StudioGateField = memo(function StudioGateField({
+  readOnly,
+}: Readonly<{ readOnly: boolean }>) {
+  const context = useContext(StudioAccessFieldContext);
   const gate = context?.access?.gate;
   if (context === null || gate === undefined) return null;
   if (gate.kind === "refused")
@@ -429,14 +445,14 @@ function StudioGateField({ readOnly }: Readonly<{ readOnly: boolean }>) {
       )}
     </StudioField>
   );
-}
+});
 
 /** One condition of the block as a row: its title, the rule in words and an Edit button. */
-function StudioConditionField({
+const StudioConditionField = memo(function StudioConditionField({
   slot,
   readOnly,
 }: Readonly<{ slot: StudioReactionSlot; readOnly: boolean }>) {
-  const context = useContext(StudioSettingFieldsContext);
+  const context = useContext(StudioAccessFieldContext);
   const conditions = context?.access?.conditions;
   if (context === null || conditions === undefined) return null;
   const row = conditions.kind === "available" ? conditions.rows.find((r) => r.slot === slot) : null;
@@ -463,7 +479,7 @@ function StudioConditionField({
       />
     </Item>
   );
-}
+});
 
 /**
  * The grid features of a Records table: the existing feature editors, edited through the
@@ -476,11 +492,11 @@ function StudioFeaturesField({ readOnly }: Readonly<{ readOnly: boolean }>) {
 }
 
 /** The size or the order of the block: the inspector's layout value drawn by the Layout fields. */
-function StudioLayoutKind({
+const StudioLayoutKind = memo(function StudioLayoutKind({
   kind,
   readOnly,
 }: Readonly<{ kind: "layout" | "order"; readOnly: boolean }>) {
-  const context = useContext(StudioSettingFieldsContext);
+  const context = useContext(StudioLayoutFieldContext);
   if (context?.layout === undefined) return null;
   const disabled = context.disabled || readOnly;
   return kind === "layout" ? (
@@ -488,7 +504,7 @@ function StudioLayoutKind({
   ) : (
     <StudioOrderField value={context.layout} disabled={disabled} />
   );
-}
+});
 
 type CustomFieldRenderer = NonNullable<NonNullable<Overrides["fieldTypes"]>["custom"]>;
 

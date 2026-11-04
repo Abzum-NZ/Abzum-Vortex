@@ -893,10 +893,7 @@ export const applyStudioCompositionCommand = (
     }
     if (!breakpointValid(command.breakpoint)) return { kind: "invalid" };
     const published = publishedLayoutReason(source, target.region.page);
-    if (published !== undefined) {
-      console.info("[studio] composition command refused", published);
-      return { kind: "refused", reason: published };
-    }
+    if (published !== undefined) return { kind: "refused", reason: published };
     const commandKeys = Reflect.ownKeys(command);
     const allowedKeys =
       command.kind === "order" ? ["kind", "breakpoint", "order"] : ["kind", "breakpoint", "layout"];

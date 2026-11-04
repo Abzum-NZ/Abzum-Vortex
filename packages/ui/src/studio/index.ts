@@ -91,7 +91,7 @@ export { studioPageNestingLevels } from "./studio-composition-depth";
 export { StudioPuckOutline } from "./studio-puck-outline";
 export { StudioBlockSettingFields } from "./studio-puck-settings";
 export type { StudioAccessFieldValue } from "./studio-puck-field-types";
-export { studioOrderMoves, type StudioLayoutFieldValue } from "./studio-layout-fields";
+export { studioOrderMoves, studioOrderWindow, type StudioLayoutFieldValue } from "./studio-layout-fields";
 export * from "./studio-inspector-actions";
 export * from "./studio-field-type-icon";
 export {

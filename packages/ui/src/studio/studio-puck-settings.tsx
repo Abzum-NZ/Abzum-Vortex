@@ -20,6 +20,8 @@ import {
 import { ItemGroup } from "../components/item";
 import { Icon } from "../icons";
 import {
+  StudioAccessFieldContext,
+  StudioLayoutFieldContext,
   StudioSettingFieldsContext,
   studioConditionField,
   studioConditionFieldName,
@@ -198,8 +200,8 @@ function StudioInspectorFieldGroups({
     .map(([key, node]) => ({ key, node: <div key={key}>{node}</div> }));
   const more = controls.filter((control) => decided.current?.keys.has(control.key) === true);
   const primary = controls.filter((control) => !more.includes(control));
-  const access = context?.access;
-  const layout = context?.layout;
+  const access = useContext(StudioAccessFieldContext)?.access;
+  const layout = useContext(StudioLayoutFieldContext)?.layout;
   const { breakpoint } = useStudioScreen();
   return (
     <>
@@ -252,6 +254,7 @@ function StudioInspectorFieldGroups({
         <StudioInspectorGroup
           title="Layout"
           defaultOpen={false}
+          forceOpen={layout.kind === "available" && layout.orderProblem !== undefined}
           summary={studioLayoutSummary(layout, breakpoint)}
         >
           {fields[studioLayoutFieldName]}
@@ -387,10 +390,11 @@ export function StudioBlockSettingFields({
   });
   const touch = useCallback(
     (key: string) =>
-      setTouched((previous) => ({
-        scope,
-        keys: new Set([...(previous.scope === scope ? previous.keys : []), key]),
-      })),
+      setTouched((previous) =>
+        previous.scope === scope && previous.keys.has(key)
+          ? previous
+          : { scope, keys: new Set([...(previous.scope === scope ? previous.keys : []), key]) },
+      ),
     [scope],
   );
   const value = useMemo(
@@ -398,8 +402,6 @@ export function StudioBlockSettingFields({
       choices,
       disabled,
       query,
-      access,
-      layout,
       features,
       settingsAfter,
       notice,
@@ -407,27 +409,26 @@ export function StudioBlockSettingFields({
       touched: touched.scope === scope ? touched.keys : noKeys,
       touch,
     }),
-    [
-      choices,
-      disabled,
-      query,
-      access,
-      layout,
-      features,
-      settingsAfter,
-      notice,
-      scope,
-      touched,
-      touch,
-    ],
+    [choices, disabled, query, features, settingsAfter, notice, scope, touched, touch],
   );
+  const accessValue = useMemo(() => ({ access, disabled }), [access, disabled]);
+  const layoutValue = useMemo(() => ({ layout, disabled }), [layout, disabled]);
   const sections = useMemo(() => ({ workflows, usedIn }), [workflows, usedIn]);
   return (
     <StudioSettingFieldsContext.Provider value={value}>
-      <StudioInspectorSectionsContext.Provider value={sections}>
-        <StudioBlockHeader titleId={titleId} name={name} actions={actions} releases={releases} />
-        {scope === placementAlias && <Puck.Fields wrapFields={false} />}
-      </StudioInspectorSectionsContext.Provider>
+      <StudioAccessFieldContext.Provider value={accessValue}>
+        <StudioLayoutFieldContext.Provider value={layoutValue}>
+          <StudioInspectorSectionsContext.Provider value={sections}>
+            <StudioBlockHeader
+              titleId={titleId}
+              name={name}
+              actions={actions}
+              releases={releases}
+            />
+            {scope === placementAlias && <Puck.Fields wrapFields={false} />}
+          </StudioInspectorSectionsContext.Provider>
+        </StudioLayoutFieldContext.Provider>
+      </StudioAccessFieldContext.Provider>
     </StudioSettingFieldsContext.Provider>
   );
 }
