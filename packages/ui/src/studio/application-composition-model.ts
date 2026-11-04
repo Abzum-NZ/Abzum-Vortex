@@ -148,7 +148,7 @@ export type StudioCompositionCommandResult =
   | Readonly<{ kind: "refused"; reason: string }>
   | Readonly<{ kind: "invalid" | "stale" | "unsupported" }>;
 
-/** What became of one command in the workspace: its kind, why for a refusal, the new block for an add. */
+/** What became of one command in the workspace: its kind, why if refused, the new block if added. */
 export type StudioCompositionOutcome = Readonly<{
   kind: StudioCompositionCommandResult["kind"];
   reason?: string;

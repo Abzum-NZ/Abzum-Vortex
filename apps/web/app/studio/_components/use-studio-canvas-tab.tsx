@@ -466,7 +466,7 @@ export function useStudioCanvasTab({
   const editable =
     inspector.status === "resolved" &&
     (selected?.kind === "application" || selectedPage !== undefined);
-  // The inspector's name and description of the selected item, as the person's one Undo step per run of typing.
+  // The inspector's name and description of the selected item: a run of typing is one Undo step.
   const setLabels = (name: string, description: string): string | true => {
     const selection = draft.selection.getSelection();
     const result = commands.setLabels(

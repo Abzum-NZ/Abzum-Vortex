@@ -116,7 +116,7 @@ const studioOutletHostRefusal = (
 export type StudioRemovalIndex = Readonly<{
   aliases: ReadonlySet<string>;
   flowReference: (alias: string) => StudioPlacementReference | undefined;
-  /** Keyed by the area's `zone.items`: separate `regions()` calls share that identity, not the region. */
+  /** Keyed by the area's `zone.items`: separate `regions()` calls share it, not the region. */
   forms: (region: Region) => ReturnType<typeof studioRegionForms> | undefined;
 }>;
 
@@ -151,8 +151,8 @@ export const studioRemovalIndex = (
  * or undefined. The one place a removal sentence is made, with one order of checks for the action
  * bar, the Delete key, the Outline, the canvas reasons, the canvas change and the agent: the
  * removal rule (page kind, public address, repeating area), a layout outlet the block holds, a
- * required slot it fills, the queries and messages that use it, a flow step that names it, and a
- * form that would lose an input it needs.
+ * required slot it fills, a flow step that names it (it says which step), the queries and
+ * messages that use it, and a form that would lose an input it needs.
  */
 export const studioRemovalRefusalAt = (
   catalogue: ImmutablePlatformBlockCatalogue,
@@ -175,12 +175,12 @@ export const studioRemovalRefusalAt = (
   if (host !== undefined) return host;
   if (place.required && place.siblings.every((sibling) => removed.has(sibling.props.id)))
     return REQUIRED_SLOT_REASON;
-  const users = [...removed].flatMap((alias) => studioPlacementReferrers(source, alias, removed));
-  if (users.length > 0) return studioPlacementUsersSentence(describeApplicationUsers(users));
   for (const alias of removed) {
     const flow = index.flowReference(alias);
     if (flow !== undefined) return studioPlacementReferenceSentence(flow);
   }
+  const users = [...removed].flatMap((alias) => studioPlacementReferrers(source, alias, removed));
+  if (users.length > 0) return studioPlacementUsersSentence(describeApplicationUsers(users));
   const forms = index.forms(place.region);
   const broken =
     forms === undefined ? undefined : studioRemovalFormRefusal(catalogue, source, forms, removed);

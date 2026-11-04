@@ -22,9 +22,7 @@ export type StudioPlacementReferenceReason =
   | "flow_form"
   | "flow_component"
   | "flow_panel"
-  | "required_slot"
   | "required_field"
-  | "content_outlet"
   | "unresolved_target";
 
 /** What still names a placement, with the flow and step that do when one does. */

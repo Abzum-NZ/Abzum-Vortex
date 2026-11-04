@@ -156,7 +156,8 @@ export function useStudioCanvasCommands({
     return runDraftChange(now, change, { merge, expected });
   };
 
-  // The canvas settings fields' edit: read from the draft as it is now, written only if it still is.
+  // The canvas settings fields' edit: read from the draft as it is now, and written only if it
+  // still is.
   const onSettingsEdit: StudioCanvasCommands["onSettingsEdit"] = (edit, merge) => {
     const context = liveContext();
     const change = settingsChangeOfPuckEdit(
@@ -171,7 +172,8 @@ export function useStudioCanvasCommands({
     });
   };
 
-  // A drag on the canvas: the canvas edits the draft it was drawn from, so any change in between makes it stale.
+  // A drag on the canvas: the canvas edits the draft it was drawn from, so any change in between
+  // makes it stale.
   const applyPuckPageEdit: StudioCanvasCommands["applyPuckPageEdit"] = (
     expectedSource,
     nextSource,
@@ -190,7 +192,8 @@ export function useStudioCanvasCommands({
     setNotice(outcome.kind === "blocked" ? outcome.message : "");
   };
 
-  // The one add path for a new block: a drop on the canvas, the palette's Add button and the setup dialog.
+  // The one add path for a new block: a drop on the canvas, the palette's Add button and the
+  // setup dialog.
   const runAdd: StudioCanvasCommands["runAdd"] = (change) => {
     const outcome = runDraftChange(draft.selection.getSelection(), change);
     if (outcome.kind === "applied") {

@@ -123,7 +123,7 @@ const effective = <Value>(
       ? (values.tablet ?? values.desktop)
       : (values.phone ?? values.tablet ?? values.desktop);
 
-/** Whether two readings of the draft are the same one: the runner asks this inside the draft's envelope. */
+/** Whether two readings of the draft are the same: the runner asks inside the draft's envelope. */
 export const sameStudioCompositionContext = (
   expected: StudioCompositionContext,
   current: StudioCompositionContext,
@@ -817,7 +817,10 @@ export const describeStudioCompositionEdit = (
   }
 };
 
-/** Return one whole native source. The runner checks the context inside the draft's envelope before one history.edit. */
+/**
+ * Return one whole native source. The runner checks the context inside the draft's envelope before
+ * one history.edit.
+ */
 export const applyStudioCompositionCommand = (
   current: StudioCompositionContext,
   selection: StudioSemanticSelection | null,
