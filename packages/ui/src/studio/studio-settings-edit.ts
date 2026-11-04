@@ -1,4 +1,3 @@
-import type { Data } from "@puckeditor/core";
 import { typedSourceSettingValue } from "@vortex/platform/schema";
 import { describeStudioCompositionSettings } from "./application-composition-commands";
 import type {
@@ -12,7 +11,7 @@ import {
   type StudioSettingValues,
 } from "./studio-setting-model";
 
-type PuckItem = Readonly<{ type: string; props: Readonly<Record<string, unknown>> }>;
+export type PuckItem = Readonly<{ type: string; props: Readonly<Record<string, unknown>> }>;
 
 const isItem = (value: unknown): value is PuckItem =>
   typeof value === "object" &&
@@ -29,65 +28,45 @@ const slotItems = (value: unknown): readonly PuckItem[] | undefined =>
 const emptyList = (value: unknown): boolean =>
   value === undefined || (Array.isArray(value) && value.length === 0);
 
-/** The blocks of Puck data by name, each with the keys of its own (non-slot) props. */
-const indexItems = (data: Data): Map<string, PuckItem> | undefined => {
-  const index = new Map<string, PuckItem>();
-  let duplicate = false;
-  const visit = (items: readonly PuckItem[]) => {
-    for (const item of items) {
-      if (index.has(item.props.id as string)) duplicate = true;
-      index.set(item.props.id as string, item);
-      for (const value of Object.values(item.props)) {
-        const children = slotItems(value);
-        if (children !== undefined) visit(children);
+/** The blocks two lists of a slot hold are the same ones (by name and type), whatever their props. */
+const sameSlotBlocks = (was: unknown, now: unknown): boolean => {
+  const before = slotItems(was) ?? [];
+  const after = slotItems(now) ?? [];
+  return (
+    before.length === after.length &&
+    before.every(
+      (item, index) =>
+        item === after[index] ||
+        (item.type === after[index]?.type && item.props.id === after[index]?.props.id),
+    )
+  );
+};
+
+/**
+ * What differs between the two states of one block: the keys of the values it holds itself, and
+ * whether the blocks in one of its slots differ (by name and type: a slot's content is judged
+ * where it changed, never through the block holding it). One block's props only.
+ */
+export const changedProps = (
+  before: PuckItem,
+  after: PuckItem,
+): Readonly<{ keys: string[]; slots: boolean }> => {
+  if (before.props === after.props) return { keys: [], slots: false };
+  let slots = false;
+  const keys = [...new Set([...Object.keys(before.props), ...Object.keys(after.props)])].filter(
+    (key) => {
+      const was = before.props[key];
+      const now = after.props[key];
+      if (Object.is(was, now) || (emptyList(was) && emptyList(now))) return false;
+      if (slotItems(was) !== undefined || slotItems(now) !== undefined) {
+        slots ||= !sameSlotBlocks(was, now);
+        return false;
       }
-    }
-  };
-  const root = (data.root as { props?: Record<string, unknown> }).props ?? {};
-  visit(((data.content ?? []) as unknown[]).filter(isItem));
-  for (const value of Object.values(root)) {
-    const children = slotItems(value);
-    if (children !== undefined) visit(children);
-  }
-  return duplicate ? undefined : index;
+      return JSON.stringify(was) !== JSON.stringify(now);
+    },
+  );
+  return { keys, slots };
 };
-
-/** The shape of a block: its name, type and the names of the blocks in each of its slots. */
-const skeleton = (item: PuckItem): unknown => [
-  item.type,
-  item.props.id,
-  Object.entries(item.props).flatMap(([key, value]) => {
-    const children = slotItems(value);
-    return children === undefined ? [] : [[key, children.map(skeleton)]];
-  }),
-];
-
-const pageSkeleton = (data: Data): string =>
-  JSON.stringify([
-    ((data.content ?? []) as unknown[]).filter(isItem).map(skeleton),
-    Object.entries((data.root as { props?: Record<string, unknown> }).props ?? {}).flatMap(
-      ([key, value]) => {
-        const children = slotItems(value);
-        return children === undefined ? [] : [[key, children.map(skeleton)]];
-      },
-    ),
-  ]);
-
-/** What differs in the props of one block, other than its slots. */
-const changedKeys = (before: PuckItem, after: PuckItem): string[] => {
-  if (before.props === after.props) return [];
-  const keys = new Set([...Object.keys(before.props), ...Object.keys(after.props)]);
-  return [...keys].filter((key) => {
-    const was = before.props[key];
-    const now = after.props[key];
-    if (Object.is(was, now) || (emptyList(was) && emptyList(now))) return false;
-    return JSON.stringify(was) !== JSON.stringify(now) && slotItems(was) === undefined;
-  });
-};
-
-/** The changed keys of an edit that are settings: the slot order (`vortex`) and `id` are not. */
-export const settingKeysOf = (keys: readonly string[]): string[] =>
-  keys.filter((key) => key !== "vortex" && key !== "id");
 
 /** One block's settings edit: the block, the keys that changed and its props as Puck holds them. */
 export type StudioSettingsEdit = Readonly<{
@@ -95,30 +74,6 @@ export type StudioSettingsEdit = Readonly<{
   keys: readonly string[];
   props: Readonly<Record<string, unknown>>;
 }>;
-
-/**
- * The one block whose own props differ between two states of the page, when nothing else about
- * the page differs (no block added, removed or moved): a settings edit in the inspector.
- */
-export const singleBlockPropsEdit = (
-  shown: Data,
-  candidate: Data,
-): StudioSettingsEdit | undefined => {
-  const before = indexItems(shown);
-  const after = indexItems(candidate);
-  if (before === undefined || after === undefined || before.size !== after.size) return undefined;
-  if (pageSkeleton(shown) !== pageSkeleton(candidate)) return undefined;
-  let found: StudioSettingsEdit | undefined;
-  for (const [alias, item] of after) {
-    const was = before.get(alias);
-    if (was === undefined) return undefined;
-    const keys = changedKeys(was, item);
-    if (keys.length === 0) continue;
-    if (found !== undefined) return undefined;
-    found = { alias, keys, props: item.props };
-  }
-  return found;
-};
 
 /**
  * The settings change for one block's edit in the inspector: each changed value is written whole,

@@ -1,191 +1,204 @@
-import type { Data } from "@puckeditor/core";
+import type { Data, PuckAction } from "@puckeditor/core";
 import {
-  applicationSourceDocumentSchema,
-  definitionLimitMessage,
-  definitionLimits,
-  removeFlowBindingsOf,
-  setSourcePageData,
-  sourceItemTree,
-  sourcePageDataAt,
-  sourcePageZones,
   StoredCompositionRefusal,
   storedPageDataFromPuck,
   storedShellReservations,
-  storedZoneAliases,
-  syncStoredBlockDependencies,
-  validateStoredApplicationOutlets,
-  withCopiedFlowBindings,
   type ApplicationSourceDocument,
   type ImmutablePlatformBlockCatalogue,
-  type SourceZonedData,
 } from "@vortex/platform/schema";
+import { canvasOwnerData } from "./application-composition-page-data";
+import type { StudioCanvasOwner, StudioCompositionCommand } from "./application-composition-model";
+import type { StudioSemanticSelection } from "./semantic-selection";
 import {
-  PUBLISHED_PAGE_ADD_REASON,
-  publishedPage,
-  regions,
-} from "./application-composition-regions";
-import { regionLevels } from "./studio-composition-depth";
-import {
-  studioFormChangeRefusal,
-  studioFormChangeRefusalSentence,
-} from "./application-composition-forms";
-import { studioPlacementReferenceSentence } from "./composition-references";
-import { pageDataJson } from "./studio-canvas-data";
-import { studioDuplicateRefusal, studioRemovalRefusal } from "./studio-canvas-permissions";
+  pageDataJson,
+  puckZoneItems,
+  withoutEmptyPuckZones,
+  type StudioPuckLocate,
+} from "./studio-canvas-data";
+import { changedProps, type PuckItem, type StudioSettingsEdit } from "./studio-settings-edit";
+
+/** The Puck actions that change the page's data; Studio's classifier reads these, in order. */
+const DATA_ACTIONS: ReadonlySet<PuckAction["type"]> = new Set([
+  "insert",
+  "duplicate",
+  "replace",
+  "replaceRoot",
+  "reorder",
+  "move",
+  "remove",
+]);
+
+/** Whether an action puts something in, takes it out or changes the page's data. */
+export const isCanvasDataAction = (action: PuckAction): boolean => DATA_ACTIONS.has(action.type);
 
 /** What a change Puck reported on the canvas comes to in the definition. */
-export type StudioCanvasChange =
-  /** The data Puck reports is the draft it was given (after Undo, Redo or a save). */
+export type StudioCanvasClassification =
+  /** The data Puck reports is the draft it was given (after Undo, Redo, a save or an echo). */
   | Readonly<{ kind: "unchanged" }>
-  | Readonly<{ kind: "applied"; source: ApplicationSourceDocument }>
-  /** The change breaks a rule of the definition; `message` says which, and the draft stays as it was. */
-  | Readonly<{ kind: "refused"; message: string }>;
+  /** The canvas takes no such edit now (hidden, read-only, locked, or not the desktop screen). */
+  | Readonly<{ kind: "forbidden" }>
+  /** The change breaks a rule of the definition or is not one the canvas can make; `message` says which. */
+  | Readonly<{ kind: "refused"; message: string }>
+  /** One block's settings edited in the inspector. */
+  | Readonly<{ kind: "settings"; edit: StudioSettingsEdit }>
+  /** A change for the one command route, to run against the draft the canvas showed. */
+  | Readonly<{
+      kind: "change";
+      selection: StudioSemanticSelection | null;
+      change: StudioCompositionCommand;
+      expectedSource: ApplicationSourceDocument;
+      /** The block to select once the draft has taken the change: the copy a Duplicate made. */
+      select?: string;
+    }>;
 
-/** The plain sentence for a change that takes the application past a composition limit. */
-const compositionLimitRefusal = (
-  catalogue: ImmutablePlatformBlockCatalogue,
-  source: ApplicationSourceDocument,
-): string | undefined => {
-  const each = regions(source);
-  const placed = each.reduce(
-    (total, region) => total + sourceItemTree(region.zone.items).length,
-    0,
-  );
-  if (placed > definitionLimits.compositionPlacements)
-    return definitionLimitMessage("compositionPlacements");
-  // A page nests inside the container of its layout, so the platform counts those levels too.
-  if (
-    each.some(
-      (region) => regionLevels(catalogue, source, region) > definitionLimits.compositionDepth,
-    )
-  )
-    return definitionLimitMessage("compositionDepth");
-  return undefined;
-};
+const SETTING_REFUSED = "That setting could not be changed. The block stays as it was.";
 
-/** What a canvas change edits: a page (or one step of a guided page), or a layout. */
-export type StudioCanvasOwner =
-  | Readonly<{ kind: "page"; pageAlias: string; step: string | undefined }>
-  | Readonly<{ kind: "layout"; shellAlias: string }>;
+/** The settings of a block: its keys other than the slot order (`vortex`) and its name. */
+const isSetting = (key: string): boolean => key !== "vortex" && key !== "id";
 
-/** The page or layout was removed or replaced while an edit was in flight: a race, refused like any other change. */
-const unavailable = (owner: StudioCanvasOwner) =>
-  new StoredCompositionRefusal(
-    [],
-    `its ${owner.kind} was removed while this change was being made`,
-  );
-
-/** The blocks of every zone of a page's (or layout's) data, in zone order. */
-const dataItems = (data: SourceZonedData) => sourcePageZones(data).flatMap(([, items]) => items);
-
-/** Every block name in the page data, at any depth. */
-const dataAliases = (data: SourceZonedData): Set<string> =>
-  storedZoneAliases({ items: dataItems(data), order: undefined });
+const idsOf = (items: readonly unknown[] | undefined): string[] | undefined =>
+  items?.map((item) => (item as PuckItem).props.id as string);
 
 /**
- * Every canvas change goes back through the definition, as the whole data of what the canvas
- * shows: Puck's data is converted to the authored page (or guided step) data, or to the layout,
- * placed in the current draft and validated before the history takes it.
+ * What a canvas change comes to, decided from the Puck action that made it and never from a diff of
+ * the whole page. Exactly one data action has its typed rule (a field edit is a settings edit, a
+ * drag inside one slot is an order, Delete is a removal); none, or several in one report (Puck
+ * batched edits), go back through the definition as the whole data, which compares the candidate
+ * and so cannot drop an edit. `locate` is Puck's own index of where a block sits, which finds a
+ * block among `shown` by walking its parents (the depth of the block, not the size of the page).
  */
-export const applyPageDataChange = (
-  catalogue: ImmutablePlatformBlockCatalogue,
-  current: ApplicationSourceDocument,
-  owner: StudioCanvasOwner,
-  candidate: Data,
-): StudioCanvasChange => {
-  try {
-    const pages = current.body.pages.filter(
-      (item) => owner.kind === "page" && item.id === owner.pageAlias,
-    );
-    const shells = current.body.shells.filter(
-      (item) => owner.kind === "layout" && item.id === owner.shellAlias,
-    );
-    const target = pages[0];
-    const targetShell = shells[0];
-    const targetData: SourceZonedData | undefined =
-      owner.kind === "layout"
-        ? targetShell?.layout
-        : target === undefined
-          ? undefined
-          : sourcePageDataAt(target, owner.step);
-    if (pages.length + shells.length !== 1 || targetData === undefined) throw unavailable(owner);
-    const { data: edited, copies } = storedPageDataFromPuck(
-      catalogue,
-      targetData,
-      candidate,
-      // A layout keeps its content slots empty: they hold the blocks of its pages.
-      targetShell === undefined ? undefined : storedShellReservations(targetShell),
-    );
-    const subject = owner.kind;
-    // Puck reports the draft it was just given (after Undo, Redo or a save) as a change too.
-    if (pageDataJson(edited) === pageDataJson(targetData)) return { kind: "unchanged" };
-    // Duplicate has the same refusals as its button, whichever draft the button was drawn from.
-    const originals = sourceItemTree(dataItems(targetData));
-    for (const original of copies.keys()) {
-      const item = originals.find((entry) => entry.props.id === original);
-      const refusal = item === undefined ? undefined : studioDuplicateRefusal(catalogue, item);
-      if (refusal !== undefined)
-        return { kind: "refused", message: `${refusal} The ${subject} stays as it was.` };
-    }
-    // A page published outside the application takes no new block: not a copy, not a drop.
-    const before = dataAliases(targetData);
-    const kept = dataAliases(edited);
-    if (
-      target !== undefined &&
-      publishedPage(current, target) &&
-      [...kept].some((alias) => !before.has(alias))
-    )
-      return { kind: "refused", message: PUBLISHED_PAGE_ADD_REASON };
-    const next = structuredClone(current);
-    if (owner.kind === "layout") {
-      const nextShell = next.body.shells.find((item) => item.id === owner.shellAlias);
-      if (nextShell === undefined) throw unavailable(owner);
-      nextShell.layout = edited as typeof nextShell.layout;
-    } else {
-      const nextPage = next.body.pages.find((item) => item.id === owner.pageAlias);
-      if (nextPage === undefined || !setSourcePageData(nextPage, owner.step, edited as never))
-        throw unavailable(owner);
-    }
-    const removed = new Set([...before].filter((alias) => !kept.has(alias)));
-    // Where a block may not leave from, whichever draft the canvas's reasons were read from: the
-    // one refusal every removal route shares.
-    const gone = removed.size === 0 ? undefined : studioRemovalRefusal(catalogue, current, removed);
-    if (gone !== undefined) return { kind: "refused", message: gone };
-    // Dragging keeps every form whole, by the same rule as Move.
-    const broken = studioFormChangeRefusal(
-      catalogue,
-      current,
-      dataItems(targetData),
-      dataItems(edited),
-    );
-    if (broken !== undefined)
+export const classifyCanvasChange = ({
+  catalogue,
+  source,
+  owner,
+  shown,
+  candidate,
+  actions,
+  selected,
+  locate,
+  permitted,
+  settingsPermitted,
+}: Readonly<{
+  catalogue: ImmutablePlatformBlockCatalogue;
+  /** The draft the canvas was drawn from. */
+  source: ApplicationSourceDocument;
+  owner: StudioCanvasOwner;
+  /** The data Puck was given. */
+  shown: Data;
+  /** The data Puck reports. */
+  candidate: Data;
+  /** The data actions Puck ran since its last report. */
+  actions: readonly PuckAction[];
+  /** The block selected in Studio. */
+  selected: string | null;
+  locate: StudioPuckLocate;
+  /** Whether the canvas takes edits of the page (desktop, editable). */
+  permitted: boolean;
+  /** Whether it takes settings edits (any screen). */
+  settingsPermitted: boolean;
+}>): StudioCanvasClassification => {
+  const expectedSource = source;
+  const itemAt = (zone: string, index: number): PuckItem | undefined =>
+    puckZoneItems(shown, zone, locate)?.[index] as PuckItem | undefined;
+  const placement = (alias: string): StudioSemanticSelection => ({
+    kind: "placement",
+    placementAlias: alias,
+  });
+
+  /** Whole data: the changes the canvas cannot name more closely. */
+  const pageData = (): StudioCanvasClassification => {
+    if (!permitted) return { kind: "forbidden" };
+    try {
+      const { data: before, shell } = canvasOwnerData(source, owner);
+      const { data, copies } = storedPageDataFromPuck(
+        catalogue,
+        before,
+        withoutEmptyPuckZones(candidate),
+        // A layout keeps its content slots empty: they hold the blocks of its pages.
+        shell === undefined ? undefined : storedShellReservations(shell),
+      );
+      if (pageDataJson(data) === pageDataJson(before)) return { kind: "unchanged" };
+      const [first] = actions;
+      const duplicated =
+        first?.type === "duplicate" ? itemAt(first.sourceZone, first.sourceIndex) : undefined;
+      const select =
+        duplicated === undefined ? undefined : copies.get(duplicated.props.id as string);
       return {
-        kind: "refused",
-        message: studioFormChangeRefusalSentence(broken, studioPlacementReferenceSentence),
+        kind: "change",
+        selection: null,
+        change: { kind: "pageData", owner, data, copies: [...copies] },
+        expectedSource,
+        ...(select === undefined ? {} : { select }),
       };
-    next.body.flow_bindings = withCopiedFlowBindings(next.body.flow_bindings, copies);
-    removeFlowBindingsOf(next.body, removed);
-    syncStoredBlockDependencies(next);
-    const parsed = applicationSourceDocumentSchema.safeParse(next);
-    if (!parsed.success) throw parsed.error;
-    validateStoredApplicationOutlets(catalogue, parsed.data);
-    // Duplicate, paste and every other insert go through the limits the platform validator holds
-    // the whole application to, so the person sees the plain sentence now, not a refused save.
-    const overLimit = compositionLimitRefusal(catalogue, parsed.data);
-    if (overLimit !== undefined) return { kind: "refused", message: overLimit };
-    return { kind: "applied", source: parsed.data };
-  } catch (error: unknown) {
-    // A change the composition rules refuse (or a page removed under it) is an expected refusal,
-    // already shown to the person as a sentence; anything else is a platform fault.
-    if (error instanceof StoredCompositionRefusal)
-      console.info("[studio] canvas change refused", error.message);
-    else console.error("[studio] canvas change failed", error);
-    return {
-      kind: "refused",
-      message:
-        error instanceof StoredCompositionRefusal
-          ? `This change could not be applied. ${error.message}. The saved draft and current edits are preserved.`
-          : "This change could not be applied. The saved draft and current edits are preserved.",
-    };
+    } catch (error: unknown) {
+      // A change the composition rules refuse (or a page removed under it) is an expected refusal,
+      // already shown to the person as a sentence; anything else is a platform fault.
+      if (error instanceof StoredCompositionRefusal) {
+        console.info("[studio] canvas change refused", error.message);
+        return { kind: "refused", message: `This change could not be applied. ${error.message}.` };
+      }
+      console.error("[studio] canvas change failed", error);
+      return { kind: "refused", message: "This change could not be applied." };
+    }
+  };
+
+  const [action, ...more] = actions;
+  if (action === undefined || more.length > 0) return pageData();
+  switch (action.type) {
+    case "insert":
+      // A block from the drawer is added by Studio's add command, not by this report.
+      return { kind: "unchanged" };
+    case "replace": {
+      const before = itemAt(action.destinationZone, action.destinationIndex);
+      const after = action.data as PuckItem;
+      if (before === undefined) return pageData();
+      const { keys, slots } = changedProps(before, after);
+      if (slots) return pageData();
+      if (keys.length === 0) return { kind: "unchanged" };
+      if (!keys.every(isSetting)) {
+        // No Studio field writes the slot order or the name of a block.
+        console.error("[studio] a field changed what it may not: STUDIO_CANVAS_VORTEX_PROP_CHANGE");
+        return { kind: "refused", message: SETTING_REFUSED };
+      }
+      if (!settingsPermitted) return { kind: "forbidden" };
+      const alias = after.props.id as string;
+      // Only the selected block's settings are edited here.
+      if (alias !== selected) {
+        console.error("[studio] the settings of a block that is not selected were edited");
+        return { kind: "refused", message: SETTING_REFUSED };
+      }
+      return { kind: "settings", edit: { alias, keys, props: after.props } };
+    }
+    case "move":
+    case "reorder": {
+      const zone = action.destinationZone;
+      if (action.type === "move" && action.sourceZone !== zone) return pageData();
+      if (!permitted) return { kind: "forbidden" };
+      const moved = itemAt(zone, action.sourceIndex);
+      const order = idsOf(puckZoneItems(candidate, zone, locate));
+      const was = idsOf(puckZoneItems(shown, zone, locate));
+      if (moved === undefined || order === undefined || was === undefined) return pageData();
+      if (order.length === was.length && order.every((id, index) => id === was[index]))
+        return { kind: "unchanged" };
+      return {
+        kind: "change",
+        selection: placement(moved.props.id as string),
+        change: { kind: "order", breakpoint: "desktop", order },
+        expectedSource,
+      };
+    }
+    case "remove": {
+      const removed = itemAt(action.zone, action.index);
+      if (removed === undefined) return pageData();
+      if (!permitted) return { kind: "forbidden" };
+      return {
+        kind: "change",
+        selection: placement(removed.props.id as string),
+        change: { kind: "remove" },
+        expectedSource,
+      };
+    }
+    default:
+      return pageData();
   }
 };

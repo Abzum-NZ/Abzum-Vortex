@@ -97,6 +97,7 @@ import {
 } from "./application-composition-regions";
 import { applyAdd, commandSettings } from "./application-composition-add";
 import { applyWrap } from "./application-composition-wrap";
+import { applyPageData } from "./application-composition-page-data";
 import { applyStudioCompositionGate } from "./application-composition-gate";
 
 export type * from "./application-composition-model";
@@ -824,6 +825,7 @@ export const applyStudioCompositionCommand = (
     if (kind === undefined || kind.get !== undefined || kind.set !== undefined)
       return { kind: "invalid" };
     if (command.kind === "add") return applyAdd(current, command);
+    if (command.kind === "pageData") return applyPageData(current, command);
     if (command.kind === "remove") {
       return applyRemoval(current, selection, command);
     }

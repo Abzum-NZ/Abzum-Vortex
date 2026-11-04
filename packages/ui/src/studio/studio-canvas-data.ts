@@ -199,15 +199,6 @@ const findPuckItem = (
   return undefined;
 };
 
-/** The block named `alias` anywhere in Puck's data. */
-const findInData = (data: Data, alias: string): Record<string, unknown> | undefined => {
-  for (const [, items] of topZones(data)) {
-    const found = findPuckItem(items, alias);
-    if (found !== undefined) return found;
-  }
-  return undefined;
-};
-
 /**
  * Where the block named `alias` sits in Puck's data: read from the data itself, never from Puck's
  * index of it, which can lag behind data that was replaced from outside (an Undo, another page).
@@ -239,13 +230,28 @@ export const puckSelectorOf = (
   return undefined;
 };
 
-/** The items of a Puck zone in its data: a top-level zone of the page or a block's slot. */
-const puckZoneItems = (data: Data, zone: string): readonly unknown[] | undefined => {
+/** Where a block sits in Puck's data, as `puckSelectorOf` or Puck's `getSelectorForId` tell it. */
+export type StudioPuckLocate = (alias: string) => Required<StudioPuckSelector> | undefined;
+
+/**
+ * The items of a Puck zone in its data: a top-level zone of the page or a block's slot. The
+ * block holding a slot is found through `locate` (default: a search of the data), and its own
+ * place the same way upward, so Puck's index makes it a walk of the block's depth.
+ */
+export const puckZoneItems = (
+  data: Data,
+  zone: string,
+  locate: StudioPuckLocate = (alias) => puckSelectorOf(data, alias),
+): readonly unknown[] | undefined => {
   const top = topZones(data).find(([name]) => name === zone);
   if (top !== undefined) return top[1];
   if (isTopZone(zone)) return undefined;
   const separator = zone.lastIndexOf(":");
-  const slot = findInData(data, zone.slice(0, separator))?.[zone.slice(separator + 1)];
+  const at = locate(zone.slice(0, separator));
+  const holder = at === undefined ? undefined : puckZoneItems(data, at.zone, locate)?.[at.index];
+  const slot = (holder as { props?: Record<string, unknown> } | null | undefined)?.props?.[
+    zone.slice(separator + 1)
+  ];
   return Array.isArray(slot) ? slot : undefined;
 };
 

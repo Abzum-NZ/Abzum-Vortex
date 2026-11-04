@@ -382,8 +382,6 @@ export function useStudioCanvasTab({
     organizationId,
     key,
     blockChoices,
-    canvasPageRef,
-    setNotice,
   });
   const { runAdd, commandComposition, commandPageValue, commandReaction } = commands;
 
@@ -914,7 +912,7 @@ export function useStudioCanvasTab({
             draft.select({ kind: "page", pageAlias: canvasPageRef.current }),
     ),
   );
-  const onPageEdit = useStable(commands.applyPuckPageEdit);
+  const onCanvasChange = useStable(commands.onCanvasChange);
   const onSettingsEdit = useStable(commands.onSettingsEdit);
   const onAddBlock = useStable(addBlock);
   const blockActions = useMemo<StudioBlockActions>(
@@ -989,7 +987,7 @@ export function useStudioCanvasTab({
       disabled: draft.locked,
       disabledReason: draft.locked ? draft.blockedReason() : undefined,
       compileFailure: view.failure,
-      onChange: onPageEdit,
+      onCanvasChange,
       onSettingsEdit,
       readRecords: readCanvasRecords,
       arrangeGrid,
@@ -1019,7 +1017,7 @@ export function useStudioCanvasTab({
       appearance,
       draft.locked,
       view.failure,
-      onPageEdit,
+      onCanvasChange,
       onSettingsEdit,
       readCanvasRecords,
       arrangeGrid,

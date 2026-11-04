@@ -152,7 +152,7 @@ export const regionRemovalCause = (
 /**
  * Where a block may not be removed from, or undefined: the region's cause (`regionRemovalCause`),
  * or a repeating slot (a block repeated by a setting). The one rule for the canvas's reasons, the
- * canvas change that carries a removal (`applyPageDataChange`) and the Remove command.
+ * canvas change that carries a removal (`applyPageData`) and the Remove command.
  */
 export const removalRule = (
   regionCause: ReturnType<typeof regionRemovalCause>,

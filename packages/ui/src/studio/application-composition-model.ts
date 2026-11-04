@@ -5,6 +5,7 @@ import type {
   PlatformBlockRelease,
   BlockPropertySchemaContract,
   SourceBlockPropertyValueContract,
+  SourceZonedData,
   sourcePlacementLayoutSchema,
 } from "@vortex/platform/schema";
 import type { StudioBorrowedChoices, StudioPaletteChoice } from "./contextual-palette";
@@ -28,6 +29,11 @@ export type StudioCompositionContext = Readonly<{
 export type StudioCompositionOwner =
   Readonly<{ kind: "page"; pageAlias: string }> | Readonly<{ kind: "layout"; shellAlias: string }>;
 
+/** What a canvas change edits: a page (or one step of a guided page), or a layout. */
+export type StudioCanvasOwner =
+  | Readonly<{ kind: "page"; pageAlias: string; step: string | undefined }>
+  | Readonly<{ kind: "layout"; shellAlias: string }>;
+
 export type StudioCompositionCommand =
   | Readonly<{
       kind: "order";
@@ -41,6 +47,18 @@ export type StudioCompositionCommand =
     }>
   | Readonly<{ kind: "move"; destination: StudioCompositionDestination }>
   | Readonly<{ kind: "remove" }>
+  /**
+   * The canvas's whole-page write, for the changes the canvas cannot name more closely (Duplicate,
+   * a drag across slots): the page's (or layout's) data as the canvas edited it, and each copy
+   * Duplicate made as `[original, copy]`. Plain data, so the core stays free of Puck; only the
+   * canvas sends it.
+   */
+  | Readonly<{
+      kind: "pageData";
+      owner: StudioCanvasOwner;
+      data: SourceZonedData;
+      copies: readonly (readonly [original: string, copy: string])[];
+    }>
   /** Set or clear only this block's view gate, keeping its settings, content and bindings. */
   | Readonly<{ kind: "gate"; gate: string | null }>
   /**

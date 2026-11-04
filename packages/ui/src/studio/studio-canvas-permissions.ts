@@ -59,7 +59,7 @@ const studioPlacementUsersSentence = (users: string): string =>
 /**
  * Why a block cannot be duplicated, or undefined: a form, or a block holding a field input, because
  * its field inputs cannot be copied. The one rule for the bar's and the Outline's Duplicate and
- * for the canvas change that carries a duplicate (`applyPageDataChange`).
+ * for the canvas change that carries a duplicate (`applyPageData`).
  */
 export const studioDuplicateRefusal = (
   catalogue: ImmutablePlatformBlockCatalogue,
