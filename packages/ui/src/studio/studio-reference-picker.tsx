@@ -67,7 +67,8 @@ export function StudioReferencePicker({
   );
   const groups = [...new Set(matches.map((entry) => entry.group ?? ""))];
   // The search text is empty whenever the list is open: what is shown before typing is the
-  // current selection inside the list (with its check), never text the person has to clear.
+  // current selection, its label as the placeholder and its check in the list, never text the
+  // person has to clear.
   const startSearch = () => {
     if (open) return;
     setQuery("");
@@ -96,7 +97,9 @@ export function StudioReferencePicker({
       <InputGroup>
         <ComboboxInput
           id={id}
-          placeholder={unset ?? "Search…"}
+          placeholder={
+            selected !== null && selected.value !== "" ? selected.label : (unset ?? "Search…")
+          }
           {...accessibility}
           onFocus={startSearch}
           onPointerDown={startSearch}
