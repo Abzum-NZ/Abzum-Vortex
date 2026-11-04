@@ -19,7 +19,7 @@ import {
   type ImmutablePlatformBlockCatalogue,
   type SourcePageData,
 } from "@vortex/platform/schema";
-import { regions } from "./application-composition-regions";
+import { publishedPage, regions } from "./application-composition-regions";
 import { regionLevels } from "./studio-composition-depth";
 import {
   studioFormChangeRefusal,
@@ -31,6 +31,7 @@ import {
 } from "./composition-references";
 import { pageDataJson } from "./studio-canvas-data";
 import {
+  PUBLISHED_PAGE_ADD_REASON,
   studioDuplicateRefusal,
   studioPlacementReferrers,
   studioRemovalRuleRefusal,
@@ -105,16 +106,25 @@ export const applyPageDataChange = (
       if (refusal !== undefined)
         return { kind: "refused", message: `${refusal} The page stays as it was.` };
     }
+    // A page published outside the application takes no new block: not a copy, not a drop.
+    const before = dataAliases(targetData);
+    if (
+      target !== undefined &&
+      publishedPage(current, target) &&
+      [...dataAliases(edited)].some((alias) => !before.has(alias))
+    )
+      return { kind: "refused", message: PUBLISHED_PAGE_ADD_REASON };
     const next = structuredClone(current);
     const nextPage = next.body.pages.find((item) => item.id === pageAlias);
     if (nextPage === undefined || !setSourcePageData(nextPage, step, edited))
       throw pageUnavailable();
     const kept = dataAliases(edited);
     const removed = new Set([...dataAliases(targetData)].filter((alias) => !kept.has(alias)));
+    // Where a block may not leave from, whichever draft the canvas's reasons were read from.
+    const rule =
+      removed.size === 0 ? undefined : studioRemovalRuleRefusal(catalogue, current, removed);
+    if (rule !== undefined) return { kind: "refused", message: rule };
     for (const alias of removed) {
-      // Where a block may not leave from, whichever draft the canvas's reasons were read from.
-      const rule = studioRemovalRuleRefusal(catalogue, current, alias);
-      if (rule !== undefined) return { kind: "refused", message: rule };
       const users = studioPlacementReferrers(current, alias, removed);
       if (users.length > 0)
         return {

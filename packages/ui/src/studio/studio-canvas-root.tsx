@@ -337,10 +337,29 @@ export function StudioCanvasIframe({
   // A block chosen outside the canvas (the Outline, the inspector, an address) is brought into view,
   // found by Studio's own attribute on its wrapper. It may not be drawn yet (its slots wait), and
   // the slots around it are drawn after the scroll with heights that were estimates, so it is kept
-  // in view until the page stops changing size or the person scrolls.
+  // in view for a few seconds, until the person scrolls or acts anywhere in Studio (the frame, the
+  // well's scrollbar, a panel) or begins a drag. A block chosen by a click in the canvas is already
+  // where the person is looking and is not scrolled to.
   const selectedId = usePuckSelector((state) => state.selectedItem?.props.id);
+  const dragging = usePuckSelector((state) => state.appState.ui.isDragging);
+  const draggingRef = useRef(dragging);
+  draggingRef.current = dragging;
+  const stopFollowing = useRef<(() => void) | null>(null);
+  const lastCanvasPointer = useRef(0);
+  useEffect(() => {
+    if (dragging) stopFollowing.current?.();
+  }, [dragging]);
+  useEffect(() => {
+    if (frameDocument === undefined) return;
+    const note = () => {
+      lastCanvasPointer.current = performance.now();
+    };
+    frameDocument.addEventListener("pointerdown", note, { capture: true, passive: true });
+    return () => frameDocument.removeEventListener("pointerdown", note, { capture: true });
+  }, [frameDocument]);
   useEffect(() => {
     if (frameDocument === undefined || selectedId === undefined) return;
+    if (performance.now() - lastCanvasPointer.current < 1000) return;
     let frame = 0;
     let tries = 0;
     let observer: MutationObserver | undefined;
@@ -349,7 +368,11 @@ export function StudioCanvasIframe({
     const stop = () => {
       observer?.disconnect();
       clearTimeout(timer);
-      for (const name of interactions) frameDocument.removeEventListener(name, stop);
+      for (const name of interactions) {
+        frameDocument.removeEventListener(name, stop);
+        document.removeEventListener(name, stop);
+      }
+      stopFollowing.current = null;
     };
     const find = () =>
       frameDocument.querySelector(`[data-vortex-placement-id="${CSS.escape(selectedId)}"]`);
@@ -360,16 +383,17 @@ export function StudioCanvasIframe({
         return;
       }
       block.scrollIntoView({ block: "nearest" });
-      timer = window.setTimeout(stop, 8000);
-      observer = new MutationObserver(() => {
-        find()?.scrollIntoView({ block: "nearest" });
-        clearTimeout(timer);
-        timer = window.setTimeout(stop, 4000);
-      });
+      timer = window.setTimeout(stop, 6000);
       // Slots drawn (or drawn again) change the page's size: what is added to the body is watched.
+      observer = new MutationObserver(() => {
+        if (!draggingRef.current) find()?.scrollIntoView({ block: "nearest" });
+      });
       observer.observe(frameDocument.body, { childList: true, subtree: true });
-      for (const name of interactions)
+      stopFollowing.current = stop;
+      for (const name of interactions) {
         frameDocument.addEventListener(name, stop, { passive: true });
+        document.addEventListener(name, stop, { passive: true });
+      }
     };
     frame = requestAnimationFrame(scroll);
     return () => {
@@ -468,10 +492,11 @@ export function StudioCanvasIframe({
   const deferral = useMemo(
     (): DeferredDrawing => ({
       near: (element) => {
+        // While grids are arranged their column controls need the keyboard: every slot is drawn
+        // (a one-time cost, the page as it was before slots waited).
+        if (interactiveRef.current) return true;
         const visible = studioCanvasVisible(viewRef.current);
         const box = element.getBoundingClientRect();
-        // While grids are arranged their column controls need the keyboard: every slot is drawn.
-        if (interactiveRef.current) return true;
         // Until the well has laid the frame out, the first screens are what is near.
         if (visible === undefined) return box.top < DRAW_AHEAD * 2;
         return box.bottom >= visible.top - DRAW_AHEAD && box.top <= visible.bottom + DRAW_AHEAD;
@@ -488,8 +513,13 @@ export function StudioCanvasIframe({
           target.documentElement.clientWidth / 2,
           Math.max(0, visible.top + 4),
         );
-        if (element !== null)
-          anchored.current = { element, top: element.getBoundingClientRect().top };
+        if (element === null) return;
+        const noted = { element, top: element.getBoundingClientRect().top };
+        anchored.current = noted;
+        // A slot that does not come to be drawn (its block left) must not leave its note behind.
+        window.setTimeout(() => {
+          if (anchored.current === noted) anchored.current = null;
+        }, 1000);
       },
       settle: () => {
         const was = anchored.current;
@@ -519,8 +549,11 @@ export function StudioCanvasIframe({
     const resize = new ResizeObserver(tell);
     if (well !== null) resize.observe(well);
     const drawn = new MutationObserver(tell);
-    if (frameDocument !== undefined)
+    if (frameDocument !== undefined) {
       drawn.observe(frameDocument.body, { childList: true, subtree: true });
+      // A screen size change resizes the frame itself and reflows the page without a new node.
+      resize.observe(frameDocument.documentElement);
+    }
     // The frame is laid out or scaled after the first draw: slots are looked at again.
     tell();
     return () => {

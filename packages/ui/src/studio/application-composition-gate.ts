@@ -15,6 +15,7 @@ import {
   workingCopy,
   workingItem,
   regionAfter,
+  publishedPage,
 } from "./application-composition-regions";
 import { studioFormChangeRefusal, studioFormShapeRefusal } from "./application-composition-forms";
 import { studioPlacementReferenceSentence } from "./composition-references";
@@ -36,20 +37,12 @@ const resolveGateTarget = (
     return { kind: "refused", reason: "This block is no longer in the current draft." } as const;
   const { source, target } = resolved;
   const page = target.region.page;
-  if (
-    page !== undefined &&
-    (page.type === "public" ||
-      source.body.public_addresses.some((address) => address.page === page.id))
-  )
+  if (page !== undefined && publishedPage(source, page))
     return {
       kind: "refused",
-      reason: "A block on a public page cannot have its permission gate changed here.",
-    } as const;
-  if (page !== undefined && source.body.experiences?.some((entry) => entry.page === page.key))
-    return {
-      kind: "refused",
-      reason:
-        "This page belongs to an experience; its block permission gates cannot be changed here.",
+      reason: source.body.experiences?.some((entry) => entry.page === page.key)
+        ? "This page belongs to an experience; its block permission gates cannot be changed here."
+        : "A block on a public page cannot have its permission gate changed here.",
     } as const;
   if (
     !manifestMatches(context.catalogue, source, target.region.zone.items) ||

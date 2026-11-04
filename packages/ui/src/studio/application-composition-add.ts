@@ -71,6 +71,7 @@ import {
   plainSource,
   plainSettings,
   settingsOf,
+  publishedPage,
 } from "./application-composition-regions";
 import { FORM_CONTAINER_KEY, NESTED_FORM_REASON } from "./application-composition-forms";
 import type { StudioPlacementDescriber } from "./semantic-outline";
@@ -131,13 +132,7 @@ export const addPlaces = (
     const pages = source.body.pages.filter((page) => page.id === owner.pageAlias);
     const page = pages.length === 1 ? pages[0]! : undefined;
     if (page === undefined) return "invalid";
-    if (
-      page.type === "public" ||
-      page.type === "guided_form" ||
-      source.body.public_addresses.some((address) => address.page === page.id) ||
-      source.body.experiences?.some((experience) => experience.page === page.key)
-    )
-      return "unsupported";
+    if (page.type === "guided_form" || publishedPage(source, page)) return "unsupported";
     const shellAlias = sourcePageShell(page.composition);
     const shell = source.body.shells.find((candidate) => candidate.id === shellAlias);
     const pageRegions = regions(source).filter(

@@ -110,6 +110,19 @@ export const movableRegion = (region: Region): boolean =>
   region.shell !== undefined || pageContentRegion(region);
 
 /**
+ * Whether a page is published to people outside the application: a public page, a page at a public
+ * address or a page an experience opens. A public address and an experience name their page by its
+ * key. The one test for the canvas, the Add, Remove, settings and gate commands.
+ */
+export const publishedPage = (
+  source: ApplicationSourceDocument,
+  page: ApplicationSourceDocument["body"]["pages"][number],
+): boolean =>
+  page.type === "public" ||
+  source.body.public_addresses.some((address) => address.page === page.key) ||
+  (source.body.experiences?.some((experience) => experience.page === page.key) ?? false);
+
+/**
  * Why no block of a region can be removed, or undefined: a page removes only from its editable
  * content, and not from a page published at a public address. A layout's blocks always can leave.
  * The one rule for the canvas (the references behind Puck's permissions) and the composition
@@ -122,11 +135,7 @@ export const regionRemovalCause = (
   if (region.shell !== undefined) return undefined;
   if (!pageContentRegion(region)) return "page_kind";
   const page = region.page;
-  // A public address and an experience name their page by its key.
-  return source.body.public_addresses.some((address) => address.page === page.key) ||
-    source.body.experiences?.some((experience) => experience.page === page.key)
-    ? "public_page"
-    : undefined;
+  return publishedPage(source, page) ? "public_page" : undefined;
 };
 
 /**
@@ -629,3 +638,15 @@ export const settingsOf = (item: SourceItem): Record<string, unknown> =>
       ([key, value]) => key !== "id" && key !== "vortex" && !Array.isArray(value),
     ),
   );
+
+/**
+ * The declaration of a slot of an item's release by the key the item stores it under: the exact key,
+ * or the repeating declaration whose key and an underscore begin it (a tab is stored as
+ * `tab_<key>`), as the platform reader splits them.
+ */
+export const slotDeclaration = (
+  release: PlatformBlockRelease | undefined,
+  key: string,
+): PlatformBlockRelease["slots"][number] | undefined =>
+  release?.slots.find((entry) => entry.key === key) ??
+  release?.slots.find((entry) => entry.repeats !== undefined && key.startsWith(`${entry.key}_`));

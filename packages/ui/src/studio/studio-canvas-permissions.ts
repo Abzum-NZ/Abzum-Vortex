@@ -9,8 +9,10 @@ import {
 import {
   itemSlots,
   regionRemovalCause,
+  publishedPage,
   removalRule,
   regions,
+  slotDeclaration,
   releaseFor,
 } from "./application-composition-regions";
 import { studioLayoutOutletPlacementUses } from "./application-layout-outlets";
@@ -81,33 +83,44 @@ const REMOVAL_RULE_REASONS = {
   repeating_slot: "This block sits in a repeating area and can't be removed here.",
 } as const;
 
+/** Why a page published to people outside the application takes no new block (a copy, a drop, Add). */
+export const PUBLISHED_PAGE_ADD_REASON =
+  "This page is published, so blocks can't be added or copied on it here.";
+
 /**
  * Why a block cannot be removed from where it sits (the page's kind, a public address, a repeating
- * area), or undefined. The canvas change that carries a removal asks this for every block it
- * removes, so a block the references do not know yet (just restored, copied or added) is held too.
+ * area), or undefined. The canvas change that carries a removal asks this once, for the removed
+ * blocks that are not inside another removed block, so a block the references do not know yet (just
+ * restored, copied or added) is held too. One walk of the application; a removed block is not
+ * entered.
  */
 export const studioRemovalRuleRefusal = (
   catalogue: ImmutablePlatformBlockCatalogue,
   source: ApplicationSourceDocument,
-  alias: string,
+  removed: ReadonlySet<string>,
 ): string | undefined => {
   for (const region of regions(source)) {
-    const visit = (items: readonly SourceItem[], repeating: boolean): boolean | undefined => {
+    const cause = regionRemovalCause(source, region);
+    const visit = (items: readonly SourceItem[], repeating: boolean): string | undefined => {
       for (const item of items) {
-        if (item.props.id === alias) return repeating;
+        if (removed.has(item.props.id)) {
+          const rule = removalRule(cause, repeating);
+          if (rule !== undefined) return REMOVAL_RULE_REASONS[rule];
+          continue;
+        }
         const release = releaseFor(catalogue, item);
         for (const [key, slot] of itemSlots(catalogue, item)) {
-          const declaration = release?.slots.find((entry) => entry.key === key);
-          const found = visit(slot.items, repeating || declaration?.repeats !== undefined);
+          const found = visit(
+            slot.items,
+            repeating || slotDeclaration(release, key)?.repeats !== undefined,
+          );
           if (found !== undefined) return found;
         }
       }
       return undefined;
     };
-    const repeating = visit(region.zone.items, false);
-    if (repeating === undefined) continue;
-    const rule = removalRule(regionRemovalCause(source, region), repeating);
-    return rule === undefined ? undefined : REMOVAL_RULE_REASONS[rule];
+    const found = visit(region.zone.items, false);
+    if (found !== undefined) return found;
   }
   return undefined;
 };
@@ -129,6 +142,8 @@ export const studioCanvasReferences = (
     const regionHoldsForm = holdsForm(catalogue, region.zone.items);
     const forms = regionHoldsForm ? studioRegionForms(catalogue, region.zone.items) : undefined;
     const regionCause = regionRemovalCause(source, region);
+    const published =
+      region.shell === undefined && region.page !== undefined && publishedPage(source, region.page);
     const visit = (items: readonly SourceItem[], required: boolean, repeating: boolean) => {
       for (const item of items) {
         const id = item.props.id;
@@ -154,6 +169,7 @@ export const studioCanvasReferences = (
             reasons.delete ??= `This block is used by ${describeApplicationUsers(users)}. Change that reference first.`;
         }
         if (required && items.length === 1) reasons.delete ??= "This block fills a required slot.";
+        if (published) reasons.duplicate ??= PUBLISHED_PAGE_ADD_REASON;
         const rule = removalRule(regionCause, repeating);
         if (rule !== undefined) reasons.delete ??= REMOVAL_RULE_REASONS[rule];
         const broken =
@@ -167,7 +183,7 @@ export const studioCanvasReferences = (
           );
         result[id] = reasons;
         for (const [key, slot] of itemSlots(catalogue, item)) {
-          const declaration = release?.slots.find((entry) => entry.key === key);
+          const declaration = slotDeclaration(release, key);
           visit(
             slot.items,
             declaration?.required === true,

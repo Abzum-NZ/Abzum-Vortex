@@ -97,6 +97,8 @@ import {
   movableRegion,
   regionRemovalCause,
   removalRule,
+  publishedPage,
+  slotDeclaration,
 } from "./application-composition-regions";
 import { applyAdd, commandSettings } from "./application-composition-add";
 import { applyWrap } from "./application-composition-wrap";
@@ -285,13 +287,7 @@ const resolveSettings = (
   if (resolved === undefined) return { kind: "invalid" } as const;
   const { source, target } = resolved;
   const page = target.region.page;
-  if (
-    target.region.shell === undefined &&
-    (page === undefined ||
-      page.type === "public" ||
-      source.body.public_addresses.some((address) => address.page === page.id) ||
-      source.body.experiences?.some((experience) => experience.page === page.key))
-  )
+  if (target.region.shell === undefined && (page === undefined || publishedPage(source, page)))
     return { kind: "unsupported" } as const;
   const release = releaseFor(catalogue, target.item);
   if (release === undefined || !manifestMatches(catalogue, source, target.region.zone.items))
@@ -533,8 +529,19 @@ const resolveRemoval = (
   const { source, target, alias } = resolved;
   // A layout's blocks leave with everything inside them; a page removes only from its editable
   // content (the one rule, shared with the canvas's permissions).
-  const regionCause = regionRemovalCause(source, target.region);
-  if (regionCause !== undefined) return { kind: "unsupported", reason: regionCause };
+  // Inside a repeating area (a tab) a block cannot leave either: found along the steps to it.
+  let repeating = false;
+  let probe = target.region.zone;
+  for (const step of target.steps) {
+    const parent = probe.items.find((item) => item.props.id === step.parentAlias);
+    const child = parent === undefined ? undefined : itemSlots(catalogue, parent).get(step.slotKey);
+    if (parent === undefined || child === undefined) break;
+    repeating ||=
+      slotDeclaration(releaseFor(catalogue, parent), step.slotKey)?.repeats !== undefined;
+    probe = child;
+  }
+  const rule = removalRule(regionRemovalCause(source, target.region), repeating);
+  if (rule !== undefined) return { kind: "unsupported", reason: rule };
   if (
     releaseFor(catalogue, target.item) === undefined ||
     !manifestMatches(catalogue, source, target.region.zone.items) ||
@@ -550,12 +557,10 @@ const resolveRemoval = (
     const declaration =
       parent === undefined
         ? undefined
-        : releaseFor(catalogue, parent)?.slots.find((item) => item.key === step.slotKey);
+        : slotDeclaration(releaseFor(catalogue, parent), step.slotKey);
     const child = parent === undefined ? undefined : itemSlots(catalogue, parent).get(step.slotKey);
     if (declaration === undefined || child === undefined)
       return { kind: "unsupported", reason: "manifest_mismatch" };
-    const rule = removalRule(undefined, declaration.repeats !== undefined);
-    if (rule !== undefined) return { kind: "unsupported", reason: rule };
     if (child.items === target.zone.items && declaration.required && child.items.length === 1)
       return { kind: "blocked", reason: "required_slot" };
     zone = child;
