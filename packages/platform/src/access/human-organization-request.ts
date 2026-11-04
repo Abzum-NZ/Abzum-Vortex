@@ -468,7 +468,7 @@ export const createHumanOrganizationRequestService = (
         error.code === "DEFINITION_PUBLICATION_FAILED" &&
         (error.cause instanceof z.ZodError || compilationRefusal);
       if (alreadyLogged) {
-        // Publication storage logged the schema failure at its source.
+        // The definition source already logged it once: a stored-schema failure at error, a compiler refusal at info.
       } else if (abandoned) console.info(`[access] human organisation request stopped: ${cause}`);
       else if (classifyDatabaseError(error) === "conflict")
         console.info(`[access] human organisation request temporarily unavailable: ${cause}`);

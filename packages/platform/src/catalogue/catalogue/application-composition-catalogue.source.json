@@ -2817,7 +2817,7 @@
         "key": "action_label",
         "presentation": true,
         "label": "Tile action",
-        "help": "The word on each tile's button",
+        "help": "Tooltip and accessible name of each tile's open button",
         "required": true,
         "minLength": 1,
         "maxLength": 30,
@@ -2831,7 +2831,7 @@
         "key": "studio_link_label",
         "presentation": true,
         "label": "Studio link",
-        "help": "Word on each tile's link to the Studio editor; leave it out to offer none",
+        "help": "Tooltip and accessible name of each tile's Studio editor link; leave it out to offer none",
         "required": false,
         "minLength": 1,
         "maxLength": 40
@@ -2841,7 +2841,7 @@
         "key": "upgrade_link_label",
         "presentation": true,
         "label": "Upgrade link",
-        "help": "Word on each tile's link to the App Store upgrade while a newer release waits; leave it out to offer none",
+        "help": "Tooltip and accessible name of each tile's App Store upgrade link while a newer release waits; leave it out to offer none",
         "required": false,
         "minLength": 1,
         "maxLength": 40
