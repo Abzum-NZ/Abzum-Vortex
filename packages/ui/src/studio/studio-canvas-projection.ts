@@ -40,8 +40,9 @@ type SlotOrder = Readonly<{
 
 /**
  * The canvas shows a smaller screen in that screen's own order: each page zone's stored order and
- * each block's stored slot orders. The arrays are reordered for display only; a canvas showing
- * another size than desktop never sends its data back as an edit.
+ * each block's stored slot orders. The arrays are reordered for display only: the data a smaller
+ * screen reports is never stored whole. A drag inside one slot there is read as that screen's
+ * order (`classifyCanvasChange`), and nothing else is taken.
  */
 export const puckDataForBreakpoint = (data: Data, breakpoint: Breakpoint): Data => {
   if (breakpoint === "desktop") return data;

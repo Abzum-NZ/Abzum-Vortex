@@ -99,7 +99,9 @@ export type StudioCanvasModel = Readonly<{
   shown: Data | undefined;
   /** Why the page is shown read-only; `undefined` when it can be arranged. */
   readOnlyCause: string | undefined;
-  /** Whether the page takes edits: not busy, readable, and on the desktop screen. */
+  /** Whether the blocks of a slot can be reordered, on any screen: not busy and readable. */
+  orderable: boolean;
+  /** Whether the page takes every other edit too: orderable, and on the desktop screen. */
   editable: boolean;
   /** Whether a data grid of the page has columns the person can arrange. */
   arrangeable: boolean;
@@ -430,7 +432,8 @@ export const useStudioCanvasModel = (
     },
     [pageAlias],
   );
-  const editable = !disabled && readOnlyCause === undefined && breakpoint === "desktop";
+  const orderable = !disabled && readOnlyCause === undefined;
+  const editable = orderable && breakpoint === "desktop";
   return useMemo(
     () => ({
       catalogue,
@@ -458,6 +461,7 @@ export const useStudioCanvasModel = (
       data,
       shown,
       readOnlyCause,
+      orderable,
       editable,
       arrangeable,
       gridHolders,
@@ -488,6 +492,7 @@ export const useStudioCanvasModel = (
       data,
       shown,
       readOnlyCause,
+      orderable,
       editable,
       arrangeable,
       gridHolders,

@@ -22,6 +22,7 @@ import {
   RootSlotGapProvider,
   SelectedPlacementProvider,
 } from "../puck-config";
+import { LockableSlot } from "../slot-lock";
 import type { Breakpoint } from "../definition-error";
 import type { FieldInputControlReleaseMap, PlatformComponentRegistry } from "../registry";
 import { createAppearanceRootProps, createThemeRootProps, VortexStyleRoot } from "../theme";
@@ -145,7 +146,7 @@ function CanvasSlot({
       data-vortex-shell-outlet=""
       data-vortex-editing=""
       {...(dragging ? { "data-vortex-dragging": "" } : {})}
-      {...(breakpoint === "desktop" ? {} : { "data-vortex-view-only": "" })}
+      {...(breakpoint === "desktop" ? {} : { "data-vortex-order-only": "" })}
       aria-label={empty ? `Empty ${label}` : undefined}
       className={empty ? "relative min-h-48 min-w-32" : "min-h-24"}
       {...(layout ? { "data-vortex-layout-root": "" } : {})}
@@ -233,7 +234,7 @@ export function StudioCanvasRoot({
     shell?.contentSlots.find((entry) => entry.key === studio.slotKeys[name])?.label ?? name;
   const slotContent = (name: string) => {
     const Slot = stableSlots.current[name]!;
-    return <Slot style={SLOT_STYLE} />;
+    return <LockableSlot Slot={Slot} zone={`root:${name}`} style={SLOT_STYLE} />;
   };
   // Several content slots sit inside the shell's own placements (the outlet holds the placement
   // that holds them all): that region is drawn from the shell, each slot's editor in its place.
