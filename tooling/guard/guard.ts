@@ -80,7 +80,11 @@ function importedArea(specifier: string, file: string): string {
       return "schema";
     return area(target);
   }
-  if (specifier.startsWith("@vortex/platform/schema")) return "schema";
+  if (
+    specifier.startsWith("@vortex/platform/schema") ||
+    specifier.startsWith("@vortex/platform/draft-snapshot")
+  )
+    return "schema";
   if (specifier.startsWith("@vortex/platform/server")) return "platform";
   if (specifier.startsWith("@vortex/")) {
     const key = specifier.split("/").slice(0, 2).join("/");

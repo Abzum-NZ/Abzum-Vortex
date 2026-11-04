@@ -2,6 +2,9 @@
  * Snapshots of the application source: deeply frozen copies that share every node an edit did not
  * touch. No React, no history and no schema is imported here, so the composition modules can ask
  * whether a source is a snapshot without depending on the draft history.
+ *
+ * `shareSnapshot` is for the Studio draft history alone: it is called only on a source that a
+ * command or the history has parsed or commit-validated.
  */
 
 /** Every node a snapshot owns: deeply frozen, free of `undefined` properties, shared between snapshots. */

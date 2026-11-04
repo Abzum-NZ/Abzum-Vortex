@@ -1,12 +1,9 @@
-import {
-  applicationSourceDocumentSchema,
-  type ApplicationSourceDocument,
-  type ImmutablePlatformBlockCatalogue,
+import type {
+  ApplicationSourceDocument,
+  ImmutablePlatformBlockCatalogue,
 } from "@vortex/platform/schema";
 import {
-  projectStudioSemanticOutline,
   studioSemanticSelectionKey,
-  type StudioCompositionContext,
   type StudioPlacementDescriber,
   type StudioSemanticOutlineNode,
   type StudioSemanticSelection,
@@ -119,19 +116,9 @@ export const studioOutlineLabels = (
   return into;
 };
 
-/** The business label of every placed item by its authored name, for editors that list or name sibling items. */
-export const studioPlacementLabels = (
-  context: StudioCompositionContext,
-): ReadonlyMap<string, string> => {
-  const source = applicationSourceDocumentSchema.parse(context.source);
-  const labels = studioOutlineLabels(
-    projectStudioSemanticOutline(
-      { rootId: context.rootId, source, catalogue: context.catalogue },
-      createStudioPlacementDescriber(context.catalogue, source),
-    ),
-  );
-  const byAlias = new Map<string, string>();
-  for (const [key, label] of labels)
-    if (key.startsWith("placement:")) byAlias.set(key.slice("placement:".length), label);
-  return byAlias;
-};
+/** The business label of a placed item by its authored name, read from the draft's one outline. */
+export const studioPlacementLabel = (
+  labels: ReadonlyMap<string, string>,
+  placementAlias: string,
+): string | undefined =>
+  labels.get(studioSemanticSelectionKey({ kind: "placement", placementAlias }));

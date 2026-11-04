@@ -20,7 +20,8 @@ import {
   resolveStudioSelectionInspectorContext,
   studioMoveUnavailableReason,
   studioSemanticSelectionKey,
-  traverseStudioSemanticSelectionDraft,
+  studioPlacedBlocks,
+  studioPlacementOwner,
   type StudioCompositionCommand,
   type StudioCompositionContext,
   type StudioCompositionDestination,
@@ -216,7 +217,7 @@ export function useStudioCanvasTab({
     try {
       const next = reduceStudioCanvasGrid(held.get(change.placementAlias), change);
       if (next !== undefined && "kind" in next) {
-        console.error("[studio] a canvas grid change was refused", {
+        console.info("[studio] a canvas grid change was refused", {
           code: next.code,
           cause: next.cause,
         });
@@ -251,24 +252,11 @@ export function useStudioCanvasTab({
   );
   const selectionKey = selected === null ? "" : studioSemanticSelectionKey(selected);
   // The page or layout that holds each block: the canvas draws a block's page, the Outline lists its owner's blocks.
-  const placementOwners = useMemo(() => {
-    const owners = new Map<
-      string,
-      Readonly<{ kind: "page"; pageAlias: string } | { kind: "shell"; shellAlias: string }>
-    >();
-    traverseStudioSemanticSelectionDraft({ rootId, source, catalogue }, ({ phase, node }) => {
-      if (phase === "enter" && node.kind === "placement")
-        owners.set(
-          node.selection.placementAlias,
-          node.owner.kind === "page"
-            ? { kind: "page", pageAlias: node.owner.pageAlias }
-            : { kind: "shell", shellAlias: node.owner.shellAlias },
-        );
-    });
-    return owners;
-  }, [rootId, source, catalogue]);
-  const selectedOwner =
-    selected?.kind === "placement" ? placementOwners.get(selected.placementAlias) : undefined;
+  const selectedAlias = selected?.kind === "placement" ? selected.placementAlias : undefined;
+  const selectedOwner = useMemo(
+    () => (selectedAlias === undefined ? undefined : studioPlacementOwner(source, selectedAlias)),
+    [source, selectedAlias],
+  );
   // A menu entry shows the page it opens; the Menu and Theme tabs otherwise show the home page, so
   // their changes are seen in the application's frame.
   const selectedEntry =
@@ -316,7 +304,7 @@ export function useStudioCanvasTab({
       const page = source.body.pages.find((entry) => entry.key === url.searchParams.get("page"));
       if (page === undefined) return;
       const block = url.searchParams.get("block");
-      const owner = block === null ? undefined : placementOwners.get(block);
+      const owner = block === null ? undefined : studioPlacementOwner(source, block);
       draft.select(
         block !== null &&
           (owner?.kind === "shell" || (owner?.kind === "page" && owner.pageAlias === page.id))
@@ -346,7 +334,7 @@ export function useStudioCanvasTab({
     }
     window.addEventListener("popstate", restore);
     return () => window.removeEventListener("popstate", restore);
-  }, [canvasPage, selected, source, placementOwners, draft.select, catalogue.releases.length]);
+  }, [canvasPage, selected, source, draft.select, catalogue.releases.length]);
   const canvasPageRef = useRef(canvasPage?.id);
   canvasPageRef.current = canvasPage?.id;
   const layoutAliasRef = useRef(layoutAlias);
@@ -519,18 +507,25 @@ export function useStudioCanvasTab({
       draft.select({ kind: "placement", placementAlias: after.added });
     return outcome.result;
   };
-  const addTargets = useMemo(
-    () =>
-      canvasPage === undefined || addOwner === undefined
-        ? null
-        : describeStudioCompositionAddTargets(compositionContext, addOwner, describePlacement),
-    [compositionContext, canvasPage?.id, addOwnerKey, describePlacement],
-  );
+  // The places a block can go are worked out when the palette is drawn or a block is added, once
+  // per draft: an edit that neither does reads nothing of them.
+  const addTargets = useMemo(() => {
+    if (canvasPage === undefined || addOwner === undefined) return null;
+    let held: ReturnType<typeof describeStudioCompositionAddTargets> | undefined;
+    return () =>
+      (held ??= describeStudioCompositionAddTargets(
+        compositionContext,
+        addOwner,
+        describePlacement,
+      ));
+  }, [compositionContext, canvasPage?.id, addOwnerKey, describePlacement]);
+  const placedBlocks = useMemo(() => studioPlacedBlocks(catalogue, source), [catalogue, source]);
   // A block for one place: added at once, or after its setup when it needs settings or data.
   const addBlock = (request: StudioCanvasAddRequest): true | false | string => {
     const owner = addOwnerRef.current;
-    if (owner === undefined || addTargets?.kind !== "available") return false;
-    const target = addTargets.targets.find(
+    const places = addTargets?.();
+    if (owner === undefined || places?.kind !== "available") return false;
+    const target = places.targets.find(
       (candidate) =>
         candidate.area === request.area &&
         sameDestination(candidate.destination, request.destination),
@@ -1006,6 +1001,7 @@ export function useStudioCanvasTab({
           key={selectionKey}
           context={compositionContext}
           selection={selected}
+          labels={labels}
           disabled={draft.locked}
           choices={blockChoices}
           compiledFields={view.compiledFields}
@@ -1231,6 +1227,7 @@ export function useStudioCanvasTab({
           context={compositionContext}
           selection={selected}
           source={source}
+          labels={labels}
           disabled={draft.locked}
           choices={blockChoices}
           onCommand={commandComposition}
@@ -1328,11 +1325,12 @@ export function useStudioCanvasTab({
         ? undefined
         : {
             targets: addTargets,
+            placed: placedBlocks,
             owner: addOwner?.kind ?? ("page" as const),
             message: paletteMessage,
             onAdd: onAddBlock,
           },
-    [addTargets, addOwner?.kind, paletteMessage, onAddBlock],
+    [addTargets, placedBlocks, addOwner?.kind, paletteMessage, onAddBlock],
   );
   const compiledSlots = canvasPage === undefined ? undefined : view.slots?.[canvasPage.id];
   const selectedPlacementAlias = selected?.kind === "placement" ? selected.placementAlias : null;

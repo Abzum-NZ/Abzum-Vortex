@@ -15,6 +15,7 @@ import {
   type SourceZonedData,
   type StoredReservations,
   type SourcePageZone,
+  isStudioDraftSnapshot,
 } from "@vortex/platform/schema";
 import type { StudioCompositionDestination } from "./application-composition-commands";
 import type { StudioPlacementDescriber } from "./semantic-outline";
@@ -324,6 +325,12 @@ export const storedDataProblem = (
   try {
     for (const [key, items] of sourcePageZones(data)) {
       const zone = { items, order: data.root.props.vortex.slot_orders[key] };
+      // The content of a history snapshot is the parsed source already: it is judged against the
+      // catalogue and cannot read back differently.
+      if (isStudioDraftSnapshot(items)) {
+        validateStoredZone(catalogue, zone, reservations);
+        continue;
+      }
       if (zoneJson(validateStoredZone(catalogue, zone, reservations)) !== zoneJson(zone))
         return "STUDIO_CANVAS_STORED_DATA_MISMATCH: the stored content reads back differently";
     }

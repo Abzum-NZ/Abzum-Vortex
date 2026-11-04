@@ -20,6 +20,7 @@ import { studioLayoutOutletPlacementUses } from "./application-layout-outlets";
 import {
   studioPlacementReferenceSentence,
   studioPlacementRemovalReferences,
+  type StudioPlacementReference,
 } from "./composition-references";
 import {
   holdsForm,
@@ -41,7 +42,7 @@ export const studioCanvasPermissionReason = (
 ): string | undefined => references[alias]?.[action];
 
 /** What still refers to a block, other than blocks that leave with it: query inputs and message targets. */
-export const studioPlacementReferrers = (
+const studioPlacementReferrers = (
   source: ApplicationSourceDocument,
   alias: string,
   leaving: ReadonlySet<string>,
@@ -50,6 +51,27 @@ export const studioPlacementReferrers = (
     ...applicationUses(source, { kind: "placement", placementAlias: alias }),
     ...applicationUses(source, { kind: "message_target", placementAlias: alias }),
   ].filter((place) => place.open.kind !== "placement" || !leaving.has(place.open.placementAlias));
+
+/** The one sentence for a block that queries or messages still use. */
+export const studioPlacementUsersSentence = (users: string): string =>
+  `This block is used by ${users}. Change that reference first.`;
+
+/** What still names blocks that leave together: a flow step first, then queries and messages. */
+export const studioRemovalReference = (
+  source: ApplicationSourceDocument,
+  leaving: ReadonlySet<string>,
+  flowReference: (alias: string) => StudioPlacementReference | undefined,
+):
+  StudioPlacementReference | Readonly<{ reason: "placement_users"; users: string }> | undefined => {
+  for (const alias of leaving) {
+    const flow = flowReference(alias);
+    if (flow !== undefined) return flow;
+  }
+  const users = [...leaving].flatMap((alias) => studioPlacementReferrers(source, alias, leaving));
+  return users.length > 0
+    ? { reason: "placement_users", users: describeApplicationUsers(users) }
+    : undefined;
+};
 
 /**
  * Why a block cannot be duplicated, or undefined: a form, or a block holding a field input, because
@@ -172,13 +194,12 @@ export const studioCanvasReferences = (
           reasons.delete = host;
           reasons.drag = host;
         }
-        for (const child of descendants) {
-          const flow = flowReference(child.props.id);
-          if (flow !== undefined) reasons.delete ??= studioPlacementReferenceSentence(flow);
-          const users = studioPlacementReferrers(source, child.props.id, removed);
-          if (users.length > 0)
-            reasons.delete ??= `This block is used by ${describeApplicationUsers(users)}. Change that reference first.`;
-        }
+        const reference = studioRemovalReference(source, removed, flowReference);
+        if (reference !== undefined)
+          reasons.delete ??=
+            reference.reason === "placement_users"
+              ? studioPlacementUsersSentence(reference.users)
+              : studioPlacementReferenceSentence(reference);
         if (required && items.length === 1) reasons.delete ??= "This block fills a required slot.";
         if (published) reasons.duplicate ??= PUBLISHED_PAGE_ADD_REASON;
         const rule = removalRule(regionCause, repeating);

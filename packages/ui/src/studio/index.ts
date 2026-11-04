@@ -7,9 +7,9 @@ export {
 } from "./board-source";
 export * from "./discovery-adapter";
 export * from "./semantic-selection";
+export { studioPlacementOwner } from "./application-composition-regions";
 export * from "./semantic-outline";
 export * from "./application-draft-history";
-export { isStudioDraftSnapshot } from "./draft-snapshot";
 export * from "./selection-inspector";
 export type {
   StudioConditionSemanticType,
@@ -104,6 +104,9 @@ export {
 export { StudioQueryBindings, StudioSelectionControlBinding } from "./studio-query-bindings";
 export { studioQueryBindingFacts, studioRecordBindingFields } from "./query-binding-facts";
 export * from "./application-flow-background";
-export { studioCanvasPermissionReason } from "./studio-canvas-permissions";
+export {
+  studioCanvasPermissionReason,
+  studioPlacementUsersSentence,
+} from "./studio-canvas-permissions";
 export { studioActionBarMore } from "./studio-action-bar-focus";
 export type { StudioCanvasAction, StudioCanvasReferences } from "./studio-canvas-permissions";

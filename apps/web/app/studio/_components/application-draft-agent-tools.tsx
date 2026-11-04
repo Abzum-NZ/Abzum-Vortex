@@ -24,6 +24,7 @@ import {
   type StudioSemanticOutlineNode,
   type StudioSemanticSelection,
   studioPlacementReferenceSentence,
+  studioPlacementUsersSentence,
 } from "@vortex/ui/studio";
 import { z } from "zod";
 import { WebMcpAdapter, type WebMcpToolDescriptor } from "../../_components/webmcp-adapter";
@@ -430,7 +431,7 @@ export function ApplicationDraftAgentTools({
           message: "Applied to the workspace draft. Studio saves it automatically.",
           ...describeNow(),
         };
-      console.error(
+      (kind === "invalid" ? console.error : console.info)(
         `[studio] agent ${operation} refused: STUDIO_AGENT_COMPOSITION_${kind.toUpperCase()}`,
       );
       return {
@@ -758,7 +759,9 @@ export function ApplicationDraftAgentTools({
                     ? "This placement holds a content outlet of its layout. Retarget the outlet first."
                     : removal.reason === "unresolved_target"
                       ? "A declared placement target cannot be resolved safely. Removal is unavailable."
-                      : `${studioPlacementReferenceSentence(removal)} Removal is unavailable.`,
+                      : removal.reason === "placement_users"
+                        ? studioPlacementUsersSentence(removal.users)
+                        : `${studioPlacementReferenceSentence({ ...removal, reason: removal.reason })} Removal is unavailable.`,
             };
           return commandOutcome(
             applyCommand(placement, { kind: "remove" }),
