@@ -167,7 +167,7 @@ export function StudioCanvasView({
               <TooltipContent>
                 {model.readOnlyCause !== undefined
                   ? "Shown read-only to keep it exactly as it is. Its blocks can still be changed in the inspector."
-                  : `This is the ${label.toLowerCase()} layout and order. Rearrange blocks on Desktop.`}
+                  : `This is the ${label.toLowerCase()} layout and order. Drag a block within its slot to reorder it here; change anything else on Desktop.`}
               </TooltipContent>
             </Tooltip>
           ) : (
