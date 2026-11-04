@@ -168,6 +168,30 @@ export const studioFormChangeRefusal = (
   return undefined;
 };
 
+/**
+ * The field keys the inputs of the form that holds `alias` already show, other than `alias` itself:
+ * one form holds one input per field (the platform's `definition_form_field_duplicate`). A guided
+ * form page is one form, so every input of the page counts. Outside any form nothing is in use.
+ */
+export const studioFormFieldsInUse = (
+  catalogue: ImmutablePlatformBlockCatalogue,
+  items: readonly SourceItem[],
+  alias: string,
+  guidedFormPage: boolean,
+): ReadonlySet<string> => {
+  const { enclosing, blocks } = formsOf(catalogue, items);
+  const form = enclosing.get(alias);
+  const used = new Set<string>();
+  if (form === undefined && !guidedFormPage) return used;
+  for (const [other, item] of blocks) {
+    if (other === alias || enclosing.get(other) !== form || !isFormInput(keyOf(catalogue, item)))
+      continue;
+    const name = answerName(item);
+    if (typeof name === "string") used.add(name);
+  }
+  return used;
+};
+
 /** The forms of one content area's blocks, read once for every block's removal check. */
 export const studioRegionForms = formsOf;
 

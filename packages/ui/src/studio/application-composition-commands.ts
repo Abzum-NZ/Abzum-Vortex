@@ -49,7 +49,11 @@ import {
   validateStoredApplicationOutlets,
   removeFlowBindingsOf,
 } from "@vortex/platform/schema";
-import { studioFormChangeRefusal, studioFormShapeRefusal } from "./application-composition-forms";
+import {
+  studioFormChangeRefusal,
+  studioFormFieldsInUse,
+  studioFormShapeRefusal,
+} from "./application-composition-forms";
 import {
   pruneStudioGridFeatureColumns,
   restoreStudioGridFeatureBindings,
@@ -307,8 +311,34 @@ const resolveSettings = (
 };
 
 /** Whether a block reads its records from a query: a data or figures block, or one that has one. */
+export const studioBlockReadsQuery = (
+  release: PlatformBlockRelease,
+  props: Readonly<{ vortex?: unknown }>,
+): boolean =>
+  studioReleaseReadsQuery(release) || (props.vortex as { query?: unknown }).query !== undefined;
+
 const readsQuery = (release: PlatformBlockRelease, item: SourceItem): boolean =>
-  studioReleaseReadsQuery(release) || item.props.vortex.query !== undefined;
+  studioBlockReadsQuery(release, item.props);
+
+/** The field keys other inputs in the selected input's form already show (none outside a form). */
+export const studioFormFieldsInUseFor = (
+  context: StudioCompositionContext,
+  selection: StudioSemanticSelection | null,
+): ReadonlySet<string> => {
+  try {
+    const resolved = resolveSettings(context, selection, true);
+    if (resolved.kind !== "available") return noFieldsInUse;
+    return studioFormFieldsInUse(
+      context.catalogue,
+      resolved.target.region.zone.items,
+      resolved.alias,
+      resolved.target.region.page?.type === "guided_form",
+    );
+  } catch {
+    return noFieldsInUse;
+  }
+};
+const noFieldsInUse: ReadonlySet<string> = new Set();
 
 export const describeStudioCompositionSettings = (
   context: StudioCompositionContext,
@@ -345,6 +375,31 @@ const applySettings = (
   if (resolved.kind !== "available") return resolved;
   const { source, target, alias, release } = resolved;
   const settings = commandSettings(input.settings, release.properties);
+  // One form holds one input per field.
+  const derived = release.properties.find(
+    (property) => property.kind === "field_reference" && property.derivesFieldInput === true,
+  );
+  const chosen = derived === undefined ? undefined : settings[derived.key];
+  const before =
+    derived === undefined
+      ? undefined
+      : itemReading(current.catalogue, target.item).settings[derived.key];
+  if (
+    chosen?.kind === "field_reference" &&
+    !(before?.kind === "field_reference" && before.field === chosen.field) &&
+    studioFormFieldsInUse(
+      current.catalogue,
+      target.region.zone.items,
+      alias,
+      target.region.page?.type === "guided_form",
+    ).has(chosen.field.slice(chosen.field.lastIndexOf(".") + 1))
+  ) {
+    console.info("[studio] composition settings refused", { reason: "form_field_duplicate" });
+    return {
+      kind: "refused",
+      reason: "Another input in this form already shows that field. Choose a different field.",
+    };
+  }
   // Studio owns some settings: a settings edit keeps each exactly as stored.
   const stored = itemReading(current.catalogue, target.item).settings;
   for (const key of Object.keys(settings)) if (studioOwnsSetting(key)) delete settings[key];

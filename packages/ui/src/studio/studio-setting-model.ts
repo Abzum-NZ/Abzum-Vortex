@@ -49,6 +49,8 @@ export type StudioSettingChoices = Readonly<{
   records: StudioRecordReader | null;
   /** The values the page of the selected block declares, which a display can show. */
   pageValues: readonly Readonly<{ key: string; label: string; currency?: string }>[];
+  /** The field keys other inputs in the selected input's form already show; a form holds one input per field. */
+  fieldsInUse?: ReadonlySet<string>;
 }>;
 
 /**
@@ -330,3 +332,14 @@ export type ControlProps = Readonly<{
   choices: StudioSettingChoices;
   disabled: boolean;
 }>;
+
+/** What an unset choice reads as: the setting's default, "Choose…" when it needs a value, else "Not set". */
+export const studioUnsetLabel = (
+  property: BlockPropertySchemaContract,
+  defaultLabel: string | undefined,
+): string =>
+  defaultLabel !== undefined
+    ? `Default (${defaultLabel})`
+    : property.required
+      ? "Choose…"
+      : "Not set";

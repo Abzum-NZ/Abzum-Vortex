@@ -173,11 +173,15 @@ function CanvasPlaceholder({
 
 /**
  * One canvas block that cannot be drawn says so in its own place, with the reason, while the rest of
- * the page and the outline stay usable; the cause goes to the console. It draws again when the
- * block's settings change.
+ * the page and the outline stay usable (React reports the cause to the console once). It draws
+ * again when what the block draws from changes: its stored settings or its compiled settings.
  */
 class CanvasBlockBoundary extends Component<
-  Readonly<{ settings: unknown; props: Readonly<Record<string, unknown>>; children: ReactNode }>,
+  Readonly<{
+    resetKeys: readonly unknown[];
+    props: Readonly<Record<string, unknown>>;
+    children: ReactNode;
+  }>,
   Readonly<{ message: string | null }>
 > {
   override state: Readonly<{ message: string | null }> = { message: null };
@@ -186,12 +190,11 @@ class CanvasBlockBoundary extends Component<
     return { message: error instanceof Error ? error.message : "" };
   }
 
-  override componentDidCatch(error: unknown) {
-    console.error("[studio] a canvas block could not be shown", error);
-  }
-
-  override componentDidUpdate(previous: Readonly<{ settings: unknown }>) {
-    if (previous.settings !== this.props.settings && this.state.message !== null)
+  override componentDidUpdate(previous: Readonly<{ resetKeys: readonly unknown[] }>) {
+    if (
+      this.state.message !== null &&
+      this.props.resetKeys.some((key, index) => key !== previous.resetKeys[index])
+    )
       this.setState({ message: null });
   }
 
@@ -208,6 +211,28 @@ class CanvasBlockBoundary extends Component<
       </CanvasPlaceholder>
     );
   }
+}
+
+/** One canvas block inside its boundary, which draws it again when its stored or compiled settings change. */
+function CanvasBlockFrame({
+  component,
+  registry,
+  props,
+}: Readonly<{
+  component: ComponentConfig<Record<string, unknown>>;
+  registry: PlatformComponentRegistry;
+  props: Record<string, unknown>;
+}>): ReactElement {
+  const { compiled } = useStudioCanvasChannel();
+  const id = typeof props.id === "string" ? props.id : "";
+  return (
+    <CanvasBlockBoundary
+      resetKeys={[props.vortex, Object.hasOwn(compiled, id) ? compiled[id] : undefined]}
+      props={props}
+    >
+      <CanvasBlock component={component} registry={registry} props={props} />
+    </CanvasBlockBoundary>
+  );
 }
 
 /** What a layout block draws in a slot reserved for the page's content: its pages' blocks are not edited here. */
@@ -526,9 +551,7 @@ export const studioCanvasConfig = (
               },
         ),
         render: (props: Record<string, unknown>) => (
-          <CanvasBlockBoundary settings={props.vortex} props={props}>
-            <CanvasBlock component={component} registry={registry} props={props} />
-          </CanvasBlockBoundary>
+          <CanvasBlockFrame component={component} registry={registry} props={props} />
         ),
         permissions: {
           ...(notCreatable.has(type) ? { insert: false } : {}),

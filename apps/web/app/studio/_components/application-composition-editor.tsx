@@ -1,7 +1,11 @@
 "use client";
 import { FieldLegend } from "@vortex/ui/components/field";
 import { Alert, AlertDescription } from "@vortex/ui/components/alert";
-import { plainSourceSettingValue, recordsTableBoardFeature } from "@vortex/platform/schema";
+import {
+  plainSourceSettingValue,
+  recordsTableBoardFeature,
+  type SourceBlockPropertyValueContract,
+} from "@vortex/platform/schema";
 import type { StudioCompiledFields } from "../_lib/studio-data-model";
 import {
   StudioField,
@@ -24,11 +28,10 @@ import {
   studioOutcomeText,
   studioSemanticSelectionKey,
   studioBlockChoices,
+  studioFormFieldsInUseFor,
   followFieldLabels,
   studioGridDataSettings,
   studioSettingProblems,
-  StudioQueryPicker,
-  StudioQueryBindings,
   StudioSelectionControlBinding,
   studioQueryBindingFacts,
   studioRecordBindingFields,
@@ -40,6 +43,7 @@ import {
   studioGridFeaturesProperty,
   studioCanvasGridKey,
   type StudioCanvasGridArrangement,
+  type StudioQueryChoice,
   type StudioCompositionCommand,
   type StudioCompositionContext,
   type StudioCompositionLayout,
@@ -133,6 +137,8 @@ const settingsInputsFor = (model: StudioCompositionSettingsModel): SettingsInput
     ? { settings: model.settings, query: model.query }
     : { settings: {}, query: null };
 const fieldClass = "w-full";
+const chooseDataProblem = "Choose the data this block shows.";
+const noQueries: readonly StudioQueryChoice[] = [];
 
 /**
  * The selected item's settings, order, size and area. Every control edits the draft as it changes,
@@ -175,12 +181,93 @@ export function ApplicationCompositionEditor(props: Props) {
   const settingsInputs = settings.value;
   // The reference settings point at the fields of the data the block reads, or, for a block that
   // reads none, at the application's own fields.
+  const fieldsInUse = useMemo(
+    () => studioFormFieldsInUseFor(props.context, props.selection),
+    [props.context, props.selection],
+  );
   const choices = useMemo(
-    () => studioBlockChoices(props.choices, settingsInputs.query),
-    [props.choices, settingsInputs.query],
+    () => ({ ...studioBlockChoices(props.choices, settingsInputs.query), fieldsInUse }),
+    [props.choices, settingsInputs.query, fieldsInUse],
   );
   // The query sheet answers after the draft changed: it chooses through the latest settings.
   const chooseQuery = useRef<(reference: string) => void>(() => undefined);
+  const editSettings = useRef<(next: SettingsInputs) => void>(() => undefined);
+  // Adding records from a list opens a create form, so the form is chosen before the switch appears.
+  const addsFromList =
+    settingsModel.kind === "available" &&
+    settingsModel.properties.some((property) => property.key === "inline_create") &&
+    settingsModel.properties.some((property) => property.key === "create_page");
+  const createPageSetting = settingsInputs.settings.create_page;
+  const inlineCreateSetting = settingsInputs.settings.inline_create;
+  const createForm = createPageSetting?.kind === "page_reference" ? createPageSetting.page : "";
+  const addsRecords = inlineCreateSetting?.kind === "boolean" && inlineCreateSetting.value;
+  // The data's own refusal shows at its field; every other problem stays in the group's alert.
+  const otherProblem = settings.problem.replace(chooseDataProblem, "").trim();
+  const queryProblem =
+    problemArea === "settings" && settings.problem.includes(chooseDataProblem)
+      ? chooseDataProblem
+      : undefined;
+  // The data a block reads is the first field of its inspector: its bindings and the add-records
+  // control follow it, because what it offers decides what the later controls offer.
+  const queryValue = useMemo(
+    () =>
+      settingsModel.kind !== "available" || !settingsModel.readsQuery
+        ? undefined
+        : {
+            value: settingsInputs.query ?? "",
+            queries: props.choices.queries,
+            recordQueries: props.choices.recordQueries ?? noQueries,
+            problem: queryProblem,
+            onChange: (reference: string) => chooseQuery.current(reference),
+            onNewQuery:
+              props.onNewQuery === undefined
+                ? undefined
+                : () => props.onNewQuery?.((reference) => chooseQuery.current(reference)),
+            bindings: {
+              value: settingsInputs.settings.query_parameters,
+              facts: studioQueryBindingFacts(
+                props.context,
+                settingsModel.placementAlias,
+                props.choices.queries,
+              ),
+              onChange: (value: SourceBlockPropertyValueContract) =>
+                editSettings.current({
+                  ...settingsInputs,
+                  settings: { ...settingsInputs.settings, query_parameters: value },
+                }),
+            },
+            after: addsFromList ? (
+              <StudioTableAddRecords
+                form={createForm}
+                adding={addsRecords === true}
+                pages={choices.pages}
+                disabled={props.disabled}
+                onChange={(next) => {
+                  const settings = { ...settingsInputs.settings };
+                  if (next.form === "") delete settings.create_page;
+                  else settings.create_page = { kind: "page_reference", page: next.form };
+                  if (next.adding) settings.inline_create = { kind: "boolean", value: true };
+                  else delete settings.inline_create;
+                  editSettings.current({ ...settingsInputs, settings });
+                }}
+              />
+            ) : undefined,
+          },
+    [
+      settingsModel,
+      settingsInputs,
+      props.choices.queries,
+      props.choices.recordQueries,
+      props.onNewQuery,
+      props.context,
+      props.disabled,
+      queryProblem,
+      addsFromList,
+      createForm,
+      addsRecords,
+      choices.pages,
+    ],
+  );
 
   if (model.kind !== "available" || layout.value === null)
     return (
@@ -199,15 +286,6 @@ export function ApplicationCompositionEditor(props: Props) {
     settingsModel.kind === "available"
       ? studioGridFeaturesProperty(settingsModel.properties)
       : undefined;
-  // Adding records from a list opens a create form, so the form is chosen before the switch appears.
-  const addsFromList =
-    settingsModel.kind === "available" &&
-    settingsModel.properties.some((property) => property.key === "inline_create") &&
-    settingsModel.properties.some((property) => property.key === "create_page");
-  const createPageSetting = settingsInputs.settings.create_page;
-  const inlineCreateSetting = settingsInputs.settings.inline_create;
-  const createForm = createPageSetting?.kind === "page_reference" ? createPageSetting.page : "";
-  const addsRecords = inlineCreateSetting?.kind === "boolean" && inlineCreateSetting.value;
   // A canvas arrangement belongs to the query, columns and density it was made for.
   const canvasMatches =
     props.canvasArrangement?.key ===
@@ -317,7 +395,7 @@ export function ApplicationCompositionEditor(props: Props) {
       ...(settingsModel.readsQuery &&
       next.query === null &&
       (board?.columnField === undefined || board.cardTitleField === undefined)
-        ? ["Choose the data this block shows."]
+        ? [chooseDataProblem]
         : []),
       ...mappingProblems,
     ];
@@ -335,6 +413,7 @@ export function ApplicationCompositionEditor(props: Props) {
       settings.applied(next);
     else settings.hold(next, "");
   };
+  editSettings.current = (next) => changeSettings(next);
   const move = (direction: -1 | 1) => {
     if (!orderEditable || selectedIndex < 0) return;
     const nextIndex = selectedIndex + direction;
@@ -379,62 +458,11 @@ export function ApplicationCompositionEditor(props: Props) {
       {settingsModel.kind === "available" ? (
         <StudioInspectorGroup title="Settings" hint="A setting you leave unset uses its default.">
           <fieldset className="space-y-4" disabled={props.disabled}>
-            {settingsModel.readsQuery && (
-              <StudioQueryPicker
-                id={`${settingsId}-query`}
-                queries={props.choices.queries}
-                recordQueries={props.choices.recordQueries}
-                value={settingsInputs.query ?? ""}
-                disabled={props.disabled}
-                onNewQuery={
-                  props.onNewQuery === undefined
-                    ? undefined
-                    : () => props.onNewQuery?.((reference) => chooseQuery.current(reference))
-                }
-                onChange={changeQuery}
-              />
-            )}
-            {settingsModel.readsQuery && (
-              <StudioQueryBindings
-                choices={choices}
-                query={props.choices.queries.find(
-                  (query) => query.reference === settingsInputs.query,
-                )}
-                value={settingsInputs.settings.query_parameters}
-                facts={studioQueryBindingFacts(
-                  props.context,
-                  settingsModel.placementAlias,
-                  props.choices.queries,
-                )}
-                disabled={props.disabled}
-                onChange={(value) =>
-                  changeSettings({
-                    ...settingsInputs,
-                    settings: { ...settingsInputs.settings, query_parameters: value },
-                  })
-                }
-              />
-            )}
-            {addsFromList && (
-              <StudioTableAddRecords
-                form={createForm}
-                adding={addsRecords === true}
-                pages={choices.pages}
-                disabled={props.disabled}
-                onChange={(next) => {
-                  const settings = { ...settingsInputs.settings };
-                  if (next.form === "") delete settings.create_page;
-                  else settings.create_page = { kind: "page_reference", page: next.form };
-                  if (next.adding) settings.inline_create = { kind: "boolean", value: true };
-                  else delete settings.inline_create;
-                  changeSettings({ ...settingsInputs, settings });
-                }}
-              />
-            )}
             <StudioBlockSettingFields
               choices={choices}
               disabled={props.disabled}
               placementAlias={model.placementAlias}
+              query={queryValue}
             />
             {(["open_with", "record_from"] as const)
               .filter((key) => settingsModel.properties.some((property) => property.key === key))
@@ -458,9 +486,9 @@ export function ApplicationCompositionEditor(props: Props) {
                 />
               ))}
           </fieldset>
-          {settings.problem !== "" && problemArea === "settings" && (
+          {otherProblem !== "" && problemArea === "settings" && (
             <Alert variant="destructive">
-              <AlertDescription>{settings.problem}</AlertDescription>
+              <AlertDescription>{otherProblem}</AlertDescription>
             </Alert>
           )}
         </StudioInspectorGroup>
