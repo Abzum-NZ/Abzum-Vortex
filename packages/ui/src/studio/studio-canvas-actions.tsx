@@ -29,6 +29,7 @@ import { StudioCanvasIframe } from "./studio-canvas-root";
 import { useStudioScreen } from "./studio-canvas-screen";
 import { useStudioCanvasChannel } from "./studio-canvas-metadata";
 import { useStudioCanvas, useStudioCanvasDragging } from "./studio-puck-provider";
+import { studioFieldTypes } from "./studio-puck-field-types";
 
 const usePuckSelector = createUsePuck();
 
@@ -428,4 +429,5 @@ export const studioCanvasOverrides: Partial<Overrides> = {
   componentOverlay: StudioComponentOverlay,
   iframe: StudioCanvasIframe,
   outline: StudioOutlineRegion,
+  fieldTypes: studioFieldTypes,
 };

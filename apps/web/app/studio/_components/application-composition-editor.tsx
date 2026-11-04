@@ -27,8 +27,6 @@ import {
   followFieldLabels,
   studioGridDataSettings,
   studioSettingProblems,
-  StudioQueryPicker,
-  StudioQueryBindings,
   StudioSelectionControlBinding,
   studioQueryBindingFacts,
   studioRecordBindingFields,
@@ -375,42 +373,6 @@ export function ApplicationCompositionEditor(props: Props) {
       {settingsModel.kind === "available" ? (
         <StudioInspectorGroup title="Settings" hint="A setting you leave unset uses its default.">
           <fieldset className="space-y-4" disabled={props.disabled}>
-            {settingsModel.readsQuery && (
-              <StudioQueryPicker
-                id={`${settingsId}-query`}
-                queries={props.choices.queries}
-                recordQueries={props.choices.recordQueries}
-                value={settingsInputs.query ?? ""}
-                disabled={props.disabled}
-                onNewQuery={
-                  props.onNewQuery === undefined
-                    ? undefined
-                    : () => props.onNewQuery?.((reference) => chooseQuery.current(reference))
-                }
-                onChange={changeQuery}
-              />
-            )}
-            {settingsModel.readsQuery && (
-              <StudioQueryBindings
-                choices={choices}
-                query={props.choices.queries.find(
-                  (query) => query.reference === settingsInputs.query,
-                )}
-                value={settingsInputs.settings.query_parameters}
-                facts={studioQueryBindingFacts(
-                  props.context,
-                  settingsModel.placementAlias,
-                  props.choices.queries,
-                )}
-                disabled={props.disabled}
-                onChange={(value) =>
-                  changeSettings({
-                    ...settingsInputs,
-                    settings: { ...settingsInputs.settings, query_parameters: value },
-                  })
-                }
-              />
-            )}
             {addsFromList && (
               <StudioTableAddRecords
                 form={createForm}
@@ -431,6 +393,33 @@ export function ApplicationCompositionEditor(props: Props) {
               choices={choices}
               disabled={props.disabled}
               placementAlias={model.placementAlias}
+              query={
+                settingsModel.readsQuery
+                  ? {
+                      value: settingsInputs.query ?? "",
+                      queries: props.choices.queries,
+                      recordQueries: props.choices.recordQueries ?? [],
+                      onChange: changeQuery,
+                      onNewQuery:
+                        props.onNewQuery === undefined
+                          ? undefined
+                          : () => props.onNewQuery?.((reference) => chooseQuery.current(reference)),
+                      bindings: {
+                        value: settingsInputs.settings.query_parameters,
+                        facts: studioQueryBindingFacts(
+                          props.context,
+                          settingsModel.placementAlias,
+                          props.choices.queries,
+                        ),
+                        onChange: (value) =>
+                          changeSettings({
+                            ...settingsInputs,
+                            settings: { ...settingsInputs.settings, query_parameters: value },
+                          }),
+                      },
+                    }
+                  : undefined
+              }
             />
             {(["open_with", "record_from"] as const)
               .filter((key) => settingsModel.properties.some((property) => property.key === key))

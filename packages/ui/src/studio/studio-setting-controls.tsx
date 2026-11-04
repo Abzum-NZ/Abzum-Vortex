@@ -24,21 +24,24 @@ import {
   InputGroupInput,
 } from "../components/input-group";
 import { Plus } from "lucide-react";
-import { StudioReferencePicker } from "./studio-reference-picker";
 import { StudioField } from "./studio-field";
 import { Label } from "../components/label";
 import { StudioEntryList, useStudioEntryKeys } from "./studio-entry-list";
 import { useConfirm } from "../components/confirm-dialog";
 import { StudioInspectorGroup } from "./studio-inspector-group";
 import { Textarea } from "../components/textarea";
-import { StudioRecordReferenceControl } from "./studio-record-reference-control";
+import {
+  StudioFieldPickerControl,
+  StudioRecordControl,
+  StudioReferenceControl,
+} from "./studio-reference-controls";
 import {
   type SettingValue,
   type StudioSettingValues,
   type StudioSettingChoices,
   initialValue,
   settleStudioSetting,
-  studioFittingFields,
+  studioUnsetLabel,
   conditionalRequiredMessage,
   type ControlProps,
 } from "./studio-setting-model";
@@ -47,7 +50,6 @@ import {
   RichTextControl,
   StudioOptionControl,
 } from "./studio-setting-basic-controls";
-import { borrowableOption } from "./studio-query-picker";
 
 /**
  * Studio's one set of typed setting controls: one control per declared block property, chosen by
@@ -56,17 +58,6 @@ import { borrowableOption } from "./studio-query-picker";
  * commands, which judge them as stored data.
  */
 
-const unsetLabel = (
-  property: BlockPropertySchemaContract,
-  defaultLabel: string | undefined,
-): string =>
-  defaultLabel !== undefined
-    ? `Default (${defaultLabel})`
-    : property.required
-      ? "Choose…"
-      : "Not set";
-
-/** The control of one setting, by its declared kind. */
 export function StudioSettingControl(props: ControlProps): ReactElement {
   const { id, property, value, onChange, choices, disabled, descriptionId, invalid } = props;
   switch (property.kind) {
@@ -84,7 +75,7 @@ export function StudioSettingControl(props: ControlProps): ReactElement {
             id={id}
             value={text}
             options={choices.pageValues.map((entry) => ({ value: entry.key, label: entry.label }))}
-            unset={unsetLabel(property, undefined)}
+            unset={studioUnsetLabel(property, undefined)}
             disabled={disabled}
             aria-describedby={descriptionId}
             aria-invalid={invalid || undefined}
@@ -182,7 +173,7 @@ export function StudioSettingControl(props: ControlProps): ReactElement {
           aria-invalid={invalid || undefined}
           disabled={disabled}
           value={value?.kind === "choice" ? value.value : ""}
-          unset={unsetLabel(
+          unset={studioUnsetLabel(
             property,
             property.options.find((option) => option.key === defaultKey)?.label,
           )}
@@ -192,163 +183,16 @@ export function StudioSettingControl(props: ControlProps): ReactElement {
       );
     }
     case "field_reference":
-      return (
-        <StudioReferencePicker
-          id={id}
-          aria-describedby={descriptionId}
-          aria-invalid={invalid || undefined}
-          disabled={disabled}
-          value={value?.kind === "field_reference" ? value.field : ""}
-          unset={
-            choices.fields.length === 0 ? "Choose the data first" : unsetLabel(property, undefined)
-          }
-          options={studioFittingFields(property, choices.fields).map((field) => ({
-            value: field.reference,
-            label: field.label,
-          }))}
-          onChange={(next) =>
-            onChange(next === "" ? undefined : { kind: "field_reference", field: next })
-          }
-        />
-      );
+      return <StudioFieldPickerControl {...props} />;
     case "total_reference":
-      return (
-        <StudioReferencePicker
-          id={id}
-          aria-describedby={descriptionId}
-          aria-invalid={invalid || undefined}
-          disabled={disabled}
-          value={value?.kind === "total_reference" ? value.value : ""}
-          unset={
-            choices.totals.length === 0
-              ? "Add a total to the query first"
-              : unsetLabel(property, undefined)
-          }
-          options={choices.totals.map((total) => ({
-            value: total.alias,
-            label: total.label,
-            group: "Totals of the query",
-          }))}
-          onChange={(next) =>
-            onChange(next === "" ? undefined : { kind: "total_reference", value: next })
-          }
-        />
-      );
     case "query_reference":
-      return (
-        <StudioReferencePicker
-          id={id}
-          aria-describedby={descriptionId}
-          aria-invalid={invalid || undefined}
-          disabled={disabled}
-          value={value?.kind === "query_reference" ? value.query : ""}
-          unset={unsetLabel(property, undefined)}
-          options={choices.queries.map(borrowableOption)}
-          onChange={(next) =>
-            onChange(next === "" ? undefined : { kind: "query_reference", query: next })
-          }
-        />
-      );
     case "page_reference":
-      return (
-        <StudioReferencePicker
-          id={id}
-          aria-describedby={descriptionId}
-          aria-invalid={invalid || undefined}
-          disabled={disabled}
-          value={value?.kind === "page_reference" ? value.page : ""}
-          unset={unsetLabel(property, undefined)}
-          options={choices.pages.map((page) => ({ value: page.key, label: page.label }))}
-          onChange={(next) =>
-            onChange(next === "" ? undefined : { kind: "page_reference", page: next })
-          }
-        />
-      );
     case "record_type_reference":
-      return (
-        <StudioReferencePicker
-          id={id}
-          aria-describedby={descriptionId}
-          aria-invalid={invalid || undefined}
-          disabled={disabled}
-          value={value?.kind === "record_type_reference" ? value.record_type : ""}
-          unset={unsetLabel(property, undefined)}
-          options={choices.recordTypes.map((recordType) => ({
-            value: recordType.key,
-            label: recordType.label,
-          }))}
-          onChange={(next) =>
-            onChange(next === "" ? undefined : { kind: "record_type_reference", record_type: next })
-          }
-        />
-      );
     case "action_reference":
-      return (
-        <BorrowableReferenceControl
-          id={id}
-          aria-describedby={descriptionId}
-          aria-invalid={invalid || undefined}
-          disabled={disabled}
-          choices={choices.actions}
-          value={value?.kind === "action_reference" ? value.action : ""}
-          unset={
-            choices.actions.length === 0
-              ? "This application has no actions yet"
-              : unsetLabel(property, undefined)
-          }
-          onChange={(next) =>
-            onChange(next === "" ? undefined : { kind: "action_reference", action: next })
-          }
-        />
-      );
     case "relationship_reference":
-      return (
-        <BorrowableReferenceControl
-          id={id}
-          aria-describedby={descriptionId}
-          aria-invalid={invalid || undefined}
-          disabled={disabled}
-          choices={choices.relationships}
-          value={value?.kind === "relationship_reference" ? value.relationship : ""}
-          unset={
-            choices.relationships.length === 0
-              ? "Its records have no relationships"
-              : unsetLabel(property, undefined)
-          }
-          onChange={(next) =>
-            onChange(
-              next === "" ? undefined : { kind: "relationship_reference", relationship: next },
-            )
-          }
-        />
-      );
+      return <StudioReferenceControl {...props} />;
     case "record_reference":
-      return (
-        <StudioRecordReferenceControl
-          id={id}
-          aria-describedby={descriptionId}
-          aria-invalid={invalid || undefined}
-          disabled={disabled}
-          recordTypes={choices.recordTypes}
-          read={choices.records}
-          value={
-            value?.kind === "record_reference"
-              ? { recordType: value.record_type, recordId: value.record_id }
-              : undefined
-          }
-          onChange={(next) =>
-            onChange(
-              next === undefined
-                ? undefined
-                : {
-                    kind: "record_reference",
-                    record_type: next.recordType,
-                    record_id: next.recordId,
-                  },
-            )
-          }
-        />
-      );
+      return <StudioRecordControl {...props} />;
     case "rich_text":
       return <RichTextControl {...props} />;
     case "group":
@@ -388,43 +232,6 @@ export function StudioSettingControl(props: ControlProps): ReactElement {
       );
     }
   }
-}
-
-function BorrowableReferenceControl({
-  id,
-  value,
-  choices,
-  unset,
-  disabled,
-  onChange,
-  "aria-describedby": describedBy,
-  "aria-invalid": invalid,
-}: Readonly<{
-  id: string;
-  "aria-describedby"?: string | undefined;
-  "aria-invalid"?: boolean | undefined;
-  value: string;
-  choices: readonly Readonly<{
-    reference: string;
-    label: string;
-    borrowedFrom?: string | undefined;
-  }>[];
-  unset: string;
-  disabled: boolean;
-  onChange: (value: string) => void;
-}>): ReactElement {
-  return (
-    <StudioReferencePicker
-      id={id}
-      value={value}
-      disabled={disabled}
-      unset={unset}
-      onChange={onChange}
-      aria-describedby={describedBy}
-      aria-invalid={invalid}
-      options={choices.map(borrowableOption)}
-    />
-  );
 }
 
 /** A choice of this application or, grouped under its owner's name, of an application it uses. */
