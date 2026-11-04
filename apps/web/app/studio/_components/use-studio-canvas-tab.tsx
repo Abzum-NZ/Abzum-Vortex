@@ -321,7 +321,15 @@ export function useStudioCanvasTab({
           : { kind: "page", pageAlias: page.id },
       );
     };
-    if (!addressRestored.current) {
+    // A block address names a block the catalogue's releases describe: until they have loaded no
+    // block has an owner, and the address would fall back to the page. It is read once they have.
+    const waitingForBlocks =
+      !addressRestored.current &&
+      new URL(window.location.href).searchParams.get("block") !== null &&
+      catalogue.releases.length === 0;
+    if (waitingForBlocks) {
+      // Nothing yet: this effect runs again when the catalogue arrives.
+    } else if (!addressRestored.current) {
       addressRestored.current = true;
       restore();
       setAddressSettled(true);
@@ -335,7 +343,7 @@ export function useStudioCanvasTab({
     }
     window.addEventListener("popstate", restore);
     return () => window.removeEventListener("popstate", restore);
-  }, [canvasPage, selected, source, placementOwners, draft.select]);
+  }, [canvasPage, selected, source, placementOwners, draft.select, catalogue.releases.length]);
   const canvasPageRef = useRef(canvasPage?.id);
   canvasPageRef.current = canvasPage?.id;
   const layoutAliasRef = useRef(layoutAlias);
