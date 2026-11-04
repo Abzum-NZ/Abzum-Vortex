@@ -25,6 +25,7 @@ import type { FieldInputControlReleaseMap, PlatformComponentRegistry } from "../
 import {
   compiledSettingsFor,
   itemsHold,
+  repeatingSlotKeys,
   storedDataProblem,
   type StudioCanvasCompiledSettings,
   type StudioCanvasCompiledSlot,
@@ -317,6 +318,16 @@ export const useStudioCanvasModel = (
   );
   // Puck is opened again only when the set of root slots changes; a label alone changes the config.
   const slotsKey = useMemo(() => rootSlots.map(([key]) => key).join(" "), [rootSlots]);
+  // The keys of the repeating slots the page holds (a tab is `tab_<key>`), by renderer key: Puck
+  // finds a slot only through the config's static fields, so the config declares these. Kept by
+  // value, so the config changes only when a block gains or loses a key.
+  const repeatingJson = JSON.stringify(
+    [...repeatingSlotKeys(catalogue, items)].map(([renderer, keys]) => [renderer, [...keys]]),
+  );
+  const repeating = useMemo(
+    () => new Map(JSON.parse(repeatingJson) as [string, string[]][]),
+    [repeatingJson],
+  );
   // The application frame is the canvas root, so the page renders in its outlets inside the iframe.
   const config = useMemo(
     () =>
@@ -328,8 +339,9 @@ export const useStudioCanvasModel = (
             fieldInputControlReleases,
             catalogue,
             rootSlots,
+            repeating,
           ),
-    [registry, fieldInputControlReleases, catalogue, rootSlots],
+    [registry, fieldInputControlReleases, catalogue, rootSlots, repeating],
   );
   // Puck's data is the stored page data itself: the root holds the shell and one slot per outlet.
   const data = useMemo(

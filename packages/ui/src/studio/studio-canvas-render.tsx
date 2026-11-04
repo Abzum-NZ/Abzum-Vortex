@@ -2,7 +2,7 @@
 
 import { Item, ItemContent, ItemDescription, ItemTitle } from "../components/item";
 import { Component, useMemo, type ReactElement, type ReactNode } from "react";
-import { placementWrapperGeometry } from "../puck-config";
+import { placementWrapperGeometry, withRepeatingSlots } from "../puck-config";
 import type { ComponentConfig, Config, Field, PuckContext } from "@puckeditor/core";
 import {
   canonicalResponsivePlacement,
@@ -485,17 +485,20 @@ const canvasConfigs = new WeakMap<
  * (its palette choice names why) is not insertable, so Puck does not let it be dragged.
  */
 export const studioCanvasConfig = (
-  config: Config,
+  baseConfig: Config,
   registry: PlatformComponentRegistry,
   fieldInputControlReleases: FieldInputControlReleaseMap,
   catalogue: ImmutablePlatformBlockCatalogue,
   /** The page's root slots with their labels: one slot field of the root for each content slot of its shell. */
   slots: readonly (readonly [key: string, label: string])[],
+  /** The keys of the repeating slots the page holds (a tab is `tab_<key>`), by renderer key. */
+  repeating: ReadonlyMap<string, readonly string[]>,
 ): Config => {
   const slotKeys = slots.map(([key]) => key);
-  const slotsKey = JSON.stringify(slots);
-  let canvas = canvasConfigs.get(config)?.get(catalogue)?.get(slotsKey);
+  const slotsKey = JSON.stringify([slots, [...repeating]]);
+  let canvas = canvasConfigs.get(baseConfig)?.get(catalogue)?.get(slotsKey);
   if (canvas !== undefined) return canvas;
+  const config = withRepeatingSlots(registry, baseConfig, repeating);
   const releaseByKey = new Map(
     registry.list().map(({ metadata }) => [metadata.rendererKey, metadata]),
   );
@@ -580,10 +583,10 @@ export const studioCanvasConfig = (
       ),
     },
   } as unknown as Config;
-  const byCatalogue = canvasConfigs.get(config) ?? new WeakMap();
+  const byCatalogue = canvasConfigs.get(baseConfig) ?? new WeakMap();
   const bySlots = byCatalogue.get(catalogue) ?? new Map<string, Config>();
   bySlots.set(slotsKey, canvas);
   byCatalogue.set(catalogue, bySlots);
-  canvasConfigs.set(config, byCatalogue);
+  canvasConfigs.set(baseConfig, byCatalogue);
   return canvas;
 };

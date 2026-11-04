@@ -724,6 +724,67 @@ function PlacementBlockContent(props: PlacementBlockProps): ReactElement {
 
 type VortexComponentConfig = ComponentConfig<Record<string, unknown>>;
 
+const releasesByRendererKey = (registry: PlatformComponentRegistry) => {
+  const releaseByKey = new Map<string, PlatformBlockRelease>();
+  for (const { metadata } of registry.list()) {
+    if (releaseByKey.has(metadata.rendererKey))
+      throw new Error(`Renderer '${metadata.rendererKey}' has more than one registered release`);
+    releaseByKey.set(metadata.rendererKey, metadata);
+  }
+  return releaseByKey;
+};
+
+const rendererKeysByCategory = (releaseByKey: ReadonlyMap<string, PlatformBlockRelease>) => {
+  const keysByCategory = new Map<string, string[]>();
+  for (const [key, release] of releaseByKey) {
+    const keys = keysByCategory.get(release.paletteGroup) ?? [];
+    keys.push(key);
+    keysByCategory.set(release.paletteGroup, keys);
+  }
+  return keysByCategory;
+};
+
+/** Puck's slot field of one declared slot: its name and the blocks it takes. */
+const slotField = (
+  slot: PlatformBlockRelease["slots"][number],
+  keysByCategory: ReadonlyMap<string, readonly string[]>,
+): Field => ({
+  type: "slot",
+  label: slot.label,
+  allow: slot.allowedChildCategories.flatMap((category) => keysByCategory.get(category) ?? []),
+});
+
+/**
+ * The config with a slot field for each key of a repeating slot that a page holds (a tab is stored
+ * as `tab_<key>`), by renderer key. Puck finds a slot only through the static `fields` of the
+ * config, never through `resolveFields`, so the keys a page uses are declared for the page; a
+ * block of that renderer that does not use a key draws nothing for it.
+ */
+export function withRepeatingSlots(
+  registry: PlatformComponentRegistry,
+  config: Config,
+  keysByRenderer: ReadonlyMap<string, readonly string[]>,
+): Config {
+  if (keysByRenderer.size === 0) return config;
+  const releaseByKey = releasesByRendererKey(registry);
+  const keysByCategory = rendererKeysByCategory(releaseByKey);
+  const components = { ...config.components } as Record<string, VortexComponentConfig>;
+  for (const [rendererKey, keys] of keysByRenderer) {
+    const release = releaseByKey.get(rendererKey);
+    const component = components[rendererKey];
+    if (release === undefined || component === undefined) continue;
+    const fields = { ...component.fields } as Record<string, Field>;
+    for (const key of keys) {
+      const declaration = release.slots.find(
+        (slot) => slot.repeats !== undefined && key.startsWith(`${slot.key}_`),
+      );
+      if (declaration !== undefined) fields[key] = slotField(declaration, keysByCategory);
+    }
+    components[rendererKey] = { ...component, fields };
+  }
+  return { ...config, components } as Config;
+}
+
 /**
  * Builds the Puck config for every release in the registry: one component per renderer key, typed
  * from that key's one release.
@@ -732,19 +793,8 @@ function createVortexPuckConfig(
   registry: PlatformComponentRegistry,
   fieldInputControlReleases: FieldInputControlReleases,
 ): Config {
-  const releaseByKey = new Map<string, PlatformBlockRelease>();
-  for (const { metadata } of registry.list()) {
-    if (releaseByKey.has(metadata.rendererKey))
-      throw new Error(`Renderer '${metadata.rendererKey}' has more than one registered release`);
-    releaseByKey.set(metadata.rendererKey, metadata);
-  }
-
-  const keysByCategory = new Map<string, string[]>();
-  for (const [key, release] of releaseByKey) {
-    const keys = keysByCategory.get(release.paletteGroup) ?? [];
-    keys.push(key);
-    keysByCategory.set(release.paletteGroup, keys);
-  }
+  const releaseByKey = releasesByRendererKey(registry);
+  const keysByCategory = rendererKeysByCategory(releaseByKey);
 
   // Only slot fields: Puck finds a block's slots through them. A placement's settings, layout and
   // theme are edited by Studio's own typed inspector, never through Puck fields.
@@ -757,16 +807,13 @@ function createVortexPuckConfig(
       ...Object.fromEntries(release.properties.map((property) => [property.key, opaque])),
     };
     for (const slot of release.slots) {
-      const allow = slot.allowedChildCategories.flatMap(
-        (category) => keysByCategory.get(category) ?? [],
-      );
       const keys =
         slot.repeats === undefined
           ? [slot.key]
           : repeatableSlotItemIdentities(slot, settings).map((identity) =>
               repeatableSlotKey(slot.key, identity),
             );
-      for (const key of keys) fields[key] = { type: "slot", label: slot.label, allow };
+      for (const key of keys) fields[key] = slotField(slot, keysByCategory);
     }
     return fields;
   };
