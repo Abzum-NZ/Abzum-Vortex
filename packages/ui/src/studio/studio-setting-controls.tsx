@@ -860,7 +860,7 @@ type SettingNoteProps = Readonly<{
  * text stays authored, with an explicit way to return to the field's label.
  */
 export function StudioSettingNote(props: SettingNoteProps): ReactElement | null {
-  const { property, properties, values, choices } = props;
+  const { property, properties, values } = props;
   const fieldProperty = properties.find(
     (candidate) => candidate.key === "field" && candidate.kind === "field_reference",
   );
