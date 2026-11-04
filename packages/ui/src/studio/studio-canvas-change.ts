@@ -6,6 +6,7 @@ import {
   type ApplicationSourceDocument,
   type ImmutablePlatformBlockCatalogue,
 } from "@vortex/platform/schema";
+import type { Breakpoint } from "../definition-error";
 import { canvasOwnerData } from "./application-composition-page-data";
 import type { StudioCanvasOwner, StudioCompositionCommand } from "./application-composition-model";
 import type { StudioSemanticSelection } from "./semantic-selection";
@@ -15,6 +16,7 @@ import {
   withoutEmptyPuckZones,
   type StudioPuckLocate,
 } from "./studio-canvas-data";
+import { studioCrossSlotReason, studioScreenOfBreakpoint } from "./studio-canvas-screen";
 import { changedProps, type PuckItem, type StudioSettingsEdit } from "./studio-settings-edit";
 
 /** The Puck actions that change the page's data; Studio's classifier reads these, in order. */
@@ -60,7 +62,10 @@ export const isNoOpCanvasAction = (
 export type StudioCanvasClassification =
   /** The data Puck reports is the draft it was given (after Undo, Redo, a save or an echo). */
   | Readonly<{ kind: "unchanged" }>
-  /** The canvas takes no such edit now (hidden, read-only, locked, or not the desktop screen). */
+  /**
+   * The canvas takes no such edit now (hidden, read-only, locked, or, for anything but a drag
+   * inside one slot, not the desktop screen).
+   */
   | Readonly<{ kind: "forbidden" }>
   /** The change breaks a rule of the definition or is one the canvas cannot make (`message`). */
   | Readonly<{ kind: "refused"; message: string }>
@@ -102,6 +107,8 @@ export const classifyCanvasChange = ({
   selected,
   locate,
   permitted,
+  reorderable,
+  breakpoint,
   settingsPermitted,
 }: Readonly<{
   catalogue: ImmutablePlatformBlockCatalogue;
@@ -117,8 +124,15 @@ export const classifyCanvasChange = ({
   /** The block selected in Studio. */
   selected: string | null;
   locate: StudioPuckLocate;
-  /** Whether the canvas takes edits of the page (desktop, editable). */
+  /**
+   * Whether the canvas takes edits of the page other than a reorder within one slot (desktop,
+   * editable).
+   */
   permitted: boolean;
+  /** Whether a drag inside one slot is taken: any screen, canvas shown and unlocked. */
+  reorderable: boolean;
+  /** The screen the canvas shows: a drag inside one slot is that screen's order. */
+  breakpoint: Breakpoint;
   /** Whether it takes settings edits (any screen). */
   settingsPermitted: boolean;
 }>): StudioCanvasClassification => {
@@ -167,8 +181,25 @@ export const classifyCanvasChange = ({
     }
   };
 
+  /**
+   * A report the typed rules cannot read: the whole data on the desktop; on a smaller screen only
+   * a reorder is taken, so it is shown again with a sentence.
+   */
+  const unreadable = (): StudioCanvasClassification => {
+    if (breakpoint === "desktop") return pageData();
+    if (!reorderable) return { kind: "forbidden" };
+    console.info(`[studio] a change on ${breakpoint} did not match the canvas; shown again`);
+    return {
+      kind: "refused",
+      message:
+        `That change could not be read on ${studioScreenOfBreakpoint(breakpoint).label}, ` +
+        "so the page is shown as it was.",
+    };
+  };
+
   const [action, ...more] = actions;
-  if (action === undefined || more.length > 0) return pageData();
+  if (action === undefined) return pageData();
+  if (more.length > 0) return unreadable();
   switch (action.type) {
     case "insert":
       // A block from the drawer is added by Studio's add command, not by this report.
@@ -199,8 +230,14 @@ export const classifyCanvasChange = ({
     case "move":
     case "reorder": {
       const zone = action.destinationZone;
-      if (action.type === "move" && action.sourceZone !== zone) return pageData();
-      if (!permitted) return { kind: "forbidden" };
+      const across = action.type === "move" && action.sourceZone !== zone;
+      if (across && breakpoint === "desktop") return pageData();
+      if (!reorderable) return { kind: "forbidden" };
+      if (across) {
+        // A smaller screen keeps only the order within a slot.
+        console.info(`[studio] refused a move to another slot on ${breakpoint}`);
+        return { kind: "refused", message: studioCrossSlotReason(breakpoint) };
+      }
       const moved = itemAt(zone, action.sourceIndex);
       const order = idsOf(puckZoneItems(candidate, zone, locate));
       const was = idsOf(puckZoneItems(shown, zone, locate));
@@ -210,13 +247,13 @@ export const classifyCanvasChange = ({
         was === undefined ||
         order[action.destinationIndex] !== moved.props.id
       )
-        return pageData();
+        return unreadable();
       if (order.length === was.length && order.every((id, index) => id === was[index]))
         return { kind: "unchanged" };
       return {
         kind: "change",
         selection: placement(moved.props.id as string),
-        change: { kind: "order", breakpoint: "desktop", order },
+        change: { kind: "order", breakpoint, order },
         expectedSource,
       };
     }
