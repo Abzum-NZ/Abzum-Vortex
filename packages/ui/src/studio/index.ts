@@ -9,7 +9,6 @@ export * from "./discovery-adapter";
 export * from "./semantic-selection";
 export * from "./semantic-outline";
 export * from "./application-draft-history";
-export { isStudioDraftSnapshot } from "./draft-snapshot";
 export * from "./selection-inspector";
 export type {
   StudioConditionSemanticType,

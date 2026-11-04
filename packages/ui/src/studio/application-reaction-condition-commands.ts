@@ -27,6 +27,7 @@ import {
   type SourcePageData,
   applicationModuleKeys,
   isRecord,
+  isStudioDraftSnapshot,
 } from "@vortex/platform/schema";
 import {
   validateStudioCondition,
@@ -37,7 +38,6 @@ import {
   type StudioConditionValidationIssue,
 } from "./condition-model";
 import type { StudioCompositionContext } from "./application-composition-commands";
-import { isStudioDraftSnapshot } from "./draft-snapshot";
 import { projectStudioFlowDraftChoices } from "./application-flow-step-form";
 import { studioDraftRecordType } from "./application-flow-values";
 import type { StudioSemanticSelection } from "./semantic-selection";

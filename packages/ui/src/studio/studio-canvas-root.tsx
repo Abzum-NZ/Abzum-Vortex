@@ -28,11 +28,7 @@ import { studioCanvasMetadata, useStudioCanvasChannel } from "./studio-canvas-me
 import { studioCanvasVisible, useStudioCanvasView } from "./studio-canvas-scale";
 import { useStudioScreen } from "./studio-canvas-screen";
 import { studioPuckIframeCss } from "./studio-puck-style";
-import {
-  useStudioCanvas,
-  useStudioCanvasDragging,
-  useStudioFrameDocumentSetter,
-} from "./studio-puck-provider";
+import { useStudioCanvasDragging, useStudioFrameDocumentSetter } from "./studio-puck-provider";
 
 const resolvePageHref = () => "#";
 

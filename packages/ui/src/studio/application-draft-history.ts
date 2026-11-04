@@ -7,8 +7,8 @@ import {
   type SaveDefinitionDraftCommand,
   type StoredDefinitionDraft,
   platformIdSchema,
+  shareSnapshot,
 } from "@vortex/platform/schema";
-import { shareSnapshot } from "./draft-snapshot";
 
 export type StudioStoredApplicationDraft = Extract<StoredDefinitionDraft, { kind: "application" }>;
 

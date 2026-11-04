@@ -20,6 +20,7 @@ import {
   type PlatformBlockRelease,
   type SourceBlockPropertyValueContract,
   type SourceItem,
+  isStudioDraftSnapshot,
 } from "@vortex/platform/schema";
 import {
   boardModeOf,
@@ -58,7 +59,6 @@ import {
   restoreStudioGridFeatureBindings,
   studioGridDataSettings,
 } from "./grid-features";
-import { isStudioDraftSnapshot } from "./draft-snapshot";
 import { studioPlacementReferrers } from "./studio-canvas-permissions";
 import type { StudioSemanticSelection } from "./semantic-selection";
 import type {

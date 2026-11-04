@@ -19,13 +19,13 @@ import {
   type SourceItem,
   type SourcePageZone,
   type SourceSlotOrder,
+  isStudioDraftSnapshot,
 } from "@vortex/platform/schema";
 import {
   storedItemRelease,
   validateStoredShell,
   validateStoredZone,
 } from "@vortex/platform/schema";
-import { isStudioDraftSnapshot } from "./draft-snapshot";
 import { resolveStudioSelectionInspectorContext } from "./selection-inspector";
 import type { StudioSemanticSelection } from "./semantic-selection";
 import type {
@@ -611,7 +611,7 @@ export const validateRegion = (
   const known = isStudioDraftSnapshot(held);
   const passed = known ? validatedRegions.get(held) : undefined;
   if (passed?.order === region.zone.order && passed?.catalogues.has(catalogue) === true) return;
-  if (region.shell === undefined) validateStoredZone(catalogue, region.zone, undefined, known);
+  if (region.shell === undefined) validateStoredZone(catalogue, region.zone);
   else validateStoredShell(catalogue, region.shell);
   if (known) {
     const catalogues =

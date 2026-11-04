@@ -15,6 +15,7 @@ import {
   type BlockPropertySchemaContract,
   type SourceBlockPropertyValueContract,
   type SourceItem,
+  isStudioDraftSnapshot,
 } from "@vortex/platform/schema";
 import {
   definitionLimitMessage,
@@ -77,7 +78,6 @@ import {
 } from "./application-composition-regions";
 import { FORM_CONTAINER_KEY, NESTED_FORM_REASON } from "./application-composition-forms";
 import type { StudioPlacementDescriber } from "./semantic-outline";
-import { isStudioDraftSnapshot } from "./draft-snapshot";
 
 const blockCounts = new WeakMap<ImmutablePlatformBlockCatalogue, WeakMap<SourceItem, number>>();
 const countBlocks = (catalogue: ImmutablePlatformBlockCatalogue, items: readonly SourceItem[]) => {

@@ -15,9 +15,9 @@ import {
   type SourceZonedData,
   type StoredReservations,
   type SourcePageZone,
+  isStudioDraftSnapshot,
 } from "@vortex/platform/schema";
 import type { StudioCompositionDestination } from "./application-composition-commands";
-import { isStudioDraftSnapshot } from "./draft-snapshot";
 import type { StudioPlacementDescriber } from "./semantic-outline";
 
 /** One compiled zone of the page (a content slot, or the default zone): its items, exactly as the published definition holds them. */
@@ -328,7 +328,7 @@ export const storedDataProblem = (
       // The content of a history snapshot is the parsed source already: it is judged against the
       // catalogue and cannot read back differently.
       if (isStudioDraftSnapshot(items)) {
-        validateStoredZone(catalogue, zone, reservations, true);
+        validateStoredZone(catalogue, zone, reservations);
         continue;
       }
       if (zoneJson(validateStoredZone(catalogue, zone, reservations)) !== zoneJson(zone))

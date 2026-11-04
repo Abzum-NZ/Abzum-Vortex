@@ -1,4 +1,5 @@
 import { definitionLimits } from "../definition-limits";
+import { isStudioDraftSnapshot } from "./draft-snapshot";
 import {
   isSourceItemShape,
   readSourceItem,
@@ -363,17 +364,18 @@ const validateTree = (
 
 /**
  * Parses and judges one raw stored slot `{ items, order }`; it throws a located refusal. The items
- * of a history snapshot (`snapshot`) are already the parsed source (the draft is parsed when it
+ * of a history snapshot are already the parsed source (the draft is parsed when it
  * is loaded and at every command), so they are judged against the catalogue and not parsed again.
  */
 export const validateStoredZone = (
   catalogue: ImmutablePlatformBlockCatalogue,
   candidate: unknown,
   reservations: StoredReservations = new Map(),
-  snapshot = false,
 ): StoredZone => {
   const zone = closed(candidate, ["items", "order"], []);
-  const items = snapshot ? (zone.items as SourceItem[]) : parseItems(catalogue, zone.items, []);
+  const items = isStudioDraftSnapshot(zone.items)
+    ? (zone.items as SourceItem[])
+    : parseItems(catalogue, zone.items, []);
   const order =
     zone.order === undefined
       ? undefined

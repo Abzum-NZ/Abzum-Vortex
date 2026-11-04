@@ -8,13 +8,13 @@ import {
   type SourceItem,
   type SourcePageData,
   isRecord,
+  isStudioDraftSnapshot,
 } from "@vortex/platform/schema";
 import {
   studioFlowLabel,
   studioFlowTaskEntries,
   type StudioSemanticSelection,
 } from "./semantic-selection";
-import { isStudioDraftSnapshot } from "./draft-snapshot";
 
 /** The current Application draft, whether supplied by history or a direct source load. */
 export type StudioSelectionInspectorDraft = Readonly<{

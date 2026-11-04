@@ -10,8 +10,8 @@ import {
   type ImmutablePlatformBlockCatalogue,
   type SourceItem,
   type SourcePageData,
+  isStudioDraftSnapshot,
 } from "@vortex/platform/schema";
-import { isStudioDraftSnapshot } from "./draft-snapshot";
 
 /**
  * The editable Application source, its permanent Definition root identity and the block catalogue
