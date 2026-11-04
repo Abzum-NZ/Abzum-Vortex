@@ -110,7 +110,11 @@ export function StudioCanvasView({
     return (
       <CanvasEmpty
         title={model.owner === "layout" ? "Layout unavailable" : "Page unavailable"}
-        description="Choose another page to keep working."
+        description={
+          model.owner === "layout"
+            ? "Choose another layout or page to keep working."
+            : "Choose another page to keep working."
+        }
       />
     );
   // A guided page has one canvas per step: the tabs choose the step, nothing else picks a zone.

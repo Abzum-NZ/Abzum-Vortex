@@ -362,8 +362,8 @@ export const useStudioCanvasModel = (
     // version that disagrees with its source, or stored data the validator should have refused, is
     // a platform fault.
     if (readOnlyCause.startsWith("STUDIO_CANVAS_COMPILED_PENDING"))
-      console.info(`[studio] canvas page ${area} waits for its compiled version`, readOnlyCause);
-    else console.error(`[studio] canvas page ${area} is read-only`, readOnlyCause);
+      console.info(`[studio] canvas ${area} waits for its compiled version`, readOnlyCause);
+    else console.error(`[studio] canvas ${area} is read-only`, readOnlyCause);
   }, [readOnlyCause]);
   const shown = useMemo(
     () => (data === undefined ? undefined : puckDataForBreakpoint(data, breakpoint)),

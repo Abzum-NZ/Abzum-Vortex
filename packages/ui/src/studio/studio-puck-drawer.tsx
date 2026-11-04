@@ -281,7 +281,7 @@ export function StudioBlocksPanel() {
     return (
       <BlocksEmpty
         title="Blocks unavailable"
-        description="Blocks can be added once this page has a compiled version, which follows shortly after your latest change is saved."
+        description={`Blocks can be added once this ${palette.owner} has a compiled version, which follows shortly after your latest change is saved.`}
       />
     );
   if (palette.targets.kind !== "available")
@@ -293,7 +293,7 @@ export function StudioBlocksPanel() {
             ? palette.targets.reason === "published"
               ? PUBLISHED_PAGE_ADD_REASON
               : "Blocks can't be added to this kind of page in Studio yet."
-            : "This page is not in the current draft."
+            : `This ${palette.owner} is not in the current draft.`
         }
       />
     );

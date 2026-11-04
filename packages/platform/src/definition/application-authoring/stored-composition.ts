@@ -31,7 +31,7 @@ import type { ApplicationSourceDocument } from "../application-source-contracts"
 type StoredZone = { items: SourceItem[]; order: SourceSlotOrder | undefined };
 type Location = readonly (string | number)[];
 /** Shell placements whose named slot is reserved for page content and must stay empty. */
-type StoredReservations = ReadonlyMap<string, ReadonlySet<string>>;
+export type StoredReservations = ReadonlyMap<string, ReadonlySet<string>>;
 
 const settingReasons: Readonly<Record<string, string>> = {
   required_value: "needs a value",

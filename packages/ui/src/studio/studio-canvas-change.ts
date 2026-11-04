@@ -37,6 +37,7 @@ import {
 import { pageDataJson } from "./studio-canvas-data";
 import {
   studioDuplicateRefusal,
+  studioOutletHostRefusal,
   studioPlacementReferrers,
   studioRemovalRuleRefusal,
 } from "./studio-canvas-permissions";
@@ -159,6 +160,11 @@ export const applyPageDataChange = (
     const rule =
       removed.size === 0 ? undefined : studioRemovalRuleRefusal(catalogue, current, removed);
     if (rule !== undefined) return { kind: "refused", message: rule };
+    // A layout block that holds a content outlet stays until the outlet is retargeted.
+    for (const alias of removed) {
+      const host = studioOutletHostRefusal(current, alias);
+      if (host !== undefined) return { kind: "refused", message: host };
+    }
     for (const alias of removed) {
       const users = studioPlacementReferrers(current, alias, removed);
       if (users.length > 0)

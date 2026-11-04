@@ -13,6 +13,7 @@ import {
   type ImmutablePlatformBlockCatalogue,
   type SourceItem,
   type SourceZonedData,
+  type StoredReservations,
   type SourcePageZone,
 } from "@vortex/platform/schema";
 import type { StudioCompositionDestination } from "./application-composition-commands";
@@ -318,7 +319,7 @@ export const storedDataProblem = (
   catalogue: ImmutablePlatformBlockCatalogue,
   data: SourceZonedData,
   /** A layout's content slots: the targets that stay empty for page content. */
-  reservations?: Parameters<typeof validateStoredZone>[2],
+  reservations?: StoredReservations,
 ): string | undefined => {
   try {
     for (const [key, items] of sourcePageZones(data)) {

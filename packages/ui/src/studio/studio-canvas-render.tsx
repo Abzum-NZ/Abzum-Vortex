@@ -226,11 +226,28 @@ function CanvasBlock({
     controls: publishControl,
     grid,
     contentTargets,
+    frame,
   } = useStudioCanvasChannel();
   const id = typeof props.id === "string" ? props.id : "";
   // The slots of this block that hold a page's content (a layout on the canvas), each with the
   // placeholder drawn in place of a slot Puck would let a block be dropped into.
   const reserved = Object.hasOwn(contentTargets, id) ? contentTargets[id] : undefined;
+  // The menu a layout's navigation block draws is the application's, as in the page's frame: the
+  // frame's own render gives it through the renderer's metadata, which the canvas's blocks lack.
+  const navigation = frame?.layout === true ? frame.frame?.navigation : undefined;
+  const pageId = frame?.layout === true ? frame.frame?.pageId : undefined;
+  const menuMetadata = useMemo(
+    () =>
+      navigation === undefined
+        ? undefined
+        : { projectedNavigation: navigation, resolvePageHref: () => "#", currentPageId: pageId },
+    [navigation, pageId],
+  );
+  const puckMetadata = (props.puck as { metadata?: Record<string, unknown> } | undefined)?.metadata;
+  const blockMetadata = useMemo(
+    () => (menuMetadata === undefined ? undefined : { ...puckMetadata, ...menuMetadata }),
+    [puckMetadata, menuMetadata],
+  );
   const slotNodes = useMemo(
     () =>
       reserved === undefined
@@ -353,6 +370,8 @@ function CanvasBlock({
     current && release !== undefined && readsRecords,
   );
   if (slotNodes !== undefined) drawn.slotNodes = slotNodes;
+  if (blockMetadata !== undefined)
+    drawn.puck = { ...(props.puck as object), metadata: blockMetadata };
   // A control that publishes a page parameter reports its chosen value, so the blocks bound to it
   // are read again for that value, exactly as the running page reads them for its address.
   if (

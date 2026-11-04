@@ -354,7 +354,7 @@ export const pageCompiledSlotsFor = (
       );
       if (compiledShell.length !== 1)
         throw new Error("Studio compiled page layout does not match its authored draft");
-      const layout = compiledShell[0]!.layout.content as unknown as CompiledSlot;
+      const layout: CompiledSlot = compiledShell[0]!.layout.content;
       assertCompiledSlotMatches(sourceShell.layout.content, layout);
       slots[shellLayoutZone] = layout;
     }

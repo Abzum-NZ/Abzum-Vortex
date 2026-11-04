@@ -1,11 +1,7 @@
 "use client";
 
 import { createUsePuck, type PuckContext } from "@puckeditor/core";
-import {
-  compiledItemSettings,
-  type CompiledLayout,
-  type ShellOutletLocation,
-} from "@vortex/platform/schema";
+import { compiledItemSettings, type ShellOutletLocation } from "@vortex/platform/schema";
 import {
   useEffect,
   useLayoutEffect,
@@ -45,7 +41,7 @@ const LAYOUT_FRAME: PagePuckRendererProps["composition"] = {
   composition: {
     root: { props: { vortex: { slotOrders: { content: { tablet: [], phone: [] } } } } },
     content: [],
-  } as unknown as CompiledLayout,
+  },
 };
 const LAYOUT_OUTLET: ShellOutletLocation = { kind: "root" };
 
