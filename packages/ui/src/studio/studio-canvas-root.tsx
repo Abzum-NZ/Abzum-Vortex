@@ -28,7 +28,7 @@ import { studioCanvasMetadata, useStudioCanvasChannel } from "./studio-canvas-me
 import { studioCanvasVisible, useStudioCanvasView } from "./studio-canvas-scale";
 import { useStudioScreen } from "./studio-canvas-screen";
 import { studioPuckIframeCss } from "./studio-puck-style";
-import { useStudioCanvas } from "./studio-puck-provider";
+import { useStudioCanvas, useStudioCanvasDragging } from "./studio-puck-provider";
 
 const resolvePageHref = () => "#";
 
@@ -94,7 +94,7 @@ function CanvasSlot({
   // A layout's blocks are added with Add; only a page's blocks drop onto the canvas.
   const canDrop = usePuckSelector((state) => state.getPermissions().insert);
   // Studio's own mark of a drag in progress, from Puck's public state, for the empty-slot rules.
-  const dragging = usePuckSelector((state) => state.appState.ui.isDragging);
+  const dragging = useStudioCanvasDragging();
   const empty = usePuckSelector((state) => {
     const data = state.appState.data;
     const list =
@@ -338,34 +338,43 @@ export function StudioCanvasIframe({
   // found by Studio's own attribute on its wrapper. It may not be drawn yet (its slots wait), and
   // the slots around it are drawn after the scroll with heights that were estimates, so it is kept
   // in view for a few seconds, until the person scrolls or acts anywhere in Studio (the frame, the
-  // well's scrollbar, a panel) or begins a drag. A block chosen by a click in the canvas is already
-  // where the person is looking and is not scrolled to.
+  // well's scrollbar, a panel) or begins a drag: that also cancels the wait for a block that is not
+  // drawn yet. A block chosen by a click in the canvas is already where the person is looking and
+  // is not scrolled to (the click's block is the one under the pointer, found by Studio's attribute).
   const selectedId = usePuckSelector((state) => state.selectedItem?.props.id);
-  const dragging = usePuckSelector((state) => state.appState.ui.isDragging);
+  const dragging = useStudioCanvasDragging();
   const draggingRef = useRef(dragging);
   draggingRef.current = dragging;
   const stopFollowing = useRef<(() => void) | null>(null);
-  const lastCanvasPointer = useRef(0);
+  const clickedBlock = useRef<string | null>(null);
   useEffect(() => {
     if (dragging) stopFollowing.current?.();
   }, [dragging]);
   useEffect(() => {
     if (frameDocument === undefined) return;
-    const note = () => {
-      lastCanvasPointer.current = performance.now();
+    const note = (event: PointerEvent) => {
+      const hit = frameDocument
+        .elementsFromPoint(event.clientX, event.clientY)
+        .find((element) => element.hasAttribute("data-vortex-placement-id"));
+      clickedBlock.current = hit?.getAttribute("data-vortex-placement-id") ?? null;
     };
     frameDocument.addEventListener("pointerdown", note, { capture: true, passive: true });
     return () => frameDocument.removeEventListener("pointerdown", note, { capture: true });
   }, [frameDocument]);
   useEffect(() => {
     if (frameDocument === undefined || selectedId === undefined) return;
-    if (performance.now() - lastCanvasPointer.current < 1000) return;
+    const clicked = clickedBlock.current;
+    clickedBlock.current = null;
+    if (clicked === selectedId) return;
     let frame = 0;
     let tries = 0;
+    let stopped = false;
     let observer: MutationObserver | undefined;
     let timer = 0;
     const interactions = ["wheel", "pointerdown", "keydown", "touchstart"] as const;
     const stop = () => {
+      stopped = true;
+      cancelAnimationFrame(frame);
       observer?.disconnect();
       clearTimeout(timer);
       for (const name of interactions) {
@@ -374,9 +383,16 @@ export function StudioCanvasIframe({
       }
       stopFollowing.current = null;
     };
+    // Listening starts at once, so a scroll or a drag while the block is not drawn yet cancels it.
+    stopFollowing.current = stop;
+    for (const name of interactions) {
+      frameDocument.addEventListener(name, stop, { passive: true });
+      document.addEventListener(name, stop, { passive: true });
+    }
     const find = () =>
       frameDocument.querySelector(`[data-vortex-placement-id="${CSS.escape(selectedId)}"]`);
     const scroll = () => {
+      if (stopped || draggingRef.current) return;
       const block = find();
       if (block === null) {
         if (tries++ < 600) frame = requestAnimationFrame(scroll);
@@ -389,17 +405,9 @@ export function StudioCanvasIframe({
         if (!draggingRef.current) find()?.scrollIntoView({ block: "nearest" });
       });
       observer.observe(frameDocument.body, { childList: true, subtree: true });
-      stopFollowing.current = stop;
-      for (const name of interactions) {
-        frameDocument.addEventListener(name, stop, { passive: true });
-        document.addEventListener(name, stop, { passive: true });
-      }
     };
     frame = requestAnimationFrame(scroll);
-    return () => {
-      cancelAnimationFrame(frame);
-      stop();
-    };
+    return stop;
   }, [frameDocument, selectedId]);
   // While blocks are edited the canvas is a picture of the page, outside Studio's Tab path (blocks
   // are chosen in the Outline); while grids are arranged its column controls need the keyboard.
@@ -516,10 +524,10 @@ export function StudioCanvasIframe({
         if (element === null) return;
         const noted = { element, top: element.getBoundingClientRect().top };
         anchored.current = noted;
-        // A slot that does not come to be drawn (its block left) must not leave its note behind.
-        window.setTimeout(() => {
+        // The slot that drew settles in the commit that follows; a note a frame old is stale.
+        requestAnimationFrame(() => {
           if (anchored.current === noted) anchored.current = null;
-        }, 1000);
+        });
       },
       settle: () => {
         const was = anchored.current;
@@ -547,12 +555,16 @@ export function StudioCanvasIframe({
     // The page or the well changes size with no scroll (a block removed or restored, another screen
     // size, a slot drawn shorter than its placeholder): slots are looked at again.
     const resize = new ResizeObserver(tell);
+    let frameResize: ResizeObserver | undefined;
     if (well !== null) resize.observe(well);
     const drawn = new MutationObserver(tell);
     if (frameDocument !== undefined) {
       drawn.observe(frameDocument.body, { childList: true, subtree: true });
-      // A screen size change resizes the frame itself and reflows the page without a new node.
-      resize.observe(frameDocument.documentElement);
+      // A screen size change resizes the frame itself and reflows the page without a new node: the
+      // frame's own window delivers it (an observer of another document's realm is not relied on).
+      const FrameResize = frameDocument.defaultView?.ResizeObserver;
+      frameResize = FrameResize === undefined ? undefined : new FrameResize(tell);
+      frameResize?.observe(frameDocument.documentElement);
     }
     // The frame is laid out or scaled after the first draw: slots are looked at again.
     tell();
@@ -561,6 +573,7 @@ export function StudioCanvasIframe({
       well?.removeEventListener("scroll", tell);
       frameDocument?.removeEventListener("scroll", tell);
       resize.disconnect();
+      frameResize?.disconnect();
       drawn.disconnect();
     };
   }, [view.well, view.scale, frameDocument, interactive]);

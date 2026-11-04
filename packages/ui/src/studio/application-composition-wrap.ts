@@ -81,7 +81,8 @@ const resolveWrap = (
     return { kind: "unsupported" } as const;
   validateRegion(catalogue, region);
   const places = addPlaces(catalogue, source, owner);
-  if (typeof places === "string") return { kind: places } as const;
+  if (typeof places === "string")
+    return { kind: places === "published" ? "unsupported" : places } as const;
   const place = places.find(
     (candidate) =>
       candidate.region.shell === region.shell &&

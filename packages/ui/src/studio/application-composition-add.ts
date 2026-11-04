@@ -71,6 +71,7 @@ import {
   plainSource,
   plainSettings,
   settingsOf,
+  PUBLISHED_PAGE_ADD_REASON,
   publishedPage,
 } from "./application-composition-regions";
 import { FORM_CONTAINER_KEY, NESTED_FORM_REASON } from "./application-composition-forms";
@@ -100,7 +101,7 @@ export const addPlaces = (
   source: ApplicationSourceDocument,
   owner: StudioCompositionOwner,
   describePlacement?: StudioPlacementDescriber,
-): AddPlace[] | "invalid" | "unsupported" => {
+): AddPlace[] | "invalid" | "unsupported" | "published" => {
   // Both owners are nonpublic and authenticated; the surface grants no authority.
   const discovery = createStudioDiscoveryAdapter({ catalogue, surface: { kind: "authenticated" } });
   type Area = {
@@ -132,7 +133,8 @@ export const addPlaces = (
     const pages = source.body.pages.filter((page) => page.id === owner.pageAlias);
     const page = pages.length === 1 ? pages[0]! : undefined;
     if (page === undefined) return "invalid";
-    if (page.type === "guided_form" || publishedPage(source, page)) return "unsupported";
+    if (publishedPage(source, page)) return "published";
+    if (page.type === "guided_form") return "unsupported";
     const shellAlias = sourcePageShell(page.composition);
     const shell = source.body.shells.find((candidate) => candidate.id === shellAlias);
     const pageRegions = regions(source).filter(
@@ -302,9 +304,11 @@ export const describeStudioCompositionAddTargets = (
       owner,
       describePlacement,
     );
-    return typeof places === "string"
-      ? { kind: places }
-      : { kind: "available", targets: Object.freeze(places.map((place) => place.target)) };
+    return places === "published"
+      ? { kind: "unsupported", reason: "published" }
+      : typeof places === "string"
+        ? { kind: places }
+        : { kind: "available", targets: Object.freeze(places.map((place) => place.target)) };
   } catch (error) {
     console.error("[studio] the places for a new block could not be read", error);
     return { kind: "invalid" };
@@ -438,6 +442,7 @@ export const applyAdd = (
   const source = applicationSourceDocumentSchema.parse(current.source);
   const destination = parseDestination(input.destination);
   const places = addPlaces(catalogue, source, parseOwner(input.owner));
+  if (places === "published") return { kind: "refused", reason: PUBLISHED_PAGE_ADD_REASON };
   if (typeof places === "string") return { kind: places };
   const place = places.find(
     (candidate) =>

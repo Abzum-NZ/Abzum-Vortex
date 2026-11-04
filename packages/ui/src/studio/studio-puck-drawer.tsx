@@ -16,6 +16,7 @@ import {
 import type { BlockPaletteGroup } from "@vortex/platform/schema";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "../components/collapsible";
 import { PALETTE_GROUP_TITLES } from "../palette-groups";
+import { PUBLISHED_PAGE_ADD_REASON } from "./application-composition-regions";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "../components/empty";
 import { Alert, AlertDescription } from "../components/alert";
 import { Button } from "../components/button";
@@ -290,7 +291,9 @@ export function StudioBlocksPanel() {
         title="Blocks unavailable"
         description={
           palette.targets.kind === "unsupported"
-            ? "Blocks can't be added to this kind of page in Studio yet."
+            ? palette.targets.reason === "published"
+              ? PUBLISHED_PAGE_ADD_REASON
+              : "Blocks can't be added to this kind of page in Studio yet."
             : "This page is not in the current draft."
         }
       />

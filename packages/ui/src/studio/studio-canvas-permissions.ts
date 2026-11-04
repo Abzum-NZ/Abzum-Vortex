@@ -9,6 +9,7 @@ import {
 import {
   itemSlots,
   regionRemovalCause,
+  PUBLISHED_PAGE_ADD_REASON,
   publishedPage,
   removalRule,
   regions,
@@ -82,10 +83,6 @@ const REMOVAL_RULE_REASONS = {
   public_page: "This page is published at a public address, so its blocks can't be removed.",
   repeating_slot: "This block sits in a repeating area and can't be removed here.",
 } as const;
-
-/** Why a page published to people outside the application takes no new block (a copy, a drop, Add). */
-export const PUBLISHED_PAGE_ADD_REASON =
-  "This page is published, so blocks can't be added or copied on it here.";
 
 /**
  * Why a block cannot be removed from where it sits (the page's kind, a public address, a repeating

@@ -1,5 +1,6 @@
 import {
   type ImmutablePlatformBlockCatalogue,
+  isRepeatableSlotIdentity,
   applicationRootIdSchema,
   applicationSourceDocumentSchema,
   organizationIdSchema,
@@ -120,7 +121,17 @@ export const publishedPage = (
 ): boolean =>
   page.type === "public" ||
   source.body.public_addresses.some((address) => address.page === page.key) ||
-  (source.body.experiences?.some((experience) => experience.page === page.key) ?? false);
+  experiencePage(source, page);
+
+/** Whether an experience opens the page (it names its page by key). */
+export const experiencePage = (
+  source: ApplicationSourceDocument,
+  page: ApplicationSourceDocument["body"]["pages"][number],
+): boolean => source.body.experiences?.some((experience) => experience.page === page.key) ?? false;
+
+/** Why a page published outside the application takes no new block (a copy, a drop, Add). */
+export const PUBLISHED_PAGE_ADD_REASON =
+  "This page is published, so blocks can't be added or copied on it here.";
 
 /**
  * Why no block of a region can be removed, or undefined: a page removes only from its editable
@@ -644,9 +655,14 @@ export const settingsOf = (item: SourceItem): Record<string, unknown> =>
  * or the repeating declaration whose key and an underscore begin it (a tab is stored as
  * `tab_<key>`), as the platform reader splits them.
  */
-export const slotDeclaration = (
-  release: PlatformBlockRelease | undefined,
+export const slotDeclaration = <Slot extends { key: string; repeats?: unknown }>(
+  release: { slots: readonly Slot[] } | undefined,
   key: string,
-): PlatformBlockRelease["slots"][number] | undefined =>
-  release?.slots.find((entry) => entry.key === key) ??
-  release?.slots.find((entry) => entry.repeats !== undefined && key.startsWith(`${entry.key}_`));
+): Slot | undefined =>
+  release?.slots.find((entry) => entry.repeats === undefined && entry.key === key) ??
+  release?.slots.find(
+    (entry) =>
+      entry.repeats !== undefined &&
+      key.startsWith(`${entry.key}_`) &&
+      isRepeatableSlotIdentity(entry.key, key.slice(entry.key.length + 1)),
+  );

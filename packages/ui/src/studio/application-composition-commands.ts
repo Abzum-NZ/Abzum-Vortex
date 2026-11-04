@@ -529,28 +529,12 @@ const resolveRemoval = (
   const { source, target, alias } = resolved;
   // A layout's blocks leave with everything inside them; a page removes only from its editable
   // content (the one rule, shared with the canvas's permissions).
-  // Inside a repeating area (a tab) a block cannot leave either: found along the steps to it.
+  // The steps to the block are walked once: inside a repeating area (a tab) a block cannot leave
+  // either, and a step that is not in the manifest is a mismatch (said after the rule).
   let repeating = false;
-  let probe = target.region.zone;
-  for (const step of target.steps) {
-    const parent = probe.items.find((item) => item.props.id === step.parentAlias);
-    const child = parent === undefined ? undefined : itemSlots(catalogue, parent).get(step.slotKey);
-    if (parent === undefined || child === undefined) break;
-    repeating ||=
-      slotDeclaration(releaseFor(catalogue, parent), step.slotKey)?.repeats !== undefined;
-    probe = child;
-  }
-  const rule = removalRule(regionRemovalCause(source, target.region), repeating);
-  if (rule !== undefined) return { kind: "unsupported", reason: rule };
-  if (
-    releaseFor(catalogue, target.item) === undefined ||
-    !manifestMatches(catalogue, source, target.region.zone.items) ||
-    (target.region.parent !== undefined && !pinnedRelease(catalogue, source, target.region.parent))
-  )
-    return { kind: "unsupported", reason: "manifest_mismatch" };
-  validateRegion(catalogue, target.region);
-  if (studioLayoutOutletPlacementUses(source, alias).length > 0)
-    return { kind: "blocked", reason: "content_outlet" };
+  let mismatch = false;
+  let last:
+    { declaration: { required: boolean }; child: { items: readonly unknown[] } } | undefined;
   let zone = target.region.zone;
   for (const step of target.steps) {
     const parent = zone.items.find((item) => item.props.id === step.parentAlias);
@@ -559,12 +543,33 @@ const resolveRemoval = (
         ? undefined
         : slotDeclaration(releaseFor(catalogue, parent), step.slotKey);
     const child = parent === undefined ? undefined : itemSlots(catalogue, parent).get(step.slotKey);
-    if (declaration === undefined || child === undefined)
-      return { kind: "unsupported", reason: "manifest_mismatch" };
-    if (child.items === target.zone.items && declaration.required && child.items.length === 1)
-      return { kind: "blocked", reason: "required_slot" };
+    if (declaration === undefined || child === undefined) {
+      mismatch = true;
+      break;
+    }
+    repeating ||= declaration.repeats !== undefined;
+    last = { declaration, child };
     zone = child;
   }
+  const rule = removalRule(regionRemovalCause(source, target.region), repeating);
+  if (rule !== undefined) return { kind: "unsupported", reason: rule };
+  if (
+    mismatch ||
+    releaseFor(catalogue, target.item) === undefined ||
+    !manifestMatches(catalogue, source, target.region.zone.items) ||
+    (target.region.parent !== undefined && !pinnedRelease(catalogue, source, target.region.parent))
+  )
+    return { kind: "unsupported", reason: "manifest_mismatch" };
+  validateRegion(catalogue, target.region);
+  if (studioLayoutOutletPlacementUses(source, alias).length > 0)
+    return { kind: "blocked", reason: "content_outlet" };
+  if (
+    last !== undefined &&
+    last.child.items === target.zone.items &&
+    last.declaration.required &&
+    last.child.items.length === 1
+  )
+    return { kind: "blocked", reason: "required_slot" };
   const removed = sourceItemTree([target.item]);
   const aliases = new Set<string>();
   const releaseUses = new Map<string, number>();

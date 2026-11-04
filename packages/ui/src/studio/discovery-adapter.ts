@@ -1,5 +1,4 @@
 import {
-  isRepeatableSlotIdentity,
   platformBlockReleaseIdentity,
   projectPlatformCatalogueDiscovery,
   type BlockPaletteGroup,
@@ -12,6 +11,7 @@ import {
   type PlatformBlockReleaseSummary,
   type PlatformCatalogueDiscovery,
 } from "@vortex/platform/schema";
+import { slotDeclaration } from "./application-composition-regions";
 
 /**
  * Studio discovery: inspector choices for a selected component, projected from the same
@@ -284,18 +284,9 @@ export function createStudioDiscoveryAdapter(
       }
       case "slot": {
         const component = getComponent(target.parent);
-        // A fixed slot matches its own key exactly; a repeatable slot accepts each item key it
-        // can own, `${family}_${identity}` with an admissible identity.
-        const slot =
-          component?.slots.find(
-            (entry) => entry.repeats === undefined && entry.key === target.slotKey,
-          ) ??
-          component?.slots.find(
-            (entry) =>
-              entry.repeats !== undefined &&
-              target.slotKey.startsWith(`${entry.key}_`) &&
-              isRepeatableSlotIdentity(entry.key, target.slotKey.slice(entry.key.length + 1)),
-          );
+        // A fixed slot matches its own key exactly; a repeatable slot accepts each item key it can
+        // own (see `slotDeclaration`).
+        const slot = slotDeclaration(component, target.slotKey);
         return Object.freeze(
           (slot?.allowedChildren ?? []).filter((release) =>
             offered.has(platformBlockReleaseIdentity(release)),

@@ -28,7 +28,7 @@ import { studioCanvasVisible, useStudioCanvasView } from "./studio-canvas-scale"
 import { StudioCanvasIframe } from "./studio-canvas-root";
 import { useStudioScreen } from "./studio-canvas-screen";
 import { useStudioCanvasChannel } from "./studio-canvas-metadata";
-import { useStudioCanvas } from "./studio-puck-provider";
+import { useStudioCanvas, useStudioCanvasDragging } from "./studio-puck-provider";
 
 const usePuckSelector = createUsePuck();
 
@@ -100,7 +100,7 @@ function StudioActionBar({ id, type }: Readonly<{ id: string; type: string }>) {
   const { breakpoint, label: screenLabel } = useStudioScreen();
   const view = useStudioCanvasView();
   // While a block is dragged the bar lets the pointer through.
-  const dragging = usePuckSelector((state) => state.appState.ui.isDragging);
+  const dragging = useStudioCanvasDragging();
   // The page changed (an Undo, an insert above): a block may have moved without a new size.
   const data = usePuckSelector((state) => state.appState.data);
   const anchor = useRef<HTMLDivElement | null>(null);

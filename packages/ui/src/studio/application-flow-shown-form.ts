@@ -5,7 +5,7 @@ import {
   type SourceFlow,
 } from "@vortex/platform/schema";
 import { addPlaces, newBlockItem, placeItem } from "./application-composition-add";
-import { regions } from "./application-composition-regions";
+import { PUBLISHED_PAGE_ADD_REASON, regions } from "./application-composition-regions";
 import { sourceNames } from "./composition-references";
 import {
   freshBlockName,
@@ -38,7 +38,20 @@ export const studioFlowCanCreateShownForm = (
   catalogue: ImmutablePlatformBlockCatalogue,
   source: ApplicationSourceDocument,
   flow: SourceFlow,
-): boolean => flowFormPlace(catalogue, source, flow) !== undefined;
+): boolean => {
+  const found = flowFormPlace(catalogue, source, flow);
+  return found !== undefined && !("published" in found);
+};
+
+/** Whether the page the flow's button sits on is published, so its form cannot be created there. */
+export const studioFlowShownFormPublished = (
+  catalogue: ImmutablePlatformBlockCatalogue,
+  source: ApplicationSourceDocument,
+  flow: SourceFlow,
+): boolean => {
+  const found = flowFormPlace(catalogue, source, flow);
+  return found !== undefined && "published" in found;
+};
 
 const flowFormPlace = (
   catalogue: ImmutablePlatformBlockCatalogue,
@@ -48,6 +61,8 @@ const flowFormPlace = (
   const region = invokingRegion(source, flow);
   if (region?.page === undefined) return undefined;
   const places = addPlaces(catalogue, source, { kind: "page", pageAlias: region.page.id });
+  // A page published outside the application takes no new block: the form cannot be made there.
+  if (places === "published") return { published: true } as const;
   if (typeof places === "string") return undefined;
   const place = places.find(
     (candidate) =>
@@ -81,6 +96,7 @@ export const addStudioFlowShownForm = (
 ): StudioFlowShownFormResult => {
   const found = flowFormPlace(catalogue, source, flow);
   if (found === undefined) return { ok: false, reason: noPage };
+  if ("published" in found) return { ok: false, reason: PUBLISHED_PAGE_ADD_REASON };
   const { item } = newBlockItem(catalogue, source, found.release, {}, null, true);
   // The form is named for its flow, so the outline and the step picker show whose form it is.
   const alias = freshBlockName(`${flow.key}_form`, sourceNames(source));

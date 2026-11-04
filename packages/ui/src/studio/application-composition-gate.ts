@@ -15,6 +15,7 @@ import {
   workingCopy,
   workingItem,
   regionAfter,
+  experiencePage,
   publishedPage,
 } from "./application-composition-regions";
 import { studioFormChangeRefusal, studioFormShapeRefusal } from "./application-composition-forms";
@@ -40,7 +41,7 @@ const resolveGateTarget = (
   if (page !== undefined && publishedPage(source, page))
     return {
       kind: "refused",
-      reason: source.body.experiences?.some((entry) => entry.page === page.key)
+      reason: experiencePage(source, page)
         ? "This page belongs to an experience; its block permission gates cannot be changed here."
         : "A block on a public page cannot have its permission gate changed here.",
     } as const;
