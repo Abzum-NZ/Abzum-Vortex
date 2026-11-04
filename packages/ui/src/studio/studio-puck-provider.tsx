@@ -43,7 +43,7 @@ import type {
 } from "./application-composition-commands";
 import type { StudioCanvasFrame } from "./studio-canvas-projection";
 import { applyPageDataChange } from "./studio-canvas-change";
-import { applySettingsEdit, singleBlockPropsEdit } from "./studio-settings-edit";
+import { applySettingsEdit, settingKeysOf, singleBlockPropsEdit } from "./studio-settings-edit";
 import type { StudioSettingChoices } from "./studio-setting-model";
 import type { StudioPlacementDescriber } from "./semantic-outline";
 import {
@@ -370,16 +370,25 @@ export function StudioPuckProvider({
   // The name of the block Puck has just removed (its Delete key or the bar's Remove): once the
   // draft takes the removal, the Undo toast names it.
   const removing = useRef<string | null>(null);
-  // The field Puck's inspector has focused: typing into it is one run of edits, so one Undo.
-  const focusedField = useRef<string | null>(null);
+  // Typing into one field of one block is a run of edits, so one Undo; a new run starts when the
+  // focused field or the selected block changes.
+  const run = useRef({ focus: null as string | null, selector: "", count: 0 });
   const permitted = model.editable && input.canvasShown;
-  const latest = useRef({ input, model, permitted });
-  latest.current = { input, model, permitted };
+  // Settings are not per screen and do not need the page to be arrangeable: only a locked or
+  // hidden canvas stops them.
+  const settingsPermitted = !input.disabled && input.canvasShown;
+  const latest = useRef({ input, model, permitted, settingsPermitted });
+  latest.current = { input, model, permitted, settingsPermitted };
 
   // Every canvas change goes back through the definition: it is placed in the current draft and
   // validated before the history takes it. A refused change is shown as the draft still is.
   const change = useCallback((candidate: Data) => {
-    const { input: now, model: shown, permitted: allowed } = latest.current;
+    const {
+      input: now,
+      model: shown,
+      permitted: allowed,
+      settingsPermitted: settingsAllowed,
+    } = latest.current;
     if (synchronizing.current) return;
     const removed = removing.current;
     removing.current = null;
@@ -388,6 +397,41 @@ export function StudioPuckProvider({
       refusedRemoval.current = null;
       if (!puckItemsHold(candidate, refusedId)) {
         setResync((generation) => generation + 1);
+        return;
+      }
+    }
+    // One block's settings edited in the inspector: the settings command writes them, on every
+    // screen, and a run of edits to one field is one Undo step. A settings edit never falls
+    // through to the page write; only an edit that changes nothing but the slot order does.
+    if (settingsAllowed && now.pageAlias !== undefined && shown.data !== undefined) {
+      const edit = singleBlockPropsEdit(shown.data, candidate);
+      const keys = edit === undefined ? [] : settingKeysOf(edit.keys);
+      if (edit !== undefined && keys.length > 0) {
+        const context = now.compositionContext();
+        const outcome = applySettingsEdit(context, now.blockChoices, { ...edit, keys });
+        if (outcome.kind === "applied") {
+          setRefused(null);
+          const before = now.blockActions.mark();
+          now.onChange(
+            context.source,
+            outcome.source,
+            `settings:${edit.alias}:${keys.join(",")}:${run.current.count}`,
+          );
+          // A later change of any kind withdraws the removal's Undo offer.
+          if (now.blockActions.mark() !== before) toast.dismiss(REMOVED_TOAST);
+          return;
+        }
+        if (outcome.kind === "refused" || outcome.kind === "unsupported")
+          console.info("[studio] a setting change was refused:", outcome.kind);
+        else console.error("[studio] the settings command failed:", outcome.kind);
+        setResync((generation) => generation + 1);
+        setRefused({
+          area: shown.area,
+          message:
+            outcome.kind === "refused"
+              ? outcome.reason
+              : "That setting could not be changed. The block stays as it was.",
+        });
         return;
       }
     }
@@ -400,34 +444,6 @@ export function StudioPuckProvider({
     if (now.pageAlias === undefined || shown.data === undefined) return;
     // A block inserted from the drawer is added by Studio's add command, not by this edit.
     for (const id of inserted.current) if (puckItemsHold(candidate, id)) return;
-    // One block's settings edited in the inspector: the settings command writes them, and a run of
-    // edits to one field is one Undo step.
-    const edit = singleBlockPropsEdit(shown.data, candidate);
-    if (edit !== undefined) {
-      const context = now.compositionContext();
-      const outcome = applySettingsEdit(context, now.blockChoices, edit);
-      if (outcome?.kind === "applied") {
-        setRefused(null);
-        now.onChange(
-          context.source,
-          outcome.source,
-          `settings:${edit.alias}:${focusedField.current ?? edit.keys.join(",")}`,
-        );
-        return;
-      }
-      if (outcome !== undefined) {
-        console.info("[studio] a setting change was not applied:", outcome.kind);
-        setResync((generation) => generation + 1);
-        setRefused({
-          area: shown.area,
-          message:
-            outcome.kind === "refused"
-              ? outcome.reason
-              : "That setting could not be changed. The block stays as it was.",
-        });
-        return;
-      }
-    }
     const result = applyPageDataChange(
       shown.catalogue,
       now.source,
@@ -468,7 +484,10 @@ export function StudioPuckProvider({
   }, []);
 
   const onAction = useCallback((action: PuckAction, state: AppState, previous: AppState) => {
-    focusedField.current = state.ui.field.focus ?? null;
+    const focus = state.ui.field.focus ?? null;
+    const selector = JSON.stringify(state.ui.itemSelector ?? null);
+    if (focus !== run.current.focus || selector !== run.current.selector)
+      run.current = { focus, selector, count: run.current.count + 1 };
     // The screen changed: the model and metadata follow in the same render as Puck's own state.
     if (
       action.type === "setUi" &&
@@ -581,11 +600,11 @@ export function StudioPuckProvider({
       drag: permitted,
       duplicate: permitted && !full,
       delete: permitted,
-      edit: permitted,
+      edit: settingsPermitted,
       // The drawer's blocks drag onto the canvas; a layout's blocks are added with Add.
       insert: permitted && !full && input.palette?.owner !== "layout",
     }),
-    [permitted, full, input.palette?.owner],
+    [permitted, settingsPermitted, full, input.palette?.owner],
   );
   const empty = useMemo((): Data => ({ root: { props: {} }, content: [] }), []);
   const shown = model.shown ?? empty;

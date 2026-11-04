@@ -322,6 +322,8 @@ export const initialValue = (
 export type ControlProps = Readonly<{
   id: string;
   descriptionId?: string | undefined;
+  /** The control holds a value its field reports as a problem. */
+  invalid?: boolean | undefined;
   property: BlockPropertySchemaContract;
   value: SettingValue;
   onChange: (value: SettingValue) => void;

@@ -52,6 +52,7 @@ export * from "./application-reaction-condition-commands";
 export type { StudioCompileFailure, StudioPreviewNotRunnable } from "./compile-failure";
 export * from "./studio-setting-controls";
 export * from "./studio-setting-model";
+export { followFieldLabels } from "./follow-field-labels";
 export * from "./studio-setting-basic-controls";
 export * from "./studio-query-picker";
 export * from "./studio-grid-features";

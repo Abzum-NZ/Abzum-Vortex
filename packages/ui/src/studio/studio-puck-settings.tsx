@@ -2,6 +2,7 @@
 
 import {
   createContext,
+  useCallback,
   useContext,
   useEffect,
   useMemo,
@@ -17,6 +18,7 @@ import {
   type Field,
 } from "@puckeditor/core";
 import {
+  canonicalJson,
   componentSettingApplies,
   plainSettingValue,
   plainSourceSettingValue,
@@ -24,11 +26,11 @@ import {
   type BlockPropertySchemaContract,
   type PlatformBlockRelease,
 } from "@vortex/platform/schema";
-import { Button } from "../components/button";
+import { FieldGroup } from "../components/field";
 import { StudioField } from "./studio-field";
 import { studioGridFeaturesProperty } from "./studio-grid-features";
 import { splitMoreSettings } from "./studio-more-settings";
-import { StudioSettingControl } from "./studio-setting-controls";
+import { StudioSettingControl, StudioSettingNote } from "./studio-setting-controls";
 import {
   conditionalRequiredMessage,
   settleStudioSetting,
@@ -55,7 +57,13 @@ export type StudioSettingFieldsValue = Readonly<{
   disabled: boolean;
 }>;
 
-const StudioSettingFieldsContext = createContext<StudioSettingFieldsValue | null>(null);
+/** The settings the person has edited since the selected block was chosen (the label note reads them). */
+type StudioSettingFieldsContextValue = StudioSettingFieldsValue &
+  Readonly<{ scope: string; touched: ReadonlySet<string>; touch: (key: string) => void }>;
+
+const StudioSettingFieldsContext = createContext<StudioSettingFieldsContextValue | null>(null);
+
+const noKeys: ReadonlySet<string> = new Set();
 
 const usePuckSelector = createUsePuck();
 
@@ -104,70 +112,6 @@ type SettingFieldRenderProps = Readonly<{
   readOnly?: boolean | undefined;
 }>;
 
-/** A field's note under its control: what auto-size and full screen offer, and the label that follows the field. */
-function SettingNotes({
-  property,
-  properties,
-  values,
-  choices,
-  disabled,
-  onChange,
-}: Readonly<{
-  property: BlockPropertySchemaContract;
-  properties: readonly BlockPropertySchemaContract[];
-  values: StudioSettingValues;
-  choices: StudioSettingChoices;
-  disabled: boolean;
-  onChange: (next: SettingValue) => void;
-}>): ReactNode {
-  const fieldProperty = properties.find(
-    (candidate) => candidate.key === "field" && candidate.kind === "field_reference",
-  );
-  const fieldValue = fieldProperty === undefined ? undefined : values[fieldProperty.key];
-  const fieldReference = fieldValue?.kind === "field_reference" ? fieldValue.field : undefined;
-  const field =
-    fieldReference === undefined
-      ? undefined
-      : choices.fields.find((candidate) => candidate.reference === fieldReference);
-  if (property.key === "auto_size" && fieldProperty !== undefined) {
-    const label = values.label;
-    return (
-      <p className="text-sm text-muted-foreground">
-        {fieldReference !== undefined
-          ? "Available"
-          : `Not possible - ${(label?.kind === "text" ? label.value : "").trim() || "Column"} has no field to measure`}
-      </p>
-    );
-  }
-  if (property.key === "allow_full_screen")
-    return <p className="text-sm text-muted-foreground">Available</p>;
-  if (
-    property.key === "label" &&
-    property.kind === "text" &&
-    !property.required &&
-    property.defaultValue === undefined &&
-    fieldProperty !== undefined &&
-    field !== undefined
-  ) {
-    const label = values.label;
-    return label?.kind === "text" ? (
-      <Button
-        type="button"
-        variant="link"
-        size="sm"
-        disabled={disabled}
-        className="h-auto px-0 whitespace-normal text-left"
-        onClick={() => onChange(undefined)}
-      >
-        Use field label: {field.label}
-      </Button>
-    ) : (
-      <p className="text-sm text-muted-foreground">Uses field label: {field.label}</p>
-    );
-  }
-  return null;
-}
-
 /** The control of one declared setting as a Puck custom field. */
 function StudioSettingField({
   property,
@@ -180,6 +124,9 @@ function StudioSettingField({
 }>) {
   const context = useContext(StudioSettingFieldsContext);
   const getPuck = useGetPuck();
+  // The selected block's values, subscribed to: the label note and the total measure depend on the
+  // sibling settings.
+  const props = usePuckSelector((state) => state.selectedItem?.props) ?? noProps;
   // Input that is not valid yet: the control shows it and the field says why; Puck never sees it.
   const [held, setHeld] = useState<Readonly<{ value: SettingValue; problem: string }> | null>(null);
   const plain = field.value;
@@ -195,17 +142,18 @@ function StudioSettingField({
     [plainKey, property],
   );
   if (context === null) return null;
-  const { choices, disabled } = context;
-  const props = getPuck().selectedItem?.props ?? {};
+  const { choices, disabled, scope, touched, touch } = context;
   const values = studioTypedSettings(props, properties);
   const change = (next: SettingValue) => {
-    const settled = settleStudioSetting(
-      properties,
-      studioTypedSettings(getPuck().selectedItem?.props ?? {}, properties),
-      property.key,
-      next,
+    touch(property.key);
+    const now = studioTypedSettings(getPuck().selectedItem?.props ?? {}, properties);
+    const settled = settleStudioSetting(properties, now, property.key, next);
+    // Only what this change introduced holds the input: a problem the block already has, or a
+    // sibling that now needs a value, is not this field's.
+    const before = new Set(studioSettingProblems(now, properties, choices));
+    const problems = studioSettingProblems(settled, properties, choices).filter(
+      (problem) => !before.has(problem),
     );
-    const problems = studioSettingProblems(settled, properties, choices);
     if (problems.length > 0) {
       setHeld({ value: next, problem: problems.join(" ") });
       return;
@@ -237,6 +185,7 @@ function StudioSettingField({
           <StudioSettingControl
             id={control.id}
             descriptionId={control["aria-describedby"]}
+            invalid={control["aria-invalid"] === true}
             property={studioTotalMeasureProperty(property, properties, values, choices.fields)}
             value={shown}
             onChange={change}
@@ -245,26 +194,34 @@ function StudioSettingField({
           />
         )}
       </StudioField>
-      <SettingNotes
+      <StudioSettingNote
         property={property}
         properties={properties}
         values={values}
         choices={choices}
         disabled={disabled}
-        onChange={change}
+        scope={scope}
+        touched={touched}
+        onUseFieldLabel={() => change(undefined)}
       />
     </div>
   );
 }
 
+const noProps: Readonly<Record<string, unknown>> = {};
+
 /** A declared setting as a Puck field. */
 const settingField = (
+  release: PlatformBlockRelease,
   property: BlockPropertySchemaContract,
   properties: readonly BlockPropertySchemaContract[],
 ): Field =>
   ({
     type: "custom",
     label: property.label,
+    // Puck keeps a custom field's render per key: a release change in place must not keep the first
+    // release's declaration.
+    key: `${release.blockId}@${release.releaseVersion}:${property.key}`,
     render: (field: SettingFieldRenderProps) => (
       <StudioSettingField property={property} properties={properties} field={field} />
     ),
@@ -282,7 +239,7 @@ const studioSettingFields = (
   const fields: Record<string, Field> = {};
   for (const property of listed) {
     if (values !== undefined && !componentSettingApplies(property, values)) continue;
-    fields[property.key] = settingField(property, release.properties as never);
+    fields[property.key] = settingField(release, property, release.properties as never);
   }
   for (const [key, field] of Object.entries(base))
     if (fields[key] === undefined) fields[key] = { ...field, visible: false } as Field;
@@ -318,8 +275,7 @@ function StudioSettingFieldList({
               !property.required &&
               (value === undefined ||
                 (property.defaultValue !== undefined &&
-                  JSON.stringify(value) ===
-                    JSON.stringify(plainSettingValue(property.defaultValue))))
+                  canonicalJson(value) === canonicalJson(plainSettingValue(property.defaultValue))))
             );
           })
           .map((property) => property.key),
@@ -329,7 +285,7 @@ function StudioSettingFieldList({
   const controls = Object.entries(fields)
     .filter(([key, node]) => node !== undefined && release.properties.some((p) => p.key === key))
     .map(([key, node]) => ({ key, node: <div key={key}>{node}</div> }));
-  return <div className="space-y-4">{splitMoreSettings(controls, decided.current.keys)}</div>;
+  return <FieldGroup>{splitMoreSettings(controls, decided.current.keys)}</FieldGroup>;
 }
 
 /** The release a placed block's props name, when the catalogue holds it. */
@@ -375,7 +331,30 @@ export function StudioBlockSettingFields({
   choices,
   disabled,
 }: Readonly<StudioSettingFieldsValue>): ReactNode {
-  const value = useMemo(() => ({ choices, disabled }), [choices, disabled]);
+  const scope =
+    usePuckSelector((state) => state.selectedItem?.props.id as string | undefined) ?? "";
+  const [touched, setTouched] = useState<{ scope: string; keys: ReadonlySet<string> }>({
+    scope,
+    keys: noKeys,
+  });
+  const touch = useCallback(
+    (key: string) =>
+      setTouched((previous) => ({
+        scope,
+        keys: new Set([...(previous.scope === scope ? previous.keys : []), key]),
+      })),
+    [scope],
+  );
+  const value = useMemo(
+    () => ({
+      choices,
+      disabled,
+      scope,
+      touched: touched.scope === scope ? touched.keys : noKeys,
+      touch,
+    }),
+    [choices, disabled, scope, touched, touch],
+  );
   return (
     <StudioSettingFieldsContext.Provider value={value}>
       <Puck.Fields wrapFields={false} />

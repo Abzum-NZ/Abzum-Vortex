@@ -178,26 +178,33 @@ function StudioActionBar({ id, type }: Readonly<{ id: string; type: string }>) {
         }),
   };
 
-  // Place the bar on its block: counter-scaled, inside the visible part of the page frame.
+  // Place the bar on its block: counter-scaled, inside the visible part of the page frame. The
+  // shift and flip in force are held in a ref, so the effect does not depend on what it sets.
+  const barPlace = useRef({ shift: 0, below: false });
   useLayoutEffect(() => {
     const bar = anchor.current;
     // Studio's own element around the bar, as big as the block (it fills Puck's overlay of it).
     const block = bar?.closest("[data-vortex-canvas-overlay]");
     const shown = studioCanvasVisible(view);
-    if (bar == null || block == null || shown === undefined) return;
+    // A bar with no box (its overlay hidden, the frame not laid out) is not measured: its box does
+    // not move with the shift, so the shift would grow without end.
+    if (bar == null || block == null || shown === undefined || bar.getClientRects().length === 0)
+      return;
     const box = bar.getBoundingClientRect();
     const blockBox = block.getBoundingClientRect();
     // `box` includes the shift in force, so the unshifted edges are found first.
-    const left = box.left - shift;
-    const right = box.right - shift;
+    const left = box.left - barPlace.current.shift;
+    const right = box.right - barPlace.current.shift;
     let next = 0;
     if (right > shown.right) next = shown.right - right;
     if (left + next < shown.left) next = shown.left - left;
     const rounded = Math.round(next);
-    if (rounded !== shift) setShift(rounded);
     const flip = blockBox.top - box.height < shown.top;
-    if (flip !== below) setBelow(flip);
-  }, [id, view, scrolled, name, shift, below, data]);
+    if (rounded === barPlace.current.shift && flip === barPlace.current.below) return;
+    barPlace.current = { shift: rounded, below: flip };
+    setShift(rounded);
+    setBelow(flip);
+  }, [id, view, scrolled, name, data]);
   // The block resizes (a drag, a setting), or the page does (content above it arrives and moves it
   // down): the bar follows its edges.
   useEffect(() => {
@@ -419,8 +426,6 @@ function StudioPuckActionBar({ children }: Readonly<{ children?: ReactNode }>) {
 export const studioCanvasOverrides: Partial<Overrides> = {
   actionBar: StudioPuckActionBar,
   componentOverlay: StudioComponentOverlay,
-  // Each setting field draws its own label, hint and message (StudioField): Puck's label is not drawn.
-  fieldLabel: ({ children }) => <>{children}</>,
   iframe: StudioCanvasIframe,
   outline: StudioOutlineRegion,
 };

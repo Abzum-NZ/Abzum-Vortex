@@ -1,7 +1,7 @@
 "use client";
 
 import { Alert, AlertDescription } from "../components/alert";
-import { FieldGroup } from "../components/field";
+import { FieldDescription, FieldGroup } from "../components/field";
 import { StudioLimitNote, Reasoned, studioLimitReason } from "./studio-limit";
 import { useEffect, useRef, useState, type ReactElement } from "react";
 import {
@@ -27,7 +27,6 @@ import { Plus } from "lucide-react";
 import { StudioReferencePicker } from "./studio-reference-picker";
 import { StudioField } from "./studio-field";
 import { Label } from "../components/label";
-import { splitMoreSettings } from "./studio-more-settings";
 import { StudioEntryList, useStudioEntryKeys } from "./studio-entry-list";
 import { useConfirm } from "../components/confirm-dialog";
 import { StudioInspectorGroup } from "./studio-inspector-group";
@@ -69,7 +68,7 @@ const unsetLabel = (
 
 /** The control of one setting, by its declared kind. */
 export function StudioSettingControl(props: ControlProps): ReactElement {
-  const { id, property, value, onChange, choices, disabled, descriptionId } = props;
+  const { id, property, value, onChange, choices, disabled, descriptionId, invalid } = props;
   switch (property.kind) {
     case "text":
     case "url": {
@@ -88,6 +87,7 @@ export function StudioSettingControl(props: ControlProps): ReactElement {
             unset={unsetLabel(property, undefined)}
             disabled={disabled}
             aria-describedby={descriptionId}
+            aria-invalid={invalid || undefined}
             onChange={(next) => onChange(next === "" ? undefined : { kind: "text", value: next })}
           />
         );
@@ -103,6 +103,7 @@ export function StudioSettingControl(props: ControlProps): ReactElement {
         <Textarea
           id={id}
           aria-describedby={descriptionId}
+          aria-invalid={invalid || undefined}
           disabled={disabled}
           maxLength={property.maxLength}
           value={text}
@@ -112,6 +113,7 @@ export function StudioSettingControl(props: ControlProps): ReactElement {
         <Input
           id={id}
           aria-describedby={descriptionId}
+          aria-invalid={invalid || undefined}
           type={property.kind === "url" ? "url" : "text"}
           disabled={disabled}
           {...(property.kind === "text" ? { maxLength: property.maxLength } : {})}
@@ -128,6 +130,7 @@ export function StudioSettingControl(props: ControlProps): ReactElement {
         <Input
           id={id}
           aria-describedby={descriptionId}
+          aria-invalid={invalid || undefined}
           disabled={disabled}
           value={value?.kind === "icon" ? value.icon_key : ""}
           onChange={(event) =>
@@ -148,6 +151,7 @@ export function StudioSettingControl(props: ControlProps): ReactElement {
         <Switch
           id={id}
           aria-describedby={descriptionId}
+          aria-invalid={invalid || undefined}
           disabled={disabled}
           checked={value?.kind === "boolean" ? value.value : fallback}
           onCheckedChange={(checked) => onChange({ kind: "boolean", value: checked === true })}
@@ -165,6 +169,7 @@ export function StudioSettingControl(props: ControlProps): ReactElement {
             id={id}
             label={property.label}
             aria-describedby={descriptionId}
+            aria-invalid={invalid || undefined}
             disabled={disabled}
             value={value?.kind === "choice" ? value.value : defaultKey}
             options={property.options.map((option) => ({ value: option.key, label: option.label }))}
@@ -175,6 +180,7 @@ export function StudioSettingControl(props: ControlProps): ReactElement {
         <StudioOptionControl
           id={id}
           aria-describedby={descriptionId}
+          aria-invalid={invalid || undefined}
           disabled={disabled}
           value={value?.kind === "choice" ? value.value : ""}
           unset={unsetLabel(
@@ -191,6 +197,7 @@ export function StudioSettingControl(props: ControlProps): ReactElement {
         <StudioReferencePicker
           id={id}
           aria-describedby={descriptionId}
+          aria-invalid={invalid || undefined}
           disabled={disabled}
           value={value?.kind === "field_reference" ? value.field : ""}
           unset={
@@ -210,6 +217,7 @@ export function StudioSettingControl(props: ControlProps): ReactElement {
         <StudioReferencePicker
           id={id}
           aria-describedby={descriptionId}
+          aria-invalid={invalid || undefined}
           disabled={disabled}
           value={value?.kind === "total_reference" ? value.value : ""}
           unset={
@@ -232,6 +240,7 @@ export function StudioSettingControl(props: ControlProps): ReactElement {
         <StudioReferencePicker
           id={id}
           aria-describedby={descriptionId}
+          aria-invalid={invalid || undefined}
           disabled={disabled}
           value={value?.kind === "query_reference" ? value.query : ""}
           unset={unsetLabel(property, undefined)}
@@ -246,6 +255,7 @@ export function StudioSettingControl(props: ControlProps): ReactElement {
         <StudioReferencePicker
           id={id}
           aria-describedby={descriptionId}
+          aria-invalid={invalid || undefined}
           disabled={disabled}
           value={value?.kind === "page_reference" ? value.page : ""}
           unset={unsetLabel(property, undefined)}
@@ -260,6 +270,7 @@ export function StudioSettingControl(props: ControlProps): ReactElement {
         <StudioReferencePicker
           id={id}
           aria-describedby={descriptionId}
+          aria-invalid={invalid || undefined}
           disabled={disabled}
           value={value?.kind === "record_type_reference" ? value.record_type : ""}
           unset={unsetLabel(property, undefined)}
@@ -678,8 +689,6 @@ function ListControl({
 /** What a query asks for, in a picker row: its inputs by name, or nothing when it asks for none. */
 type SettingFieldsProps = Readonly<{
   idPrefix: string;
-  /** Optional settings that start in a closed "More settings" section. */
-  moreKeys?: ReadonlySet<string> | undefined;
   properties: readonly BlockPropertySchemaContract[];
   values: StudioSettingValues;
   onChange: (values: StudioSettingValues) => void;
@@ -741,7 +750,6 @@ export function StudioSettingFields(props: SettingFieldsProps): ReactElement {
 
 function SettingFields({
   idPrefix,
-  moreKeys,
   properties,
   values,
   onChange,
@@ -752,36 +760,6 @@ function SettingFields({
     id: idPrefix,
     keys: new Set(),
   });
-  // A field's optional label is an override. Matching text follows the field when it changes;
-  // other text stays authored, with an explicit way to return to the field's label.
-  const fieldProperty = properties.find(
-    (property) => property.key === "field" && property.kind === "field_reference",
-  );
-  const labelProperty = properties.find(
-    (property) =>
-      property.key === "label" &&
-      property.kind === "text" &&
-      !property.required &&
-      property.defaultValue === undefined,
-  );
-  const fieldValue = fieldProperty === undefined ? undefined : values[fieldProperty.key];
-  const field =
-    fieldValue?.kind === "field_reference"
-      ? choices.fields.find((candidate) => candidate.reference === fieldValue.field)
-      : undefined;
-  const label = labelProperty === undefined ? undefined : values[labelProperty.key];
-  const labelText = label?.kind === "text" ? label.value : undefined;
-  const fieldReference = fieldValue?.kind === "field_reference" ? fieldValue.field : undefined;
-  const [labelSource, setLabelSource] = useState({
-    idPrefix,
-    labelText,
-    fieldReference,
-    fieldLabel: field?.label,
-  });
-  if (labelSource.idPrefix !== idPrefix || labelSource.labelText !== labelText)
-    setLabelSource({ idPrefix, labelText, fieldReference, fieldLabel: field?.label });
-  const fieldChanged =
-    labelSource.fieldReference !== fieldReference || labelSource.fieldLabel !== field?.label;
   const useFieldLabel = () => {
     const result = { ...values };
     delete result.label;
@@ -789,103 +767,179 @@ function SettingFields({
   };
   return (
     <FieldGroup>
-      {splitMoreSettings(
-        properties.flatMap((property) => {
-          if (!componentSettingApplies(property, values)) return [];
-          const value = Object.hasOwn(values, property.key) ? values[property.key] : undefined;
-          const set = (next: SettingValue) => {
-            setTouched((previous) => ({
-              id: idPrefix,
-              keys: new Set([...(previous.id === idPrefix ? previous.keys : []), property.key]),
-            }));
-            onChange(settleStudioSetting(properties, values, property.key, next));
-          };
-          return {
-            key: property.key,
-            node: (
-              <div key={property.key} className="space-y-2" data-vortex-setting={property.key}>
-                <StudioField
-                  label={property.label}
-                  optional={!property.required}
-                  hint={property.help}
-                  error={
-                    property.required &&
-                    property.showWhen !== undefined &&
-                    property.defaultValue === undefined &&
-                    value === undefined
-                      ? conditionalRequiredMessage(property)
-                      : undefined
-                  }
-                >
-                  {(control) => (
-                    <StudioSettingControl
-                      id={control.id}
-                      descriptionId={control["aria-describedby"]}
-                      property={studioTotalMeasureProperty(
-                        property,
-                        properties,
-                        values,
-                        choices.fields,
-                      )}
-                      value={value}
-                      onChange={set}
-                      choices={choices}
-                      disabled={disabled}
-                    />
+      {properties.map((property) => {
+        if (!componentSettingApplies(property, values)) return null;
+        const value = Object.hasOwn(values, property.key) ? values[property.key] : undefined;
+        const set = (next: SettingValue) => {
+          setTouched((previous) => ({
+            id: idPrefix,
+            keys: new Set([...(previous.id === idPrefix ? previous.keys : []), property.key]),
+          }));
+          onChange(settleStudioSetting(properties, values, property.key, next));
+        };
+        return (
+          <div key={property.key} className="space-y-2" data-vortex-setting={property.key}>
+            <StudioField
+              label={property.label}
+              optional={!property.required}
+              hint={property.help}
+              error={
+                property.required &&
+                property.showWhen !== undefined &&
+                property.defaultValue === undefined &&
+                value === undefined
+                  ? conditionalRequiredMessage(property)
+                  : undefined
+              }
+            >
+              {(control) => (
+                <StudioSettingControl
+                  id={control.id}
+                  descriptionId={control["aria-describedby"]}
+                  property={studioTotalMeasureProperty(
+                    property,
+                    properties,
+                    values,
+                    choices.fields,
                   )}
-                </StudioField>
-                {property.key === "auto_size" && fieldProperty !== undefined && (
-                  <p className="text-sm text-muted-foreground">
-                    {fieldReference !== undefined
-                      ? "Available"
-                      : `Not possible - ${labelText?.trim() || "Column"} has no field to measure`}
-                  </p>
-                )}
-                {property.key === "allow_full_screen" && (
-                  <p className="text-sm text-muted-foreground">Available</p>
-                )}
-                {property === labelProperty && fieldProperty !== undefined && (
-                  <div className="space-y-1 text-sm text-muted-foreground">
-                    {field === undefined &&
-                    touched.id === idPrefix &&
-                    (touched.keys.has(fieldProperty.key) || touched.keys.has(property.key)) ? (
-                      <Alert variant="destructive">
-                        <AlertDescription>
-                          Choose a field offered by this data to resolve its label.
-                        </AlertDescription>
-                      </Alert>
-                    ) : field === undefined ? null : label?.kind === "text" ? (
-                      <>
-                        {fieldChanged && label.value !== field.label && (
-                          <Alert variant="destructive">
-                            <AlertDescription>
-                              The field changed since this label was set. Keep it as a custom label,
-                              or use &ldquo;{field.label}&rdquo;.
-                            </AlertDescription>
-                          </Alert>
-                        )}
-                        <Button
-                          type="button"
-                          variant="link"
-                          size="sm"
-                          disabled={disabled}
-                          className="h-auto px-0 whitespace-normal text-left"
-                          onClick={useFieldLabel}
-                        >
-                          Use field label: {field.label}
-                        </Button>
-                      </>
-                    ) : (
-                      <p className="text-muted-foreground">Uses field label: {field.label}</p>
-                    )}
-                  </div>
-                )}
-              </div>
-            ),
-          };
-        }),
-        moreKeys,
-      )}
+                  value={value}
+                  onChange={set}
+                  choices={choices}
+                  disabled={disabled}
+                  invalid={control["aria-invalid"] === true}
+                />
+              )}
+            </StudioField>
+            <StudioSettingNote
+              property={property}
+              properties={properties}
+              values={values}
+              choices={choices}
+              disabled={disabled}
+              scope={idPrefix}
+              touched={touched.id === idPrefix ? touched.keys : noKeys}
+              onUseFieldLabel={useFieldLabel}
+            />
+          </div>
+        );
+      })}
     </FieldGroup>
+  );
+}
+
+const noKeys: ReadonlySet<string> = new Set();
+
+/** A field's optional label is an override: the text setting named `label` beside a `field` reference. */
+const labelPropertyOf = (
+  properties: readonly BlockPropertySchemaContract[],
+): BlockPropertySchemaContract | undefined =>
+  properties.find(
+    (property) =>
+      property.key === "label" &&
+      property.kind === "text" &&
+      !property.required &&
+      property.defaultValue === undefined,
+  );
+
+type SettingNoteProps = Readonly<{
+  property: BlockPropertySchemaContract;
+  properties: readonly BlockPropertySchemaContract[];
+  values: StudioSettingValues;
+  choices: StudioSettingChoices;
+  disabled: boolean;
+  /** What the notes belong to (the selected block): a different scope starts them afresh. */
+  scope: string;
+  /** The keys of the settings edited since the scope began. */
+  touched: ReadonlySet<string>;
+  onUseFieldLabel: () => void;
+}>;
+
+/**
+ * The one copy of the notes under a setting's control: what auto-size and full screen offer, and
+ * the label that follows its field. Matching label text follows the field when it changes; other
+ * text stays authored, with an explicit way to return to the field's label.
+ */
+export function StudioSettingNote(props: SettingNoteProps): ReactElement | null {
+  const { property, properties, values, choices } = props;
+  const fieldProperty = properties.find(
+    (candidate) => candidate.key === "field" && candidate.kind === "field_reference",
+  );
+  if (property.key === "auto_size" && fieldProperty !== undefined) {
+    const label = values.label;
+    return (
+      <FieldDescription>
+        {values[fieldProperty.key]?.kind === "field_reference"
+          ? "Available"
+          : `Not possible - ${(label?.kind === "text" ? label.value : "").trim() || "Column"} has no field to measure`}
+      </FieldDescription>
+    );
+  }
+  if (property.key === "allow_full_screen") return <FieldDescription>Available</FieldDescription>;
+  if (fieldProperty !== undefined && property === labelPropertyOf(properties))
+    return <LabelNote {...props} fieldProperty={fieldProperty} />;
+  return null;
+}
+
+function LabelNote({
+  property,
+  values,
+  choices,
+  disabled,
+  scope,
+  touched,
+  onUseFieldLabel,
+  fieldProperty,
+}: SettingNoteProps & Readonly<{ fieldProperty: BlockPropertySchemaContract }>): ReactElement {
+  const fieldValue = values[fieldProperty.key];
+  const fieldReference = fieldValue?.kind === "field_reference" ? fieldValue.field : undefined;
+  const field =
+    fieldReference === undefined
+      ? undefined
+      : choices.fields.find((candidate) => candidate.reference === fieldReference);
+  const label = values[property.key];
+  const labelText = label?.kind === "text" ? label.value : undefined;
+  const [labelSource, setLabelSource] = useState({
+    scope,
+    labelText,
+    fieldReference,
+    fieldLabel: field?.label,
+  });
+  if (labelSource.scope !== scope || labelSource.labelText !== labelText)
+    setLabelSource({ scope, labelText, fieldReference, fieldLabel: field?.label });
+  const fieldChanged =
+    labelSource.fieldReference !== fieldReference || labelSource.fieldLabel !== field?.label;
+  return (
+    <div className="space-y-1 text-sm text-muted-foreground">
+      {field === undefined && (touched.has(fieldProperty.key) || touched.has(property.key)) ? (
+        <Alert variant="destructive">
+          <AlertDescription>
+            Choose a field offered by this data to resolve its label.
+          </AlertDescription>
+        </Alert>
+      ) : field === undefined ? null : label?.kind === "text" ? (
+        <>
+          {fieldChanged && label.value !== field.label && (
+            <Alert variant="destructive">
+              <AlertDescription>
+                The field changed since this label was set. Keep it as a custom label, or use
+                &ldquo;{field.label}&rdquo;.
+              </AlertDescription>
+            </Alert>
+          )}
+          <Button
+            type="button"
+            variant="link"
+            size="sm"
+            disabled={disabled}
+            className="h-auto px-0 whitespace-normal text-left"
+            onClick={onUseFieldLabel}
+          >
+            Use field label: {field.label}
+          </Button>
+        </>
+      ) : (
+        <FieldDescription>Uses field label: {field.label}</FieldDescription>
+      )}
+    </div>
   );
 }

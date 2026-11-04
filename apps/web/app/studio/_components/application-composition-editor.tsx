@@ -24,6 +24,7 @@ import {
   studioOutcomeText,
   studioSemanticSelectionKey,
   studioBlockChoices,
+  followFieldLabels,
   studioGridDataSettings,
   studioSettingProblems,
   StudioQueryPicker,
@@ -154,7 +155,11 @@ export function ApplicationCompositionEditor(props: Props) {
   const settings = useStudioDraftHeld(settingsInputsFor(settingsModel));
   const layout = useStudioDraftHeld(model.kind === "available" ? inputsFor(model.layout) : null);
   const [problemArea, setProblemArea] = useState<"settings" | "features">("settings");
-  const [message, setMessage] = useState("");
+  // A success is announced to a screen reader; a refusal stays on screen for everyone.
+  const [message, setMessage] = useState<Readonly<{ text: string; failed: boolean }>>({
+    text: "",
+    failed: false,
+  });
   const titleId = useId();
   const hintId = useId();
   const settingsId = useId();
@@ -221,29 +226,39 @@ export function ApplicationCompositionEditor(props: Props) {
     const result = props.onCommand(props.context, props.selection, next, merge);
     setMessage(
       result.kind === "applied"
-        ? done
-        : studioOutcomeText(result, "Nothing changed. Use a valid size or order."),
+        ? { text: done, failed: false }
+        : {
+            text: studioOutcomeText(result, "Nothing changed. Use a valid size or order."),
+            failed: true,
+          },
     );
     return result.kind === "applied";
   };
-  const changeQuery = (reference: string) =>
-    changeSettings({
-      query: reference === "" ? null : reference,
-      settings: {
-        ...settingsInputs.settings,
-        // The settings command decides whether the title follows the new data.
-        ...Object.fromEntries(
-          Object.entries(
-            studioGridDataSettings(
-              settingsModel.kind === "available" ? settingsModel.properties : [],
-              [...props.choices.queries, ...(props.choices.recordQueries ?? [])].find(
-                (query) => query.reference === reference,
-              ),
-            ),
-          ).filter(([key]) => key !== "title"),
+  const changeQuery = (reference: string) => {
+    const properties = settingsModel.kind === "available" ? settingsModel.properties : [];
+    const query = reference === "" ? null : reference;
+    const data = Object.fromEntries(
+      Object.entries(
+        studioGridDataSettings(
+          properties,
+          [...props.choices.queries, ...(props.choices.recordQueries ?? [])].find(
+            (candidate) => candidate.reference === reference,
+          ),
         ),
-      },
+      ).filter(([key]) => key !== "title"),
+    );
+    // A label copied from the old data's field follows the field the new data offers.
+    changeSettings({
+      query,
+      settings: followFieldLabels(
+        properties,
+        { ...settingsInputs.settings, ...data },
+        settingsInputs.settings,
+        studioBlockChoices(props.choices, query).fields,
+        choices.fields,
+      ),
     });
+  };
   chooseQuery.current = changeQuery;
   const changeLayout = (next: LayoutInputs) => {
     const described = layoutOf(next);
@@ -702,8 +717,13 @@ export function ApplicationCompositionEditor(props: Props) {
         </fieldset>
       </StudioInspectorGroup>
       <p role="status" aria-live="polite" className="sr-only">
-        {message}
+        {message.failed ? "" : message.text}
       </p>
+      {message.failed && (
+        <Alert variant="destructive">
+          <AlertDescription>{message.text}</AlertDescription>
+        </Alert>
+      )}
     </section>
   );
 }

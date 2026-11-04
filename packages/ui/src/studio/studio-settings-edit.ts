@@ -88,6 +88,10 @@ const changedKeys = (before: PuckItem, after: PuckItem): string[] => {
   });
 };
 
+/** The changed keys of an edit that are settings: the slot order (`vortex`) and `id` are not. */
+export const settingKeysOf = (keys: readonly string[]): string[] =>
+  keys.filter((key) => key !== "vortex" && key !== "id");
+
 /**
  * The one block whose own props differ between two states of the page, when nothing else about
  * the page differs (no block added, removed or moved): a settings edit in the inspector.
@@ -120,25 +124,25 @@ export const singleBlockPropsEdit = (
  * The source after the settings of one block changed: each changed value is written whole, the
  * settings that no longer apply are dropped and the ones that now apply take their declared
  * default, copied field labels follow their field, and the result goes through the one settings
- * command. `undefined` when a changed prop is not a setting or its value is not valid (the page
- * change then takes its ordinary route).
+ * command. A changed prop that is not a setting, or a value that does not read as its
+ * declaration, is refused as `invalid`: a settings edit never reaches the page write.
  */
 export const applySettingsEdit = (
   context: StudioCompositionContext,
   choices: (query: string | null) => StudioSettingChoices,
   edit: NonNullable<ReturnType<typeof singleBlockPropsEdit>>,
-): StudioCompositionCommandResult | undefined => {
+): StudioCompositionCommandResult => {
   const selection = { kind: "placement", placementAlias: edit.alias } as const;
   const model = describeStudioCompositionSettings(context, selection);
-  if (model.kind !== "available") return undefined;
+  if (model.kind !== "available") return { kind: model.kind };
   let values: StudioSettingValues = model.settings;
   for (const key of edit.keys) {
     const property = model.properties.find((candidate) => candidate.key === key);
-    if (property === undefined) return undefined;
+    if (property === undefined) return { kind: "invalid" };
     const plain = edit.props[key];
     const next =
       plain === undefined ? undefined : typedSourceSettingValue(plain, property, [key], []);
-    if (plain !== undefined && next === undefined) return undefined;
+    if (plain !== undefined && next === undefined) return { kind: "invalid" };
     values = settleStudioSetting(model.properties, values, key, next);
   }
   const fields = choices(model.query).fields;
