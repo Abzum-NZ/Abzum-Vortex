@@ -155,7 +155,7 @@ export type StudioCompositionOutcome = Readonly<{
   placementAlias?: string;
 }>;
 
-/** `refused` carries the one sentence that says why (`studioRemovalRefusal`). */
+/** `refused` carries the one sentence that says why (`studioRemovalRefusalAt`). */
 export type StudioCompositionRemovalModel =
   | Readonly<{ kind: "available"; placementAlias: string; willRemoveUnusedRelease: boolean }>
   | Readonly<{ kind: "refused"; reason: string }>

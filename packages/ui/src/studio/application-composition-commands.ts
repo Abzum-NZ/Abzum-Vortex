@@ -50,6 +50,7 @@ import {
   studioGridDataSettings,
 } from "./grid-features";
 import {
+  releaseKey,
   studioRemovalIndex,
   studioRemovalRefusalAt,
   type StudioRemovalIndex,
@@ -72,7 +73,6 @@ import {
   type SlotStep,
   type Target,
   refuse,
-  regions,
   releaseFor,
   itemSlots,
   itemReading,
@@ -570,8 +570,6 @@ type Removal = {
   /** Releases no block uses once the block and everything inside it leave the draft. */
   unusedReleases: readonly string[];
 };
-const releaseKey = (block: { block_id: string; release_version: string }): string =>
-  `${block.block_id}@${block.release_version}`;
 type ResolvedRemoval =
   | { kind: "available"; removal: Removal }
   | Exclude<StudioCompositionRemovalModel, { kind: "available" }>;
@@ -587,7 +585,8 @@ const resolveRemoval = (
   if (resolved === undefined) return { kind: "invalid" };
   const { source, target, alias } = resolved;
   // The steps to the block are walked once: inside a repeating area (a tab) a block cannot leave,
-  // a slot may need its last block, and a step that is not in the manifest is a mismatch.
+  // and a slot may need its last block. A step not in the manifest is a mismatch, said before any
+  // removal sentence (the canvas has no mismatch to show).
   let repeating = false;
   let mismatch = false;
   let last:
@@ -619,6 +618,8 @@ const resolveRemoval = (
   // A block's own flow bindings leave with it (see applyRemoval); the one removal refusal says
   // why it cannot leave, as for the action bar, the Delete key, the Outline and the canvas change.
   const index = known ?? studioRemovalIndex(catalogue, source);
+  // A block name used twice is not a draft this command edits, whatever else is said about it.
+  if (index.placed !== index.aliases.size) return { kind: "invalid" };
   const removed = sourceItemTree([target.item]);
   const reason = studioRemovalRefusalAt(
     catalogue,
@@ -634,16 +635,7 @@ const resolveRemoval = (
     index,
   );
   if (reason !== undefined) return { kind: "refused", reason };
-  const releaseUses = new Map<string, number>();
-  let placed = 0;
-  for (const region of regions(source))
-    for (const item of sourceItemTree(region.zone.items)) {
-      placed += 1;
-      const key = releaseKey(item.props.vortex.block);
-      releaseUses.set(key, (releaseUses.get(key) ?? 0) + 1);
-    }
-  // A block name used twice is not a draft this command edits.
-  if (placed !== index.aliases.size) return { kind: "invalid" };
+  const releaseUses = new Map(index.releaseUses);
   for (const item of removed) {
     const key = releaseKey(item.props.vortex.block);
     releaseUses.set(key, releaseUses.get(key)! - 1);

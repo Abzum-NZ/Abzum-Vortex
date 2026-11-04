@@ -108,13 +108,22 @@ const studioOutletHostRefusal = (
     : `This block holds ${describeApplicationUsers(outlets)}. Retarget the outlet first.`;
 };
 
+/** The release a block uses, as the draft's block dependencies name it. */
+export const releaseKey = (block: { block_id: string; release_version: string }): string =>
+  `${block.block_id}@${block.release_version}`;
+
 /**
- * What a removal reads from the whole application, built once per source: every block name, the
- * flow steps that name a block, and the forms of a content area (read only for an area that holds
- * a form, and once per area).
+ * What a removal reads from the whole application, built once per source: every block name and how
+ * many blocks there are (more than names when one name is used twice), how many blocks use each
+ * release, the flow steps that name a block, the layout outlets a block holds, and the forms of a
+ * content area (read only for an area that holds a form, and once per area).
  */
 export type StudioRemovalIndex = Readonly<{
   aliases: ReadonlySet<string>;
+  placed: number;
+  releaseUses: ReadonlyMap<string, number>;
+  /** The sentence for a block that holds a layout outlet, or undefined; read once per block. */
+  host: (alias: string) => string | undefined;
   flowReference: (alias: string) => StudioPlacementReference | undefined;
   /** Keyed by the area's `zone.items`: separate `regions()` calls share it, not the region. */
   forms: (region: Region) => ReturnType<typeof studioRegionForms> | undefined;
@@ -124,14 +133,28 @@ export const studioRemovalIndex = (
   catalogue: ImmutablePlatformBlockCatalogue,
   source: ApplicationSourceDocument,
 ): StudioRemovalIndex => {
-  const aliases = new Set(
-    regions(source).flatMap((region) =>
-      sourceItemTree(region.zone.items).map((item) => item.props.id),
-    ),
-  );
+  const aliases = new Set<string>();
+  const releaseUses = new Map<string, number>();
+  let placed = 0;
+  for (const region of regions(source))
+    for (const item of sourceItemTree(region.zone.items)) {
+      placed += 1;
+      aliases.add(item.props.id);
+      const key = releaseKey(item.props.vortex.block);
+      releaseUses.set(key, (releaseUses.get(key) ?? 0) + 1);
+    }
+  const hosts = new Map<string, string | null>();
   const read = new WeakMap<readonly SourceItem[], ReturnType<typeof studioRegionForms> | null>();
   return {
     aliases,
+    placed,
+    releaseUses,
+    host: (alias) => {
+      let held = hosts.get(alias);
+      if (held === undefined) held = studioOutletHostRefusal(source, alias) ?? null;
+      hosts.set(alias, held);
+      return held ?? undefined;
+    },
     // The flows are scanned once for every block, not once per block.
     flowReference: studioPlacementRemovalReferences(source, aliases),
     forms: (region) => {
@@ -171,7 +194,7 @@ export const studioRemovalRefusalAt = (
 ): string | undefined => {
   const rule = removalRule(regionRemovalCause(source, place.region), place.repeating);
   if (rule !== undefined) return REMOVAL_RULE_REASONS[rule];
-  const host = studioOutletHostRefusal(source, place.alias);
+  const host = index.host(place.alias);
   if (host !== undefined) return host;
   if (place.required && place.siblings.every((sibling) => removed.has(sibling.props.id)))
     return REQUIRED_SLOT_REASON;
@@ -258,7 +281,7 @@ export const studioCanvasReferences = (
         const duplicate = studioDuplicateRefusal(catalogue, item, descendants);
         if (duplicate !== undefined) reasons.duplicate = duplicate;
         else if (published) reasons.duplicate = PUBLISHED_PAGE_ADD_REASON;
-        const host = studioOutletHostRefusal(source, id);
+        const host = index.host(id);
         if (host !== undefined) reasons.drag = host;
         const refusal = studioRemovalRefusalAt(
           catalogue,
