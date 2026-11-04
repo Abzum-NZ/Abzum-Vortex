@@ -163,6 +163,8 @@ export type StudioCompositionRemovalModel =
       /** The flow, and its step, that still names this item. */
       flow?: string;
       step?: string;
+      /** The queries and messages that still use the block, when the reason is placement_users. */
+      users?: string;
     }>
   | Readonly<{ kind: "unsupported"; reason: StudioCompositionRemovalUnsupportedReason }>
   | Readonly<{ kind: "invalid" }>;

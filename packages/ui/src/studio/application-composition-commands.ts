@@ -111,7 +111,7 @@ export type * from "./application-composition-model";
 export {
   studioPlacementRemovalReference,
   studioPlacementReferenceSentence,
-  type StudioCompositionRemovalReason,
+  type StudioPlacementReferenceReason,
 } from "./composition-references";
 export {
   describeStudioCompositionAddTargets,
@@ -492,7 +492,7 @@ const applySettings = (
     validateStoredApplicationOutlets(current.catalogue, source);
   } catch (error) {
     if (error instanceof StoredCompositionRefusal) {
-      console.error("[studio] composition settings refused", {
+      console.info("[studio] composition settings refused", {
         part: error.location,
         reason: error.reason,
       });
@@ -654,6 +654,10 @@ const resolveRemoval = (
     const key = releaseKey(item.props.vortex.block);
     releaseUses.set(key, releaseUses.get(key)! - 1);
   }
+  const leaving = new Set(removed.map((item) => item.props.id));
+  const users = [...leaving].flatMap((id) => studioPlacementReferrers(source, id, leaving));
+  if (users.length > 0)
+    return { kind: "blocked", reason: "placement_users", users: describeApplicationUsers(users) };
   const broken = studioFormChangeRefusal(
     catalogue,
     source,
@@ -699,6 +703,11 @@ const applyRemoval = (
 ): StudioCompositionCommandResult => {
   closedPlain(command, ["kind"]);
   const resolved = resolveRemoval(current, selection);
+  if (resolved.kind === "blocked" && resolved.reason === "placement_users")
+    return {
+      kind: "refused",
+      reason: `This block is used by ${resolved.users}. Change that reference first.`,
+    };
   if (resolved.kind !== "available")
     return { kind: resolved.kind === "invalid" ? "invalid" : "unsupported" };
   const { source, target, alias, unusedReleases } = resolved.removal;
@@ -849,22 +858,6 @@ export const applyStudioCompositionCommand = (
           reason:
             "This block holds a content outlet of its layout. Retarget the outlet in the Layout inspector before removing the block.",
         };
-      if (selection?.kind === "placement") {
-        const held = regions(current.source)
-          .flatMap((region) => sourceItemTree(region.zone.items))
-          .find((item) => item.props.id === selection.placementAlias);
-        const leaving = new Set(
-          sourceItemTree(held === undefined ? [] : [held]).map((item) => item.props.id),
-        );
-        const users = [...leaving].flatMap((id) =>
-          studioPlacementReferrers(current.source, id, leaving),
-        );
-        if (users.length > 0)
-          return {
-            kind: "refused",
-            reason: `This block is used by ${describeApplicationUsers(users)}. Change that reference first.`,
-          };
-      }
       return applyRemoval(current, selection, command);
     }
     if (command.kind === "settings") return applySettings(current, selection, command);
@@ -989,9 +982,11 @@ export const applyStudioCompositionCommand = (
     if (sameValue(parsed, current.source)) return { kind: "invalid" };
     return { kind: "applied", source: parsed };
   } catch (error) {
-    console.error("[studio] composition command could not be applied", error);
-    if (error instanceof StoredCompositionRefusal || error instanceof StructureRefusal)
+    if (error instanceof StoredCompositionRefusal || error instanceof StructureRefusal) {
+      console.info("[studio] composition command refused", error.message);
       return { kind: "refused", reason: error.message };
+    }
+    console.error("[studio] composition command could not be applied", error);
     return { kind: "invalid" };
   }
 };

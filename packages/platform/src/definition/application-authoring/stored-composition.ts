@@ -352,7 +352,7 @@ const validateTree = (
             release.capabilities.responsiveOrder,
           );
       }
-      if (reusable && Object.isFrozen(item) && Object.isFrozen(item.props)) {
+      if (reusable && isStudioDraftSnapshot(item)) {
         let verified = verifiedBlocks.get(catalogue);
         if (verified === undefined) verifiedBlocks.set(catalogue, (verified = new WeakMap()));
         verified.set(item, [...seen].slice(first));
@@ -364,8 +364,9 @@ const validateTree = (
 
 /**
  * Parses and judges one raw stored slot `{ items, order }`; it throws a located refusal. The items
- * of a history snapshot are already the parsed source (the draft is parsed when it
- * is loaded and at every command), so they are judged against the catalogue and not parsed again.
+ * of a history snapshot are already the parsed source (the draft is parsed when it is loaded and at
+ * every command), so only the contract parse is skipped: their depth, count and shape are still
+ * bounded, and they are judged against the catalogue.
  */
 export const validateStoredZone = (
   catalogue: ImmutablePlatformBlockCatalogue,
@@ -374,7 +375,7 @@ export const validateStoredZone = (
 ): StoredZone => {
   const zone = closed(candidate, ["items", "order"], []);
   const items = isStudioDraftSnapshot(zone.items)
-    ? (zone.items as SourceItem[])
+    ? (boundItems(catalogue, zone.items, []), zone.items as SourceItem[])
     : parseItems(catalogue, zone.items, []);
   const order =
     zone.order === undefined

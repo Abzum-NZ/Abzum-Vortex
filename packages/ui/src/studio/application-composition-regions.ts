@@ -27,7 +27,7 @@ import {
   validateStoredZone,
 } from "@vortex/platform/schema";
 import { resolveStudioSelectionInspectorContext } from "./selection-inspector";
-import type { StudioSemanticSelection } from "./semantic-selection";
+import type { StudioSemanticPlacementOwner, StudioSemanticSelection } from "./semantic-selection";
 import type {
   StudioCompositionContext,
   StudioCompositionOwner,
@@ -208,6 +208,36 @@ export const regions = (source: ApplicationSourceDocument): Region[] => {
     }
   }
   return result;
+};
+
+/** Every block name in an item's subtree, kept for items of a history snapshot, which never change. */
+const subtreeAliases = new WeakMap<SourceItem, ReadonlySet<string>>();
+const aliasesOf = (item: SourceItem): ReadonlySet<string> => {
+  const held = subtreeAliases.get(item);
+  if (held !== undefined) return held;
+  const aliases = new Set([item.props.id]);
+  for (const [, children] of sourceItemChildSlots(item))
+    for (const child of children) for (const alias of aliasesOf(child)) aliases.add(alias);
+  if (isStudioDraftSnapshot(item)) subtreeAliases.set(item, aliases);
+  return aliases;
+};
+
+/**
+ * The page or layout that holds a block, or undefined when none does. Unchanged blocks of an edited
+ * draft keep their identity, so only the blocks on the path to the edit are read again.
+ */
+export const studioPlacementOwner = (
+  source: ApplicationSourceDocument,
+  placementAlias: string,
+): StudioSemanticPlacementOwner | undefined => {
+  const region = regions(source).find((each) =>
+    each.zone.items.some((item) => aliasesOf(item).has(placementAlias)),
+  );
+  return region?.shell !== undefined
+    ? { kind: "shell", shellAlias: region.shell.id }
+    : region?.page !== undefined
+      ? { kind: "page", pageAlias: region.page.id }
+      : undefined;
 };
 
 /**

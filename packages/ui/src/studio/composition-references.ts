@@ -16,7 +16,8 @@ const object = (value: unknown): Record<string, unknown> => {
   return value;
 };
 
-export type StudioCompositionRemovalReason =
+/** Why a flow, or the block itself, still names a placement. */
+export type StudioPlacementReferenceReason =
   | "flow_input"
   | "flow_form"
   | "flow_component"
@@ -26,9 +27,11 @@ export type StudioCompositionRemovalReason =
   | "content_outlet"
   | "unresolved_target";
 
+export type StudioCompositionRemovalReason = StudioPlacementReferenceReason | "placement_users";
+
 /** What still names a placement, with the flow and step that do when one does. */
 export type StudioPlacementReference = Readonly<{
-  reason: StudioCompositionRemovalReason;
+  reason: StudioPlacementReferenceReason;
   flow?: string;
   step?: string;
 }>;
@@ -75,7 +78,7 @@ export const sourceNames = (source: ApplicationSourceDocument): Set<string> => {
 
 /** What a flow task's target position holds: a placement alias, or something that cannot be resolved. */
 type FlowTarget =
-  "unresolved_target" | Readonly<{ local: string; reason: StudioCompositionRemovalReason }>;
+  "unresolved_target" | Readonly<{ local: string; reason: StudioPlacementReferenceReason }>;
 
 /**
  * The flow task that targets each placement, read only from declared placement identity
@@ -91,7 +94,7 @@ export const studioPlacementRemovalReferences = (
   const target = (
     value: unknown,
     qualified: boolean,
-    reason: StudioCompositionRemovalReason,
+    reason: StudioPlacementReferenceReason,
   ): FlowTarget => {
     if (typeof value !== "string") return "unresolved_target";
     const separator = value.indexOf(":");
@@ -111,7 +114,7 @@ export const studioPlacementRemovalReferences = (
   const literalTarget = (
     value: unknown,
     qualified: boolean,
-    reason: StudioCompositionRemovalReason,
+    reason: StudioPlacementReferenceReason,
   ): FlowTarget => {
     if (
       !isObject(value) ||
@@ -147,7 +150,7 @@ export const studioPlacementRemovalReferences = (
       }
       const task = entry.task;
       const definition = definitions.find((candidate) => candidate.type === task.type);
-      const at = (reason: StudioCompositionRemovalReason): StudioPlacementReference => ({
+      const at = (reason: StudioPlacementReferenceReason): StudioPlacementReference => ({
         reason,
         flow: flowName,
         step:
@@ -231,9 +234,10 @@ export const studioPlacementRemovalReference = (
 ): StudioPlacementReference | undefined => studioPlacementRemovalReferences(source, aliases)(alias);
 
 /**
- * Whether two values hold the same data. With `emptyListIsAbsent`, a list with nothing in it and a
- * property that is not there are the same (Puck fills every slot it knows with an empty list, so
- * Puck's data and the draft's data for one page differ in nothing else).
+ * Whether two values hold the same data. With `emptyListIsAbsent`, a slot with nothing in it and a
+ * slot that is not there are the same (Puck fills every slot it knows with an empty list, so
+ * Puck's data and the draft's data for one page differ in nothing else). Slots are direct keys of
+ * an item's props, which are the objects that hold `vortex`; a list inside a setting is data.
  */
 export const sameCompositionValue = (
   left: unknown,
@@ -251,8 +255,10 @@ export const sameCompositionValue = (
       )
     );
   if (!isObject(left) || !isObject(right)) return false;
+  const slotLevel =
+    emptyListIsAbsent && (Object.hasOwn(left, "vortex") || Object.hasOwn(right, "vortex"));
   const present = (value: unknown): boolean =>
-    value !== undefined && !(emptyListIsAbsent && Array.isArray(value) && value.length === 0);
+    value !== undefined && !(slotLevel && Array.isArray(value) && value.length === 0);
   const keys = Object.keys(left).filter((key) => present(left[key]));
   return (
     keys.length === Object.keys(right).filter((key) => present(right[key])).length &&

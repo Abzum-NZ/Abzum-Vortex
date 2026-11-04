@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { isStudioDraftSnapshot } from "../application-authoring/draft-snapshot";
 import { jsonValueSchema, labelSchema } from "../../catalogue/common";
 import { applicationAudienceSchema } from "../../catalogue/application-link";
 import { builderKeySchema, namespacedKeySchema } from "../../catalogue/identifiers";
@@ -457,10 +458,10 @@ type SourceItemReading = Readonly<{
 }>;
 
 /**
- * Readings of frozen items (the draft's snapshots share every node an edit did not touch, so an
- * unchanged block is read once for the whole session). A frozen item cannot change under its
- * reading, and the release is the catalogue's own object; an item someone may still change is read
- * afresh each time. Callers treat a reading as read-only.
+ * Readings of snapshot items (the draft's snapshots share every node an edit did not touch, so an
+ * unchanged block is read once for the whole session). A snapshot item is deeply frozen and cannot
+ * change under its reading, and the release is the catalogue's own object; an item someone may
+ * still change is read afresh each time. A cached reading is frozen, so a write to it throws.
  */
 const frozenReadings = new WeakMap<SourceItem, WeakMap<PlatformBlockRelease, SourceItemReading>>();
 
@@ -468,8 +469,7 @@ export const readSourceItem = (
   item: SourceItem,
   release: PlatformBlockRelease,
 ): SourceItemReading => {
-  if (!Object.isFrozen(item) || !Object.isFrozen(item.props))
-    return readSourceItemFresh(item, release);
+  if (!isStudioDraftSnapshot(item)) return readSourceItemFresh(item, release);
   let byRelease = frozenReadings.get(item);
   if (byRelease === undefined) {
     byRelease = new WeakMap();
@@ -478,6 +478,8 @@ export const readSourceItem = (
   let reading = byRelease.get(release);
   if (reading === undefined) {
     reading = readSourceItemFresh(item, release);
+    Object.freeze(reading.settings);
+    Object.freeze(reading);
     byRelease.set(release, reading);
   }
   return reading;
