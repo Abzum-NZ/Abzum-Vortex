@@ -73,7 +73,7 @@ begin
   if vortex_definition.application_release_contains_custom_components_internal(
     p_application_root_id, p_application_release_revision
   ) then
-    perform vortex_definition.require_custom_code_install_internal();
+    perform vortex_definition.require_custom_code_manage_internal(true);
   end if;
 
   select pg_catalog.count(*)::integer into pin_count

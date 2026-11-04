@@ -1,11 +1,13 @@
--- SEC-1: installing an Application that places custom components is checked in SQL. Until now the
--- custom code permission (platform.organization.custom_code.manage) and the recent sign-in it
--- needs were enforced only by the TypeScript installer. activate_application_installation now
--- derives "the release contains custom components" from the stored release platform block
--- dependency manifest (application_release_contains_custom_components_internal, against the
--- built-in block ids in vortex_definition.platform_block_catalogue) and, when it does, requires the
--- permission and a primary sign-in within 15 minutes (require_custom_code_install_internal), the
--- rule builder-authority.ts states.
+-- SEC-1: installing or uninstalling an Application that places custom components is checked in
+-- SQL. Until now the custom code permission (platform.organization.custom_code.manage) and the
+-- recent sign-in an install needs were enforced only by the TypeScript installer.
+-- application_release_contains_custom_components_internal decides "the release contains custom
+-- components" from the release content's platformBlockDependencies (the list the runtime bundle
+-- registers) against the built-in block ids in vortex_definition.platform_block_catalogue, and
+-- fails closed on a malformed list. activate_application_installation then requires the permission
+-- and a primary sign-in within 15 minutes, and detach_application_installation (an uninstall, not
+-- an upgrade) requires the permission without a recent sign-in, through
+-- require_custom_code_manage_internal(p_recent_sign_in), the rule builder-authority.ts states.
 set local role vortex_owner;
 
 create table if not exists vortex_definition.platform_block_catalogue (
@@ -62,6 +64,24 @@ on conflict (block_id) do nothing;
 -- database does not know can never skip the custom code permission and recent sign-in that
 -- installing custom code needs. A built-in block added to the platform block catalogue
 -- (application-composition-catalogue.source.json) is added to that table in the same change.
+-- Whether an Application release places a platform block that is not a built-in block. A custom
+-- component is a platform block release registered outside the built-in catalogue. The decision
+-- reads the release content's platformBlockDependencies, the list the runtime bundle registers
+-- (write_installation_runtime_bundle), and counts any block that
+-- vortex_definition.platform_block_catalogue does not hold, so a block the database does not know
+-- can never skip the custom code permission and recent sign-in that installing custom code needs. A
+-- list that is missing or malformed counts too. A built-in block added to the platform block
+-- catalogue (application-composition-catalogue.source.json) is added to that table in the same
+-- change.
+-- Whether an Application release places a platform block that is not a built-in block. A custom
+-- component is a platform block release registered outside the built-in catalogue. The decision
+-- reads the release content's platformBlockDependencies, the list the runtime bundle registers
+-- (write_installation_runtime_bundle), and counts any block that
+-- vortex_definition.platform_block_catalogue does not hold, so a block the database does not know
+-- can never skip the custom code permission and recent sign-in that installing custom code needs. A
+-- list that is missing or malformed counts too. A built-in block added to the platform block
+-- catalogue (application-composition-catalogue.source.json) is added to that table in the same
+-- change.
 create or replace function vortex_definition.application_release_contains_custom_components_internal(
   p_application_root_id uuid,
   p_application_release_revision bigint
@@ -72,17 +92,30 @@ stable
 security definer
 set search_path = ''
 as $function$
-  select exists (
-    select 1
-    from vortex_definition.release_dependencies as dependency
-    where dependency.root_id = p_application_root_id
-      and dependency.release_revision = p_application_release_revision
-      and dependency.dependency_kind = 'platform_block'
-      and not exists (
-        select 1 from vortex_definition.platform_block_catalogue as built_in
-        where built_in.block_id = dependency.catalogue_item_id
+  select coalesce((
+    select pg_catalog.jsonb_typeof(source.dependencies) is distinct from 'array'
+      or exists (
+        select 1
+        from pg_catalog.jsonb_array_elements(
+          case when pg_catalog.jsonb_typeof(source.dependencies) = 'array'
+            then source.dependencies else '[]'::jsonb end
+        ) as dependency(value)
+        where pg_catalog.jsonb_typeof(dependency.value) is distinct from 'object'
+          or dependency.value ->> 'blockId' is null
+          or dependency.value ->> 'blockId' !~
+            '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+          or not exists (
+            select 1 from vortex_definition.platform_block_catalogue as built_in
+            where built_in.block_id = (dependency.value ->> 'blockId')::uuid
+          )
       )
-  );
+    from (
+      select release.compilation_output #> '{canonical,content,platformBlockDependencies}'
+      from vortex_definition.releases as release
+      where release.root_id = p_application_root_id
+        and release.release_revision = p_application_release_revision
+    ) as source(dependencies)
+  ), true);
 $function$;
 
 alter function vortex_definition.application_release_contains_custom_components_internal(uuid, bigint)
@@ -94,9 +127,9 @@ grant execute on function vortex_definition.application_release_contains_custom_
   to postgres;
 
 comment on function vortex_definition.application_release_contains_custom_components_internal(uuid, bigint) is
-  'Private: true when the stored dependency manifest of an Application release names a platform block that is not a built-in block, that is, a custom component.';
+  'Private: true when the content of an Application release names a platform block that is not a built-in block, that is, a custom component, or a malformed list.';
 
-create or replace function vortex_definition.require_custom_code_install_internal()
+create or replace function vortex_definition.require_custom_code_manage_internal(p_recent_sign_in boolean)
 returns void
 language plpgsql
 volatile
@@ -117,9 +150,11 @@ begin
       'requiredPermission', vortex_access.required_platform_permission(
         'platform.organization.custom_code.manage'
       ),
-      -- The recent sign-in the TypeScript builder authority asks of an installation of custom code.
-      'recentAuthentication',
-        pg_catalog.jsonb_build_object('kind', 'primary', 'maximumAgeSeconds', 900),
+      -- The recent sign-in the TypeScript builder authority asks of an installation of custom code;
+      -- an uninstall asks for none.
+      'recentAuthentication', case when p_recent_sign_in
+        then pg_catalog.jsonb_build_object('kind', 'primary', 'maximumAgeSeconds', 900)
+        else pg_catalog.jsonb_build_object('kind', 'none') end,
       'authority', pg_catalog.jsonb_build_object('kind', 'permission')
     )
   ) as evaluated;
@@ -143,16 +178,16 @@ begin
 end
 $function$;
 
-alter function vortex_definition.require_custom_code_install_internal()
+alter function vortex_definition.require_custom_code_manage_internal(boolean)
   owner to vortex_owner;
 
-revoke all on function vortex_definition.require_custom_code_install_internal()
-  from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
-grant execute on function vortex_definition.require_custom_code_install_internal()
+revoke all on function vortex_definition.require_custom_code_manage_internal(boolean)
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_adapter;
+grant execute on function vortex_definition.require_custom_code_manage_internal(boolean)
   to postgres;
 
-comment on function vortex_definition.require_custom_code_install_internal() is
-  'Private check for installing or upgrading an Application that places custom components: the current person holds platform.organization.custom_code.manage and signed in within 15 minutes.';
+comment on function vortex_definition.require_custom_code_manage_internal(boolean) is
+  'Private check for installing, upgrading or uninstalling an Application that places custom components: the current person holds platform.organization.custom_code.manage and, when asked, signed in within 15 minutes.';
 
 create or replace function vortex_definition.activate_application_installation(
   p_application_root_id uuid,
@@ -229,7 +264,7 @@ begin
   if vortex_definition.application_release_contains_custom_components_internal(
     p_application_root_id, p_application_release_revision
   ) then
-    perform vortex_definition.require_custom_code_install_internal();
+    perform vortex_definition.require_custom_code_manage_internal(true);
   end if;
 
   select pg_catalog.count(*)::integer into pin_count
@@ -451,5 +486,294 @@ grant execute on function vortex_definition.activate_application_installation(uu
   to vortex_request;
 comment on function vortex_definition.activate_application_installation(uuid, bigint, jsonb) is
   'Revision-checked atomic activation of the complete exact Module pin set for one Application release.';
+
+create or replace function vortex_definition.detach_application_installation(
+  p_application_root_id uuid,
+  p_application_release_revision bigint,
+  p_expected_module_bindings jsonb,
+  p_replacement_release_revision bigint default null
+)
+returns jsonb
+language plpgsql
+volatile
+security definer
+set search_path = ''
+as $function$
+declare
+  initial_authority record;
+  current_authority record;
+  pin record;
+  expected_count integer;
+  pin_count integer;
+  all_active boolean;
+  all_provisioned boolean;
+  all_detached boolean;
+  changed_value boolean;
+  binding_evidence jsonb;
+  sort_index_status jsonb;
+begin
+  if p_application_root_id is null
+    or p_application_root_id = '00000000-0000-0000-0000-000000000000'::uuid
+    or p_application_release_revision not between 1 and 9007199254740991
+    or pg_catalog.jsonb_typeof(p_expected_module_bindings) is distinct from 'array'
+    or pg_catalog.jsonb_array_length(p_expected_module_bindings) = 0
+    or exists (
+      select 1 from pg_catalog.jsonb_array_elements(p_expected_module_bindings) as item(value)
+      where pg_catalog.jsonb_typeof(item.value) <> 'object'
+        or not item.value ?& array['moduleRootId', 'bindingRevision']
+        or item.value - array['moduleRootId', 'bindingRevision'] <> '{}'::jsonb
+        or (item.value ->> 'moduleRootId')::uuid =
+          '00000000-0000-0000-0000-000000000000'::uuid
+        or (item.value ->> 'bindingRevision')::bigint not between 1 and 9007199254740991
+    )
+    or exists (
+      select 1
+      from pg_catalog.jsonb_array_elements(p_expected_module_bindings) as item(value)
+      group by (item.value ->> 'moduleRootId')::uuid
+      having pg_catalog.count(*) <> 1
+    )
+    or p_expected_module_bindings is distinct from (
+      select pg_catalog.jsonb_agg(item.value order by (item.value ->> 'moduleRootId')::uuid)
+      from pg_catalog.jsonb_array_elements(p_expected_module_bindings) as item(value)
+    ) then
+    raise exception using errcode = '22023',
+      message = 'Application installation detach command is invalid';
+  end if;
+
+  select locked.* into strict initial_authority
+  from vortex_access.lock_application_installation_authority() as locked;
+
+  -- Detaching only retires bindings, so an installed release of an earlier definition contract
+  -- stays detachable: its identity is checked, never its contract version.
+  if not exists (
+    select 1
+    from vortex_definition.roots as root
+    join vortex_definition.releases as release on release.root_id = root.root_id
+    where root.root_id = p_application_root_id
+      and root.organization_id = initial_authority.organization_id
+      and root.kind = 'application'
+      and release.release_revision = p_application_release_revision
+      and release.compilation_output #>> '{kind}' = 'application'
+      and release.compilation_output #>> '{canonical,envelope,rootId}' = p_application_root_id::text
+  ) then
+    raise exception using errcode = 'P0002',
+      message = 'Exact Application release is unavailable';
+  end if;
+
+  -- Uninstalling an Application that places custom components needs the custom code permission, as
+  -- the TypeScript installer says; a detach that makes room for a replacement release is an
+  -- upgrade, which activation checks. No recent sign-in is asked of an uninstall.
+  if p_replacement_release_revision is null
+    and vortex_definition.application_release_contains_custom_components_internal(
+      p_application_root_id, p_application_release_revision
+    ) then
+    perform vortex_definition.require_custom_code_manage_internal(false);
+  end if;
+
+  -- A platform system Application is never uninstalled (architecture decision 11): it is detached
+  -- only to be replaced by another release of the same Application, as an upgrade does.
+  if exists (
+    select 1
+    from vortex_definition.roots as root
+    where root.root_id = p_application_root_id
+      and root.application_origin_kind = 'platform_system_application'
+  ) and (
+    p_replacement_release_revision is null
+    or p_replacement_release_revision <= p_application_release_revision
+    or not exists (
+      select 1 from vortex_definition.releases as replacement
+      where replacement.root_id = p_application_root_id
+        and replacement.release_revision = p_replacement_release_revision
+        and replacement.compilation_output #>> '{kind}' = 'application'
+        and replacement.compilation_output #>> '{canonical,envelope,rootId}' = p_application_root_id::text
+    )
+  ) then
+    raise exception using errcode = '42501',
+      message = 'A platform application cannot be uninstalled';
+  end if;
+  -- The replacement is proved at commit: the deferred trigger
+  -- system_application_stays_installed refuses a transaction that leaves a platform system
+  -- Application without an active binding.
+
+  select pg_catalog.count(*)::integer into pin_count
+  from vortex_definition.reachable_module_dependency_edges(
+    p_application_root_id, p_application_release_revision
+  );
+  expected_count := pg_catalog.jsonb_array_length(p_expected_module_bindings);
+  if pin_count = 0 or expected_count <> pin_count
+    or exists (
+      select 1
+      from vortex_definition.reachable_module_dependency_edges(
+        p_application_root_id, p_application_release_revision
+      ) as required
+      where not exists (
+        select 1 from pg_catalog.jsonb_array_elements(p_expected_module_bindings) as expected(value)
+        where (expected.value ->> 'moduleRootId')::uuid = required.target_root_id
+      )
+    ) then
+    raise exception using errcode = '23514',
+      message = 'Application installation binding set is incomplete';
+  end if;
+
+  for pin in
+    select required.*
+    from vortex_definition.reachable_module_dependency_edges(
+      p_application_root_id, p_application_release_revision
+    ) as required
+    order by required.target_root_id
+  loop
+    perform pg_catalog.pg_advisory_xact_lock(
+      pg_catalog.hashtextextended(
+        'vortex_definition.binding:' || initial_authority.organization_id::text || ':' ||
+          p_application_root_id::text || ':' || pin.target_root_id::text,
+        0
+      )
+    );
+    perform 1
+    from vortex_definition.installation_bindings as binding
+    where binding.organization_id = initial_authority.organization_id
+      and binding.application_root_id = p_application_root_id
+      and binding.module_root_id = pin.target_root_id
+    for update;
+  end loop;
+
+  select locked.* into strict current_authority
+  from vortex_access.lock_application_installation_authority() as locked;
+  if current_authority.organization_id <> initial_authority.organization_id
+    or current_authority.organization_account_id <> initial_authority.organization_account_id
+    or current_authority.access_version <> initial_authority.access_version
+    or current_authority.correlation_id <> initial_authority.correlation_id then
+    raise exception using errcode = '40001',
+      message = 'Application installation authority changed';
+  end if;
+
+  -- Each accepted state must hold for the complete exact set; mixed states are refused.
+  select pg_catalog.bool_and(coalesce(
+      binding.state = 'active'
+      and binding.binding_revision = expected.binding_revision
+      and binding.application_release_revision = p_application_release_revision
+      and binding.module_release_revision = required.target_release_revision, false
+    )),
+    pg_catalog.bool_and(coalesce(
+      binding.state = 'provisioned'
+      and binding.binding_revision = expected.binding_revision
+      and binding.application_release_revision = p_application_release_revision
+      and binding.module_release_revision = required.target_release_revision, false
+    )),
+    pg_catalog.bool_and(coalesce(
+      binding.state = 'detached'
+      and binding.binding_revision = expected.binding_revision
+      and binding.application_release_revision = p_application_release_revision
+      and binding.module_release_revision = required.target_release_revision, false
+    ))
+  into all_active, all_provisioned, all_detached
+  from vortex_definition.reachable_module_dependency_edges(
+    p_application_root_id, p_application_release_revision
+  ) as required
+  left join vortex_definition.installation_bindings as binding
+    on binding.organization_id = initial_authority.organization_id
+    and binding.application_root_id = p_application_root_id
+    and binding.module_root_id = required.target_root_id
+  left join lateral (
+    select (expected.value ->> 'bindingRevision')::bigint as binding_revision
+    from pg_catalog.jsonb_array_elements(p_expected_module_bindings) as expected(value)
+    where (expected.value ->> 'moduleRootId')::uuid = required.target_root_id
+  ) as expected on true
+  ;
+  if all_active is null or (not all_active and not all_provisioned and not all_detached)
+    or exists (
+      select 1 from vortex_definition.installation_bindings as binding
+      where binding.organization_id = initial_authority.organization_id
+        and binding.application_root_id = p_application_root_id
+        and binding.state <> 'detached'
+        and not exists (
+          select 1 from vortex_definition.reachable_module_dependency_edges(
+            p_application_root_id, p_application_release_revision
+          ) as required
+          where required.target_root_id = binding.module_root_id
+        )
+    ) then
+    raise exception using errcode = '40001',
+      message = 'Application installation bindings changed or are incomplete';
+  end if;
+
+  changed_value := all_active or all_provisioned;
+  if changed_value then
+    if exists (
+      select 1 from vortex_definition.reachable_module_dependency_edges(
+        p_application_root_id, p_application_release_revision
+      ) as required
+      join vortex_definition.installation_bindings as binding
+        on binding.organization_id = initial_authority.organization_id
+        and binding.application_root_id = p_application_root_id
+        and binding.module_root_id = required.target_root_id
+      where binding.binding_revision = 9007199254740991
+    ) then
+      raise exception using errcode = '22003',
+        message = 'Application installation binding revision is exhausted';
+    end if;
+    update vortex_definition.installation_bindings as binding
+    set state = 'detached', binding_revision = binding.binding_revision + 1,
+      changed_at = pg_catalog.statement_timestamp()
+    from vortex_definition.reachable_module_dependency_edges(
+      p_application_root_id, p_application_release_revision
+    ) as required
+    where binding.organization_id = initial_authority.organization_id
+      and binding.application_root_id = p_application_root_id
+      and binding.module_root_id = required.target_root_id
+      and binding.state in ('active', 'provisioned');
+    if not found then
+      raise exception using errcode = '40001',
+        message = 'Application installation bindings changed';
+    end if;
+    sort_index_status := vortex_record.sync_published_sort_indexes_internal();
+  end if;
+
+  select pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
+    'organizationId', binding.organization_id,
+    'applicationRootId', binding.application_root_id,
+    'moduleRootId', binding.module_root_id,
+    'bindingRevision', binding.binding_revision,
+    'applicationReleaseRevision', binding.application_release_revision,
+    'moduleReleaseRevision', binding.module_release_revision,
+    'state', binding.state
+  ) order by binding.module_root_id) into binding_evidence
+  from vortex_definition.reachable_module_dependency_edges(
+    p_application_root_id, p_application_release_revision
+  ) as required
+  join vortex_definition.installation_bindings as binding
+    on binding.organization_id = initial_authority.organization_id
+    and binding.application_root_id = p_application_root_id
+    and binding.module_root_id = required.target_root_id;
+
+  return pg_catalog.jsonb_build_object(
+    'organizationId', initial_authority.organization_id,
+    'applicationRootId', p_application_root_id,
+    'applicationReleaseRevision', p_application_release_revision,
+    'state', 'detached', 'changed', changed_value,
+    'sortIndexes', sort_index_status,
+    'moduleBindings', binding_evidence
+  );
+exception
+  when no_data_found then
+    raise exception using errcode = 'P0002',
+      message = 'Application installation evidence is unavailable';
+  when too_many_rows then
+    raise exception using errcode = '55000',
+      message = 'Application installation evidence is ambiguous';
+  when invalid_text_representation or numeric_value_out_of_range then
+    raise exception using errcode = '22023',
+      message = 'Application installation detach command is invalid';
+end
+$function$;
+
+alter function vortex_definition.detach_application_installation(uuid,bigint,jsonb,bigint) owner to vortex_owner;
+
+revoke all on function vortex_definition.detach_application_installation(uuid, bigint, jsonb, bigint)
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_record_adapter;
+grant execute on function vortex_definition.detach_application_installation(uuid, bigint, jsonb, bigint)
+  to vortex_request;
+comment on function vortex_definition.detach_application_installation(uuid, bigint, jsonb, bigint) is
+  'Revision-checked atomic detach of one complete Application Module binding set while retaining storage and records. A platform system Application is detached only to be replaced by another release of it.';
 
 reset role;

@@ -1,4 +1,4 @@
-create or replace function vortex_definition.require_custom_code_install_internal()
+create or replace function vortex_definition.require_custom_code_manage_internal(p_recent_sign_in boolean)
 returns void
 language plpgsql
 volatile
@@ -19,9 +19,11 @@ begin
       'requiredPermission', vortex_access.required_platform_permission(
         'platform.organization.custom_code.manage'
       ),
-      -- The recent sign-in the TypeScript builder authority asks of an installation of custom code.
-      'recentAuthentication',
-        pg_catalog.jsonb_build_object('kind', 'primary', 'maximumAgeSeconds', 900),
+      -- The recent sign-in the TypeScript builder authority asks of an installation of custom code;
+      -- an uninstall asks for none.
+      'recentAuthentication', case when p_recent_sign_in
+        then pg_catalog.jsonb_build_object('kind', 'primary', 'maximumAgeSeconds', 900)
+        else pg_catalog.jsonb_build_object('kind', 'none') end,
       'authority', pg_catalog.jsonb_build_object('kind', 'permission')
     )
   ) as evaluated;
@@ -45,13 +47,13 @@ begin
 end
 $function$;
 
-alter function vortex_definition.require_custom_code_install_internal()
+alter function vortex_definition.require_custom_code_manage_internal(boolean)
   owner to vortex_owner;
 
-revoke all on function vortex_definition.require_custom_code_install_internal()
-  from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
-grant execute on function vortex_definition.require_custom_code_install_internal()
+revoke all on function vortex_definition.require_custom_code_manage_internal(boolean)
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_adapter;
+grant execute on function vortex_definition.require_custom_code_manage_internal(boolean)
   to postgres;
 
-comment on function vortex_definition.require_custom_code_install_internal() is
-  'Private check for installing or upgrading an Application that places custom components: the current person holds platform.organization.custom_code.manage and signed in within 15 minutes.';
+comment on function vortex_definition.require_custom_code_manage_internal(boolean) is
+  'Private check for installing, upgrading or uninstalling an Application that places custom components: the current person holds platform.organization.custom_code.manage and, when asked, signed in within 15 minutes.';

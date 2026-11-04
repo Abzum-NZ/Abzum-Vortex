@@ -71,6 +71,16 @@ begin
       message = 'Exact Application release is unavailable';
   end if;
 
+  -- Uninstalling an Application that places custom components needs the custom code permission, as
+  -- the TypeScript installer says; a detach that makes room for a replacement release is an
+  -- upgrade, which activation checks. No recent sign-in is asked of an uninstall.
+  if p_replacement_release_revision is null
+    and vortex_definition.application_release_contains_custom_components_internal(
+      p_application_root_id, p_application_release_revision
+    ) then
+    perform vortex_definition.require_custom_code_manage_internal(false);
+  end if;
+
   -- A platform system Application is never uninstalled (architecture decision 11): it is detached
   -- only to be replaced by another release of the same Application, as an upgrade does.
   if exists (
