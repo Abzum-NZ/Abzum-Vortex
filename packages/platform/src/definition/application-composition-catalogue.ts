@@ -403,7 +403,11 @@ const NAVIGATION_BLOCK_RELEASES: readonly PlatformBlockRelease[] = Object.freeze
   APPLICATION_SEARCH_BLOCK_RELEASE,
 ]);
 
-/** All immutable platform block releases registered for the page builder. */
+/**
+ * All immutable platform block releases registered for the page builder. Every `blockId` here is
+ * also a row of `vortex_definition.platform_block_catalogue`; a new built-in block adds its row in a
+ * new migration in the same change, or the database counts it as a custom component.
+ */
 export const PLATFORM_BLOCK_RELEASES: readonly PlatformBlockRelease[] = Object.freeze([
   ...DISPLAY_BLOCK_RELEASES,
   ...CONTROL_BLOCK_RELEASES,

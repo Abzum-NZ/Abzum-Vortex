@@ -25,6 +25,7 @@ import {
 } from "./installation-role-templates";
 import {
   activateUpgradeRelease,
+  upgradeChangesCustomCode,
   type UpgradeEnvironment,
   type UpgradeSelector,
   type UpgradeState,
@@ -65,7 +66,7 @@ export const readUpgradeRoleChanges = async (
     environment,
     session,
     selector,
-    environment.containsCustomComponents(state.selectedReleaseSet),
+    upgradeChangesCustomCode(environment, state),
   );
   return applicationRoleChanges(roles.roles, state.selectedReleaseSet, [state.activeReleaseSet]);
 };
@@ -93,7 +94,7 @@ const completeWhenRolesMatch = (
         scope,
         environment,
         selector,
-        environment.containsCustomComponents(state.selectedReleaseSet),
+        upgradeChangesCustomCode(environment, state),
       );
       if (applicationRoleChanges(locked.roles, state.selectedReleaseSet, []).length > 0)
         installationProblem("upgrade_role_revision_changed", "conflict");
@@ -153,7 +154,7 @@ export const upgradeWithRoleChanges = async (
     environment,
     session,
     selector,
-    environment.containsCustomComponents(state.selectedReleaseSet),
+    upgradeChangesCustomCode(environment, state),
     state.selectedReleaseSet,
     listed.map((change) => change.sourceRoleId),
   );
@@ -170,7 +171,7 @@ export const upgradeWithRoleChanges = async (
           scope,
           environment,
           selector,
-          environment.containsCustomComponents(state.selectedReleaseSet),
+          upgradeChangesCustomCode(environment, state),
         );
         const lockedChanges = applicationRoleChanges(locked.roles, state.selectedReleaseSet, [
           state.activeReleaseSet,
@@ -235,7 +236,7 @@ export const resumeUpgradeRoleChanges = async (
       scope,
       environment,
       selector,
-      environment.containsCustomComponents(state.selectedReleaseSet),
+      upgradeChangesCustomCode(environment, state),
     ),
   );
   const listed = applicationRoleChanges(roles.roles, state.selectedReleaseSet, []);
@@ -280,7 +281,7 @@ export const resumeUpgradeRoleChanges = async (
     environment,
     session,
     selector,
-    environment.containsCustomComponents(state.selectedReleaseSet),
+    upgradeChangesCustomCode(environment, state),
     state.selectedReleaseSet,
     reviewedSourceRoleIds,
   );

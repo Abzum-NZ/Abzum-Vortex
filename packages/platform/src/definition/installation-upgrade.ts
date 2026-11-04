@@ -190,6 +190,14 @@ const readCurrentInstallation = async (
   return { active, bindings };
 };
 
+/** An upgrade changes custom code when the selected release or the active release it replaces places any. */
+export const upgradeChangesCustomCode = (
+  environment: Pick<UpgradeEnvironment, "containsCustomComponents">,
+  state: Pick<UpgradeState, "activeReleaseSet" | "selectedReleaseSet">,
+): boolean =>
+  environment.containsCustomComponents(state.selectedReleaseSet) ||
+  environment.containsCustomComponents(state.activeReleaseSet);
+
 const readCurrentState = async (
   environment: UpgradeEnvironment,
   transaction: RequestDatabaseTransaction,
@@ -368,7 +376,7 @@ const installationDeadline = async (
   scope: SelectedOrganizationScope,
   context: InstallationHumanContext,
   rootId: string,
-  releaseSet: SystemApplicationBoundReleaseSetResult,
+  containsCustomComponents: boolean,
 ): Promise<Readonly<{ deadline: number; completedAt: string }>> => {
   const installationDeadlines = await readInstallationAuthorityDeadlines(
     transaction,
@@ -376,7 +384,7 @@ const installationDeadline = async (
     context,
     environment.permissions,
     rootId,
-    environment.containsCustomComponents(releaseSet),
+    containsCustomComponents,
   );
   const completedAt = await readInstallationDatabaseTime(transaction);
   const deadline = Math.min(
@@ -423,10 +431,7 @@ export const readUpgradeAuthorizedState = async (
           transaction,
           scope,
           environment.permissions,
-          installationOperation(
-            selector.rootId,
-            environment.containsCustomComponents(firstState.selectedReleaseSet),
-          ),
+          installationOperation(selector.rootId, upgradeChangesCustomCode(environment, firstState)),
         );
 
         const finalContext = await readInstallationHumanContext(
@@ -447,10 +452,7 @@ export const readUpgradeAuthorizedState = async (
           transaction,
           scope,
           environment.permissions,
-          installationOperation(
-            selector.rootId,
-            environment.containsCustomComponents(firstState.selectedReleaseSet),
-          ),
+          installationOperation(selector.rootId, upgradeChangesCustomCode(environment, firstState)),
         );
 
         const { deadline, completedAt } = await installationDeadline(
@@ -459,7 +461,7 @@ export const readUpgradeAuthorizedState = async (
           scope,
           finalContext,
           selector.rootId,
-          firstState.selectedReleaseSet,
+          upgradeChangesCustomCode(environment, firstState),
         );
         return {
           snapshot: makeSnapshot(
