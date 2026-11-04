@@ -44,7 +44,11 @@ import type {
   StudioCompositionOwner,
 } from "./application-composition-commands";
 import type { StudioCanvasFrame } from "./studio-canvas-projection";
-import { classifyCanvasChange, isCanvasDataAction } from "./studio-canvas-change";
+import {
+  classifyCanvasChange,
+  isCanvasDataAction,
+  isNoOpCanvasAction,
+} from "./studio-canvas-change";
 import type { StudioSettingsEdit } from "./studio-settings-edit";
 import type { StudioSemanticSelection } from "./semantic-selection";
 import type { StudioPlacementDescriber } from "./semantic-outline";
@@ -451,23 +455,27 @@ export function StudioPuckProvider({
       setRefused({ area: shown.area, message: classified.message });
       return;
     }
-    // The name of a removed block is read before the draft takes the removal: the Undo toast names it.
-    const removedName =
-      classified.kind === "change" && classified.change.kind === "remove"
-        ? (studioBlockName(
-            now.describePlacement,
-            shown.items,
-            (classified.selection as { placementAlias: string }).placementAlias,
-          ) ?? "block")
+    // The name of a removed block is read before the draft takes the removal (the Undo toast
+    // names it).
+    const removedAlias =
+      classified.kind === "change" &&
+      classified.change.kind === "remove" &&
+      classified.selection?.kind === "placement"
+        ? classified.selection.placementAlias
         : null;
+    const removedName =
+      removedAlias === null
+        ? null
+        : (studioBlockName(now.describePlacement, shown.items, removedAlias) ?? "block");
     const before = now.blockActions.mark();
     // A run of edits to one field of one block is one Undo step.
+    const merge =
+      classified.kind === "settings"
+        ? `settings:${classified.edit.alias}:${classified.edit.keys.join(",")}:${run.current.count}`
+        : "";
     const outcome: StudioCompositionOutcome =
       classified.kind === "settings"
-        ? now.onSettingsEdit(
-            classified.edit,
-            `settings:${classified.edit.alias}:${classified.edit.keys.join(",")}:${run.current.count}`,
-          )
+        ? now.onSettingsEdit(classified.edit, merge)
         : now.onCanvasChange(classified.selection, classified.change, classified.expectedSource);
     if (outcome.kind === "applied") {
       setRefused(null);
@@ -554,9 +562,14 @@ export function StudioPuckProvider({
         return;
       }
     }
-    // What the next report of Puck's data is classified from. A field edit that changed nothing is
-    // never reported, so the next edit of that block replaces it.
-    if (isCanvasDataAction(action)) {
+    // What the next report of Puck's data is classified from. An action that changes nothing is
+    // never reported, so it is not kept (it would turn the next edit into a whole-page write).
+    if (
+      isCanvasDataAction(action) &&
+      !isNoOpCanvasAction(action, previous.data, (alias) =>
+        getPuckRef.current?.().getSelectorForId(alias),
+      )
+    ) {
       const last = pending.current[pending.current.length - 1];
       if (
         last?.type === "replace" &&

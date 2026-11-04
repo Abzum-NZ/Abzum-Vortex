@@ -28,7 +28,7 @@ const slotItems = (value: unknown): readonly PuckItem[] | undefined =>
 const emptyList = (value: unknown): boolean =>
   value === undefined || (Array.isArray(value) && value.length === 0);
 
-/** The blocks two lists of a slot hold are the same ones (by name and type), whatever their props. */
+/** The two lists of a slot hold the same blocks (by name and type), whatever their props. */
 const sameSlotBlocks = (was: unknown, now: unknown): boolean => {
   const before = slotItems(was) ?? [];
   const after = slotItems(now) ?? [];

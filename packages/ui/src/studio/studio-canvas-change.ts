@@ -31,13 +31,38 @@ const DATA_ACTIONS: ReadonlySet<PuckAction["type"]> = new Set([
 /** Whether an action puts something in, takes it out or changes the page's data. */
 export const isCanvasDataAction = (action: PuckAction): boolean => DATA_ACTIONS.has(action.type);
 
+/**
+ * Whether an action changes nothing (a drop where the block was, a field set to its value). Puck
+ * dispatches it but never reports it (its `onChange` skips equal data), so it must not wait in
+ * the list the next report is classified from. `previous` is the data before the action.
+ */
+export const isNoOpCanvasAction = (
+  action: PuckAction,
+  previous: Data,
+  locate: StudioPuckLocate,
+): boolean => {
+  if (action.type === "move")
+    return (
+      action.sourceZone === action.destinationZone && action.sourceIndex === action.destinationIndex
+    );
+  if (action.type === "reorder") return action.sourceIndex === action.destinationIndex;
+  if (action.type !== "replace") return false;
+  const item = puckZoneItems(previous, action.destinationZone, locate)?.[
+    action.destinationIndex
+  ] as PuckItem | undefined;
+  const after = action.data as PuckItem;
+  if (item === undefined || item.props.id !== after.props.id) return false;
+  const { keys, slots } = changedProps(item, after);
+  return keys.length === 0 && !slots;
+};
+
 /** What a change Puck reported on the canvas comes to in the definition. */
 export type StudioCanvasClassification =
   /** The data Puck reports is the draft it was given (after Undo, Redo, a save or an echo). */
   | Readonly<{ kind: "unchanged" }>
   /** The canvas takes no such edit now (hidden, read-only, locked, or not the desktop screen). */
   | Readonly<{ kind: "forbidden" }>
-  /** The change breaks a rule of the definition or is not one the canvas can make; `message` says which. */
+  /** The change breaks a rule of the definition or is one the canvas cannot make (`message`). */
   | Readonly<{ kind: "refused"; message: string }>
   /** One block's settings edited in the inspector. */
   | Readonly<{ kind: "settings"; edit: StudioSettingsEdit }>
@@ -151,7 +176,9 @@ export const classifyCanvasChange = ({
     case "replace": {
       const before = itemAt(action.destinationZone, action.destinationIndex);
       const after = action.data as PuckItem;
-      if (before === undefined) return pageData();
+      // Puck's index can lag behind data replaced from outside (an Undo, another page): a block
+      // that is not the one the action names is a race, and the whole data compares the candidate.
+      if (before === undefined || before.props.id !== after.props.id) return pageData();
       const { keys, slots } = changedProps(before, after);
       if (slots) return pageData();
       if (keys.length === 0) return { kind: "unchanged" };
@@ -177,7 +204,13 @@ export const classifyCanvasChange = ({
       const moved = itemAt(zone, action.sourceIndex);
       const order = idsOf(puckZoneItems(candidate, zone, locate));
       const was = idsOf(puckZoneItems(shown, zone, locate));
-      if (moved === undefined || order === undefined || was === undefined) return pageData();
+      if (
+        moved === undefined ||
+        order === undefined ||
+        was === undefined ||
+        order[action.destinationIndex] !== moved.props.id
+      )
+        return pageData();
       if (order.length === was.length && order.every((id, index) => id === was[index]))
         return { kind: "unchanged" };
       return {
