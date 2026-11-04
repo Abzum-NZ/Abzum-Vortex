@@ -435,3 +435,5 @@ grant execute on function vortex_definition.activate_application_installation(uu
   to vortex_request;
 comment on function vortex_definition.activate_application_installation(uuid, bigint, jsonb) is
   'Revision-checked atomic activation of the complete exact Module pin set for one Application release.';
+
+reset role;
