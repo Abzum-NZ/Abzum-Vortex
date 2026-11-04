@@ -1,45 +1,27 @@
 "use client";
 
-import {
-  createContext,
-  useCallback,
-  useContext,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type ReactNode,
-} from "react";
-import {
-  createUsePuck,
-  Puck,
-  useGetPuck,
-  type ComponentConfig,
-  type Field,
-} from "@puckeditor/core";
+import { useCallback, useMemo, useRef, useState, type ReactNode } from "react";
+import { Puck, type ComponentConfig, type Field } from "@puckeditor/core";
 import {
   canonicalJson,
   componentSettingApplies,
   plainSettingValue,
-  plainSourceSettingValue,
-  typedSourceSettingValue,
   type BlockPropertySchemaContract,
   type PlatformBlockRelease,
 } from "@vortex/platform/schema";
 import { FieldGroup } from "../components/field";
-import { StudioField } from "./studio-field";
+import {
+  StudioSettingFieldsContext,
+  studioQueryField,
+  studioQueryFieldName,
+  studioSettingField,
+  studioTypedSettings,
+  usePuckSelector,
+  type StudioSettingFieldsValue,
+} from "./studio-puck-field-types";
 import { studioGridFeaturesProperty } from "./studio-grid-features";
 import { splitMoreSettings } from "./studio-more-settings";
-import { StudioSettingControl, StudioSettingNote } from "./studio-setting-controls";
-import {
-  conditionalRequiredMessage,
-  settleStudioSetting,
-  studioSettingProblems,
-  type SettingValue,
-  type StudioSettingChoices,
-  type StudioSettingValues,
-} from "./studio-setting-model";
-import { studioTotalMeasureProperty } from "./grid-features/totals";
+import { studioBlockReadsQuery } from "./application-composition-commands";
 import { studioOwnsSetting } from "./contextual-palette";
 
 /**
@@ -57,22 +39,7 @@ import { studioOwnsSetting } from "./contextual-palette";
  */
 export const studioVortexField = { type: "object", objectFields: {}, visible: false } as Field;
 
-/** What the setting controls need that a field's own value does not hold. */
-export type StudioSettingFieldsValue = Readonly<{
-  /** What reference settings can point at, for the selected block's data. */
-  choices: StudioSettingChoices;
-  disabled: boolean;
-}>;
-
-/** The settings the person has edited since the selected block was chosen (the label note reads them). */
-type StudioSettingFieldsContextValue = StudioSettingFieldsValue &
-  Readonly<{ scope: string; touched: ReadonlySet<string>; touch: (key: string) => void }>;
-
-const StudioSettingFieldsContext = createContext<StudioSettingFieldsContextValue | null>(null);
-
 const noKeys: ReadonlySet<string> = new Set();
-
-const usePuckSelector = createUsePuck();
 
 /**
  * The declared settings that are plain fields of the inspector. The others have a control of their
@@ -98,141 +65,7 @@ const studioFieldSettings = (
   );
 };
 
-/** The typed settings a block's plain props hold; a prop that is not a valid value of its declaration is left out. */
-const studioTypedSettings = (
-  props: Readonly<Record<string, unknown>>,
-  properties: readonly BlockPropertySchemaContract[],
-): StudioSettingValues => {
-  const typed: Record<string, NonNullable<SettingValue>> = {};
-  for (const property of properties) {
-    const plain = props[property.key];
-    if (plain === undefined) continue;
-    const value = typedSourceSettingValue(plain, property, [property.key], []);
-    if (value !== undefined) typed[property.key] = value;
-  }
-  return typed;
-};
-
-type SettingFieldRenderProps = Readonly<{
-  value: unknown;
-  onChange: (value: unknown) => void;
-  readOnly?: boolean | undefined;
-}>;
-
-/** The control of one declared setting as a Puck custom field. */
-function StudioSettingField({
-  property,
-  properties,
-  field,
-}: Readonly<{
-  property: BlockPropertySchemaContract;
-  properties: readonly BlockPropertySchemaContract[];
-  field: SettingFieldRenderProps;
-}>) {
-  const context = useContext(StudioSettingFieldsContext);
-  const getPuck = useGetPuck();
-  // The selected block's values, subscribed to: the label note and the total measure depend on the
-  // sibling settings.
-  const props = usePuckSelector((state) => state.selectedItem?.props) ?? noProps;
-  // Input that is not valid yet: the control shows it and the field says why; Puck never sees it.
-  const [held, setHeld] = useState<Readonly<{ value: SettingValue; problem: string }> | null>(null);
-  const plain = field.value;
-  const plainKey = JSON.stringify(plain ?? null);
-  // The draft changed under the held input (Undo, Redo, another block): it is dropped.
-  useEffect(() => setHeld(null), [plainKey]);
-  const typed = useMemo(
-    () =>
-      plain === undefined
-        ? undefined
-        : typedSourceSettingValue(plain, property, [property.key], []),
-    // The plain value is compared by content: Puck hands over a fresh object for the same setting.
-    [plainKey, property],
-  );
-  if (context === null) return null;
-  const { choices, disabled, scope, touched, touch } = context;
-  const values = studioTypedSettings(props, properties);
-  const change = (next: SettingValue) => {
-    touch(property.key);
-    const now = studioTypedSettings(getPuck().selectedItem?.props ?? {}, properties);
-    const settled = settleStudioSetting(properties, now, property.key, next);
-    // Only what this change introduced holds the input: a problem the block already has, or a
-    // sibling that now needs a value, is not this field's.
-    const before = new Set(studioSettingProblems(now, properties, choices));
-    const problems = studioSettingProblems(settled, properties, choices).filter(
-      (problem) => !before.has(problem),
-    );
-    if (problems.length > 0) {
-      setHeld({ value: next, problem: problems.join(" ") });
-      return;
-    }
-    setHeld(null);
-    field.onChange(next === undefined ? undefined : plainSourceSettingValue(next));
-  };
-  const shown = held === null ? typed : held.value;
-  const requiredBySibling =
-    property.required &&
-    property.showWhen !== undefined &&
-    property.defaultValue === undefined &&
-    typed === undefined;
-  const error =
-    held !== null
-      ? held.problem
-      : requiredBySibling
-        ? conditionalRequiredMessage(property)
-        : undefined;
-  return (
-    <div className="space-y-2" data-vortex-setting={property.key}>
-      <StudioField
-        label={property.label}
-        optional={!property.required}
-        hint={property.help}
-        error={error}
-      >
-        {(control) => (
-          <StudioSettingControl
-            id={control.id}
-            descriptionId={control["aria-describedby"]}
-            invalid={control["aria-invalid"] === true}
-            property={studioTotalMeasureProperty(property, properties, values, choices.fields)}
-            value={shown}
-            onChange={change}
-            choices={choices}
-            disabled={disabled || field.readOnly === true}
-          />
-        )}
-      </StudioField>
-      <StudioSettingNote
-        property={property}
-        properties={properties}
-        values={values}
-        choices={choices}
-        disabled={disabled}
-        scope={scope}
-        touched={touched}
-        onUseFieldLabel={() => change(undefined)}
-      />
-    </div>
-  );
-}
-
 const noProps: Readonly<Record<string, unknown>> = {};
-
-/** A declared setting as a Puck field. */
-const settingField = (
-  release: PlatformBlockRelease,
-  property: BlockPropertySchemaContract,
-  properties: readonly BlockPropertySchemaContract[],
-): Field =>
-  ({
-    type: "custom",
-    label: property.label,
-    // Puck keeps a custom field's render per key: a release change in place must not keep the first
-    // release's declaration.
-    key: `${release.blockId}@${release.releaseVersion}:${property.key}`,
-    render: (field: SettingFieldRenderProps) => (
-      <StudioSettingField property={property} properties={properties} field={field} />
-    ),
-  }) as unknown as Field;
 
 /** The fields of one placement: its shown settings first, every other prop hidden from the inspector. */
 const studioSettingFields = (
@@ -243,10 +76,14 @@ const studioSettingFields = (
   const listed = studioFieldSettings(release.properties as readonly BlockPropertySchemaContract[]);
   const values =
     props === undefined ? undefined : studioTypedSettings(props, release.properties as never);
-  const fields: Record<string, Field> = {};
+  // A block that reads data chooses it first, and the bindings of its inputs follow.
+  const readsQuery = props !== undefined && studioBlockReadsQuery(release, props);
+  const fields: Record<string, Field> = readsQuery
+    ? { [studioQueryFieldName]: studioQueryField }
+    : {};
   for (const property of listed) {
     if (values !== undefined && !componentSettingApplies(property, values)) continue;
-    fields[property.key] = settingField(release, property, release.properties as never);
+    fields[property.key] = studioSettingField(release, property, release.properties as never);
   }
   for (const [key, field] of Object.entries(base))
     if (fields[key] === undefined) fields[key] = { ...field, visible: false } as Field;
@@ -289,7 +126,11 @@ function StudioSettingFieldList({
     };
   }
   const controls = Object.entries(fields)
-    .filter(([key, node]) => node !== undefined && release.properties.some((p) => p.key === key))
+    .filter(
+      ([key, node]) =>
+        node !== undefined &&
+        (key === studioQueryFieldName || release.properties.some((p) => p.key === key)),
+    )
     .map(([key, node]) => ({ key, node: <div key={key}>{node}</div> }));
   return <FieldGroup>{splitMoreSettings(controls, decided.current.keys)}</FieldGroup>;
 }
@@ -339,6 +180,7 @@ export const withSettingFields = (
 export function StudioBlockSettingFields({
   choices,
   disabled,
+  query,
   placementAlias,
 }: Readonly<
   StudioSettingFieldsValue & {
@@ -364,11 +206,12 @@ export function StudioBlockSettingFields({
     () => ({
       choices,
       disabled,
+      query,
       scope,
       touched: touched.scope === scope ? touched.keys : noKeys,
       touch,
     }),
-    [choices, disabled, scope, touched, touch],
+    [choices, disabled, query, scope, touched, touch],
   );
   return (
     <StudioSettingFieldsContext.Provider value={value}>

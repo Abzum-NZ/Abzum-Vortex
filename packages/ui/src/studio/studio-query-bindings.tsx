@@ -360,6 +360,7 @@ export function StudioQueryBindings({
               (input.type?.kind === "record" ? (
                 <StudioRecordReferenceControl
                   id={`${id}-${input.key}-record`}
+                  label={input.label}
                   recordTypes={choices.recordTypes.filter(
                     (record) =>
                       input.type?.kind === "record" && input.type.recordTypes.includes(record.key),

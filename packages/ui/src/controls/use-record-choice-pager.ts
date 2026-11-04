@@ -12,6 +12,8 @@ export type RecordChoicePagerPage<Item> = Readonly<{
 export type RecordChoicePagerReader<Item> = (
   search: string,
   continuationToken?: string,
+  /** Aborted when the read is no longer wanted (a newer read, a reset, the picker closing or leaving). */
+  signal?: AbortSignal,
 ) => Promise<RecordChoicePagerPage<Item> | undefined>;
 
 export type RecordChoicePager<Item> = Readonly<{
@@ -51,16 +53,20 @@ export function useRecordChoicePager<Item>(
   const [loading, setLoading] = useState(false);
   const [failed, setFailed] = useState(false);
   const generation = useRef(0);
+  const reading = useRef<AbortController | null>(null);
   const reader = useRef(options.read);
   reader.current = options.read;
   const bounded = search.trim().slice(0, RECORD_CHOICE_SEARCH_LIMIT);
 
   const readPage = (continuationToken: string | undefined, append: boolean): void => {
     const request = ++generation.current;
+    reading.current?.abort();
+    const controller = new AbortController();
+    reading.current = controller;
     setLoading(true);
     setFailed(false);
     void reader
-      .current(bounded, continuationToken)
+      .current(bounded, continuationToken, controller.signal)
       .then((page) => {
         if (generation.current !== request) return;
         if (page === undefined) {
@@ -83,6 +89,7 @@ export function useRecordChoicePager<Item>(
   useEffect(() => {
     if (!open || disabled) {
       generation.current += 1;
+      reading.current?.abort();
       return;
     }
     const timeout = window.setTimeout(
@@ -92,6 +99,7 @@ export function useRecordChoicePager<Item>(
     return () => {
       window.clearTimeout(timeout);
       generation.current += 1;
+      reading.current?.abort();
     };
   }, [open, disabled, bounded]);
 
@@ -105,6 +113,7 @@ export function useRecordChoicePager<Item>(
     },
     reset: () => {
       generation.current += 1;
+      reading.current?.abort();
       setItems([]);
       setNext(undefined);
       setLoading(false);
