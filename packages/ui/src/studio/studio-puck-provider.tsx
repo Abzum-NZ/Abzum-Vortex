@@ -36,18 +36,21 @@ import type { FieldInputControlReleaseMap } from "../registry";
 import type { PlatformThemeTokens } from "../theme";
 import type { StudioCompileFailure } from "./compile-failure";
 import type {
+  StudioCanvasOwner,
+  StudioCompositionCommand,
   StudioCompositionOutcome,
   StudioCompositionAddTargetsModel,
   StudioCompositionDestination,
   StudioCompositionOwner,
 } from "./application-composition-commands";
 import type { StudioCanvasFrame } from "./studio-canvas-projection";
-import { applyPageDataChange, type StudioCanvasOwner } from "./studio-canvas-change";
 import {
-  settingKeysOf,
-  singleBlockPropsEdit,
-  type StudioSettingsEdit,
-} from "./studio-settings-edit";
+  classifyCanvasChange,
+  isCanvasDataAction,
+  isNoOpCanvasAction,
+} from "./studio-canvas-change";
+import type { StudioSettingsEdit } from "./studio-settings-edit";
+import type { StudioSemanticSelection } from "./semantic-selection";
 import type { StudioPlacementDescriber } from "./semantic-outline";
 import {
   destinationOfZone,
@@ -58,8 +61,8 @@ import {
   puckSelectorOf,
   rootSlotHolding,
   studioBlockName,
-  withoutEmptyPuckZones,
   type StudioCanvasCompiledSlot,
+  type StudioPuckLocate,
   type StudioPuckSelector,
 } from "./studio-canvas-data";
 import { toast } from "../components/sonner";
@@ -153,7 +156,15 @@ export type StudioPuckInput = Readonly<{
   disabledReason?: string | undefined;
   /** Why the saved draft would not compile; the page stays open so the cause can be corrected. */
   compileFailure?: StudioCompileFailure | null | undefined;
-  onChange: (expectedSource: ApplicationSourceDocument, source: ApplicationSourceDocument) => void;
+  /**
+   * A change of the canvas, run against the draft as the canvas showed it (`expectedSource`)
+   * through the one composition command route; a change made since makes it stale.
+   */
+  onCanvasChange: (
+    selection: StudioSemanticSelection | null,
+    change: StudioCompositionCommand,
+    expectedSource: ApplicationSourceDocument,
+  ) => StudioCompositionOutcome;
   /**
    * One block's settings edited in the inspector, run against the draft as it is now through the
    * one composition command route; `merge` joins a run of edits to one value into one Undo step.
@@ -374,9 +385,10 @@ export function StudioPuckProvider({
   const inserted = useRef<Set<string>>(new Set());
   // The block a refused removal named: the change that carries the removal is refused with it.
   const refusedRemoval = useRef<string | null>(null);
-  // The name of the block Puck has just removed (its Delete key or the bar's Remove): once the
-  // draft takes the removal, the Undo toast names it.
-  const removing = useRef<string | null>(null);
+  // The data actions Puck ran since it last reported its data: the report is classified from them.
+  const pending = useRef<PuckAction[]>([]);
+  // Puck's own reader of where a block sits, set by `StudioPuckSync`.
+  const getPuckRef = useRef<(() => { getSelectorForId: StudioPuckLocate }) | null>(null);
   // Typing into one field of one block is a run of edits, so one Undo; a new run starts when the
   // focused field or the selected block changes.
   const run = useRef({ focus: null as string | null, selector: "", count: 0 });
@@ -387,8 +399,9 @@ export function StudioPuckProvider({
   const latest = useRef({ input, model, permitted, settingsPermitted });
   latest.current = { input, model, permitted, settingsPermitted };
 
-  // Every canvas change goes back through the definition: it is placed in the current draft and
-  // validated before the history takes it. A refused change is shown as the draft still is.
+  // Every canvas change goes back through the definition: the Puck actions that made it say what
+  // it is (`classifyCanvasChange`), and the one command route places it in the current draft and
+  // validates it before the history takes it. A refused change is shown as the draft still is.
   const change = useCallback((candidate: Data) => {
     const {
       input: now,
@@ -396,9 +409,9 @@ export function StudioPuckProvider({
       permitted: allowed,
       settingsPermitted: settingsAllowed,
     } = latest.current;
+    const actions = pending.current;
+    pending.current = [];
     if (synchronizing.current) return;
-    const removed = removing.current;
-    removing.current = null;
     const refusedId = refusedRemoval.current;
     if (refusedId !== null) {
       refusedRemoval.current = null;
@@ -407,57 +420,6 @@ export function StudioPuckProvider({
         return;
       }
     }
-    // One block's settings edited in the inspector (a page's or a layout's block): the settings
-    // command writes them, on every screen, and a run of edits to one field is one Undo step. A settings edit never falls
-    // through to the page write; only an edit that changes nothing but the slot order does.
-    if (
-      settingsAllowed &&
-      (now.pageAlias !== undefined || now.layoutAlias !== undefined) &&
-      shown.shown !== undefined
-    ) {
-      // Puck holds the screen's own order (Tablet and Phone reorder slots for display), so a
-      // settings edit is found against what Puck was given; the settings command writes from the
-      // live draft, so the screen order is kept.
-      const edit = singleBlockPropsEdit(shown.shown, candidate);
-      const keys = edit === undefined ? [] : settingKeysOf(edit.keys);
-      if (edit !== undefined && keys.length > 0) {
-        // Only the selected block's settings are edited here.
-        const before = now.blockActions.mark();
-        const outcome: StudioCompositionOutcome =
-          edit.alias === now.selectedPlacementAlias
-            ? now.onSettingsEdit(
-                { ...edit, keys },
-                `settings:${edit.alias}:${keys.join(",")}:${run.current.count}`,
-              )
-            : { kind: "invalid" };
-        if (outcome.kind === "applied") {
-          setRefused(null);
-          // A later change of any kind withdraws the removal's Undo offer; an edit that changed
-          // nothing leaves the draft, and so the offer, as it was.
-          if (now.blockActions.mark() !== before) toast.dismiss(REMOVED_TOAST);
-          return;
-        }
-        if (outcome.kind === "refused" || outcome.kind === "unsupported")
-          console.info("[studio] a setting change was refused:", outcome.kind);
-        else console.error("[studio] the settings command failed:", outcome.kind);
-        setResync((generation) => generation + 1);
-        setRefused({
-          area: shown.area,
-          message:
-            outcome.kind === "refused" && outcome.reason !== undefined
-              ? outcome.reason
-              : "That setting could not be changed. The block stays as it was.",
-        });
-        return;
-      }
-    }
-    // A change made while the canvas cannot take edits (hidden, read-only, locked) is never kept:
-    // Puck shows the draft again, so the move cannot be committed later.
-    if (!allowed) {
-      setResync((generation) => generation + 1);
-      return;
-    }
-    if (shown.data === undefined) return;
     const owner: StudioCanvasOwner | undefined =
       shown.owner === "layout"
         ? now.layoutAlias === undefined
@@ -466,44 +428,96 @@ export function StudioPuckProvider({
         : now.pageAlias === undefined
           ? undefined
           : { kind: "page", pageAlias: now.pageAlias, step: shown.step };
-    if (owner === undefined) return;
+    if (owner === undefined || shown.shown === undefined) return;
     // A block inserted from the drawer is added by Studio's add command, not by this edit.
     for (const id of inserted.current) if (puckItemsHold(candidate, id)) return;
-    const result = applyPageDataChange(
-      shown.catalogue,
-      now.source,
+    const classified = classifyCanvasChange({
+      catalogue: shown.catalogue,
+      source: now.source,
       owner,
-      withoutEmptyPuckZones(candidate),
-    );
-    if (result.kind === "unchanged") return;
-    if (result.kind === "refused") {
+      shown: shown.shown,
+      candidate,
+      actions,
+      selected: now.selectedPlacementAlias,
+      locate: (alias) => getPuckRef.current?.().getSelectorForId(alias),
+      permitted: allowed,
+      settingsPermitted: settingsAllowed,
+    });
+    if (classified.kind === "unchanged") return;
+    // A change made while the canvas cannot take it (hidden, read-only, locked) is never kept:
+    // Puck shows the draft again, so the move cannot be committed later.
+    if (classified.kind === "forbidden") {
       setResync((generation) => generation + 1);
-      setRefused({ area: shown.area, message: result.message });
       return;
     }
-    setRefused(null);
+    if (classified.kind === "refused") {
+      setResync((generation) => generation + 1);
+      setRefused({ area: shown.area, message: classified.message });
+      return;
+    }
+    // The name of a removed block is read before the draft takes the removal (the Undo toast
+    // names it).
+    const removedAlias =
+      classified.kind === "change" &&
+      classified.change.kind === "remove" &&
+      classified.selection?.kind === "placement"
+        ? classified.selection.placementAlias
+        : null;
+    const removedName =
+      removedAlias === null
+        ? null
+        : (studioBlockName(now.describePlacement, shown.items, removedAlias) ?? "block");
     const before = now.blockActions.mark();
-    now.onChange(now.source, result.source);
-    const after = now.blockActions.mark();
-    // The draft took the change. One delete for the Delete key and the bar's Remove: it is
-    // immediate, and Undo is offered for exactly the draft the removal produced; a later change of
-    // any kind withdraws the offer.
-    if (after === before) return;
-    if (removed === null) {
-      toast.dismiss(REMOVED_TOAST);
+    // A run of edits to one field of one block is one Undo step.
+    const merge =
+      classified.kind === "settings"
+        ? `settings:${classified.edit.alias}:${classified.edit.keys.join(",")}:${run.current.count}`
+        : "";
+    const outcome: StudioCompositionOutcome =
+      classified.kind === "settings"
+        ? now.onSettingsEdit(classified.edit, merge)
+        : now.onCanvasChange(classified.selection, classified.change, classified.expectedSource);
+    if (outcome.kind === "applied") {
+      setRefused(null);
+      // Duplicate selects the copy, as it does in Puck.
+      if (classified.kind === "change" && classified.select !== undefined)
+        void now.onSelectPlacement(classified.select);
+      const after = now.blockActions.mark();
+      // An edit that changed nothing leaves the draft, and so the removal's Undo offer, as it was.
+      if (after === before) return;
+      // The draft took the change. One delete for the Delete key and the bar's Remove: it is
+      // immediate, and Undo is offered for exactly the draft the removal produced; a later change
+      // of any kind withdraws the offer.
+      if (removedName === null) {
+        toast.dismiss(REMOVED_TOAST);
+        return;
+      }
+      toast(`Removed ${removedName}`, {
+        id: REMOVED_TOAST,
+        action: {
+          label: "Undo",
+          onClick: () => {
+            if (!latest.current.input.blockActions.undoIf(after))
+              console.info(
+                "[studio] the removal's Undo was offered for an older draft; nothing was undone",
+              );
+          },
+        },
+      });
       return;
     }
-    toast(`Removed ${removed}`, {
-      id: REMOVED_TOAST,
-      action: {
-        label: "Undo",
-        onClick: () => {
-          if (!latest.current.input.blockActions.undoIf(after))
-            console.info(
-              "[studio] the removal's Undo was offered for an older draft; nothing was undone",
-            );
-        },
-      },
+    if (outcome.kind === "refused" || outcome.kind === "stale" || outcome.kind === "unsupported")
+      console.info(`[studio] a canvas change was not applied: ${outcome.kind}`);
+    else console.error(`[studio] the canvas change failed: ${outcome.kind}`);
+    setResync((generation) => generation + 1);
+    setRefused({
+      area: shown.area,
+      message:
+        outcome.kind === "refused" && outcome.reason !== undefined
+          ? outcome.reason
+          : classified.kind === "settings"
+            ? "That setting could not be changed. The block stays as it was."
+            : "This change could not be applied. The saved draft and current edits are preserved.",
     });
   }, []);
 
@@ -547,10 +561,24 @@ export function StudioPuckProvider({
         });
         return;
       }
-      removing.current =
-        (removed === null
-          ? undefined
-          : studioBlockName(now.describePlacement, shown.items, removed)) ?? "block";
+    }
+    // What the next report of Puck's data is classified from. An action that changes nothing is
+    // never reported, so it is not kept (it would turn the next edit into a whole-page write).
+    if (
+      isCanvasDataAction(action) &&
+      !isNoOpCanvasAction(action, previous.data, (alias) =>
+        getPuckRef.current?.().getSelectorForId(alias),
+      )
+    ) {
+      const last = pending.current[pending.current.length - 1];
+      if (
+        last?.type === "replace" &&
+        action.type === "replace" &&
+        last.destinationZone === action.destinationZone &&
+        last.destinationIndex === action.destinationIndex
+      )
+        pending.current.pop();
+      pending.current.push(action);
     }
     // A drop or an Add from the drawer: Puck has put an interim block (the release defaults) in its
     // own data; Studio adds the real one.
@@ -696,6 +724,7 @@ export function StudioPuckProvider({
                 synchronizing={synchronizing}
                 deriving={deriving}
                 showSelection={showSelection}
+                getPuckRef={getPuckRef}
               />
               <div className="flex h-full min-h-0 flex-col">{children}</div>
             </Puck>
@@ -766,6 +795,7 @@ function StudioPuckSync({
   synchronizing,
   deriving,
   showSelection,
+  getPuckRef,
 }: Readonly<{
   /** The config the page on the canvas is drawn with. */
   config: Config;
@@ -788,8 +818,16 @@ function StudioPuckSync({
   deriving: RefObject<boolean>;
   /** Lets the provider put Studio's selection back on the canvas. */
   showSelection: RefObject<((alias: string | null) => void) | null>;
+  /** Lets the provider ask Puck where a block sits. */
+  getPuckRef: RefObject<(() => { getSelectorForId: StudioPuckLocate }) | null>;
 }>) {
   const getPuck = useGetPuck();
+  useLayoutEffect(() => {
+    getPuckRef.current = getPuck;
+    return () => {
+      getPuckRef.current = null;
+    };
+  }, [getPuck, getPuckRef]);
   // A workspace opened again after a page with other outlets: the focus it had comes back.
   useLayoutEffect(() => {
     restoreFocus(false);

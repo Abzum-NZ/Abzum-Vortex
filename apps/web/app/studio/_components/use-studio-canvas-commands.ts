@@ -1,8 +1,4 @@
-import {
-  applicationSourceDocumentSchema,
-  type ApplicationSourceDocument,
-  type ConditionNode,
-} from "@vortex/platform/schema";
+import type { ApplicationSourceDocument, ConditionNode } from "@vortex/platform/schema";
 import {
   applyStudioCompositionCommand,
   applyStudioItemLabels,
@@ -31,6 +27,8 @@ type DraftChangeOptions = Readonly<{
   merge?: string | undefined;
   /** The reading the caller's view was drawn from; any other current one makes the change stale. */
   expected?: StudioCompositionContext | undefined;
+  /** The draft a view of the canvas was drawn from; any other current one refuses the change. */
+  expectedSource?: ApplicationSourceDocument | undefined;
 }>;
 
 /** The ways a person, the canvas and the agent change a page's composition, over one draft. */
@@ -48,10 +46,11 @@ export type StudioCanvasCommands = Readonly<{
     merge?: string,
   ) => StudioCompositionOutcome;
   onSettingsEdit: (edit: StudioSettingsEdit, merge: string) => StudioCompositionOutcome;
-  applyPuckPageEdit: (
+  onCanvasChange: (
+    selection: StudioSemanticSelection | null,
+    change: StudioCompositionCommand,
     expectedSource: ApplicationSourceDocument,
-    nextSource: ApplicationSourceDocument,
-  ) => void;
+  ) => StudioCompositionOutcome;
   runAdd: (change: Extract<StudioCompositionCommand, { kind: "add" }>) => string | true;
   commandPageValue: (command: StudioPageValueCommand) => StudioPageValueResult;
   commandReaction: (
@@ -79,15 +78,11 @@ export function useStudioCanvasCommands({
   organizationId,
   key,
   blockChoices,
-  canvasPageRef,
-  setNotice,
 }: Readonly<{
   draft: StudioDraft;
   organizationId: string;
   key: string;
   blockChoices: Parameters<typeof studioBlockChoices>[0];
-  canvasPageRef: Readonly<{ current: string | undefined }>;
-  setNotice: (notice: string) => void;
 }>): StudioCanvasCommands {
   const liveContext = (): StudioCompositionContext => {
     const current = draft.history.getState();
@@ -135,7 +130,7 @@ export function useStudioCanvasCommands({
               : { kind: result.kind },
         };
       },
-      { merge: options.merge },
+      { merge: options.merge, expected: options.expectedSource },
     );
     return outcome.kind === "done" ? outcome.result : { kind: "refused", reason: outcome.message };
   };
@@ -147,6 +142,8 @@ export function useStudioCanvasCommands({
     change,
     merge,
   ) => {
+    // The whole-page write comes from the canvas alone (`onCanvasChange`).
+    if (change.kind === "pageData") return { kind: "invalid" };
     const now = draft.selection.getSelection();
     if (
       now === null ||
@@ -172,25 +169,13 @@ export function useStudioCanvasCommands({
     });
   };
 
-  // A drag on the canvas: the canvas edits the draft it was drawn from, so any change in between
-  // makes it stale.
-  const applyPuckPageEdit: StudioCanvasCommands["applyPuckPageEdit"] = (
+  // A change of the canvas (a drag, Duplicate, Delete): it edits the draft it was drawn from, so
+  // any change in between makes it stale.
+  const onCanvasChange: StudioCanvasCommands["onCanvasChange"] = (
+    selection,
+    change,
     expectedSource,
-    nextSource,
-  ) => {
-    if (canvasPageRef.current === undefined) return;
-    const parsed = applicationSourceDocumentSchema.safeParse(nextSource);
-    if (!parsed.success) {
-      console.error("Failed to validate Puck page changes", parsed.error);
-      setNotice("This page change could not be applied. Your draft is unchanged.");
-      return;
-    }
-    if (parsed.data.key !== key || parsed.data.root_alias !== draft.state.source.root_alias) return;
-    const outcome = draft.run(() => ({ kind: "edit", source: parsed.data, result: true }), {
-      expected: expectedSource,
-    });
-    setNotice(outcome.kind === "blocked" ? outcome.message : "");
-  };
+  ) => runDraftChange(selection, change, { expectedSource });
 
   // The one add path for a new block: a drop on the canvas, the palette's Add button and the
   // setup dialog.
@@ -272,7 +257,7 @@ export function useStudioCanvasCommands({
     runDraftChange,
     commandComposition,
     onSettingsEdit,
-    applyPuckPageEdit,
+    onCanvasChange,
     runAdd,
     commandPageValue,
     commandReaction,

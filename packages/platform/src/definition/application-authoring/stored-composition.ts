@@ -767,13 +767,19 @@ export const storedPageDataFromPuck = <Zoned extends SourceZonedData>(
   return { data, copies };
 };
 
-/** The item with every block name and slot order left out, to compare a copy with its original. */
+/**
+ * The item with every block name, slot order and empty list left out, to compare a copy with its
+ * original (Puck's copy leaves an empty slot out where the original holds `[]`).
+ */
 const withoutIdentity = (value: unknown): unknown => {
   if (Array.isArray(value)) return value.map(withoutIdentity);
   if (value === null || typeof value !== "object") return value;
   return Object.fromEntries(
     Object.entries(value as Record<string, unknown>)
-      .filter(([key]) => key !== "id" && key !== "slot_orders")
+      .filter(
+        ([key, entry]) =>
+          key !== "id" && key !== "slot_orders" && !(Array.isArray(entry) && entry.length === 0),
+      )
       .sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0))
       .map(([key, entry]) => [key, withoutIdentity(entry)]),
   );
