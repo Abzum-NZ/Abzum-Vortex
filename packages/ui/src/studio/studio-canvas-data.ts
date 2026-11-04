@@ -124,7 +124,8 @@ const ROOT_ZONE = "root:default-zone";
 
 /**
  * The keys of the repeating slots the items hold (a tab is stored as `tab_<key>`), by renderer key,
- * in the order the items hold them: the canvas config declares a slot field for each, because Puck finds slots only there.
+ * in the order the items hold them. The canvas config declares a slot field for each, because Puck
+ * finds slots only through the config's fields.
  */
 export const repeatingSlotKeys = (
   catalogue: ImmutablePlatformBlockCatalogue,
