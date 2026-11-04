@@ -78,7 +78,6 @@ import type { StudioApplicationCanvasFrames } from "../../_lib/studio-applicatio
 import { studioMenuPosition } from "@vortex/platform/schema";
 import type { StudioInspectorAction } from "@vortex/ui/studio";
 import { ApplicationCompositionEditor } from "./application-composition-editor";
-import { StudioBlockVisibility } from "./studio-block-gate";
 import { StudioBlockSetupDialog, type StudioBlockSetupRequest } from "./studio-block-setup-dialog";
 import { StudioBlockDialogs } from "./studio-block-dialogs";
 import { StudioQuerySheet } from "./studio-query-sheet";
@@ -772,7 +771,7 @@ export function useStudioCanvasTab({
       : outcome.result;
   };
 
-  const commandReaction: Parameters<typeof StudioBlockVisibility>[0]["onReaction"] = (
+  const commandReaction: Parameters<typeof ApplicationCompositionEditor>[0]["onReaction"] = (
     expected,
     expectedSelection,
     metadata,
@@ -1009,20 +1008,11 @@ export function useStudioCanvasTab({
           disabled={draft.locked}
           choices={blockChoices}
           compiledFields={view.compiledFields}
+          saved={draft.saved}
+          onReaction={commandReaction}
           canvasArrangement={studioCanvasGridArrangement(gridStates.get(selected.placementAlias))}
           onCommand={commandComposition}
           onNewQuery={(use) => setQuerySheet({ use })}
-        />
-      )}
-      {selected?.kind === "placement" && inspector.status === "resolved" && (
-        <StudioBlockVisibility
-          key={`visibility:${draft.lifetime}:${selectionKey}`}
-          context={compositionContext}
-          selection={selected}
-          saved={draft.saved}
-          disabled={draft.locked}
-          onCommand={commandComposition}
-          onReaction={commandReaction}
         />
       )}
       {selected?.kind === "page" && inspector.status === "resolved" && (

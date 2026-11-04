@@ -78,6 +78,7 @@ export {
 export * from "./application-home-dashboard";
 export * from "./application-item-labels";
 export * from "./studio-reference-picker";
+export * from "./studio-gate-select";
 export * from "./studio-entry-list";
 export * from "./studio-segmented-control";
 export * from "./studio-field";
@@ -88,6 +89,7 @@ export * from "./studio-limit";
 export { studioPageNestingLevels } from "./studio-composition-depth";
 export { StudioPuckOutline } from "./studio-puck-outline";
 export { StudioBlockSettingFields } from "./studio-puck-settings";
+export type { StudioAccessFieldValue } from "./studio-puck-field-types";
 export * from "./studio-inspector-actions";
 export * from "./studio-field-type-icon";
 export {

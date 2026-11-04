@@ -17,9 +17,9 @@ import {
   studioAccessMenuEntries,
   studioAccessPermissions,
   studioStandardFieldPolicy,
+  StudioGateSelect,
   StudioIconButton,
 } from "@vortex/ui/studio";
-import { StudioGateSelect } from "./studio-gate-select";
 import { StudioPermissionDeclaration } from "./studio-permission-declaration";
 import { StudioStandardFieldPolicy } from "./studio-standard-field-policy";
 import type { StudioAccessRun } from "./studio-access-role";
