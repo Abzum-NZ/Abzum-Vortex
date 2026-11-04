@@ -467,13 +467,15 @@ export function useStudioCanvasTab({
   // The inspector's name and description of the selected item: a run of typing is one Undo step.
   const setLabels = (name: string, description: string): string | true => {
     const selection = draft.selection.getSelection();
-    if (selection === null) return "This item is not in the draft any more.";
-    const result = commands.setLabels(
-      selection,
-      name,
-      description,
-      `labels:${studioSemanticSelectionKey(selection)}`,
-    );
+    const result =
+      selection === null
+        ? ({ kind: "not_found" } as const)
+        : commands.setLabels(
+            selection,
+            name,
+            description,
+            `labels:${studioSemanticSelectionKey(selection)}`,
+          );
     return result.kind === "applied"
       ? true
       : result.kind === "blocked"

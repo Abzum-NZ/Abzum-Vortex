@@ -3,12 +3,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { describeFailure, type SourceIdentityReservation } from "@vortex/platform/schema";
 import {
   StudioFieldProblemsProvider,
+  createStudioPlacementDescriber,
   projectStudioSemanticOutline,
   studioSemanticSelectionKey,
   type StudioSemanticSelection,
   type StudioStoredApplicationDraft,
 } from "@vortex/ui/studio";
-import { createStudioPlacementDescriber, studioOutlineLabels } from "../_lib/studio-labels";
+import { studioOutlineLabels } from "../_lib/studio-labels";
 import { studioPlaceSelection, studioTabOfSelection } from "../_lib/studio-places";
 import { describeStudioCompileFailure } from "../_lib/studio-compile-failure";
 import { ApplicationDraftAgentTools } from "./application-draft-agent-tools";

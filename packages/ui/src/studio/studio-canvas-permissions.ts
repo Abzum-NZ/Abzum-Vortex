@@ -4,6 +4,7 @@ import {
   sourceItemTree,
   type ApplicationSourceDocument,
   type ImmutablePlatformBlockCatalogue,
+  type ApplicationUsePlace,
   type SourceItem,
 } from "@vortex/platform/schema";
 import {
@@ -17,6 +18,9 @@ import {
   releaseFor,
   type Region,
 } from "./application-composition-regions";
+import { studioBlockName } from "./studio-canvas-data";
+import { createStudioPlacementDescriber } from "./studio-placement-describer";
+import type { StudioPlacementDescriber } from "./semantic-outline";
 import { studioLayoutOutletPlacementUses } from "./application-layout-outlets";
 import {
   studioPlacementReferenceSentence,
@@ -42,16 +46,26 @@ export const studioCanvasPermissionReason = (
   action: StudioCanvasAction,
 ): string | undefined => references[alias]?.[action];
 
-/** What still refers to a block, other than blocks that leave with it: query inputs and message targets. */
+/**
+ * What still refers to a block, other than blocks that leave with it: query inputs and message
+ * targets. A referring block is named as the Outline names it ("Data grid"), not by its alias.
+ */
 const studioPlacementReferrers = (
   source: ApplicationSourceDocument,
   alias: string,
   leaving: ReadonlySet<string>,
-) =>
+  index: StudioRemovalIndex,
+): readonly ApplicationUsePlace[] =>
   [
     ...applicationUses(source, { kind: "placement", placementAlias: alias }),
     ...applicationUses(source, { kind: "message_target", placementAlias: alias }),
-  ].filter((place) => place.open.kind !== "placement" || !leaving.has(place.open.placementAlias));
+  ]
+    .filter((place) => place.open.kind !== "placement" || !leaving.has(place.open.placementAlias))
+    .map((place) => {
+      const name =
+        place.open.kind === "placement" ? index.nameOf(place.open.placementAlias) : undefined;
+      return name === undefined ? place : { ...place, label: name };
+    });
 
 const studioPlacementUsersSentence = (users: string): string =>
   `This block is used by ${users}. Change that reference first.`;
@@ -122,6 +136,8 @@ export type StudioRemovalIndex = Readonly<{
   aliases: ReadonlySet<string>;
   placed: number;
   releaseUses: ReadonlyMap<string, number>;
+  /** The name the Outline gives a placed block, or undefined; the describer is built once. */
+  nameOf: (alias: string) => string | undefined;
   /** The sentence for a block that holds a layout outlet, or undefined; read once per block. */
   host: (alias: string) => string | undefined;
   flowReference: (alias: string) => StudioPlacementReference | undefined;
@@ -134,21 +150,30 @@ export const studioRemovalIndex = (
   source: ApplicationSourceDocument,
 ): StudioRemovalIndex => {
   const aliases = new Set<string>();
+  const byAlias = new Map<string, SourceItem>();
   const releaseUses = new Map<string, number>();
   let placed = 0;
   for (const region of regions(source))
     for (const item of sourceItemTree(region.zone.items)) {
       placed += 1;
       aliases.add(item.props.id);
+      byAlias.set(item.props.id, item);
       const key = releaseKey(item.props.vortex.block);
       releaseUses.set(key, (releaseUses.get(key) ?? 0) + 1);
     }
+  let describe: StudioPlacementDescriber | undefined;
   const hosts = new Map<string, string | null>();
   const read = new WeakMap<readonly SourceItem[], ReturnType<typeof studioRegionForms> | null>();
   return {
     aliases,
     placed,
     releaseUses,
+    nameOf: (alias) => {
+      const item = byAlias.get(alias);
+      if (item === undefined) return undefined;
+      describe ??= createStudioPlacementDescriber(catalogue, source);
+      return studioBlockName(describe, [item], alias);
+    },
     host: (alias) => {
       let held = hosts.get(alias);
       if (held === undefined) held = studioOutletHostRefusal(source, alias) ?? null;
@@ -202,7 +227,9 @@ export const studioRemovalRefusalAt = (
     const flow = index.flowReference(alias);
     if (flow !== undefined) return studioPlacementReferenceSentence(flow);
   }
-  const users = [...removed].flatMap((alias) => studioPlacementReferrers(source, alias, removed));
+  const users = [...removed].flatMap((alias) =>
+    studioPlacementReferrers(source, alias, removed, index),
+  );
   if (users.length > 0) return studioPlacementUsersSentence(describeApplicationUsers(users));
   const forms = index.forms(place.region);
   const broken =

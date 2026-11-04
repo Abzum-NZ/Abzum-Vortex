@@ -10,6 +10,7 @@ import {
   type ApplicationSourceDocument,
 } from "@vortex/platform/schema";
 import {
+  createStudioPlacementDescriber,
   describeStudioCompositionAddTargets,
   describeStudioCompositionRemoval,
   describeStudioCompositionSettings,
@@ -35,7 +36,6 @@ import {
   type ApplicationAuthoringToolName,
 } from "../_lib/application-authoring-tools";
 import { previewProblem } from "./studio-refusal-messages";
-import { createStudioPlacementDescriber } from "../_lib/studio-labels";
 import { studioActionTokens, type StudioActionToken } from "../../_lib/studio-action-tokens";
 import type { StudioDraft } from "./use-studio-draft";
 
@@ -132,7 +132,7 @@ const applicationTools: readonly StudioApplicationTool[] = [
   ),
   tool(
     "read_application_draft",
-    "Read the Application draft as it is in the workspace now: revision, whether an edit is still being saved, the outline of pages, placements, flows and navigation, for each page the places a new block can go with the blocks each admits, the queries a data block can read, and for each placement its declared settings. Call it first and after any refusal.",
+    "Read the Application draft as it is in the workspace now: revision, whether an edit is still being saved, the outline of pages, placements, flows and navigation, for each page the places a new block can go with the blocks each admits, the queries a data block can read, and for each placement its declared settings and whether it can be removed (removable: true, or the sentence that says why not). Call it first and after any refusal.",
     z.object({}).strict(),
     true,
   ),
@@ -223,7 +223,7 @@ const applicationTools: readonly StudioApplicationTool[] = [
   ),
   tool(
     "remove_placement",
-    "Remove a placement, the same edit as the Remove placement control. A placement the application still uses (a query, message, flow step or required field reads it) or that its page does not allow removing is refused with outcome refused and the sentence that names why; nothing changes. Studio saves the change automatically.",
+    "Remove a placement, the same edit as the Remove placement control. It is refused, with outcome refused and the sentence that names why, when its page does not allow removing it, it holds a layout outlet, it fills a required slot, a flow step names it, another block uses it, or its form would lose a required input; read_application_draft's removable gives the same sentence. Nothing changes then. Studio saves the change automatically.",
     z
       .object({ placementAlias: alias("The placement alias from read_application_draft.") })
       .strict(),
@@ -292,7 +292,10 @@ export function ApplicationDraftAgentTools({
     expectedSelection: StudioSemanticSelection,
     command: StudioCompositionCommand,
   ) => StudioCompositionOutcome;
-  /** The inspector's rename over the one draft; the agent passes no `merge`, so it is its own Undo step. */
+  /**
+   * The inspector's rename over the one draft. The agent passes no `merge`, so its rename is its own
+   * Undo step.
+   */
   rename: (
     selection: StudioSemanticSelection,
     name: string,
@@ -643,38 +646,26 @@ export function ApplicationDraftAgentTools({
           };
         }
         if (found.name === "rename_application_item") {
-          const input = parsed.data as {
-            target: "application" | "page";
-            pageAlias?: string;
-            name: string;
-            description?: string;
-          };
+          const input = parsed.data as
+            | { target: "application"; name: string; description: string }
+            | { target: "page"; pageAlias: string; name: string };
           const target: StudioSemanticSelection =
             input.target === "application"
               ? { kind: "application", applicationRootId: history.getState().rootId }
-              : { kind: "page", pageAlias: input.pageAlias ?? "" };
-          if (
-            input.target === "page" &&
-            !history.getState().source.body.pages.some((page) => page.id === input.pageAlias)
-          )
-            return {
-              outcome: "not_found",
-              message: "That page is not in the current draft. Call read_application_draft.",
-            };
-          if (!select(target))
-            return {
-              outcome: "invalid",
-              message: "That item cannot be selected, so nothing was changed.",
-            };
+              : { kind: "page", pageAlias: input.pageAlias };
+          // A page takes only a name; the application's description belongs to the application.
           const result = actions.current.rename(
             target,
             input.name,
-            input.description ?? history.getState().source.body.description,
+            input.target === "application" ? input.description : "",
           );
           if (result.kind === "not_found")
             return {
               outcome: "not_found",
-              message: "That item is not in the current draft. Call read_application_draft.",
+              message:
+                input.target === "page"
+                  ? "That page is not in the current draft. Call read_application_draft."
+                  : "That item is not in the current draft. Call read_application_draft.",
             };
           if (result.kind === "invalid")
             return {
@@ -684,7 +675,15 @@ export function ApplicationDraftAgentTools({
             };
           if (result.kind === "blocked") {
             console.info("[studio] agent rename refused: STUDIO_AGENT_RENAME_BLOCKED");
-            return { outcome: "refused", message: result.message };
+            return { outcome: "blocked", message: result.message };
+          }
+          // The person's inspector follows the item the agent renamed, once the rename has landed.
+          if (!select(target)) {
+            console.error("[studio] agent rename landed but its item cannot be selected");
+            return {
+              outcome: "invalid",
+              message: "The item was renamed but could not be selected.",
+            };
           }
           return {
             outcome: "applied",
