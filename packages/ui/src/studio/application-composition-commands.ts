@@ -96,6 +96,9 @@ import {
   plainSettings,
   movableRegion,
   regionRemovalCause,
+  removalRule,
+  publishedPage,
+  slotDeclaration,
 } from "./application-composition-regions";
 import { applyAdd, commandSettings } from "./application-composition-add";
 import { applyWrap } from "./application-composition-wrap";
@@ -284,13 +287,7 @@ const resolveSettings = (
   if (resolved === undefined) return { kind: "invalid" } as const;
   const { source, target } = resolved;
   const page = target.region.page;
-  if (
-    target.region.shell === undefined &&
-    (page === undefined ||
-      page.type === "public" ||
-      source.body.public_addresses.some((address) => address.page === page.id) ||
-      source.body.experiences?.some((experience) => experience.page === page.key))
-  )
+  if (target.region.shell === undefined && (page === undefined || publishedPage(source, page)))
     return { kind: "unsupported" } as const;
   const release = releaseFor(catalogue, target.item);
   if (release === undefined || !manifestMatches(catalogue, source, target.region.zone.items))
@@ -532,9 +529,32 @@ const resolveRemoval = (
   const { source, target, alias } = resolved;
   // A layout's blocks leave with everything inside them; a page removes only from its editable
   // content (the one rule, shared with the canvas's permissions).
-  const regionCause = regionRemovalCause(source, target.region);
-  if (regionCause !== undefined) return { kind: "unsupported", reason: regionCause };
+  // The steps to the block are walked once: inside a repeating area (a tab) a block cannot leave
+  // either, and a step that is not in the manifest is a mismatch (said after the rule).
+  let repeating = false;
+  let mismatch = false;
+  let last:
+    { declaration: { required: boolean }; child: { items: readonly unknown[] } } | undefined;
+  let zone = target.region.zone;
+  for (const step of target.steps) {
+    const parent = zone.items.find((item) => item.props.id === step.parentAlias);
+    const declaration =
+      parent === undefined
+        ? undefined
+        : slotDeclaration(releaseFor(catalogue, parent), step.slotKey);
+    const child = parent === undefined ? undefined : itemSlots(catalogue, parent).get(step.slotKey);
+    if (declaration === undefined || child === undefined) {
+      mismatch = true;
+      break;
+    }
+    repeating ||= declaration.repeats !== undefined;
+    last = { declaration, child };
+    zone = child;
+  }
+  const rule = removalRule(regionRemovalCause(source, target.region), repeating);
+  if (rule !== undefined) return { kind: "unsupported", reason: rule };
   if (
+    mismatch ||
     releaseFor(catalogue, target.item) === undefined ||
     !manifestMatches(catalogue, source, target.region.zone.items) ||
     (target.region.parent !== undefined && !pinnedRelease(catalogue, source, target.region.parent))
@@ -543,21 +563,13 @@ const resolveRemoval = (
   validateRegion(catalogue, target.region);
   if (studioLayoutOutletPlacementUses(source, alias).length > 0)
     return { kind: "blocked", reason: "content_outlet" };
-  let zone = target.region.zone;
-  for (const step of target.steps) {
-    const parent = zone.items.find((item) => item.props.id === step.parentAlias);
-    const declaration =
-      parent === undefined
-        ? undefined
-        : releaseFor(catalogue, parent)?.slots.find((item) => item.key === step.slotKey);
-    const child = parent === undefined ? undefined : itemSlots(catalogue, parent).get(step.slotKey);
-    if (declaration === undefined || child === undefined)
-      return { kind: "unsupported", reason: "manifest_mismatch" };
-    if (declaration.repeats !== undefined) return { kind: "unsupported", reason: "repeating_slot" };
-    if (child.items === target.zone.items && declaration.required && child.items.length === 1)
-      return { kind: "blocked", reason: "required_slot" };
-    zone = child;
-  }
+  if (
+    last !== undefined &&
+    last.child.items === target.zone.items &&
+    last.declaration.required &&
+    last.child.items.length === 1
+  )
+    return { kind: "blocked", reason: "required_slot" };
   const removed = sourceItemTree([target.item]);
   const aliases = new Set<string>();
   const releaseUses = new Map<string, number>();

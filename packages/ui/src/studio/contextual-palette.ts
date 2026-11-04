@@ -184,7 +184,7 @@ const matches = (choice: StudioPaletteChoice, words: readonly string[]): boolean
 
 /**
  * The blocks the drawer lists for a place and a search, as the Puck components of each palette
- * group (a Puck `ui.componentList` category): the blocks that match every word, in each group the
+ * group: the blocks that match every word, in each group the
  * ones that can be added first. Every group is present; a group with no match holds none.
  */
 export function studioPaletteComponentLists(

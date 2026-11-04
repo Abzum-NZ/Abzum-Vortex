@@ -72,12 +72,11 @@ import {
   type StudioCanvasMetadata,
   type StudioCanvasViewer,
 } from "./studio-canvas-metadata";
-import { StudioDrawerItem } from "./studio-puck-drawer";
 import { studioPuckStyle } from "./studio-puck-style";
 import { studioPuckWords } from "./studio-puck-words";
 import type { StudioCanvasRecordsReader } from "./use-studio-canvas-records";
 import { useStudioCanvasChannelValue } from "./use-studio-canvas-channel";
-import { studioCanvasReferences, type StudioCanvasReferences } from "./studio-canvas-permissions";
+import { studioCanvasReferences } from "./studio-canvas-permissions";
 import { sameCompositionValue } from "./composition-references";
 
 export { studioScreens, useStudioScreen } from "./studio-canvas-screen";
@@ -199,10 +198,12 @@ export const whenNotDragging = (gate: RefObject<StudioDragGate>, apply: () => vo
 export type StudioCanvasContextValue = Readonly<{
   input: StudioPuckInput;
   model: StudioCanvasModel;
-  /** Why a block's delete, drag or duplicate is unavailable, by block name. */
-  references: StudioCanvasReferences;
   /** Why the last canvas change was refused; empty while the draft shows as it was edited. */
   refusal: string;
+  /** The document of the canvas's iframe, which Puck's `iframe` override hands to Studio's own. */
+  frameDocument: Document | null;
+  /** Set by the iframe override once the canvas document exists. */
+  setFrameDocument: (document: Document | null) => void;
 }>;
 
 const StudioCanvasContext = createContext<StudioCanvasContextValue | null>(null);
@@ -220,11 +221,25 @@ const usePuckSelector = createUsePuck();
 export const useStudioCanvasDragging = (): boolean =>
   usePuckSelector((state) => state.appState.ui.isDragging);
 
-/** Puck compares overrides by identity: one object, with the drawer's block row and the canvas's. */
-const OVERRIDES = { ...studioCanvasOverrides, drawerItem: StudioDrawerItem } as const;
-
 /** The Puck iframe the canvas draws the page in; its styles come from the host. */
 const IFRAME = { enabled: true, waitForStyles: true, syncHostStyles: true } as const;
+
+/**
+ * Whether a document has a script animation (`element.animate`, which is what a drop uses) with an
+ * end that is still running. CSS animations and transitions (a toast, a tooltip, a hover) are not
+ * waited for; they are told apart by their own properties, as the frame document's animations come
+ * from another realm.
+ */
+const animating = (target: Document | null): boolean =>
+  target
+    ?.getAnimations()
+    .some(
+      (animation) =>
+        !("animationName" in animation) &&
+        !("transitionProperty" in animation) &&
+        animation.playState === "running" &&
+        animation.effect?.getComputedTiming().endTime !== Number.POSITIVE_INFINITY,
+    ) === true;
 
 const sameSelector = (
   left: StudioPuckSelector | null | undefined,
@@ -272,6 +287,26 @@ function useStylesheetApplied(): boolean {
  * selection store the one selection, and every canvas change goes back through the definition
  * before the draft takes it. The frame, the panels, the canvas and the inspector are drawn inside
  * this editor, so Puck's parts (the canvas preview, the block drag) work from any of them.
+ *
+ * Studio uses Puck's public API only (components, props, `overrides`, `metadata`, `usePuck`
+ * selectors, `dispatch`, documented attributes). What it still depends on beyond that, to re-check
+ * after a Puck upgrade:
+ * - Puck takes a new config and new data one effect after this component sees them; the sync below
+ *   walks the data again once `usePuck().config` is the page's (`held`), and holds Puck's history
+ *   at one entry because Puck records its own drags and deletes a moment after they happen.
+ * - Puck draws each drawer row twice, a visual copy under the draggable one, and puts its keyboard
+ *   attributes on the draggable row: `StudioDrawerItem` hides the copy that mounts first.
+ * - A drop animates with the Web Animations API: the page waits for script animations to end.
+ * - Puck's Outline draws Copy and Trash on every row and has no override for them (`LayerActions`
+ *   follow Puck's per-item permissions, which Studio no longer resolves): a Trash is answered by
+ *   `onAction` (the block's own reason first, else "select it first"), a Copy by the canvas change.
+ *   The Outline also names a root slot by its raw key (accepted).
+ * - Puck's `iframe` element is reached through the document its override receives
+ *   (`frameElement`) to take it out of the Tab path while blocks are edited.
+ * - Puck keeps a 16px drag handle at a selected block's top right corner: the action bar ends
+ *   before it.
+ * Nothing page-sized goes into Puck's `metadata` (Puck walks it once for every block it draws):
+ * it travels in `StudioCanvasChannel`.
  */
 export function StudioPuckProvider({
   input,
@@ -296,39 +331,20 @@ export function StudioPuckProvider({
     () => studioCanvasReferences(referenceSource, model.catalogue),
     [referenceSource, model.catalogue],
   );
-  // A new revision usually leaves every reason as it was (a label changed, say); Puck asks every
-  // block's permissions again for a new object, so the one held stays while the reasons are the same.
+  // A new revision usually leaves every reason as it was (a label changed, say); the object held
+  // stays while the reasons are the same, so the canvas channel changes only for a real change.
   const heldReferences = useRef(readReferences);
   if (!sameCompositionValue(heldReferences.current, readReferences))
     heldReferences.current = readReferences;
   const references = heldReferences.current;
+  // The reasons are Studio's, not Puck's per-block permissions: Puck would resolve every block's
+  // permissions through its store (a copy of two maps of every block per block, so work that grows
+  // with the square of the page). The bar and the removal guard read the reasons from the canvas
+  // channel instead.
+  const config = model.config;
   const referencesRef = useRef(references);
   referencesRef.current = references;
-  // The config remains stable while its permission resolver reads the current draft's map.
-  const config = useMemo(
-    (): Config =>
-      ({
-        ...model.config,
-        components: Object.fromEntries(
-          Object.entries(model.config.components).map(([type, component]) => [
-            type,
-            {
-              ...component,
-              resolvePermissions: (data: { props: { id: string } }) => {
-                const reasons = referencesRef.current[data.props.id];
-                return {
-                  ...(component.permissions?.insert === false ? { insert: false } : {}),
-                  ...(reasons?.delete === undefined ? {} : { delete: false }),
-                  ...(reasons?.drag === undefined ? {} : { drag: false }),
-                  ...(reasons?.duplicate === undefined ? {} : { duplicate: false }),
-                };
-              },
-            },
-          ]),
-        ),
-      }) as Config,
-    [model.config],
-  );
+  const [frameDocument, setFrameDocument] = useState<Document | null>(null);
   const [refused, setRefused] = useState<Readonly<{ area: string; message: string }> | null>(null);
   const [resync, setResync] = useState(0);
   // Puck's callbacks run while Studio shows its own data or selection: they must not echo back.
@@ -426,15 +442,22 @@ export function StudioPuckProvider({
         index: action.index,
         zone: action.zone,
       });
-      if (removed !== null && removed !== now.selectedPlacementAlias) {
+      // Puck's Delete key and the Outline's Trash act on any block; the reason a block cannot be
+      // removed is Studio's and is said first, whichever block Puck was pointed at.
+      const unremovable = removed === null ? undefined : referencesRef.current[removed]?.delete;
+      const notSelected = removed !== null && removed !== now.selectedPlacementAlias;
+      if (removed !== null && (unremovable !== undefined || notSelected)) {
         console.info(
-          `[studio] refused a removal of '${removed}': the selected block is '${String(now.selectedPlacementAlias)}'`,
+          unremovable !== undefined
+            ? `[studio] refused a removal of '${removed}': ${unremovable}`
+            : `[studio] refused a removal of '${removed}': the selected block is '${String(now.selectedPlacementAlias)}'`,
         );
         refusedRemoval.current = removed;
         setResync((generation) => generation + 1);
         setRefused({
           area: shown.area,
-          message: "That block was not deleted: the selection changed. Select it and try again.",
+          message:
+            unremovable ?? "That block was not deleted. Select the block first, then delete it.",
         });
         return;
       }
@@ -498,7 +521,7 @@ export function StudioPuckProvider({
     });
   }, []);
 
-  const channel = useStudioCanvasChannelValue(input, model);
+  const channel = useStudioCanvasChannelValue(input, model, references);
   // Puck walks this object once for every block it draws: it stays small.
   const metadata = useMemo(
     (): StudioCanvasMetadata => ({ breakpoint, readSettings: compiledItemSettings }),
@@ -547,8 +570,8 @@ export function StudioPuckProvider({
   const initial = opened.current.data;
   const refusal = refused?.area === model.area ? refused.message : "";
   const value = useMemo(
-    (): StudioCanvasContextValue => ({ input, model, references, refusal }),
-    [input, model, references, refusal],
+    (): StudioCanvasContextValue => ({ input, model, refusal, frameDocument, setFrameDocument }),
+    [input, model, refusal, frameDocument],
   );
   if (!stylesheetApplied) return null;
   return (
@@ -569,14 +592,14 @@ export function StudioPuckProvider({
             ui={opened.current.ui}
             // Puck's own wrapper fills the workspace, so the canvas has the height of its well.
             height="100%"
-            overrides={OVERRIDES}
+            overrides={studioCanvasOverrides}
             metadata={metadata}
             permissions={permissions}
             dictionary={studioPuckWords}
           >
             <StudioPuckSync
               config={config}
-              references={references}
+              frameDocument={frameDocument}
               data={shown}
               resync={resync}
               area={model.area}
@@ -645,7 +668,7 @@ const restoreFocus = (final: boolean): void => {
  */
 function StudioPuckSync({
   config,
-  references,
+  frameDocument,
   data,
   resync,
   area,
@@ -662,7 +685,7 @@ function StudioPuckSync({
 }: Readonly<{
   /** The config the page on the canvas is drawn with. */
   config: Config;
-  references: StudioCanvasReferences;
+  frameDocument: Document | null;
   data: Data;
   /** The page and step on the canvas. */
   area: string;
@@ -693,52 +716,11 @@ function StudioPuckSync({
   const recorded = usePuckSelector((state) => state.history.histories.length);
   // The config Puck holds: it takes the page's config a moment after this component sees it.
   const held = usePuckSelector((state) => state.config);
-  // Puck asks for a block's permissions again only when told to, and keeps what it last worked out
-  // for a block whose data has not changed. A new config asks for the blocks on the canvas; after
-  // that, a block whose reasons differ from the ones it was last asked with is asked again, so
-  // deleting one block of five hundred does not set every block's permissions again. A block that is
-  // not on the canvas (another page) is left pending and asked when it comes onto the canvas; only
-  // pending blocks are looked at when nothing but the canvas data changed.
-  const worked = useRef<Readonly<{
-    held: Config;
-    seen: StudioCanvasReferences;
-    reasons: StudioCanvasReferences;
-    pending: ReadonlySet<string>;
-  }> | null>(null);
-  // The data Puck holds, which is walked (and its blocks indexed) after the draft's data arrives.
-  const canvasData = usePuckSelector((state) => state.appState.data);
-  useEffect(() => {
-    const { refreshPermissions, getSelectorForId, getItemById } = getPuck();
-    const last = worked.current;
-    const full = last === null || last.held !== held;
-    if (full) refreshPermissions();
-    const reasons: Record<string, StudioCanvasReferences[string]> = { ...last?.reasons };
-    const pending = new Set<string>();
-    const aliases =
-      full || last.seen !== references
-        ? new Set([...Object.keys(references), ...Object.keys(reasons)])
-        : last.pending;
-    for (const alias of aliases) {
-      const waiting = !full && last.pending.has(alias);
-      if (!full && !waiting && sameCompositionValue(references[alias] ?? {}, reasons[alias] ?? {}))
-        continue;
-      // `getSelectorForId` answers undefined exactly when the block is not on the canvas
-      // (`getItemById` throws then).
-      if (getSelectorForId(alias) === undefined) {
-        pending.add(alias);
-        continue;
-      }
-      const item = full ? undefined : getItemById(alias);
-      if (item !== undefined) refreshPermissions({ item }, true);
-      const now = references[alias];
-      if (now === undefined) delete reasons[alias];
-      else reasons[alias] = now;
-    }
-    worked.current = { held, seen: references, reasons, pending };
-  }, [getPuck, held, references, canvasData]);
   // The config Puck's data was last walked under; Puck walked its first data under `held`.
   const walked = useRef(held);
   const latestData = useRef(data);
+  const frameRef = useRef(frameDocument);
+  frameRef.current = frameDocument;
   latestData.current = data;
   // Studio's draft history is the one undo. Puck records its own drags and deletes and answers
   // Ctrl+Z / Ctrl+Y with its older states, which Studio would then take as new edits, so Puck's
@@ -748,9 +730,10 @@ function StudioPuckSync({
     // The newest entry carries Puck's indexes, so setting it is cheap and warns of nothing.
     const kept = history.histories[history.histories.length - 1];
     if (history.histories.length <= 1 || kept === undefined) return;
-    // Puck records 250 ms after an action, so the entry can be older than the screen: what Studio
-    // pushed since (the real block after a palette drop, a refused change shown again, an Undo, a
-    // selection) is put back, and Studio's own `change` is held while it is.
+    // Puck records a moment after an action, so the entry may be older than the screen however
+    // long that moment is: the screen's own data and ui are what is put back when they differ
+    // (the real block after a palette drop, a refused change shown again, an Undo, a selection),
+    // and Studio's own `change` is held while it is. Nothing here waits for Puck's timer.
     synchronizing.current = true;
     try {
       history.setHistories([kept]);
@@ -866,30 +849,29 @@ function StudioPuckSync({
     if (pending === null) return;
     let frames = 0;
     let frame = 0;
+    let ran = false;
+    // The drop's own animation runs in the page it lands in (the canvas's document, or this one for
+    // a block dropped from the drawer): the page is left alone while a script animation of either
+    // document is still running (the Web Animations API, not Puck's markup), for at most 90 frames.
     const settle = () => {
-      const previewDocument =
-        document.querySelector<HTMLIFrameElement>("iframe#preview-frame")?.contentDocument;
-      const moving = (target: Document | null | undefined) =>
-        target?.querySelector("[data-dnd-dragging], [data-dnd-dropping]") != null;
-      if ((moving(document) || moving(previewDocument)) && frames++ < 90)
+      if ((animating(document) || animating(frameRef.current)) && frames++ < 90)
         frame = requestAnimationFrame(settle);
-      else pending();
+      else {
+        ran = true;
+        pending();
+      }
     };
     frame = requestAnimationFrame(settle);
-    return () => cancelAnimationFrame(frame);
+    return () => {
+      cancelAnimationFrame(frame);
+      // Another drag began before the request ran: it waits for that drag too.
+      if (!ran) dragGate.current.pending ??= pending;
+    };
   }, [dragging, dragGate]);
 
   // The outline or the inspector selected something, or the canvas came into or left view.
   useEffect(() => {
     select(wanted);
-    // Chosen outside the canvas (the outline, the inspector): bring the block into the frame's view.
-    if (wanted !== null)
-      requestAnimationFrame(() =>
-        document
-          .querySelector<HTMLIFrameElement>("iframe#preview-frame")
-          ?.contentDocument?.querySelector(`[data-puck-component="${CSS.escape(wanted)}"]`)
-          ?.scrollIntoView({ block: "nearest" }),
-      );
   }, [wanted, select]);
 
   return null;

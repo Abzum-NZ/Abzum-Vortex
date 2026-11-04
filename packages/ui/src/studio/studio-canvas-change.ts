@@ -19,7 +19,11 @@ import {
   type ImmutablePlatformBlockCatalogue,
   type SourcePageData,
 } from "@vortex/platform/schema";
-import { regions } from "./application-composition-regions";
+import {
+  PUBLISHED_PAGE_ADD_REASON,
+  publishedPage,
+  regions,
+} from "./application-composition-regions";
 import { regionLevels } from "./studio-composition-depth";
 import {
   studioFormChangeRefusal,
@@ -30,7 +34,11 @@ import {
   studioPlacementRemovalReference,
 } from "./composition-references";
 import { pageDataJson } from "./studio-canvas-data";
-import { studioDuplicateRefusal, studioPlacementReferrers } from "./studio-canvas-permissions";
+import {
+  studioDuplicateRefusal,
+  studioPlacementReferrers,
+  studioRemovalRuleRefusal,
+} from "./studio-canvas-permissions";
 
 /** What a change Puck reported on the canvas comes to in the definition. */
 export type StudioCanvasChange =
@@ -101,12 +109,24 @@ export const applyPageDataChange = (
       if (refusal !== undefined)
         return { kind: "refused", message: `${refusal} The page stays as it was.` };
     }
+    // A page published outside the application takes no new block: not a copy, not a drop.
+    const before = dataAliases(targetData);
+    const kept = dataAliases(edited);
+    if (
+      target !== undefined &&
+      publishedPage(current, target) &&
+      [...kept].some((alias) => !before.has(alias))
+    )
+      return { kind: "refused", message: PUBLISHED_PAGE_ADD_REASON };
     const next = structuredClone(current);
     const nextPage = next.body.pages.find((item) => item.id === pageAlias);
     if (nextPage === undefined || !setSourcePageData(nextPage, step, edited))
       throw pageUnavailable();
-    const kept = dataAliases(edited);
-    const removed = new Set([...dataAliases(targetData)].filter((alias) => !kept.has(alias)));
+    const removed = new Set([...before].filter((alias) => !kept.has(alias)));
+    // Where a block may not leave from, whichever draft the canvas's reasons were read from.
+    const rule =
+      removed.size === 0 ? undefined : studioRemovalRuleRefusal(catalogue, current, removed);
+    if (rule !== undefined) return { kind: "refused", message: rule };
     for (const alias of removed) {
       const users = studioPlacementReferrers(current, alias, removed);
       if (users.length > 0)

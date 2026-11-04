@@ -9,7 +9,11 @@ import {
 import {
   itemSlots,
   regionRemovalCause,
+  PUBLISHED_PAGE_ADD_REASON,
+  publishedPage,
+  removalRule,
   regions,
+  slotDeclaration,
   releaseFor,
 } from "./application-composition-regions";
 import { studioLayoutOutletPlacementUses } from "./application-layout-outlets";
@@ -29,7 +33,7 @@ export type StudioCanvasReferences = Readonly<
   Record<string, Readonly<Partial<Record<StudioCanvasAction, string>>>>
 >;
 
-/** The same reason is available to Puck's permissions and the action bar. */
+/** The reason is read by the action bar and by the canvas's removal guard. */
 export const studioCanvasPermissionReason = (
   references: StudioCanvasReferences,
   alias: string,
@@ -49,7 +53,7 @@ export const studioPlacementReferrers = (
 
 /**
  * Why a block cannot be duplicated, or undefined: a form, or a block holding a field input, because
- * its field inputs cannot be copied. The one rule for Puck's Duplicate button (the references) and
+ * its field inputs cannot be copied. The one rule for the bar's and the Outline's Duplicate and
  * for the canvas change that carries a duplicate (`applyPageDataChange`).
  */
 export const studioDuplicateRefusal = (
@@ -72,12 +76,51 @@ export const studioDuplicateRefusal = (
     : undefined;
 };
 
-/** Why a page's blocks cannot be removed, by `regionRemovalCause`. */
-const REGION_REMOVAL_REASONS = {
+/** Why a block cannot be removed from where it sits, by `removalRule`. */
+const REMOVAL_RULE_REASONS = {
   page_kind:
     "Blocks can only be removed from a layout or from the content of a list, detail, form or dashboard page.",
   public_page: "This page is published at a public address, so its blocks can't be removed.",
+  repeating_slot: "This block sits in a repeating area and can't be removed here.",
 } as const;
+
+/**
+ * Why a block cannot be removed from where it sits (the page's kind, a public address, a repeating
+ * area), or undefined. The canvas change that carries a removal asks this once, for the removed
+ * blocks that are not inside another removed block, so a block the references do not know yet (just
+ * restored, copied or added) is held too. One walk of the application; a removed block is not
+ * entered.
+ */
+export const studioRemovalRuleRefusal = (
+  catalogue: ImmutablePlatformBlockCatalogue,
+  source: ApplicationSourceDocument,
+  removed: ReadonlySet<string>,
+): string | undefined => {
+  for (const region of regions(source)) {
+    const cause = regionRemovalCause(source, region);
+    const visit = (items: readonly SourceItem[], repeating: boolean): string | undefined => {
+      for (const item of items) {
+        if (removed.has(item.props.id)) {
+          const rule = removalRule(cause, repeating);
+          if (rule !== undefined) return REMOVAL_RULE_REASONS[rule];
+          continue;
+        }
+        const release = releaseFor(catalogue, item);
+        for (const [key, slot] of itemSlots(catalogue, item)) {
+          const found = visit(
+            slot.items,
+            repeating || slotDeclaration(release, key)?.repeats !== undefined,
+          );
+          if (found !== undefined) return found;
+        }
+      }
+      return undefined;
+    };
+    const found = visit(region.zone.items, false);
+    if (found !== undefined) return found;
+  }
+  return undefined;
+};
 
 /** Build the references once for a draft; the values are plain metadata. */
 export const studioCanvasReferences = (
@@ -96,6 +139,8 @@ export const studioCanvasReferences = (
     const regionHoldsForm = holdsForm(catalogue, region.zone.items);
     const forms = regionHoldsForm ? studioRegionForms(catalogue, region.zone.items) : undefined;
     const regionCause = regionRemovalCause(source, region);
+    const published =
+      region.shell === undefined && region.page !== undefined && publishedPage(source, region.page);
     const visit = (items: readonly SourceItem[], required: boolean, repeating: boolean) => {
       for (const item of items) {
         const id = item.props.id;
@@ -121,9 +166,9 @@ export const studioCanvasReferences = (
             reasons.delete ??= `This block is used by ${describeApplicationUsers(users)}. Change that reference first.`;
         }
         if (required && items.length === 1) reasons.delete ??= "This block fills a required slot.";
-        if (regionCause !== undefined) reasons.delete ??= REGION_REMOVAL_REASONS[regionCause];
-        if (repeating)
-          reasons.delete ??= "This block sits in a repeating area and can't be removed here.";
+        if (published) reasons.duplicate ??= PUBLISHED_PAGE_ADD_REASON;
+        const rule = removalRule(regionCause, repeating);
+        if (rule !== undefined) reasons.delete ??= REMOVAL_RULE_REASONS[rule];
         const broken =
           forms === undefined
             ? undefined
@@ -135,7 +180,7 @@ export const studioCanvasReferences = (
           );
         result[id] = reasons;
         for (const [key, slot] of itemSlots(catalogue, item)) {
-          const declaration = release?.slots.find((entry) => entry.key === key);
+          const declaration = slotDeclaration(release, key);
           visit(
             slot.items,
             declaration?.required === true,

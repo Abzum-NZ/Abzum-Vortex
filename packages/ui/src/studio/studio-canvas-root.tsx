@@ -13,6 +13,7 @@ import {
   type SyntheticEvent,
 } from "react";
 import { isElement, isHtmlElement } from "../lib/dom";
+import { DeferredDrawingProvider, type DeferredDrawing } from "../deferred-drawing";
 import { PagePuckRenderer } from "../page-puck-renderer";
 import {
   createSelectedPlacementStore,
@@ -24,11 +25,15 @@ import type { Breakpoint } from "../definition-error";
 import type { FieldInputControlReleaseMap, PlatformComponentRegistry } from "../registry";
 import { createAppearanceRootProps, createThemeRootProps, VortexStyleRoot } from "../theme";
 import { studioCanvasMetadata, useStudioCanvasChannel } from "./studio-canvas-metadata";
-import { useStudioCanvasView } from "./studio-canvas-scale";
+import { studioCanvasVisible, useStudioCanvasView } from "./studio-canvas-scale";
 import { useStudioScreen } from "./studio-canvas-screen";
 import { studioPuckIframeCss } from "./studio-puck-style";
+import { useStudioCanvas, useStudioCanvasDragging } from "./studio-puck-provider";
 
 const resolvePageHref = () => "#";
+
+/** How far past what the canvas shows (in the page's pixels) a waiting slot is drawn. */
+const DRAW_AHEAD = 1200;
 
 const usePuckSelector = createUsePuck();
 
@@ -40,7 +45,20 @@ const usePuckSelector = createUsePuck();
 function SelectedBlock({ children }: Readonly<{ children: ReactNode }>) {
   const [store] = useState(createSelectedPlacementStore);
   const selected = usePuckSelector((state) => state.selectedItem?.props.id);
-  useLayoutEffect(() => store.set(selected), [store, selected]);
+  // The blocks that hold the selected one, nearest first (a slot that holds it is drawn at once).
+  const holders = usePuckSelector((state) => {
+    const chain: string[] = [];
+    let parent = selected === undefined ? undefined : state.getParentById(selected);
+    while (parent !== undefined && parent !== null) {
+      chain.push(parent.props.id);
+      parent = state.getParentById(parent.props.id);
+    }
+    return chain.join("\n");
+  });
+  useLayoutEffect(
+    () => store.set(selected, holders === "" ? [] : holders.split("\n")),
+    [store, selected, holders],
+  );
   return <SelectedPlacementProvider store={store}>{children}</SelectedPlacementProvider>;
 }
 
@@ -76,7 +94,7 @@ function CanvasSlot({
   // A layout's blocks are added with Add; only a page's blocks drop onto the canvas.
   const canDrop = usePuckSelector((state) => state.getPermissions().insert);
   // Studio's own mark of a drag in progress, from Puck's public state, for the empty-slot rules.
-  const dragging = usePuckSelector((state) => state.appState.ui.isDragging);
+  const dragging = useStudioCanvasDragging();
   const empty = usePuckSelector((state) => {
     const data = state.appState.data;
     const list =
@@ -309,6 +327,88 @@ export function StudioCanvasIframe({
   document: frameDocument,
 }: Readonly<{ children: ReactNode; document?: Document | undefined }>) {
   const previewMode = usePuckSelector((state) => state.appState.ui.previewMode);
+  // The provider reaches the canvas's document (the drop animation, the scroll to a chosen block)
+  // through this override, which Puck hands the document.
+  const { setFrameDocument } = useStudioCanvas();
+  useEffect(() => {
+    setFrameDocument(frameDocument ?? null);
+    return () => setFrameDocument(null);
+  }, [setFrameDocument, frameDocument]);
+  // A block chosen outside the canvas (the Outline, the inspector, an address) is brought into view,
+  // found by Studio's own attribute on its wrapper. It may not be drawn yet (its slots wait), and
+  // the slots around it are drawn after the scroll with heights that were estimates, so it is kept
+  // in view for a few seconds, until the person scrolls or acts anywhere in Studio (the frame, the
+  // well's scrollbar, a panel) or begins a drag: that also cancels the wait for a block that is not
+  // drawn yet. A block chosen by a click in the canvas is already where the person is looking and
+  // is not scrolled to (the click's block is the one under the pointer, found by Studio's attribute).
+  const selectedId = usePuckSelector((state) => state.selectedItem?.props.id);
+  const dragging = useStudioCanvasDragging();
+  const draggingRef = useRef(dragging);
+  draggingRef.current = dragging;
+  const stopFollowing = useRef<(() => void) | null>(null);
+  const clickedBlock = useRef<string | null>(null);
+  useEffect(() => {
+    if (dragging) stopFollowing.current?.();
+  }, [dragging]);
+  useEffect(() => {
+    if (frameDocument === undefined) return;
+    const note = (event: PointerEvent) => {
+      const hit = frameDocument
+        .elementsFromPoint(event.clientX, event.clientY)
+        .find((element) => element.hasAttribute("data-vortex-placement-id"));
+      clickedBlock.current = hit?.getAttribute("data-vortex-placement-id") ?? null;
+    };
+    frameDocument.addEventListener("pointerdown", note, { capture: true, passive: true });
+    return () => frameDocument.removeEventListener("pointerdown", note, { capture: true });
+  }, [frameDocument]);
+  useEffect(() => {
+    if (frameDocument === undefined || selectedId === undefined) return;
+    const clicked = clickedBlock.current;
+    clickedBlock.current = null;
+    if (clicked === selectedId) return;
+    let frame = 0;
+    let tries = 0;
+    let stopped = false;
+    let observer: MutationObserver | undefined;
+    let timer = 0;
+    const interactions = ["wheel", "pointerdown", "keydown", "touchstart"] as const;
+    const stop = () => {
+      stopped = true;
+      cancelAnimationFrame(frame);
+      observer?.disconnect();
+      clearTimeout(timer);
+      for (const name of interactions) {
+        frameDocument.removeEventListener(name, stop);
+        document.removeEventListener(name, stop);
+      }
+      stopFollowing.current = null;
+    };
+    // Listening starts at once, so a scroll or a drag while the block is not drawn yet cancels it.
+    stopFollowing.current = stop;
+    for (const name of interactions) {
+      frameDocument.addEventListener(name, stop, { passive: true });
+      document.addEventListener(name, stop, { passive: true });
+    }
+    const find = () =>
+      frameDocument.querySelector(`[data-vortex-placement-id="${CSS.escape(selectedId)}"]`);
+    const scroll = () => {
+      if (stopped || draggingRef.current) return;
+      const block = find();
+      if (block === null) {
+        if (tries++ < 600) frame = requestAnimationFrame(scroll);
+        return;
+      }
+      block.scrollIntoView({ block: "nearest" });
+      timer = window.setTimeout(stop, 6000);
+      // Slots drawn (or drawn again) change the page's size: what is added to the body is watched.
+      observer = new MutationObserver(() => {
+        if (!draggingRef.current) find()?.scrollIntoView({ block: "nearest" });
+      });
+      observer.observe(frameDocument.body, { childList: true, subtree: true });
+    };
+    frame = requestAnimationFrame(scroll);
+    return stop;
+  }, [frameDocument, selectedId]);
   // While blocks are edited the canvas is a picture of the page, outside Studio's Tab path (blocks
   // are chosen in the Outline); while grids are arranged its column controls need the keyboard.
   useEffect(() => {
@@ -382,15 +482,111 @@ export function StudioCanvasIframe({
     if (isElement(event.target) && event.target.closest("a[href]") !== null) event.preventDefault();
   };
   // What the canvas draws for the person (empty-slot labels) counter-scales by the zoom, in CSS.
-  const { scale } = useStudioCanvasView();
+  const view = useStudioCanvasView();
+  const { scale } = view;
+  // A slot far from what the well shows is drawn when it comes near (see `DeferredSlot`): the
+  // well's and the page's own scrolls tell the slots that wait, once per frame.
+  const viewRef = useRef(view);
+  viewRef.current = view;
+  const interactive = previewMode === "interactive";
+  const interactiveRef = useRef(interactive);
+  interactiveRef.current = interactive;
+  const documentRef = useRef(frameDocument);
+  documentRef.current = frameDocument;
+  const waiting = useRef(new Set<() => void>());
+  // The block at the top of the view before slots above it are drawn: the well is scrolled by how
+  // far it moved, so what the person is looking at stays where it is.
+  const anchored = useRef<{ element: Element; top: number } | null>(null);
+  const deferral = useMemo(
+    (): DeferredDrawing => ({
+      near: (element) => {
+        // While grids are arranged their column controls need the keyboard: every slot is drawn
+        // (a one-time cost, the page as it was before slots waited).
+        if (interactiveRef.current) return true;
+        const visible = studioCanvasVisible(viewRef.current);
+        const box = element.getBoundingClientRect();
+        // Until the well has laid the frame out, the first screens are what is near.
+        if (visible === undefined) return box.top < DRAW_AHEAD * 2;
+        return box.bottom >= visible.top - DRAW_AHEAD && box.top <= visible.bottom + DRAW_AHEAD;
+      },
+      subscribe: (listener) => {
+        waiting.current.add(listener);
+        return () => waiting.current.delete(listener);
+      },
+      anchor: () => {
+        const target = documentRef.current;
+        const visible = studioCanvasVisible(viewRef.current);
+        if (anchored.current !== null || target === undefined || visible === undefined) return;
+        const element = target.elementFromPoint(
+          target.documentElement.clientWidth / 2,
+          Math.max(0, visible.top + 4),
+        );
+        if (element === null) return;
+        const noted = { element, top: element.getBoundingClientRect().top };
+        anchored.current = noted;
+        // The slot that drew settles in the commit that follows; a note a frame old is stale.
+        requestAnimationFrame(() => {
+          if (anchored.current === noted) anchored.current = null;
+        });
+      },
+      settle: () => {
+        const was = anchored.current;
+        anchored.current = null;
+        // The canvas scrolls in its own document (Puck's frame has the well's height).
+        const scroller = documentRef.current?.scrollingElement;
+        if (was === null || scroller == null || !was.element.isConnected) return;
+        const moved = was.element.getBoundingClientRect().top - was.top;
+        if (moved !== 0) scroller.scrollTop += moved;
+      },
+    }),
+    [],
+  );
+  useEffect(() => {
+    const well = view.well;
+    let frame = 0;
+    const tell = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        for (const listener of [...waiting.current]) listener();
+      });
+    };
+    well?.addEventListener("scroll", tell, { passive: true });
+    frameDocument?.addEventListener("scroll", tell, { passive: true });
+    // The page or the well changes size with no scroll (a block removed or restored, another screen
+    // size, a slot drawn shorter than its placeholder): slots are looked at again.
+    const resize = new ResizeObserver(tell);
+    let frameResize: ResizeObserver | undefined;
+    if (well !== null) resize.observe(well);
+    const drawn = new MutationObserver(tell);
+    if (frameDocument !== undefined) {
+      drawn.observe(frameDocument.body, { childList: true, subtree: true });
+      // A screen size change resizes the frame itself and reflows the page without a new node: the
+      // frame's own window delivers it (an observer of another document's realm is not relied on).
+      const FrameResize = frameDocument.defaultView?.ResizeObserver;
+      frameResize = FrameResize === undefined ? undefined : new FrameResize(tell);
+      frameResize?.observe(frameDocument.documentElement);
+    }
+    // The frame is laid out or scaled after the first draw: slots are looked at again.
+    tell();
+    return () => {
+      cancelAnimationFrame(frame);
+      well?.removeEventListener("scroll", tell);
+      frameDocument?.removeEventListener("scroll", tell);
+      resize.disconnect();
+      frameResize?.disconnect();
+      drawn.disconnect();
+    };
+  }, [view.well, view.scale, frameDocument, interactive]);
   return (
-    <div
-      className="min-h-full"
-      style={{ "--vortex-canvas-scale": scale } as CSSProperties}
-      onClickCapture={inert}
-      onAuxClickCapture={inert}
-    >
-      {children}
-    </div>
+    <DeferredDrawingProvider value={deferral}>
+      <div
+        className="min-h-full"
+        style={{ "--vortex-canvas-scale": scale } as CSSProperties}
+        onClickCapture={inert}
+        onAuxClickCapture={inert}
+      >
+        {children}
+      </div>
+    </DeferredDrawingProvider>
   );
 }

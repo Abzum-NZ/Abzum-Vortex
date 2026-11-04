@@ -33,7 +33,11 @@ import {
   type StudioFlowStepDraft,
 } from "./application-flow-step-form";
 import { studioDraftRecordType, studioFlowEventChoices } from "./application-flow-values";
-import { studioFlowCanCreateShownForm } from "./application-flow-shown-form";
+import {
+  studioFlowCanCreateShownForm,
+  studioFlowShownFormPublished,
+} from "./application-flow-shown-form";
+import { PUBLISHED_PAGE_ADD_REASON } from "./application-composition-regions";
 
 /**
  * The flow commands: one checked edit of the stored flow definition each, taken by the draft
@@ -166,7 +170,15 @@ const builderChoiceOptions = (
         flow,
       )
         ? [...forms, { value: studioNewFormChoice, label: "Create a form for this step" }]
-        : forms;
+        : studioFlowShownFormPublished(context.catalogue, source as ApplicationSourceDocument, flow)
+          ? [
+              ...forms,
+              {
+                value: studioNewFormChoice,
+                label: `Create a form for this step (${PUBLISHED_PAGE_ADD_REASON})`,
+              },
+            ]
+          : forms;
     }
     case "protected_operation_key":
       return draft().actions.map((action) => ({ value: action.key, label: action.label }));

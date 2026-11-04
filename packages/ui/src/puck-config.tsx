@@ -45,13 +45,11 @@ import {
   repeatableSlotKey,
   type BreakpointOrder,
   type CompiledItemVortex,
-  type BlockPaletteGroup,
   type BlockPropertyValueContract,
   type ApplicationPuckRootShell,
   type PlatformBlockRelease,
   type ProjectedNavigation,
 } from "@vortex/platform/schema";
-import { PALETTE_GROUP_TITLES } from "./palette-groups";
 import {
   DefinitionRenderError,
   placementSettings,
@@ -70,6 +68,7 @@ import {
   type ResponsivePlacementLayouts,
   type SlotGapName,
 } from "./layout-styles";
+import { DeferredSlot } from "./deferred-drawing";
 import { projectedAvailability } from "./placement-availability";
 import {
   EMPTY_RUNTIME_INPUTS,
@@ -228,18 +227,25 @@ export function RootSlotGapProvider({
 /** Which placement the editor has selected; each placement reads only whether it is that one. */
 export type SelectedPlacementStore = Readonly<{
   get: () => string | undefined;
-  set: (placementId: string | undefined) => void;
+  /** Whether the placement holds the selected one, at any depth. */
+  holds: (placementId: string) => boolean;
+  /** The selected placement and the placements that hold it (nearest first). */
+  set: (placementId: string | undefined, holders?: readonly string[]) => void;
   subscribe: (listener: () => void) => () => void;
 }>;
 
 export const createSelectedPlacementStore = (): SelectedPlacementStore => {
   let selected: string | undefined;
+  let holders: ReadonlySet<string> = new Set();
   const listeners = new Set<() => void>();
   return {
     get: () => selected,
-    set: (placementId) => {
-      if (placementId === selected) return;
+    holds: (placementId) => holders.has(placementId),
+    set: (placementId, holding = []) => {
+      const same = placementId === selected && holding.join("\n") === [...holders].join("\n");
+      if (same) return;
       selected = placementId;
+      holders = new Set(holding);
       for (const listener of listeners) listener();
     },
     subscribe: (listener) => {
@@ -545,6 +551,11 @@ function PlacementBlockContent(props: PlacementBlockProps): ReactElement {
     () => selection.get() === placementId,
     () => false,
   );
+  const holdsSelected = useSyncExternalStore(
+    selection.subscribe,
+    () => selection.holds(placementId),
+    () => false,
+  );
   const rootSlotGap = useContext(RootSlotGapContext);
   const breakpoint = metadataIn.breakpoint;
   const responsive = breakpoint === undefined;
@@ -611,10 +622,12 @@ function PlacementBlockContent(props: PlacementBlockProps): ReactElement {
       hostNode !== undefined ? (
         hostNode
       ) : StableSlot !== undefined ? (
-        <StableSlot
-          className={slotClassName(puck.isEditing, slotRequired, selectedHere)}
-          style={puck.isEditing ? { ...slotStyle, ...slotLabelStyle(slotLabel) } : slotStyle}
-        />
+        <DeferredSlot forced={!puck.isEditing || holdsSelected || selectedHere}>
+          <StableSlot
+            className={slotClassName(puck.isEditing, slotRequired, selectedHere)}
+            style={puck.isEditing ? { ...slotStyle, ...slotLabelStyle(slotLabel) } : slotStyle}
+          />
+        </DeferredSlot>
       ) : null;
   }
 
@@ -806,16 +819,6 @@ function createVortexPuckConfig(
   }
 
   return {
-    categories: Object.fromEntries(
-      [...keysByCategory].map(([category, components]) => [
-        category,
-        {
-          title: PALETTE_GROUP_TITLES[category as BlockPaletteGroup] ?? category,
-          components,
-          defaultExpanded: true,
-        },
-      ]),
-    ),
     components,
     root: {
       defaultProps: {

@@ -110,7 +110,9 @@ export type StudioCompositionWrapModel =
   | Readonly<{ kind: "invalid" | "unsupported" }>;
 export type StudioCompositionAddTargetsModel =
   | Readonly<{ kind: "available"; targets: readonly StudioCompositionAddTarget[] }>
-  | Readonly<{ kind: "invalid" | "unsupported" }>;
+  | Readonly<{ kind: "invalid" }>
+  /** `published`: the page is published outside the application and takes no new block. */
+  | Readonly<{ kind: "unsupported"; reason?: "published" }>;
 
 export type StudioCompositionSettingsModel =
   | Readonly<{

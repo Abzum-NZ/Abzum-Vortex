@@ -1,5 +1,6 @@
 import {
   type ImmutablePlatformBlockCatalogue,
+  isRepeatableSlotIdentity,
   applicationRootIdSchema,
   applicationSourceDocumentSchema,
   organizationIdSchema,
@@ -110,6 +111,29 @@ export const movableRegion = (region: Region): boolean =>
   region.shell !== undefined || pageContentRegion(region);
 
 /**
+ * Whether a page is published to people outside the application: a public page, a page at a public
+ * address or a page an experience opens. A public address and an experience name their page by its
+ * key. The one test for the canvas, the Add, Remove, settings and gate commands.
+ */
+export const publishedPage = (
+  source: ApplicationSourceDocument,
+  page: ApplicationSourceDocument["body"]["pages"][number],
+): boolean =>
+  page.type === "public" ||
+  source.body.public_addresses.some((address) => address.page === page.key) ||
+  experiencePage(source, page);
+
+/** Whether an experience opens the page (it names its page by key). */
+export const experiencePage = (
+  source: ApplicationSourceDocument,
+  page: ApplicationSourceDocument["body"]["pages"][number],
+): boolean => source.body.experiences?.some((experience) => experience.page === page.key) ?? false;
+
+/** Why a page published outside the application takes no new block (a copy, a drop, Add). */
+export const PUBLISHED_PAGE_ADD_REASON =
+  "This page is published, so blocks can't be added or copied on it here.";
+
+/**
  * Why no block of a region can be removed, or undefined: a page removes only from its editable
  * content, and not from a page published at a public address. A layout's blocks always can leave.
  * The one rule for the canvas (the references behind Puck's permissions) and the composition
@@ -122,11 +146,19 @@ export const regionRemovalCause = (
   if (region.shell !== undefined) return undefined;
   if (!pageContentRegion(region)) return "page_kind";
   const page = region.page;
-  return source.body.public_addresses.some((address) => address.page === page.id) ||
-    source.body.experiences?.some((experience) => experience.page === page.key)
-    ? "public_page"
-    : undefined;
+  return publishedPage(source, page) ? "public_page" : undefined;
 };
+
+/**
+ * Where a block may not be removed from, or undefined: the region's cause (`regionRemovalCause`),
+ * or a repeating slot (a block repeated by a setting). The one rule for the canvas's reasons, the
+ * canvas change that carries a removal (`applyPageDataChange`) and the Remove command.
+ */
+export const removalRule = (
+  regionCause: ReturnType<typeof regionRemovalCause>,
+  repeating: boolean,
+): "page_kind" | "public_page" | "repeating_slot" | undefined =>
+  regionCause ?? (repeating ? "repeating_slot" : undefined);
 
 /** Enumerate native regions; a caller cannot supply a JSON pointer or a guessed step id. */
 export const regions = (source: ApplicationSourceDocument): Region[] => {
@@ -616,4 +648,21 @@ export const settingsOf = (item: SourceItem): Record<string, unknown> =>
     Object.entries(item.props).filter(
       ([key, value]) => key !== "id" && key !== "vortex" && !Array.isArray(value),
     ),
+  );
+
+/**
+ * The declaration of a slot of an item's release by the key the item stores it under: the exact key,
+ * or the repeating declaration whose key and an underscore begin it (a tab is stored as
+ * `tab_<key>`), as the platform reader splits them.
+ */
+export const slotDeclaration = <Slot extends { key: string; repeats?: unknown }>(
+  release: { slots: readonly Slot[] } | undefined,
+  key: string,
+): Slot | undefined =>
+  release?.slots.find((entry) => entry.repeats === undefined && entry.key === key) ??
+  release?.slots.find(
+    (entry) =>
+      entry.repeats !== undefined &&
+      key.startsWith(`${entry.key}_`) &&
+      isRepeatableSlotIdentity(entry.key, key.slice(entry.key.length + 1)),
   );
