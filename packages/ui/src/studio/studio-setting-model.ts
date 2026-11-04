@@ -1,5 +1,9 @@
 import {
+  componentSettingApplies,
+  plainSettingValue,
+  plainSourceSettingValue,
   recordsTableColumnProblems,
+  typedSourceSettingValue,
   validateComponentSettings,
   queryTotalReferenceProblem,
   type ApplicationSourceDocument,
@@ -102,6 +106,42 @@ export const studioBlockChoices = (
           (relationship) => relationship.recordType === chosen?.recordType,
         ),
       };
+};
+
+/**
+ * The settings after one setting changed: the new value written whole (a group's declared defaults
+ * are part of its typed value), each setting that no longer applies dropped and each that now
+ * applies given its declared default. The one rule of the inspector's fields and of the Set-up dialog.
+ */
+export const settleStudioSetting = (
+  properties: readonly BlockPropertySchemaContract[],
+  values: StudioSettingValues,
+  key: string,
+  next: SettingValue,
+): StudioSettingValues => {
+  const property = properties.find((candidate) => candidate.key === key);
+  const result: Record<string, SourceBlockPropertyValueContract> = { ...values };
+  if (next === undefined) delete result[key];
+  else
+    result[key] =
+      property === undefined
+        ? next
+        : (typedSourceSettingValue(plainSourceSettingValue(next), property, [key], []) ?? next);
+  for (const sibling of properties) {
+    if (!componentSettingApplies(sibling, result)) delete result[sibling.key];
+    else if (result[sibling.key] === undefined && sibling.defaultValue !== undefined) {
+      const initial = typedSourceSettingValue(
+        plainSettingValue(sibling.defaultValue),
+        sibling,
+        [sibling.key],
+        [],
+      );
+      if (initial === undefined)
+        throw new TypeError(`The declared default for ${sibling.key} is invalid.`);
+      result[sibling.key] = initial;
+    }
+  }
+  return result;
 };
 
 const familyText: Readonly<Record<ComponentSettingFailure["family"], string>> = {

@@ -7,9 +7,6 @@ import { useEffect, useRef, useState, type ReactElement } from "react";
 import {
   canonicalJson,
   componentSettingApplies,
-  plainSettingValue,
-  plainSourceSettingValue,
-  typedSourceSettingValue,
   type BlockPropertySchemaContract,
   type SourceBlockPropertyValueContract,
 } from "@vortex/platform/schema";
@@ -41,6 +38,7 @@ import {
   type StudioSettingValues,
   type StudioSettingChoices,
   initialValue,
+  settleStudioSetting,
   studioFittingFields,
   conditionalRequiredMessage,
   type ControlProps,
@@ -70,7 +68,7 @@ const unsetLabel = (
       : "Not set";
 
 /** The control of one setting, by its declared kind. */
-function SettingControl(props: ControlProps): ReactElement {
+export function StudioSettingControl(props: ControlProps): ReactElement {
   const { id, property, value, onChange, choices, disabled, descriptionId } = props;
   switch (property.kind) {
     case "text":
@@ -578,7 +576,7 @@ function ListControl({
             title: heading.title ?? `${property.item.label} ${index + 1}`,
             summary: heading.summary,
             content: (
-              <SettingControl
+              <StudioSettingControl
                 id={`${id}-${keys.current[index]}`}
                 property={property.item}
                 value={item}
@@ -800,34 +798,7 @@ function SettingFields({
               id: idPrefix,
               keys: new Set([...(previous.id === idPrefix ? previous.keys : []), property.key]),
             }));
-            const result: Record<string, SourceBlockPropertyValueContract> = { ...values };
-            if (next === undefined) delete result[property.key];
-            // A group's declared defaults are part of its typed value. Materialize them here,
-            // including new list entries, before the composition command checks its round trip.
-            // Incomplete user input stays in the ordinary settings validation path.
-            else
-              result[property.key] =
-                typedSourceSettingValue(
-                  plainSourceSettingValue(next),
-                  property,
-                  [property.key],
-                  [],
-                ) ?? next;
-            for (const sibling of properties) {
-              if (!componentSettingApplies(sibling, result)) delete result[sibling.key];
-              else if (result[sibling.key] === undefined && sibling.defaultValue !== undefined) {
-                const initial = typedSourceSettingValue(
-                  plainSettingValue(sibling.defaultValue),
-                  sibling,
-                  [sibling.key],
-                  [],
-                );
-                if (initial === undefined)
-                  throw new TypeError(`The declared default for ${sibling.key} is invalid.`);
-                result[sibling.key] = initial;
-              }
-            }
-            onChange(result);
+            onChange(settleStudioSetting(properties, values, property.key, next));
           };
           return {
             key: property.key,
@@ -847,7 +818,7 @@ function SettingFields({
                   }
                 >
                   {(control) => (
-                    <SettingControl
+                    <StudioSettingControl
                       id={control.id}
                       descriptionId={control["aria-describedby"]}
                       property={studioTotalMeasureProperty(
