@@ -1,13 +1,14 @@
--- SEC-1: installing or uninstalling an Application that places custom components is checked in
--- SQL. Until now the custom code permission (platform.organization.custom_code.manage) and the
--- recent sign-in an install needs were enforced only by the TypeScript installer.
+-- SEC-1: installing, upgrading or uninstalling an Application that places custom components is
+-- checked in SQL. Until now the custom code permission (platform.organization.custom_code.manage)
+-- and the recent sign-in an install needs were enforced only by the TypeScript installer.
 -- application_release_contains_custom_components_internal decides "the release contains custom
 -- components" from the release content's platformBlockDependencies (the list the runtime bundle
 -- registers) against the built-in block ids in vortex_definition.platform_block_catalogue, and
--- fails closed on a malformed list. activate_application_installation then requires the permission
--- and a primary sign-in within 15 minutes, and detach_application_installation (an uninstall, not
--- an upgrade) requires the permission without a recent sign-in, through
--- require_custom_code_manage_internal(p_recent_sign_in), the rule builder-authority.ts states.
+-- fails closed on a malformed list. require_custom_code_manage_internal(p_recent_sign_in) checks the
+-- permission and, when asked, a primary sign-in within 15 minutes. activate_application_installation
+-- asks for both; detach_application_installation checks the release being removed (a recent sign-in
+-- only when a replacement is named); purge_application checks an installed application it removes
+-- (no second sign-in: purge already asks for one).
 set local role vortex_owner;
 
 create table if not exists vortex_definition.platform_block_catalogue (
@@ -57,22 +58,6 @@ insert into vortex_definition.platform_block_catalogue (block_id) values
   ('f40dc797-ac89-4687-8aa2-157c639be233')
 on conflict (block_id) do nothing;
 
--- Whether an Application release places a platform block that is not a built-in block. A custom
--- component is a platform block release registered outside the built-in catalogue, and the stored
--- dependency manifest names every platform block a release places. Any block that
--- vortex_definition.platform_block_catalogue does not hold therefore counts, so a block the
--- database does not know can never skip the custom code permission and recent sign-in that
--- installing custom code needs. A built-in block added to the platform block catalogue
--- (application-composition-catalogue.source.json) is added to that table in the same change.
--- Whether an Application release places a platform block that is not a built-in block. A custom
--- component is a platform block release registered outside the built-in catalogue. The decision
--- reads the release content's platformBlockDependencies, the list the runtime bundle registers
--- (write_installation_runtime_bundle), and counts any block that
--- vortex_definition.platform_block_catalogue does not hold, so a block the database does not know
--- can never skip the custom code permission and recent sign-in that installing custom code needs. A
--- list that is missing or malformed counts too. A built-in block added to the platform block
--- catalogue (application-composition-catalogue.source.json) is added to that table in the same
--- change.
 -- Whether an Application release places a platform block that is not a built-in block. A custom
 -- component is a platform block release registered outside the built-in catalogue. The decision
 -- reads the release content's platformBlockDependencies, the list the runtime bundle registers
@@ -161,7 +146,7 @@ begin
   -- Missing permission is named before a stale sign-in: signing in again cannot help without it.
   if decision.outcome = 'refused' and decision.reason_code = 'authentication_unsatisfied' then
     raise exception using errcode = 'V3150',
-      message = 'Installing custom code needs a recent sign-in';
+      message = 'Changing custom code needs a recent sign-in';
   end if;
   if decision.outcome is distinct from 'eligible'
     or decision.operation_key is distinct from 'platform.organization.custom_code.manage'
@@ -173,7 +158,7 @@ begin
       is distinct from (context_value ->> 'organizationAccountId')::uuid
     or decision.correlation_id is distinct from (context_value ->> 'correlationId')::uuid then
     raise exception using errcode = '42501',
-      message = 'Installing custom code needs the custom code permission';
+      message = 'Changing custom code needs the custom code permission';
   end if;
 end
 $function$;
@@ -187,7 +172,7 @@ grant execute on function vortex_definition.require_custom_code_manage_internal(
   to postgres;
 
 comment on function vortex_definition.require_custom_code_manage_internal(boolean) is
-  'Private check for installing, upgrading or uninstalling an Application that places custom components: the current person holds platform.organization.custom_code.manage and, when asked, signed in within 15 minutes.';
+  'Private check for installing, upgrading from or to, or uninstalling an Application that places custom components: the current person holds platform.organization.custom_code.manage and, when asked, signed in within 15 minutes.';
 
 create or replace function vortex_definition.activate_application_installation(
   p_application_root_id uuid,
@@ -560,14 +545,15 @@ begin
       message = 'Exact Application release is unavailable';
   end if;
 
-  -- Uninstalling an Application that places custom components needs the custom code permission, as
-  -- the TypeScript installer says; a detach that makes room for a replacement release is an
-  -- upgrade, which activation checks. No recent sign-in is asked of an uninstall.
-  if p_replacement_release_revision is null
-    and vortex_definition.application_release_contains_custom_components_internal(
-      p_application_root_id, p_application_release_revision
-    ) then
-    perform vortex_definition.require_custom_code_manage_internal(false);
+  -- Removing an Application release that places custom components needs the custom code
+  -- permission, whether it is uninstalled or replaced by an upgrade; an upgrade also needs a recent
+  -- sign-in, as installing does (builder-authority.ts). Activation checks the replacing release.
+  if vortex_definition.application_release_contains_custom_components_internal(
+    p_application_root_id, p_application_release_revision
+  ) then
+    perform vortex_definition.require_custom_code_manage_internal(
+      p_replacement_release_revision is not null
+    );
   end if;
 
   -- A platform system Application is never uninstalled (architecture decision 11): it is detached
@@ -774,6 +760,111 @@ revoke all on function vortex_definition.detach_application_installation(uuid, b
 grant execute on function vortex_definition.detach_application_installation(uuid, bigint, jsonb, bigint)
   to vortex_request;
 comment on function vortex_definition.detach_application_installation(uuid, bigint, jsonb, bigint) is
-  'Revision-checked atomic detach of one complete Application Module binding set while retaining storage and records. A platform system Application is detached only to be replaced by another release of it.';
+  'Revision-checked atomic detach of one complete Application Module binding set while retaining storage and records. A platform system Application is detached only to be replaced by another release of it. A release that places custom components needs the custom code permission to be removed.';
+
+-- Counts, or with p_apply removes, everything one ordinary application and the modules it owns
+-- hold in the validated organisation, in one transaction under the application installation
+-- authority. The proof of what may be removed (purge_application_review_internal) and the
+-- deletion of the protected history (purge_application_history_internal, owned by the only role
+-- the history protection lets delete) both prove it again themselves; this function only
+-- sequences them, then removes the roots and records the change.
+create or replace function vortex_definition.purge_application(
+  p_application_root_id uuid,
+  p_apply boolean,
+  p_delete_only boolean,
+  p_confirmed_name text
+)
+returns jsonb
+language plpgsql
+volatile
+security definer
+set search_path = ''
+as $function$
+declare
+  authority record;
+  impact jsonb;
+  context_value jsonb;
+begin
+  if p_application_root_id is null or p_apply is null or p_delete_only is null then
+    raise exception using errcode = '22023',
+      message = 'Application purge command is invalid';
+  end if;
+
+  -- Purging or deleting needs a recent sign-in, as the installation authority in TypeScript says.
+  select locked.* into strict authority
+  from vortex_access.lock_application_installation_authority(
+    case when p_apply then pg_catalog.jsonb_build_object('kind', 'primary', 'maximumAgeSeconds', 900) end
+  ) as locked;
+
+  -- Purging an installed Application that places custom components uninstalls custom code.
+  if p_apply and exists (
+    select 1
+    from vortex_definition.installation_bindings as binding
+    where binding.organization_id = authority.organization_id
+      and binding.application_root_id = p_application_root_id
+      and binding.state <> 'detached'
+      and vortex_definition.application_release_contains_custom_components_internal(
+        binding.application_root_id, binding.application_release_revision
+      )
+  ) then
+    perform vortex_definition.require_custom_code_manage_internal(false);
+  end if;
+
+  -- Without a typed name this only reads; with p_apply the typed name is required and proved.
+  impact := vortex_definition.purge_application_review_internal(
+    authority.organization_id,
+    p_application_root_id,
+    p_delete_only,
+    case when p_apply then coalesce(p_confirmed_name, '') else null end);
+  if not p_apply then
+    return impact;
+  end if;
+
+  perform vortex_definition.purge_application_history_internal(
+    authority.organization_id, p_application_root_id, p_delete_only, p_confirmed_name);
+  perform vortex_definition.purge_application_roots_internal(
+    authority.organization_id, p_application_root_id);
+
+  context_value := vortex_access.validated_human_request_context();
+  perform vortex_access.increment_organization_access_version(
+    authority.organization_id,
+    authority.organization_account_id,
+    authority.correlation_id,
+    'application_access_changed'
+  );
+  perform vortex_record.append_organization_activity_entry(
+    authority.organization_id,
+    pg_catalog.gen_random_uuid(),
+    pg_catalog.statement_timestamp(),
+    'organization_account',
+    authority.organization_account_id,
+    case when p_delete_only then 'delete_application' else 'purge_application' end,
+    array[p_application_root_id]::uuid[],
+    array[]::uuid[],
+    vortex_platform.channel(),
+    (context_value ->> 'correlationId')::uuid,
+    'completed'
+  );
+
+  return pg_catalog.jsonb_build_object(
+    'roles', impact -> 'roles',
+    'role_assignments', impact -> 'role_assignments',
+    'permission_entries', impact -> 'permission_entries',
+    'releases', impact -> 'releases',
+    'records', impact -> 'records',
+    'record_tables', impact -> 'record_tables'
+  );
+end
+$function$;
+
+revoke all on function vortex_definition.purge_application(uuid, boolean, boolean, text)
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_record_adapter;
+grant execute on function vortex_definition.purge_application(uuid, boolean, boolean, text)
+  to vortex_request;
+
+comment on function vortex_definition.purge_application(uuid, boolean, boolean, text) is
+  'Counts, or with p_apply removes, everything one ordinary Application and the Modules it owns hold in the validated organisation, in one transaction under the application installation authority: the protected history through the one role allowed to delete it, then the roots. A system application, the default application and an application another one depends on are refused; p_delete_only also refuses an installed application; the typed name is required and proved to remove.';
+
+alter function vortex_definition.purge_application(uuid, boolean, boolean, text) owner to vortex_owner;
 
 reset role;

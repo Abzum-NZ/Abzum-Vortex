@@ -216,11 +216,15 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
     applicationRootId: ApplicationRootId,
     exact: ExactRelease,
     accepting: boolean,
+    prior: ExactRelease | null = null,
   ): BuilderOperation => ({
     kind: "installation",
     applicationRootId,
     change: "install_or_upgrade",
-    containsCustomComponents: dependencies.containsCustomComponents(exact.releaseSet),
+    // An upgrade changes custom code when the release it replaces places any too.
+    containsCustomComponents:
+      dependencies.containsCustomComponents(exact.releaseSet) ||
+      (prior !== null && dependencies.containsCustomComponents(prior.releaseSet)),
     acceptedPermissions: accepting ? conferredPermissions(exact.preparedTemplates) : [],
   });
 
@@ -885,7 +889,7 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
         "runAccessChange",
         verifiedSession.data,
         request.organizationId,
-        installOperation(request.applicationRootId, exact, false),
+        installOperation(request.applicationRootId, exact, false, prior),
         async (transaction, authority, scope) => {
           const state = await readInstallationBindings(
             transaction,
@@ -1023,7 +1027,7 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
           else await writePreparedInstallationRuntimeBundle(transaction, preparedSource);
           await requireBuilderAuthority(
             currentAuthority,
-            installOperation(request.applicationRootId, exact, false),
+            installOperation(request.applicationRootId, exact, false, prior),
           );
           const activated = requireLifecycleResult(
             await activateApplicationInstallation(transaction, {

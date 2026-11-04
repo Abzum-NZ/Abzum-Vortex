@@ -30,7 +30,7 @@ begin
   -- Missing permission is named before a stale sign-in: signing in again cannot help without it.
   if decision.outcome = 'refused' and decision.reason_code = 'authentication_unsatisfied' then
     raise exception using errcode = 'V3150',
-      message = 'Installing custom code needs a recent sign-in';
+      message = 'Changing custom code needs a recent sign-in';
   end if;
   if decision.outcome is distinct from 'eligible'
     or decision.operation_key is distinct from 'platform.organization.custom_code.manage'
@@ -42,7 +42,7 @@ begin
       is distinct from (context_value ->> 'organizationAccountId')::uuid
     or decision.correlation_id is distinct from (context_value ->> 'correlationId')::uuid then
     raise exception using errcode = '42501',
-      message = 'Installing custom code needs the custom code permission';
+      message = 'Changing custom code needs the custom code permission';
   end if;
 end
 $function$;
@@ -56,4 +56,4 @@ grant execute on function vortex_definition.require_custom_code_manage_internal(
   to postgres;
 
 comment on function vortex_definition.require_custom_code_manage_internal(boolean) is
-  'Private check for installing, upgrading or uninstalling an Application that places custom components: the current person holds platform.organization.custom_code.manage and, when asked, signed in within 15 minutes.';
+  'Private check for installing, upgrading from or to, or uninstalling an Application that places custom components: the current person holds platform.organization.custom_code.manage and, when asked, signed in within 15 minutes.';

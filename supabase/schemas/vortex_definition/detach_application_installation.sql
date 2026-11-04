@@ -71,14 +71,15 @@ begin
       message = 'Exact Application release is unavailable';
   end if;
 
-  -- Uninstalling an Application that places custom components needs the custom code permission, as
-  -- the TypeScript installer says; a detach that makes room for a replacement release is an
-  -- upgrade, which activation checks. No recent sign-in is asked of an uninstall.
-  if p_replacement_release_revision is null
-    and vortex_definition.application_release_contains_custom_components_internal(
-      p_application_root_id, p_application_release_revision
-    ) then
-    perform vortex_definition.require_custom_code_manage_internal(false);
+  -- Removing an Application release that places custom components needs the custom code
+  -- permission, whether it is uninstalled or replaced by an upgrade; an upgrade also needs a recent
+  -- sign-in, as installing does (builder-authority.ts). Activation checks the replacing release.
+  if vortex_definition.application_release_contains_custom_components_internal(
+    p_application_root_id, p_application_release_revision
+  ) then
+    perform vortex_definition.require_custom_code_manage_internal(
+      p_replacement_release_revision is not null
+    );
   end if;
 
   -- A platform system Application is never uninstalled (architecture decision 11): it is detached
@@ -285,4 +286,4 @@ revoke all on function vortex_definition.detach_application_installation(uuid, b
 grant execute on function vortex_definition.detach_application_installation(uuid, bigint, jsonb, bigint)
   to vortex_request;
 comment on function vortex_definition.detach_application_installation(uuid, bigint, jsonb, bigint) is
-  'Revision-checked atomic detach of one complete Application Module binding set while retaining storage and records. A platform system Application is detached only to be replaced by another release of it.';
+  'Revision-checked atomic detach of one complete Application Module binding set while retaining storage and records. A platform system Application is detached only to be replaced by another release of it. A release that places custom components needs the custom code permission to be removed.';

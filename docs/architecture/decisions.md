@@ -316,7 +316,7 @@ required-caller policy is itself a protected access-administration operation.
 
 Ordinary organisation administrators do not hold these permissions unless a role grants them.
 
-**System applications** (IAM, Organisation Administration, Tenant Administration, the Landing Zone)
+**System applications** (IAM, Organisation Administration, Tenant Administration, the Landing Zone, Studio with the App Store)
 are platform packages, installed when an organisation is created. They cannot be uninstalled. Their
 protected operations and operation bindings stay platform-owned. People holding
 `system_applications.manage` customise them through extension fields, theme, navigation and their own
