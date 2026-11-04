@@ -15,6 +15,8 @@ import {
   StudioSettingFieldsContext,
   studioConditionField,
   studioConditionFieldName,
+  studioFeaturesField,
+  studioFeaturesFieldName,
   studioGateField,
   studioGateFieldName,
   studioLayoutField,
@@ -84,6 +86,7 @@ const noProps: Readonly<Record<string, unknown>> = {};
 
 /** Who sees the block and when, and its size and order: the fields of the Visibility and access and Layout groups. */
 const addInspectorFields = (fields: Record<string, Field>): void => {
+  fields[studioFeaturesFieldName] = studioFeaturesField;
   fields[studioLayoutFieldName] = studioLayoutField;
   fields[studioOrderFieldName] = studioOrderField;
   fields[studioGateFieldName] = studioGateField;
@@ -165,6 +168,7 @@ function StudioInspectorFieldGroups({
   const primary = controls.filter((control) => !more.includes(control));
   const access = context?.access;
   const layout = context?.layout;
+  const { workflows, usedIn } = context ?? {};
   const { breakpoint } = useStudioScreen();
   return (
     <>
@@ -212,6 +216,7 @@ function StudioInspectorFieldGroups({
           )}
         </StudioInspectorGroup>
       )}
+      {fields[studioFeaturesFieldName]}
       {layout !== undefined && (
         <StudioInspectorGroup
           title="Layout"
@@ -222,6 +227,8 @@ function StudioInspectorFieldGroups({
           {fields[studioOrderFieldName]}
         </StudioInspectorGroup>
       )}
+      {workflows}
+      {usedIn}
     </>
   );
 }
@@ -316,6 +323,9 @@ export function StudioBlockSettingFields({
   query,
   access,
   layout,
+  features,
+  workflows,
+  usedIn,
   settingsAfter,
   notice,
   placementAlias,
@@ -356,13 +366,30 @@ export function StudioBlockSettingFields({
       query,
       access,
       layout,
+      features,
+      workflows,
+      usedIn,
       settingsAfter,
       notice,
       scope,
       touched: touched.scope === scope ? touched.keys : noKeys,
       touch,
     }),
-    [choices, disabled, query, access, layout, settingsAfter, notice, scope, touched, touch],
+    [
+      choices,
+      disabled,
+      query,
+      access,
+      layout,
+      features,
+      workflows,
+      usedIn,
+      settingsAfter,
+      notice,
+      scope,
+      touched,
+      touch,
+    ],
   );
   return (
     <StudioSettingFieldsContext.Provider value={value}>

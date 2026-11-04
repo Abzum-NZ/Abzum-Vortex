@@ -9,7 +9,7 @@ import type { StudioCompiledFields } from "../_lib/studio-data-model";
 import { StudioInspectorGroup } from "@vortex/ui/studio";
 import { useStudioScreen } from "@vortex/ui/studio/puck-provider";
 
-import { useId, useMemo, useRef, useState } from "react";
+import { useId, useMemo, useRef, useState, type ReactNode } from "react";
 import { studioPlacementLabel } from "../_lib/studio-labels";
 import {
   describeStudioCompositionEdit,
@@ -25,7 +25,6 @@ import {
   studioQueryBindingFacts,
   studioRecordBindingFields,
   StudioBlockSettingFields,
-  StudioGridFeatures,
   boardModeOf,
   boardSettingChoices,
   studioBoardPipelines,
@@ -36,6 +35,7 @@ import {
   type StudioCompositionCommand,
   type StudioCompositionContext,
   type StudioCompositionOutcome,
+  type StudioGridFeaturesProps,
   type StudioLayoutFieldValue,
   type StudioCompositionSettings,
   type StudioCompositionSettingsModel,
@@ -74,6 +74,10 @@ type Props = Readonly<{
   ) => StudioCompositionOutcome;
   /** One condition of the block (when it shows, is required, is read-only or is enabled). */
   onReaction: Parameters<typeof useStudioBlockAccess>[0]["onReaction"];
+  /** The block's flow bindings, drawn by the Workflows group. */
+  workflows: ReactNode;
+  /** Where the block is used, drawn by the Used in group. */
+  usedIn: ReactNode;
 }>;
 
 /** The settings form's input: the block's set settings and the query it reads. */
@@ -90,7 +94,7 @@ const noQueries: readonly StudioQueryChoice[] = [];
  * through the one composition command; input that is not valid yet stays here with its problem and
  * never reaches the draft. New blocks come from the Blocks panel's palette.
  */
-export function ApplicationCompositionEditor(props: Props) {
+export function StudioBlockInspector(props: Props) {
   // The screen is the canvas screen: one state, kept by Puck.
   const { breakpoint, choose: chooseScreen } = useStudioScreen();
   const { labels } = props;
@@ -364,6 +368,8 @@ export function ApplicationCompositionEditor(props: Props) {
           releases={props.context.catalogue.releases}
           access={access}
           layout={layoutValue}
+          workflows={props.workflows}
+          usedIn={props.usedIn}
           notice={settingsNotice ?? "This item's settings can't be changed here."}
         />
         {conditionDialog}
@@ -372,7 +378,7 @@ export function ApplicationCompositionEditor(props: Props) {
     );
   }
 
-  // A Records table's grid features are edited in their own Features panel, not as a setting group.
+  // A Records table's grid features are edited in their own Features field, not as a setting group.
   const featuresProperty =
     settingsModel.kind === "available"
       ? studioGridFeaturesProperty(settingsModel.properties)
@@ -467,6 +473,72 @@ export function ApplicationCompositionEditor(props: Props) {
     else settings.hold(next, "");
   };
   editSettings.current = (next) => changeSettings(next);
+  const queryOfSettings = props.choices.queries.find(
+    (candidate) => candidate.reference === settingsInputs.query,
+  );
+  const presentationSetting =
+    settingsInputs.settings.presentation ??
+    (settingsModel.kind === "available"
+      ? settingsModel.properties.find((property) => property.key === "presentation")?.defaultValue
+      : undefined);
+  // The Records table's grid features: the panel's facts and the edit it makes.
+  const features: StudioGridFeaturesProps | undefined =
+    featuresProperty === undefined
+      ? undefined
+      : {
+          idPrefix: `${settingsId}-features`,
+          property: featuresProperty,
+          problem: problemArea === "features" ? settings.problem : "",
+          tableSettings: settingsInputs.settings,
+          canvasArrangement: canvasMatches ? props.canvasArrangement?.state : undefined,
+          canvasStale: props.canvasArrangement !== undefined && !canvasMatches,
+          signedIn: settingsModel.kind === "available" && settingsModel.signedIn,
+          value: settingsInputs.settings[featuresProperty.key],
+          presentation: (() => {
+            if (
+              presentationSetting?.kind !== "choice" ||
+              (presentationSetting.value !== "grid" && presentationSetting.value !== "cards")
+            )
+              throw new Error("Data grid preset is missing its declared setting");
+            return presentationSetting.value;
+          })(),
+          query: queryOfSettings,
+          compiledFields:
+            queryOfSettings === undefined
+              ? undefined
+              : props.compiledFields?.recordTypes[queryOfSettings.recordType],
+          choices,
+          boardChoices: boardSettingChoices(props.choices, boardModeOf(settingsInputs.settings)),
+          pipelines: studioBoardPipelines(
+            props.context.source,
+            settingsModel.kind === "available" ? settingsModel.placementAlias : undefined,
+          ),
+          related: {
+            queries: props.choices.queries,
+            relationships: props.choices.relationships,
+            recordTypeLabel: (recordType) =>
+              props.choices.recordTypes.find((candidate) => candidate.key === recordType)?.label ??
+              "A removed item",
+            page: studioQueryBindingFacts(
+              props.context,
+              settingsModel.kind === "available" ? settingsModel.placementAlias : "",
+              props.choices.queries,
+            ),
+            rowFields: studioRecordBindingFields(
+              props.context.source,
+              queryOfSettings?.recordType ?? "",
+            ),
+          },
+          disabled: props.disabled,
+          onChange: (next) =>
+            changeSettings(
+              {
+                ...settingsInputs,
+                settings: { ...settingsInputs.settings, [featuresProperty.key]: next },
+              },
+              "features",
+            ),
+        };
   const move = (direction: -1 | 1) => {
     if (!orderEditable || selectedIndex < 0) return;
     const nextIndex = selectedIndex + direction;
@@ -505,81 +577,13 @@ export function ApplicationCompositionEditor(props: Props) {
         query={queryValue}
         access={access}
         layout={layoutValue}
+        features={features}
+        workflows={props.workflows}
+        usedIn={props.usedIn}
         settingsAfter={settingsAfter}
         notice={settingsNotice}
       />
       {conditionDialog}
-      {featuresProperty === undefined ? null : (
-        <StudioGridFeatures
-          idPrefix={`${settingsId}-features`}
-          property={featuresProperty}
-          problem={problemArea === "features" ? settings.problem : ""}
-          tableSettings={settingsInputs.settings}
-          canvasArrangement={canvasMatches ? props.canvasArrangement?.state : undefined}
-          canvasStale={props.canvasArrangement !== undefined && !canvasMatches}
-          signedIn={settingsModel.kind === "available" && settingsModel.signedIn}
-          value={settingsInputs.settings[featuresProperty.key]}
-          presentation={(() => {
-            const setting =
-              settingsInputs.settings.presentation ??
-              (settingsModel.kind === "available"
-                ? settingsModel.properties.find((property) => property.key === "presentation")
-                    ?.defaultValue
-                : undefined);
-            if (
-              setting?.kind !== "choice" ||
-              (setting.value !== "grid" && setting.value !== "cards")
-            )
-              throw new Error("Data grid preset is missing its declared setting");
-            return setting.value;
-          })()}
-          query={props.choices.queries.find((query) => query.reference === settingsInputs.query)}
-          compiledFields={(() => {
-            const query = props.choices.queries.find(
-              (candidate) => candidate.reference === settingsInputs.query,
-            );
-            return query === undefined
-              ? undefined
-              : props.compiledFields?.recordTypes[query.recordType];
-          })()}
-          choices={choices}
-          boardChoices={boardSettingChoices(props.choices, boardModeOf(settingsInputs.settings))}
-          pipelines={studioBoardPipelines(
-            props.context.source,
-            settingsModel.kind === "available" ? settingsModel.placementAlias : undefined,
-          )}
-          related={{
-            queries: props.choices.queries,
-            relationships: props.choices.relationships,
-            recordTypeLabel: (recordType) =>
-              props.choices.recordTypes.find((candidate) => candidate.key === recordType)?.label ??
-              "A removed item",
-            page:
-              settingsModel.kind === "available"
-                ? studioQueryBindingFacts(
-                    props.context,
-                    settingsModel.placementAlias,
-                    props.choices.queries,
-                  )
-                : studioQueryBindingFacts(props.context, "", props.choices.queries),
-            rowFields: studioRecordBindingFields(
-              props.context.source,
-              props.choices.queries.find((query) => query.reference === settingsInputs.query)
-                ?.recordType ?? "",
-            ),
-          }}
-          disabled={props.disabled}
-          onChange={(features) =>
-            changeSettings(
-              {
-                ...settingsInputs,
-                settings: { ...settingsInputs.settings, [featuresProperty.key]: features },
-              },
-              "features",
-            )
-          }
-        />
-      )}
       {announcement}
       {message.failed && message.area === "settings" && (
         <Alert key={message.at} variant="destructive">

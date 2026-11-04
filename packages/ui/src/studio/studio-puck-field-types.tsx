@@ -43,6 +43,7 @@ import {
   type StudioSettingValues,
 } from "./studio-setting-model";
 import { studioTotalMeasureProperty } from "./grid-features/totals";
+import { StudioGridFeatures, type StudioGridFeaturesProps } from "./studio-grid-features";
 import {
   StudioLayoutField,
   StudioOrderField,
@@ -71,6 +72,12 @@ export type StudioSettingFieldsValue = Readonly<{
   access?: StudioAccessFieldValue | undefined;
   /** The block's size and order on the canvas screen, and the commands that change them. */
   layout?: StudioLayoutFieldValue | undefined;
+  /** The Records table's grid features (board, formatting, export, inline edit, row actions, row edit). */
+  features?: StudioGridFeaturesProps | undefined;
+  /** The block's flow bindings, drawn by the Workflows group. */
+  workflows?: ReactNode;
+  /** Where the block is used, drawn by the Used in group. */
+  usedIn?: ReactNode;
   /** What follows the settings in their group: the selection bindings and the group's refusal. */
   settingsAfter?: ReactNode;
   /** Said in the Settings group in place of the settings when the block's settings cannot be drawn. */
@@ -142,6 +149,8 @@ export const studioGateFieldName = "vortexGate";
 /** The inspector fields of the Layout group: the block's size and its order on the canvas screen. */
 export const studioLayoutFieldName = "vortexLayout";
 export const studioOrderFieldName = "vortexOrder";
+/** The inspector field that holds the Records table's grid features (they are one setting group, drawn as one panel). */
+export const studioFeaturesFieldName = "vortexGridFeatures";
 export const studioConditionFieldName = (slot: StudioReactionSlot) => `vortexCondition-${slot}`;
 
 type SettingKind = Readonly<{
@@ -153,7 +162,7 @@ type SettingKind = Readonly<{
 /** What a Studio field carries: the setting and the control that edits it, or the block's data choice. */
 type StudioFieldKind =
   | SettingKind
-  | Readonly<{ kind: "query" | "gate" | "layout" | "order" }>
+  | Readonly<{ kind: "query" | "gate" | "layout" | "order" | "features" }>
   | Readonly<{ kind: "condition"; slot: StudioReactionSlot }>;
 
 /** Studio's data travels in Puck's public field `metadata`; Puck's own render is not used. */
@@ -194,6 +203,11 @@ export const studioLayoutField: Field = studioCustomField("Size", studioLayoutFi
 });
 export const studioOrderField: Field = studioCustomField("Order", studioOrderFieldName, {
   kind: "order",
+});
+
+/** The field that holds the Records table's grid features. */
+export const studioFeaturesField: Field = studioCustomField("Features", studioFeaturesFieldName, {
+  kind: "features",
 });
 
 /** The field of one condition (when the block shows, is required, is read-only or is enabled). */
@@ -417,6 +431,13 @@ function StudioConditionField({
   );
 }
 
+/** The grid features of a Records table: the existing feature editors, edited through the inspector's settings command. */
+function StudioFeaturesField({ readOnly }: Readonly<{ readOnly: boolean }>) {
+  const features = useContext(StudioSettingFieldsContext)?.features;
+  if (features === undefined) return null;
+  return <StudioGridFeatures {...features} disabled={features.disabled || readOnly} />;
+}
+
 /** The size or the order of the block: the inspector's layout value drawn by the Layout fields. */
 function StudioLayoutKind({
   kind,
@@ -447,6 +468,8 @@ const StudioCustomField: CustomFieldRenderer = (props) => {
       return <StudioGateField readOnly={readOnly} />;
     case "condition":
       return <StudioConditionField slot={studio.slot} readOnly={readOnly} />;
+    case "features":
+      return <StudioFeaturesField readOnly={readOnly} />;
     case "layout":
     case "order":
       return <StudioLayoutKind kind={studio.kind} readOnly={readOnly} />;

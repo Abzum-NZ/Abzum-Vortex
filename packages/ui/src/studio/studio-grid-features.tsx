@@ -95,32 +95,8 @@ export const studioGridFeaturesProperty = (
     : undefined;
 };
 
-/**
- * The Features panel of a Records table: one compact row per grid feature with its switch and its
- * capability check beside it, "Available" or "Not possible" with the business sentence. The check is
- * the registry's own, run on the draft's facts of the bound query, so it says exactly what
- * publication will say. Switching a feature on reveals its settings; switching it off keeps only the
- * switch, so a feature that is off compiles to nothing.
- */
-export function StudioGridFeatures({
-  idPrefix,
-  property,
-  problem,
-  value,
-  presentation,
-  query,
-  compiledFields,
-  tableSettings,
-  canvasArrangement,
-  canvasStale,
-  signedIn,
-  choices,
-  boardChoices,
-  related,
-  pipelines,
-  disabled,
-  onChange,
-}: Readonly<{
+/** What the Features panel of a Records table is drawn from: the draft's facts, and the edit it makes. */
+export type StudioGridFeaturesProps = Readonly<{
   idPrefix: string;
   /** The inspector's held problem after a features change; shown in the changed feature. */
   problem: string;
@@ -147,7 +123,34 @@ export function StudioGridFeatures({
   pipelines: readonly StudioBoardPipeline[];
   disabled: boolean;
   onChange: (next: SourceBlockPropertyValueContract) => void;
-}>): ReactElement {
+}>;
+
+/**
+ * The Features panel of a Records table: one compact row per grid feature with its switch and its
+ * capability check beside it, "Available" or "Not possible" with the business sentence. The check is
+ * the registry's own, run on the draft's facts of the bound query, so it says exactly what
+ * publication will say. Switching a feature on reveals its settings; switching it off keeps only the
+ * switch, so a feature that is off compiles to nothing.
+ */
+export function StudioGridFeatures({
+  idPrefix,
+  property,
+  problem,
+  value,
+  presentation,
+  query,
+  compiledFields,
+  tableSettings,
+  canvasArrangement,
+  canvasStale,
+  signedIn,
+  choices,
+  boardChoices,
+  related,
+  pipelines,
+  disabled,
+  onChange,
+}: StudioGridFeaturesProps): ReactElement {
   const ownId = useId();
   const [changedFeature, setChangedFeature] = useState<RecordsTableFeatureKey | undefined>();
   const authored = value?.kind === "group" ? value.properties : {};
