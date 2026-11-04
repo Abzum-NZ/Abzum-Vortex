@@ -233,14 +233,23 @@ export type SourcePageData = {
   content: SourceItem[];
 };
 
+/**
+ * The Puck data of one canvas: a page's (or guided step's) data, or a layout's, which is the same
+ * shape without a shell of its own (all its blocks are in `content`).
+ */
+export type SourceZonedData = {
+  root: { props: { vortex: { slot_orders: SourceSlotOrders } } & Record<string, unknown> };
+  content: SourceItem[];
+};
+
 /** The root slots of page data: every root prop but `vortex`, each one shell content slot. */
-export const sourcePageRootSlots = (data: SourcePageData): [string, SourceItem[]][] =>
+export const sourcePageRootSlots = (data: SourceZonedData): [string, SourceItem[]][] =>
   Object.entries(data.root.props).flatMap(([key, value]): [string, SourceItem[]][] =>
     key === "vortex" ? [] : [[key, value as SourceItem[]]],
   );
 
 /** Every zone of page data with its items: `content` and each root slot. */
-export const sourcePageZones = (data: SourcePageData): [string, SourceItem[]][] => [
+export const sourcePageZones = (data: SourceZonedData): [string, SourceItem[]][] => [
   [rootZone, data.content],
   ...sourcePageRootSlots(data),
 ];

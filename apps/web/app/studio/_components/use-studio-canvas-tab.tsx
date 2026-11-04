@@ -324,7 +324,15 @@ export function useStudioCanvasTab({
           : { kind: "page", pageAlias: page.id },
       );
     };
-    if (!addressRestored.current) {
+    // A block address names a block the catalogue's releases describe: until they have loaded no
+    // block has an owner, and the address would fall back to the page. It is read once they have.
+    const waitingForBlocks =
+      !addressRestored.current &&
+      new URL(window.location.href).searchParams.get("block") !== null &&
+      catalogue.releases.length === 0;
+    if (waitingForBlocks) {
+      // Nothing yet: this effect runs again when the catalogue arrives.
+    } else if (!addressRestored.current) {
       addressRestored.current = true;
       restore();
       setAddressSettled(true);
@@ -338,9 +346,11 @@ export function useStudioCanvasTab({
     }
     window.addEventListener("popstate", restore);
     return () => window.removeEventListener("popstate", restore);
-  }, [canvasPage, selected, source, placementOwners, draft.select]);
+  }, [canvasPage, selected, source, placementOwners, draft.select, catalogue.releases.length]);
   const canvasPageRef = useRef(canvasPage?.id);
   canvasPageRef.current = canvasPage?.id;
+  const layoutAliasRef = useRef(layoutAlias);
+  layoutAliasRef.current = layoutAlias;
   // New blocks go to the selected layout, otherwise to the page on the canvas.
   const addOwner: StudioCompositionOwner | undefined =
     layoutAlias !== undefined
@@ -900,7 +910,7 @@ export function useStudioCanvasTab({
         title="Blocks"
         description={
           addOwner?.kind === "layout"
-            ? "Blocks to add to the selected layout. Use Add to put a block into it."
+            ? "Blocks to add to the selected layout. Drag a block onto the layout, or use Add."
             : "Blocks to add to the page on the canvas. Drag a block onto the page, or use Add."
         }
         hidden={tab !== "blocks"}
@@ -1262,11 +1272,14 @@ export function useStudioCanvasTab({
         : { roleName: viewAsRole.name, decisions: viewDecisions },
     [viewAsRole, viewDecisions],
   );
+  // A click on the canvas's empty ground selects what the canvas shows: the layout, or the page.
   const onSelectPlacement = useStable((alias: string | null) =>
     Promise.resolve(
       alias !== null
         ? draft.select({ kind: "placement", placementAlias: alias })
-        : canvasPageRef.current !== undefined &&
+        : layoutAliasRef.current !== undefined
+          ? draft.select({ kind: "shell", shellAlias: layoutAliasRef.current })
+          : canvasPageRef.current !== undefined &&
             draft.select({ kind: "page", pageAlias: canvasPageRef.current }),
     ),
   );
@@ -1332,6 +1345,7 @@ export function useStudioCanvasTab({
       fieldInputControlReleases,
       platformThemeTokens,
       pageAlias: canvasPage?.id,
+      layoutAlias,
       compiledSlots,
       frame: canvasFrame,
       viewer: canvasViewer,
@@ -1362,6 +1376,7 @@ export function useStudioCanvasTab({
       fieldInputControlReleases,
       platformThemeTokens,
       canvasPage?.id,
+      layoutAlias,
       compiledSlots,
       canvasFrame,
       canvasViewer,

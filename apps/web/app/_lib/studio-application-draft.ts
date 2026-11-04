@@ -29,11 +29,13 @@ import {
   canonicalJson,
   describeFailure,
   compiledItemSlots,
+  compiledPageShellId,
   type ApplicationContent,
   type CompiledItem,
   type PageComposition,
   sourcePageSlotAddresses,
   sourceItemChildSlots,
+  shellLayoutZone,
   sourcePageShell,
   sourcePageSlotAt,
   type OrganizationId,
@@ -341,6 +343,20 @@ export const pageCompiledSlotsFor = (
       if (zone === undefined) throw new Error("Studio authored page slot is missing");
       assertCompiledSlotMatches(zone.items, runtimeSlot);
       slots[at.key] = runtimeSlot;
+    }
+    // The page's layout is drawn from its compiled blocks too: a selected layout is edited on the canvas.
+    const shellAlias = sourcePageShell(page.composition);
+    const sourceShell = source.body.shells.find((candidate) => candidate.id === shellAlias);
+    if (sourceShell !== undefined) {
+      const shellId = compiledPageShellId(compiledPage.composition);
+      const compiledShell = content.shells.filter(
+        (candidate) => String(candidate.shellId) === String(shellId),
+      );
+      if (compiledShell.length !== 1)
+        throw new Error("Studio compiled page layout does not match its authored draft");
+      const layout: CompiledSlot = compiledShell[0]!.layout.content;
+      assertCompiledSlotMatches(sourceShell.layout.content, layout);
+      slots[shellLayoutZone] = layout;
     }
     result[page.id] = slots;
   });

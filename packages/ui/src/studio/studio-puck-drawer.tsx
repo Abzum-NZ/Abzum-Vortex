@@ -40,7 +40,6 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from "../components/tooltip";
 import { Icon, resolveVortexIconName, type VortexIconName } from "../icons";
 import { cn } from "../lib/utils";
-import { toast } from "../components/sonner";
 import { definitionLimitMessage, definitionLimitReached } from "@vortex/platform/schema";
 import { StudioLimitNote, Reasoned } from "./studio-limit";
 import type { StudioCompositionAddTarget } from "./application-composition-commands";
@@ -277,12 +276,12 @@ export function StudioBlocksPanel() {
   const screen = useStudioScreen();
   const palette = input.palette;
   // No page is open: the panel says so itself.
-  if (palette === undefined || model.page === undefined) return null;
+  if (palette === undefined || !model.open) return null;
   if (model.shown === undefined)
     return (
       <BlocksEmpty
         title="Blocks unavailable"
-        description="Blocks can be added once this page has a compiled version, which follows shortly after your latest change is saved."
+        description={`Blocks can be added once this ${palette.owner} has a compiled version, which follows shortly after your latest change is saved.`}
       />
     );
   if (palette.targets.kind !== "available")
@@ -294,19 +293,16 @@ export function StudioBlocksPanel() {
             ? palette.targets.reason === "published"
               ? PUBLISHED_PAGE_ADD_REASON
               : "Blocks can't be added to this kind of page in Studio yet."
-            : "This page is not in the current draft."
+            : `This ${palette.owner} is not in the current draft.`
         }
       />
     );
   return (
     <StudioBlocksDrawer
-      targets={palette.targets.targets.filter(
-        (target) => palette.owner === "layout" || model.zoneKeys.has(target.area),
-      )}
+      targets={palette.targets.targets.filter((target) => model.zoneKeys.has(target.area))}
       blocked={blockedReason(model.editable, model.readOnlyCause, screen, input.disabledReason)}
       owner={palette.owner}
       message={palette.message}
-      onAdd={palette.onAdd}
       slotOfArea={model.slotOfZoneKey}
       preferredArea={model.defaultZoneKey}
     />
@@ -318,17 +314,15 @@ function StudioBlocksDrawer({
   blocked,
   owner,
   message,
-  onAdd,
   slotOfArea,
   preferredArea,
 }: Readonly<{
   /** The places of the page (or step) the canvas shows. */
   targets: readonly StudioCompositionAddTarget[];
   blocked: string | undefined;
-  /** A page's blocks also drag onto the canvas; a layout's blocks are added with Add. */
+  /** Whose blocks the panel adds to, which it says when there is no place for one. */
   owner: "page" | "layout";
   message: string;
-  onAdd: (request: StudioCanvasAddRequest) => true | false | string;
   /** Puck's root slot of a content slot's key; `undefined` for the page's default zone. */
   slotOfArea: (area: string) => string | undefined;
   /** The content slot the panel adds to until another is chosen. */
@@ -367,14 +361,8 @@ function StudioBlocksDrawer({
         index: END_OF_SLOT,
         rendererKey: choice.rendererKey,
       };
-      // A layout's blocks are not on the canvas, so Studio's add command takes the request itself.
-      if (owner === "layout") {
-        const outcome = onAdd(request);
-        if (typeof outcome === "string") toast.error(outcome);
-        return;
-      }
-      // A page's block is inserted at the end of the place like a drop is, so both reach the add
-      // command through Puck's `insert` action.
+      // A block is inserted at the end of the place like a drop is, so both reach the add command
+      // through Puck's `insert` action.
       getPuck().dispatch({
         type: "insert",
         componentType: choice.rendererKey,
@@ -383,7 +371,7 @@ function StudioBlocksDrawer({
         id: `${choice.rendererKey}-${instance}-${(inserts.current += 1)}`,
       });
     },
-    [target, owner, onAdd, getPuck, instance, slotOfArea],
+    [target, getPuck, instance, slotOfArea],
   );
   const limitId = useId();
   // The place is full when the application holds every block it may, or the place nests as deep as

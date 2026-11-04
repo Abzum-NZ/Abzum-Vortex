@@ -12,7 +12,8 @@ import {
   type CompiledItem,
   type ImmutablePlatformBlockCatalogue,
   type SourceItem,
-  type SourcePageData,
+  type SourceZonedData,
+  type StoredReservations,
   type SourcePageZone,
 } from "@vortex/platform/schema";
 import type { StudioCompositionDestination } from "./application-composition-commands";
@@ -306,7 +307,7 @@ const zoneJson = (zone: StudioCanvasSourceSlot): string =>
   canonicalJson(JSON.parse(JSON.stringify(zone)) as unknown);
 
 /** A page's (or guided step's) data as canonical text, to compare two of them. */
-export const pageDataJson = (data: SourcePageData): string =>
+export const pageDataJson = (data: SourceZonedData): string =>
   canonicalJson(JSON.parse(JSON.stringify(data)) as unknown);
 
 /**
@@ -316,12 +317,14 @@ export const pageDataJson = (data: SourcePageData): string =>
  */
 export const storedDataProblem = (
   catalogue: ImmutablePlatformBlockCatalogue,
-  data: SourcePageData,
+  data: SourceZonedData,
+  /** A layout's content slots: the targets that stay empty for page content. */
+  reservations?: StoredReservations,
 ): string | undefined => {
   try {
     for (const [key, items] of sourcePageZones(data)) {
       const zone = { items, order: data.root.props.vortex.slot_orders[key] };
-      if (zoneJson(validateStoredZone(catalogue, zone)) !== zoneJson(zone))
+      if (zoneJson(validateStoredZone(catalogue, zone, reservations)) !== zoneJson(zone))
         return "STUDIO_CANVAS_STORED_DATA_MISMATCH: the stored content reads back differently";
     }
     return undefined;

@@ -122,6 +122,23 @@ export const studioRemovalRuleRefusal = (
   return undefined;
 };
 
+/**
+ * Why a block cannot be removed or moved because it holds a layout's content outlet (the outlet
+ * reserves it or a block inside it), or undefined. The one sentence for the canvas's reasons and
+ * the canvas change; it names the outlets themselves, not every page bound to them.
+ */
+export const studioOutletHostRefusal = (
+  source: ApplicationSourceDocument,
+  alias: string,
+): string | undefined => {
+  const outlets = studioLayoutOutletPlacementUses(source, alias).filter(
+    (place) => place.open.kind === "shell",
+  );
+  return outlets.length === 0
+    ? undefined
+    : `This block holds ${describeApplicationUsers(outlets)}. Retarget the outlet first.`;
+};
+
 /** Build the references once for a draft; the values are plain metadata. */
 export const studioCanvasReferences = (
   source: ApplicationSourceDocument,
@@ -150,13 +167,10 @@ export const studioCanvasReferences = (
         const release = releaseFor(catalogue, item);
         const duplicate = studioDuplicateRefusal(catalogue, item, descendants);
         if (duplicate !== undefined) reasons.duplicate = duplicate;
-        // The tooltip names the outlets themselves, not every page bound to them.
-        const outlets = studioLayoutOutletPlacementUses(source, id).filter(
-          (place) => place.open.kind === "shell",
-        );
-        if (outlets.length > 0) {
-          reasons.delete = `This block holds ${describeApplicationUsers(outlets)}. Retarget the outlet first.`;
-          reasons.drag = reasons.delete;
+        const host = studioOutletHostRefusal(source, id);
+        if (host !== undefined) {
+          reasons.delete = host;
+          reasons.drag = host;
         }
         for (const child of descendants) {
           const flow = flowReference(child.props.id);

@@ -1,7 +1,7 @@
 "use client";
 
 import { Item, ItemContent, ItemDescription, ItemTitle } from "../components/item";
-import { Component, type ReactElement, type ReactNode } from "react";
+import { Component, useMemo, type ReactElement, type ReactNode } from "react";
 import { placementWrapperGeometry } from "../puck-config";
 import type { ComponentConfig, Config, Field, PuckContext } from "@puckeditor/core";
 import {
@@ -210,6 +210,18 @@ class CanvasBlockBoundary extends Component<
   }
 }
 
+/** What a layout block draws in a slot reserved for the page's content: its pages' blocks are not edited here. */
+function PageContentPlaceholder({ label }: Readonly<{ label: string }>): ReactElement {
+  return (
+    <Item variant="outline" className="border-dashed" data-vortex-canvas-page-content={label}>
+      <ItemContent>
+        <ItemTitle>Page content</ItemTitle>
+        <ItemDescription>{label}</ItemDescription>
+      </ItemContent>
+    </Item>
+  );
+}
+
 function CanvasBlock({
   component,
   registry,
@@ -219,8 +231,47 @@ function CanvasBlock({
   registry: PlatformComponentRegistry;
   props: Record<string, unknown>;
 }>): ReactElement {
-  const { compiled, records, viewer, controls: publishControl, grid } = useStudioCanvasChannel();
+  const {
+    compiled,
+    records,
+    viewer,
+    controls: publishControl,
+    grid,
+    contentTargets,
+    frame,
+  } = useStudioCanvasChannel();
   const id = typeof props.id === "string" ? props.id : "";
+  // The slots of this block that hold a page's content (a layout on the canvas), each with the
+  // placeholder drawn in place of a slot Puck would let a block be dropped into.
+  const reserved = Object.hasOwn(contentTargets, id) ? contentTargets[id] : undefined;
+  // The menu a layout's navigation block draws is the application's, as in the page's frame: the
+  // frame's own render gives it through the renderer's metadata, which the canvas's blocks lack.
+  const navigation = frame?.layout === true ? frame.frame?.navigation : undefined;
+  const pageId = frame?.layout === true ? frame.frame?.pageId : undefined;
+  const menuMetadata = useMemo(
+    () =>
+      navigation === undefined
+        ? undefined
+        : { projectedNavigation: navigation, resolvePageHref: () => "#", currentPageId: pageId },
+    [navigation, pageId],
+  );
+  const puckMetadata = (props.puck as { metadata?: Record<string, unknown> } | undefined)?.metadata;
+  const blockMetadata = useMemo(
+    () => (menuMetadata === undefined ? undefined : { ...puckMetadata, ...menuMetadata }),
+    [puckMetadata, menuMetadata],
+  );
+  const slotNodes = useMemo(
+    () =>
+      reserved === undefined
+        ? undefined
+        : Object.fromEntries(
+            Object.entries(reserved).map(([slot, label]) => [
+              slot,
+              <PageContentPlaceholder key={slot} label={label} />,
+            ]),
+          ),
+    [reserved],
+  );
   const dragRef = dragRefOf(props);
   const release = releaseOf(registry, props);
   // One rule for "this block has records": the records read for it (a query or a record detail),
@@ -330,6 +381,9 @@ function CanvasBlock({
     Object.hasOwn(compiled, id) ? compiled[id] : undefined,
     current && release !== undefined && readsRecords,
   );
+  if (slotNodes !== undefined) drawn.slotNodes = slotNodes;
+  if (blockMetadata !== undefined)
+    drawn.puck = { ...(props.puck as object), metadata: blockMetadata };
   // A control that publishes a page parameter reports its chosen value, so the blocks bound to it
   // are read again for that value, exactly as the running page reads them for its address.
   if (

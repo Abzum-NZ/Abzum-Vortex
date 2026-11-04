@@ -3,6 +3,7 @@ import {
   type ImmutablePlatformBlockCatalogue,
   applicationSourceDocumentSchema,
   plainSourceSettingValue,
+  shellLayoutZone,
   sourcePageShell,
   typedSourceSettingValue,
   repeatableSlotItemIdentities,
@@ -87,7 +88,7 @@ type AddPlace = {
 };
 
 /** The area key of a layout's blocks among its places; a page's places use its slot address key. */
-const LAYOUT_AREA = "layout";
+const LAYOUT_AREA = shellLayoutZone;
 
 /**
  * Every place on one page or layout a new block can go: the top of each content area (a layout's

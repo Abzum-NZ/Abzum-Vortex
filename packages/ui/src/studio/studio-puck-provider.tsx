@@ -42,7 +42,7 @@ import type {
   StudioCompositionOwner,
 } from "./application-composition-commands";
 import type { StudioCanvasFrame } from "./studio-canvas-projection";
-import { applyPageDataChange } from "./studio-canvas-change";
+import { applyPageDataChange, type StudioCanvasOwner } from "./studio-canvas-change";
 import {
   settingKeysOf,
   singleBlockPropsEdit,
@@ -107,7 +107,7 @@ export type StudioCanvasAddRequest = Readonly<{
 export type StudioCanvasPalette = Readonly<{
   /** The places on the open page a new block can go. */
   targets: StudioCompositionAddTargetsModel;
-  /** Whose blocks the palette adds to: the open page's content slots, or its layout. */
+  /** Whose blocks the palette adds to: the open page's content slots, or the selected layout. */
   owner: StudioCompositionOwner["kind"];
   message: string;
   /** Adds a block through Studio's one add command; `false` when nothing was added yet. */
@@ -140,8 +140,10 @@ export type StudioPuckInput = Readonly<{
   /** Absent until the draft's canvas view has loaded. */
   fieldInputControlReleases: FieldInputControlReleaseMap | null;
   platformThemeTokens: PlatformThemeTokens | null;
-  /** The page on the canvas; `undefined` when the workspace shows no page. */
+  /** The page on the canvas, or the page that frames the selected layout; `undefined` when the workspace shows none. */
   pageAlias: string | undefined;
+  /** The selected layout, whose blocks are then the canvas's: the page above only draws the frame around them. */
+  layoutAlias: string | undefined;
   /** The compiled items of each content slot of this page (or step), keyed by page slot address key. */
   compiledSlots?: Readonly<Record<string, StudioCanvasCompiledSlot>> | undefined;
   disabled: boolean;
@@ -399,10 +401,14 @@ export function StudioPuckProvider({
         return;
       }
     }
-    // One block's settings edited in the inspector: the settings command writes them, on every
-    // screen, and a run of edits to one field is one Undo step. A settings edit never falls
+    // One block's settings edited in the inspector (a page's or a layout's block): the settings
+    // command writes them, on every screen, and a run of edits to one field is one Undo step. A settings edit never falls
     // through to the page write; only an edit that changes nothing but the slot order does.
-    if (settingsAllowed && now.pageAlias !== undefined && shown.shown !== undefined) {
+    if (
+      settingsAllowed &&
+      (now.pageAlias !== undefined || now.layoutAlias !== undefined) &&
+      shown.shown !== undefined
+    ) {
       // Puck holds the screen's own order (Tablet and Phone reorder slots for display), so a
       // settings edit is found against what Puck was given; the settings command writes from the
       // live draft, so the screen order is kept.
@@ -443,14 +449,22 @@ export function StudioPuckProvider({
       setResync((generation) => generation + 1);
       return;
     }
-    if (now.pageAlias === undefined || shown.data === undefined) return;
+    if (shown.data === undefined) return;
+    const owner: StudioCanvasOwner | undefined =
+      shown.owner === "layout"
+        ? now.layoutAlias === undefined
+          ? undefined
+          : { kind: "layout", shellAlias: now.layoutAlias }
+        : now.pageAlias === undefined
+          ? undefined
+          : { kind: "page", pageAlias: now.pageAlias, step: shown.step };
+    if (owner === undefined) return;
     // A block inserted from the drawer is added by Studio's add command, not by this edit.
     for (const id of inserted.current) if (puckItemsHold(candidate, id)) return;
     const result = applyPageDataChange(
       shown.catalogue,
       now.source,
-      now.pageAlias,
-      shown.step,
+      owner,
       withoutEmptyPuckZones(candidate),
     );
     if (result.kind === "unchanged") return;
@@ -603,10 +617,9 @@ export function StudioPuckProvider({
       duplicate: permitted && !full,
       delete: permitted,
       edit: settingsPermitted,
-      // The drawer's blocks drag onto the canvas; a layout's blocks are added with Add.
-      insert: permitted && !full && input.palette?.owner !== "layout",
+      insert: permitted && !full,
     }),
-    [permitted, settingsPermitted, full, input.palette?.owner],
+    [permitted, settingsPermitted, full],
   );
   const empty = useMemo((): Data => ({ root: { props: {} }, content: [] }), []);
   const shown = model.shown ?? empty;

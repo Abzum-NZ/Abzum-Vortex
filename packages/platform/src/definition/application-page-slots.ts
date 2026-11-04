@@ -24,6 +24,9 @@ export type SourcePageZone = Readonly<{ items: SourceItem[]; order: SourceSlotOr
 
 const contentZone = "content";
 
+/** The zone key of a layout's blocks beside the zones of a page: no content slot alias can spell it. */
+export const shellLayoutZone = "[layout]";
+
 const addressKey = (step: string | undefined, slot: string | undefined): string =>
   step === undefined ? (slot ?? "main") : slot === undefined ? step : `${step}/${slot}`;
 
