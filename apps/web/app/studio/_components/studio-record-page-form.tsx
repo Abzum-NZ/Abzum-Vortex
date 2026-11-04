@@ -153,14 +153,16 @@ export function StudioRecordPageForm({
           </StudioField>
           <StudioField
             label="Page"
-            hint={[
-              availableKinds.find((entry) => entry.kind === effectiveKind)?.hint,
-              boardUnavailable
-                ? "Board pages need a pipeline: add one on a choice field in Data first."
-                : undefined,
-            ]
-              .filter((part) => part !== undefined)
-              .join(" ")}
+            hint={
+              [
+                availableKinds.find((entry) => entry.kind === effectiveKind)?.hint,
+                boardUnavailable
+                  ? "Board pages need a pipeline: add one on a choice field in Data first."
+                  : undefined,
+              ]
+                .filter((part) => part !== undefined)
+                .join(" ") || undefined
+            }
             error={
               availableKinds.length === 0
                 ? "Enable Read under Standard actions in Data before adding pages."
@@ -243,12 +245,15 @@ export function StudioRecordPageForm({
                       type="button"
                       variant="ghost"
                       size="sm"
-                      className="w-full justify-start"
+                      className="w-full min-w-0 justify-start"
                     />
                   }
                 >
-                  <Icon name="chevron-down" />
-                  What will be added ({current.details.length})
+                  <Icon
+                    name="chevron-right"
+                    className="transition-transform group-data-[panel-open]/button:rotate-90"
+                  />
+                  <span className="truncate">What will be added ({current.details.length})</span>
                 </CollapsibleTrigger>
                 <CollapsibleContent className="pt-1">
                   <ItemGroup className="gap-1">

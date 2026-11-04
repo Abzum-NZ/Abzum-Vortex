@@ -9,7 +9,7 @@ import { cellValueToText } from "@vortex/platform/schema";
 import { DisplayHeader, RowActionControl } from "../display/controls";
 import { rowActionEventIdOf } from "../display/context";
 import { DisplayStateContainer } from "../display/display-state-container";
-import type { DisplayDetailCell } from "../display/projected-data";
+import type { DisplayDetailCell, DisplayRowLink } from "../display/projected-data";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../components/tooltip";
 import { cn } from "../lib/utils";
 import { NavigationLink } from "../routing/navigation-link";
@@ -20,7 +20,7 @@ import {
 } from "./launcher-context";
 
 /** The icon each kind of row link is drawn with; its label is the tooltip. */
-const linkIcons: Readonly<Record<"studio" | "upgrade", VortexIconName>> = {
+const linkIcons: Readonly<Record<DisplayRowLink["kind"], VortexIconName>> = {
   studio: "pencil",
   upgrade: "arrow-up",
 };

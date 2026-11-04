@@ -50,9 +50,6 @@ export function StudioAccessPageGates({
   const external = entries.filter((entry) => entry.type === "external");
   return (
     <section aria-label="Pages and menu" className="space-y-4">
-      <div className="flex justify-end">
-        <StudioHelp hint="A page opens for people who hold its permission, and a menu entry shows for people who hold its own. Give the permission to roles in each role's page." />
-      </div>
       <Card className="gap-0 py-0">
         <Table
           containerClassName="border-0"
@@ -62,7 +59,12 @@ export function StudioAccessPageGates({
           <TableHeader>
             <TableRow>
               <TableHead>Page</TableHead>
-              <TableHead>Opens for people who hold</TableHead>
+              <TableHead>
+                <span className="inline-flex items-center gap-1">
+                  Opens for people who hold
+                  <StudioHelp hint="A page opens for people who hold its permission, and a menu entry shows for people who hold its own. Give the permission to roles in each role's page." />
+                </span>
+              </TableHead>
               <TableHead>Its menu entries show for</TableHead>
             </TableRow>
           </TableHeader>

@@ -48,7 +48,7 @@ import {
   type StudioAccessPermission,
 } from "@vortex/ui/studio";
 import { StudioField } from "./studio-field";
-import { StudioHelp, StudioIconButton, StudioOptionControl } from "@vortex/ui/studio";
+import { Reasoned, StudioHelp, StudioIconButton, StudioOptionControl } from "@vortex/ui/studio";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@vortex/ui/components/tooltip";
 
 type Role = ApplicationSourceDocument["body"]["roles"][number];
@@ -180,8 +180,10 @@ function FieldAccess({
               <TableRow>
                 <TableHead>Field</TableHead>
                 <TableHead className="w-28 text-center">
-                  Can see
-                  <StudioHelp hint="Can see reflects the selected Read permission. Other grants can provide additional access. Can change reflects Create and Update." />
+                  <span className="inline-flex items-center gap-1">
+                    Can see
+                    <StudioHelp hint="Can see reflects the selected Read permission. Other grants can provide additional access. Can change reflects Create and Update." />
+                  </span>
                 </TableHead>
                 <TableHead className="w-20 text-center">Can change</TableHead>
               </TableRow>
@@ -399,26 +401,30 @@ export function StudioAccessRoleEditor({
 
       {wildcard ? (
         <div className="flex items-center gap-1">
-          <Button
-            type="button"
-            size="sm"
-            disabled={disabled || compiledGrants === undefined}
-            onClick={() =>
-              run({
-                kind: "list_role_permissions",
-                roleKey: role.key,
-                permissionKeys: compiledGrants ?? [],
-              })
+          <Reasoned
+            reason={
+              compiledGrants === undefined
+                ? "They are listed once your latest change is saved."
+                : undefined
             }
           >
-            List its permissions one by one
-          </Button>
+            <Button
+              type="button"
+              size="sm"
+              disabled={disabled}
+              onClick={() =>
+                run({
+                  kind: "list_role_permissions",
+                  roleKey: role.key,
+                  permissionKeys: compiledGrants ?? [],
+                })
+              }
+            >
+              List its permissions one by one
+            </Button>
+          </Reasoned>
           <StudioHelp
-            hint={`${role.name} holds every permission of the application that is not administrative. To choose them one by one, list them first.${
-              compiledGrants === undefined
-                ? " They are listed once your latest change is saved."
-                : ""
-            }`}
+            hint={`${role.name} holds every permission of the application that is not administrative. To choose them one by one, list them first.`}
           />
         </div>
       ) : (

@@ -128,6 +128,7 @@ export function StudioDrawerItem({
 }: Readonly<{ children: ReactNode; name: string }>) {
   const drawer = useContext(DrawerContext);
   const underlay = useDrawerRow(name);
+  const descriptionId = useId();
   const choice = drawer?.choices.get(name);
   const draggable = drawer?.notDroppable.has(name) === false;
   if (drawer === null || choice === undefined) return <>{children}</>;
@@ -138,6 +139,7 @@ export function StudioDrawerItem({
       variant="ghost"
       size="icon-sm"
       aria-label={`Add ${choice.name} to ${drawer.target.label}`}
+      aria-describedby={descriptionId}
       onClick={() => drawer.add(choice)}
     >
       <Icon name="plus" />
@@ -160,7 +162,9 @@ export function StudioDrawerItem({
       <Tooltip>
         <TooltipTrigger render={<ItemContent className="min-w-0" />}>
           <ItemTitle>{choice.name}</ItemTitle>
-          <ItemDescription className="line-clamp-2">{choice.description}</ItemDescription>
+          <ItemDescription id={descriptionId} className="line-clamp-2">
+            {choice.description}
+          </ItemDescription>
         </TooltipTrigger>
         <TooltipContent className="max-w-prose">{choice.description}</TooltipContent>
       </Tooltip>
@@ -168,7 +172,9 @@ export function StudioDrawerItem({
         {reason === undefined ? (
           <Tooltip>
             <TooltipTrigger render={addButton} />
-            <TooltipContent>Add {choice.name}</TooltipContent>
+            <TooltipContent className="max-w-prose">
+              Add {choice.name}: {choice.description}
+            </TooltipContent>
           </Tooltip>
         ) : (
           <Reasoned
