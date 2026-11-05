@@ -342,7 +342,7 @@ export const traverseStudioSemanticSelectionDraft = (
   for (const event of events) listener(event);
 };
 
-/** The latest snapshot's walk: a snapshot never changes, so it holds until another one is walked. */
+/** The latest snapshot's walk: a snapshot never changes, so it holds until another is walked. */
 let lastWalk:
   | Readonly<{
       source: ApplicationSourceDocument;
