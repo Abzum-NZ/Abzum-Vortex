@@ -8,6 +8,7 @@ import {
   readyPlacementData,
   firstParameter,
   logPlacementFailure,
+  placeInstallationRequired,
   type PlacementModule,
   type PlacementQuery,
   type PlacementReadEntry,
@@ -81,6 +82,7 @@ export const readCalendar = async (
     );
     return;
   }
+  if (placeInstallationRequired(data, placementId, projection.reasonCode)) return;
   logPlacementFailure(address, placementId, projection.cause);
   if (projection.cause === "calendar_range_unsupported") {
     data[placementId] = {

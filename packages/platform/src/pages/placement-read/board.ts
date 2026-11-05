@@ -19,6 +19,7 @@ import {
   fieldFilterTargetsOf,
   fieldLabelsOf,
   logPlacementFailure,
+  placeInstallationRequired,
   readyPlacementData,
   type PlacementModule,
   type PlacementQuery,
@@ -173,6 +174,7 @@ export const readBoard = async (
     );
     return;
   }
+  if (placeInstallationRequired(read.data, placementId, projection.reasonCode)) return;
   logPlacementFailure(read.address, placementId, projection.cause, projection.detail);
   read.data[placementId] =
     projection.outcome === "unavailable"

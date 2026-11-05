@@ -25,6 +25,7 @@ import {
 import {
   readyPlacementData,
   logPlacementFailure,
+  placeInstallationRequired,
   placementSettingsOf,
   queryRecordType,
   type PlacementField,
@@ -283,6 +284,7 @@ export const readSummaryOrChart = async (
       summaryResult.kind === "available" && summaryResult.value.outcome === "refused"
         ? summaryResult.value
         : undefined;
+    if (placeInstallationRequired(data, placementId, refusal?.reasonCode)) return;
     logPlacementFailure(
       address,
       placementId,
