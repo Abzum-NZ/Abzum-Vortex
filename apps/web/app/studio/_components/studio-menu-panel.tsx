@@ -56,6 +56,8 @@ const kindWords = (item: StudioMenuItem) =>
 export function StudioMenuPanel({
   source,
   selectedAlias,
+  editing,
+  onEditingChange: setEditing,
   onSelect,
   onCommand,
   onOpenAccess,
@@ -64,6 +66,9 @@ export function StudioMenuPanel({
 }: Readonly<{
   source: ApplicationSourceDocument;
   selectedAlias: string | null;
+  /** The entry whose settings are open; held by the caller, so a redrawn panel keeps it. */
+  editing: string | null;
+  onEditingChange: (alias: string | null) => void;
   onSelect: (alias: string | null) => void;
   /** Opens the Access tab, where who can see an entry is set. */
   onOpenAccess: () => void;
@@ -76,7 +81,6 @@ export function StudioMenuPanel({
   const [dragging, setDragging] = useState<string | null>(null);
   const [dropTarget, setDropTarget] = useState<string | null>(null);
   const [confirm, confirmDialog] = useConfirm();
-  const [editing, setEditing] = useState<string | null>(null);
   const treeHost = useRef<HTMLDivElement>(null);
   const [newPage, setNewPage] = useState("");
   const [addingHeading, setAddingHeading] = useState(false);
@@ -163,21 +167,25 @@ export function StudioMenuPanel({
     run({ kind: "move", alias, headingAlias: at.headingAlias, index: at.index - shift });
   };
 
+  // The row takes the focus at once, while it is still on screen, and again once the change is
+  // drawn. A change that selects an entry of a page with other outlets draws the whole panel again;
+  // the canvas provider then finds the focused row again by its key.
   const focusRow = (alias: string | undefined) => {
-    requestAnimationFrame(() => {
-      const rows = treeHost.current?.querySelectorAll<HTMLButtonElement>('[role="treeitem"]');
+    const focus = () => {
+      const rows = treeHost.current?.querySelectorAll<HTMLButtonElement>("[data-tree-key]");
       rows?.forEach((row) => {
         if (row.dataset.treeKey === alias) row.focus();
       });
-    });
+    };
+    focus();
+    requestAnimationFrame(focus);
   };
   const remove = async (item: StudioMenuItem) => {
     const position = studioMenuPosition(source, item.id);
-    if (position?.headingAlias !== null && position?.length === 1) {
-      run({ kind: "remove", alias: item.id });
-      return;
-    }
+    // The only entry under a heading goes without a confirmation.
+    const asked = !(position?.headingAlias !== null && position?.length === 1);
     if (
+      asked &&
       !(await confirm({
         title: `Remove "${item.label}" from the menu?`,
         description:
