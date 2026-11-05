@@ -19,6 +19,7 @@ import {
   studioBlockReadsQuery,
   studioOwnsSetting,
   studioReleaseReadsQuery,
+  studioReactionSlots,
 } from "@vortex/platform/schema";
 import { ItemGroup } from "../components/item";
 import { Icon } from "../icons";
@@ -52,7 +53,6 @@ import { StudioOrderNamesContext, studioLayoutSummary } from "./studio-layout-fi
 import { useStudioScreen } from "./studio-canvas-screen";
 import { studioReleaseIcon } from "./studio-puck-drawer";
 import { studioPuckStyle } from "./studio-puck-style";
-import { studioReactionSlots } from "./application-reaction-condition-commands";
 
 /**
  * A block's settings are Puck fields: each declared setting is a custom field whose control is

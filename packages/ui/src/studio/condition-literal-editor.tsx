@@ -11,8 +11,6 @@ import {
   jsonValueSchema,
   isRecord,
   type JsonValue,
-} from "@vortex/platform/schema";
-import {
   type ConditionOperand,
   type ConditionPath,
   type StudioConditionSemanticType,
@@ -22,7 +20,7 @@ import {
   literalInputValue,
   literalMatchesType,
   localDateTimeInputValue,
-} from "./condition-model";
+} from "@vortex/platform/schema";
 
 const currencyCodes = [...currentIso4217Alpha3CodeSetV2026_01_01].sort();
 

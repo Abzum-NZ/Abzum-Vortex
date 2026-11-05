@@ -1,12 +1,12 @@
+import { checkFlowFormula } from "../../rules/flow-formula-check";
+import type { ConditionNode } from "../module-foundation-contracts";
+import type { FlowFormula } from "../../workflows/flow-formula-tree";
+import type { FlowLiteral } from "../../workflows/flow-values";
+import type { JsonValue } from "../../catalogue/json-value";
 import {
-  checkFlowFormula,
-  type ConditionNode,
-  type FlowFormula,
-  type FlowLiteral,
-  type JsonValue,
   studioFlowReferenceToken,
   type StudioFlowReferenceChoice,
-} from "@vortex/platform/schema";
+} from "./application-flow-values";
 import type {
   StudioConditionControlsContext,
   StudioConditionOperandRole,

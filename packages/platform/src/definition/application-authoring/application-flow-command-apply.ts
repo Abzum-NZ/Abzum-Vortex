@@ -1,13 +1,14 @@
+import { builderKeySchema } from "../../catalogue/identifiers";
+import { flowMaximumTaskCount } from "../../workflows/flow-limits";
+import { flowTaskChildLists } from "../../workflows/flow-task-tree";
+import { validateFlow } from "../flow-validation";
 import {
-  builderKeySchema,
-  flowMaximumTaskCount,
-  flowTaskChildLists,
-  validateFlow,
   applicationSourceDocumentSchema,
   type ApplicationSourceDocument,
-  type SourceFlow,
-  type SourceFlowTask,
-  type StudioSemanticSelection,
+} from "../application-source-contracts";
+import type { SourceFlow, SourceFlowTask } from "../../workflows/flow-source-contracts";
+import { type StudioSemanticSelection, studioFlowLabel } from "./semantic-selection";
+import {
   sameStudioFlowContext,
   samePath,
   studioFlowKeyFrom,
@@ -21,11 +22,12 @@ import {
   type StudioFlowPath,
   type StudioFlowSelection,
   type StudioFlowTaskListOutline,
-  addStudioBackgroundFlow,
-  applyStudioFlowStepDraft,
-  addStudioFlowShownForm,
-  studioFlowCallerNames,
-  studioFlowLabel,
+} from "./application-flow-model";
+import { addStudioBackgroundFlow } from "./application-flow-background";
+import { applyStudioFlowStepDraft } from "./application-flow-step-form";
+import { addStudioFlowShownForm } from "./application-flow-shown-form";
+import { studioFlowCallerNames } from "./application-flow-start";
+import {
   newStep,
   noChangeGuard,
   flowRecordInput,
@@ -36,7 +38,7 @@ import {
   studioNewFormChoice,
   type StudioFlowCommand,
   type StudioFlowNewStepSettings,
-} from "@vortex/platform/schema";
+} from "./application-flow-commands";
 
 /**
  * Applying one flow command: the commands that change a step, its settings, its place or its

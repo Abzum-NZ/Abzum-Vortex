@@ -34,6 +34,7 @@ import {
   type InlineQueryChange,
   type InlineQuerySort,
   type ApplicationUsePlace,
+  validateStudioCondition,
 } from "@vortex/platform/schema";
 import {
   readStudioQueryFilter,
@@ -41,7 +42,6 @@ import {
   StudioInspectorGroup,
   StudioOptionControl,
   studioQueryFilterContext,
-  validateStudioCondition,
   writeStudioQueryFilter,
 } from "@vortex/ui/studio";
 import { Button } from "@vortex/ui/components/button";

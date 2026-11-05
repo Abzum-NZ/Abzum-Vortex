@@ -46,16 +46,16 @@ import {
   type StudioSemanticSelection,
   type StudioNavigationApplication,
   type StudioNavigationApplicationsStatus,
+  applyStudioFlowCommand,
+  studioFlowConditionContext,
+  type StudioFlowCombineResult,
 } from "@vortex/platform/schema";
 import { useAppearanceMode } from "@vortex/ui/appearance";
 import { useConfirm } from "@vortex/ui/components/confirm-dialog";
 import {
   applyStudioRowActionChange,
-  applyStudioFlowCommand,
-  studioFlowConditionContext,
   type StudioBehaviourResult,
   type StudioBehaviourTarget,
-  type StudioFlowCombineResult,
   type StudioFlowStepPickerContext,
   type StudioInspectorAction,
 } from "@vortex/ui/studio";

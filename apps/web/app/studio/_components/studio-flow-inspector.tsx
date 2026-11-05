@@ -31,6 +31,7 @@ import {
   type StudioFlowStepType,
   type StudioFlowTaskListOutline,
   type StudioFlowTaskOutline,
+  studioFlowConditionContext,
 } from "@vortex/platform/schema";
 import {
   StudioField,
@@ -39,7 +40,6 @@ import {
   StudioInspectorActions,
   StudioOptionControl,
   StudioFlowStepPicker,
-  studioFlowConditionContext,
   type StudioFlowStepPickerContext,
 } from "@vortex/ui/studio";
 import { StudioFlowStepForm } from "./studio-flow-step-form";

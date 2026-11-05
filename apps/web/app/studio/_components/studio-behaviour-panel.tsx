@@ -25,6 +25,8 @@ import {
   type StudioFlowCreateChoices,
   type StudioFlowCreateCommand,
   type StudioFlowSelection,
+  type StudioFlowCombineResult,
+  applyStudioFlowCombine,
 } from "@vortex/platform/schema";
 import { Icon } from "@vortex/ui";
 import {
@@ -34,11 +36,9 @@ import {
   type StudioBehaviourEvent,
   type StudioBehaviourResult,
   type StudioBehaviourTarget,
-  type StudioFlowCombineResult,
   type StudioRowAction,
   StudioInspectorGroup,
   applyStudioBindingSettings,
-  applyStudioFlowCombine,
   applyStudioRebind,
   applyStudioResetToDefault,
   applyStudioUnbind,

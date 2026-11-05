@@ -11,6 +11,7 @@ import {
   revisionSchema,
   type IdentitySession,
   applicationModuleKeys,
+  type StudioApplicationConditionContextResult,
 } from "@vortex/platform/schema";
 import {
   BuilderAuthorityError,
@@ -20,7 +21,6 @@ import {
   readLiveHumanContext,
   requireBuilderAuthority,
 } from "@vortex/platform/server";
-import type { StudioApplicationConditionContextResult } from "@vortex/ui/studio";
 import { z } from "zod";
 import { installedReleaseCatalogue } from "./definition-catalogue";
 import { humanOrganizationRequests } from "./server-composition";

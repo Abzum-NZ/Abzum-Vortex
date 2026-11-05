@@ -11,6 +11,12 @@ import {
   type ApplicationUsePlace,
   type ConditionNode,
   type InlineModuleActionPrecondition,
+  projectStudioActionCondition,
+  remapStudioActionCondition,
+  studioActionConditionContext,
+  studioActionConditionSource,
+  validateStudioCondition,
+  type StudioConditionValidation,
 } from "@vortex/platform/schema";
 import { Badge } from "@vortex/ui/components/badge";
 import { Button } from "@vortex/ui/components/button";
@@ -34,16 +40,7 @@ import {
   ItemHeader,
   ItemTitle,
 } from "@vortex/ui/components/item";
-import {
-  StudioConditionControls,
-  projectStudioActionCondition,
-  remapStudioActionCondition,
-  studioActionConditionContext,
-  studioActionConditionSource,
-  validateStudioCondition,
-  type StudioConditionValidation,
-  StudioOptionControl,
-} from "@vortex/ui/studio";
+import { StudioConditionControls, StudioOptionControl } from "@vortex/ui/studio";
 import { studioEditProblem, type StudioDataEdit } from "../_lib/studio-data-model";
 import { StudioReferencesAlert, StudioUsedIn, useStudioPlaceOpener } from "./studio-used-in";
 import { StudioActionInputs } from "./studio-action-inputs";

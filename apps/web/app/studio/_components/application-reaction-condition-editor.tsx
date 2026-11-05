@@ -12,9 +12,6 @@ import {
   type StudioCompositionContext,
   type StudioSemanticSelection,
   type StudioStoredApplicationDraft,
-} from "@vortex/platform/schema";
-import {
-  StudioConditionControls,
   parseStudioApplicationConditionContext,
   projectStudioReactionEditor,
   resolveStudioReactionTarget,
@@ -25,7 +22,8 @@ import {
   type StudioConditionValidation,
   type StudioReactionCommandResult,
   type StudioReactionSlot,
-} from "@vortex/ui/studio";
+} from "@vortex/platform/schema";
+import { StudioConditionControls } from "@vortex/ui/studio";
 import { resolveStudioApplicationConditionContext } from "../actions";
 
 type Props = Readonly<{

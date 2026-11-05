@@ -153,3 +153,8 @@ export * from "./application-authoring/studio-canvas-permissions";
 export * from "./application-authoring/studio-composition-depth";
 export * from "./application-authoring/studio-placement-describer";
 export * from "./application-authoring/studio-setting-model";
+export * from "./application-authoring/application-flow-command-apply";
+export * from "./application-authoring/application-flow-condition";
+export * from "./application-authoring/application-reaction-condition-commands";
+export * from "./application-authoring/condition-model";
+export * from "./application-authoring/module-action-condition";

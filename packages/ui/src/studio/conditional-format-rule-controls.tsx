@@ -12,6 +12,7 @@ import {
   type ConditionalFormatToken,
   type ConditionalFormattingDateParameter,
   type ModuleField,
+  type StudioConditionControlsContext,
 } from "@vortex/platform/schema";
 import { Badge } from "../components/badge";
 import { Button } from "../components/button";
@@ -21,7 +22,6 @@ import { Switch } from "../components/switch";
 import { ToggleGroup, ToggleGroupItem } from "../components/toggle-group";
 import { Icon } from "../icons/icon";
 import { cn } from "../lib/utils";
-import type { StudioConditionControlsContext } from "./condition-model";
 import { StudioReferencePicker } from "./studio-reference-picker";
 
 /**

@@ -21,8 +21,6 @@ import {
   conditionMaximumOperandCount,
   type ConditionNode,
   type JsonValue,
-} from "@vortex/platform/schema";
-import {
   type ConditionOperand,
   type ConditionOperator,
   type ConditionPath,
@@ -59,7 +57,7 @@ import {
   usesChoiceOptionControl,
   validateStudioCondition,
   withDraftIssues,
-} from "./condition-model";
+} from "@vortex/platform/schema";
 import { LiteralEditor } from "./condition-literal-editor";
 
 type ChildListChange = Readonly<{ path: ConditionPath; from: number; to: number | null }>;
