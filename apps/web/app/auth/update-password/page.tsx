@@ -61,7 +61,6 @@ export default async function UpdatePasswordPage({
           missing="Choose a password."
           invalid="This password does not meet the rules above."
         />
-
         <SubmitButton pendingLabel="Updating password…">Update password</SubmitButton>
       </AuthForm>
     </AuthShell>

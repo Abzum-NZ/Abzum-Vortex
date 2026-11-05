@@ -26,7 +26,6 @@ export function ConfirmEmailForm() {
         missing="Enter the six-digit code."
         invalid="The code is six digits, with no spaces."
       />
-
       <SubmitButton pendingLabel="Confirming email…">Confirm email address</SubmitButton>
     </AuthForm>
   );
