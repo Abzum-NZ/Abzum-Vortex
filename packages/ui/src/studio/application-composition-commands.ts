@@ -443,6 +443,8 @@ const applySettings = (
           ),
         ]
       : [];
+  // A board writes its query and its totals into the draft's modules: they become the command's.
+  if (board !== undefined) source.body.modules = structuredClone(source.body.modules);
   const moveProblem =
     board === undefined ? undefined : boardMoveRecordTypeProblem(source, alias, board);
   if (moveProblem !== undefined) return { kind: "refused", reason: moveProblem };
@@ -552,10 +554,14 @@ const applySettings = (
     flowed = made.source;
   }
   if (flowed !== source) return { kind: "applied", source: flowed };
-  const parsed = applicationSourceDocumentSchema.parse(source);
-  return sameValue(parsed, current.source)
-    ? { kind: "invalid" }
-    : { kind: "applied", source: parsed };
+  // A board's totals and a record side sheet write outside the edited slot, so the draft is parsed
+  // as a whole. Otherwise only the slot changed and it was judged as stored data: the whole draft
+  // is parsed when it is saved, not for each key of a typing run.
+  const next =
+    sideSheet || (board !== undefined && query !== null)
+      ? applicationSourceDocumentSchema.parse(source)
+      : source;
+  return sameValue(next, current.source) ? { kind: "invalid" } : { kind: "applied", source: next };
 };
 
 type Removal = {
