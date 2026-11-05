@@ -26,8 +26,8 @@ export type StudioRecordPage =
 
 /**
  * Reads one page of records of a draft record type (`<module>:<record>`), after a keyset
- * continuation token, narrowed to the records whose title or other searchable field holds the
- * search text when there is one. Each page holds at most 40 records.
+ * continuation token, narrowed by a search text to the records whose searchable fields (those the
+ * record type marks searchable) hold it. Each page holds at most 40 records.
  */
 export type StudioRecordReader = (
   request: Readonly<{

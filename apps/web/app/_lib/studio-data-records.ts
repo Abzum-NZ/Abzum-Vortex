@@ -6,6 +6,7 @@ import {
   collectRecordLinkValues,
   protectedQueryCommandSchema,
   protectedQuerySummaryCommandSchema,
+  recordChoiceSearchSchema,
   recordLinkPlainText,
   type ProjectedRecordLinks,
 } from "@vortex/platform/server";
@@ -40,8 +41,8 @@ const requestSchema = z
     pageSize: z.number().int().min(1).max(200),
     continuationToken: z.string().min(1).max(65_536).optional(),
     pageDirection: z.enum(["forward", "backward"]).optional(),
-    /** Narrows the records to those whose title or another searchable field holds this text. */
-    search: z.string().trim().min(1).max(100).optional(),
+    /** A record picker's search, by the record type's searchable fields. */
+    search: recordChoiceSearchSchema.optional(),
   })
   .strict();
 
