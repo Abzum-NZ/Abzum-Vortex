@@ -18,6 +18,7 @@ import {
   type Overrides,
 } from "@puckeditor/core";
 import {
+  type ApplicationAudience,
   type ApplicationSourceDocument,
   plainSourceSettingValue,
   typedSourceSettingValue,
@@ -30,6 +31,7 @@ import type { StudioQueryChoice } from "./contextual-palette";
 import { StudioField } from "./studio-field";
 import { StudioEditButton } from "./studio-icon-buttons";
 import { StudioGateSelect } from "./studio-gate-select";
+import { StudioReferencePicker } from "./studio-reference-picker";
 import type { StudioReactionSlot } from "./application-reaction-condition-commands";
 import {
   StudioSettingControl,
@@ -107,6 +109,14 @@ export type StudioAccessFieldValue = Readonly<{
         onChange: (permission: string | null) => boolean;
         /** Why the draft refused the last change, shown at the field until the draft changes. */
         problem?: string | undefined;
+        /** The permission that lets people use the block, or an empty text. */
+        use: string;
+        onUse: (permission: string | null) => boolean;
+        useProblem?: string | undefined;
+        /** Who the block is offered to, or an empty text for everyone. */
+        audience: ApplicationAudience | "";
+        onAudience: (audience: ApplicationAudience | null) => boolean;
+        audienceProblem?: string | undefined;
       }>
     | Readonly<{ kind: "refused"; reason: string }>;
   /** One row per condition, or the reason they cannot be changed here. */
@@ -450,9 +460,14 @@ function StudioQueryField({ readOnly }: Readonly<{ readOnly: boolean }>) {
   );
 }
 
+const audienceChoices = [
+  { value: "builders", label: "Builders", description: "People who may build applications" },
+  { value: "installers", label: "Installers", description: "People who may install applications" },
+] as const;
+
 /**
- * Who can see the block: the permission it needs. A refusal shows at the field until the draft
- * changes.
+ * Who can see the block and use it: the permission that shows it, the permission that lets people
+ * use it and who it is offered to. A refusal shows at its field until the draft changes.
  */
 const StudioGateField = memo(function StudioGateField({
   readOnly,
@@ -466,28 +481,72 @@ const StudioGateField = memo(function StudioGateField({
         {gate.reason}
       </p>
     );
+  const disabled = context.disabled || readOnly;
   return (
-    <StudioField
-      label="Permission gate"
-      optional
-      error={gate.problem}
-      hint="Show this block only to people who hold its permission. Page and menu permissions still apply. Clearing this gate adds no block permission requirement. Create permissions in Access."
-    >
-      {(control) => (
-        <StudioGateSelect
-          id={control.id}
-          aria-describedby={control["aria-describedby"]}
-          aria-invalid={control["aria-invalid"]}
-          source={gate.source}
-          value={gate.permission}
-          label="Permission gate"
-          disabled={context.disabled || readOnly}
-          onGate={(next) => next.kind === "existing" && gate.onChange(next.key)}
-          onClear={() => gate.onChange(null)}
-          allowCreate={false}
-        />
-      )}
-    </StudioField>
+    <div className="space-y-4">
+      <StudioField
+        label="Permission gate"
+        optional
+        error={gate.problem}
+        hint="Show this block only to people who hold its permission. Page and menu permissions still apply. Clearing this gate adds no block permission requirement. Create permissions in Access."
+      >
+        {(control) => (
+          <StudioGateSelect
+            id={control.id}
+            aria-describedby={control["aria-describedby"]}
+            aria-invalid={control["aria-invalid"]}
+            source={gate.source}
+            value={gate.permission}
+            label="Permission gate"
+            disabled={disabled}
+            onGate={(next) => next.kind === "existing" && gate.onChange(next.key)}
+            onClear={() => gate.onChange(null)}
+            allowCreate={false}
+          />
+        )}
+      </StudioField>
+      <StudioField
+        label="Use permission"
+        optional
+        error={gate.useProblem}
+        hint="People who see the block but do not hold this permission cannot use it. Clearing it adds no use requirement. Create permissions in Access."
+      >
+        {(control) => (
+          <StudioGateSelect
+            id={control.id}
+            aria-describedby={control["aria-describedby"]}
+            aria-invalid={control["aria-invalid"]}
+            source={gate.source}
+            value={gate.use}
+            label="Use permission"
+            disabled={disabled}
+            onGate={(next) => next.kind === "existing" && gate.onUse(next.key)}
+            onClear={() => gate.onUse(null)}
+            allowCreate={false}
+            unsetLabel="No use permission"
+          />
+        )}
+      </StudioField>
+      <StudioField
+        label="Offered to"
+        error={gate.audienceProblem}
+        hint="Everyone sees the block. Builders or Installers show it only to people who may build or install applications."
+      >
+        {(control) => (
+          <StudioReferencePicker
+            id={control.id}
+            aria-describedby={control["aria-describedby"]}
+            aria-invalid={control["aria-invalid"]}
+            aria-label="Offered to"
+            value={gate.audience}
+            unset="Everyone"
+            options={audienceChoices}
+            disabled={disabled}
+            onChange={(next) => gate.onAudience(next === "" ? null : (next as ApplicationAudience))}
+          />
+        )}
+      </StudioField>
+    </div>
   );
 });
 
