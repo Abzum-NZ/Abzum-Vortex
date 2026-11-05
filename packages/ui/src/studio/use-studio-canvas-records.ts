@@ -34,8 +34,8 @@ export type StudioCanvasRecordsReader = (
 ) => Promise<StudioCanvasRecordsRead>;
 
 /**
- * The records of every zone of the area (a page's zones, or the layout's one) as one read: all that
- * was read, and the first zone that could not be read says why the area's records are not.
+ * The records of every zone of the area (a page's zones, or the layout's one zone) as one read: all
+ * that was read, and the first zone that could not be read says why the area's records are not.
  */
 const mergedRead = (reads: readonly StudioCanvasRecordsRead[]): StudioCanvasRecordsRead => {
   const failed = reads.find((read) => read.state !== "ready");
