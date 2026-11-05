@@ -21,6 +21,8 @@ import {
 import type { StudioBorrowedChoices } from "./contextual-palette";
 import { studioEventSentence, studioWithoutUnusedFlows } from "./application-flow-model";
 import { studioBlockRelease, studioFlowLabel } from "./semantic-selection";
+import { logCompositionRefusal } from "./application-composition-commands";
+import { studioWorkflowRemovalRefusal } from "./application-composition-gate";
 
 /**
  * The Behaviour panel's model: every event the selected component (or the page) raises, with the
@@ -198,6 +200,11 @@ export const applyStudioUnbind = (
   candidate.body.flow_bindings = candidate.body.flow_bindings.filter(
     (binding) => binding.id !== bindingId,
   );
+  const refusal = studioWorkflowRemovalRefusal(source, candidate);
+  if (refusal !== undefined) {
+    logCompositionRefusal("unbind", refusal);
+    return { kind: "refused", reason: refusal };
+  }
   const result = checked(candidate);
   return result.kind === "applied" && replaced !== undefined
     ? { kind: "applied", source: studioWithoutUnusedFlows(result.source, [replaced]) }
