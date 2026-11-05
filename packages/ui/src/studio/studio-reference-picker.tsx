@@ -102,11 +102,13 @@ export function StudioReferencePicker({
           {...accessibility}
           onPointerDown={startSearch}
           onKeyDown={(event) => {
-            // Typing a character opens the list before the character lands, so the search is
-            // what was typed, not the held choice's label with it.
-            if (event.key.length === 1 && !event.ctrlKey && !event.metaKey && !event.altKey)
-              startSearch();
+            // Typing, deleting or pasting opens the list before the edit lands, so the search is
+            // what was typed, never the held choice's label edited.
+            const typed =
+              event.key.length === 1 && !event.ctrlKey && !event.metaKey && !event.altKey;
+            if (typed || event.key === "Backspace" || event.key === "Delete") startSearch();
           }}
+          onPaste={startSearch}
           aria-invalid={accessibility["aria-invalid"] || !known}
         />
         <InputGroupAddon align="inline-end">
