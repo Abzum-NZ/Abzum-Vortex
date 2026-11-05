@@ -314,12 +314,43 @@ const removeShell = (
   };
 };
 
+/**
+ * A page or layout rename: the path-scoped label edit, so a keystroke in the Name field copies only
+ * the changed path and checks only the name. It runs before the whole-draft copy below.
+ */
+const renameItem = (
+  context: StudioStructureContext,
+  command: Extract<StudioStructureCommand, { kind: "rename" }>,
+): StudioStructureResult => {
+  const what = command.selection.kind === "page" ? "page" : "layout";
+  const name = cleanName(command.name, what);
+  const result = applyStudioItemLabels(
+    context.source,
+    command.selection,
+    name,
+    context.source.body.description,
+  );
+  if (result.kind === "not_found") return refuse(`That ${what} is no longer in the draft.`);
+  if (result.kind === "invalid") {
+    const issue = result.issues[0]?.message ?? "invalid";
+    return refuse(`The ${what} name was refused (${issue}). Nothing was changed.`);
+  }
+  return {
+    kind: "applied",
+    source: result.source,
+    select: command.selection,
+    details: [],
+    message: `Renamed to ${quoted(name)}.`,
+  };
+};
+
 /** Applies one Structure edit to the draft, or refuses it with a located message. */
 export const applyStudioStructureCommand = (
   context: StudioStructureContext,
   command: StudioStructureCommand,
 ): StudioStructureResult => {
   try {
+    if (command.kind === "rename") return renameItem(context, command);
     const candidate = applicationSourceDocumentSchema.parse(structuredClone(context.source));
     switch (command.kind) {
       case "add_page":
@@ -393,28 +424,6 @@ export const applyStudioStructureCommand = (
           select: null,
           details: plan.details,
           message: `The home page now shows ${plan.details.length === 0 ? "the dashboard" : plan.details[0]!.replace(/^A query /u, "a query ")}.`,
-        };
-      }
-      case "rename": {
-        const what = command.selection.kind === "page" ? "page" : "layout";
-        const name = cleanName(command.name, what);
-        const result = applyStudioItemLabels(
-          context.source,
-          command.selection,
-          name,
-          context.source.body.description,
-        );
-        if (result.kind === "not_found") return refuse(`That ${what} is no longer in the draft.`);
-        if (result.kind === "invalid")
-          return refuse(
-            `The ${what} name was refused (${result.issues[0]?.message ?? "invalid"}). Nothing was changed.`,
-          );
-        return {
-          kind: "applied",
-          source: result.source,
-          select: command.selection,
-          details: [],
-          message: `Renamed to ${quoted(name)}.`,
         };
       }
     }

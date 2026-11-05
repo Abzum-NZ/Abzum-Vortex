@@ -77,6 +77,7 @@ export {
 } from "./application-record-page-kinds";
 export * from "./application-home-dashboard";
 export * from "./application-item-labels";
+export { createStudioPlacementDescriber } from "./studio-placement-describer";
 export * from "./studio-reference-picker";
 export * from "./studio-gate-select";
 export * from "./studio-entry-list";

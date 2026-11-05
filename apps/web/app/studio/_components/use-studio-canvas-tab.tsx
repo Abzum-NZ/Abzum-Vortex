@@ -467,18 +467,25 @@ export function useStudioCanvasTab({
   // The inspector's name and description of the selected item: a run of typing is one Undo step.
   const setLabels = (name: string, description: string): string | true => {
     const selection = draft.selection.getSelection();
-    const result = commands.setLabels(
-      selection,
-      name,
-      description,
-      `labels:${selection === null ? "" : studioSemanticSelectionKey(selection)}`,
-    );
+    const result =
+      selection === null
+        ? ({ kind: "not_found" } as const)
+        : commands.setLabels(
+            selection,
+            name,
+            description,
+            `labels:${studioSemanticSelectionKey(selection)}`,
+          );
     return result.kind === "applied"
       ? true
       : result.kind === "blocked"
         ? result.message
         : result.kind === "invalid"
-          ? "Enter a name and description within their length limits."
+          ? name.trim().length === 0
+            ? `Enter a name for the ${selection?.kind === "application" ? "application" : "page"}.`
+            : selection?.kind === "application"
+              ? "Enter a name and description within their length limits."
+              : "Enter a name of at most 60 characters."
           : "This item is not in the draft any more.";
   };
 
@@ -1046,6 +1053,7 @@ export function useStudioCanvasTab({
     breadcrumbItem,
     compositionContext,
     commandComposition,
+    renameItem: commands.setLabels,
     readRecordChoices,
     previewAs,
     readQueries: (borrowed: StudioBorrowedChoices | null) =>
