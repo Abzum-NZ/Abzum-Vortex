@@ -26,6 +26,7 @@ import {
 } from "@vortex/ui/components/sheet";
 import { Icon, type VortexIconName } from "@vortex/ui";
 import { Badge } from "@vortex/ui/components/badge";
+import { Button } from "@vortex/ui/components/button";
 import {
   Collapsible,
   CollapsibleContent,
@@ -253,19 +254,21 @@ function StudioRail<Key extends string>({
   onToggleCollapsed: (() => void) | undefined;
 }>) {
   return (
-    <div className="flex w-28 shrink-0 flex-col items-center gap-1 overflow-y-auto border-r border-sidebar-border bg-sidebar px-1 py-2 text-sidebar-foreground">
+    <div className="flex w-fit min-w-18 shrink-0 flex-col items-center gap-1 overflow-y-auto border-r border-sidebar-border bg-sidebar px-1 py-2 text-sidebar-foreground">
       {onToggleCollapsed !== undefined && (
         <Tooltip>
           <TooltipTrigger
             render={
-              <button
+              <Button
                 type="button"
+                variant="ghost"
+                size="icon"
                 id="studio-panel-toggle"
                 aria-label="Side panel"
                 aria-expanded={!collapsed}
                 aria-controls={controls}
                 onClick={onToggleCollapsed}
-                className="mb-1 flex size-9 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-sidebar-accent/60 hover:text-foreground"
+                className="mb-1 shrink-0 text-muted-foreground"
               />
             }
           >
@@ -329,10 +332,9 @@ function RailTab<Key extends string>({
               aria-haspopup={modal ? "dialog" : undefined}
               onClick={() => onChoose(tab.key)}
               className={cn(
-                "h-16 w-full flex-none flex-col justify-center gap-1 border-0 text-xs shadow-none group-data-vertical/tabs:justify-center data-active:shadow-none",
+                "h-16 w-full flex-none flex-col justify-center gap-1 text-xs group-data-vertical/tabs:justify-center",
                 "text-muted-foreground hover:bg-sidebar-accent/60 hover:text-foreground",
-                "data-active:bg-sidebar-accent data-active:text-sidebar-accent-foreground dark:data-active:bg-sidebar-accent dark:data-active:text-sidebar-accent-foreground",
-                "before:absolute before:inset-y-3 before:-left-1 before:w-0.75 before:rounded-full before:bg-primary before:opacity-0 data-active:before:opacity-100",
+                "data-active:text-sidebar-accent-foreground dark:data-active:text-sidebar-accent-foreground",
               )}
             />
           }
@@ -716,7 +718,7 @@ export function StudioFrame<Key extends string>({
                 dockHost,
               )}
             <Sheet open={!wide && hasPanel && narrowPanelOpen} onOpenChange={setNarrowPanelOpen}>
-              <SheetContent side="left" className="w-80 max-w-full overflow-y-auto p-0 pt-10">
+              <SheetContent side="left" className="w-80 max-w-full overflow-y-auto">
                 <SheetHeader className="sr-only">
                   <SheetTitle>{active?.label}</SheetTitle>
                   <SheetDescription>The {active?.label} panel.</SheetDescription>
@@ -725,7 +727,7 @@ export function StudioFrame<Key extends string>({
                   value={activeTab}
                   data-studio-rail-panel=""
                   tabIndex={-1}
-                  className="flex text-base min-h-0 min-w-0 flex-1 flex-col"
+                  className="flex text-base min-h-0 min-w-0 flex-1 flex-col pt-10"
                 >
                   <PaneSlot host={hosts?.panel ?? null} />
                 </TabsContent>
@@ -818,16 +820,12 @@ export function StudioFrame<Key extends string>({
         open={hasInspector && !dockInspector && narrowInspectorOpen}
         onOpenChange={setNarrowInspectorOpen}
       >
-        <SheetContent
-          ref={inspectorSheet}
-          side="right"
-          className="w-96 max-w-full overflow-y-auto p-0 pt-10"
-        >
+        <SheetContent ref={inspectorSheet} side="right" className="w-96 max-w-full overflow-y-auto">
           <SheetHeader className="sr-only">
             <SheetTitle>{inspectorLabel}</SheetTitle>
             <SheetDescription>Settings for the selected item.</SheetDescription>
           </SheetHeader>
-          <div aria-label={inspectorLabel} className="flex min-h-0 min-w-0 flex-1 flex-col">
+          <div aria-label={inspectorLabel} className="flex min-h-0 min-w-0 flex-1 flex-col pt-10">
             <PaneSlot host={hosts?.inspector ?? null} />
           </div>
         </SheetContent>
