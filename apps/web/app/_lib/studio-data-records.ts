@@ -351,7 +351,8 @@ export const readStudioDataRecords = async (
       // No declared list: the engine searches every field the record type marks searchable.
       searchableFieldIds: [],
       ...(request.search === undefined ? {} : { search: request.search }),
-      pageSize: request.pageSize,
+      // The query's own page size is the most one page may hold; the keyset reads the rest.
+      pageSize: Math.min(request.pageSize, query.pageSize),
       ...(request.continuationToken === undefined
         ? {}
         : { continuationToken: request.continuationToken }),
