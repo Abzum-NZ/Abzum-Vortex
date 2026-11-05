@@ -62,14 +62,18 @@ export function StudioReferencePicker({
     setSearchText(text);
     onSearch?.(text);
   };
-  const known = value === "" || options.some((option) => option.value === value);
+  const searching = query.trim() !== "";
+  // A caller's search results are not the whole list: the value missing from them is not removed.
+  const known =
+    value === "" ||
+    (onSearch !== undefined && searching) ||
+    options.some((option) => option.value === value);
   const entries: StudioReferencePickerOption[] = [
     ...(unset === undefined ? [] : [{ value: "", label: unset }]),
     ...(!known ? [{ value, label: "A removed item", disabled: true }] : []),
     ...options,
   ];
   const selected = entries.find((entry) => entry.value === value) ?? null;
-  const searching = query.trim() !== "";
   const matches =
     onSearch === undefined
       ? entries.filter((entry) =>
