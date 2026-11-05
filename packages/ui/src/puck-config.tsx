@@ -42,6 +42,7 @@ import {
 import type { ComponentConfig, Config, Field, PuckContext, SlotComponent } from "@puckeditor/core";
 import {
   plainSettingValue,
+  sameCanonicalValue,
   readCompiledItemSettings,
   repeatableSlotItemIdentities,
   repeatableSlotKey,
@@ -534,20 +535,38 @@ type PlacementBlockProps = {
   fieldInputControlReleases: FieldInputControlReleases;
 };
 
-const sameShallow = (left: object, right: object): boolean => {
+/** One prop: the same value, or JSON data that holds the same content (Puck rebuilds objects it walks). */
+const sameProp = (left: unknown, right: unknown): boolean => {
+  if (Object.is(left, right)) return true;
+  if (typeof left !== "object" || typeof right !== "object" || left === null || right === null)
+    return false;
+  try {
+    return sameCanonicalValue(left, right);
+  } catch {
+    // Not JSON (a React element, a store): only the same object is the same.
+    return false;
+  }
+};
+
+const sameShallow = (
+  left: object,
+  right: object,
+  same: (left: unknown, right: unknown) => boolean = Object.is,
+): boolean => {
   const keys = Object.keys(left);
   return (
     keys.length === Object.keys(right).length &&
     keys.every((key) =>
-      Object.is((left as Record<string, unknown>)[key], (right as Record<string, unknown>)[key]),
+      same((left as Record<string, unknown>)[key], (right as Record<string, unknown>)[key]),
     )
   );
 };
 
 /**
  * One placement. Puck calls the render function of every block again when its selection moves,
- * with the same props; a placement draws again only for a change in its props, or in the context
- * and stores it reads (its own selection among them).
+ * with the same props, and rebuilds the objects of every block's props (`vortex` among them) on
+ * each change of the page; a placement draws again only for a change in what its props hold, or in
+ * the context and stores it reads (its own selection among them).
  */
 const PlacementBlock = memo(
   PlacementBlockContent,
@@ -557,7 +576,7 @@ const PlacementBlock = memo(
     return (
       previous.registry === next.registry &&
       previous.fieldInputControlReleases === next.fieldInputControlReleases &&
-      sameShallow(previousRest, nextRest) &&
+      sameShallow(previousRest, nextRest, sameProp) &&
       sameShallow(previousPuck, nextPuck)
     );
   },

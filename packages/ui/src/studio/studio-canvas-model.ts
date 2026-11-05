@@ -218,16 +218,20 @@ export const useStudioCanvasModel = (
   );
   // The page's content slots (its zones) by address key, or the layout's one zone: the canvas shows all of them at once.
   const layoutOpen = shell !== undefined;
+  // Kept by value: the page is a new object after every edit of the draft, and everything drawn
+  // from the addresses (the compiled settings of every block) would be read again for each key.
+  const addressesJson = JSON.stringify(
+    layout
+      ? layoutOpen
+        ? [{ key: shellLayoutZone }]
+        : []
+      : page === undefined
+        ? []
+        : sourcePageSlotAddresses(page).filter((entry) => entry.step === step),
+  );
   const addresses = useMemo(
-    (): readonly PageSlotAddress[] =>
-      layout
-        ? layoutOpen
-          ? [{ key: shellLayoutZone }]
-          : []
-        : page === undefined
-          ? []
-          : sourcePageSlotAddresses(page).filter((entry) => entry.step === step),
-    [layout, layoutOpen, page, step],
+    () => JSON.parse(addressesJson) as readonly PageSlotAddress[],
+    [addressesJson],
   );
   const zoneKeyList = useMemo(() => addresses.map((entry) => entry.key), [addresses]);
   const zoneKeys = useMemo(() => new Set(zoneKeyList), [zoneKeyList]);
