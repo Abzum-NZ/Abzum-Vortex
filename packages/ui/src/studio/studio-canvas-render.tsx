@@ -21,7 +21,7 @@ import {
   type ResponsivePlacement,
 } from "@vortex/platform/schema";
 import { studioPaletteChoices } from "./contextual-palette";
-import { hidden, studioVortexField, withSettingFields } from "./studio-puck-settings";
+import { studioVortexField, withSettingFields } from "./studio-puck-settings";
 import type { FieldInputControlReleaseMap, PlatformComponentRegistry } from "../registry";
 import { useStudioCanvasGridEvents } from "./studio-canvas-grid";
 import {
@@ -484,7 +484,7 @@ const canvasConfigs = new WeakMap<
   >
 >();
 
-/** The shell with a slot field for each repeating key the page holds, hidden like every prop. */
+/** The shell with a slot field for each repeating key the page holds, hidden like every slot. */
 const withHeldRepeatingSlots = (
   registry: PlatformComponentRegistry,
   shell: Config,
@@ -496,7 +496,15 @@ const withHeldRepeatingSlots = (
   for (const rendererKey of repeating.keys()) {
     const component = components[rendererKey];
     if (component?.fields !== undefined)
-      components[rendererKey] = { ...component, fields: hidden(component.fields as never) };
+      components[rendererKey] = {
+        ...component,
+        fields: Object.fromEntries(
+          Object.entries(component.fields).map(([key, field]) => [
+            key,
+            field.type === "slot" ? { ...field, visible: false } : field,
+          ]),
+        ),
+      };
   }
   return { ...config, components } as Config;
 };
@@ -587,6 +595,10 @@ export const studioCanvasConfig = (
                 ) => Record<string, Field>;
                 return resolve({ ...data, props }, params);
               },
+          // A block that holds tabs: Puck shows its static fields while a new config's fields resolve.
+          releaseByKey.get(type)?.slots.some((slot) => slot.repeats !== undefined)
+            ? releaseByKey.get(type)
+            : undefined,
         ),
         render: (props: Record<string, unknown>) => (
           <CanvasBlockFrame component={component} registry={registry} props={props} />

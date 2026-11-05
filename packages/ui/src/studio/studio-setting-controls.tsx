@@ -476,7 +476,11 @@ function ListControl({
                     }));
                     return;
                   }
-                  setHeld(({ [entryKey]: _released, ...rest }) => rest);
+                  setHeld((previous) =>
+                    Object.fromEntries(
+                      Object.entries(previous).filter(([key]) => key !== entryKey),
+                    ),
+                  );
                   write(
                     items.map((entry, position) => (position === index ? replacement : entry)),
                     keys.current,

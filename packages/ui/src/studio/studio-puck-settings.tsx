@@ -211,7 +211,7 @@ export type StudioSettingRelease = (
   props: Readonly<Record<string, unknown>>,
 ) => PlatformBlockRelease | undefined;
 
-export const hidden = (fields: Readonly<Record<string, Field>>): Record<string, Field> =>
+const hidden = (fields: Readonly<Record<string, Field>>): Record<string, Field> =>
   Object.fromEntries(
     Object.entries(fields).map(([key, field]) => [key, { ...field, visible: false } as Field]),
   );
@@ -219,7 +219,10 @@ export const hidden = (fields: Readonly<Record<string, Field>>): Record<string, 
 /**
  * A canvas component with its settings declared as Puck fields: `fields` hides every prop until
  * the block is resolved, `resolveFields` gives the settings that apply to the values the block
- * holds, and `renderFields` lays them out.
+ * holds, and `renderFields` lays them out. Puck takes a new config when a page's tab keys change
+ * and, until it resolves the selected block's fields again, shows its static `fields`: a block that
+ * holds repeating slots (`repeating` is its release) declares its settings there, so the inspector
+ * keeps what it draws and the field being typed in keeps its focus.
  */
 export const withSettingFields = (
   component: ComponentConfig<Record<string, unknown>>,
@@ -227,10 +230,12 @@ export const withSettingFields = (
   resolveBase:
     | ((data: { props: Record<string, unknown> }, params: unknown) => Record<string, Field>)
     | undefined,
+  repeating?: PlatformBlockRelease | undefined,
 ): Partial<ComponentConfig<Record<string, unknown>>> => {
   const base = { ...(component.fields ?? {}), vortex: studioVortexField } as Record<string, Field>;
   return {
-    fields: hidden(base),
+    fields:
+      repeating === undefined ? hidden(base) : studioSettingFields(repeating, base, undefined),
     resolveFields: (data: { props: Record<string, unknown> }, params: unknown) => {
       const release = releaseOf(data.props);
       const resolved = {
