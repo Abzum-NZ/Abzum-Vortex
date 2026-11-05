@@ -94,9 +94,9 @@ export function StudioReferencePicker({
         )
       : entries.filter((entry) => !searching || entry.value !== "");
   const groups = [...new Set(matches.map((entry) => entry.group ?? ""))];
-  // The search text is empty whenever the list is open: what is shown before typing is the
+  // The search text is empty whenever the list opens: what is shown before typing is the
   // current selection, its label as the placeholder and its check in the list, never text the
-  // person has to clear.
+  // person has to clear. Focus alone (Tab, a dialog opening on its first field) opens nothing.
   const startSearch = () => {
     if (open) return;
     setQuery("");
@@ -129,8 +129,15 @@ export function StudioReferencePicker({
           id={id}
           placeholder={selected?.label ?? "Search…"}
           {...accessibility}
-          onFocus={startSearch}
           onPointerDown={startSearch}
+          onKeyDown={(event) => {
+            // Typing, deleting or pasting opens the list before the edit lands, so the search is
+            // what was typed, never the held choice's label edited.
+            const typed =
+              event.key.length === 1 && !event.ctrlKey && !event.metaKey && !event.altKey;
+            if (typed || event.key === "Backspace" || event.key === "Delete") startSearch();
+          }}
+          onPaste={startSearch}
           aria-invalid={accessibility["aria-invalid"] || !known}
         />
         <InputGroupAddon align="inline-end">

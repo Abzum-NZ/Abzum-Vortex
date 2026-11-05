@@ -214,6 +214,8 @@ type CalendarPlacementProjection =
   | Readonly<{
       outcome: "refused" | "unavailable";
       cause: CalendarPlacementFailureCause;
+      /** The protected query's own refusal code, present only when the query refused. */
+      reasonCode?: string;
     }>;
 
 export const projectCalendarPlacement = async (
@@ -315,7 +317,9 @@ export const projectCalendarPlacement = async (
     return { outcome: "unavailable", cause: "calendar_query_unavailable" };
   }
   if (queryResult.kind !== "available" || queryResult.value.outcome !== "completed") {
-    return refused("calendar_query_refused");
+    return queryResult.kind === "available" && queryResult.value.outcome === "refused"
+      ? { ...refused("calendar_query_refused"), reasonCode: queryResult.value.reasonCode }
+      : refused("calendar_query_refused");
   }
 
   const fieldIds = [...new Set(requestedFieldIds.map((fieldId) => fieldId.toLowerCase()))];

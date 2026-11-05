@@ -5,6 +5,7 @@ import { recordIdSchema } from "../../catalogue/identifiers";
 import { sameId } from "../../catalogue/runtime-primitives";
 import { readRecordDetailContract } from "../../definition/application-composition/records-display";
 import {
+  isInstallationRequired,
   protectedQueryCommandSchema,
   type ProtectedQueryRow,
 } from "../../queries/protected-query-contracts";
@@ -13,6 +14,7 @@ import {
   fieldPipelinesOf,
   findModuleQuery,
   logPlacementFailure,
+  placeInstallationRequired,
   moduleFieldDisplay,
   queryRecordType,
   readyPlacementData,
@@ -243,7 +245,13 @@ const readRelatedLists = async (
       continue;
     }
     if (result.kind !== "available" || result.value.outcome !== "completed") {
-      logPlacementFailure(read.address, placementId, "related_list_refused");
+      const reasonCode =
+        result.kind === "available" && result.value.outcome === "refused"
+          ? result.value.reasonCode
+          : undefined;
+      // A list that needs the application installed is left out like any refused list.
+      if (!isInstallationRequired(reasonCode))
+        logPlacementFailure(read.address, placementId, "related_list_refused");
       continue;
     }
     const rows: readonly ProtectedQueryRow[] = result.value.rows;
@@ -320,6 +328,11 @@ export const readQueryDetail = async (
     return;
   }
   if (result.kind !== "available" || result.value.outcome !== "completed") {
+    const reasonCode =
+      result.kind === "available" && result.value.outcome === "refused"
+        ? result.value.reasonCode
+        : undefined;
+    if (placeInstallationRequired(read.data, placementId, reasonCode)) return;
     logPlacementFailure(read.address, placementId, "detail_query_refused");
     read.data[placementId] = { status: "refused", reason: "not_permitted" };
     return;

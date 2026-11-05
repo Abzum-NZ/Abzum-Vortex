@@ -12,7 +12,10 @@ import {
   TABLE_BLOCK_RELEASE,
 } from "../../definition/application-composition-catalogue";
 import type { InstalledRuntimeContext } from "../../definition/installed-runtime-context";
-import type { ProtectedQueryRow } from "../../queries/protected-query-contracts";
+import {
+  isInstallationRequired,
+  type ProtectedQueryRow,
+} from "../../queries/protected-query-contracts";
 import {
   collectRecordLinks,
   type ProjectedFieldPipeline,
@@ -146,6 +149,21 @@ export const logPlacementFailure = (
   console.error(
     `[page] data placement not loaded: application=${address.application.key} page=${address.pageKey} placement=${placementId} reason=${reason}${detail === undefined ? "" : ` cause=${detail}`}`,
   );
+};
+
+/**
+ * A placement whose query needs the application installed says so, and logs nothing more (the
+ * protected query logged it once at info). Returns whether it applied; every other refusal is the
+ * caller's.
+ */
+export const placeInstallationRequired = (
+  data: Record<string, PageDataState>,
+  placementId: string,
+  reasonCode: string | undefined,
+): boolean => {
+  if (!isInstallationRequired(reasonCode)) return false;
+  data[placementId] = { status: "refused", reason: "installation_required" };
+  return true;
 };
 
 /** A block's payload contract: the platform schema its ready values must satisfy. */

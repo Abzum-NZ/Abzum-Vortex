@@ -291,7 +291,7 @@ export function StudioGridFeatures({
       kind: "group",
       properties: {
         ...(declaration?.defaultValue?.kind === "group" ? declaration.defaultValue.properties : {}),
-        ...studioGridFeatureStart(key, facts),
+        ...studioGridFeatureStart(key, facts, pipelines),
         enabled: { kind: "boolean", value: true },
       },
     };

@@ -37,20 +37,26 @@ import type {
   StudioQueryField,
   StudioRelationshipChoice,
 } from "../contextual-palette";
+import type { StudioBoardPipeline } from "../board-source";
+
+/** The block's setup settings include a grid's column list, so its rows are the data's records. */
+export const studioHasGridColumns = (
+  properties: readonly BlockPropertySchemaContract[],
+): boolean => {
+  const columns = properties.find((property) => property.key === "columns");
+  return (
+    columns?.kind === "list" &&
+    columns.item.kind === "group" &&
+    columns.item.properties.some((property) => property.key === "visible")
+  );
+};
 
 /** Data selection writes a grid's initial columns, sorting choices and title into its definition. */
 export const studioGridDataSettings = (
   properties: readonly BlockPropertySchemaContract[],
   query: StudioQueryChoice | undefined,
 ): Readonly<Record<string, SourceBlockPropertyValueContract>> => {
-  const columns = properties.find((property) => property.key === "columns");
-  if (
-    query === undefined ||
-    columns?.kind !== "list" ||
-    columns.item.kind !== "group" ||
-    !columns.item.properties.some((property) => property.key === "visible")
-  )
-    return {};
+  if (query === undefined || !studioHasGridColumns(properties)) return {};
   const values: Record<string, unknown> = {
     title: query.recordTypePluralLabel ?? query.recordTypeLabel,
     // A projection's address fields stay available as columns but start hidden, after the rest.
@@ -261,18 +267,26 @@ export const studioGroupingStart = (
 
 /**
  * The settings a feature starts with for this bound query: Group by also starts as the query
- * groups, and Board starts on the query's first stage field, so switching it on makes columns.
+ * groups, and Board starts on the query's first stage field and that record type's title as the
+ * card title, as choosing the pipeline does, so switching it on makes ready columns.
  */
 export const studioGridFeatureStart = (
   key: RecordsTableFeatureKey,
   facts: Pick<RecordsTableQueryFacts, "fields" | "groupBy" | "grouped" | "board">,
+  pipelines: readonly Pick<StudioBoardPipeline, "reference" | "titleField">[],
 ): Readonly<Record<string, SourceBlockPropertyValueContract>> => {
   const stageField = facts.board?.stageFields[0];
+  const titleField = pipelines.find((pipeline) => pipeline.reference === stageField)?.titleField;
   return {
     ...studioGridFeatureStartSettings[key],
     ...(key === recordsTableGroupingFeature.key ? studioGroupingStart(facts) : {}),
     ...(key === recordsTableBoardFeature.key && stageField !== undefined
-      ? { column_field: { kind: "field_reference", field: stageField } }
+      ? {
+          column_field: { kind: "field_reference", field: stageField },
+          ...(titleField === undefined
+            ? {}
+            : { card_title_field: { kind: "field_reference", field: titleField } }),
+        }
       : {}),
   };
 };

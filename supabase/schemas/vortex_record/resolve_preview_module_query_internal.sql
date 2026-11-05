@@ -250,12 +250,17 @@ begin
   -- preview reads on the live path under the reader's own live access. Its record type, fields and
   -- permissions are the installed release's, never the draft's: the draft contributes only its
   -- query, and a draft whose record type or permissions differ from the installed ones is refused.
+  -- With no installed projection to read (no active installation binding the Module, or one whose
+  -- record type or permissions differ from the draft's) installing this draft is what is missing:
+  -- the one refusal that names its cause, decided here and passed on unchanged by every caller.
   if record_type_item ? 'systemProjection' then
     installed := vortex_record.read_installed_projection_internal(
       installation, record_type_module_root_id, record_type_id
     );
     if installed is null then
-      return null;
+      return pg_catalog.jsonb_build_object(
+        'outcome', 'refused', 'reasonCode', 'installation_required'
+      );
     end if;
     return pg_catalog.jsonb_build_object(
       'moduleReleaseRevision', query_release_revision,
@@ -359,4 +364,4 @@ revoke all on function vortex_record.resolve_preview_module_query_internal(uuid,
 grant execute on function vortex_record.resolve_preview_module_query_internal(uuid, uuid)
   to vortex_record_adapter;
 comment on function vortex_record.resolve_preview_module_query_internal(uuid, uuid) is
-  'Private preview-only resolver for one query and its exact pinned record type and active preview storage identity (a system projection resolves the draft''s query over the installed record type, refusing a draft whose record type or permissions differ, with no preview storage); it validates the current human-owned unexpired preview and never falls back to an active installation.';
+  'Private preview-only resolver for one query and its exact pinned record type and active preview storage identity (a system projection resolves the draft''s query over the installed record type with no preview storage, and returns the refusal installation_required when there is no installed projection to read: no active installation binding the Module, or a draft whose record type or permissions differ from it); it validates the current human-owned unexpired preview and never falls back to an active installation.';

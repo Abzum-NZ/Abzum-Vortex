@@ -11,6 +11,7 @@ import {
 import {
   readyPlacementData,
   logPlacementFailure,
+  placeInstallationRequired,
   placementSettingsOf,
   queryRecordType,
   type PlacementModule,
@@ -152,6 +153,7 @@ export const readLauncher = async (
       result.kind === "available" && result.value.outcome === "refused"
         ? result.value.reasonCode
         : result.kind;
+    if (placeInstallationRequired(data, placementId, failureCause)) return;
     logPlacementFailure(address, placementId, "launcher_query_refused", failureCause);
     data[placementId] = { status: "refused", reason: "not_permitted" };
     return;

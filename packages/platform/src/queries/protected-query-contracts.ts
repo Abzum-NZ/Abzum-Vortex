@@ -389,6 +389,8 @@ export type ProtectedQueryPageRow = z.infer<typeof protectedQueryPageRowSchema>;
 export const protectedQueryRefusalReasonCodes = [
   "request_invalid",
   "query_unavailable",
+  /** A preview of a query over a system projection with no installed projection to read. */
+  "installation_required",
   "read_forbidden",
   "descriptor_invalid",
   "input_invalid",
@@ -411,6 +413,14 @@ export const protectedQueryRefusalReasonCodes = [
   "value_out_of_range",
 ] as const;
 export type ProtectedQueryRefusalReasonCode = (typeof protectedQueryRefusalReasonCodes)[number];
+
+/**
+ * Whether a refusal says a preview reads a system projection the previewed application has not
+ * installed (decided in SQL). It is an expected refusal, logged once at info where the protected
+ * query refuses it; no reader of the refusal logs it again.
+ */
+export const isInstallationRequired = (reasonCode: string | undefined): boolean =>
+  reasonCode === "installation_required";
 
 /** Every refusal is this one neutral shape; it is decided before any row is exposed. */
 const protectedQueryRefusalSchema = z
