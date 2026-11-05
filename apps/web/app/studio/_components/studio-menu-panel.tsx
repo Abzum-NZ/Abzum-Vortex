@@ -167,21 +167,25 @@ export function StudioMenuPanel({
     run({ kind: "move", alias, headingAlias: at.headingAlias, index: at.index - shift });
   };
 
+  // The row takes the focus at once, while it is still on screen, and again once the change is
+  // drawn. A change that selects an entry of a page with other outlets draws the whole panel again;
+  // the canvas provider then finds the focused row again by its key.
   const focusRow = (alias: string | undefined) => {
-    requestAnimationFrame(() => {
+    const focus = () => {
       const rows = treeHost.current?.querySelectorAll<HTMLButtonElement>("[data-tree-key]");
       rows?.forEach((row) => {
         if (row.dataset.treeKey === alias) row.focus();
       });
-    });
+    };
+    focus();
+    requestAnimationFrame(focus);
   };
   const remove = async (item: StudioMenuItem) => {
     const position = studioMenuPosition(source, item.id);
-    if (position?.headingAlias !== null && position?.length === 1) {
-      run({ kind: "remove", alias: item.id });
-      return;
-    }
+    // The only entry under a heading goes without a confirmation.
+    const asked = !(position?.headingAlias !== null && position?.length === 1);
     if (
+      asked &&
       !(await confirm({
         title: `Remove "${item.label}" from the menu?`,
         description:
