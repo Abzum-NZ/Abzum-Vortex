@@ -2,8 +2,7 @@
 import { Alert, AlertDescription } from "@vortex/ui/components/alert";
 import { Field, FieldGroup, FieldLabel } from "@vortex/ui/components/field";
 import type { ReactNode } from "react";
-import { StudioOptionControl } from "@vortex/ui/studio";
-import { useStudioDraftHeld } from "./use-studio-draft-held";
+import { StudioOptionControl, useStudioDraftHeld } from "@vortex/ui/studio";
 
 /** A record type change stays at the control until the builder has chosen its record types. */
 export function StudioInputType<Type extends string>({

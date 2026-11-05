@@ -331,6 +331,10 @@ export type ControlProps = Readonly<{
   onChange: (value: SettingValue) => void;
   choices: StudioSettingChoices;
   disabled: boolean;
+  /** A list whose entries each name a slot (a tab): the slot family and the identity setting. */
+  identity?: Readonly<{ family: string; property: string }> | undefined;
+  /** A group's messages by setting key, for input held out of the draft. */
+  problems?: Readonly<Record<string, string>> | undefined;
 }>;
 
 /** What an unset choice reads as: the setting's default, "Choose…" when it needs a value, else "Not set". */

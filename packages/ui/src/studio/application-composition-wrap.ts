@@ -14,7 +14,7 @@ import type {
   StudioCompositionContext,
   StudioCompositionOwner,
   StudioCompositionWrapModel,
-  StudioCompositionCommandResult,
+  StudioDraftChangeResult,
 } from "./application-composition-model";
 import {
   type Region,
@@ -165,7 +165,7 @@ export const applyWrap = (
   current: StudioCompositionContext,
   selection: StudioSemanticSelection | null,
   command: unknown,
-): StudioCompositionCommandResult => {
+): StudioDraftChangeResult => {
   const input = closedPlain(command, ["kind", "blockId", "releaseVersion", "settings"]);
   if (
     input.kind !== "wrap" ||
@@ -183,16 +183,11 @@ export const applyWrap = (
   );
   if (container === undefined)
     return { kind: "refused", reason: `${moved.name} can't be wrapped in that block here.` };
-  if (container.unavailable !== undefined) {
-    console.error("[studio] composition wrap refused", {
-      part: alias,
-      reason: container.unavailable,
-    });
+  if (container.unavailable !== undefined)
     return {
       kind: "refused",
       reason: `${container.release.name} can't wrap ${moved.name}. ${container.unavailable}`,
     };
-  }
   const settings = commandSettings(input.settings, container.release.properties);
   if (Object.keys(settings).some(studioOwnsSetting)) return { kind: "invalid" };
   const { alias: wrapperAlias, item: wrapper } = newBlockItem(
@@ -221,16 +216,11 @@ export const applyWrap = (
     commitWorking(current.catalogue, target.region, working);
     validateStoredApplicationOutlets(current.catalogue, source);
   } catch (error) {
-    if (error instanceof StoredCompositionRefusal) {
-      console.error("[studio] composition wrap refused", {
-        part: error.location,
-        reason: error.reason,
-      });
+    if (error instanceof StoredCompositionRefusal)
       return {
         kind: "refused",
         reason: `${container.release.name} can't wrap ${moved.name}. ${error.message}.`,
       };
-    }
     throw error;
   }
   syncStoredBlockDependencies(source);

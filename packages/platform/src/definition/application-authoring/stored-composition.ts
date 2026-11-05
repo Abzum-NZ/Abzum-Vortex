@@ -182,22 +182,34 @@ const parseSlotOrder = (
   return result;
 };
 
-/** The items of a raw slot, parsed with the source item schema; the first issue is located. */
+/**
+ * The items of a raw slot, parsed with the source item schema; the first issue is located. An item
+ * of a history snapshot is already the parsed source, so a slot that an edit rebuilt around one
+ * changed block parses only the items that are not snapshots.
+ */
 const parseItems = (
   catalogue: ImmutablePlatformBlockCatalogue,
   candidate: unknown,
   location: Location,
 ): SourceItem[] => {
   boundItems(catalogue, candidate, location);
-  const parsed = sourceItemSchema.array().safeParse(candidate);
-  if (parsed.success) return parsed.data;
+  const raw = candidate as readonly unknown[];
+  const fresh = raw.flatMap((item, index) => (isStudioDraftSnapshot(item) ? [] : [index]));
+  const parsed = sourceItemSchema.array().safeParse(fresh.map((index) => raw[index]));
+  if (parsed.success) {
+    const items = [...raw] as SourceItem[];
+    for (const [at, index] of fresh.entries()) items[index] = parsed.data[at]!;
+    return items;
+  }
   const issue = parsed.error.issues[0]!;
-  const at = [
+  const [first, ...rest] = issue.path;
+  const path = [
     ...location,
-    ...issue.path.map((part) => (typeof part === "number" ? part : String(part))),
+    ...(typeof first === "number" ? [fresh[first]!] : []),
+    ...rest.map((part) => (typeof part === "number" ? part : String(part))),
   ];
   return refuse(
-    at,
+    path,
     issue.code === "unrecognized_keys"
       ? `has an unknown key '${issue.keys.join("', '")}'`
       : issue.code === "custom"
@@ -673,12 +685,15 @@ export const storedPageDataFromPuck = <Zoned extends SourceZonedData>(
               : structuredClone(value),
         ]),
       );
-      // Puck writes an empty list for every slot the stored block leaves out; that is not an edit.
+      // Puck writes an empty list for every slot its config declares on the block's type, including
+      // keys only another block of the same type holds (a tab); that is not an edit. A list with
+      // blocks under a key the block does not hold is still refused when the tree is validated.
       const item = { type: node.type, props } as SourceItem;
       const release = hasBlockReference(props) ? storedItemRelease(catalogue, item) : undefined;
       const before = baselineItems.get(alias)?.props;
-      if (release !== undefined)
-        for (const key of readSourceItem(item, release).slots.keys()) {
+      if (release !== undefined) {
+        const reading = readSourceItem(item, release);
+        for (const key of [...reading.slots.keys(), ...reading.unknownKeys]) {
           const value = props[key];
           if (
             Array.isArray(value) &&
@@ -687,6 +702,7 @@ export const storedPageDataFromPuck = <Zoned extends SourceZonedData>(
           )
             delete props[key];
         }
+      }
       return item;
     });
   const data = structuredClone(baseline);

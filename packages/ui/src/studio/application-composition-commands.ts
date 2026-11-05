@@ -59,12 +59,12 @@ import type { StudioSemanticSelection } from "./semantic-selection";
 import type {
   StudioCompositionBreakpoint,
   StudioCompositionContext,
-  StudioCompositionCommand,
+  StudioDraftChange,
   StudioCompositionSettingsModel,
   StudioCompositionDestination,
   StudioCompositionDestinationModel,
   StudioCompositionOutcome,
-  StudioCompositionCommandResult,
+  StudioDraftChangeResult,
   StudioCompositionRemovalModel,
   StudioCompositionEditorModel,
 } from "./application-composition-model";
@@ -361,7 +361,7 @@ const applySettings = (
   current: StudioCompositionContext,
   selection: StudioSemanticSelection | null,
   command: unknown,
-): StudioCompositionCommandResult => {
+): StudioDraftChangeResult => {
   const input = closedPlain(command, ["kind", "settings", "query"]);
   if (input.kind !== "settings" || (input.query !== null && typeof input.query !== "string"))
     return { kind: "invalid" };
@@ -388,7 +388,6 @@ const applySettings = (
       target.region.page?.type === "guided_form",
     ).has(chosen.field.slice(chosen.field.lastIndexOf(".") + 1))
   ) {
-    console.info("[studio] composition settings refused", { reason: "form_field_duplicate" });
     return {
       kind: "refused",
       reason: "Another input in this form already shows that field. Choose a different field.",
@@ -444,6 +443,8 @@ const applySettings = (
           ),
         ]
       : [];
+  // A board writes its query and its totals into the draft's modules: they become the command's.
+  if (board !== undefined) source.body.modules = structuredClone(source.body.modules);
   const moveProblem =
     board === undefined ? undefined : boardMoveRecordTypeProblem(source, alias, board);
   if (moveProblem !== undefined) return { kind: "refused", reason: moveProblem };
@@ -485,16 +486,11 @@ const applySettings = (
     if (sideSheet) ensureStudioRecordSheet(current.catalogue, source, alias);
     validateStoredApplicationOutlets(current.catalogue, source);
   } catch (error) {
-    if (error instanceof StoredCompositionRefusal) {
-      console.info("[studio] composition settings refused", {
-        part: error.location,
-        reason: error.reason,
-      });
+    if (error instanceof StoredCompositionRefusal)
       return {
         kind: "refused",
         reason: `${release.name} can't take these settings. ${error.message}.`,
       };
-    }
     throw error;
   }
   // A board's card moves are saved through a flow: the first time the board is on, it gets the
@@ -558,10 +554,14 @@ const applySettings = (
     flowed = made.source;
   }
   if (flowed !== source) return { kind: "applied", source: flowed };
-  const parsed = applicationSourceDocumentSchema.parse(source);
-  return sameValue(parsed, current.source)
-    ? { kind: "invalid" }
-    : { kind: "applied", source: parsed };
+  // A board's totals and a record side sheet write outside the edited slot, so the draft is parsed
+  // as a whole. Otherwise only the slot changed and it was judged as stored data: the whole draft
+  // is parsed when it is saved, not for each key of a typing run.
+  const next =
+    sideSheet || (board !== undefined && query !== null)
+      ? applicationSourceDocumentSchema.parse(source)
+      : source;
+  return sameValue(next, current.source) ? { kind: "invalid" } : { kind: "applied", source: next };
 };
 
 type Removal = {
@@ -680,7 +680,7 @@ const applyRemoval = (
   current: StudioCompositionContext,
   selection: StudioSemanticSelection | null,
   command: unknown,
-): StudioCompositionCommandResult => {
+): StudioDraftChangeResult => {
   closedPlain(command, ["kind"]);
   const resolved = resolveRemoval(current, selection);
   if (resolved.kind === "refused") return resolved;
@@ -769,6 +769,15 @@ export const describeStudioCompositionDestinations = (
   }
 };
 
+/** Why a block on a published page keeps its size and order, or undefined. */
+const publishedLayoutReason = (
+  source: ApplicationSourceDocument,
+  page: ApplicationSourceDocument["body"]["pages"][number] | undefined,
+): string | undefined =>
+  page !== undefined && publishedPage(source, page)
+    ? "A block on a published page cannot have its size or order changed here."
+    : undefined;
+
 export const describeStudioCompositionEdit = (
   context: StudioCompositionContext,
   selection: StudioSemanticSelection | null,
@@ -780,6 +789,8 @@ export const describeStudioCompositionEdit = (
     if (resolved === undefined) return { kind: "invalid" };
     const catalogue = context.catalogue;
     const { target, source, alias } = resolved;
+    const published = publishedLayoutReason(source, target.region.page);
+    if (published !== undefined) return { kind: "refused", reason: published };
     if (
       !manifestMatches(catalogue, source, target.region.zone.items) ||
       (target.region.parent !== undefined &&
@@ -812,13 +823,28 @@ export const describeStudioCompositionEdit = (
 
 /**
  * Return one whole native source. The runner checks the context inside the draft's envelope before
- * one history.edit.
+ * one history.edit. Every command passes here, so a refusal is logged here, once, whichever rule
+ * refused it.
  */
-export const applyStudioCompositionCommand = (
+export const applyDraftChange = (
   current: StudioCompositionContext,
   selection: StudioSemanticSelection | null,
-  command: StudioCompositionCommand,
-): StudioCompositionCommandResult => {
+  command: StudioDraftChange,
+): StudioDraftChangeResult => {
+  const result = composeCommand(current, selection, command);
+  if (result.kind === "refused")
+    console.info("[studio] composition command refused", {
+      command: command.kind,
+      reason: result.reason,
+    });
+  return result;
+};
+
+const composeCommand = (
+  current: StudioCompositionContext,
+  selection: StudioSemanticSelection | null,
+  command: StudioDraftChange,
+): StudioDraftChangeResult => {
   try {
     const catalogue = current.catalogue;
     const kind = Object.getOwnPropertyDescriptor(command, "kind");
@@ -881,6 +907,8 @@ export const applyStudioCompositionCommand = (
         : { kind: "applied", source: parsed };
     }
     if (!breakpointValid(command.breakpoint)) return { kind: "invalid" };
+    const published = publishedLayoutReason(source, target.region.page);
+    if (published !== undefined) return { kind: "refused", reason: published };
     const commandKeys = Reflect.ownKeys(command);
     const allowedKeys =
       command.kind === "order" ? ["kind", "breakpoint", "order"] : ["kind", "breakpoint", "layout"];
@@ -951,10 +979,8 @@ export const applyStudioCompositionCommand = (
     if (sameValue(parsed, current.source)) return { kind: "invalid" };
     return { kind: "applied", source: parsed };
   } catch (error) {
-    if (error instanceof StoredCompositionRefusal || error instanceof StructureRefusal) {
-      console.info("[studio] composition command refused", error.message);
+    if (error instanceof StoredCompositionRefusal || error instanceof StructureRefusal)
       return { kind: "refused", reason: error.message };
-    }
     console.error("[studio] composition command could not be applied", error);
     return { kind: "invalid" };
   }

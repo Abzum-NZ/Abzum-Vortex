@@ -715,8 +715,8 @@ export function createInitialStudioCondition(
   )
     return undefined;
   if (contextIssues(context).length > 0) return undefined;
+  // A condition starts from something the page offers to test, never from a typed-in text.
   const operands: ConditionOperand[] = context.allowedOperands.map((entry) => entry.operand);
-  if (context.allowLiteralValues) operands.push(literalOperand("text"));
   for (const operand of operands) {
     const options = studioConditionOperatorsFor(operand, undefined, context);
     const option = options.find((entry) => entry.arity === "unary") ?? options[0];

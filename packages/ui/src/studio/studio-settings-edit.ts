@@ -1,9 +1,6 @@
 import { typedSourceSettingValue } from "@vortex/platform/schema";
 import { describeStudioCompositionSettings } from "./application-composition-commands";
-import type {
-  StudioCompositionCommand,
-  StudioCompositionContext,
-} from "./application-composition-model";
+import type { StudioDraftChange, StudioCompositionContext } from "./application-composition-model";
 import { followFieldLabels } from "./follow-field-labels";
 import {
   settleStudioSetting,
@@ -87,7 +84,7 @@ export const settingsChangeOfPuckEdit = (
   choices: (query: string | null) => StudioSettingChoices,
   edit: StudioSettingsEdit,
 ):
-  | Extract<StudioCompositionCommand, { kind: "settings" }>
+  | Extract<StudioDraftChange, { kind: "settings" }>
   | Readonly<{ kind: "invalid" | "unsupported" }> => {
   const model = describeStudioCompositionSettings(context, {
     kind: "placement",

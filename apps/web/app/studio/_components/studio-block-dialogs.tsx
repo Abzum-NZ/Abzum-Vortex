@@ -11,7 +11,7 @@ import {
   studioOutcomeText,
   describeStudioCompositionDestinations,
   describeStudioCompositionWrap,
-  type StudioCompositionCommand,
+  type StudioDraftChange,
   type StudioCompositionContext,
   type StudioCompositionOutcome,
   type StudioCompositionSettings,
@@ -38,7 +38,7 @@ type Props = Readonly<{
   onCommand: (
     expected: StudioCompositionContext,
     selection: StudioSemanticSelection,
-    command: StudioCompositionCommand,
+    command: StudioDraftChange,
   ) => StudioCompositionOutcome;
 }>;
 

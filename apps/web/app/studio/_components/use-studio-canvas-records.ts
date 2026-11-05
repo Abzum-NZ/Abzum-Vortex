@@ -2,6 +2,7 @@ import { useCallback, useMemo } from "react";
 import type { ApplicationRootId, ApplicationSourceDocument } from "@vortex/platform/schema";
 import {
   studioDraftChoices,
+  useStudioSameByKey,
   type StudioCanvasGridRead,
   type StudioRecordReader,
 } from "@vortex/ui/studio";
@@ -36,7 +37,7 @@ export function useStudioCanvasRecords({
   // time with their preview access through the same reader as the Data tab's results, once the
   // preview runs the saved revision's data shape.
   const readRecordChoices = useCallback<StudioRecordReader>(
-    async ({ recordType, after }, signal) => {
+    async ({ recordType, after, search }, signal) => {
       const separator = recordType.indexOf(":");
       const result = await readWhenPreviewReady(
         draft.preview,
@@ -53,6 +54,7 @@ export function useStudioCanvasRecords({
               recordKey: recordType.slice(separator + 1),
               pageSize: 40,
               ...(after === undefined ? {} : { continuationToken: after }),
+              ...(search === undefined ? {} : { search }),
             },
             signal,
           ),
@@ -103,12 +105,19 @@ export function useStudioCanvasRecords({
       "another application",
     [applications],
   );
-  const draftChoices = useMemo(
+  const draftChoicesNow = useMemo(
     () => studioDraftChoices(source, view.borrowedChoices, readRecordChoices, applicationName),
     [source, view.borrowedChoices, readRecordChoices, applicationName],
   );
+  // The choices are made again for each draft change but hold the same content for nearly all of
+  // them (a typed label changes none): they keep their identity, so the settings do not draw.
+  const draftChoices = useStudioSameByKey(draftChoicesNow, JSON.stringify(draftChoicesNow), [
+    readRecordChoices,
+    applicationName,
+    view.borrowedChoices,
+  ]);
   // The values the selected block's page declares, which a display can show.
-  const blockChoices = useMemo(
+  const blockChoicesNow = useMemo(
     () => ({
       ...draftChoices,
       pageValues: Object.entries(canvasPage?.values ?? {}).map(([key, declaration]) => ({
@@ -118,6 +127,11 @@ export function useStudioCanvasRecords({
       })),
     }),
     [draftChoices, canvasPage],
+  );
+  const blockChoices = useStudioSameByKey(
+    blockChoicesNow,
+    JSON.stringify(blockChoicesNow.pageValues),
+    [draftChoices],
   );
   // The records of the canvas's data blocks, read once per area for the compiled saved revision,
   // when the builder's preview runs that revision's data shape.

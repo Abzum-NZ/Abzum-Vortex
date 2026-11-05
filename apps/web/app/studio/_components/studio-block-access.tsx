@@ -1,6 +1,10 @@
 "use client";
 import { useMemo, useRef, useState, type ReactNode } from "react";
-import type { ConditionNode } from "@vortex/platform/schema";
+import {
+  canonicalJson,
+  type ApplicationAudience,
+  type ConditionNode,
+} from "@vortex/platform/schema";
 import {
   describeCondition,
   describeStudioCompositionGate,
@@ -15,6 +19,7 @@ import {
   type StudioReactionSlot,
   type StudioSemanticSelection,
   type StudioStoredApplicationDraft,
+  useStudioSameByKey,
 } from "@vortex/ui/studio";
 import {
   ApplicationReactionConditionEditor,
@@ -32,8 +37,10 @@ export function useStudioBlockAccess({
   selection,
   saved,
   disabled,
-  gateProblem,
+  problems,
   onGate,
+  onUse,
+  onAudience,
   onReaction,
 }: Readonly<{
   context: StudioCompositionContext;
@@ -41,10 +48,18 @@ export function useStudioBlockAccess({
   /** The saved draft, whose compiled fields a condition can name. */
   saved: StudioStoredApplicationDraft;
   disabled: boolean;
-  /** Why the draft refused the last gate change; shown at the gate until the draft changes. */
-  gateProblem?: string | undefined;
+  /** Why the draft refused the last change of each; shown at its field until the draft changes. */
+  problems: Readonly<{
+    gate?: string | undefined;
+    use?: string | undefined;
+    audience?: string | undefined;
+  }>;
   /** Sets the block's permission gate (null clears it); answers whether the draft took it. */
   onGate: (permission: string | null) => boolean;
+  /** Sets the permission that lets people use the block (null clears it). */
+  onUse: (permission: string | null) => boolean;
+  /** Sets who the block is offered to (null is everyone). */
+  onAudience: (audience: ApplicationAudience | null) => boolean;
   onReaction: (
     expected: StudioCompositionContext,
     selection: StudioSemanticSelection,
@@ -82,19 +97,43 @@ export function useStudioBlockAccess({
     return new Map(studioReactionSlots.map((entry) => [entry.slot, wordsOf(entry.slot)]));
   }, [context, selection, target, fields.metadata, fields.needsFields]);
   // The gate callback reads the latest handler, so the field values keep their identity between renders.
-  const gateHandler = useRef(onGate);
-  gateHandler.current = onGate;
+  const handlers = useRef({ onGate, onUse, onAudience });
+  handlers.current = { onGate, onUse, onAudience };
+  // The permission picker reads the permissions, the roles that hold them and the modules' own
+  // permissions: the source it is handed stays the same object while those are unchanged.
+  const gateSourceKey = useMemo(
+    () =>
+      canonicalJson([
+        context.source.body.permissions,
+        context.source.body.roles,
+        context.source.body.modules.map((module) => module.permissions),
+      ]),
+    [context.source],
+  );
+  const gateSource = useStudioSameByKey(context.source, gateSourceKey);
+  const hasTarget = target !== undefined;
+  const slotsSet = studioReactionSlots
+    .filter((entry) => target?.placement[entry.slot] !== undefined)
+    .map((entry) => entry.slot)
+    .join(",");
+  const wordsKey = JSON.stringify([...words]);
+  const gatePermission = gate.kind === "available" ? (gate.permission ?? "") : "";
+  const gateUse = gate.kind === "available" ? (gate.use ?? "") : "";
+  const useOffered = gate.kind === "available" && gate.useOffered;
+  const gateAudience = gate.kind === "available" ? (gate.audience ?? "") : "";
+  const gateReason = gate.kind === "available" ? "" : gate.reason;
+  // What the fields draw is a handful of values: the value keeps its identity until one changes.
   const access = useMemo<StudioAccessFieldValue>(() => {
-    const permissionLabel =
-      gate.kind === "available" && gate.permission !== null
-        ? (context.source.body.permissions.find((item) => item.key === gate.permission)?.label ??
-          context.source.body.modules
-            .flatMap((module) => module.permissions)
-            .find((item) => item.key === gate.permission)?.label ??
-          gate.permission)
-        : undefined;
+    const labelOf = (key: string) =>
+      gateSource.body.permissions.find((item) => item.key === key)?.label ??
+      gateSource.body.modules
+        .flatMap((module) => module.permissions)
+        .find((item) => item.key === key)?.label ??
+      key;
     const summary = [
-      permissionLabel === undefined ? undefined : `Needs ${permissionLabel}`,
+      gatePermission === "" ? undefined : `Needs ${labelOf(gatePermission)}`,
+      gateUse === "" ? undefined : `Use needs ${labelOf(gateUse)}`,
+      gateAudience === "" ? undefined : `Offered to ${gateAudience}`,
       ...studioReactionSlots
         .filter((entry) => target?.placement[entry.slot] !== undefined)
         .map((entry) => `${entry.title} ${words.get(entry.slot)}`),
@@ -105,10 +144,17 @@ export function useStudioBlockAccess({
         gate.kind === "available"
           ? {
               kind: "available",
-              source: context.source,
+              source: gateSource,
               permission: gate.permission ?? "",
-              onChange: (next) => !disabled && gateHandler.current(next),
-              problem: gateProblem,
+              onChange: (next) => !disabled && handlers.current.onGate(next),
+              problem: problems.gate,
+              use: gateUse,
+              useOffered,
+              onUse: (next) => !disabled && handlers.current.onUse(next),
+              useProblem: problems.use,
+              audience: gateAudience,
+              onAudience: (next) => !disabled && handlers.current.onAudience(next),
+              audienceProblem: problems.audience,
             }
           : { kind: "refused", reason: gate.reason },
       conditions:
@@ -127,7 +173,22 @@ export function useStudioBlockAccess({
               })),
             },
     };
-  }, [context.source, gate, target, words, disabled, gateProblem]);
+    // The values that decide the field's content are the keys below.
+  }, [
+    gateSource,
+    gatePermission,
+    gateUse,
+    useOffered,
+    gateAudience,
+    gateReason,
+    hasTarget,
+    slotsSet,
+    wordsKey,
+    disabled,
+    problems.gate,
+    problems.use,
+    problems.audience,
+  ]);
   const slotInfo = studioReactionSlots.find((entry) => entry.slot === slot)!;
   const dialog = (
     <StudioDialog
@@ -136,6 +197,7 @@ export function useStudioBlockAccess({
       title={slotInfo.title}
       description={slotInfo.help}
       closeLabel="Done"
+      focusDialog
     >
       {editing && (
         <ApplicationReactionConditionEditor

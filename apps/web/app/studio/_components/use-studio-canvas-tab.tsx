@@ -59,7 +59,7 @@ import { pageUsingLayout } from "../_lib/studio-view-request";
 import type { StudioApplicationCanvasFrames } from "../../_lib/studio-application-draft";
 import { studioMenuPosition } from "@vortex/platform/schema";
 import type { StudioInspectorAction } from "@vortex/ui/studio";
-import { ApplicationCompositionEditor } from "./application-composition-editor";
+import { StudioBlockInspector } from "./studio-block-inspector";
 import { StudioBlockSetupDialog, type StudioBlockSetupRequest } from "./studio-block-setup-dialog";
 import { StudioBlockDialogs } from "./studio-block-dialogs";
 import { StudioQuerySheet } from "./studio-query-sheet";
@@ -467,18 +467,25 @@ export function useStudioCanvasTab({
   // The inspector's name and description of the selected item: a run of typing is one Undo step.
   const setLabels = (name: string, description: string): string | true => {
     const selection = draft.selection.getSelection();
-    const result = commands.setLabels(
-      selection,
-      name,
-      description,
-      `labels:${selection === null ? "" : studioSemanticSelectionKey(selection)}`,
-    );
+    const result =
+      selection === null
+        ? ({ kind: "not_found" } as const)
+        : commands.setLabels(
+            selection,
+            name,
+            description,
+            `labels:${studioSemanticSelectionKey(selection)}`,
+          );
     return result.kind === "applied"
       ? true
       : result.kind === "blocked"
         ? result.message
         : result.kind === "invalid"
-          ? "Enter a name and description within their length limits."
+          ? name.trim().length === 0
+            ? `Enter a name for the ${selection?.kind === "application" ? "application" : "page"}.`
+            : selection?.kind === "application"
+              ? "Enter a name and description within their length limits."
+              : "Enter a name of at most 60 characters."
           : "This item is not in the draft any more.";
   };
 
@@ -638,7 +645,7 @@ export function useStudioCanvasTab({
         inspector.status === "resolved" &&
         flowsInspector}
       {selected?.kind === "placement" && inspector.status === "resolved" && (
-        <ApplicationCompositionEditor
+        <StudioBlockInspector
           key={`${draft.lifetime}:${selectionKey}`}
           context={compositionContext}
           selection={selected}
@@ -651,6 +658,15 @@ export function useStudioCanvasTab({
           canvasArrangement={studioCanvasGridArrangement(gridStates.get(selected.placementAlias))}
           onCommand={commandComposition}
           onNewQuery={(use) => setQuerySheet({ use })}
+          workflows={placementWorkflows}
+          usedIn={
+            <>
+              <StudioLayoutOutletUses source={source} placementAlias={selected.placementAlias} />
+              {usedIn !== null && (
+                <StudioUsedIn source={source} target={usedIn} name={selectedName ?? "it"} />
+              )}
+            </>
+          }
         />
       )}
       {selected?.kind === "page" && inspector.status === "resolved" && (
@@ -661,12 +677,9 @@ export function useStudioCanvasTab({
           onEdit={commandPageValue}
         />
       )}
-      {inspector.status === "resolved" && placementWorkflows}
-      {selected?.kind === "placement" && (
-        <StudioLayoutOutletUses source={source} placementAlias={selected.placementAlias} />
-      )}
+      {selected?.kind === "page" && inspector.status === "resolved" && placementWorkflows}
       {selected?.kind === "flow" && flowDeleteNotice}
-      {usedIn !== null && (
+      {selected?.kind !== "placement" && usedIn !== null && (
         <StudioUsedIn source={source} target={usedIn} name={selectedName ?? "it"} />
       )}
     </StudioInspector>
@@ -1040,6 +1053,7 @@ export function useStudioCanvasTab({
     breadcrumbItem,
     compositionContext,
     commandComposition,
+    renameItem: commands.setLabels,
     readRecordChoices,
     previewAs,
     readQueries: (borrowed: StudioBorrowedChoices | null) =>

@@ -125,6 +125,12 @@ const failure = (error: unknown, reported = false): PreviewFailure => {
     case "PREVIEW_INSTALLATION_REFUSED":
       return { kind: "refused", reason: "permission_refused" };
     case "INVALID_PREVIEW_INSTALLATION_COMMAND":
+      // A malformed request is a contract fault between the client and the server, not a refusal.
+      if (!reported)
+        console.error(
+          "[studio] preview request refused as invalid: STUDIO_PREVIEW_INVALID_REQUEST",
+          error,
+        );
       return { kind: "refused", reason: "invalid_request" };
     case "PREVIEW_INSTALLATION_TEMPORARILY_UNAVAILABLE":
       return { kind: "temporarily_unavailable" };

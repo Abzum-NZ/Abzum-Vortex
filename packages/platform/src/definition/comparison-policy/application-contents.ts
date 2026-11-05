@@ -278,7 +278,7 @@ const comparePlacements = (
       "configuration",
       id,
     );
-    for (const key of ["viewPermissionKey", "usePermissionKey"])
+    for (const key of ["viewPermissionKey", "usePermissionKey", "applicationAudience"])
       pushChange(
         reasons,
         before.vortex[key],

@@ -77,12 +77,14 @@ export {
 } from "./application-record-page-kinds";
 export * from "./application-home-dashboard";
 export * from "./application-item-labels";
+export { createStudioPlacementDescriber } from "./studio-placement-describer";
 export * from "./studio-reference-picker";
 export * from "./studio-gate-select";
 export * from "./studio-entry-list";
 export * from "./studio-segmented-control";
 export * from "./studio-field";
 export * from "./studio-inspector-group";
+export * from "./use-studio-draft-held";
 export * from "./studio-dialog";
 export * from "./studio-icon-buttons";
 export * from "./studio-limit";
@@ -90,6 +92,12 @@ export { studioPageNestingLevels } from "./studio-composition-depth";
 export { StudioPuckOutline } from "./studio-puck-outline";
 export { StudioBlockSettingFields } from "./studio-puck-settings";
 export type { StudioAccessFieldValue } from "./studio-puck-field-types";
+export {
+  studioOrderMoves,
+  studioOrderWindow,
+  type StudioLayoutFieldValue,
+} from "./studio-layout-fields";
+export { useStudioSameByKey } from "./use-studio-same-by-key";
 export * from "./studio-inspector-actions";
 export * from "./studio-field-type-icon";
 export {

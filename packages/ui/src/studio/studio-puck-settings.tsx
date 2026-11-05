@@ -1,6 +1,14 @@
 "use client";
 
-import { useCallback, useContext, useMemo, useRef, useState, type ReactNode } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import { Puck, type ComponentConfig, type Field } from "@puckeditor/core";
 import {
   canonicalJson,
@@ -12,11 +20,20 @@ import {
 import { ItemGroup } from "../components/item";
 import { Icon } from "../icons";
 import {
+  StudioAccessFieldContext,
+  StudioLayoutFieldContext,
   StudioSettingFieldsContext,
+  StudioSettingTouchedContext,
   studioConditionField,
   studioConditionFieldName,
+  studioFeaturesField,
+  studioFeaturesFieldName,
   studioGateField,
   studioGateFieldName,
+  studioLayoutField,
+  studioLayoutFieldName,
+  studioOrderField,
+  studioOrderFieldName,
   studioQueryField,
   studioQueryFieldName,
   studioSettingField,
@@ -28,10 +45,13 @@ import { studioGridFeaturesProperty } from "./studio-grid-features";
 import { StudioHelp } from "./studio-field";
 import { StudioInspectorGroup } from "./studio-inspector-group";
 import { StudioInspectorActions, type StudioInspectorAction } from "./studio-inspector-actions";
+import { StudioOrderNamesContext, studioLayoutSummary } from "./studio-layout-fields";
+import { useStudioScreen } from "./studio-canvas-screen";
 import { studioReleaseIcon } from "./studio-puck-drawer";
+import { studioPuckStyle } from "./studio-puck-style";
 import { studioReactionSlots } from "./application-reaction-condition-commands";
 import { studioBlockReadsQuery } from "./application-composition-commands";
-import { studioOwnsSetting } from "./contextual-palette";
+import { studioOwnsSetting, studioReleaseReadsQuery } from "./contextual-palette";
 
 /**
  * A block's settings are Puck fields: each declared setting is a custom field whose control is
@@ -76,8 +96,14 @@ const studioFieldSettings = (
 
 const noProps: Readonly<Record<string, unknown>> = {};
 
-/** Who sees the block and when: the fields of the Visibility and access group. */
-const addAccessFields = (fields: Record<string, Field>): void => {
+/**
+ * The fields that are not settings: the grid features, the size and order, the permission gate and
+ * the conditions, drawn in the Grid features, Layout and Visibility and access groups.
+ */
+const addInspectorFields = (fields: Record<string, Field>): void => {
+  fields[studioFeaturesFieldName] = studioFeaturesField;
+  fields[studioLayoutFieldName] = studioLayoutField;
+  fields[studioOrderFieldName] = studioOrderField;
   fields[studioGateFieldName] = studioGateField;
   for (const reaction of studioReactionSlots)
     fields[studioConditionFieldName(reaction.slot)] = studioConditionField(
@@ -86,7 +112,11 @@ const addAccessFields = (fields: Record<string, Field>): void => {
     );
 };
 
-/** The fields of one placement: its shown settings first, every other prop hidden from the inspector. */
+/**
+ * The fields of one placement: its shown settings first, every other prop hidden from the
+ * inspector. Without `props` they are the release's static fields: the settings shown whatever
+ * the block holds (no conditional setting), and the data choice when the release reads data.
+ */
 const studioSettingFields = (
   release: PlatformBlockRelease,
   base: Readonly<Record<string, Field>>,
@@ -96,19 +126,43 @@ const studioSettingFields = (
   const values =
     props === undefined ? undefined : studioTypedSettings(props, release.properties as never);
   // A block that reads data chooses it first, and the bindings of its inputs follow.
-  const readsQuery = props !== undefined && studioBlockReadsQuery(release, props);
+  const readsQuery =
+    props === undefined ? studioReleaseReadsQuery(release) : studioBlockReadsQuery(release, props);
   const fields: Record<string, Field> = readsQuery
     ? { [studioQueryFieldName]: studioQueryField }
     : {};
   for (const property of listed) {
-    if (values !== undefined && !componentSettingApplies(property, values)) continue;
+    if (
+      values === undefined
+        ? property.showWhen !== undefined
+        : !componentSettingApplies(property, values)
+    )
+      continue;
     fields[property.key] = studioSettingField(release, property, release.properties as never);
   }
-  addAccessFields(fields);
+  addInspectorFields(fields);
   for (const [key, field] of Object.entries(base))
     if (fields[key] === undefined) fields[key] = { ...field, visible: false } as Field;
   return fields;
 };
+
+/**
+ * The block's flow bindings and where it is used: sections that are not Puck fields. They have a
+ * context of their own, so their churn draws only them and not the fields.
+ */
+const StudioInspectorSectionsContext = createContext<
+  Readonly<{ workflows: ReactNode; usedIn: ReactNode }>
+>({ workflows: null, usedIn: null });
+
+function StudioInspectorSections() {
+  const { workflows, usedIn } = useContext(StudioInspectorSectionsContext);
+  return (
+    <>
+      {workflows}
+      {usedIn}
+    </>
+  );
+}
 
 /**
  * Lays the inspector out in groups: the settings in use first, the optional ones nobody has set in
@@ -155,7 +209,9 @@ function StudioInspectorFieldGroups({
     .map(([key, node]) => ({ key, node: <div key={key}>{node}</div> }));
   const more = controls.filter((control) => decided.current?.keys.has(control.key) === true);
   const primary = controls.filter((control) => !more.includes(control));
-  const access = context?.access;
+  const access = useContext(StudioAccessFieldContext)?.access;
+  const layout = useContext(StudioLayoutFieldContext)?.layout;
+  const { breakpoint } = useStudioScreen();
   return (
     <>
       {(primary.length > 0 || context?.settingsAfter || context?.notice) && (
@@ -202,6 +258,19 @@ function StudioInspectorFieldGroups({
           )}
         </StudioInspectorGroup>
       )}
+      {fields[studioFeaturesFieldName]}
+      {layout !== undefined && (
+        <StudioInspectorGroup
+          title="Layout"
+          defaultOpen={false}
+          forceOpen={layout.kind === "available" && layout.orderProblem !== undefined}
+          summary={studioLayoutSummary(layout, breakpoint)}
+        >
+          {fields[studioLayoutFieldName]}
+          {fields[studioOrderFieldName]}
+        </StudioInspectorGroup>
+      )}
+      <StudioInspectorSections />
     </>
   );
 }
@@ -217,9 +286,13 @@ const hidden = (fields: Readonly<Record<string, Field>>): Record<string, Field> 
   );
 
 /**
- * A canvas component with its settings declared as Puck fields: `fields` hides every prop until
- * the block is resolved, `resolveFields` gives the settings that apply to the values the block
- * holds, and `renderFields` lays them out.
+ * A canvas component with its settings declared as Puck fields: `fields` declares the settings
+ * shown whatever the block holds (`release` is the component's own release), `resolveFields`
+ * gives the settings that apply to the values the block holds, and `renderFields` lays them out.
+ * Puck resets the selected block's fields to the static `fields` whenever it takes a new config
+ * (a page's tab keys change it) and then resolves them again, so each field the static fields
+ * share with the resolved ones keeps its identity and the field being typed in keeps its focus.
+ * Upgrade check: walks/B5d-review-3/identity3.cjs (sections A to C) reads that identity.
  */
 export const withSettingFields = (
   component: ComponentConfig<Record<string, unknown>>,
@@ -227,10 +300,11 @@ export const withSettingFields = (
   resolveBase:
     | ((data: { props: Record<string, unknown> }, params: unknown) => Record<string, Field>)
     | undefined,
+  release: PlatformBlockRelease | undefined,
 ): Partial<ComponentConfig<Record<string, unknown>>> => {
   const base = { ...(component.fields ?? {}), vortex: studioVortexField } as Record<string, Field>;
   return {
-    fields: hidden(base),
+    fields: release === undefined ? hidden(base) : studioSettingFields(release, base, undefined),
     resolveFields: (data: { props: Record<string, unknown> }, params: unknown) => {
       const release = releaseOf(data.props);
       const resolved = {
@@ -240,7 +314,7 @@ export const withSettingFields = (
       if (release !== undefined) return studioSettingFields(release, resolved, data.props);
       // A block whose release the catalogue lacks still shows who sees it and when.
       const fields = hidden(resolved);
-      addAccessFields(fields);
+      addInspectorFields(fields);
       return fields;
     },
     renderFields: ({ fields }: { fields: Partial<Record<string, ReactNode>> }) => (
@@ -295,6 +369,11 @@ export function StudioBlockSettingFields({
   disabled,
   query,
   access,
+  layout,
+  orderNames,
+  features,
+  workflows,
+  usedIn,
   settingsAfter,
   notice,
   placementAlias,
@@ -310,8 +389,14 @@ export function StudioBlockSettingFields({
     /** The name of this instance, and its More menu. */
     name: string;
     actions: readonly StudioInspectorAction[];
+    /** The names of the blocks near this one in its order, for the order field. */
+    orderNames: ReadonlyMap<string, string>;
     /** The catalogue's releases, for the block's kind and description. */
     releases: readonly PlatformBlockRelease[];
+    /** The block's flow bindings, drawn by the Workflows group. */
+    workflows: ReactNode;
+    /** Where the block is used, drawn by the Used in group. */
+    usedIn: ReactNode;
   }
 >): ReactNode {
   const scope =
@@ -322,10 +407,11 @@ export function StudioBlockSettingFields({
   });
   const touch = useCallback(
     (key: string) =>
-      setTouched((previous) => ({
-        scope,
-        keys: new Set([...(previous.scope === scope ? previous.keys : []), key]),
-      })),
+      setTouched((previous) =>
+        previous.scope === scope && previous.keys.has(key)
+          ? previous
+          : { scope, keys: new Set([...(previous.scope === scope ? previous.keys : []), key]) },
+      ),
     [scope],
   );
   const value = useMemo(
@@ -333,19 +419,43 @@ export function StudioBlockSettingFields({
       choices,
       disabled,
       query,
-      access,
+      features,
       settingsAfter,
       notice,
       scope,
-      touched: touched.scope === scope ? touched.keys : noKeys,
       touch,
     }),
-    [choices, disabled, query, access, settingsAfter, notice, scope, touched, touch],
+    [choices, disabled, query, features, settingsAfter, notice, scope, touch],
   );
+  const touchedKeys = touched.scope === scope ? touched.keys : noKeys;
+  const accessValue = useMemo(() => ({ access, disabled }), [access, disabled]);
+  const layoutValue = useMemo(() => ({ layout, disabled }), [layout, disabled]);
+  const sections = useMemo(() => ({ workflows, usedIn }), [workflows, usedIn]);
   return (
     <StudioSettingFieldsContext.Provider value={value}>
-      <StudioBlockHeader titleId={titleId} name={name} actions={actions} releases={releases} />
-      {scope === placementAlias && <Puck.Fields wrapFields={false} />}
+      <StudioSettingTouchedContext.Provider value={touchedKeys}>
+        <StudioAccessFieldContext.Provider value={accessValue}>
+          <StudioLayoutFieldContext.Provider value={layoutValue}>
+            <StudioOrderNamesContext.Provider value={orderNames}>
+              <StudioInspectorSectionsContext.Provider value={sections}>
+                <StudioBlockHeader
+                  titleId={titleId}
+                  name={name}
+                  actions={actions}
+                  releases={releases}
+                />
+                {scope === placementAlias && (
+                  // The Puck colour and font map again: in a narrow window the inspector is a sheet
+                  // outside the provider's wrapper, where Puck's form would take its own font.
+                  <div className="contents" style={studioPuckStyle}>
+                    <Puck.Fields wrapFields={false} />
+                  </div>
+                )}
+              </StudioInspectorSectionsContext.Provider>
+            </StudioOrderNamesContext.Provider>
+          </StudioLayoutFieldContext.Provider>
+        </StudioAccessFieldContext.Provider>
+      </StudioSettingTouchedContext.Provider>
     </StudioSettingFieldsContext.Provider>
   );
 }

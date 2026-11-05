@@ -2,6 +2,7 @@
 
 import {
   createContext,
+  memo,
   useContext,
   useEffect,
   useId,
@@ -17,6 +18,7 @@ import {
   type Overrides,
 } from "@puckeditor/core";
 import {
+  type ApplicationAudience,
   type ApplicationSourceDocument,
   plainSourceSettingValue,
   typedSourceSettingValue,
@@ -29,11 +31,15 @@ import type { StudioQueryChoice } from "./contextual-palette";
 import { StudioField } from "./studio-field";
 import { StudioEditButton } from "./studio-icon-buttons";
 import { StudioGateSelect } from "./studio-gate-select";
+import { StudioReferencePicker } from "./studio-reference-picker";
 import type { StudioReactionSlot } from "./application-reaction-condition-commands";
-import { StudioSettingControl } from "./studio-setting-controls";
+import {
+  StudioSettingControl,
+  StudioSettingNote,
+  studioSiblingSettingKeys,
+} from "./studio-setting-controls";
 import { StudioQueryBindings } from "./studio-query-bindings";
 import { StudioQueryPicker } from "./studio-query-picker";
-import { StudioSettingNote } from "./studio-setting-controls";
 import {
   conditionalRequiredMessage,
   settleStudioSetting,
@@ -43,6 +49,12 @@ import {
   type StudioSettingValues,
 } from "./studio-setting-model";
 import { studioTotalMeasureProperty } from "./grid-features/totals";
+import { StudioGridFeatures, type StudioGridFeaturesProps } from "./studio-grid-features";
+import {
+  StudioLayoutField,
+  StudioOrderField,
+  type StudioLayoutFieldValue,
+} from "./studio-layout-fields";
 
 /**
  * Studio's Puck field types, drawn through `overrides.fieldTypes.custom`. Every field of a block
@@ -64,13 +76,26 @@ export type StudioSettingFieldsValue = Readonly<{
   query?: StudioQueryFieldValue | undefined;
   /** Who sees the block and when: its permission gate and conditions. */
   access?: StudioAccessFieldValue | undefined;
+  /** The block's size and order on the canvas screen, and the commands that change them. */
+  layout?: StudioLayoutFieldValue | undefined;
+  /**
+   * The Records table's grid features (board, formatting, export, inline edit, row actions, row
+   * edit).
+   */
+  features?: StudioGridFeaturesProps | undefined;
   /** What follows the settings in their group: the selection bindings and the group's refusal. */
   settingsAfter?: ReactNode;
-  /** Said in the Settings group in place of the settings when the block's settings cannot be drawn. */
+  /**
+   * Said in the Settings group in place of the settings when the block's settings cannot be
+   * drawn.
+   */
   notice?: string | undefined;
 }>;
 
-/** The permission gate and the four conditions of the selected block, edited through the inspector's commands. */
+/**
+ * The permission gate and the four conditions of the selected block, edited through the
+ * inspector's commands.
+ */
 export type StudioAccessFieldValue = Readonly<{
   /** The group's one-line summary while it is closed. */
   summary: string;
@@ -84,6 +109,16 @@ export type StudioAccessFieldValue = Readonly<{
         onChange: (permission: string | null) => boolean;
         /** Why the draft refused the last change, shown at the field until the draft changes. */
         problem?: string | undefined;
+        /** The permission that lets people use the block, or an empty text. */
+        use: string;
+        /** Whether the block starts a workflow (or has a use permission to clear). */
+        useOffered: boolean;
+        onUse: (permission: string | null) => boolean;
+        useProblem?: string | undefined;
+        /** Who the block is offered to, or an empty text for everyone. */
+        audience: ApplicationAudience | "";
+        onAudience: (audience: ApplicationAudience | null) => boolean;
+        audienceProblem?: string | undefined;
       }>
     | Readonly<{ kind: "refused"; reason: string }>;
   /** One row per condition, or the reason they cannot be changed here. */
@@ -100,7 +135,10 @@ export type StudioAccessFieldValue = Readonly<{
     | Readonly<{ kind: "refused"; reason: string }>;
 }>;
 
-/** The block's data choice and the bindings of its inputs, edited through the inspector's commands. */
+/**
+ * The block's data choice and the bindings of its inputs, edited through the inspector's
+ * commands.
+ */
 type StudioQueryFieldValue = Readonly<{
   value: string;
   queries: readonly StudioQueryChoice[];
@@ -119,31 +157,68 @@ type StudioQueryFieldValue = Readonly<{
   after?: ReactNode;
 }>;
 
-/** The settings the person has edited since the selected block was chosen (the label note reads them). */
-type StudioSettingFieldsContextValue = StudioSettingFieldsValue &
-  Readonly<{ scope: string; touched: ReadonlySet<string>; touch: (key: string) => void }>;
+/** The selection the fields belong to, and how a field marks its setting as edited. */
+type StudioSettingFieldsContextValue = Omit<StudioSettingFieldsValue, "access" | "layout"> &
+  Readonly<{ scope: string; touch: (key: string) => void }>;
+
+/**
+ * The settings the person has edited since the selected block was chosen. Only the notes read
+ * them, so the first edit of a setting draws the notes and not every setting.
+ */
+export const StudioSettingTouchedContext = createContext<ReadonlySet<string>>(new Set());
+
+/**
+ * Who sees the block, and its size and order, each in a context of its own: they change with the
+ * draft far more often than the settings do, and only their own fields read them.
+ */
+export const StudioAccessFieldContext = createContext<Readonly<{
+  access: StudioAccessFieldValue | undefined;
+  disabled: boolean;
+}> | null>(null);
+export const StudioLayoutFieldContext = createContext<Readonly<{
+  layout: StudioLayoutFieldValue | undefined;
+  disabled: boolean;
+}> | null>(null);
 
 export const StudioSettingFieldsContext = createContext<StudioSettingFieldsContextValue | null>(
   null,
 );
 
-/** The name of the inspector field that holds the block's data choice (it is not a prop of the block). */
+/**
+ * The name of the inspector field that holds the block's data choice (it is not a prop of the
+ * block).
+ */
 export const studioQueryFieldName = "vortexQuery";
 
 /** The inspector fields that hold the block's access: its permission gate and each condition. */
 export const studioGateFieldName = "vortexGate";
+/**
+ * The inspector fields of the Layout group: the block's size and its order on the canvas screen.
+ */
+export const studioLayoutFieldName = "vortexLayout";
+export const studioOrderFieldName = "vortexOrder";
+/**
+ * The inspector field that holds the Records table's grid features (they are one setting group,
+ * drawn as one panel).
+ */
+export const studioFeaturesFieldName = "vortexGridFeatures";
 export const studioConditionFieldName = (slot: StudioReactionSlot) => `vortexCondition-${slot}`;
 
 type SettingKind = Readonly<{
   kind: "setting";
   property: BlockPropertySchemaContract;
   properties: readonly BlockPropertySchemaContract[];
+  /** The slot family this list's entries are named for, when each entry owns a slot (a tab). */
+  identity?: Readonly<{ family: string; property: string }> | undefined;
 }>;
 
-/** What a Studio field carries: the setting and the control that edits it, or the block's data choice. */
+/**
+ * What a Studio field carries: the setting and the control that edits it, or the block's data
+ * choice.
+ */
 type StudioFieldKind =
   | SettingKind
-  | Readonly<{ kind: "query" | "gate" }>
+  | Readonly<{ kind: "query" | "gate" | "layout" | "order" | "features" }>
   | Readonly<{ kind: "condition"; slot: StudioReactionSlot }>;
 
 /** Studio's data travels in Puck's public field `metadata`; Puck's own render is not used. */
@@ -156,17 +231,45 @@ const studioCustomField = (label: string, key: string, studio: StudioFieldKind):
     render: () => null as never,
   }) satisfies CustomField<unknown>;
 
+/**
+ * The field of each declared setting, made once: the inspector asks for its fields on every edit
+ * of the block, and a field that is the same object lets its control keep its place.
+ */
+const settingFields = new WeakMap<BlockPropertySchemaContract, Field>();
+
 /** The field of a declared setting. */
 export const studioSettingField = (
-  release: Readonly<{ blockId: string; releaseVersion: number | string }>,
+  release: Readonly<{
+    blockId: string;
+    releaseVersion: number | string;
+    slots: readonly Readonly<{
+      key: string;
+      repeats?: Readonly<{ items: string; identity: string }> | undefined;
+    }>[];
+  }>,
   property: BlockPropertySchemaContract,
   properties: readonly BlockPropertySchemaContract[],
-): Field =>
-  studioCustomField(
+): Field => {
+  const made = settingFields.get(property);
+  if (made !== undefined) return made;
+  // A list whose entries each name a slot (a tab) carries that slot family; it depends only on the
+  // release's own slots, so the field made once per setting stays right.
+  const repeating = release.slots.find((slot) => slot.repeats?.items === property.key);
+  const field = studioCustomField(
     property.label,
     `${release.blockId}@${release.releaseVersion}:${property.key}`,
-    { kind: "setting", property, properties },
+    {
+      kind: "setting",
+      property,
+      properties,
+      ...(repeating?.repeats === undefined
+        ? {}
+        : { identity: { family: repeating.key, property: repeating.repeats.identity } }),
+    },
   );
+  settingFields.set(property, field);
+  return field;
+};
 
 /** The field that chooses the data a block reads. */
 export const studioQueryField: Field = studioCustomField("Data", studioQueryFieldName, {
@@ -178,13 +281,30 @@ export const studioGateField: Field = studioCustomField("Permission gate", studi
   kind: "gate",
 });
 
+/**
+ * The fields of the Layout group; they hold no prop of the block and write through its resize and
+ * order commands.
+ */
+export const studioLayoutField: Field = studioCustomField("Size", studioLayoutFieldName, {
+  kind: "layout",
+});
+export const studioOrderField: Field = studioCustomField("Order", studioOrderFieldName, {
+  kind: "order",
+});
+
+/** The field that holds the Records table's grid features. */
+export const studioFeaturesField: Field = studioCustomField("Features", studioFeaturesFieldName, {
+  kind: "features",
+});
+
 /** The field of one condition (when the block shows, is required, is read-only or is enabled). */
 export const studioConditionField = (slot: StudioReactionSlot, title: string): Field =>
   studioCustomField(title, studioConditionFieldName(slot), { kind: "condition", slot });
 
-const noProps: Readonly<Record<string, unknown>> = {};
-
-/** The typed settings a block's plain props hold; a prop that is not a valid value of its declaration is left out. */
+/**
+ * The typed settings a block's plain props hold; a prop that is not a valid value of its
+ * declaration is left out.
+ */
 export const studioTypedSettings = (
   props: Readonly<Record<string, unknown>>,
   properties: readonly BlockPropertySchemaContract[],
@@ -205,17 +325,37 @@ type SettingFieldRenderProps = Readonly<{
   readOnly?: boolean | undefined;
 }>;
 
-/** One setting as a field: its label, hint and message around its control; held input stays in the control. */
-function StudioSettingField({
+/**
+ * Puck hands every field a new props object when any setting of the block changes: a field draws
+ * again only when its own value, its read-only state or its change function differs.
+ */
+const sameSettingField = (
+  before: Readonly<{ setting: SettingKind; field: SettingFieldRenderProps }>,
+  after: Readonly<{ setting: SettingKind; field: SettingFieldRenderProps }>,
+) =>
+  before.setting === after.setting &&
+  before.field.readOnly === after.field.readOnly &&
+  before.field.onChange === after.field.onChange &&
+  JSON.stringify(before.field.value ?? null) === JSON.stringify(after.field.value ?? null);
+
+/**
+ * One setting as a field: its label, hint and message around its control; held input stays in the
+ * control.
+ */
+const StudioSettingField = memo(function StudioSettingField({
   setting,
   field,
 }: Readonly<{ setting: SettingKind; field: SettingFieldRenderProps }>) {
-  const { property, properties } = setting;
+  const { property, properties, identity } = setting;
   const context = useContext(StudioSettingFieldsContext);
   const getPuck = useGetPuck();
-  // The selected block's values, subscribed to: the label note and the total measure depend on the
-  // sibling settings.
-  const props = usePuckSelector((state) => state.selectedItem?.props) ?? noProps;
+  // The sibling settings this field's notes and measure read, subscribed to as one string: a
+  // keystroke in a setting that no other field reads draws no other field.
+  const siblingKeys = studioSiblingSettingKeys(property, properties);
+  const siblingsKey = usePuckSelector((state) => {
+    const current = state.selectedItem?.props;
+    return JSON.stringify(siblingKeys.map((key) => current?.[key] ?? null));
+  });
   // Input that is not valid yet: the control shows it and the field says why; Puck never sees it.
   const [held, setHeld] = useState<Readonly<{ value: SettingValue; problem: string }> | null>(null);
   const plain = field.value;
@@ -230,9 +370,16 @@ function StudioSettingField({
     // The plain value is compared by content: Puck hands over a fresh object for the same setting.
     [plainKey, property],
   );
+  const values = useMemo(() => {
+    const read = JSON.parse(siblingsKey) as unknown[];
+    const siblings: Record<string, unknown> = {};
+    studioSiblingSettingKeys(property, properties).forEach((key, at) => {
+      if (read[at] !== null) siblings[key] = read[at];
+    });
+    return studioTypedSettings(siblings, properties);
+  }, [siblingsKey, property, properties]);
   if (context === null) return null;
-  const { choices, disabled, scope, touched, touch } = context;
-  const values = studioTypedSettings(props, properties);
+  const { choices, disabled, scope, touch } = context;
   const change = (next: SettingValue) => {
     touch(property.key);
     const now = studioTypedSettings(getPuck().selectedItem?.props ?? {}, properties);
@@ -244,7 +391,11 @@ function StudioSettingField({
       (problem) => !before.has(problem),
     );
     if (problems.length > 0) {
-      setHeld({ value: next, problem: problems.join(" ") });
+      const problem = problems.join(" ");
+      // An expected refusal, logged once when the field starts holding it, not on every keystroke.
+      if (held?.problem !== problem)
+        console.info(`[studio] a setting value was refused: ${property.key}: ${problem}`);
+      setHeld({ value: next, problem });
       return;
     }
     setHeld(null);
@@ -276,6 +427,7 @@ function StudioSettingField({
             descriptionId={control["aria-describedby"]}
             invalid={control["aria-invalid"] === true}
             property={studioTotalMeasureProperty(property, properties, values, choices.fields)}
+            identity={identity}
             value={shown}
             onChange={change}
             choices={choices}
@@ -283,18 +435,23 @@ function StudioSettingField({
           />
         )}
       </StudioField>
-      <StudioSettingNote
+      <StudioSettingFieldNote
         property={property}
         properties={properties}
         values={values}
         choices={choices}
         disabled={disabled}
         scope={scope}
-        touched={touched}
         onUseFieldLabel={() => change(undefined)}
       />
     </div>
   );
+}, sameSettingField);
+
+/** The notes under a setting, with the edited settings they read from their own context. */
+function StudioSettingFieldNote(props: Omit<Parameters<typeof StudioSettingNote>[0], "touched">) {
+  const touched = useContext(StudioSettingTouchedContext);
+  return <StudioSettingNote {...props} touched={touched} />;
 }
 
 /** The data a block reads and the bindings of its inputs, in the inspector's own commands. */
@@ -329,9 +486,29 @@ function StudioQueryField({ readOnly }: Readonly<{ readOnly: boolean }>) {
   );
 }
 
-/** Who can see the block: the permission it needs. A refusal shows at the field until the draft changes. */
-function StudioGateField({ readOnly }: Readonly<{ readOnly: boolean }>) {
-  const context = useContext(StudioSettingFieldsContext);
+const audienceChoices = [
+  { value: "builders", label: "Builders", description: "People who may build applications" },
+  { value: "installers", label: "Installers", description: "People who may install applications" },
+] as const;
+
+const gateHint =
+  "Show this block only to people who hold its permission. Page and menu permissions still " +
+  "apply. Clearing this gate adds no block permission requirement. Create permissions in Access.";
+const useHint =
+  "People who see the block but do not hold this permission cannot start its workflows. " +
+  "Clearing it adds no use requirement. Create permissions in Access.";
+const audienceHint =
+  "Who the block is offered to. Builders or Installers: only people who may build or install " +
+  "applications see it. The permission gate still applies.";
+
+/**
+ * Who can see the block and use it: the permission that shows it, the permission that lets people
+ * use it and who it is offered to. A refusal shows at its field until the draft changes.
+ */
+const StudioGateField = memo(function StudioGateField({
+  readOnly,
+}: Readonly<{ readOnly: boolean }>) {
+  const context = useContext(StudioAccessFieldContext);
   const gate = context?.access?.gate;
   if (context === null || gate === undefined) return null;
   if (gate.kind === "refused")
@@ -340,37 +517,69 @@ function StudioGateField({ readOnly }: Readonly<{ readOnly: boolean }>) {
         {gate.reason}
       </p>
     );
+  const disabled = context.disabled || readOnly;
   return (
-    <StudioField
-      label="Permission gate"
-      optional
-      error={gate.problem}
-      hint="Show this block only to people who hold its permission. Page and menu permissions still apply. Clearing this gate adds no block permission requirement. Create permissions in Access."
-    >
-      {(control) => (
-        <StudioGateSelect
-          id={control.id}
-          aria-describedby={control["aria-describedby"]}
-          aria-invalid={control["aria-invalid"]}
-          source={gate.source}
-          value={gate.permission}
-          label="Permission gate"
-          disabled={context.disabled || readOnly}
-          onGate={(next) => next.kind === "existing" && gate.onChange(next.key)}
-          onClear={() => gate.onChange(null)}
-          allowCreate={false}
-        />
-      )}
-    </StudioField>
+    <div className="space-y-4">
+      <StudioField label="Permission gate" optional error={gate.problem} hint={gateHint}>
+        {(control) => (
+          <StudioGateSelect
+            id={control.id}
+            aria-describedby={control["aria-describedby"]}
+            aria-invalid={control["aria-invalid"]}
+            source={gate.source}
+            value={gate.permission}
+            label="Permission gate"
+            disabled={disabled}
+            onGate={(next) => next.kind === "existing" && gate.onChange(next.key)}
+            onClear={() => gate.onChange(null)}
+            allowCreate={false}
+          />
+        )}
+      </StudioField>
+      {gate.useOffered ? (
+        <StudioField label="Use permission" optional error={gate.useProblem} hint={useHint}>
+          {(control) => (
+            <StudioGateSelect
+              id={control.id}
+              aria-describedby={control["aria-describedby"]}
+              aria-invalid={control["aria-invalid"]}
+              source={gate.source}
+              value={gate.use}
+              label="Use permission"
+              disabled={disabled}
+              onGate={(next) => next.kind === "existing" && gate.onUse(next.key)}
+              onClear={() => gate.onUse(null)}
+              allowCreate={false}
+              unsetLabel="No use permission"
+            />
+          )}
+        </StudioField>
+      ) : null}
+      <StudioField label="Offered to" error={gate.audienceProblem} hint={audienceHint}>
+        {(control) => (
+          <StudioReferencePicker
+            id={control.id}
+            aria-describedby={control["aria-describedby"]}
+            aria-invalid={control["aria-invalid"]}
+            aria-label="Offered to"
+            value={gate.audience}
+            unset="Everyone"
+            options={audienceChoices}
+            disabled={disabled}
+            onChange={(next) => gate.onAudience(next === "" ? null : (next as ApplicationAudience))}
+          />
+        )}
+      </StudioField>
+    </div>
   );
-}
+});
 
 /** One condition of the block as a row: its title, the rule in words and an Edit button. */
-function StudioConditionField({
+const StudioConditionField = memo(function StudioConditionField({
   slot,
   readOnly,
 }: Readonly<{ slot: StudioReactionSlot; readOnly: boolean }>) {
-  const context = useContext(StudioSettingFieldsContext);
+  const context = useContext(StudioAccessFieldContext);
   const conditions = context?.access?.conditions;
   if (context === null || conditions === undefined) return null;
   const row = conditions.kind === "available" ? conditions.rows.find((r) => r.slot === slot) : null;
@@ -397,7 +606,32 @@ function StudioConditionField({
       />
     </Item>
   );
+});
+
+/**
+ * The grid features of a Records table: the existing feature editors, edited through the
+ * inspector's settings command.
+ */
+function StudioFeaturesField({ readOnly }: Readonly<{ readOnly: boolean }>) {
+  const features = useContext(StudioSettingFieldsContext)?.features;
+  if (features === undefined) return null;
+  return <StudioGridFeatures {...features} disabled={features.disabled || readOnly} />;
 }
+
+/** The size or the order of the block: the inspector's layout value drawn by the Layout fields. */
+const StudioLayoutKind = memo(function StudioLayoutKind({
+  kind,
+  readOnly,
+}: Readonly<{ kind: "layout" | "order"; readOnly: boolean }>) {
+  const context = useContext(StudioLayoutFieldContext);
+  if (context?.layout === undefined) return null;
+  const disabled = context.disabled || readOnly;
+  return kind === "layout" ? (
+    <StudioLayoutField value={context.layout} disabled={disabled} />
+  ) : (
+    <StudioOrderField value={context.layout} disabled={disabled} />
+  );
+});
 
 type CustomFieldRenderer = NonNullable<NonNullable<Overrides["fieldTypes"]>["custom"]>;
 
@@ -414,6 +648,11 @@ const StudioCustomField: CustomFieldRenderer = (props) => {
       return <StudioGateField readOnly={readOnly} />;
     case "condition":
       return <StudioConditionField slot={studio.slot} readOnly={readOnly} />;
+    case "features":
+      return <StudioFeaturesField readOnly={readOnly} />;
+    case "layout":
+    case "order":
+      return <StudioLayoutKind kind={studio.kind} readOnly={readOnly} />;
     case "setting":
       return (
         <StudioSettingField
