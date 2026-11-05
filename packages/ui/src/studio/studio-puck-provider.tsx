@@ -35,7 +35,6 @@ import {
   createContext,
   useCallback,
   useContext,
-  useDeferredValue,
   useEffect,
   useMemo,
   useLayoutEffect,
@@ -86,6 +85,7 @@ import { studioPuckStyle } from "./studio-puck-style";
 import { studioPuckWords } from "./studio-puck-words";
 import type { StudioCanvasRecordsReader } from "./use-studio-canvas-records";
 import { useStudioCanvasChannelValue } from "./use-studio-canvas-channel";
+import { useSettledValue } from "./use-settled-value";
 import { createSlotLockStore, SlotLockProvider, type SlotLockStore } from "../slot-lock";
 
 export { studioScreens, useStudioScreen } from "./studio-canvas-screen";
@@ -356,7 +356,7 @@ export function StudioPuckProvider({
   // added a moment ago already says what it cannot do, and a reason clears as soon as what caused
   // it is gone. The read is cheap (it does not grow faster than the page) and is made at lower
   // priority than typing: the deferred draft is the one a keystroke has not just replaced.
-  const referenceSource = useDeferredValue(input.source);
+  const referenceSource = useSettledValue(input.source);
   const readReferences = useMemo(
     () => studioCanvasReferences(referenceSource, model.catalogue),
     [referenceSource, model.catalogue],

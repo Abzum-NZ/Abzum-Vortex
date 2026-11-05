@@ -2,7 +2,7 @@
 import { Alert, AlertDescription } from "@vortex/ui/components/alert";
 import { useIntentPreload } from "../_lib/use-intent-preload";
 import dynamic from "next/dynamic";
-import { useCallback, useDeferredValue, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useMemo, useState, type ReactNode } from "react";
 import {
   describeFailure,
   checkFlowFormula,
@@ -58,6 +58,7 @@ import {
   applyStudioRowActionChange,
   type StudioFlowStepPickerContext,
   type StudioInspectorAction,
+  useSettledValue,
 } from "@vortex/ui/studio";
 import type { StudioDraft, StudioDraftStep } from "./use-studio-draft";
 import { deferredStudioPart } from "./studio-deferred-part";
@@ -242,7 +243,7 @@ export function useStudioFlowsTab({
   );
   // The choices are read only by the Flows tab and the Behaviour section: a flow being edited reads
   // them at once, everything else after the keystroke has been drawn.
-  const choicesSource = useDeferredValue(source);
+  const choicesSource = useSettledValue(source);
   const draftChoices = useMemo(
     () =>
       flowSelection === null

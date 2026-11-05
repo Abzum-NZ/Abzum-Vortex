@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useStable } from "./use-stable";
 import {
   describeFailure,
@@ -16,7 +16,7 @@ import {
   type StudioNavigationApplication,
   type StudioNavigationApplicationsStatus,
 } from "@vortex/platform/schema";
-import { StudioFieldProblemsProvider } from "@vortex/ui/studio";
+import { StudioFieldProblemsProvider, useSettledValue } from "@vortex/ui/studio";
 import { studioOutlineLabels } from "../_lib/studio-labels";
 import { studioPlaceSelection, studioTabOfSelection } from "../_lib/studio-places";
 import { describeStudioCompileFailure } from "../_lib/studio-compile-failure";
@@ -181,7 +181,7 @@ function ExistingApplicationWorkspace(props: ExistingProps) {
     () => createStudioPlacementDescriber(catalogue, source),
     [catalogue, source],
   );
-  const outlineSource = useDeferredValue(source);
+  const outlineSource = useSettledValue(source);
   const outline = useMemo(
     () =>
       projectStudioSemanticOutline(

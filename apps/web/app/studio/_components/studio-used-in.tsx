@@ -3,7 +3,6 @@ import { Item, ItemContent, ItemGroup } from "@vortex/ui/components/item";
 import {
   createContext,
   useContext,
-  useDeferredValue,
   useMemo,
   useState,
   type ReactNode,
@@ -16,7 +15,7 @@ import {
   type ApplicationUsePlace,
   type ApplicationUseTarget,
 } from "@vortex/platform/schema";
-import { StudioInspectorGroup } from "@vortex/ui/studio";
+import { StudioInspectorGroup, useSettledValue } from "@vortex/ui/studio";
 import { Alert, AlertDescription, AlertTitle } from "@vortex/ui/components/alert";
 import { Button } from "@vortex/ui/components/button";
 import { Fragment } from "react";
@@ -139,7 +138,7 @@ export function StudioUsedIn({
   onBeforeOpen?: () => void;
 }>) {
   // A read of the whole draft: drawn after the keystroke that changed it, like the Outline.
-  const shown = useDeferredValue(source);
+  const shown = useSettledValue(source);
   const places = useMemo(() => applicationUses(shown, target), [shown, target]);
   return (
     <StudioInspectorGroup
