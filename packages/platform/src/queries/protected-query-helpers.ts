@@ -2,13 +2,13 @@ import "server-only";
 
 import type { z, ZodError } from "zod";
 import type { DatabaseRow, RequestDatabaseTransaction } from "../db/request-transaction";
-import type {
-  ProtectedQueryRefusalReasonCode,
-  ProtectedQueryResult,
-  ProtectedQueryCommand,
-  ProtectedQuerySummaryCommand,
+import {
+  isInstallationRequired,
+  type ProtectedQueryRefusalReasonCode,
+  type ProtectedQueryResult,
+  type ProtectedQueryCommand,
+  type ProtectedQuerySummaryCommand,
 } from "./protected-query-contracts";
-import { isInstallationRequired } from "./protected-query-contracts";
 import { inputsReadSchema } from "./protected-query-read-schemas";
 import {
   parseQueryInputDeclarations,
