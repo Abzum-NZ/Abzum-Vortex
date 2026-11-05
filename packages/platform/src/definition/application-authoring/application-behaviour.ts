@@ -200,10 +200,10 @@ export const applyStudioUnbind = (
   candidate.body.flow_bindings = candidate.body.flow_bindings.filter(
     (binding) => binding.id !== bindingId,
   );
-  const kept = studioWorkflowRemovalRefusal(source, candidate);
-  if (kept !== undefined) {
-    logCompositionRefusal("unbind", kept);
-    return { kind: "refused", reason: kept };
+  const refusal = studioWorkflowRemovalRefusal(source, candidate);
+  if (refusal !== undefined) {
+    logCompositionRefusal("unbind", refusal);
+    return { kind: "refused", reason: refusal };
   }
   const result = checked(candidate);
   return result.kind === "applied" && replaced !== undefined

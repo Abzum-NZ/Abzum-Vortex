@@ -588,7 +588,8 @@ export function ApplicationDraftAgentTools({
                 "The workspace changed during review. Nothing was applied. Call read_application_draft.",
             };
           // Pages and layouts replaced here have the refusals of the commands that make the same
-          // changes: the gate, a published page, where a block may leave, a form kept whole.
+          // changes: the gate, a published page, where a block may leave, a form kept whole, the
+          // workflow a use permission needs.
           const checked = applyStudioAuthoredSource(contextNow(), reviewed.source);
           if (checked.kind === "refused")
             return { outcome: "refused", message: `${checked.reason} Nothing was applied.` };
