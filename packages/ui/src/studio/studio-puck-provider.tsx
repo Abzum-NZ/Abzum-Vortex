@@ -369,8 +369,8 @@ export function StudioPuckProvider({
   const references = heldReferences.current;
   // The reasons are Studio's, not Puck's per-block permissions: Puck would resolve every block's
   // permissions through its store (a copy of two maps of every block per block, so work that grows
-  // with the square of the page). The bar and the removal guard read the reasons from the canvas
-  // channel instead.
+  // with the square of the page). The bar reads the reasons from the canvas channel instead, and
+  // the removal guard makes them again from the live draft.
   const config = model.config;
   const [frameDocument, setFrameDocument] = useState<Document | null>(null);
   const [refused, setRefused] = useState<Readonly<{ area: string; message: string }> | null>(null);
