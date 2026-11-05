@@ -405,8 +405,10 @@ type ReadingResolution = Readonly<{
 const readingResolutions = new WeakMap<object, Map<string, ReadingResolution>>();
 
 /**
- * The block in a copy of a history snapshot, found by the region's place and the path of block
- * names to it, so the copy's items are not read again to find what the snapshot already says.
+ * The block's place for a command that edits a copy of a history snapshot: the region that
+ * receives the committed slot is the copy's, found by its place in the snapshot, and the block and
+ * its slot are the snapshot's own objects. The command copies on write from them (`workingCopy`),
+ * so the blocks it did not touch keep their identity and are not read or judged again.
  */
 const targetInCopy = (
   snapshot: ApplicationSourceDocument,
@@ -415,21 +417,7 @@ const targetInCopy = (
 ): Target | undefined => {
   const index = regions(snapshot).findIndex((each) => each.zone.items === target.region.zone.items);
   const region = index < 0 ? undefined : regions(copy)[index];
-  if (region === undefined) return undefined;
-  let zone: Zone = region.zone;
-  for (const step of target.steps) {
-    const holder = zone.items.find((item) => item.props.id === step.parentAlias);
-    const children = holder?.props[step.slotKey];
-    if (holder === undefined || !Array.isArray(children)) return undefined;
-    zone = {
-      items: children as SourceItem[],
-      order: holder.props.vortex.slot_orders?.[step.slotKey],
-    };
-  }
-  const item = zone.items.find((each) => each.props.id === target.item.props.id);
-  return item === undefined
-    ? undefined
-    : { region, zone, item, steps: target.steps, responsiveOrder: target.responsiveOrder };
+  return region === undefined ? undefined : { ...target, region: { ...region, zone: target.region.zone } };
 };
 
 const resolveBlock = (
