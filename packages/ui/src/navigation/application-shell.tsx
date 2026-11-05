@@ -7,6 +7,7 @@ import {
   useRef,
   useState,
   type CSSProperties,
+  type KeyboardEvent,
   type MouseEvent,
   type ReactElement,
   type ReactNode,
@@ -26,12 +27,11 @@ import {
   DropdownMenuItem,
   DropdownMenuGroup,
   DropdownMenuLabel,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "../components/dropdown-menu";
 import { Button } from "../components/button";
+import { Popover, PopoverContent, PopoverTrigger } from "../components/popover";
 import { SidebarProvider, SidebarTrigger } from "../components/sidebar";
 import { FlowSurfaceContext } from "../flow-runtime/flow-surface-context";
 import { Icon } from "../icons/icon";
@@ -256,6 +256,36 @@ function OrganizationSwitcher({
   );
 }
 
+const SWITCHER_NOTICE =
+  "px-[var(--vortex-space-md)] py-[var(--vortex-space-sm)] text-sm text-muted-foreground";
+
+/**
+ * Down, Up, Home and End move between the switcher's applications (the disclosure pattern keeps
+ * them; Tab still visits each one).
+ */
+const moveBetweenApplications = (event: KeyboardEvent<HTMLUListElement>) => {
+  if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+  const buttons = [...event.currentTarget.querySelectorAll<HTMLButtonElement>("button:enabled")];
+  const at = buttons.indexOf(event.target as HTMLButtonElement);
+  const next =
+    event.key === "ArrowDown"
+      ? buttons[Math.min(at + 1, buttons.length - 1)]
+      : event.key === "ArrowUp"
+        ? buttons[Math.max(at - 1, 0)]
+        : event.key === "Home"
+          ? buttons[0]
+          : event.key === "End"
+            ? buttons.at(-1)
+            : undefined;
+  if (next === undefined || at === -1) return;
+  event.preventDefault();
+  next.focus();
+};
+
+/**
+ * The application switcher: a popover with a search above the list of applications. It is not a
+ * menu because a menu may hold only items, so its search field and results have no place in one.
+ */
 function ApplicationSwitcher({
   shellName,
   runtime,
@@ -264,6 +294,7 @@ function ApplicationSwitcher({
   const actions = useApplicationAccountActions();
   const navigator = useNavigator();
   const source = useContext(ApplicationSwitcherContext);
+  const [open, setOpen] = useState(false);
   const [switcher, setSwitcher] = useState<ApplicationSwitcherData>();
   const [searchExpression, setSearchExpression] = useState("");
   const [search, setSearch] = useState<LauncherSearchResult>({ kind: "available", groups: [] });
@@ -313,11 +344,13 @@ function ApplicationSwitcher({
     setSwitcher(undefined);
   };
   return (
-    <DropdownMenu
-      onOpenChange={(open) => {
-        if (open) {
+    <Popover
+      open={open}
+      onOpenChange={(next) => {
+        setOpen(next);
+        if (next) {
           // The first open consumes the intent read, including one still in flight. Later opens
-          // read again, so closing the menu never retains its application list for another open.
+          // read again, so closing the switcher never keeps its application list for another open.
           if (intentRead.current === undefined) void read();
           intentRead.current = undefined;
         } else {
@@ -330,7 +363,7 @@ function ApplicationSwitcher({
         }
       }}
     >
-      <DropdownMenuTrigger
+      <PopoverTrigger
         disabled={source === undefined || actions === null}
         aria-label={`Application: ${applicationName}`}
         onPointerEnter={readOnIntent}
@@ -342,20 +375,15 @@ function ApplicationSwitcher({
         }
       >
         <SwitcherButton icon="grid" label={applicationName} />
-      </DropdownMenuTrigger>
-      <DropdownMenuContent
+      </PopoverTrigger>
+      <PopoverContent
         align="end"
-        className="w-[min(28rem,calc(100vw-2rem))] min-w-56"
+        className="flex w-[min(28rem,calc(100vw-2rem))] min-w-56 flex-col gap-[var(--vortex-space-xs)]"
         aria-busy={switcher === undefined}
+        aria-label="Application switcher"
       >
         {source?.search === undefined ? null : (
-          <div
-            className="w-full p-[var(--vortex-space-sm)]"
-            // The search field answers its own keys; Escape still reaches the menu, which closes on it.
-            onKeyDown={(event) => {
-              if (event.key !== "Escape") event.stopPropagation();
-            }}
-          >
+          <div className="w-full">
             <ApplicationSearchControl
               placementId="application-switcher-search"
               settings={{
@@ -437,64 +465,61 @@ function ApplicationSwitcher({
             />
           </div>
         )}
-        <DropdownMenuGroup>
-          <DropdownMenuLabel>Applications</DropdownMenuLabel>
-        </DropdownMenuGroup>
-        <DropdownMenuSeparator />
         {switcher === undefined ? (
-          <div
-            role="status"
-            className="px-[var(--vortex-space-md)] py-[var(--vortex-space-sm)] text-sm text-muted-foreground"
-          >
+          <p role="status" className={SWITCHER_NOTICE}>
             Loading applications…
-          </div>
+          </p>
         ) : switcher.state !== "available" ? (
           <>
-            <div
-              role="status"
-              className="px-[var(--vortex-space-md)] py-[var(--vortex-space-sm)] text-sm text-muted-foreground"
-            >
+            <p role="status" className={SWITCHER_NOTICE}>
               {switcher.state === "temporarily_unavailable"
                 ? "Applications temporarily unavailable"
                 : "Applications unavailable"}
-            </div>
-            <DropdownMenuItem closeOnClick={false} onClick={() => void read()}>
+            </p>
+            <Button variant="ghost" size="sm" onClick={() => void read()}>
               Retry
-            </DropdownMenuItem>
+            </Button>
           </>
         ) : switcher.applications.length === 0 ? (
-          <div
-            role="status"
-            className="px-[var(--vortex-space-md)] py-[var(--vortex-space-sm)] text-sm text-muted-foreground"
-          >
+          <p role="status" className={SWITCHER_NOTICE}>
             No other applications
-          </div>
+          </p>
         ) : (
-          <DropdownMenuRadioGroup
-            value={
-              switcher.applications.find((application) => application.name === applicationName)
-                ?.key ?? ""
-            }
+          <ul
+            aria-label="Applications"
+            className="m-0 flex list-none flex-col gap-[var(--vortex-space-xs)] p-0"
+            onKeyDown={moveBetweenApplications}
           >
-            {switcher.applications.map((application) => (
-              <DropdownMenuRadioItem
-                key={application.key}
-                value={application.key}
-                onClick={() => navigator.navigate(application.href)}
-                disabled={actions === null}
-              >
-                <Icon
-                  name={resolveVortexIconName(application.icon ?? "") ?? "circle"}
-                  aria-hidden="true"
-                  data-icon="inline-start"
-                />
-                {application.name}
-              </DropdownMenuRadioItem>
-            ))}
-          </DropdownMenuRadioGroup>
+            {switcher.applications.map((application) => {
+              const current = application.name === applicationName;
+              return (
+                <li key={application.key}>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="w-full justify-start"
+                    aria-current={current ? "true" : undefined}
+                    disabled={actions === null}
+                    onClick={() => {
+                      setOpen(false);
+                      navigator.navigate(application.href);
+                    }}
+                  >
+                    <Icon
+                      name={resolveVortexIconName(application.icon ?? "") ?? "circle"}
+                      aria-hidden="true"
+                      data-icon="inline-start"
+                    />
+                    <span className="min-w-0 flex-1 truncate text-left">{application.name}</span>
+                    {current ? <Icon name="check" aria-hidden="true" /> : null}
+                  </Button>
+                </li>
+              );
+            })}
+          </ul>
         )}
-      </DropdownMenuContent>
-    </DropdownMenu>
+      </PopoverContent>
+    </Popover>
   );
 }
 
