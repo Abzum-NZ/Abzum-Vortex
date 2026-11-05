@@ -24,7 +24,9 @@ import {
   regionAfter,
   experiencePage,
   publishedPage,
+  regions,
 } from "./application-composition-regions";
+import { sourceItemTree } from "../application-composition/source-composition";
 import { studioFormChangeRefusal, studioFormShapeRefusal } from "./application-composition-forms";
 import { studioPlacementReferenceSentence } from "./composition-references";
 import type { StudioSemanticSelection } from "./semantic-selection";
@@ -76,6 +78,32 @@ const startsWorkflow = (source: ApplicationSourceDocument, alias: string) =>
 const NO_WORKFLOW =
   "This block starts no workflow, so a use permission would only show it unavailable. " +
   "Add a workflow to it first.";
+
+/**
+ * Why an edit may not take the last workflow from a block that keeps a use permission, or
+ * undefined: the use permission would then only show it unavailable, the state `NO_WORKFLOW`
+ * refuses.
+ */
+export const studioWorkflowRemovalRefusal = (
+  before: ApplicationSourceDocument,
+  after: ApplicationSourceDocument,
+): string | undefined => {
+  const bound = new Set(after.body.flow_bindings.map((binding) => binding.control));
+  const unbound = new Set(
+    before.body.flow_bindings
+      .map((binding) => binding.control)
+      .filter((alias) => !bound.has(alias)),
+  );
+  if (unbound.size === 0) return undefined;
+  const gated = regions(after).some((region) =>
+    sourceItemTree(region.zone.items).some(
+      (item) => unbound.has(item.props.id) && item.props.vortex.use_permission !== undefined,
+    ),
+  );
+  return gated
+    ? "This block has a use permission, so it keeps a workflow. Clear its use permission first."
+    : undefined;
+};
 
 export const describeStudioCompositionGate = (
   context: StudioCompositionContext,
