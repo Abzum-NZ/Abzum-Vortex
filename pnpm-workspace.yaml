@@ -45,11 +45,11 @@ catalog:
   re2js: 2.9.1
   "@xyflow/react": 12.12.0
   "@tanstack/react-table": 9.3.1
-  "@tanstack/react-virtual": 3.14.24
+  "@tanstack/react-virtual": 3.14.25
   file-type: 22.3.0
   exceljs: 4.4.0
   "@noble/hashes": 2.4.0
-  react-resizable-panels: 4.16.0
+  react-resizable-panels: 4.16.1
   cmdk: 1.1.1
 
 catalogMode: strict
