@@ -1,9 +1,6 @@
 import { typedSourceSettingValue } from "@vortex/platform/schema";
 import { describeStudioCompositionSettings } from "./application-composition-commands";
-import type {
-  StudioDraftChange,
-  StudioCompositionContext,
-} from "./application-composition-model";
+import type { StudioDraftChange, StudioCompositionContext } from "./application-composition-model";
 import { followFieldLabels } from "./follow-field-labels";
 import {
   settleStudioSetting,
