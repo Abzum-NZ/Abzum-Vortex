@@ -291,6 +291,16 @@ export const addPlaces = (
             const parentAlias = item.props.id;
             const childSteps = [...steps, { parentAlias, slotKey }];
             const outlet = outlets.get(`${parentAlias}|${slotKey}`);
+            const label = [
+              describePlacement?.({ block: item.props.vortex.block, settings: settingsOf(item) }) ??
+                `${release.name} ${ordinal}`,
+              ": ",
+              declaration.label,
+              declaration.repeats === undefined
+                ? ""
+                : ` (${repeatingEntryName(item, declaration, slotKey)})`,
+              outlet === undefined ? "" : ` (page content: ${outlet})`,
+            ].join("");
             places.push({
               region,
               steps: childSteps,
@@ -299,7 +309,7 @@ export const addPlaces = (
                 id: `${area}|${parentAlias}|${slotKey}`,
                 area,
                 destination: { kind: "child", parentAlias, slotKey },
-                label: `${describePlacement?.({ block: item.props.vortex.block, settings: settingsOf(item) }) ?? `${release.name} ${ordinal}`}: ${declaration.label}${declaration.repeats === undefined ? "" : ` (${repeatingEntryName(item, declaration, slotKey)})`}${outlet === undefined ? "" : ` (page content: ${outlet})`}`,
+                label,
                 depth: hostLevels + childSteps.length,
                 placed,
                 choices:

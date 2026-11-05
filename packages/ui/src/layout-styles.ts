@@ -356,9 +356,11 @@ export const LAYOUT_ONLY_STYLES_CSS = `
 [data-vortex-studio-canvas][data-vortex-dragging] .vortex-puck-slot--optional:empty::after {
   content: var(--vortex-slot-label);
 }
-/* The blocks stacked at the top level of a layout on the canvas are spaced by the page root's gap, as in
-   the running frame: the top level is Puck's default zone, so the gap is each following block's own
-   top margin (the blocks are Studio's own elements). */
+/* The blocks stacked at the top level of a layout on the canvas are spaced by the page root's gap,
+   as in the running frame: the top level is Puck's default zone, so the gap is each following
+   block's own top margin (the blocks are Studio's own elements). The first star is Puck's default
+   zone; if an upgrade nests it deeper the gap is lost: walks/B5d-review-2/layout-gap-compare.cjs
+   (equal to the running frame) catches it. */
 [data-vortex-layout-root] > * > [data-vortex-layout-wrapper] + [data-vortex-layout-wrapper] {
   margin-top: var(--vortex-layout-gap);
 }

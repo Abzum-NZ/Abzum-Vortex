@@ -138,6 +138,8 @@ type SettingKind = Readonly<{
   kind: "setting";
   property: BlockPropertySchemaContract;
   properties: readonly BlockPropertySchemaContract[];
+  /** The slot family this list's entries are named for, when each entry owns a slot (a tab). */
+  identity?: Readonly<{ family: string; property: string }> | undefined;
 }>;
 
 /** What a Studio field carries: the setting and the control that edits it, or the block's data choice. */
@@ -158,15 +160,31 @@ const studioCustomField = (label: string, key: string, studio: StudioFieldKind):
 
 /** The field of a declared setting. */
 export const studioSettingField = (
-  release: Readonly<{ blockId: string; releaseVersion: number | string }>,
+  release: Readonly<{
+    blockId: string;
+    releaseVersion: number | string;
+    slots: readonly Readonly<{
+      key: string;
+      repeats?: Readonly<{ items: string; identity: string }> | undefined;
+    }>[];
+  }>,
   property: BlockPropertySchemaContract,
   properties: readonly BlockPropertySchemaContract[],
-): Field =>
-  studioCustomField(
+): Field => {
+  const repeating = release.slots.find((slot) => slot.repeats?.items === property.key);
+  return studioCustomField(
     property.label,
     `${release.blockId}@${release.releaseVersion}:${property.key}`,
-    { kind: "setting", property, properties },
+    {
+      kind: "setting",
+      property,
+      properties,
+      ...(repeating?.repeats === undefined
+        ? {}
+        : { identity: { family: repeating.key, property: repeating.repeats.identity } }),
+    },
   );
+};
 
 /** The field that chooses the data a block reads. */
 export const studioQueryField: Field = studioCustomField("Data", studioQueryFieldName, {
@@ -210,7 +228,7 @@ function StudioSettingField({
   setting,
   field,
 }: Readonly<{ setting: SettingKind; field: SettingFieldRenderProps }>) {
-  const { property, properties } = setting;
+  const { property, properties, identity } = setting;
   const context = useContext(StudioSettingFieldsContext);
   const getPuck = useGetPuck();
   // The selected block's values, subscribed to: the label note and the total measure depend on the
@@ -276,6 +294,7 @@ function StudioSettingField({
             descriptionId={control["aria-describedby"]}
             invalid={control["aria-invalid"] === true}
             property={studioTotalMeasureProperty(property, properties, values, choices.fields)}
+            identity={identity}
             value={shown}
             onChange={change}
             choices={choices}

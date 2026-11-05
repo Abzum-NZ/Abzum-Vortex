@@ -32,10 +32,11 @@ export const DeferredDrawingProvider = DeferredDrawingContext.Provider;
 const WAITING_SLOT: CSSProperties = { minHeight: "10rem" };
 
 /**
- * A block's slot on the editor's canvas (`holder` is the block). Puck draws and registers every block of a slot it is given
- * to draw, which for a page of hundreds of blocks is most of the time it takes to open: a slot is
- * drawn once it comes near what the canvas shows (or holds the selected block), and then stays
- * drawn. A page that is not being edited draws every slot at once.
+ * A block's slot on the editor's canvas (`holder` is the block). Puck draws and registers every
+ * block of a slot it is given to draw, which for a page of hundreds of blocks is most of the time
+ * it takes to open: a slot is drawn once it comes near what the canvas shows (or holds the selected
+ * block), and then stays drawn. A live page (no deferral) draws every slot at once; while grids are
+ * arranged only the slots of blocks that hold a grid are drawn at once.
  */
 export function DeferredSlot({
   holder,

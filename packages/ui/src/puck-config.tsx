@@ -234,7 +234,10 @@ export type SelectedPlacementStore = Readonly<{
   holds: (placementId: string) => boolean;
   /** The key of the slot of the placement that holds the selected one, or undefined. */
   slotOf: (placementId: string) => string | undefined;
-  /** The selected placement and the placements that hold it (nearest first), each with the slot that holds it. */
+  /**
+   * The selected placement and the placements that hold it (nearest first), each with the slot
+   * that holds it.
+   */
   set: (placementId: string | undefined, holders?: readonly SelectionHolder[]) => void;
   subscribe: (listener: () => void) => () => void;
 }>;
@@ -839,9 +842,9 @@ export function withRepeatingSlots(
     const declarations = release.slots.filter((slot) => slot.repeats !== undefined);
     // Puck lists a block's slots in the reverse of its fields' order (it puts each slot field
     // first in turn), so the keys are declared last first, and the Outline shows the tabs in the
-    // order the page holds them (with blocks that hold the same keys in different orders, the first
-    // block's order). If a Puck upgrade lists the slots in field order, drop the reverse: the "listed
-    // in the order" check of walks/STUDIO-CANVAS-TABS/tabs.cjs catches it.
+    // order the page holds them (with blocks that hold the same keys in different orders, the
+    // first block's order). If a Puck upgrade lists the slots in field order, drop the reverse:
+    // the "listed in the order" check of walks/STUDIO-CANVAS-TABS/tabs.cjs catches it.
     for (const key of Object.keys(fields))
       if (declarations.some((slot) => key.startsWith(slot.key + "_"))) delete fields[key];
     for (const key of [...keys].reverse()) {

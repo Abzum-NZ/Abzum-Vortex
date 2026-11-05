@@ -524,9 +524,11 @@ export function StudioPuckProvider({
       });
       return;
     }
-    if (outcome.kind === "refused" || outcome.kind === "stale" || outcome.kind === "unsupported")
+    // A refusal is logged once, by the command that refused it.
+    if (outcome.kind === "stale" || outcome.kind === "unsupported")
       console.info(`[studio] a canvas change was not applied: ${outcome.kind}`);
-    else console.error(`[studio] the canvas change failed: ${outcome.kind}`);
+    else if (outcome.kind !== "refused")
+      console.error(`[studio] the canvas change failed: ${outcome.kind}`);
     setResync((generation) => generation + 1);
     setRefused({
       area: shown.area,
@@ -727,7 +729,8 @@ export function StudioPuckProvider({
                   iframe={IFRAME}
                   viewports={studioViewports}
                   ui={opened.current.ui}
-                  // Puck's own wrapper fills the workspace, so the canvas has the height of its well.
+                  // Puck's own wrapper fills the workspace, so the canvas has the height of its
+                  // well.
                   height="100%"
                   overrides={studioCanvasOverrides}
                   metadata={metadata}

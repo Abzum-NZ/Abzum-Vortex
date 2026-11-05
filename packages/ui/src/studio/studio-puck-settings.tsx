@@ -211,7 +211,7 @@ export type StudioSettingRelease = (
   props: Readonly<Record<string, unknown>>,
 ) => PlatformBlockRelease | undefined;
 
-const hidden = (fields: Readonly<Record<string, Field>>): Record<string, Field> =>
+export const hidden = (fields: Readonly<Record<string, Field>>): Record<string, Field> =>
   Object.fromEntries(
     Object.entries(fields).map(([key, field]) => [key, { ...field, visible: false } as Field]),
   );

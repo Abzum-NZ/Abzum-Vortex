@@ -21,7 +21,7 @@ import {
   type ResponsivePlacement,
 } from "@vortex/platform/schema";
 import { studioPaletteChoices } from "./contextual-palette";
-import { studioVortexField, withSettingFields } from "./studio-puck-settings";
+import { hidden, studioVortexField, withSettingFields } from "./studio-puck-settings";
 import type { FieldInputControlReleaseMap, PlatformComponentRegistry } from "../registry";
 import { useStudioCanvasGridEvents } from "./studio-canvas-grid";
 import {
@@ -472,14 +472,34 @@ function CanvasBlock({
   );
 }
 
-/** By base config and catalogue, then by root slots: the latest config built with the repeating keys then held. */
+/**
+ * By base config and catalogue, then by root slots: the canvas built once (`shell`, drawn from the
+ * base config alone) and the latest config made from it with the repeating keys then held.
+ */
 const canvasConfigs = new WeakMap<
   Config,
   WeakMap<
     ImmutablePlatformBlockCatalogue,
-    Map<string, Readonly<{ repeatingKey: string; config: Config }>>
+    Map<string, Readonly<{ shell: Config; repeatingKey: string; config: Config }>>
   >
 >();
+
+/** The shell with a slot field for each repeating key the page holds, hidden like every prop. */
+const withHeldRepeatingSlots = (
+  registry: PlatformComponentRegistry,
+  shell: Config,
+  repeating: ReadonlyMap<string, readonly string[]>,
+): Config => {
+  const config = withRepeatingSlots(registry, shell, repeating);
+  if (config === shell) return shell;
+  const components = { ...config.components } as Record<string, ComponentConfig>;
+  for (const rendererKey of repeating.keys()) {
+    const component = components[rendererKey];
+    if (component?.fields !== undefined)
+      components[rendererKey] = { ...component, fields: hidden(component.fields as never) };
+  }
+  return { ...config, components } as Config;
+};
 
 /**
  * The canvas config: the one config's components and root, each component drawing its stored
@@ -502,12 +522,20 @@ export const studioCanvasConfig = (
   /** The keys of the repeating slots the page holds (a tab is `tab_<key>`), by renderer key. */
   repeating: ReadonlyMap<string, readonly string[]>,
 ): Config => {
-  const slotKeys = slots.map(([key]) => key);
   const slotsKey = JSON.stringify(slots);
   const repeatingKey = JSON.stringify([...repeating]);
-  const cached = canvasConfigs.get(baseConfig)?.get(catalogue)?.get(slotsKey);
-  if (cached?.repeatingKey === repeatingKey) return cached.config;
-  const config = withRepeatingSlots(registry, baseConfig, repeating);
+  const bySlotsHeld = canvasConfigs.get(baseConfig)?.get(catalogue);
+  const cached = bySlotsHeld?.get(slotsKey);
+  if (cached !== undefined) {
+    if (cached.repeatingKey === repeatingKey) return cached.config;
+    // A change of the keys replaces only the static fields of the renderers that hold repeating
+    // slots: every render function, field renderer and the root keep their identity, so nothing
+    // remounts.
+    const config = withHeldRepeatingSlots(registry, cached.shell, repeating);
+    bySlotsHeld?.set(slotsKey, { shell: cached.shell, repeatingKey, config });
+    return config;
+  }
+  const slotKeys = slots.map(([key]) => key);
   const releaseByKey = releasesByRendererKey(registry);
   const choices = studioPaletteChoices(catalogue, catalogue.releases);
   const notCreatable = new Set(
@@ -526,7 +554,7 @@ export const studioCanvasConfig = (
   );
   const components = Object.fromEntries(
     Object.entries(
-      config.components as Record<string, ComponentConfig<Record<string, unknown>>>,
+      baseConfig.components as Record<string, ComponentConfig<Record<string, unknown>>>,
     ).map(([type, component]) => [
       type,
       {
@@ -570,7 +598,7 @@ export const studioCanvasConfig = (
     ]),
   );
   const canvas = {
-    ...config,
+    ...baseConfig,
     components,
     // The application frame is the canvas root: it draws the theme, appearance and shell around the
     // page. Puck's data holds only what the stored page holds, so the root has no props of its own
@@ -593,9 +621,10 @@ export const studioCanvasConfig = (
   const byCatalogue = canvasConfigs.get(baseConfig) ?? new WeakMap();
   const bySlots =
     byCatalogue.get(catalogue) ??
-    new Map<string, Readonly<{ repeatingKey: string; config: Config }>>();
-  bySlots.set(slotsKey, { repeatingKey, config: canvas });
+    new Map<string, Readonly<{ shell: Config; repeatingKey: string; config: Config }>>();
+  const config = withHeldRepeatingSlots(registry, canvas, repeating);
+  bySlots.set(slotsKey, { shell: canvas, repeatingKey, config });
   byCatalogue.set(catalogue, bySlots);
   canvasConfigs.set(baseConfig, byCatalogue);
-  return canvas;
+  return config;
 };

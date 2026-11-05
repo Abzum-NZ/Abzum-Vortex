@@ -100,8 +100,9 @@ type RootSlot = (props?: { className?: string; style?: CSSProperties }) => React
 const OUTLET_STYLE: CSSProperties = { gap: "inherit" };
 const SLOT_STYLE: CSSProperties = { display: "flex", flexDirection: "column", gap: "inherit" };
 /**
- * A layout's top level is Puck's default zone, which takes no style from Studio: the blocks stacked
- * in it are spaced by the page root's gap, as the running frame spaces them (see the layout styles).
+ * A layout's top level is Puck's default zone, which takes no style from Studio: the blocks
+ * stacked in it are spaced by the page root's gap, as the running frame spaces them (see the
+ * layout styles).
  */
 const LAYOUT_OUTLET_STYLE: CSSProperties = {
   ...OUTLET_STYLE,

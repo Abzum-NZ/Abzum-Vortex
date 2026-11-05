@@ -476,11 +476,13 @@ const applySettings = (
     else vortex.query = query;
     item.props.vortex = vortex;
     const slotProblem = syncRepeatableSlots(item, release, before, settings);
-    if (slotProblem !== undefined)
+    if (slotProblem !== undefined) {
+      console.info("[studio] composition settings refused", { reason: slotProblem });
       return {
         kind: "refused",
         reason: `${release.name} can't take these settings. ${slotProblem}.`,
       };
+    }
     commitWorking(current.catalogue, target.region, working);
     if (sideSheet) ensureStudioRecordSheet(current.catalogue, source, alias);
     validateStoredApplicationOutlets(current.catalogue, source);

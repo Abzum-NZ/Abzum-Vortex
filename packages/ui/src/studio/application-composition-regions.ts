@@ -720,8 +720,9 @@ export const settingsOf = (item: SourceItem): Record<string, unknown> =>
   );
 
 /**
- * The keys an item stores the slot of one declaration under: the declared key, or a `family_<identity>`
- * key for each entry of a repeating declaration the item holds (a tab), in the item's order.
+ * The keys an item stores the slot of one declaration under: the declared key, or a
+ * `family_<identity>` key for each entry of a repeating declaration the item holds (a tab), in the
+ * item's order.
  */
 export const declarationSlotKeys = (
   declaration: Readonly<{ key: string; repeats?: unknown }>,
