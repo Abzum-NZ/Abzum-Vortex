@@ -525,7 +525,12 @@ export const sameDestination = (
       left.parentAlias === right.parentAlias &&
       left.slotKey === right.slotKey;
 
-/** A working copy of one region's stored slot; commands edit it and commit it as a whole. */
+/**
+ * A working copy of one region's stored slot; commands edit it and commit it as a whole. It copies
+ * on write along the path a command takes: the slot's list, each block on the path to the block it
+ * edits, and that block's own subtree. Every other block stays the snapshot's own object, so the
+ * judging that follows reads only what the command changed.
+ */
 type Working = { items: SourceItem[]; order: SourceSlotOrder | undefined };
 /** One slot of a working copy: its items, its declared order and how to write both back. */
 type ZoneHandle = Readonly<{
@@ -534,8 +539,25 @@ type ZoneHandle = Readonly<{
   set: (items: SourceItem[], order: SourceSlotOrder | undefined) => void;
 }>;
 
-export const workingCopy = (region: Region): Working =>
-  structuredClone({ items: region.zone.items, order: region.zone.order });
+/** What a working copy has already copied: those objects are its own and may be edited. */
+const copied = new WeakMap<Working, WeakSet<object>>();
+
+export const workingCopy = (region: Region): Working => {
+  const working: Working = { items: [...region.zone.items], order: region.zone.order };
+  copied.set(working, new WeakSet([working.items]));
+  return working;
+};
+
+/** The block at `index` of an own list, as a copy of its own that a command may set properties of. */
+const ownBlockAt = (working: Working, items: SourceItem[], index: number): SourceItem => {
+  const item = items[index]!;
+  const own = copied.get(working)!;
+  if (own.has(item)) return item;
+  const next = { ...item, props: { ...item.props, vortex: { ...item.props.vortex } } } as SourceItem;
+  own.add(next);
+  items[index] = next;
+  return next;
+};
 
 /** The slot a path of steps reaches in a working copy; its order lives on its parent block. */
 export const zoneHandle = (working: Working, steps: readonly SlotStep[]): ZoneHandle => {
@@ -548,15 +570,21 @@ export const zoneHandle = (working: Working, steps: readonly SlotStep[]): ZoneHa
         working.order = order;
       },
     };
+  const own = copied.get(working)!;
   let items = working.items;
   let parent: SourceItem | undefined;
   for (const step of steps) {
-    const matches = items.filter((item) => item.props.id === step.parentAlias);
-    if (matches.length !== 1) return refuse();
-    parent = matches[0]!;
+    const at = items.flatMap((item, index) => (item.props.id === step.parentAlias ? [index] : []));
+    if (at.length !== 1) return refuse();
+    parent = ownBlockAt(working, items, at[0]!);
     const child = parent.props[step.slotKey];
     if (!Array.isArray(child)) return refuse();
-    items = child as SourceItem[];
+    if (!own.has(child)) {
+      const list = [...(child as SourceItem[])];
+      own.add(list);
+      parent.props[step.slotKey] = list;
+    }
+    items = parent.props[step.slotKey] as SourceItem[];
   }
   const holder = parent!;
   const key = steps.at(-1)!.slotKey;
@@ -599,8 +627,17 @@ export const workingItem = (
   steps: readonly SlotStep[],
   alias: string,
 ): SourceItem => {
-  const matches = zoneHandle(working, steps).items.filter((item) => item.props.id === alias);
-  return matches.length === 1 ? matches[0]! : refuse();
+  const { items } = zoneHandle(working, steps);
+  const at = items.flatMap((item, index) => (item.props.id === alias ? [index] : []));
+  if (at.length !== 1) return refuse();
+  const item = items[at[0]!]!;
+  const own = copied.get(working)!;
+  if (own.has(item)) return item;
+  // The block and everything inside it: a command may set anything below it.
+  const next = structuredClone(item);
+  own.add(next);
+  items[at[0]!] = next;
+  return next;
 };
 
 /** Judges the edited slot as stored data and writes it into the region's own document. */

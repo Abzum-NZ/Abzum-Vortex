@@ -552,10 +552,9 @@ const applySettings = (
     flowed = made.source;
   }
   if (flowed !== source) return { kind: "applied", source: flowed };
-  const parsed = applicationSourceDocumentSchema.parse(source);
-  return sameValue(parsed, current.source)
-    ? { kind: "invalid" }
-    : { kind: "applied", source: parsed };
+  // The block this edit rebuilt was judged as stored data and every other block is the draft's own
+  // object: the whole draft is parsed when it is saved, not for each key of a typing run.
+  return sameValue(source, current.source) ? { kind: "invalid" } : { kind: "applied", source };
 };
 
 type Removal = {
