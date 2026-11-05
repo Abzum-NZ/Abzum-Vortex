@@ -18,8 +18,8 @@ import {
   type StudioSemanticSelection,
   type StudioSemanticSelectionStore,
   type StudioStoredApplicationDraft,
+  type StudioCompileFailure,
 } from "@vortex/platform/schema";
-import type { StudioCompileFailure } from "@vortex/ui/studio";
 import { saveStudioApplication, type StudioDraftChangedElsewhere } from "../actions";
 import { reopenStudioApplication } from "../_lib/studio-reads";
 import { createStudioPreviewGate, type StudioPreviewGate } from "../_lib/studio-preview-gate";

@@ -1,12 +1,6 @@
 export * from "./condition-controls";
-export * from "./studio-query-filter";
 export * from "./studio-flow-step-picker";
-export * from "./application-behaviour";
-export * from "./application-page-values";
-export type { StudioCompileFailure, StudioPreviewNotRunnable } from "./compile-failure";
 export * from "./studio-setting-controls";
-export { followFieldLabels } from "./follow-field-labels";
-export { settingsChangeOfPuckEdit, type StudioSettingsEdit } from "./studio-settings-edit";
 export * from "./studio-setting-basic-controls";
 export * from "./studio-query-picker";
 export * from "./studio-grid-features";
@@ -17,8 +11,6 @@ export {
 } from "./grid-features/row-actions";
 export * from "./studio-record-reference-control";
 export * from "./theme-preset";
-export * from "./application-structure-commands";
-export * from "./application-home-dashboard";
 export * from "./studio-reference-picker";
 export * from "./studio-gate-select";
 export * from "./studio-entry-list";
@@ -52,5 +44,4 @@ export {
 } from "./studio-canvas-grid";
 
 export { StudioQueryBindings, StudioSelectionControlBinding } from "./studio-query-bindings";
-export { studioQueryBindingFacts, studioRecordBindingFields } from "./query-binding-facts";
 export { studioActionBarMore } from "./studio-action-bar-focus";

@@ -1,15 +1,12 @@
-import type {
-  ConditionNode,
-  InlineQueryFilter,
-  InlineQueryInput,
-  JsonValue,
-  ModuleField,
-} from "@vortex/platform/schema";
+import type { ConditionNode } from "../module-foundation-contracts";
+import type { InlineQueryFilter, InlineQueryInput } from "../module-query-edit";
+import type { JsonValue } from "../../catalogue/json-value";
+import type { ModuleField } from "../module-contracts";
 import type {
   StudioConditionControlsContext,
   StudioConditionOperator,
   StudioConditionParameterType,
-} from "@vortex/platform/schema";
+} from "./condition-model";
 
 type Comparison = Extract<ConditionNode, { kind: "comparison" }>;
 type Operand = Comparison["left"];

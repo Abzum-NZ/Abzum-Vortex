@@ -32,8 +32,8 @@ import {
   type PreviewInstallation,
   type PreviewDemand,
   type SelectedOrganizationScope,
+  type StudioPreviewNotRunnable,
 } from "@vortex/platform/schema";
-import type { StudioPreviewNotRunnable } from "@vortex/ui/studio";
 import { z } from "zod";
 import { installedReleaseCatalogue } from "./definition-catalogue";
 import { humanOrganizationRequests } from "./server-composition";

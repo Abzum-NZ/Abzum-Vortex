@@ -27,23 +27,23 @@ import {
   type StudioFlowSelection,
   type StudioFlowCombineResult,
   applyStudioFlowCombine,
-} from "@vortex/platform/schema";
-import { Icon } from "@vortex/ui";
-import {
-  StudioIconButton,
-  StudioOptionControl,
-  StudioRowActionsBindings,
   type StudioBehaviourEvent,
   type StudioBehaviourResult,
   type StudioBehaviourTarget,
-  type StudioRowAction,
-  StudioInspectorGroup,
   applyStudioBindingSettings,
   applyStudioRebind,
   applyStudioResetToDefault,
   applyStudioUnbind,
   studioBindingDefault,
   projectStudioBehaviour,
+} from "@vortex/platform/schema";
+import { Icon } from "@vortex/ui";
+import {
+  StudioIconButton,
+  StudioOptionControl,
+  StudioRowActionsBindings,
+  type StudioRowAction,
+  StudioInspectorGroup,
 } from "@vortex/ui/studio";
 import { StudioNewFlowDialog } from "./studio-new-flow-dialog";
 import { StudioFormulaEditor, type FormulaReferenceChoice } from "./studio-formula-editor";

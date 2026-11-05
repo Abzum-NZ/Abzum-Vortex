@@ -4,11 +4,11 @@ import type { NavigationPermissionDecisions } from "@vortex/platform/schema";
 import type { Breakpoint } from "../definition-error";
 import type { VortexPuckMetadata } from "../puck-config";
 import type { PlatformThemeTokens } from "../theme";
-import type { StudioCompileFailure } from "./compile-failure";
 import type { StudioCanvasCompiledSettings } from "./studio-canvas-data";
 import type { StudioCanvasGridChannel } from "./studio-canvas-grid";
 import type { StudioCanvasFrame } from "./studio-canvas-projection";
 import type { StudioCanvasReferences } from "@vortex/platform/schema";
+import type { StudioCompileFailure } from "@vortex/platform/schema";
 
 /**
  * The records the canvas's data blocks show: read from the builder's preview of one saved draft

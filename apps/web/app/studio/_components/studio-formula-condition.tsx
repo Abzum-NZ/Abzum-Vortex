@@ -2,12 +2,12 @@
 import { FieldSet } from "@vortex/ui/components/field";
 import { useMemo } from "react";
 import type { ModuleField } from "@vortex/platform/schema";
+import { StudioConditionControls } from "@vortex/ui/studio";
 import {
   readStudioQueryFilter,
-  StudioConditionControls,
   studioQueryFilterContext,
   writeStudioQueryFilter,
-} from "@vortex/ui/studio";
+} from "@vortex/platform/schema";
 
 /**
  * A condition over one record type's fields, built with the shared typed condition controls and

@@ -8,18 +8,12 @@ import {
   studioRecordPageKinds,
   takenIds,
   type StudioRecordPageCommand,
-  companions,
-  resolveRecordType,
-  addDetail,
-  cleanName,
-  judged,
-  quoted,
-  refuse,
-  type Source,
-  type StudioStructureContext,
-  type StudioStructureResult,
-  type Plan,
-} from "@vortex/platform/schema";
+} from "./application-record-page-kinds";
+import { companions, resolveRecordType } from "./application-record-page-shared";
+import { addDetail } from "./application-record-page-detail";
+import { cleanName, judged, quoted, refuse, type Source } from "./application-structure";
+import type { StudioStructureContext, StudioStructureResult } from "./application-structure-common";
+import type { Plan } from "./application-record-plan";
 
 export const addRecordPage = (
   context: StudioStructureContext,

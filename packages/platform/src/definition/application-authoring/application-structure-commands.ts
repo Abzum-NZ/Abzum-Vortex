@@ -1,49 +1,54 @@
+import { applicationSourceDocumentSchema } from "../application-source-contracts";
+import { applicationUses } from "../application-uses";
+import { PLATFORM_BLOCK_RELEASE_IDENTITIES } from "../application-composition-release-identities";
 import {
-  applicationSourceDocumentSchema,
-  applicationUses,
-  PLATFORM_BLOCK_RELEASE_IDENTITIES,
   sourceItemTree,
   sourcePageItems,
   sourcePageShell,
   type SourceItem,
+} from "../application-composition/source-composition";
+import {
   studioPlacementRemovalReference,
   type StudioPlacementReferenceReason,
   sourceNames,
   type StudioPlacementReference,
-  settingsOf,
-  type StudioSemanticSelection,
-  applyStudioItemLabels,
+} from "./composition-references";
+import { settingsOf } from "./application-composition-regions";
+import type { StudioSemanticSelection } from "./semantic-selection";
+import { applyStudioItemLabels } from "./application-item-labels";
+import {
   blockItem,
   cleanName,
   emptyPageData,
-  pageData,
   judged,
   blockRelease,
-  placeNewPage,
   quoted,
   refuse,
   StructureRefusal,
   uniqueKey,
   type Navigation,
   type Source,
+} from "./application-structure";
+import {
+  pageData,
+  placeNewPage,
   type StudioStructureContext,
   type StudioStructureResult,
-  takenIds,
-  type StudioRecordPageCommand,
+} from "./application-structure-common";
+import { takenIds, type StudioRecordPageCommand } from "./application-record-page-kinds";
+import {
   ensureDetailEdit,
   ensureListEdit,
   resolveRecordType,
-  type Plan,
-  movePage,
-  type StudioPageLayoutCommand,
-  editLayoutOutlet,
-  type StudioLayoutOutletCommand,
-} from "@vortex/platform/schema";
-import { removeFlowBindingsOf } from "@vortex/platform/schema";
+} from "./application-record-page-shared";
+import type { Plan } from "./application-record-plan";
+import { movePage, type StudioPageLayoutCommand } from "./application-page-layout";
+import { editLayoutOutlet, type StudioLayoutOutletCommand } from "./application-layout-outlets";
+import { removeFlowBindingsOf } from "./stored-composition";
 import { addRecordPage } from "./application-record-pages";
 import { ensureFormCancel } from "./application-record-page-form";
 import { ensureHomeDashboard } from "./application-home-dashboard";
-import { placeMenuShell, placementsOf } from "@vortex/platform/schema";
+import { placeMenuShell, placementsOf } from "./application-structure";
 
 /**
  * The Structure tab's edits: add, rename and remove pages and layouts, add the pages of a record

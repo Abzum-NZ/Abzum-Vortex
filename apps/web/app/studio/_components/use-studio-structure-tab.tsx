@@ -1,7 +1,6 @@
 "use client";
 import { useMemo } from "react";
 import type { ImmutablePlatformBlockCatalogue } from "@vortex/platform/schema";
-import { applyStudioStructureCommand, type StudioStructureCommand } from "@vortex/ui/studio";
 import { studioFieldPublication } from "./module-fields-editor";
 import { StudioStructurePanel } from "./studio-outline-panels";
 import {
@@ -17,6 +16,8 @@ import {
   type StudioSemanticSelection,
   studioPageLayoutPlan,
   type StudioStructureResult,
+  applyStudioStructureCommand,
+  type StudioStructureCommand,
 } from "@vortex/platform/schema";
 
 /**

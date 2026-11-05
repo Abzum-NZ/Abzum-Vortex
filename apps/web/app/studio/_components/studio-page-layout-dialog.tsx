@@ -11,10 +11,10 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@vortex/ui/components/dialog";
-import type { StudioStructureCommand } from "@vortex/ui/studio";
 import { StudioOptionControl } from "@vortex/ui/studio";
 import { StudioField } from "./studio-field";
 import type { StudioPageLayoutPlan, StudioStructureResult } from "@vortex/platform/schema";
+import type { StudioStructureCommand } from "@vortex/platform/schema";
 
 /** Collect every destination before applying a layout and its blocks as one draft edit. */
 export function StudioPageLayoutDialog({

@@ -16,7 +16,6 @@ import { Empty, EmptyContent, EmptyDescription, EmptyHeader } from "@vortex/ui/c
 import { Input } from "@vortex/ui/components/input";
 import { Item, ItemContent, ItemGroup } from "@vortex/ui/components/item";
 import { StudioHelp, StudioOptionControl } from "@vortex/ui/studio";
-import { studioStructureDefaultShell, studioStructureShellChoices } from "@vortex/ui/studio";
 import { StudioField } from "./studio-field";
 import {
   studioRecordPageChoices,
@@ -24,6 +23,8 @@ import {
   type StudioRecordPageCommand,
   type StudioRecordPageKind,
   type StudioStructureResult,
+  studioStructureDefaultShell,
+  studioStructureShellChoices,
 } from "@vortex/platform/schema";
 
 /**

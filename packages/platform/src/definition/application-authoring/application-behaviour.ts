@@ -1,24 +1,26 @@
 import {
   applicationSourceDocumentSchema,
+  type ApplicationSourceDocument,
+} from "../application-source-contracts";
+import {
   pageDispatchedEvents,
   pageSemanticEventKinds,
   recordLoadedPageTypes,
-  sourceItemTree,
-  sourcePageItems,
-  type ApplicationSourceDocument,
   type ComponentSemanticEventKind,
   type FlowBindingSettings,
-  type ImmutablePlatformBlockCatalogue,
-  type SourceFlow,
-  studioFlowCallerNames,
+} from "../component-semantic-events";
+import { sourceItemTree, sourcePageItems } from "../application-composition/source-composition";
+import type { ImmutablePlatformBlockCatalogue } from "../application-composition/platform-block-release";
+import type { SourceFlow } from "../../workflows/flow-source-contracts";
+import { studioFlowCallerNames } from "./application-flow-start";
+import {
   applyStudioFlowCreate,
   studioFlowCreateSavesChange,
   type StudioFlowCreateCommand,
-  type StudioBorrowedChoices,
-  studioEventSentence,
-  studioWithoutUnusedFlows,
-  studioFlowLabel,
-} from "@vortex/platform/schema";
+} from "./application-flow-create";
+import type { StudioBorrowedChoices } from "./contextual-palette";
+import { studioEventSentence, studioWithoutUnusedFlows } from "./application-flow-model";
+import { studioFlowLabel } from "./semantic-selection";
 
 /**
  * The Behaviour panel's model: every event the selected component (or the page) raises, with the

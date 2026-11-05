@@ -1,5 +1,4 @@
 import "server-only";
-import type { StudioPreviewNotRunnable } from "@vortex/ui/studio";
 
 import {
   createRecordChoiceReader,
@@ -35,6 +34,7 @@ import {
   type PageDefinition,
   type SourceItem,
   sortKeySchema,
+  type StudioPreviewNotRunnable,
 } from "@vortex/platform/schema";
 import { z } from "zod";
 import { pageCompiledSlotsFor } from "./studio-application-draft";
