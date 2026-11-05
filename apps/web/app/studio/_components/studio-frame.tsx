@@ -340,7 +340,7 @@ function RailTab<Key extends string>({
               className={cn(
                 "h-16 w-full flex-none flex-col justify-center gap-1 text-xs",
                 "group-data-vertical/tabs:justify-center",
-                "text-muted-foreground hover:bg-sidebar-accent/60 hover:text-foreground",
+                "text-sidebar-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground",
                 "data-active:text-sidebar-accent-foreground",
                 "dark:data-active:text-sidebar-accent-foreground",
               )}
