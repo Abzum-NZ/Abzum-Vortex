@@ -20,7 +20,7 @@ import {
 } from "./application-flow-create";
 import type { StudioBorrowedChoices } from "./contextual-palette";
 import { studioEventSentence, studioWithoutUnusedFlows } from "./application-flow-model";
-import { studioFlowLabel } from "./semantic-selection";
+import { studioBlockRelease, studioFlowLabel } from "./semantic-selection";
 
 /**
  * The Behaviour panel's model: every event the selected component (or the page) raises, with the
@@ -87,11 +87,7 @@ export const projectStudioBehaviour = (
       ...source.body.shells.flatMap((shell) => sourceItemTree(shell.layout.content)),
     ].find((entry) => entry.props.id === target.placementAlias);
     const block = item?.props.vortex.block;
-    const release = catalogue.releases.find(
-      (candidate) =>
-        String(candidate.blockId) === block?.block_id &&
-        String(candidate.releaseVersion) === block?.release_version,
-    );
+    const release = block === undefined ? undefined : studioBlockRelease(catalogue, block);
     return (release?.supportedEvents ?? []).filter(
       (event) => event !== "row_action" && pageDispatchedEvents.has(event),
     );

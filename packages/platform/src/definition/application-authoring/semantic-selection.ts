@@ -11,6 +11,7 @@ import {
 } from "../application-composition/platform-block-release";
 import type { ApplicationRootId } from "../../catalogue/identifiers";
 import type { ApplicationSourceDocument } from "../application-source-contracts";
+import { isStudioDraftSnapshot } from "./draft-snapshot";
 
 /**
  * The editable Application source, its permanent Definition root identity and the block catalogue
@@ -224,27 +225,82 @@ const authoredLabel = (value: string | undefined, fallback: string): string => {
   return label ? label : fallback;
 };
 
+const releaseIndexes = new WeakMap<
+  ImmutablePlatformBlockCatalogue,
+  Map<string, ImmutablePlatformBlockCatalogue["releases"][number]>
+>();
+
+/** The catalogue's release of a placed block, found by one lookup instead of a catalogue scan. */
+export const studioBlockRelease = (
+  catalogue: ImmutablePlatformBlockCatalogue,
+  block: Readonly<{ block_id: string; release_version: string }>,
+): ImmutablePlatformBlockCatalogue["releases"][number] | undefined => {
+  let index = releaseIndexes.get(catalogue);
+  if (index === undefined) {
+    index = new Map(
+      catalogue.releases.map((release) => [
+        `${release.blockId}:${release.releaseVersion}`,
+        release,
+      ]),
+    );
+    releaseIndexes.set(catalogue, index);
+  }
+  return index.get(`${block.block_id}:${block.release_version}`);
+};
+
 /**
  * The item's child slots as its block release declares them (read by `readSourceItem`), with the
  * items placed in each; every other prop but `id` and `vortex` is a plain setting. An item whose
- * release the catalogue does not hold has no slots.
+ * release the catalogue does not hold has no slots. Both are frozen: every walk of a snapshot item
+ * hands out the same ones.
  */
 const itemPropsByRole = (catalogue: ImmutablePlatformBlockCatalogue, item: SourceItem) => {
-  const { block_id: blockId, release_version: releaseVersion } = item.props.vortex.block;
-  const release = catalogue.releases.find(
-    (candidate) => candidate.blockId === blockId && candidate.releaseVersion === releaseVersion,
-  );
-  const slots: [string, SourceItem[]][] = [];
+  const release = studioBlockRelease(catalogue, item.props.vortex.block);
+  const slots: (readonly [string, readonly SourceItem[]])[] = [];
   if (release !== undefined)
     for (const [key, slot] of readSourceItem(item, release).slots)
-      if (slot.items !== undefined) slots.push([key, slot.items]);
+      if (slot.items !== undefined) slots.push(Object.freeze([key, slot.items] as const));
   const slotKeys = new Set(slots.map(([key]) => key));
   const settings = Object.fromEntries(
     Object.entries(item.props).filter(
       ([key]) => !reservedItemPropKeys.has(key) && !slotKeys.has(key),
     ),
   );
-  return { slots, settings };
+  return { slots: Object.freeze(slots), settings: Object.freeze(settings) };
+};
+
+/**
+ * What the walk shows of one placed item: its settings, child slots, selection, label and block.
+ * A snapshot item never changes, so it is read once per catalogue and every walk after an edit
+ * reuses the entries of the items the edit did not touch.
+ */
+const placementViews = new WeakMap<
+  ImmutablePlatformBlockCatalogue,
+  WeakMap<SourceItem, ReturnType<typeof placementView>>
+>();
+
+const placementView = (catalogue: ImmutablePlatformBlockCatalogue, item: SourceItem) => {
+  const placementAlias = item.props.id;
+  const { slots, settings } = itemPropsByRole(catalogue, item);
+  return Object.freeze({
+    slots,
+    settings,
+    selection: Object.freeze({ kind: "placement", placementAlias } as const),
+    label: `Item ${readableKey(placementAlias, "item")}`,
+    block: Object.freeze({
+      block_id: String(item.props.vortex.block.block_id),
+      release_version: String(item.props.vortex.block.release_version),
+    }),
+  });
+};
+
+const viewOfPlacement = (catalogue: ImmutablePlatformBlockCatalogue, item: SourceItem) => {
+  if (!isStudioDraftSnapshot(item)) return placementView(catalogue, item);
+  let views = placementViews.get(catalogue);
+  if (views === undefined) placementViews.set(catalogue, (views = new WeakMap()));
+  let view = views.get(item);
+  if (view === undefined) views.set(item, (view = placementView(catalogue, item)));
+  return view;
 };
 
 /** A flow's name as a person reads it: its authored name label, else its readable key. */
@@ -267,6 +323,39 @@ export const traverseStudioSemanticSelectionDraft = (
   draft: StudioApplicationSelectionDraft,
   listener: StudioSemanticSelectionTraversalListener,
 ): void => {
+  // Every surface walks the same snapshot after an edit (the outline, the flows tab, the selection
+  // store): the latest snapshot's walk is kept, so an edit costs one walk, not one per surface.
+  const walk = lastWalk;
+  if (
+    walk !== undefined &&
+    walk.source === draft.source &&
+    walk.catalogue === draft.catalogue &&
+    walk.rootId === draft.rootId
+  ) {
+    for (const event of walk.events) listener(event);
+    return;
+  }
+  const events: StudioSemanticSelectionTraversalEvent[] = [];
+  walkDraft(draft, (event) => events.push(event));
+  if (isStudioDraftSnapshot(draft.source))
+    lastWalk = { source: draft.source, catalogue: draft.catalogue, rootId: draft.rootId, events };
+  for (const event of events) listener(event);
+};
+
+/** The latest snapshot's walk: a snapshot never changes, so it holds until another is walked. */
+let lastWalk:
+  | Readonly<{
+      source: ApplicationSourceDocument;
+      catalogue: ImmutablePlatformBlockCatalogue;
+      rootId: ApplicationRootId;
+      events: readonly StudioSemanticSelectionTraversalEvent[];
+    }>
+  | undefined;
+
+const walkDraft = (
+  draft: StudioApplicationSelectionDraft,
+  listener: StudioSemanticSelectionTraversalListener,
+): void => {
   const visit = (node: StudioSemanticSelectionTraversalNode, children?: () => void): void => {
     listener(Object.freeze({ phase: "enter", node }));
     children?.();
@@ -281,19 +370,20 @@ export const traverseStudioSemanticSelectionDraft = (
   ): void => {
     visit(Object.freeze({ kind: "slot", slotAlias, label }), () => {
       for (const item of items) {
-        const placementAlias = item.props.id;
-        const { slots, settings } = itemPropsByRole(draft.catalogue, item);
-        const selection = Object.freeze({ kind: "placement", placementAlias } as const);
+        const {
+          slots,
+          settings,
+          selection,
+          label: itemLabel,
+          block,
+        } = viewOfPlacement(draft.catalogue, item);
         visit(
           Object.freeze({
             kind: "placement",
-            label: `Item ${readableKey(placementAlias, "item")}`,
+            label: itemLabel,
             selection,
             owner,
-            block: Object.freeze({
-              block_id: String(item.props.vortex.block.block_id),
-              release_version: String(item.props.vortex.block.release_version),
-            }),
+            block,
             settings,
           }),
           () => {

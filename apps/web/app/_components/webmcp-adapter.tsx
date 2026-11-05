@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { describeFailure } from "@vortex/platform/schema";
 import type { ApplicationWebMcpRuntime } from "@vortex/ui";
 
@@ -104,7 +104,7 @@ export function WebMcpAdapter<Tool extends WebMcpToolDescriptor>({
     }
   }, []);
 
-  const toolSignature = JSON.stringify(tools);
+  const toolSignature = useMemo(() => JSON.stringify(tools), [tools]);
   useEffect(() => {
     if (modelContext === undefined || tools.length === 0) {
       setStatus("checking");

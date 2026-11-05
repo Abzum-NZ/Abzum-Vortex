@@ -19,6 +19,7 @@ import {
 import { describeStudioCompositionAddTargets } from "./application-composition-add";
 import type { StudioCompositionContext } from "./application-composition-model";
 import { studioQueryChoices } from "./contextual-palette";
+import { studioBlockRelease } from "./semantic-selection";
 
 /**
  * "Also show it on": the places a new field can be shown in the same draft edit that adds it. A
@@ -75,13 +76,8 @@ const pageTypeWords: Readonly<Record<string, string>> = {
   form: "Form page",
 };
 
-const releaseOf = (context: StudioCompositionContext, item: SourceItem): Release | undefined => {
-  const block = item.props.vortex.block;
-  return context.catalogue.releases.find(
-    (release) =>
-      release.blockId === block.block_id && release.releaseVersion === block.release_version,
-  );
-};
+const releaseOf = (context: StudioCompositionContext, item: SourceItem): Release | undefined =>
+  studioBlockRelease(context.catalogue, item.props.vortex.block);
 
 type ListSetting = Extract<BlockPropertySchemaContract, { kind: "list" }>;
 type FieldList = Readonly<{ setting: ListSetting; nested?: ListSetting }>;
