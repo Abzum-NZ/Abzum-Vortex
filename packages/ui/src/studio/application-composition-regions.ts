@@ -18,6 +18,7 @@ import {
   type SourceBlockPropertyValueContract,
   type SourceItem,
   type SourcePageZone,
+  type SourceZonedData,
   type SourceSlotOrder,
   isStudioDraftSnapshot,
 } from "@vortex/platform/schema";
@@ -422,6 +423,60 @@ const targetInCopy = (
     : { ...target, region: { ...region, zone: target.region.zone } };
 };
 
+/** Zoned data (a page's, a guided step's or a layout's) whose slots and slot orders may be set. */
+const ownZonedData = <Data extends SourceZonedData | SourceShell["layout"]>(data: Data): Data => {
+  const props = data.root.props;
+  return {
+    ...data,
+    root: {
+      ...data.root,
+      props: {
+        ...props,
+        vortex: { ...props.vortex, slot_orders: { ...props.vortex.slot_orders } },
+      },
+    },
+  };
+};
+
+/**
+ * The copy of a history snapshot that a command edits. The document, its body and the path to the
+ * region the command commits into are the copy's own objects; every other node stays the
+ * snapshot's own (frozen) node, so nothing that grows with the application is copied for a key and
+ * the history keeps every node the command did not touch. A command writes the region (through
+ * `region.replace`) and the body's own fields; a write anywhere else copies its part first.
+ */
+const editableCopy = (
+  snapshot: ApplicationSourceDocument,
+  region: Region,
+): ApplicationSourceDocument => {
+  const body = { ...snapshot.body };
+  const { shell, page, address } = region;
+  if (shell !== undefined)
+    body.shells = body.shells.map((each) =>
+      each === shell ? { ...each, layout: ownZonedData(each.layout) } : each,
+    );
+  else if (page !== undefined) {
+    const composition = page.composition;
+    const step = address?.step;
+    const owned =
+      "step_content" in composition
+        ? step === undefined
+          ? composition
+          : {
+              ...composition,
+              step_content: {
+                ...composition.step_content,
+                [step]: ownZonedData(composition.step_content[step]!),
+              },
+            }
+        : ownZonedData(composition);
+    body.pages = body.pages.map((each) =>
+      each === page ? ({ ...each, composition: owned } as SourcePage) : each,
+    );
+  }
+  return { ...snapshot, body };
+};
+
 const resolveBlock = (
   context: StudioCompositionContext,
   selection: Extract<StudioSemanticSelection, { kind: "placement" }>,
@@ -435,7 +490,7 @@ const resolveBlock = (
     const snapshot = context.source as ApplicationSourceDocument;
     const found = resolve(context, selection, true);
     if (found === undefined) return undefined;
-    const source = structuredClone(snapshot);
+    const source = editableCopy(snapshot, found.target.region);
     const target = targetInCopy(snapshot, source, found.target);
     return target === undefined ? undefined : { source, target, alias };
   }

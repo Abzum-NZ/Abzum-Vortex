@@ -443,6 +443,8 @@ const applySettings = (
           ),
         ]
       : [];
+  // A board writes its query and its totals into the draft's modules: they become the command's.
+  if (board !== undefined) source.body.modules = structuredClone(source.body.modules);
   const moveProblem =
     board === undefined ? undefined : boardMoveRecordTypeProblem(source, alias, board);
   if (moveProblem !== undefined) return { kind: "refused", reason: moveProblem };
