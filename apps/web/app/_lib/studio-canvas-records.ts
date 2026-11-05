@@ -97,7 +97,10 @@ const requestSchema = z
      * exactly like a running page's address value, and none can carry the viewer's identity.
      */
     controlValues: z.record(z.string().min(1).max(160), z.string().max(400)),
-    /** The query state and projection of each Records table the builder worked on, by placement name. */
+    /**
+     * The query state and projection of each Records table the builder worked on, by placement
+     * name.
+     */
     tableStates: z.record(
       z
         .string()
@@ -113,7 +116,8 @@ const requestSchema = z
 
 /**
  * The records the data blocks of one content area of a saved draft page, or of the layout it is
- * drawn in, show, by block name, for exactly that draft revision, including a detail page's sample subject.
+ * drawn in, show, by block name, for exactly that draft revision, including a detail page's sample
+ * subject.
  */
 type StudioCanvasRecordsResult =
   | Readonly<{
@@ -140,7 +144,10 @@ type StudioCanvasRecordsResult =
   | StudioPreviewNotRunnable
   | Readonly<{ kind: "temporarily_unavailable" }>;
 
-/** The compiled slot of one page area beside its stored items, and the block name of each compiled placement. */
+/**
+ * The compiled slot of one area (a page zone or the layout) beside its stored items, and the block
+ * name of each compiled placement.
+ */
 const placementAliases = (
   stored: readonly SourceItem[],
   compiled: readonly CompiledItem[],
@@ -224,12 +231,12 @@ const readSample = async (
 };
 
 /**
- * Reads the records the data blocks of one saved draft page area (or its layout) show, through the builder's own
- * preview installation of that draft. The area's blocks are the saved revision's own compile; the
- * records are read with the running application's own placement reader against the preview, so a
- * block shows on the canvas what it shows in the preview to this builder: the records they may
- * read, a draft-only record type's and those made in the preview included, and nothing of records
- * they may not read.
+ * Reads the records the data blocks of one saved draft page area (or its layout) show, through the
+ * builder's own preview installation of that draft. The area's blocks are the saved revision's own
+ * compile; the records are read with the running application's own placement reader against the
+ * preview, so a block shows on the canvas what it shows in the preview to this builder: the records
+ * they may read, a draft-only record type's and those made in the preview included, and nothing of
+ * records they may not read.
  */
 export const readStudioCanvasRecords = async (
   session: IdentitySession,
@@ -266,7 +273,8 @@ export const readStudioCanvasRecords = async (
     const page = draft.source.body.pages[pageIndex];
     const compiledPage = content.pages[pageIndex] as PageDefinition | undefined;
     // The area is one of the page's content zones, or the layout the page is drawn in
-    // (`shellLayoutZone`), whose blocks the running page reads with the page's own queries.
+    // (`shellLayoutZone`), whose blocks the running page reads with the page's bindings and
+    // subject.
     const address =
       page === undefined || request.area === shellLayoutZone
         ? undefined
