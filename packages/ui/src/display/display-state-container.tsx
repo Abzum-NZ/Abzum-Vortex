@@ -11,6 +11,7 @@ const REFUSAL_MESSAGES: Readonly<Record<DisplayRefusalReason, string>> = Object.
   applications_not_read:
     "The canvas does not list the applications you can open. Open the preview to see them.",
   access_ended: "Access to this content has ended",
+  installation_required: "Install this application to see its data",
   not_found: "Content not found",
   value_out_of_range:
     "Some dates in these records fall in a period that reaches past the supported years 0001 to 9999. Narrow the records with search or filters, or group the dates by a shorter period.",
