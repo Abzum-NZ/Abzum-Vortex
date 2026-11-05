@@ -6,6 +6,7 @@ import {
   collectRecordLinkValues,
   protectedQueryCommandSchema,
   protectedQuerySummaryCommandSchema,
+  recordChoiceSearchSchema,
   recordLinkPlainText,
   type ProjectedRecordLinks,
 } from "@vortex/platform/server";
@@ -40,6 +41,8 @@ const requestSchema = z
     pageSize: z.number().int().min(1).max(200),
     continuationToken: z.string().min(1).max(65_536).optional(),
     pageDirection: z.enum(["forward", "backward"]).optional(),
+    /** A record picker's search, by the record type's searchable fields. */
+    search: recordChoiceSearchSchema.optional(),
   })
   .strict();
 
@@ -345,8 +348,11 @@ export const readStudioDataRecords = async (
       sort: [],
       sortableFieldIds: [],
       filterableFieldIds: [],
+      // No declared list: the engine searches every field the record type marks searchable.
       searchableFieldIds: [],
-      pageSize: request.pageSize,
+      ...(request.search === undefined ? {} : { search: request.search }),
+      // The query's own page size is the most one page may hold; the keyset reads the rest.
+      pageSize: Math.min(request.pageSize, query.pageSize),
       ...(request.continuationToken === undefined
         ? {}
         : { continuationToken: request.continuationToken }),
