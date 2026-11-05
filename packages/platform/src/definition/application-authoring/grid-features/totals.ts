@@ -1,9 +1,7 @@
-import {
-  recordsTableAggregateSupportsType,
-  type BlockPropertySchemaContract,
-  type SourceBlockPropertyValueContract,
-  type StudioQueryField,
-} from "@vortex/platform/schema";
+import { recordsTableAggregateSupportsType } from "../../application-composition/records-table-features/totals";
+import type { BlockPropertySchemaContract } from "../../application-composition/block-property-schema";
+import type { SourceBlockPropertyValueContract } from "../../application-composition/block-property-values";
+import type { StudioQueryField } from "../contextual-palette";
 
 /** A measure's operation narrows its field picker; the publication check judges the same types. */
 export const studioTotalMeasureProperty = (

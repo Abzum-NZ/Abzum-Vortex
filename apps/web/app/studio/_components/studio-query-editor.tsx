@@ -35,14 +35,14 @@ import {
   type InlineQuerySort,
   type ApplicationUsePlace,
   validateStudioCondition,
+  readStudioQueryFilter,
+  studioQueryFilterContext,
+  writeStudioQueryFilter,
 } from "@vortex/platform/schema";
 import {
-  readStudioQueryFilter,
   StudioConditionControls,
   StudioInspectorGroup,
   StudioOptionControl,
-  studioQueryFilterContext,
-  writeStudioQueryFilter,
 } from "@vortex/ui/studio";
 import { Button } from "@vortex/ui/components/button";
 import { Checkbox } from "@vortex/ui/components/checkbox";

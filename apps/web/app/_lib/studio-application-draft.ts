@@ -60,6 +60,7 @@ import {
   type StudioQueryChoice,
   type StudioQueryInput,
   type StudioRelationshipChoice,
+  type StudioCompileFailure,
 } from "@vortex/platform/schema";
 import {
   BuilderAuthorityError,
@@ -75,7 +76,6 @@ import {
   DefinitionCompilationError,
   readCurrentOrganizationThemeAfterAuthorization,
 } from "@vortex/platform/server";
-import type { StudioCompileFailure } from "@vortex/ui/studio";
 import { installedReleaseCatalogue } from "./definition-catalogue";
 import type {
   StudioCompiledFields,

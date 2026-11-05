@@ -11,10 +11,10 @@ import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "..
 import { Skeleton } from "../components/skeleton";
 import { Tabs, TabsList, TabsTrigger } from "../components/tabs";
 import { Icon } from "../icons";
-import type { StudioCompileFailure } from "./compile-failure";
 import { StudioCanvasViewProvider } from "./studio-canvas-scale";
 import { useStudioScreen } from "./studio-canvas-screen";
 import { useStudioCanvas } from "./studio-puck-provider";
+import type { StudioCompileFailure } from "@vortex/platform/schema";
 
 const READ_ONLY_HINT =
   "Shown read-only to keep it exactly as it is. " +

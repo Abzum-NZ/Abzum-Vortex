@@ -1,15 +1,10 @@
+import { PLATFORM_BLOCK_RELEASE_IDENTITIES } from "../application-composition-release-identities";
+import { plainSettingValue } from "../application-composition/component-setting-reading";
+import type { RecordsTableBoardMode } from "../application-composition/records-table-features/board";
+import { listing, lowerFirst, type StudioRecordPageCommand } from "./application-record-page-kinds";
+import { createStudioBoardQuery, studioBoardPipelines } from "./board-source";
+import { flowCreate, freshAlias, type Plan } from "./application-record-plan";
 import {
-  PLATFORM_BLOCK_RELEASE_IDENTITIES,
-  plainSettingValue,
-  type RecordsTableBoardMode,
-  listing,
-  lowerFirst,
-  type StudioRecordPageCommand,
-  createStudioBoardQuery,
-  studioBoardPipelines,
-  flowCreate,
-  freshAlias,
-  type Plan,
   bindDelete,
   companions,
   ensureDetailDelete,
@@ -23,14 +18,13 @@ import {
   release,
   tableColumns,
   type Resolved,
-  blockItem,
-  judged,
+} from "./application-record-page-shared";
+import { blockItem, judged, quoted, refuse } from "./application-structure";
+import {
   pageData,
   placeNewPage,
-  quoted,
-  refuse,
   type StudioStructureContext,
-} from "@vortex/platform/schema";
+} from "./application-structure-common";
 
 export const addList = (
   context: StudioStructureContext,

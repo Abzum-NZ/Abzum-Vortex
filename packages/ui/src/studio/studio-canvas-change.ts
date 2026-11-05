@@ -9,6 +9,9 @@ import {
   type StudioCanvasOwner,
   type StudioDraftChange,
   type StudioSemanticSelection,
+  changedProps,
+  type PuckItem,
+  type StudioSettingsEdit,
 } from "@vortex/platform/schema";
 import type { Breakpoint } from "../definition-error";
 import {
@@ -18,7 +21,6 @@ import {
   type StudioPuckLocate,
 } from "./studio-canvas-data";
 import { studioCrossSlotReason, studioScreenOfBreakpoint } from "./studio-canvas-screen";
-import { changedProps, type PuckItem, type StudioSettingsEdit } from "./studio-settings-edit";
 
 /** The Puck actions that change the page's data; Studio's classifier reads these, in order. */
 const DATA_ACTIONS: ReadonlySet<PuckAction["type"]> = new Set([

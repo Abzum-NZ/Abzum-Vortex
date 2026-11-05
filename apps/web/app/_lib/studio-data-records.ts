@@ -1,5 +1,4 @@
 import "server-only";
-import type { StudioPreviewNotRunnable } from "@vortex/ui/studio";
 
 import {
   collectRecordLinks,
@@ -22,6 +21,7 @@ import {
   sameId,
   type IdentitySession,
   type JsonValue,
+  type StudioPreviewNotRunnable,
 } from "@vortex/platform/schema";
 import { z } from "zod";
 import { openStudioPreviewRead } from "./studio-preview-read";

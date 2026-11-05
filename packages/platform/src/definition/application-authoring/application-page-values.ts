@@ -1,11 +1,13 @@
 import {
   applicationSourceDocumentSchema,
-  applicationUses,
-  builderKeySchema,
-  describeApplicationUsers,
   type ApplicationSourceDocument,
+} from "../application-source-contracts";
+import {
+  applicationUses,
+  describeApplicationUsers,
   type ApplicationUsePlace,
-} from "@vortex/platform/schema";
+} from "../application-uses";
+import { builderKeySchema } from "../../catalogue/identifiers";
 
 /**
  * The values a page declares (Studio flows design §8): typed, set by flows, shown by displays and

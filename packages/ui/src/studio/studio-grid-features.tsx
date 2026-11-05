@@ -17,11 +17,11 @@ import {
   type StudioSettingChoices,
   type StudioSettingValues,
   studioSettingProblems,
+  studioGridPrerequisites,
 } from "@vortex/platform/schema";
 
 import { useId, useState, type ReactElement } from "react";
 import { Button } from "../components/button";
-import { studioGridPrerequisites } from "./grid-features/prerequisites";
 import {
   checkRecordsTableFeature,
   plainSourceSettingValue,

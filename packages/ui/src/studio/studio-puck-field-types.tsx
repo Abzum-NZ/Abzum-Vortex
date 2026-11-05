@@ -33,6 +33,7 @@ import {
   type StudioSettingChoices,
   type StudioSettingValues,
   type StudioReactionSlot,
+  studioTotalMeasureProperty,
 } from "@vortex/platform/schema";
 import { Item } from "../components/item";
 import { StudioField } from "./studio-field";
@@ -46,7 +47,6 @@ import {
 } from "./studio-setting-controls";
 import { StudioQueryBindings } from "./studio-query-bindings";
 import { StudioQueryPicker } from "./studio-query-picker";
-import { studioTotalMeasureProperty } from "./grid-features/totals";
 import { StudioGridFeatures, type StudioGridFeaturesProps } from "./studio-grid-features";
 import {
   StudioLayoutField,

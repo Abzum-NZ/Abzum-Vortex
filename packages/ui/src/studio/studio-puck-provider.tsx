@@ -28,6 +28,8 @@ import {
   studioBlockName,
   studioCanvasReferences,
   sameCompositionValue,
+  type StudioCompileFailure,
+  type StudioSettingsEdit,
 } from "@vortex/platform/schema";
 import {
   createContext,
@@ -46,14 +48,12 @@ import {
 import type { Breakpoint } from "../definition-error";
 import type { FieldInputControlReleaseMap } from "../registry";
 import type { PlatformThemeTokens } from "../theme";
-import type { StudioCompileFailure } from "./compile-failure";
 import type { StudioCanvasFrame } from "./studio-canvas-projection";
 import {
   classifyCanvasChange,
   isCanvasDataAction,
   isNoOpCanvasAction,
 } from "./studio-canvas-change";
-import type { StudioSettingsEdit } from "./studio-settings-edit";
 import {
   destinationOfZone,
   itemsHold,
