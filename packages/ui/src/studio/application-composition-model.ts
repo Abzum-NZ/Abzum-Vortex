@@ -193,4 +193,5 @@ export type StudioCompositionEditorModel =
         Pick<PlatformBlockRelease["capabilities"], "gridWidth" | "height" | "responsiveVisibility">
       >;
     }>
+  | Readonly<{ kind: "refused"; reason: string }>
   | Readonly<{ kind: "invalid" | "unsupported" }>;
