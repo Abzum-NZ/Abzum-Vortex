@@ -230,7 +230,7 @@ const releaseIndexes = new WeakMap<
   Map<string, ImmutablePlatformBlockCatalogue["releases"][number]>
 >();
 
-/** The catalogue's release of a placed block, found by one lookup instead of a scan of the catalogue. */
+/** The catalogue's release of a placed block, found by one lookup instead of a catalogue scan. */
 export const studioBlockRelease = (
   catalogue: ImmutablePlatformBlockCatalogue,
   block: Readonly<{ block_id: string; release_version: string }>,
@@ -251,21 +251,22 @@ export const studioBlockRelease = (
 /**
  * The item's child slots as its block release declares them (read by `readSourceItem`), with the
  * items placed in each; every other prop but `id` and `vortex` is a plain setting. An item whose
- * release the catalogue does not hold has no slots.
+ * release the catalogue does not hold has no slots. Both are frozen: every walk of a snapshot item
+ * hands out the same ones.
  */
 const itemPropsByRole = (catalogue: ImmutablePlatformBlockCatalogue, item: SourceItem) => {
   const release = studioBlockRelease(catalogue, item.props.vortex.block);
-  const slots: [string, SourceItem[]][] = [];
+  const slots: (readonly [string, readonly SourceItem[]])[] = [];
   if (release !== undefined)
     for (const [key, slot] of readSourceItem(item, release).slots)
-      if (slot.items !== undefined) slots.push([key, slot.items]);
+      if (slot.items !== undefined) slots.push(Object.freeze([key, slot.items] as const));
   const slotKeys = new Set(slots.map(([key]) => key));
   const settings = Object.fromEntries(
     Object.entries(item.props).filter(
       ([key]) => !reservedItemPropKeys.has(key) && !slotKeys.has(key),
     ),
   );
-  return { slots, settings };
+  return { slots: Object.freeze(slots), settings: Object.freeze(settings) };
 };
 
 /**
@@ -323,7 +324,7 @@ export const traverseStudioSemanticSelectionDraft = (
   listener: StudioSemanticSelectionTraversalListener,
 ): void => {
   // Every surface walks the same snapshot after an edit (the outline, the flows tab, the selection
-  // store): the walk of the latest snapshot is kept, so one edit costs one walk, not one per surface.
+  // store): the latest snapshot's walk is kept, so an edit costs one walk, not one per surface.
   const walk = lastWalk;
   if (
     walk !== undefined &&
@@ -341,7 +342,7 @@ export const traverseStudioSemanticSelectionDraft = (
   for (const event of events) listener(event);
 };
 
-/** The latest snapshot's walk. A snapshot never changes, so the events are valid until another is walked. */
+/** The latest snapshot's walk: a snapshot never changes, so it holds until another one is walked. */
 let lastWalk:
   | Readonly<{
       source: ApplicationSourceDocument;
