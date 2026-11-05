@@ -4,6 +4,11 @@ import {
   sourcePageShell,
   type ApplicationSourceDocument,
   type ApplicationUsePlace,
+  type StudioSemanticSelection,
+  studioRecordPageChoices,
+  type StudioPageLayoutPlan,
+  type StudioStructureResult,
+  studioAccessGateChoices,
 } from "@vortex/platform/schema";
 import { Icon } from "@vortex/ui";
 import { Button } from "@vortex/ui/components/button";
@@ -25,22 +30,14 @@ import {
   DialogDescription,
 } from "@vortex/ui/components/dialog";
 import { studioNotice } from "./studio-save-state";
-import {
-  StudioLimitNote,
-  Reasoned,
-  studioLimitReason,
-  type StudioSemanticSelection,
-} from "@vortex/ui/studio";
+import { StudioLimitNote, Reasoned, studioLimitReason } from "@vortex/ui/studio";
 import {
   studioStructureDefaultShell,
   studioStructureShellChoices,
-  studioRecordPageChoices,
   StudioInspectorActions,
-  type StudioPageLayoutPlan,
   type StudioStructureCommand,
-  type StudioStructureResult,
 } from "@vortex/ui/studio";
-import { StudioOptionControl, studioAccessGateChoices } from "@vortex/ui/studio";
+import { StudioOptionControl } from "@vortex/ui/studio";
 import { StudioField } from "./studio-field";
 import { StudioRecordPageForm } from "./studio-record-page-form";
 import { StudioPlaceList } from "./studio-used-in";

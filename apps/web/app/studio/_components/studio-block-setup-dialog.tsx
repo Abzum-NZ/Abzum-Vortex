@@ -10,10 +10,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@vortex/ui/components/dialog";
+import { StudioQueryPicker, StudioSettingFields } from "@vortex/ui/studio";
+
 import {
+  plainSettingValue,
+  typedSourceSettingValue,
   STUDIO_GROUPED_TABLE_PRESET,
-  StudioQueryPicker,
-  StudioSettingFields,
   studioBlockChoices,
   studioGridDataSettings,
   studioHasGridColumns,
@@ -24,9 +26,7 @@ import {
   type StudioCompositionSettings,
   type StudioPaletteChoice,
   type StudioSettingChoices,
-} from "@vortex/ui/studio";
-
-import { plainSettingValue, typedSourceSettingValue } from "@vortex/platform/schema";
+} from "@vortex/platform/schema";
 import { useLeaveWarning } from "./use-leave-warning";
 
 /** A new block whose required settings or query the person gives before it is added. */

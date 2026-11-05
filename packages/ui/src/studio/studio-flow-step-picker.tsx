@@ -27,13 +27,14 @@ import {
   type FlowLiteral,
   type FlowValue,
   type SourceFlow,
+  type StudioFlowNewStepSettings,
+  type StudioFlowStepType,
 } from "@vortex/platform/schema";
 import { StudioConditionControls } from "./condition-controls";
 import {
   studioFlowConditionFormula,
   type StudioFlowConditionContext,
 } from "./application-flow-condition";
-import type { StudioFlowNewStepSettings, StudioFlowStepType } from "./application-flow-commands";
 
 export type StudioFlowStepChoice = StudioFlowStepType;
 export type StudioFlowStepPickerContext = Readonly<{

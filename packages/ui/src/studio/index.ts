@@ -1,16 +1,3 @@
-export * from "./contextual-palette";
-export {
-  boardModeOf,
-  boardSettingChoices,
-  studioBoardPipelines,
-  type StudioBoardPipeline,
-} from "./board-source";
-export * from "./discovery-adapter";
-export * from "./semantic-selection";
-export { studioPlacementOwner } from "./application-composition-regions";
-export * from "./semantic-outline";
-export * from "./application-draft-history";
-export * from "./selection-inspector";
 export type {
   StudioConditionSemanticType,
   StudioConditionParameterType,
@@ -31,34 +18,20 @@ export {
 } from "./condition-model";
 export * from "./condition-controls";
 export * from "./studio-query-filter";
-export * from "./application-composition-commands";
-export { describeStudioCompositionGate } from "./application-composition-gate";
-export * from "./field-placement";
-export * from "./application-flow-model";
-export * from "./application-flow-commands";
 export * from "./application-flow-command-apply";
 export * from "./studio-flow-step-picker";
-export * from "./application-flow-create";
-export * from "./application-flow-delete";
-export * from "./application-flow-values";
-export * from "./application-flow-step-form";
 export * from "./application-flow-condition";
-export * from "./application-flow-start";
 export * from "./application-behaviour";
 export * from "./application-page-values";
-export * from "./application-record-rules";
 export * from "./module-action-condition";
 export * from "./application-reaction-condition-commands";
 export type { StudioCompileFailure, StudioPreviewNotRunnable } from "./compile-failure";
 export * from "./studio-setting-controls";
-export * from "./studio-setting-model";
 export { followFieldLabels } from "./follow-field-labels";
 export { settingsChangeOfPuckEdit, type StudioSettingsEdit } from "./studio-settings-edit";
 export * from "./studio-setting-basic-controls";
 export * from "./studio-query-picker";
 export * from "./studio-grid-features";
-export * from "./grid-features";
-export * from "./grouped-table-preset";
 export {
   StudioRowActionsBindings,
   applyStudioRowActionChange,
@@ -67,17 +40,7 @@ export {
 export * from "./studio-record-reference-control";
 export * from "./theme-preset";
 export * from "./application-structure-commands";
-export { studioPageLayoutPlan, type StudioPageLayoutPlan } from "./application-page-layout";
-export * from "./application-access-commands";
-export {
-  studioRecordPageChoices,
-  studioRecordPageKinds,
-  type StudioRecordPageCommand,
-  type StudioRecordPageKind,
-} from "./application-record-page-kinds";
 export * from "./application-home-dashboard";
-export * from "./application-item-labels";
-export { createStudioPlacementDescriber } from "./studio-placement-describer";
 export * from "./studio-reference-picker";
 export * from "./studio-gate-select";
 export * from "./studio-entry-list";
@@ -88,7 +51,6 @@ export * from "./use-studio-draft-held";
 export * from "./studio-dialog";
 export * from "./studio-icon-buttons";
 export * from "./studio-limit";
-export { studioPageNestingLevels } from "./studio-composition-depth";
 export { StudioPuckOutline } from "./studio-puck-outline";
 export { StudioBlockSettingFields } from "./studio-puck-settings";
 export type { StudioAccessFieldValue } from "./studio-puck-field-types";
@@ -113,7 +75,4 @@ export {
 
 export { StudioQueryBindings, StudioSelectionControlBinding } from "./studio-query-bindings";
 export { studioQueryBindingFacts, studioRecordBindingFields } from "./query-binding-facts";
-export * from "./application-flow-background";
-export { studioCanvasPermissionReason, studioRemovalIndex } from "./studio-canvas-permissions";
 export { studioActionBarMore } from "./studio-action-bar-focus";
-export type { StudioCanvasAction, StudioCanvasReferences } from "./studio-canvas-permissions";

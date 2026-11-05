@@ -15,6 +15,8 @@ import {
   type RelativeDateAnchor,
   type SourceBlockPropertyValueContract,
   type QueryBindingPageFacts,
+  type StudioSettingChoices,
+  type StudioQueryChoice,
 } from "@vortex/platform/schema";
 import { Badge } from "../components/badge";
 import { Input } from "../components/input";
@@ -22,8 +24,6 @@ import { StudioReferencePicker } from "./studio-reference-picker";
 import { StudioField } from "./studio-field";
 import { StudioRecordReferenceControl } from "./studio-record-reference-control";
 import { StudioOptionControl } from "./studio-setting-basic-controls";
-import type { StudioSettingChoices } from "./studio-setting-model";
-import type { StudioQueryChoice } from "./contextual-palette";
 
 type Value = SourceBlockPropertyValueContract;
 const text = (value: string): Value => ({ kind: "text", value });

@@ -16,6 +16,9 @@ import {
   plainSettingValue,
   type BlockPropertySchemaContract,
   type PlatformBlockRelease,
+  studioBlockReadsQuery,
+  studioOwnsSetting,
+  studioReleaseReadsQuery,
 } from "@vortex/platform/schema";
 import { ItemGroup } from "../components/item";
 import { Icon } from "../icons";
@@ -50,8 +53,6 @@ import { useStudioScreen } from "./studio-canvas-screen";
 import { studioReleaseIcon } from "./studio-puck-drawer";
 import { studioPuckStyle } from "./studio-puck-style";
 import { studioReactionSlots } from "./application-reaction-condition-commands";
-import { studioBlockReadsQuery } from "./application-composition-commands";
-import { studioOwnsSetting, studioReleaseReadsQuery } from "./contextual-palette";
 
 /**
  * A block's settings are Puck fields: each declared setting is a custom field whose control is

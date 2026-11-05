@@ -20,13 +20,17 @@ import {
   flowBindingExclusiveScopeSchema,
   flowBindingMaximumTimeoutMs,
   defaultFlowBindingSettings,
+  type StudioActionChoice,
+  type StudioBorrowedChoices,
+  type StudioFlowCreateChoices,
+  type StudioFlowCreateCommand,
+  type StudioFlowSelection,
 } from "@vortex/platform/schema";
 import { Icon } from "@vortex/ui";
 import {
   StudioIconButton,
   StudioOptionControl,
   StudioRowActionsBindings,
-  type StudioActionChoice,
   type StudioBehaviourEvent,
   type StudioBehaviourResult,
   type StudioBehaviourTarget,
@@ -39,11 +43,7 @@ import {
   applyStudioResetToDefault,
   applyStudioUnbind,
   studioBindingDefault,
-  type StudioBorrowedChoices,
   projectStudioBehaviour,
-  type StudioFlowCreateChoices,
-  type StudioFlowCreateCommand,
-  type StudioFlowSelection,
 } from "@vortex/ui/studio";
 import { StudioNewFlowDialog } from "./studio-new-flow-dialog";
 import { StudioFormulaEditor, type FormulaReferenceChoice } from "./studio-formula-editor";

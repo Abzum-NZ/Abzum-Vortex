@@ -71,13 +71,16 @@ import { Item, ItemContent, ItemGroup } from "../components/item";
 import { Popover, PopoverContent, PopoverTitle, PopoverTrigger } from "../components/popover";
 import { cn } from "../lib/utils";
 import type { ThemeMode } from "../theme";
-import type { StudioFlowNewStepSettings } from "./application-flow-commands";
-import type { StudioFlowPath, StudioFlowTaskListOutline } from "./application-flow-model";
 import {
   StudioFlowStepPicker,
   type StudioFlowStepChoice,
   type StudioFlowStepPickerContext,
 } from "./studio-flow-step-picker";
+import type {
+  StudioFlowNewStepSettings,
+  StudioFlowPath,
+  StudioFlowTaskListOutline,
+} from "@vortex/platform/schema";
 
 /** The graph is a view of the authored lists; no canvas positions or graph state are stored. */
 type NodeKind = "start" | "step" | "group" | "end" | "insert";

@@ -10,16 +10,15 @@ import {
   type FlowBindingSettings,
   type ImmutablePlatformBlockCatalogue,
   type SourceFlow,
-} from "@vortex/platform/schema";
-import { studioFlowCallerNames } from "./application-flow-start";
-import {
+  studioFlowCallerNames,
   applyStudioFlowCreate,
   studioFlowCreateSavesChange,
   type StudioFlowCreateCommand,
-} from "./application-flow-create";
-import type { StudioBorrowedChoices } from "./contextual-palette";
-import { studioEventSentence, studioWithoutUnusedFlows } from "./application-flow-model";
-import { studioFlowLabel } from "./semantic-selection";
+  type StudioBorrowedChoices,
+  studioEventSentence,
+  studioWithoutUnusedFlows,
+  studioFlowLabel,
+} from "@vortex/platform/schema";
 
 /**
  * The Behaviour panel's model: every event the selected component (or the page) raises, with the

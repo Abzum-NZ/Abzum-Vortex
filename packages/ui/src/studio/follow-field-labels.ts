@@ -2,8 +2,7 @@ import type {
   BlockPropertySchemaContract,
   SourceBlockPropertyValueContract,
 } from "@vortex/platform/schema";
-import type { StudioQueryField } from "./contextual-palette";
-import type { StudioSettingValues } from "./studio-setting-model";
+import type { StudioQueryField, StudioSettingValues } from "@vortex/platform/schema";
 type SettingValue = SourceBlockPropertyValueContract | undefined;
 
 /** Remove copied field labels in one update, including every column affected by a query change. */

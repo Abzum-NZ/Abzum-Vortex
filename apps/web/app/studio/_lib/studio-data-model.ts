@@ -7,8 +7,8 @@ import {
   type PublishedModuleField,
   type ModuleQueryExposure,
   type RecordOwnershipMode,
+  type StudioQueryInput,
 } from "@vortex/platform/schema";
-import type { StudioQueryInput } from "@vortex/ui/studio";
 import type { ModuleExtensionPointUse } from "@vortex/platform/schema";
 import type { StudioDraft, StudioRunOptions } from "../_components/use-studio-draft";
 

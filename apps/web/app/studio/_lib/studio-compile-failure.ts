@@ -4,12 +4,10 @@ import {
   type ApplicationSourceDocument,
   type SourceFlow,
   type SourceFlowTask,
-} from "@vortex/platform/schema";
-import {
   studioWords,
-  type StudioCompileFailure,
   type StudioDataSelection,
-} from "@vortex/ui/studio";
+} from "@vortex/platform/schema";
+import type { StudioCompileFailure } from "@vortex/ui/studio";
 
 /** Why the saved draft does not compile, in words, and the Data tab item to change when it is one. */
 type StudioCompileProblem = Readonly<{

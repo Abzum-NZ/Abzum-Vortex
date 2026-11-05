@@ -10,18 +10,16 @@ import {
   type PeopleDirectoryOwner,
   type SourceIdentityReservation,
   isStudioDraftSnapshot,
-} from "@vortex/platform/schema";
-import {
   createStudioApplicationDraftHistoryController,
   createStudioSemanticSelectionStore,
   type StudioApplicationDraftHistoryController,
   type StudioApplicationDraftHistoryState,
   type StudioBorrowedChoices,
-  type StudioCompileFailure,
   type StudioSemanticSelection,
   type StudioSemanticSelectionStore,
   type StudioStoredApplicationDraft,
-} from "@vortex/ui/studio";
+} from "@vortex/platform/schema";
+import type { StudioCompileFailure } from "@vortex/ui/studio";
 import { saveStudioApplication, type StudioDraftChangedElsewhere } from "../actions";
 import { reopenStudioApplication } from "../_lib/studio-reads";
 import { createStudioPreviewGate, type StudioPreviewGate } from "../_lib/studio-preview-gate";

@@ -1,18 +1,7 @@
 "use client";
 import { useMemo } from "react";
 import type { ImmutablePlatformBlockCatalogue } from "@vortex/platform/schema";
-import {
-  studioSemanticSelectionKey,
-  type StudioPlacementDescriber,
-  type StudioSemanticOutline,
-  type StudioSemanticSelection,
-} from "@vortex/ui/studio";
-import {
-  applyStudioStructureCommand,
-  studioPageLayoutPlan,
-  type StudioStructureCommand,
-  type StudioStructureResult,
-} from "@vortex/ui/studio";
+import { applyStudioStructureCommand, type StudioStructureCommand } from "@vortex/ui/studio";
 import { studioFieldPublication } from "./module-fields-editor";
 import { StudioStructurePanel } from "./studio-outline-panels";
 import {
@@ -21,6 +10,14 @@ import {
   type StudioStructureForm,
 } from "./studio-structure-editor";
 import type { StudioDraft } from "./use-studio-draft";
+import {
+  studioSemanticSelectionKey,
+  type StudioPlacementDescriber,
+  type StudioSemanticOutline,
+  type StudioSemanticSelection,
+  studioPageLayoutPlan,
+  type StudioStructureResult,
+} from "@vortex/platform/schema";
 
 /**
  * The one Structure command runner: a checked Structure command through the draft's envelope, and

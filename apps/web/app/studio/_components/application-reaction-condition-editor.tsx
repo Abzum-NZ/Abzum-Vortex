@@ -5,7 +5,14 @@ import { Alert, AlertDescription } from "@vortex/ui/components/alert";
 import { Button } from "@vortex/ui/components/button";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { applicationModuleKeys, type ConditionNode } from "@vortex/platform/schema";
+import {
+  applicationModuleKeys,
+  type ConditionNode,
+  studioSemanticSelectionKey,
+  type StudioCompositionContext,
+  type StudioSemanticSelection,
+  type StudioStoredApplicationDraft,
+} from "@vortex/platform/schema";
 import {
   StudioConditionControls,
   parseStudioApplicationConditionContext,
@@ -13,13 +20,9 @@ import {
   resolveStudioReactionTarget,
   sameStudioReactionCondition,
   validateStudioReactionCondition,
-  studioSemanticSelectionKey,
   studioReactionSlots,
   type StudioApplicationConditionContext,
-  type StudioCompositionContext,
   type StudioConditionValidation,
-  type StudioSemanticSelection,
-  type StudioStoredApplicationDraft,
   type StudioReactionCommandResult,
   type StudioReactionSlot,
 } from "@vortex/ui/studio";

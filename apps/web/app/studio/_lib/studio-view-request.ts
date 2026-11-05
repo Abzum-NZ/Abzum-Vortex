@@ -6,8 +6,8 @@ import {
   sourcePageSlotAt,
   type SourceItem,
   type ApplicationSourceDocument,
+  type StudioSemanticSelection,
 } from "@vortex/platform/schema";
-import type { StudioSemanticSelection } from "@vortex/ui/studio";
 
 /** A read describes the visible editor, never the collection of previously visited tabs. */
 export const studioViewRequestSchema = z

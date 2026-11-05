@@ -21,9 +21,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "../components/tooltip";
 import { Icon } from "../icons";
 import { Reasoned, type ReasonedTooltipProps } from "../components/reasoned";
 import { studioLimitReason } from "./studio-limit";
-import { studioCanvasPermissionReason } from "./studio-canvas-permissions";
 import { puckNeighbourOf, puckSelectorOf } from "./studio-canvas-data";
-import { studioBlockName } from "./studio-placement-describer";
 import { StudioCanvasMore, type StudioMoreChoice } from "./studio-canvas-more";
 import { studioCanvasVisible, useStudioCanvasView } from "./studio-canvas-scale";
 import { StudioCanvasIframe } from "./studio-canvas-root";
@@ -31,6 +29,7 @@ import { studioCrossSlotReason, useStudioScreen } from "./studio-canvas-screen";
 import { useStudioCanvasChannel } from "./studio-canvas-metadata";
 import { useStudioCanvas, useStudioCanvasDragging } from "./studio-puck-provider";
 import { studioFieldTypes } from "./studio-puck-field-types";
+import { studioCanvasPermissionReason, studioBlockName } from "@vortex/platform/schema";
 
 const usePuckSelector = createUsePuck();
 

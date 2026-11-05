@@ -1,12 +1,16 @@
 "use client";
 import { useMemo, useState, type ReactNode } from "react";
-import type { StudioSemanticOutline, StudioSemanticOutlineNode } from "@vortex/ui/studio";
-import { StudioPuckOutline, studioShownByFlowsKey } from "@vortex/ui/studio";
+import { StudioPuckOutline } from "@vortex/ui/studio";
 import { Button } from "@vortex/ui/components/button";
 import { Empty, EmptyDescription, EmptyHeader } from "@vortex/ui/components/empty";
 import { StudioPanelShell, StudioSearchBox, StudioSection } from "./studio-frame";
 import { StudioOutline } from "./studio-outline";
 import { StudioLimitRow } from "./studio-limit";
+import {
+  type StudioSemanticOutline,
+  type StudioSemanticOutlineNode,
+  studioShownByFlowsKey,
+} from "@vortex/platform/schema";
 
 /**
  * The rail panels drawn from the one semantic outline of the draft: Structure (the application, its

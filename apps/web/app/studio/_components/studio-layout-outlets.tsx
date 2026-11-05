@@ -6,17 +6,12 @@ import type {
   ImmutablePlatformBlockCatalogue,
 } from "@vortex/platform/schema";
 import {
-  studioLayoutOutletTargets,
-  studioLayoutOutletPlacementUses,
   StudioDialog,
   StudioField,
   StudioInspectorGroup,
   StudioReferencePicker,
   StudioIconButton,
-  type StudioPlacementDescriber,
   type StudioStructureCommand,
-  type StudioStructureResult,
-  type StudioLayoutOutletValues,
 } from "@vortex/ui/studio";
 import { Icon } from "@vortex/ui";
 import { Button } from "@vortex/ui/components/button";
@@ -26,6 +21,13 @@ import { Checkbox } from "@vortex/ui/components/checkbox";
 import { studioNotice } from "./studio-save-state";
 import { useStudioDraftText } from "./use-studio-draft-text";
 import { StudioPlaceList } from "./studio-used-in";
+import {
+  studioLayoutOutletTargets,
+  studioLayoutOutletPlacementUses,
+  type StudioPlacementDescriber,
+  type StudioStructureResult,
+  type StudioLayoutOutletValues,
+} from "@vortex/platform/schema";
 
 type Shell = ApplicationSourceDocument["body"]["shells"][number];
 type Outlet = Shell["content_slots"][number];

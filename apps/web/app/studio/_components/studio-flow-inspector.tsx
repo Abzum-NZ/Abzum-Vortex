@@ -12,19 +12,10 @@ import {
   canonicalJson,
   describeFailure,
   type SourceFlow,
-} from "@vortex/platform/schema";
-import {
-  StudioField,
-  StudioReferencePicker,
-  StudioInspectorGroup,
-  StudioInspectorActions,
-  StudioOptionControl,
-  StudioFlowStepPicker,
   projectStudioFlowStepActions,
   projectStudioFlowStepForm,
   refreshStudioFlowStepFields,
   samePath,
-  studioFlowConditionContext,
   studioFlowOutline,
   studioFlowReferenceChoices,
   type StudioFlowCommand,
@@ -37,10 +28,19 @@ import {
   type StudioFlowStartDraft,
   type StudioFlowStartProjection,
   type StudioFlowStepDraft,
-  type StudioFlowStepPickerContext,
   type StudioFlowStepType,
   type StudioFlowTaskListOutline,
   type StudioFlowTaskOutline,
+} from "@vortex/platform/schema";
+import {
+  StudioField,
+  StudioReferencePicker,
+  StudioInspectorGroup,
+  StudioInspectorActions,
+  StudioOptionControl,
+  StudioFlowStepPicker,
+  studioFlowConditionContext,
+  type StudioFlowStepPickerContext,
 } from "@vortex/ui/studio";
 import { StudioFlowStepForm } from "./studio-flow-step-form";
 import { StudioFlowStartEditor } from "./studio-flow-start-editor";

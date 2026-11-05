@@ -4,18 +4,18 @@ import { NavigationLink } from "@vortex/ui/routing";
 import { useMemo, useState } from "react";
 import { Button } from "@vortex/ui/components/button";
 import type { ApplicationSourceDocument } from "@vortex/platform/schema";
+import { Icon } from "@vortex/ui";
+import { StudioNavItem } from "./studio-nav-tree";
+import { StudioPanelShell, StudioSearchBox, StudioSection } from "./studio-frame";
+import { StudioNewFlowDialog } from "./studio-new-flow-dialog";
+import type { StudioModuleOwnerApplication } from "./module-fields-editor";
 import {
   studioFlowLabel,
   studioSemanticSelectionKey,
   type StudioFlowCreateChoices,
   type StudioFlowCreateCommand,
   type StudioFlowSelection,
-} from "@vortex/ui/studio";
-import { Icon } from "@vortex/ui";
-import { StudioNavItem } from "./studio-nav-tree";
-import { StudioPanelShell, StudioSearchBox, StudioSection } from "./studio-frame";
-import { StudioNewFlowDialog } from "./studio-new-flow-dialog";
-import type { StudioModuleOwnerApplication } from "./module-fields-editor";
+} from "@vortex/platform/schema";
 
 /**
  * The Flows tab's list: the application's own flows, then each owned Module's flows, then the

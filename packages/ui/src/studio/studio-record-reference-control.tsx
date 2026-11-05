@@ -7,7 +7,11 @@ import { Button } from "../components/button";
 import { ChevronsDown, RotateCcw } from "lucide-react";
 import { useRecordChoicePager } from "../controls/use-record-choice-pager";
 import { StudioReferencePicker } from "./studio-reference-picker";
-import type { StudioRecordChoice, StudioRecordPage, StudioRecordReader } from "./studio-setting-model";
+import type {
+  StudioRecordChoice,
+  StudioRecordPage,
+  StudioRecordReader,
+} from "@vortex/platform/schema";
 
 type RecordValue = Readonly<{ recordType: string; recordId: string }>;
 

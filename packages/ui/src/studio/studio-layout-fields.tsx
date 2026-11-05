@@ -7,15 +7,15 @@ import { FieldLegend } from "../components/field";
 import { Input } from "../components/input";
 import { Switch } from "../components/switch";
 import { Icon } from "../icons";
-import type {
-  StudioCompositionEditorModel,
-  StudioCompositionLayout,
-} from "./application-composition-model";
 import { studioScreens, useStudioScreen } from "./studio-canvas-screen";
 import { StudioIconButton } from "./studio-entry-list";
 import { StudioField, StudioHelp } from "./studio-field";
 import { StudioSegmentedControl } from "./studio-segmented-control";
 import { useStudioDraftHeld } from "./use-studio-draft-held";
+import type {
+  StudioCompositionEditorModel,
+  StudioCompositionLayout,
+} from "@vortex/platform/schema";
 
 /**
  * The Layout group's two fields: the size of the selected block on the screen the canvas shows, and

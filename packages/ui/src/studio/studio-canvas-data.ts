@@ -16,10 +16,9 @@ import {
   type StoredReservations,
   type SourcePageZone,
   isStudioDraftSnapshot,
+  type StudioCompositionDestination,
+  slotDeclaration,
 } from "@vortex/platform/schema";
-import type { StudioCompositionDestination } from "./application-composition-commands";
-import { slotDeclaration } from "./application-composition-regions";
-import type { StudioPlacementDescriber } from "./semantic-outline";
 
 /** One compiled zone of the page (a content slot, or the default zone): its items, exactly as the published definition holds them. */
 export type StudioCanvasCompiledSlot = readonly CompiledItem[];

@@ -3,8 +3,8 @@ import type {
   ApplicationRootId,
   ApplicationUseTarget,
 } from "@vortex/platform/schema";
-import type { StudioSemanticSelection } from "@vortex/ui/studio";
 import type { StudioRailKey } from "../_components/studio-rail-tabs";
+import type { StudioSemanticSelection } from "@vortex/platform/schema";
 
 /**
  * How Studio goes to a place of the draft's reference index: the selection that shows it, and the

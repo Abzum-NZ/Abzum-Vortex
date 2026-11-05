@@ -15,8 +15,6 @@ import {
 } from "react";
 import type { BlockPaletteGroup } from "@vortex/platform/schema";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "../components/collapsible";
-import { PALETTE_GROUP_TITLES } from "../palette-groups";
-import { PUBLISHED_PAGE_ADD_REASON } from "./application-composition-regions";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "../components/empty";
 import { Alert, AlertDescription } from "../components/alert";
 import { Button } from "../components/button";
@@ -40,10 +38,16 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from "../components/tooltip";
 import { Icon, resolveVortexIconName, type VortexIconName } from "../icons";
 import { cn } from "../lib/utils";
-import { definitionLimitMessage, definitionLimitReached } from "@vortex/platform/schema";
+import {
+  definitionLimitMessage,
+  definitionLimitReached,
+  PALETTE_GROUP_TITLES,
+  PUBLISHED_PAGE_ADD_REASON,
+  type StudioCompositionAddTarget,
+  studioPaletteComponentLists,
+  type StudioPaletteChoice,
+} from "@vortex/platform/schema";
 import { StudioLimitNote, Reasoned } from "./studio-limit";
-import type { StudioCompositionAddTarget } from "./application-composition-commands";
-import { studioPaletteComponentLists, type StudioPaletteChoice } from "./contextual-palette";
 import { zoneOfDestination } from "./studio-canvas-data";
 import { studioScreens, useStudioScreen } from "./studio-canvas-screen";
 import { useStudioCanvas, type StudioCanvasAddRequest } from "./studio-puck-provider";

@@ -1,0 +1,598 @@
+import { sameCompositionValue as sameValue, sourceNames } from "./composition-references";
+import type {
+  ImmutablePlatformBlockCatalogue,
+  PlatformBlockRelease,
+} from "../application-composition/platform-block-release";
+import {
+  applicationSourceDocumentSchema,
+  type ApplicationSourceDocument,
+} from "../application-source-contracts";
+import {
+  plainSourceSettingValue,
+  typedSourceSettingValue,
+  type ComponentSettingFailure,
+  type BlockPropertySchemaContract,
+} from "../application-composition/block-property-schema";
+import { shellLayoutZone } from "../application-page-slots";
+import { sourcePageShell, type SourceItem } from "../application-composition/source-composition";
+import {
+  repeatableSlotItemIdentities,
+  repeatableSlotKey,
+  isRepeatableSlotIdentity,
+} from "../application-composition/placement-slots";
+import type { SourceBlockPropertyValueContract } from "../application-composition/block-property-values";
+import { isStudioDraftSnapshot } from "./draft-snapshot";
+import {
+  definitionLimitMessage,
+  definitionLimitReached,
+  definitionLimits,
+} from "../definition-limits";
+import { studioStarterSlots } from "./composition-starters";
+import { studioPageAreaLabel } from "./application-page-layout";
+import { createStudioDiscoveryAdapter } from "./discovery-adapter";
+import {
+  STUDIO_ROW_ACTION_EVENT_SETTING,
+  studioOwnsSetting,
+  studioPaletteChoices,
+  studioQueryOffered,
+  studioQueryChoices,
+  studioRowActionEventId,
+  type StudioPaletteChoice,
+} from "./contextual-palette";
+import { studioGridDataSettings } from "./grid-features/index";
+import { resolveStudioDataQuery } from "./default-record-query";
+import {
+  adjustedSlotOrder,
+  freshBlockName,
+  StoredCompositionRefusal,
+  syncStoredBlockDependencies,
+  validateStoredApplicationOutlets,
+} from "./stored-composition";
+import type {
+  StudioCompositionContext,
+  StudioCompositionAddTarget,
+  StudioCompositionAddTargetsModel,
+  StudioCompositionOwner,
+  StudioDraftChangeResult,
+} from "./application-composition-model";
+import {
+  type Region,
+  type SlotStep,
+  toolsFor,
+  refuse,
+  isObject,
+  object,
+  validContext,
+  regions,
+  regionHostLevels,
+  releaseFor,
+  itemSlots,
+  closedPlain,
+  parseDestination,
+  parseOwner,
+  sameDestination,
+  workingCopy,
+  zoneHandle,
+  workingItem,
+  commitWorking,
+  plainSource,
+  plainSettings,
+  settingsOf,
+  PUBLISHED_PAGE_ADD_REASON,
+  declarationSlotKeys,
+  publishedPage,
+} from "./application-composition-regions";
+import { FORM_CONTAINER_KEY, NESTED_FORM_REASON } from "./application-composition-forms";
+import type { StudioPlacementDescriber } from "./semantic-outline";
+
+/**
+ * What the author calls the entry of a repeating slot (a tab) that is stored under `slotKey`: its
+ * label, else its key, as the block itself shows it.
+ */
+const repeatingEntryName = (
+  item: SourceItem,
+  declaration: Readonly<{
+    key: string;
+    repeats?: Readonly<{ items: string; identity: string }> | undefined;
+  }>,
+  slotKey: string,
+): string => {
+  const identity = slotKey.slice(declaration.key.length + 1);
+  const entries = declaration.repeats === undefined ? [] : item.props[declaration.repeats.items];
+  const entry = (Array.isArray(entries) ? entries : []).find(
+    (candidate: unknown) =>
+      typeof candidate === "object" &&
+      candidate !== null &&
+      (candidate as Record<string, unknown>)[declaration.repeats!.identity] === identity,
+  ) as Record<string, unknown> | undefined;
+  const label = entry?.label;
+  return typeof label === "string" && label.trim().length > 0 ? label : identity;
+};
+
+const blockCounts = new WeakMap<ImmutablePlatformBlockCatalogue, WeakMap<SourceItem, number>>();
+const countBlocks = (catalogue: ImmutablePlatformBlockCatalogue, items: readonly SourceItem[]) => {
+  let total = 0;
+  for (const item of items) {
+    const held = blockCounts.get(catalogue)?.get(item);
+    if (held !== undefined) {
+      total += held;
+      continue;
+    }
+    let count = 1;
+    for (const child of itemSlots(catalogue, item).values())
+      count += countBlocks(catalogue, child.items);
+    // A block of a history snapshot never changes, so an unchanged block is counted once.
+    if (isStudioDraftSnapshot(item)) {
+      let counts = blockCounts.get(catalogue);
+      if (counts === undefined) blockCounts.set(catalogue, (counts = new WeakMap()));
+      counts.set(item, count);
+    }
+    total += count;
+  }
+  return total;
+};
+
+/** The composition limit counts every block of the application: its pages and its layouts. */
+export const studioPlacedBlocks = (
+  catalogue: ImmutablePlatformBlockCatalogue,
+  source: ApplicationSourceDocument,
+): number =>
+  regions(source).reduce((total, each) => total + countBlocks(catalogue, each.zone.items), 0);
+
+/** One place on a page or layout where a new block can go, as the palette and the add command know it. */
+type AddPlace = {
+  target: StudioCompositionAddTarget;
+  region: Region;
+  steps: readonly SlotStep[];
+  /** The outlet label when the slot holds page content: a layout never takes blocks there. */
+  outlet?: string;
+};
+
+/** The area key of a layout's blocks among its places; a page's places use its slot address key. */
+const LAYOUT_AREA = shellLayoutZone;
+
+/**
+ * Every place on one page or layout a new block can go: the top of each content area (a layout's
+ * top level), and each fixed slot of every block in it, at any depth. Each place lists the one
+ * release of every block the catalogue admits there. A public page, a guided form and a page an
+ * experience shows are not offered: their surface rules are not checked here. A layout slot that
+ * holds a page's content outlet is listed without choices: that slot holds page content.
+ */
+export const addPlaces = (
+  catalogue: ImmutablePlatformBlockCatalogue,
+  source: ApplicationSourceDocument,
+  owner: StudioCompositionOwner,
+  describePlacement?: StudioPlacementDescriber,
+): AddPlace[] | "invalid" | "unsupported" | "published" => {
+  // Both owners are nonpublic and authenticated; the surface grants no authority.
+  const discovery = createStudioDiscoveryAdapter({ catalogue, surface: { kind: "authenticated" } });
+  type Area = {
+    region: Region;
+    area: string;
+    label: string;
+    admitted: () => ReturnType<typeof discovery.getPlacementChoices>;
+  };
+  const areas: Area[] = [];
+  let outlets: ReadonlyMap<string, string> = new Map();
+  if (owner.kind === "layout") {
+    const shells = source.body.shells.filter((candidate) => candidate.id === owner.shellAlias);
+    const shell = shells.length === 1 ? shells[0]! : undefined;
+    if (shell === undefined) return "invalid";
+    const region = regions(source).find((candidate) => candidate.shell === shell) ?? refuse();
+    areas.push({
+      region,
+      area: LAYOUT_AREA,
+      label: "Layout",
+      admitted: () => discovery.getPlacementChoices({ kind: "shell_layout" }),
+    });
+    outlets = new Map(
+      shell.content_slots.map((slot) => [
+        `${slot.parent_placement}|${slot.parent_slot}`,
+        slot.label,
+      ]),
+    );
+  } else {
+    const pages = source.body.pages.filter((page) => page.id === owner.pageAlias);
+    const page = pages.length === 1 ? pages[0]! : undefined;
+    if (page === undefined) return "invalid";
+    if (publishedPage(source, page)) return "published";
+    if (page.type === "guided_form") return "unsupported";
+    const shellAlias = sourcePageShell(page.composition);
+    const shell = source.body.shells.find((candidate) => candidate.id === shellAlias);
+    const pageRegions = regions(source).filter(
+      (region) => region.page === page && region.address !== undefined,
+    );
+    for (const region of pageRegions) {
+      const address = region.address!;
+      areas.push({
+        region,
+        area: address.key,
+        label:
+          pageRegions.length > 1
+            ? `Page content: ${studioPageAreaLabel(source, page, address)}`
+            : "Page content",
+        admitted: () => {
+          if (region.parent === undefined) return discovery.getPlacementChoices({ kind: "page" });
+          const binding = shell?.content_slots.find((candidate) => candidate.id === address.slot);
+          const declared =
+            releaseFor(catalogue, region.parent)?.slots.find(
+              (slot) => slot.key === binding?.parent_slot,
+            )?.allowedChildCategories ?? [];
+          return discovery.getPlacementChoices({
+            kind: "shell_content",
+            allowedChildCategories: (binding?.allowed_child_categories ?? []).filter((group) =>
+              declared.includes(group),
+            ),
+          });
+        },
+      });
+    }
+  }
+  const places: AddPlace[] = [];
+  const placed = studioPlacedBlocks(catalogue, source);
+  for (const { region, area, label, admitted } of areas) {
+    const hostLevels = regionHostLevels(catalogue, source, region);
+    // A block with slots is named as the outline names it (display name and item label); only
+    // without a describer is it named by its kind and its place among blocks of that kind in
+    // this area. Never by its alias.
+    const ordinals = new Map<string, number>();
+    // A place that would take a block past the composition limits offers every block as unavailable.
+    const limited = (
+      depth: number,
+      choices: readonly StudioPaletteChoice[],
+    ): readonly StudioPaletteChoice[] => {
+      const reason = definitionLimitReached("compositionPlacements", placed)
+        ? definitionLimitMessage("compositionPlacements")
+        : depth >= definitionLimits.compositionDepth
+          ? definitionLimitMessage("compositionDepth")
+          : undefined;
+      return reason === undefined
+        ? choices
+        : choices.map((choice) =>
+            Object.freeze({ ...choice, unavailable: reason, unavailableWhenFilled: reason }),
+          );
+    };
+    places.push({
+      region,
+      steps: [],
+      target: Object.freeze<StudioCompositionAddTarget>({
+        id: `${area}|`,
+        area,
+        destination: { kind: "root" },
+        label,
+        depth: hostLevels,
+        placed,
+        choices: limited(hostLevels, studioPaletteChoices(catalogue, admitted())),
+      }),
+    });
+    // A form takes no other form: inside one, the form choice is offered as unavailable.
+    const formChoices = (
+      inForm: boolean,
+      choices: readonly StudioPaletteChoice[],
+    ): readonly StudioPaletteChoice[] =>
+      choices.map((choice) =>
+        inForm && choice.key === FORM_CONTAINER_KEY
+          ? Object.freeze({
+              ...choice,
+              unavailable: NESTED_FORM_REASON,
+              unavailableWhenFilled: NESTED_FORM_REASON,
+            })
+          : choice,
+      );
+    const visit = (
+      items: readonly SourceItem[],
+      steps: readonly SlotStep[],
+      inForm: boolean,
+    ): void => {
+      for (const item of items) {
+        const release = releaseFor(catalogue, item);
+        if (release === undefined) continue;
+        const slots = itemSlots(catalogue, item);
+        const ordinal = (ordinals.get(String(release.name)) ?? 0) + 1;
+        ordinals.set(String(release.name), ordinal);
+        const childInForm = inForm || release.key === FORM_CONTAINER_KEY;
+        for (const declaration of release.slots)
+          for (const slotKey of declarationSlotKeys(declaration, slots.keys())) {
+            const parentAlias = item.props.id;
+            const childSteps = [...steps, { parentAlias, slotKey }];
+            const outlet = outlets.get(`${parentAlias}|${slotKey}`);
+            const label = [
+              describePlacement?.({ block: item.props.vortex.block, settings: settingsOf(item) }) ??
+                `${release.name} ${ordinal}`,
+              ": ",
+              declaration.label,
+              declaration.repeats === undefined
+                ? ""
+                : ` (${repeatingEntryName(item, declaration, slotKey)})`,
+              outlet === undefined ? "" : ` (page content: ${outlet})`,
+            ].join("");
+            places.push({
+              region,
+              steps: childSteps,
+              ...(outlet === undefined ? {} : { outlet }),
+              target: Object.freeze<StudioCompositionAddTarget>({
+                id: `${area}|${parentAlias}|${slotKey}`,
+                area,
+                destination: { kind: "child", parentAlias, slotKey },
+                label,
+                depth: hostLevels + childSteps.length,
+                placed,
+                choices:
+                  outlet === undefined
+                    ? limited(
+                        hostLevels + childSteps.length,
+                        formChoices(
+                          childInForm,
+                          studioPaletteChoices(
+                            catalogue,
+                            discovery.getPlacementChoices({
+                              kind: "slot",
+                              parent: {
+                                blockId: release.blockId,
+                                releaseVersion: release.releaseVersion,
+                              },
+                              slotKey,
+                            }),
+                          ),
+                        ),
+                      )
+                    : [],
+              }),
+            });
+            const child = slots.get(slotKey);
+            if (child !== undefined) visit(child.items, childSteps, childInForm);
+          }
+      }
+    };
+    visit(region.zone.items, [], false);
+  }
+  return places;
+};
+
+/** The places on one page or layout a new block can go, for the palette and its keyboard add. */
+export const describeStudioCompositionAddTargets = (
+  context: StudioCompositionContext,
+  owner: StudioCompositionOwner,
+  describePlacement?: StudioPlacementDescriber,
+): StudioCompositionAddTargetsModel => {
+  try {
+    plainSource(context.source);
+    if (!validContext(context)) return { kind: "invalid" };
+    const places = addPlaces(
+      context.catalogue,
+      applicationSourceDocumentSchema.parse(context.source),
+      owner,
+      describePlacement,
+    );
+    return places === "published"
+      ? { kind: "unsupported", reason: "published" }
+      : typeof places === "string"
+        ? { kind: places }
+        : { kind: "available", targets: Object.freeze(places.map((place) => place.target)) };
+  } catch (error) {
+    console.error("[studio] the places for a new block could not be read", error);
+    return { kind: "invalid" };
+  }
+};
+
+const groupsTaken = (target: StudioCompositionAddTarget): string => {
+  const labels = [...new Set(target.choices.map((choice) => choice.groupLabel.toLowerCase()))];
+  if (labels.length === 0) return "it takes no new blocks";
+  const listed =
+    labels.length === 1 ? labels[0]! : `${labels.slice(0, -1).join(", ")} and ${labels.at(-1)!}`;
+  return `it takes ${listed} blocks`;
+};
+
+/**
+ * Puts one new block into a place of the source at an index: a fixed slot the stored block leaves
+ * out starts as an empty list, and each declared tablet and phone order takes the block at its
+ * desktop position. The source is edited in place; a stored-composition refusal is thrown.
+ */
+export const placeItem = (
+  catalogue: ImmutablePlatformBlockCatalogue,
+  source: ApplicationSourceDocument,
+  place: AddPlace,
+  index: number,
+  item: SourceItem,
+): void => {
+  const working = workingCopy(place.region);
+  const last = place.steps.at(-1);
+  if (last !== undefined) {
+    const parent = workingItem(working, place.steps.slice(0, -1), last.parentAlias);
+    if (!Array.isArray(parent.props[last.slotKey])) parent.props[last.slotKey] = [];
+  }
+  const zone = zoneHandle(working, place.steps);
+  const items = [...zone.items];
+  items.splice(Math.min(index, items.length), 0, item);
+  zone.set(
+    items,
+    adjustedSlotOrder(
+      zone.order,
+      items.map((entry) => entry.props.id),
+    ),
+  );
+  commitWorking(catalogue, place.region, working);
+  validateStoredApplicationOutlets(catalogue, source);
+};
+
+/**
+ * A new block of one release: a fresh block name, the settings given (the release's declared
+ * defaults fill every other setting when the source is read), an empty list for every fixed slot
+ * and the default layout.
+ */
+export const newBlockItem = (
+  catalogue: ImmutablePlatformBlockCatalogue,
+  source: ApplicationSourceDocument,
+  release: PlatformBlockRelease,
+  settings: Readonly<Record<string, SourceBlockPropertyValueContract>>,
+  query: string | null,
+  shownByFlow = false,
+): { alias: string; item: SourceItem } => {
+  const taken = sourceNames(source);
+  const alias = freshBlockName(release.key.split(".").at(-1) ?? "block", taken);
+  taken.add(alias);
+  const item = {
+    type: release.rendererKey,
+    props: {
+      id: alias,
+      ...plainSettings(settings),
+      // A block with one row action names that action's event from its own block name.
+      ...(release.properties.some((property) => property.key === STUDIO_ROW_ACTION_EVENT_SETTING)
+        ? { [STUDIO_ROW_ACTION_EVENT_SETTING]: studioRowActionEventId(alias) }
+        : {}),
+      ...Object.fromEntries(
+        release.slots.filter((slot) => slot.repeats === undefined).map((slot) => [slot.key, []]),
+      ),
+      ...Object.fromEntries(
+        release.slots.flatMap((slot) =>
+          repeatableSlotItemIdentities(slot, settings)
+            .filter((identity) => isRepeatableSlotIdentity(slot.key, identity))
+            .map((identity) => [repeatableSlotKey(slot.key, identity), []]),
+        ),
+      ),
+      ...studioStarterSlots(catalogue, release, taken, shownByFlow, source),
+      vortex: {
+        block: { block_id: release.blockId, release_version: release.releaseVersion },
+        ...(query === null ? {} : { query }),
+        responsive: {
+          desktop: { visible: true, width: { kind: "fill" }, height: { kind: "content" } },
+        },
+      },
+    },
+  } as unknown as SourceItem;
+  return { alias, item };
+};
+
+/**
+ * Adds one new block at one place on a page: a fresh block name, the settings Studio owns and the
+ * settings the person gives (the release's declared defaults fill the rest when the source is read),
+ * an empty list for every fixed slot and the default layout. The required settings the catalogue has no default for, and the query of a data block,
+ * come with the command. The edited slot is judged as stored data, and a block release the source
+ * does not depend on yet becomes a dependency.
+ */
+export const applyAdd = (
+  current: StudioCompositionContext,
+  command: unknown,
+): StudioDraftChangeResult => {
+  const input = closedPlain(command, [
+    "kind",
+    "owner",
+    "area",
+    "destination",
+    "index",
+    "blockId",
+    "releaseVersion",
+    "settings",
+    "query",
+  ]);
+  if (
+    input.kind !== "add" ||
+    typeof input.area !== "string" ||
+    typeof input.blockId !== "string" ||
+    typeof input.releaseVersion !== "string" ||
+    typeof input.index !== "number" ||
+    !Number.isSafeInteger(input.index) ||
+    input.index < 0 ||
+    (input.query !== null && typeof input.query !== "string")
+  )
+    return { kind: "invalid" };
+  plainSource(current.source);
+  if (!validContext(current)) return { kind: "invalid" };
+  const catalogue = current.catalogue;
+  const source = applicationSourceDocumentSchema.parse(current.source);
+  const destination = parseDestination(input.destination);
+  const places = addPlaces(catalogue, source, parseOwner(input.owner));
+  if (places === "published") return { kind: "refused", reason: PUBLISHED_PAGE_ADD_REASON };
+  if (typeof places === "string") return { kind: places };
+  const place = places.find(
+    (candidate) =>
+      candidate.target.area === input.area &&
+      sameDestination(candidate.target.destination, destination),
+  );
+  const release = toolsFor(catalogue).releases.get(`${input.blockId}:${input.releaseVersion}`);
+  if (place === undefined)
+    return { kind: "refused", reason: "This place does not take new blocks." };
+  if (place.outlet !== undefined)
+    return {
+      kind: "refused",
+      reason: `This slot holds the page content of the layout's "${place.outlet}" outlet, so it takes no blocks of the layout. Add the block to a page instead.`,
+    };
+  const choice = place.target.choices.find(
+    (candidate) =>
+      candidate.blockId === input.blockId && candidate.releaseVersion === input.releaseVersion,
+  );
+  if (release === undefined || choice === undefined)
+    return {
+      kind: "refused",
+      reason: `${release?.name ?? "This block"} can't go into ${place.target.label}: ${groupsTaken(place.target)}.`,
+    };
+  if (choice.unavailable !== undefined)
+    return { kind: "refused", reason: `${choice.name} can't be added yet. ${choice.unavailable}` };
+
+  // The settings the person gave (the setup asks for each required one without a default), each
+  // of its declared kind; every other setting takes its catalogue default.
+  const query = resolveStudioDataQuery(source, input.query as string | null);
+  const settings = commandSettings(
+    {
+      ...studioGridDataSettings(
+        release.properties,
+        studioQueryChoices(source, current.borrowed).find((choice) => choice.reference === query),
+      ),
+      ...(input.settings as Record<string, SourceBlockPropertyValueContract>),
+    },
+    release.properties,
+  );
+  // Studio owns some settings and writes them itself, so a command never supplies them.
+  if (Object.keys(settings).some(studioOwnsSetting)) return { kind: "invalid" };
+  if (
+    choice.needsQuery !== (query !== null) ||
+    (query !== null && !studioQueryOffered(source, current.borrowed, query))
+  )
+    return { kind: "invalid" };
+
+  const { alias, item } = newBlockItem(catalogue, source, release, settings, query);
+  try {
+    placeItem(catalogue, source, place, input.index, item);
+  } catch (error) {
+    if (error instanceof StoredCompositionRefusal)
+      return {
+        kind: "refused",
+        reason: `${choice.name} can't go into ${place.target.label}. ${error.message}.`,
+      };
+    throw error;
+  }
+  syncStoredBlockDependencies(source);
+  return {
+    kind: "applied",
+    source: applicationSourceDocumentSchema.parse(source),
+    placementAlias: alias,
+  };
+};
+
+/**
+ * The settings a command supplies, each a typed authored value of the declared kind of its key.
+ * A value is accepted only when its plain stored form reads back as exactly that value.
+ */
+export const commandSettings = (
+  value: unknown,
+  properties: readonly BlockPropertySchemaContract[],
+): Record<string, SourceBlockPropertyValueContract> => {
+  plainSource(value);
+  const raw = object(value);
+  const result: Record<string, SourceBlockPropertyValueContract> = {};
+  for (const key of Object.keys(raw)) {
+    const declaration = properties.find((property) => property.key === key) ?? refuse();
+    const supplied = raw[key];
+    if (!isObject(supplied) || supplied.kind !== declaration.kind) return refuse();
+    const failures: ComponentSettingFailure[] = [];
+    const typed = typedSourceSettingValue(
+      plainSourceSettingValue(supplied as SourceBlockPropertyValueContract),
+      declaration,
+      [key],
+      failures,
+    );
+    if (typed === undefined || failures.length > 0 || !sameValue(typed, supplied)) return refuse();
+    result[key] = typed;
+  }
+  return result;
+};

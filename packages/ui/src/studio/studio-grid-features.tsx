@@ -8,6 +8,15 @@ import {
   recordsTableSavedViewsFeature,
   recordsTableSpreadsheetFeature,
   recordsTableColumnFiltersFeature,
+  type StudioQueryChoice,
+  studioGridFeatureEditors,
+  studioGridFeatureStart,
+  studioRecordsTableQueryFacts,
+  type StudioRelatedRecordsChoices,
+  type StudioBoardPipeline,
+  type StudioSettingChoices,
+  type StudioSettingValues,
+  studioSettingProblems,
 } from "@vortex/platform/schema";
 
 import { useId, useState, type ReactElement } from "react";
@@ -42,17 +51,9 @@ import {
 } from "../components/item";
 import { Label } from "../components/label";
 import { Switch } from "../components/switch";
-import type { StudioQueryChoice } from "./contextual-palette";
-import {
-  studioGridFeatureEditors,
-  studioGridFeatureStart,
-  studioRecordsTableQueryFacts,
-  type StudioRelatedRecordsChoices,
-} from "./grid-features";
 import { StudioSpreadsheetEditor } from "./grid-features/spreadsheet";
 import { StudioRowEditEditor } from "./grid-features/row-edit";
 import { StudioInlineEditEditor } from "./grid-features/inline-edit";
-import type { StudioBoardPipeline } from "./board-source";
 import { StudioBoardEditor } from "./grid-features/board";
 import { StudioConditionalFormattingEditor } from "./grid-features/conditional-formatting";
 import { StudioSavedViewsEditor } from "./grid-features/saved-views";
@@ -60,11 +61,6 @@ import { StudioExportEditor } from "./grid-features/export";
 import { StudioInspectorGroup } from "./studio-inspector-group";
 import { StudioQueryBindings } from "./studio-query-bindings";
 import { StudioSettingFields } from "./studio-setting-controls";
-import {
-  type StudioSettingChoices,
-  type StudioSettingValues,
-  studioSettingProblems,
-} from "./studio-setting-model";
 
 type GroupValue = Extract<SourceBlockPropertyValueContract, { kind: "group" }>;
 

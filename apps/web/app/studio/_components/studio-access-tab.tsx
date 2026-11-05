@@ -15,16 +15,16 @@ import {
 } from "@vortex/ui/components/popover";
 import { StudioNavItem } from "./studio-nav-tree";
 import { studioNotice } from "./studio-save-state";
-import type {
-  StudioAccessCommand,
-  StudioAccessResult,
-  StudioSemanticSelection,
-} from "@vortex/ui/studio";
 import { useIntentPreload } from "../_lib/use-intent-preload";
 import { deferredStudioPart } from "./studio-deferred-part";
 import { StudioField } from "./studio-field";
 import { StudioPanelShell, StudioSection } from "./studio-frame";
 import { StudioReferencesAlert } from "./studio-used-in";
+import type {
+  StudioAccessCommand,
+  StudioAccessResult,
+  StudioSemanticSelection,
+} from "@vortex/platform/schema";
 
 // The three editors of the centre load when the Access tab is first opened.
 const StudioAccessRoleEditor = deferredStudioPart(

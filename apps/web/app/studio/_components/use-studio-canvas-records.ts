@@ -1,15 +1,11 @@
 import { useCallback, useMemo } from "react";
 import type { ApplicationRootId, ApplicationSourceDocument } from "@vortex/platform/schema";
-import {
-  studioDraftChoices,
-  useStudioSameByKey,
-  type StudioCanvasGridRead,
-  type StudioRecordReader,
-} from "@vortex/ui/studio";
+import { useStudioSameByKey, type StudioCanvasGridRead } from "@vortex/ui/studio";
 import { readStudioCanvasRecords, readStudioDataRecords } from "../_lib/studio-preview-reader";
 import { readWhenPreviewReady } from "../_lib/studio-preview-gate";
 import type { StudioModuleOwnerApplication } from "./module-fields-editor";
 import type { StudioDraft } from "./use-studio-draft";
+import { studioDraftChoices, type StudioRecordReader } from "@vortex/platform/schema";
 
 /**
  * What the canvas tab reads for the blocks: the choices their settings offer (queries, fields,
