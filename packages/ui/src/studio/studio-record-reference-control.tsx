@@ -228,15 +228,18 @@ function StudioRecordChoicesPage({
         onSearch={setSearch}
         status={pager.loading ? "Searching…" : "No record matches that search."}
         // Inside the list, so the next page continues the search typed there.
-        footer={
+        footer={(backToSearch) =>
           pager.next !== undefined && (
             <Button
               type="button"
               variant="ghost"
               size="sm"
               className="w-full"
-              disabled={disabled || pager.loading}
-              onClick={pager.loadMore}
+              disabled={disabled}
+              onClick={() => {
+                pager.loadMore();
+                backToSearch();
+              }}
             >
               <ChevronsDown />
               Show more records

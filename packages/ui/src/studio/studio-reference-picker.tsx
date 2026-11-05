@@ -1,5 +1,5 @@
 "use client";
-import { useState, type ReactNode } from "react";
+import { useRef, useState, type ReactNode } from "react";
 import {
   Combobox,
   ComboboxCollection,
@@ -56,13 +56,17 @@ export function StudioReferencePicker({
   onSearch?: ((text: string) => void) | undefined;
   /** What the list says when it holds no choice: for a caller's search, that it reads or found none. */
   status?: string | undefined;
-  /** Drawn inside the list under the choices, such as the control that reads the next page. */
-  footer?: ReactNode;
+  /**
+   * Drawn inside the list under the choices, such as the control that reads the next page. It is
+   * handed `backToSearch`, which returns the keyboard to the search box so typing goes on there.
+   */
+  footer?: ((backToSearch: () => void) => ReactNode) | undefined;
   "aria-label"?: string | undefined;
   "aria-describedby"?: string | undefined;
   "aria-invalid"?: boolean | undefined;
 }>) {
   const [open, setOpen] = useState(false);
+  const input = useRef<HTMLInputElement>(null);
   const [query, setSearchText] = useState("");
   const setQuery = (text: string): void => {
     setSearchText(text);
@@ -121,6 +125,7 @@ export function StudioReferencePicker({
     >
       <InputGroup>
         <ComboboxInput
+          ref={input}
           id={id}
           placeholder={selected?.label ?? "Search…"}
           {...accessibility}
@@ -166,7 +171,7 @@ export function StudioReferencePicker({
             </ComboboxGroup>
           ))}
         </ComboboxList>
-        {footer}
+        {footer?.(() => input.current?.focus())}
       </ComboboxContent>
     </Combobox>
   );
