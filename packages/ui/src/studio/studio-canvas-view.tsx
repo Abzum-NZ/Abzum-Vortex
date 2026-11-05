@@ -28,10 +28,7 @@ const smallerScreenHint = (label: string): string =>
 const HELP_ICON_CLASS =
   "flex size-8 shrink-0 items-center justify-center rounded-md text-muted-foreground";
 
-// The focus outline is drawn inside the well: the panels beside it would cover one drawn outside.
-const WELL_CLASS =
-  "min-h-0 flex-1 bg-muted/40 p-4 [scrollbar-gutter:stable_both-edges] " +
-  "focus-visible:-outline-offset-2";
+const WELL_CLASS = "min-h-0 flex-1 bg-muted/40 p-4 [scrollbar-gutter:stable_both-edges]";
 
 function CanvasEmpty({ title, description }: Readonly<{ title: string; description: string }>) {
   return (
