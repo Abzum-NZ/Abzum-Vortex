@@ -253,7 +253,7 @@ function StudioRail<Key extends string>({
   onToggleCollapsed: (() => void) | undefined;
 }>) {
   return (
-    <div className="flex w-24 shrink-0 flex-col items-center gap-1 overflow-y-auto border-r border-sidebar-border bg-sidebar px-1 py-2 text-sidebar-foreground">
+    <div className="flex w-28 shrink-0 flex-col items-center gap-1 overflow-y-auto border-r border-sidebar-border bg-sidebar px-1 py-2 text-sidebar-foreground">
       {onToggleCollapsed !== undefined && (
         <Tooltip>
           <TooltipTrigger
