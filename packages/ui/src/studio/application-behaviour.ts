@@ -18,6 +18,7 @@ import {
   studioEventSentence,
   studioWithoutUnusedFlows,
   studioFlowLabel,
+  studioBlockRelease,
 } from "@vortex/platform/schema";
 
 /**
@@ -85,11 +86,7 @@ export const projectStudioBehaviour = (
       ...source.body.shells.flatMap((shell) => sourceItemTree(shell.layout.content)),
     ].find((entry) => entry.props.id === target.placementAlias);
     const block = item?.props.vortex.block;
-    const release = catalogue.releases.find(
-      (candidate) =>
-        String(candidate.blockId) === block?.block_id &&
-        String(candidate.releaseVersion) === block?.release_version,
-    );
+    const release = block === undefined ? undefined : studioBlockRelease(catalogue, block);
     return (release?.supportedEvents ?? []).filter(
       (event) => event !== "row_action" && pageDispatchedEvents.has(event),
     );
