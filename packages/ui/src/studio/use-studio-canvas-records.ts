@@ -12,7 +12,8 @@ import type { StudioCanvasRecords, StudioCanvasSample } from "./studio-canvas-me
 
 /**
  * The records of the canvas's data blocks for one saved revision, as the workspace read them.
- * `superseded`: a newer saved revision replaced this one; its own read follows, so what is shown stays.
+ * `superseded`: a newer saved revision replaced this one; its own read follows, so what is shown
+ * stays.
  */
 export type StudioCanvasRecordsRead = Readonly<{
   state: StudioCanvasRecords["state"] | "superseded";
@@ -33,8 +34,8 @@ export type StudioCanvasRecordsReader = (
 ) => Promise<StudioCanvasRecordsRead>;
 
 /**
- * The records of every zone of the page as one read: all that was read, and the first zone that
- * could not be read says why the page's records are not.
+ * The records of every zone of the area (a page's zones, or the layout's one) as one read: all that
+ * was read, and the first zone that could not be read says why the area's records are not.
  */
 const mergedRead = (reads: readonly StudioCanvasRecordsRead[]): StudioCanvasRecordsRead => {
   const failed = reads.find((read) => read.state !== "ready");
@@ -48,7 +49,7 @@ const mergedRead = (reads: readonly StudioCanvasRecordsRead[]): StudioCanvasReco
 
 type HeldRead = StudioCanvasRecordsRead & {
   state: StudioCanvasRecords["state"];
-  /** The page and step the records were read for. */
+  /** The page and step, or the layout, the records were read for. */
   area: string;
   source?: ApplicationSourceDocument;
   keys?: ReadonlyMap<string, string>;
@@ -70,10 +71,11 @@ const useStableKeys = (keys: ReadonlyMap<string, string>): Readonly<Record<strin
 const NO_VALUES_READ: StudioCanvasRecords["records"] = Object.freeze({});
 
 /**
- * The records the open page's data blocks show, the value chosen in each control on the
- * canvas and the channel the grid's events arrive on. Reads follow the visible area only: one per
- * page (or step) and compiled revision, and one more (debounced, the earlier one cancelled) per
- * control or grid-state change, sent once the preview runs this revision's data shape.
+ * The records the data blocks of the open page or layout show, the value chosen in each control on
+ * the canvas and the channel the grid's events arrive on. Reads follow the visible area only: one
+ * per page (or step, or layout) and compiled revision, and one more (debounced, the earlier one
+ * cancelled) per control or grid-state change, sent once the preview runs this revision's data
+ * shape.
  */
 export const useStudioCanvasRecords = ({
   area,
@@ -90,9 +92,12 @@ export const useStudioCanvasRecords = ({
   updating,
   compileFailure,
 }: Readonly<{
-  /** The page and step on the canvas. */
+  /** The page and step, or the layout, on the canvas. */
   area: string;
-  /** The page slot address keys of the page's zones, which the reader is asked for one by one. */
+  /**
+   * The slot address keys of the page's zones (or the layout's `[layout]`), which the reader is
+   * asked for one by one.
+   */
   areaKeys: readonly string[];
   readRecords: StudioCanvasRecordsReader | undefined;
   catalogue: ImmutablePlatformBlockCatalogue;
@@ -156,7 +161,8 @@ export const useStudioCanvasRecords = ({
         (reads) => {
           const read = mergedRead(reads);
           if (cancelled || controller.signal.aborted) return;
-          // A newer saved revision replaced this one: its own read follows, and what is shown stays.
+          // A newer saved revision replaced this one: its own read follows, and what is shown
+          // stays.
           if (read.state === "superseded") return;
           setHeld({ ...read, state: read.state, area, source: compiledSource, keys: savedKeys });
         },
@@ -180,7 +186,7 @@ export const useStudioCanvasRecords = ({
       controller.abort();
     };
   }, [readRecords, compiledSource, area, areaKeysKey, visible, stateKey]);
-  // Records read for another page or step are never shown as this one's.
+  // Records read for another page, step or layout are never shown as this one's.
   const read = useMemo(
     (): HeldRead => (held.area === area ? held : { state: LOADING, records: {}, area }),
     [held, area],
