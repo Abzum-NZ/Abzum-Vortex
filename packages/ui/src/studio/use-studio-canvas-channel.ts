@@ -23,9 +23,9 @@ const NO_COMPILED_SETTINGS: StudioCanvasChannel["compiled"] = Object.freeze({});
  * What the canvas draws from that grows with the page, in one place (`StudioCanvasChannel`, not
  * Puck's `metadata`, which Puck walks once per block). Compiled settings come from the open page's
  * model; the records are read for the saved revision (only while the canvas is on show, and only
- * for the visible page); the controls and the grid report back into the same reads; the frame is
- * the application the page is drawn in. The object changes only when one of its parts does, so
- * blocks draw again only for a real change.
+ * for the visible page or layout); the controls and the grid report back into the same reads; the
+ * frame is the application the page is drawn in. The object changes only when one of its parts
+ * does, so blocks draw again only for a real change.
  */
 export const useStudioCanvasChannelValue = (
   input: StudioPuckInput,
@@ -40,11 +40,10 @@ export const useStudioCanvasChannelValue = (
     compiledSource: input.compiledSource,
     originalItems: model.originalItems,
     items: model.items,
-    // Records are read for the page the canvas shows: once it is on show with its compiled version
-    // and frame, never before, so one read serves the final revision.
+    // Records are read for what the canvas shows, a page or a layout: once it is on show with its
+    // compiled version and frame, never before, so one read serves the final revision.
     visible:
       input.canvasShown &&
-      model.owner === "page" &&
       model.shown !== undefined &&
       input.platformThemeTokens !== null &&
       input.fieldInputControlReleases !== null,
