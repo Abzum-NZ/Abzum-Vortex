@@ -89,7 +89,10 @@ function SelectedBlock({ children }: Readonly<{ children: ReactNode }>) {
   return <SelectedPlacementProvider store={store}>{children}</SelectedPlacementProvider>;
 }
 
-/** Puck's component for one slot of the root; the root receives one for every slot field it declares. */
+/**
+ * Puck's component for one slot of the root; the root receives one for every slot field it
+ * declares.
+ */
 type RootSlot = (props?: { className?: string; style?: CSSProperties }) => ReactNode;
 
 /**
@@ -110,10 +113,10 @@ const LAYOUT_OUTLET_STYLE: CSSProperties = {
 };
 
 /**
- * One content slot of the page on the canvas: Studio's own element around the slot's content (Puck's
- * slot for a root slot, Puck's default zone for a page in the default frame). The editor-only rules
- * key on the element's `data-vortex-studio-canvas` marker, so the page lays out the same whether it
- * is being edited or its grids are being arranged.
+ * One content slot of the page on the canvas: Studio's own element around the slot's content
+ * (Puck's slot for a root slot, Puck's default zone for a page in the default frame). The
+ * editor-only rules key on the element's `data-vortex-studio-canvas` marker, so the page lays out
+ * the same whether it is being edited or its grids are being arranged.
  */
 function CanvasSlot({
   content,
@@ -165,10 +168,10 @@ function CanvasSlot({
 
 /**
  * The canvas root's render, inside Puck's preview, in every Puck mode. It draws the application's
- * theme, appearance and frame (shell and menu) from the frame Studio put in the canvas channel, with
- * each of the page's content slots (the root's slot fields) drawn where the shell declares it. A
- * page in the default frame has one content area, Puck's default zone, which Puck spaces itself:
- * the only public route to the page's block spacing is a root slot.
+ * theme, appearance and frame (shell and menu) from the frame Studio put in the canvas channel,
+ * with each of the page's content slots (the root's slot fields) drawn where the shell declares
+ * it. A page in the default frame has one content area, Puck's default zone, which Puck spaces
+ * itself: the only public route to the page's block spacing is a root slot.
  */
 export function StudioCanvasRoot({
   children,
@@ -196,8 +199,9 @@ export function StudioCanvasRoot({
   const latestSlots = useRef<Record<string, RootSlot>>({});
   const stableSlots = useRef<Record<string, RootSlot>>({});
   for (const name of rootSlots) {
-    // Until Puck holds the page's config (it opens on the empty one before the field controls load),
-    // a declared slot has no function yet: the last one stays, and nothing is drawn without one.
+    // Until Puck holds the page's config (it opens on the empty one before the field controls
+    // load), a declared slot has no function yet: the last one stays, and nothing is drawn without
+    // one.
     const slot = slots[name];
     if (slot !== undefined) latestSlots.current[name] = slot;
     stableSlots.current[name] ??= (props) => latestSlots.current[name]?.(props) ?? null;
@@ -314,7 +318,8 @@ export function StudioCanvasRoot({
     );
   const applicationName = frame?.applicationName ?? "";
   const pageName = frame?.pageName ?? "";
-  // Stable while the application and page are: the shell below is not drawn again for other changes.
+  // Stable while the application and page are: the shell below is not drawn again for other
+  // changes.
   const applicationSwitcherSource = useMemo(
     () => async () => ({
       state: "available" as const,
@@ -343,7 +348,8 @@ export function StudioCanvasRoot({
       ) : (
         <PagePuckRenderer
           readSettings={compiledItemSettings}
-          // A layout is drawn from Puck's content inside the shell's chrome, not from the saved frame.
+          // A layout is drawn from Puck's content inside the shell's chrome, not from the saved
+          // frame.
           composition={studio.layout ? LAYOUT_FRAME : frame.frame}
           breakpoint={breakpoint}
           registry={registry}
@@ -386,13 +392,14 @@ export function StudioCanvasIframe({
   useEffect(() => {
     frameDocument?.defaultView?.frameElement?.setAttribute("title", "Canvas preview");
   }, [frameDocument]);
-  // A block chosen outside the canvas (the Outline, the inspector, an address) is brought into view,
-  // found by Studio's own attribute on its wrapper. It may not be drawn yet (its slots wait), and
-  // the slots around it are drawn after the scroll with heights that were estimates, so it is kept
-  // in view for a few seconds, until the person scrolls or acts anywhere in Studio (the frame, the
-  // well's scrollbar, a panel) or begins a drag: that also cancels the wait for a block that is not
-  // drawn yet. A block chosen by a click in the canvas is already where the person is looking and
-  // is not scrolled to (the click's block is the one under the pointer, found by Studio's attribute).
+  // A block chosen outside the canvas (the Outline, the inspector, an address) is brought into
+  // view, found by Studio's own attribute on its wrapper. It may not be drawn yet (its slots wait),
+  // and the slots around it are drawn after the scroll with heights that were estimates, so it is
+  // kept in view for a few seconds, until the person scrolls or acts anywhere in Studio (the frame,
+  // the well's scrollbar, a panel) or begins a drag: that also cancels the wait for a block that is
+  // not drawn yet. A block chosen by a click in the canvas is already where the person is looking
+  // and is not scrolled to (the click's block is the one under the pointer, found by Studio's
+  // attribute).
   const selectedId = usePuckSelector((state) => state.selectedItem?.props.id);
   const dragging = useStudioCanvasDragging();
   const draggingRef = useRef(dragging);
@@ -477,16 +484,16 @@ export function StudioCanvasIframe({
     };
     copyStudioValues();
     frameDocument.head.append(style);
-    // Studio's document root can change its variables while the canvas is open (the theme is applied
-    // again after a navigation); the copy follows.
+    // Studio's document root can change its variables while the canvas is open (the theme is
+    // applied again after a navigation); the copy follows.
     const themeObserver = new MutationObserver(copyStudioValues);
     themeObserver.observe(document.documentElement, {
       attributes: true,
       attributeFilter: ["style", "class"],
     });
     // Keys pressed while focus is inside the iframe reach only its own document. Studio's shortcuts
-    // (Undo, Redo, the inspector, the panel) listen on the host window, so they are passed on there,
-    // as Puck passes on pointer moves. Typing in a field is left alone.
+    // (Undo, Redo, the inspector, the panel) listen on the host window, so they are passed on
+    // there, as Puck passes on pointer moves. Typing in a field is left alone.
     const forward = (event: KeyboardEvent) => {
       const target = event.target;
       if (
