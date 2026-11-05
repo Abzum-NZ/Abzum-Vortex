@@ -131,7 +131,8 @@ export function StudioUsedIn({
   name: string;
   onBeforeOpen?: () => void;
 }>) {
-  // A read of the whole draft: drawn after the keystroke that changed it, like the Outline.
+  // A read of the whole draft: drawn once typing pauses, like the Outline. Opening an entry selects
+  // its place in the current draft, which refuses a place that has left it.
   const shown = useSettledValue(source);
   const places = useMemo(() => applicationUses(shown, target), [shown, target]);
   return (

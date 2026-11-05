@@ -163,9 +163,9 @@ export function useStudioFlowsTab({
       catalogue,
     ],
   );
-  // A page is the control of its own events (load, record loaded). The names are read by content, so
-  // a keystroke in a block does not give the label function, and with it the create choices, a new
-  // identity before the deferred pass.
+  // A page is the control of its own events (load, record loaded). The names are read by content,
+  // so a keystroke in a block does not give the label function, and with it the create choices, a
+  // new identity.
   const pageNameKey = JSON.stringify(source.body.pages.map((entry) => [entry.id, entry.name]));
   const pageNames = useMemo(
     () => new Map(source.body.pages.map((entry) => [entry.id, entry.name])),
@@ -242,7 +242,8 @@ export function useStudioFlowsTab({
     [source, flowSelection, controlLabel],
   );
   // The choices are read only by the Flows tab and the Behaviour section: a flow being edited reads
-  // them at once, everything else after the keystroke has been drawn.
+  // them at once; the create choices are drawn from the draft as it stood once typing paused (a
+  // choice whose control has left the draft is refused by the create command).
   const choicesSource = useSettledValue(source);
   const draftChoices = useMemo(
     () =>
