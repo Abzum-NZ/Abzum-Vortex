@@ -54,7 +54,7 @@ export function StudioReferencePicker({
    * searches them (a long list read page by page) instead of this picker filtering the loaded ones.
    */
   onSearch?: ((text: string) => void) | undefined;
-  /** What the list says when it holds no choice: for a caller's search, that it reads or found none. */
+  /** What the empty list says; for a caller's search, that it is reading or found none. */
   status?: string | undefined;
   /**
    * Drawn inside the list under the choices, such as the control that reads the next page. It is
