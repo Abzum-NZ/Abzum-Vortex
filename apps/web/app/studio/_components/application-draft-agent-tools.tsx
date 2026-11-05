@@ -24,6 +24,7 @@ import {
   type StudioSemanticOutlineNode,
   type StudioSemanticSelection,
   studioRemovalIndex,
+  applyStudioAuthoredSource,
 } from "@vortex/platform/schema";
 import { z } from "zod";
 import { WebMcpAdapter, type WebMcpToolDescriptor } from "../../_components/webmcp-adapter";
@@ -515,6 +516,8 @@ export function ApplicationDraftAgentTools({
             "add_placement",
             "remove_placement",
             "change_placement_settings",
+            "change_application_pages",
+            "change_application_flows",
           ].includes(found.name)
         ) {
           authoring.current = await latest.current.loadAuthoringResources();
@@ -584,8 +587,19 @@ export function ApplicationDraftAgentTools({
               message:
                 "The workspace changed during review. Nothing was applied. Call read_application_draft.",
             };
+          // Pages and layouts replaced here have the refusals of the commands that make the same
+          // changes: the gate, a published page, where a block may leave, a form kept whole, the
+          // workflow a use permission needs.
+          const checked = applyStudioAuthoredSource(contextNow(), reviewed.source);
+          if (checked.kind === "refused")
+            return { outcome: "refused", message: `${checked.reason} Nothing was applied.` };
+          if (checked.kind !== "applied")
+            return {
+              outcome: "invalid",
+              message: "The edit could not be checked. Nothing was applied.",
+            };
           const edited = latest.current.run(
-            () => ({ kind: "edit", source: reviewed.source, result: true }),
+            () => ({ kind: "edit", source: checked.source, result: true }),
             { expected },
           );
           if (edited.kind !== "done") return { outcome: "blocked", message: edited.message };

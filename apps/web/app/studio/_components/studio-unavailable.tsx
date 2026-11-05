@@ -3,15 +3,18 @@ import { NavigationLink } from "@vortex/ui/routing";
 import { unavailableMessage, type StudioUnavailableKind } from "./studio-refusal-messages";
 
 const titles: Readonly<Record<StudioUnavailableKind, string>> = {
-  refused: "refused",
-  conflict: "changed while loading",
-  temporarily_unavailable: "temporarily unavailable",
-  validation_failed: "not valid",
-  dependency_unavailable: "missing a release",
-  no_change: "unchanged",
+  refused: "is not available to your account",
+  conflict: "changed while it was loading",
+  temporarily_unavailable: "is temporarily unavailable",
+  validation_failed: "cannot be opened",
+  dependency_unavailable: "is missing a release",
+  no_change: "has no changes",
 };
 
-/** The one place a Studio page shows a loader that did not return the draft, with the loader's own reason. */
+/**
+ * The one place a Studio page shows a loader that did not return the draft, with the sentence for
+ * its reason (the reason code itself is never shown).
+ */
 export function StudioUnavailable({
   subject,
   result,
@@ -25,12 +28,11 @@ export function StudioUnavailable({
     <main className="mx-auto max-w-3xl space-y-4 p-6">
       <Alert variant={result.kind === "temporarily_unavailable" ? "default" : "destructive"}>
         <AlertTitle>
-          {subject} {titles[result.kind]}
+          <h1>
+            {subject} {titles[result.kind]}
+          </h1>
         </AlertTitle>
-        <AlertDescription>
-          <p>{unavailableMessage(result.kind, result.reason)}</p>
-          {result.reason === undefined ? null : <p className="text-xs">Reason: {result.reason}</p>}
-        </AlertDescription>
+        <AlertDescription>{unavailableMessage(result.kind, result.reason)}</AlertDescription>
       </Alert>
       {reloadHref === undefined ? null : (
         <NavigationLink className="underline" href={reloadHref}>
