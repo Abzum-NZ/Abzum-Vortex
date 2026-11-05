@@ -96,11 +96,47 @@ export const studioGridFeaturesProperty = (
 };
 
 /**
+ * What the Features panel of a Records table is drawn from: the draft's facts, and the edit it
+ * makes.
+ */
+export type StudioGridFeaturesProps = Readonly<{
+  idPrefix: string;
+  /** The inspector's held problem after a features change; shown in the changed feature. */
+  problem: string;
+  /** The table release's `features` group declaration. */
+  property: Extract<BlockPropertySchemaContract, { kind: "group" }>;
+  /** The authored features group; unset uses the catalogue default (every feature off). */
+  value: SourceBlockPropertyValueContract | undefined;
+  presentation: "grid" | "cards";
+  /** The query the table reads, or undefined until one is chosen. */
+  query: StudioQueryChoice | undefined;
+  /**
+   * The saved draft's compiled fields of the record type the query reads; undefined before a
+   * save.
+   */
+  compiledFields: readonly ModuleField[] | undefined;
+  /** The block's choices: the bound query's fields by business name. */
+  tableSettings: StudioSettingValues;
+  canvasArrangement?: GroupValue | undefined;
+  canvasStale: boolean;
+  signedIn: boolean;
+  choices: StudioSettingChoices;
+  /** Real fields of the selected pipeline's record type, including fields not yet queried. */
+  boardChoices: StudioSettingChoices;
+  /** What the draft offers the rows' related records. */
+  related: StudioRelatedRecordsChoices;
+  /** The pipelines of the draft's record types, which a board takes its columns from. */
+  pipelines: readonly StudioBoardPipeline[];
+  disabled: boolean;
+  onChange: (next: SourceBlockPropertyValueContract) => void;
+}>;
+
+/**
  * The Features panel of a Records table: one compact row per grid feature with its switch and its
- * capability check beside it, "Available" or "Not possible" with the business sentence. The check is
- * the registry's own, run on the draft's facts of the bound query, so it says exactly what
- * publication will say. Switching a feature on reveals its settings; switching it off keeps only the
- * switch, so a feature that is off compiles to nothing.
+ * capability check beside it, "Available" or "Not possible" with the business sentence. The check
+ * is the registry's own, run on the draft's facts of the bound query, so it says exactly what
+ * publication will say. Switching a feature on reveals its settings; switching it off keeps only
+ * the switch, so a feature that is off compiles to nothing.
  */
 export function StudioGridFeatures({
   idPrefix,
@@ -120,34 +156,7 @@ export function StudioGridFeatures({
   pipelines,
   disabled,
   onChange,
-}: Readonly<{
-  idPrefix: string;
-  /** The inspector's held problem after a features change; shown in the changed feature. */
-  problem: string;
-  /** The table release's `features` group declaration. */
-  property: Extract<BlockPropertySchemaContract, { kind: "group" }>;
-  /** The authored features group; unset uses the catalogue default (every feature off). */
-  value: SourceBlockPropertyValueContract | undefined;
-  presentation: "grid" | "cards";
-  /** The query the table reads, or undefined until one is chosen. */
-  query: StudioQueryChoice | undefined;
-  /** The saved draft's compiled fields of the record type the query reads; undefined before a save. */
-  compiledFields: readonly ModuleField[] | undefined;
-  /** The block's choices: the bound query's fields by business name. */
-  tableSettings: StudioSettingValues;
-  canvasArrangement?: GroupValue | undefined;
-  canvasStale: boolean;
-  signedIn: boolean;
-  choices: StudioSettingChoices;
-  /** Real fields of the selected pipeline's record type, including fields not yet queried. */
-  boardChoices: StudioSettingChoices;
-  /** What the draft offers the rows' related records. */
-  related: StudioRelatedRecordsChoices;
-  /** The pipelines of the draft's record types, which a board takes its columns from. */
-  pipelines: readonly StudioBoardPipeline[];
-  disabled: boolean;
-  onChange: (next: SourceBlockPropertyValueContract) => void;
-}>): ReactElement {
+}: StudioGridFeaturesProps): ReactElement {
   const ownId = useId();
   const [changedFeature, setChangedFeature] = useState<RecordsTableFeatureKey | undefined>();
   const authored = value?.kind === "group" ? value.properties : {};
@@ -273,7 +282,9 @@ export function StudioGridFeatures({
     onChange(normalized ?? candidate);
   };
 
-  /** The value a feature's switch writes when it is turned on: its defaults and starting settings. */
+  /**
+   * The value a feature's switch writes when it is turned on: its defaults and starting settings.
+   */
   const enabledValue = (key: RecordsTableFeatureKey): GroupValue => {
     const declaration = property.properties.find((feature) => feature.key === key);
     return {

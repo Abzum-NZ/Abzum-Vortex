@@ -763,6 +763,15 @@ export const describeStudioCompositionDestinations = (
   }
 };
 
+/** Why a block on a published page keeps its size and order, or undefined. */
+const publishedLayoutReason = (
+  source: ApplicationSourceDocument,
+  page: ApplicationSourceDocument["body"]["pages"][number] | undefined,
+): string | undefined =>
+  page !== undefined && publishedPage(source, page)
+    ? "A block on a published page cannot have its size or order changed here."
+    : undefined;
+
 export const describeStudioCompositionEdit = (
   context: StudioCompositionContext,
   selection: StudioSemanticSelection | null,
@@ -774,6 +783,8 @@ export const describeStudioCompositionEdit = (
     if (resolved === undefined) return { kind: "invalid" };
     const catalogue = context.catalogue;
     const { target, source, alias } = resolved;
+    const published = publishedLayoutReason(source, target.region.page);
+    if (published !== undefined) return { kind: "refused", reason: published };
     if (
       !manifestMatches(catalogue, source, target.region.zone.items) ||
       (target.region.parent !== undefined &&
@@ -890,6 +901,8 @@ const composeCommand = (
         : { kind: "applied", source: parsed };
     }
     if (!breakpointValid(command.breakpoint)) return { kind: "invalid" };
+    const published = publishedLayoutReason(source, target.region.page);
+    if (published !== undefined) return { kind: "refused", reason: published };
     const commandKeys = Reflect.ownKeys(command);
     const allowedKeys =
       command.kind === "order" ? ["kind", "breakpoint", "order"] : ["kind", "breakpoint", "layout"];

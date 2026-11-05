@@ -756,6 +756,25 @@ type SettingNoteProps = Readonly<{
 }>;
 
 /**
+ * The sibling settings a setting's notes and measure read: the field and the label for the label
+ * and auto-size notes, the operation for a total's field. A setting draws again only when one of
+ * these (or its own value) changes. Keep it in step with `StudioSettingNote` and
+ * `studioTotalMeasureProperty`.
+ */
+export const studioSiblingSettingKeys = (
+  property: BlockPropertySchemaContract,
+  properties: readonly BlockPropertySchemaContract[],
+): readonly string[] => {
+  if (property.key === "field") return ["operation"];
+  const hasField = properties.some(
+    (candidate) => candidate.key === "field" && candidate.kind === "field_reference",
+  );
+  return hasField && (property.key === "auto_size" || property.key === "label")
+    ? ["field", "label"]
+    : [];
+};
+
+/**
  * The one copy of the notes under a setting's control: what auto-size and full screen offer, and
  * the label that follows its field. Matching label text follows the field when it changes; other
  * text stays authored, with an explicit way to return to the field's label.

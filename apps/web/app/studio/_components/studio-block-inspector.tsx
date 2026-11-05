@@ -1,25 +1,15 @@
 "use client";
-import { FieldLegend } from "@vortex/ui/components/field";
 import { Alert, AlertDescription } from "@vortex/ui/components/alert";
 import {
   plainSourceSettingValue,
+  canonicalJson,
   recordsTableBoardFeature,
   type SourceBlockPropertyValueContract,
 } from "@vortex/platform/schema";
 import type { StudioCompiledFields } from "../_lib/studio-data-model";
-import {
-  StudioField,
-  StudioInspectorGroup,
-  StudioHelp,
-  StudioSegmentedControl,
-} from "@vortex/ui/studio";
-import { Icon } from "@vortex/ui";
-import { studioScreens, useStudioScreen } from "@vortex/ui/studio/puck-provider";
-import { Switch } from "@vortex/ui/components/switch";
-import { Button } from "@vortex/ui/components/button";
-import { Input } from "@vortex/ui/components/input";
+import { useStudioScreen } from "@vortex/ui/studio/puck-provider";
 
-import { useId, useMemo, useRef, useState } from "react";
+import { useId, useMemo, useRef, useState, type ReactNode } from "react";
 import { studioPlacementLabel } from "../_lib/studio-labels";
 import {
   describeStudioCompositionEdit,
@@ -35,7 +25,6 @@ import {
   studioQueryBindingFacts,
   studioRecordBindingFields,
   StudioBlockSettingFields,
-  StudioGridFeatures,
   boardModeOf,
   boardSettingChoices,
   studioBoardPipelines,
@@ -45,15 +34,19 @@ import {
   type StudioQueryChoice,
   type StudioCompositionCommand,
   type StudioCompositionContext,
-  type StudioCompositionLayout,
   type StudioCompositionOutcome,
+  type StudioGridFeaturesProps,
+  studioOrderMoves,
+  studioOrderWindow,
+  useStudioSameByKey,
+  type StudioLayoutFieldValue,
   type StudioCompositionSettings,
   type StudioCompositionSettingsModel,
   type StudioSemanticSelection,
   type StudioSettingChoices,
   type StudioStoredApplicationDraft,
 } from "@vortex/ui/studio";
-import { useStudioDraftHeld } from "./use-studio-draft-held";
+import { useStudioDraftHeld } from "@vortex/ui/studio";
 import { StudioTableAddRecords } from "./studio-table-add-records";
 import { useStudioBlockAccess } from "./studio-block-access";
 
@@ -84,64 +77,18 @@ type Props = Readonly<{
   ) => StudioCompositionOutcome;
   /** One condition of the block (when it shows, is required, is read-only or is enabled). */
   onReaction: Parameters<typeof useStudioBlockAccess>[0]["onReaction"];
+  /** The block's flow bindings, drawn by the Workflows group. */
+  workflows: ReactNode;
+  /** Where the block is used, drawn by the Used in group. */
+  usedIn: ReactNode;
 }>;
 
-type LayoutInputs = Readonly<{
-  visible: boolean;
-  width: "content" | "fill" | "grid";
-  startColumn: string;
-  span: string;
-  height: "content" | "bounded";
-  units: string;
-}>;
-const inputsFor = (layout: StudioCompositionLayout): LayoutInputs => ({
-  visible: layout.visible,
-  width: layout.width.kind,
-  startColumn: layout.width.kind === "grid" ? String(layout.width.start_column) : "1",
-  span: layout.width.kind === "grid" ? String(layout.width.span) : "12",
-  height: layout.height.kind,
-  units: layout.height.kind === "bounded" ? String(layout.height.units) : "1",
-});
-const columnNumber = (text: string): number | undefined => {
-  const value = Number(text);
-  return text.trim() !== "" && Number.isInteger(value) && value >= 1 && value <= 12
-    ? value
-    : undefined;
-};
-/** The layout the inputs describe, or the problem that keeps them from the draft. */
-const layoutOf = (
-  inputs: LayoutInputs,
-): Readonly<{ layout: StudioCompositionLayout } | { problem: string }> => {
-  const start = columnNumber(inputs.startColumn);
-  const span = columnNumber(inputs.span);
-  const units = Number(inputs.units);
-  if (inputs.width === "grid" && (start === undefined || span === undefined))
-    return { problem: "Columns are whole numbers from 1 to 12." };
-  if (
-    inputs.height === "bounded" &&
-    (inputs.units.trim() === "" || !Number.isFinite(units) || units < 0)
-  )
-    return { problem: "A fixed height is a number of zero or more." };
-  return {
-    layout: {
-      visible: inputs.visible,
-      width:
-        inputs.width === "grid"
-          ? { kind: "grid", start_column: start!, span: span! }
-          : inputs.width === "content"
-            ? { kind: "content" }
-            : { kind: "fill" },
-      height: inputs.height === "bounded" ? { kind: "bounded", units } : { kind: "content" },
-    } as StudioCompositionLayout,
-  };
-};
 /** The settings form's input: the block's set settings and the query it reads. */
 type SettingsInputs = Readonly<{ settings: StudioCompositionSettings; query: string | null }>;
 const settingsInputsFor = (model: StudioCompositionSettingsModel): SettingsInputs =>
   model.kind === "available"
     ? { settings: model.settings, query: model.query }
     : { settings: {}, query: null };
-const fieldClass = "w-full";
 const chooseDataProblem = "Choose the data this block shows.";
 const noQueries: readonly StudioQueryChoice[] = [];
 
@@ -150,9 +97,9 @@ const noQueries: readonly StudioQueryChoice[] = [];
  * through the one composition command; input that is not valid yet stays here with its problem and
  * never reaches the draft. New blocks come from the Blocks panel's palette.
  */
-export function ApplicationCompositionEditor(props: Props) {
+export function StudioBlockInspector(props: Props) {
   // The screen is the canvas screen: one state, kept by Puck.
-  const { breakpoint, choose: chooseScreen } = useStudioScreen();
+  const { breakpoint } = useStudioScreen();
   const { labels } = props;
   const model = useMemo(
     () => describeStudioCompositionEdit(props.context, props.selection, breakpoint),
@@ -167,42 +114,145 @@ export function ApplicationCompositionEditor(props: Props) {
   // screen size) drops it. The workspace keys this editor by the selected item.
   const settingsFromDraft = useMemo(() => settingsInputsFor(settingsModel), [settingsModel]);
   const settings = useStudioDraftHeld(settingsFromDraft);
-  const layout = useStudioDraftHeld(model.kind === "available" ? inputsFor(model.layout) : null);
   const [problemArea, setProblemArea] = useState<"settings" | "features">("settings");
   // A success is announced to a screen reader; a refusal stays on screen for everyone.
   const [message, setMessage] = useState<
-    Readonly<{ text: string; failed: boolean; area: "gate" | "layout"; at: number }>
-  >({ text: "", failed: false, area: "layout", at: 0 });
+    Readonly<{ text: string; failed: boolean; area: "gate" | "settings"; at: number }>
+  >({ text: "", failed: false, area: "settings", at: 0 });
   // The refusal belongs to the draft it was made against: another change by any path clears it.
   const [refusedOn, setRefusedOn] = useState(props.context.source);
   if (message.failed && refusedOn !== props.context.source) {
     setRefusedOn(props.context.source);
     setMessage((previous) => ({ ...previous, text: "", failed: false }));
   }
-  const hintId = useId();
   const titleId = useId();
   const settingsId = useId();
   const settingsInputs = settings.value;
+  /**
+   * Runs one composition command; answers the words of its refusal, or undefined once the draft
+   * took it. A size or an order says its refusal at its own field (`atField`).
+   */
   const command = (
     next: StudioCompositionCommand,
     merge?: string,
     done = "Changed.",
     fallback = "Nothing changed. Use a valid size or order.",
-  ): boolean => {
-    if (props.disabled) return false;
+    atField = false,
+  ): string | undefined => {
+    if (props.disabled) return fallback;
     const result = props.onCommand(props.context, props.selection, next, merge);
     // An expected refusal logs once, at info.
     if (result.kind !== "applied")
       console.info("[studio] composition change refused", next.kind, result.kind);
+    const text = result.kind === "applied" ? undefined : studioOutcomeText(result, fallback);
     setRefusedOn(props.context.source);
     setMessage((previous) => ({
-      text: result.kind === "applied" ? done : studioOutcomeText(result, fallback),
-      failed: result.kind !== "applied",
-      area: next.kind === "gate" ? "gate" : "layout",
+      text: text ?? done,
+      failed: text !== undefined && !atField,
+      area: next.kind === "gate" ? "gate" : "settings",
       at: previous.at + 1,
     }));
-    return result.kind === "applied";
+    return text;
   };
+  // The layout fields call the latest handler, so their value keeps its identity between renders.
+  const run = useRef(command);
+  run.current = command;
+  // The order says the draft's refusal at its own field, until the draft changes.
+  const [orderRefusal, setOrderRefusal] = useState<Readonly<{ on: unknown; text: string }> | null>(
+    null,
+  );
+  const draftSource = useRef(props.context.source);
+  draftSource.current = props.context.source;
+  const orderProblem =
+    orderRefusal !== null && orderRefusal.on === props.context.source
+      ? orderRefusal.text
+      : undefined;
+  const changeOrder = (order: readonly string[] | null): string | undefined => {
+    const text = run.current(
+      { kind: "order", breakpoint, order },
+      undefined,
+      "Order changed.",
+      undefined,
+      true,
+    );
+    setOrderRefusal(text === undefined ? null : { on: draftSource.current, text });
+    return text;
+  };
+  const changeOrderRef = useRef(changeOrder);
+  changeOrderRef.current = changeOrder;
+  // The layout value keeps its identity while what the fields draw is the same: the model, the
+  // names of the blocks near this one and the refusal. A keystroke elsewhere in the draft then
+  // draws none of the Layout fields.
+  const modelRef = useRef(model);
+  modelRef.current = model;
+  const layoutKey = useMemo(() => {
+    if (model.kind !== "available")
+      return canonicalJson({
+        kind: model.kind,
+        reason: model.kind === "refused" ? model.reason : "",
+      });
+    const index = model.order.indexOf(model.placementAlias);
+    return canonicalJson({
+      model: { ...model, order: [] },
+      breakpoint,
+      selectionKey,
+      index,
+      count: model.order.length,
+      near: studioOrderWindow(model.order, index),
+      orderProblem: orderProblem ?? null,
+    });
+  }, [model, breakpoint, selectionKey, orderProblem]);
+  // The names the order field draws: its own value, so a typed label draws that field alone.
+  const nearNames: [string, string][] =
+    model.kind === "available"
+      ? studioOrderWindow(model.order, model.order.indexOf(model.placementAlias)).map((alias) => [
+          alias,
+          studioPlacementLabel(labels, alias) ?? "Item",
+        ])
+      : [];
+  const orderNames = useStudioSameByKey(
+    new Map<string, string>(nearNames),
+    JSON.stringify(nearNames),
+  );
+  const layoutValue = useStudioSameByKey<StudioLayoutFieldValue>(
+    model.kind === "available"
+      ? {
+          kind: "available",
+          model,
+          onResize: (next) =>
+            run.current(
+              { kind: "resize", breakpoint, layout: next },
+              next === null ? undefined : `size:${selectionKey}:${breakpoint}`,
+              "Size changed.",
+              undefined,
+              true,
+            ),
+          onOrder: (next) => changeOrderRef.current(next),
+          // The kept value moves within the latest order, which may differ outside its window.
+          onMove: (direction) => {
+            const current = modelRef.current;
+            if (current.kind !== "available") return undefined;
+            const index = current.order.indexOf(current.placementAlias);
+            const to = index + direction;
+            if (index < 0 || to < 0 || to >= current.order.length) return undefined;
+            const next = [...current.order];
+            const [moved] = next.splice(index, 1);
+            next.splice(to, 0, moved!);
+            return changeOrderRef.current(next);
+          },
+          orderProblem,
+        }
+      : {
+          kind: "refused",
+          reason:
+            model.kind === "refused"
+              ? model.reason
+              : model.kind === "unsupported"
+                ? "This area uses an item type that cannot be edited here. Nothing was changed."
+                : "This item is not in the current draft.",
+        },
+    layoutKey,
+  );
   // Who sees the block and when: its gate and conditions are fields of the Visibility and access group.
   const { access, dialog: conditionDialog } = useStudioBlockAccess({
     context: props.context,
@@ -216,14 +266,19 @@ export function ApplicationCompositionEditor(props: Props) {
         undefined,
         "Permission gate changed.",
         "This block's permission gate could not be changed. Nothing was changed.",
-      ),
+      ) === undefined,
     onReaction: props.onReaction,
   });
   // The reference settings point at the fields of the data the block reads, or, for a block that
   // reads none, at the application's own fields.
-  const fieldsInUse = useMemo(
+  const fieldsInUseNow = useMemo(
     () => studioFormFieldsInUseFor(props.context, props.selection),
     [props.context, props.selection],
+  );
+  // The set keeps its identity while it holds the same fields, so the settings do not draw for it.
+  const fieldsInUse = useStudioSameByKey(
+    fieldsInUseNow,
+    JSON.stringify([...fieldsInUseNow].sort()),
   );
   const choices = useMemo(
     () => ({ ...studioBlockChoices(props.choices, settingsInputs.query), fieldsInUse }),
@@ -356,50 +411,7 @@ export function ApplicationCompositionEditor(props: Props) {
     otherProblem,
   ]);
 
-  const settingsNotice =
-    settingsModel.kind === "available"
-      ? undefined
-      : settingsModel.kind === "unsupported"
-        ? "This item's settings can't be changed here."
-        : "This item's settings can't be read.";
-  // A success is announced to a screen reader, in both the full and the reduced inspector.
-  const announcement = (
-    <p role="status" aria-live="polite" className="sr-only">
-      {message.failed ? "" : message.text}
-    </p>
-  );
-  if (model.kind !== "available" || layout.value === null) {
-    // The block's header and who sees it stay; only its settings, order and size are unavailable.
-    const placementAlias =
-      props.selection.kind === "placement" ? props.selection.placementAlias : "";
-    return (
-      <section aria-labelledby={titleId}>
-        <StudioBlockSettingFields
-          titleId={titleId}
-          choices={choices}
-          disabled={props.disabled}
-          placementAlias={placementAlias}
-          name={studioPlacementLabel(labels, placementAlias) ?? "Block"}
-          actions={[]}
-          releases={props.context.catalogue.releases}
-          access={access}
-          notice={settingsNotice ?? "This item's settings can't be changed here."}
-        />
-        {conditionDialog}
-        {announcement}
-        <div className="space-y-2">
-          <h3 className="text-sm font-medium">Item order and size</h3>
-          <p role="status" className="text-sm text-muted-foreground">
-            {model.kind === "unsupported"
-              ? "This area uses an item type that cannot be edited here. Nothing was changed."
-              : "This item is not in the current draft."}
-          </p>
-        </div>
-      </section>
-    );
-  }
-
-  // A Records table's grid features are edited in their own Features panel, not as a setting group.
+  // A Records table's grid features are edited in their own Features field, not as a setting group.
   const featuresProperty =
     settingsModel.kind === "available"
       ? studioGridFeaturesProperty(settingsModel.properties)
@@ -416,16 +428,124 @@ export function ApplicationCompositionEditor(props: Props) {
         ]),
       ),
     );
-  const inputs = layout.value;
-  const widthWord =
-    inputs.width === "fill"
-      ? "Full width"
-      : inputs.width === "content"
-        ? "Fits content"
-        : `${inputs.span} columns`;
-  const layoutSummary = `${breakpoint.charAt(0).toUpperCase()}${breakpoint.slice(1)} · ${widthWord}`;
-  const orderEditable = breakpoint === "desktop" || model.responsiveOrder;
-  const selectedIndex = model.order.indexOf(model.placementAlias);
+  const queryOfSettings = props.choices.queries.find(
+    (candidate) => candidate.reference === settingsInputs.query,
+  );
+  const presentationSetting =
+    settingsInputs.settings.presentation ??
+    (settingsModel.kind === "available"
+      ? settingsModel.properties.find((property) => property.key === "presentation")?.defaultValue
+      : undefined);
+  // The features edit goes through the latest settings handler, so the value keeps its identity.
+  const changeFeatures = useRef<(next: SourceBlockPropertyValueContract) => void>(() => undefined);
+  const features = useMemo<StudioGridFeaturesProps | undefined>(
+    () =>
+      featuresProperty === undefined
+        ? undefined
+        : {
+            idPrefix: `${settingsId}-features`,
+            property: featuresProperty,
+            problem: problemArea === "features" ? settings.problem : "",
+            tableSettings: settingsInputs.settings,
+            canvasArrangement: canvasMatches ? props.canvasArrangement?.state : undefined,
+            canvasStale: props.canvasArrangement !== undefined && !canvasMatches,
+            signedIn: settingsModel.kind === "available" && settingsModel.signedIn,
+            value: settingsInputs.settings[featuresProperty.key],
+            presentation: (() => {
+              if (
+                presentationSetting?.kind !== "choice" ||
+                (presentationSetting.value !== "grid" && presentationSetting.value !== "cards")
+              )
+                throw new Error("Data grid preset is missing its declared setting");
+              return presentationSetting.value;
+            })(),
+            query: queryOfSettings,
+            compiledFields:
+              queryOfSettings === undefined
+                ? undefined
+                : props.compiledFields?.recordTypes[queryOfSettings.recordType],
+            choices,
+            boardChoices: boardSettingChoices(props.choices, boardModeOf(settingsInputs.settings)),
+            pipelines: studioBoardPipelines(
+              props.context.source,
+              settingsModel.kind === "available" ? settingsModel.placementAlias : undefined,
+            ),
+            related: {
+              queries: props.choices.queries,
+              relationships: props.choices.relationships,
+              recordTypeLabel: (recordType) =>
+                props.choices.recordTypes.find((candidate) => candidate.key === recordType)
+                  ?.label ?? "A removed item",
+              page: studioQueryBindingFacts(
+                props.context,
+                settingsModel.kind === "available" ? settingsModel.placementAlias : "",
+                props.choices.queries,
+              ),
+              rowFields: studioRecordBindingFields(
+                props.context.source,
+                queryOfSettings?.recordType ?? "",
+              ),
+            },
+            disabled: props.disabled,
+            onChange: (next) => changeFeatures.current(next),
+          },
+    [
+      featuresProperty,
+      settingsId,
+      problemArea,
+      settings.problem,
+      settingsInputs.settings,
+      canvasMatches,
+      props.canvasArrangement,
+      settingsModel,
+      presentationSetting,
+      queryOfSettings,
+      props.compiledFields,
+      choices,
+      props.choices,
+      props.context,
+      props.disabled,
+    ],
+  );
+  const settingsNotice =
+    settingsModel.kind === "available"
+      ? undefined
+      : settingsModel.kind === "unsupported"
+        ? "This item's settings can't be changed here."
+        : "This item's settings can't be read.";
+  // A success is announced to a screen reader, in both the full and the reduced inspector.
+  const announcement = (
+    <p role="status" aria-live="polite" className="sr-only">
+      {message.failed ? "" : message.text}
+    </p>
+  );
+  if (model.kind !== "available") {
+    // The block's header and who sees it stay; only its settings, order and size are unavailable.
+    const placementAlias =
+      props.selection.kind === "placement" ? props.selection.placementAlias : "";
+    return (
+      <section aria-labelledby={titleId}>
+        <StudioBlockSettingFields
+          titleId={titleId}
+          choices={choices}
+          disabled={props.disabled}
+          placementAlias={placementAlias}
+          name={studioPlacementLabel(labels, placementAlias) ?? "Block"}
+          actions={[]}
+          releases={props.context.catalogue.releases}
+          access={access}
+          layout={layoutValue}
+          orderNames={orderNames}
+          workflows={props.workflows}
+          usedIn={props.usedIn}
+          notice={settingsNotice ?? "This item's settings can't be changed here."}
+        />
+        {conditionDialog}
+        {announcement}
+      </section>
+    );
+  }
+
   const changeQuery = (reference: string) => {
     const properties = settingsModel.kind === "available" ? settingsModel.properties : [];
     const query = reference === "" ? null : reference;
@@ -452,22 +572,6 @@ export function ApplicationCompositionEditor(props: Props) {
     });
   };
   chooseQuery.current = changeQuery;
-  const changeLayout = (next: LayoutInputs) => {
-    const described = layoutOf(next);
-    if ("problem" in described) {
-      layout.hold(next, described.problem);
-      return;
-    }
-    if (
-      command(
-        { kind: "resize", breakpoint, layout: described.layout },
-        `size:${selectionKey}:${breakpoint}`,
-        "Size changed.",
-      )
-    )
-      layout.applied(next);
-    else layout.hold(next, "");
-  };
   const changeSettings = (next: SettingsInputs, area: "settings" | "features" = "settings") => {
     setProblemArea(area);
     if (settingsModel.kind !== "available") return;
@@ -512,22 +616,24 @@ export function ApplicationCompositionEditor(props: Props) {
         { kind: "settings", settings: next.settings, query: next.query },
         `settings:${selectionKey}`,
         "Settings changed.",
-      )
+      ) === undefined
     )
       settings.applied(next);
     else settings.hold(next, "");
   };
   editSettings.current = (next) => changeSettings(next);
-  const move = (direction: -1 | 1) => {
-    if (!orderEditable || selectedIndex < 0) return;
-    const nextIndex = selectedIndex + direction;
-    if (nextIndex < 0 || nextIndex >= model.order.length) return;
-    const next = [...model.order];
-    const moved = next.splice(selectedIndex, 1)[0];
-    if (moved === undefined) return;
-    next.splice(nextIndex, 0, moved);
-    command({ kind: "order", breakpoint, order: next }, undefined, "Order changed.");
-  };
+  changeFeatures.current = (next) =>
+    changeSettings(
+      {
+        ...settingsInputs,
+        settings: {
+          ...settingsInputs.settings,
+          ...(featuresProperty === undefined ? {} : { [featuresProperty.key]: next }),
+        },
+      },
+      "features",
+    );
+  const moves = studioOrderMoves(model, breakpoint);
   return (
     <section aria-labelledby={titleId}>
       <StudioBlockSettingFields
@@ -539,289 +645,29 @@ export function ApplicationCompositionEditor(props: Props) {
         actions={[
           {
             label: "Move up",
-            disabled: props.disabled || !orderEditable || selectedIndex <= 0,
-            onSelect: () => move(-1),
+            disabled: props.disabled || !moves.up,
+            onSelect: () => void (layoutValue.kind === "available" && layoutValue.onMove(-1)),
           },
           {
             label: "Move down",
-            disabled:
-              props.disabled ||
-              !orderEditable ||
-              selectedIndex < 0 ||
-              selectedIndex >= model.order.length - 1,
-            onSelect: () => move(1),
+            disabled: props.disabled || !moves.down,
+            onSelect: () => void (layoutValue.kind === "available" && layoutValue.onMove(1)),
           },
         ]}
         releases={props.context.catalogue.releases}
         query={queryValue}
         access={access}
+        layout={layoutValue}
+        orderNames={orderNames}
+        features={features}
+        workflows={props.workflows}
+        usedIn={props.usedIn}
         settingsAfter={settingsAfter}
         notice={settingsNotice}
       />
       {conditionDialog}
-      {featuresProperty === undefined ? null : (
-        <StudioGridFeatures
-          idPrefix={`${settingsId}-features`}
-          property={featuresProperty}
-          problem={problemArea === "features" ? settings.problem : ""}
-          tableSettings={settingsInputs.settings}
-          canvasArrangement={canvasMatches ? props.canvasArrangement?.state : undefined}
-          canvasStale={props.canvasArrangement !== undefined && !canvasMatches}
-          signedIn={settingsModel.kind === "available" && settingsModel.signedIn}
-          value={settingsInputs.settings[featuresProperty.key]}
-          presentation={(() => {
-            const setting =
-              settingsInputs.settings.presentation ??
-              (settingsModel.kind === "available"
-                ? settingsModel.properties.find((property) => property.key === "presentation")
-                    ?.defaultValue
-                : undefined);
-            if (
-              setting?.kind !== "choice" ||
-              (setting.value !== "grid" && setting.value !== "cards")
-            )
-              throw new Error("Data grid preset is missing its declared setting");
-            return setting.value;
-          })()}
-          query={props.choices.queries.find((query) => query.reference === settingsInputs.query)}
-          compiledFields={(() => {
-            const query = props.choices.queries.find(
-              (candidate) => candidate.reference === settingsInputs.query,
-            );
-            return query === undefined
-              ? undefined
-              : props.compiledFields?.recordTypes[query.recordType];
-          })()}
-          choices={choices}
-          boardChoices={boardSettingChoices(props.choices, boardModeOf(settingsInputs.settings))}
-          pipelines={studioBoardPipelines(
-            props.context.source,
-            settingsModel.kind === "available" ? settingsModel.placementAlias : undefined,
-          )}
-          related={{
-            queries: props.choices.queries,
-            relationships: props.choices.relationships,
-            recordTypeLabel: (recordType) =>
-              props.choices.recordTypes.find((candidate) => candidate.key === recordType)?.label ??
-              "A removed item",
-            page:
-              settingsModel.kind === "available"
-                ? studioQueryBindingFacts(
-                    props.context,
-                    settingsModel.placementAlias,
-                    props.choices.queries,
-                  )
-                : studioQueryBindingFacts(props.context, "", props.choices.queries),
-            rowFields: studioRecordBindingFields(
-              props.context.source,
-              props.choices.queries.find((query) => query.reference === settingsInputs.query)
-                ?.recordType ?? "",
-            ),
-          }}
-          disabled={props.disabled}
-          onChange={(features) =>
-            changeSettings(
-              {
-                ...settingsInputs,
-                settings: { ...settingsInputs.settings, [featuresProperty.key]: features },
-              },
-              "features",
-            )
-          }
-        />
-      )}
-      <StudioInspectorGroup title="Layout" defaultOpen={false} summary={layoutSummary}>
-        <StudioField label="Screen size">
-          {() => (
-            <StudioSegmentedControl
-              label="Screen size"
-              value={breakpoint}
-              disabled={props.disabled}
-              onChange={chooseScreen}
-              options={studioScreens.map((screen) => ({
-                value: screen.breakpoint,
-                label: screen.label,
-                icon: <Icon name={screen.icon} />,
-              }))}
-            />
-          )}
-        </StudioField>
-        <fieldset
-          className="space-y-2"
-          disabled={props.disabled || !orderEditable}
-          aria-describedby={hintId}
-        >
-          <FieldLegend variant="label" className="flex items-center gap-1">
-            Order among its neighbours
-            <StudioHelp
-              id={hintId}
-              hint={
-                breakpoint !== "desktop" && !model.responsiveOrder
-                  ? "This area uses one order at every screen size."
-                  : model.explicitOrder
-                    ? "This order is set for this screen size."
-                    : "This order is inherited from the larger screen size."
-              }
-            />
-          </FieldLegend>
-          <ol className="space-y-px">
-            {model.order.map((alias, index) => (
-              <li
-                key={alias}
-                aria-current={alias === model.placementAlias ? "true" : undefined}
-                className={
-                  alias === model.placementAlias
-                    ? "flex items-center gap-2 rounded-md bg-muted px-2 py-1 text-sm font-medium"
-                    : "flex items-center gap-2 rounded-md px-2 py-1 text-sm"
-                }
-              >
-                <span className="w-4 text-xs text-muted-foreground tabular-nums">{index + 1}</span>
-                <span className="truncate">{studioPlacementLabel(labels, alias) ?? "Item"}</span>
-              </li>
-            ))}
-          </ol>
-          {breakpoint !== "desktop" && (
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              disabled={!model.explicitOrder}
-              onClick={() => {
-                command({ kind: "order", breakpoint, order: null }, undefined, "Order changed.");
-              }}
-            >
-              <Icon name="undo" />
-              Use the larger screen&apos;s order
-            </Button>
-          )}
-        </fieldset>
-        <fieldset className="space-y-4" disabled={props.disabled}>
-          <FieldLegend variant="label" className="flex items-center gap-1">
-            Size
-            <StudioHelp
-              hint={
-                model.explicitLayout
-                  ? "This size is set for this screen size."
-                  : "This size is inherited from the larger screen size."
-              }
-            />
-          </FieldLegend>
-          <label className="flex items-center justify-between gap-2 text-sm">
-            Shown at this screen size
-            <Switch
-              checked={inputs.visible}
-              disabled={props.disabled || !model.capabilities.responsiveVisibility}
-              onCheckedChange={(checked) => changeLayout({ ...inputs, visible: checked })}
-            />
-          </label>
-          <StudioField label="Width">
-            {() => (
-              <StudioSegmentedControl
-                label="Width"
-                value={inputs.width}
-                disabled={props.disabled}
-                onChange={(width) => changeLayout({ ...inputs, width })}
-                options={[
-                  { value: "content", label: "Content" },
-                  { value: "fill", label: "Fill" },
-                  ...(model.capabilities.gridWidth
-                    ? [{ value: "grid" as const, label: "Columns" }]
-                    : []),
-                ]}
-              />
-            )}
-          </StudioField>
-          {inputs.width === "grid" && (
-            <div className="grid grid-cols-2 gap-2">
-              <StudioField label="Starts at column">
-                {(control) => (
-                  <Input
-                    {...control}
-                    className={fieldClass}
-                    type="number"
-                    required
-                    min={1}
-                    max={12}
-                    step={1}
-                    value={inputs.startColumn}
-                    onChange={(event) =>
-                      changeLayout({ ...inputs, startColumn: event.target.value })
-                    }
-                  />
-                )}
-              </StudioField>
-              <StudioField label="Number of columns">
-                {(control) => (
-                  <Input
-                    {...control}
-                    className={fieldClass}
-                    type="number"
-                    required
-                    min={1}
-                    max={12}
-                    step={1}
-                    value={inputs.span}
-                    onChange={(event) => changeLayout({ ...inputs, span: event.target.value })}
-                  />
-                )}
-              </StudioField>
-            </div>
-          )}
-          <StudioField label="Height">
-            {() => (
-              <StudioSegmentedControl
-                label="Height"
-                value={inputs.height}
-                disabled={props.disabled}
-                onChange={(height) => changeLayout({ ...inputs, height })}
-                options={[
-                  { value: "content", label: "Content" },
-                  ...(model.capabilities.height === "content_or_bounded"
-                    ? [{ value: "bounded" as const, label: "Fixed height" }]
-                    : []),
-                ]}
-              />
-            )}
-          </StudioField>
-          {inputs.height === "bounded" && (
-            <StudioField label="Fixed height">
-              {(control) => (
-                <Input
-                  {...control}
-                  className={fieldClass}
-                  type="number"
-                  required
-                  min={0}
-                  step="any"
-                  value={inputs.units}
-                  onChange={(event) => changeLayout({ ...inputs, units: event.target.value })}
-                />
-              )}
-            </StudioField>
-          )}
-          {layout.problem !== "" && (
-            <Alert variant="destructive">
-              <AlertDescription>{layout.problem}</AlertDescription>
-            </Alert>
-          )}
-          {breakpoint !== "desktop" && (
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              disabled={props.disabled || !model.explicitLayout}
-              onClick={() => {
-                command({ kind: "resize", breakpoint, layout: null }, undefined, "Size changed.");
-              }}
-            >
-              <Icon name="undo" />
-              Use the larger screen&apos;s size
-            </Button>
-          )}
-        </fieldset>
-      </StudioInspectorGroup>
       {announcement}
-      {message.failed && message.area !== "gate" && (
+      {message.failed && message.area === "settings" && (
         <Alert key={message.at} variant="destructive">
           <AlertDescription>{message.text}</AlertDescription>
         </Alert>

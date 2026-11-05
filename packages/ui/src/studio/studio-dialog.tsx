@@ -1,5 +1,5 @@
 "use client";
-import type { FormEvent, ReactNode } from "react";
+import { useRef, type FormEvent, type ReactNode } from "react";
 import { Button } from "../components/button";
 import { FieldGroup } from "../components/field";
 import {
@@ -25,6 +25,7 @@ export function StudioDialog({
   submitLabel,
   closeLabel = "Close",
   finalFocus,
+  focusDialog = false,
   submitDisabled = false,
   onSubmit,
   children,
@@ -41,8 +42,14 @@ export function StudioDialog({
   onSubmit?: () => void;
   /** Where focus goes when the dialog closes, when it was not opened from a control that stays. */
   finalFocus?: (() => HTMLElement | false) | undefined;
+  /**
+   * Focus starts on the dialog itself, which its title names, instead of its first control: for a
+   * dialog whose first control is a menu button, so the first Escape closes it.
+   */
+  focusDialog?: boolean;
   children: ReactNode;
 }>) {
+  const popup = useRef<HTMLDivElement>(null);
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     // The dialog is portalled, but its events still reach the inspector form that opened it.
@@ -63,7 +70,12 @@ export function StudioDialog({
   );
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md" finalFocus={finalFocus}>
+      <DialogContent
+        ref={popup}
+        className="sm:max-w-md"
+        finalFocus={finalFocus}
+        {...(focusDialog ? { initialFocus: popup } : {})}
+      >
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
           {description !== undefined && <DialogDescription>{description}</DialogDescription>}

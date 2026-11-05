@@ -105,7 +105,8 @@ export function StudioOptionControl({
       value={value}
       disabled={disabled}
       onValueChange={(next) => {
-        if (typeof next === "string") onChange(next);
+        // Choosing the option already held changes nothing, so it sends nothing.
+        if (typeof next === "string" && next !== value) onChange(next);
       }}
     >
       <SelectTrigger
