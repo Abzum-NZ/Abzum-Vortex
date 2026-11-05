@@ -771,41 +771,63 @@ export function StudioPuckProvider({
 
 /**
  * What held the keyboard focus when Puck was reopened (the workspace is drawn inside it, so its
- * controls are drawn again): found again by id or by name inside the rail panel, once the new
- * workspace is on screen.
+ * controls are drawn again): found again by its list row key, its id or its name among the shown
+ * rail panel's controls, once the new workspace has drawn them.
  */
-let focusBeforeReopen: Readonly<{ id: string; label: string }> | null = null;
+let focusBeforeReopen: Readonly<{ treeKey: string; id: string; label: string }> | null = null;
 const rememberFocus = (): void => {
   const active = document.activeElement;
   focusBeforeReopen =
     active instanceof HTMLElement && active !== document.body
       ? {
+          treeKey: active.dataset.treeKey ?? "",
           id: active.id,
           label: active.getAttribute("aria-label") ?? active.textContent?.trim() ?? "",
         }
       : null;
 };
-const restoreFocus = (final: boolean): void => {
+/** Whether the focus came back; `final` gives up looking. */
+const restoreFocus = (final: boolean): boolean => {
   const wanted = focusBeforeReopen;
-  if (wanted === null) return;
+  if (wanted === null) return true;
+  // The person put the focus somewhere meanwhile: that wins.
+  if (document.activeElement !== null && document.activeElement !== document.body) {
+    focusBeforeReopen = null;
+    return true;
+  }
+  // Every tab's panel stays drawn, hidden, so only shown and enabled controls are candidates.
+  const usable = (element: HTMLElement | null): element is HTMLElement =>
+    element !== null && element.getClientRects().length > 0 && !element.matches(":disabled");
+  const shown = [
+    ...document.querySelectorAll<HTMLElement>(
+      "[data-studio-rail-panel] button, [data-studio-rail-panel] a",
+    ),
+  ].filter(usable);
   const byId = wanted.id === "" ? null : document.getElementById(wanted.id);
-  const byLabel =
-    wanted.label === ""
+  const found =
+    (wanted.treeKey === ""
       ? undefined
-      : [
-          ...document.querySelectorAll<HTMLElement>(
-            "[data-studio-rail-panel] button, [data-studio-rail-panel] [role=treeitem], [data-studio-rail-panel] a",
-          ),
-        ].find(
+      : shown.find((element) => element.dataset.treeKey === wanted.treeKey)) ??
+    (usable(byId) ? byId : undefined) ??
+    (wanted.label === ""
+      ? undefined
+      : shown.find(
           (element) =>
             (element.getAttribute("aria-label") ?? element.textContent?.trim()) === wanted.label,
-        );
-  const found = byId ?? byLabel;
-  if (found !== undefined && found !== null) {
+        ));
+  if (found !== undefined) {
     focusBeforeReopen = null;
     found.focus();
-  } else if (final) focusBeforeReopen = null;
+    return true;
+  }
+  if (final) focusBeforeReopen = null;
+  return final;
 };
+/**
+ * The rail panel draws its rows a few frames after the reopened workspace, and they may stay
+ * disabled while the change that reopened it is saved: look that long.
+ */
+const RESTORE_FOCUS_MS = 3000;
 
 /**
  * Runs inside Puck and draws nothing: it keeps Puck's private state in step with Studio. The
@@ -872,8 +894,13 @@ function StudioPuckSync({
   }, [getPuck, getPuckRef]);
   // A workspace opened again after a page with other outlets: the focus it had comes back.
   useLayoutEffect(() => {
-    restoreFocus(false);
-    const frame = requestAnimationFrame(() => restoreFocus(true));
+    if (restoreFocus(false)) return;
+    const until = performance.now() + RESTORE_FOCUS_MS;
+    let frame = 0;
+    const look = () => {
+      if (!restoreFocus(performance.now() >= until)) frame = requestAnimationFrame(look);
+    };
+    frame = requestAnimationFrame(look);
     return () => cancelAnimationFrame(frame);
   }, []);
   const previewMode = usePuckSelector((state) => state.appState.ui.previewMode);
