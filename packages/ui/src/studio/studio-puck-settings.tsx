@@ -31,7 +31,7 @@ import { StudioInspectorActions, type StudioInspectorAction } from "./studio-ins
 import { studioReleaseIcon } from "./studio-puck-drawer";
 import { studioReactionSlots } from "./application-reaction-condition-commands";
 import { studioBlockReadsQuery } from "./application-composition-commands";
-import { studioOwnsSetting } from "./contextual-palette";
+import { studioOwnsSetting, studioReleaseReadsQuery } from "./contextual-palette";
 
 /**
  * A block's settings are Puck fields: each declared setting is a custom field whose control is
@@ -86,7 +86,11 @@ const addAccessFields = (fields: Record<string, Field>): void => {
     );
 };
 
-/** The fields of one placement: its shown settings first, every other prop hidden from the inspector. */
+/**
+ * The fields of one placement: its shown settings first, every other prop hidden from the
+ * inspector. Without `props` they are the release's static fields: the settings shown whatever
+ * the block holds (no conditional setting), and the data choice when the release reads data.
+ */
 const studioSettingFields = (
   release: PlatformBlockRelease,
   base: Readonly<Record<string, Field>>,
@@ -96,12 +100,18 @@ const studioSettingFields = (
   const values =
     props === undefined ? undefined : studioTypedSettings(props, release.properties as never);
   // A block that reads data chooses it first, and the bindings of its inputs follow.
-  const readsQuery = props !== undefined && studioBlockReadsQuery(release, props);
+  const readsQuery =
+    props === undefined ? studioReleaseReadsQuery(release) : studioBlockReadsQuery(release, props);
   const fields: Record<string, Field> = readsQuery
     ? { [studioQueryFieldName]: studioQueryField }
     : {};
   for (const property of listed) {
-    if (values !== undefined && !componentSettingApplies(property, values)) continue;
+    if (
+      values === undefined
+        ? property.showWhen !== undefined
+        : !componentSettingApplies(property, values)
+    )
+      continue;
     fields[property.key] = studioSettingField(release, property, release.properties as never);
   }
   addAccessFields(fields);
@@ -217,12 +227,13 @@ const hidden = (fields: Readonly<Record<string, Field>>): Record<string, Field> 
   );
 
 /**
- * A canvas component with its settings declared as Puck fields: `fields` hides every prop until
- * the block is resolved, `resolveFields` gives the settings that apply to the values the block
- * holds, and `renderFields` lays them out. Puck takes a new config when a page's tab keys change
- * and, until it resolves the selected block's fields again, shows its static `fields`: a block that
- * holds repeating slots (`repeating` is its release) declares its settings there, so the inspector
- * keeps what it draws and the field being typed in keeps its focus.
+ * A canvas component with its settings declared as Puck fields: `fields` declares the settings
+ * shown whatever the block holds (`release` is the component's own release), `resolveFields`
+ * gives the settings that apply to the values the block holds, and `renderFields` lays them out.
+ * Puck resets the selected block's fields to the static `fields` whenever it takes a new config
+ * (a page's tab keys change it) and then resolves them again, so each field the static fields
+ * share with the resolved ones keeps its identity and the field being typed in keeps its focus.
+ * Upgrade check: walks/B5d-review-3/identity3.cjs (sections A to C) reads that identity.
  */
 export const withSettingFields = (
   component: ComponentConfig<Record<string, unknown>>,
@@ -230,12 +241,11 @@ export const withSettingFields = (
   resolveBase:
     | ((data: { props: Record<string, unknown> }, params: unknown) => Record<string, Field>)
     | undefined,
-  repeating?: PlatformBlockRelease | undefined,
+  release: PlatformBlockRelease | undefined,
 ): Partial<ComponentConfig<Record<string, unknown>>> => {
   const base = { ...(component.fields ?? {}), vortex: studioVortexField } as Record<string, Field>;
   return {
-    fields:
-      repeating === undefined ? hidden(base) : studioSettingFields(repeating, base, undefined),
+    fields: release === undefined ? hidden(base) : studioSettingFields(release, base, undefined),
     resolveFields: (data: { props: Record<string, unknown> }, params: unknown) => {
       const release = releaseOf(data.props);
       const resolved = {

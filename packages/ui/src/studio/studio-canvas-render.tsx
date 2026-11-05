@@ -511,14 +511,15 @@ const withHeldRepeatingSlots = (
 
 /**
  * The canvas config: the one config's components and root, each component drawing its stored
- * item as above. The fields stay exactly as the one config declares them (each slot with its
- * `allow` list, every other prop an opaque object), because Puck finds slots through them and Studio edits
- * settings in its inspector. A block dropped from the palette is added by Studio's add command,
- * never kept from Puck's insert. The interim item Puck holds until then carries only the block's
- * identity and plain placement, in the stored spelling a stored block has, so it draws as the block with its release
- * defaults (Puck merges `defaultProps` under every block it draws, so they hold nothing else: a
- * stored block's own `vortex` replaces them). A block Studio cannot create yet
- * (its palette choice names why) is not insertable, so Puck does not let it be dragged.
+ * item as above. Each slot field keeps its `allow` list, because Puck finds slots through the
+ * static fields; a block's settings are Puck fields (`withSettingFields`). A change of the page's
+ * tab keys replaces only the static `fields` of the renderers that hold tabs
+ * (`withHeldRepeatingSlots`). A block dropped from the palette is added by Studio's
+ * add command, never kept from Puck's insert. The interim item Puck holds until then carries only
+ * the block's identity and plain placement, in the stored spelling a stored block has, so it draws
+ * as the block with its release defaults (Puck merges `defaultProps` under every block it draws,
+ * so they hold nothing else: a stored block's own `vortex` replaces them). A block Studio cannot
+ * create yet (its palette choice names why) is not insertable, so Puck does not let it be dragged.
  */
 export const studioCanvasConfig = (
   baseConfig: Config,
@@ -595,10 +596,7 @@ export const studioCanvasConfig = (
                 ) => Record<string, Field>;
                 return resolve({ ...data, props }, params);
               },
-          // A block that holds tabs: Puck shows its static fields while a new config's fields resolve.
-          releaseByKey.get(type)?.slots.some((slot) => slot.repeats !== undefined)
-            ? releaseByKey.get(type)
-            : undefined,
+          releaseByKey.get(type),
         ),
         render: (props: Record<string, unknown>) => (
           <CanvasBlockFrame component={component} registry={registry} props={props} />

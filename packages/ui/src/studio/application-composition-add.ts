@@ -549,16 +549,11 @@ export const applyAdd = (
   try {
     placeItem(catalogue, source, place, input.index, item);
   } catch (error) {
-    if (error instanceof StoredCompositionRefusal) {
-      console.info("[studio] composition add refused", {
-        part: error.location,
-        reason: error.reason,
-      });
+    if (error instanceof StoredCompositionRefusal)
       return {
         kind: "refused",
         reason: `${choice.name} can't go into ${place.target.label}. ${error.message}.`,
       };
-    }
     throw error;
   }
   syncStoredBlockDependencies(source);

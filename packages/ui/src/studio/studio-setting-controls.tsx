@@ -368,8 +368,13 @@ function ListControl({
 }: ControlProps): ReactElement {
   const [newLabel, setNewLabel] = useState("");
   // An entry whose identity cannot name a slot: its text stays in the entry, with its message, and
-  // never reaches the draft. It is dropped when the stored entry changes under it (Undo, a reload).
+  // never reaches the draft. It is dropped when the stored entry changes under it (Undo, a reload)
+  // and when focus leaves the entry, which then shows the identity the draft keeps.
   const [held, setHeld] = useState<Readonly<Record<string, HeldEntry>>>({});
+  const dropHeld = (entryKey: string) =>
+    setHeld((previous) =>
+      Object.fromEntries(Object.entries(previous).filter(([key]) => key !== entryKey)),
+    );
   const [confirm, confirmDialog] = useConfirm();
   if (property.kind !== "list") throw new TypeError("A list control needs a list setting.");
   const items = value?.kind === "list" ? value.items : [];
@@ -446,47 +451,54 @@ function ListControl({
             title: heading.title ?? `${property.item.label} ${index + 1}`,
             summary: heading.summary,
             content: (
-              <StudioSettingControl
-                id={`${id}-${entryKey}`}
-                property={property.item}
-                value={holding?.entry ?? item}
-                choices={choices}
-                disabled={disabled}
-                problems={
-                  holding === undefined || identity === undefined
-                    ? undefined
-                    : { [identity.property]: holding.problem }
-                }
-                onChange={(next) => {
-                  const replacement = next ?? initialValue(property.item, choices);
-                  if (replacement === undefined) return;
-                  const problem =
-                    identity === undefined
-                      ? undefined
-                      : identityProblem(
-                          identity,
-                          replacement,
-                          items.filter((_, position) => position !== index),
-                          itemName,
-                        );
-                  if (problem !== undefined) {
-                    setHeld((previous) => ({
-                      ...previous,
-                      [entryKey]: { entry: replacement, problem, against: canonicalJson(item) },
-                    }));
-                    return;
-                  }
-                  setHeld((previous) =>
-                    Object.fromEntries(
-                      Object.entries(previous).filter(([key]) => key !== entryKey),
-                    ),
-                  );
-                  write(
-                    items.map((entry, position) => (position === index ? replacement : entry)),
-                    keys.current,
-                  );
+              <div
+                className="contents"
+                onBlur={(event) => {
+                  if (
+                    holding !== undefined &&
+                    !event.currentTarget.contains(event.relatedTarget as Node | null)
+                  )
+                    dropHeld(entryKey);
                 }}
-              />
+              >
+                <StudioSettingControl
+                  id={`${id}-${entryKey}`}
+                  property={property.item}
+                  value={holding?.entry ?? item}
+                  choices={choices}
+                  disabled={disabled}
+                  problems={
+                    holding === undefined || identity === undefined
+                      ? undefined
+                      : { [identity.property]: holding.problem }
+                  }
+                  onChange={(next) => {
+                    const replacement = next ?? initialValue(property.item, choices);
+                    if (replacement === undefined) return;
+                    const problem =
+                      identity === undefined
+                        ? undefined
+                        : identityProblem(
+                            identity,
+                            replacement,
+                            items.filter((_, position) => position !== index),
+                            itemName,
+                          );
+                    if (problem !== undefined) {
+                      setHeld((previous) => ({
+                        ...previous,
+                        [entryKey]: { entry: replacement, problem, against: canonicalJson(item) },
+                      }));
+                      return;
+                    }
+                    dropHeld(entryKey);
+                    write(
+                      items.map((entry, position) => (position === index ? replacement : entry)),
+                      keys.current,
+                    );
+                  }}
+                />
+              </div>
             ),
           };
         })}
