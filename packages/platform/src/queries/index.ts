@@ -108,6 +108,7 @@ export { arrangeDataset, arrangeProtectedBoard } from "./arrangements";
 export {
   createRecordChoiceReader,
   recordChoicePageSizes,
+  recordChoiceSearchSchema,
   titleText,
   type RecordChoice,
   type RecordChoiceAdmission,
