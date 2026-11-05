@@ -28,7 +28,10 @@ const smallerScreenHint = (label: string): string =>
 const HELP_ICON_CLASS =
   "flex size-8 shrink-0 items-center justify-center rounded-md text-muted-foreground";
 
-const WELL_CLASS = "min-h-0 flex-1 bg-muted/40 p-4 [scrollbar-gutter:stable_both-edges]";
+// The focus outline is drawn inside the well: the panels beside it would cover one drawn outside.
+const WELL_CLASS =
+  "min-h-0 flex-1 bg-muted/40 p-4 [scrollbar-gutter:stable_both-edges] " +
+  "focus-visible:-outline-offset-2";
 
 function CanvasEmpty({ title, description }: Readonly<{ title: string; description: string }>) {
   return (
@@ -102,6 +105,9 @@ export function StudioCanvasView({
   // well, in the iframe's own pixels. The zoom only scales the iframe as a whole.
   const [available, setAvailable] = useState({ width: 0, height: 0 });
   const scale = zoom === "fit" ? Math.min(1, available.width / width) : zoom / 100;
+  // The screen takes the well's height, so the well scrolls only sideways, when the zoomed screen
+  // is wider than the well; Fit never does.
+  const scrolls = zoom !== "fit" && width * scale > available.width;
   useEffect(() => {
     if (well === null) return;
     // The well's own content box, fractional and without its padding or scrollbar gutter: Fit
@@ -219,10 +225,8 @@ export function StudioCanvasView({
         <div
           ref={setWell}
           data-vortex-studio-canvas-well=""
-          // A well that scrolls is a keyboard stop with a name, so the arrow keys scroll it; Fit never scrolls.
-          {...(zoom === "fit"
-            ? {}
-            : { role: "region", "aria-label": "Canvas scroll area", tabIndex: 0 })}
+          // While it scrolls the well is a keyboard stop with a name, so Left and Right scroll it.
+          {...(scrolls ? { role: "region", "aria-label": "Canvas scroll area", tabIndex: 0 } : {})}
           // Fit shows the whole screen, so it never has anything to scroll to.
           className={`${WELL_CLASS} ${zoom === "fit" ? "overflow-hidden" : "overflow-auto"}`}
         >
