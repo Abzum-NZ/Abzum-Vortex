@@ -62,7 +62,6 @@ export default async function RegisterPage({ searchParams }: RegisterPageProps) 
             type="password"
             autoComplete="new-password"
             minLength={newPasswordPolicy.minimumLength}
-            maxLength={newPasswordPolicy.maximumLength}
             pattern={newPasswordPolicy.pattern}
             missing="Choose a password."
             invalid="This password does not meet the rules above."
