@@ -253,8 +253,8 @@ export const createStudioApplicationDraftHistoryController = (
       if (next === current.source) return "unchanged";
 
       // A discrete command (no merge key) is checked against the source contract here, so a bad
-      // command is refused at the edit and not at the next autosave. A typing run is made of
-      // settings commands, which check the block's own settings; nothing is parsed per keystroke.
+      // command is refused at the edit and not at the next autosave. A typing run (settings or
+      // labels) checks only what it changes; nothing is parsed per keystroke.
       if (merge === undefined) {
         const checked = applicationSourceDocumentSchema.safeParse(next);
         if (!checked.success) {
