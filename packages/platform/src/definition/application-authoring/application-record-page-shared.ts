@@ -34,6 +34,7 @@ import {
   type StructureRelease,
 } from "./application-structure";
 import type { StudioStructureContext } from "./application-structure-common";
+import { studioBlockRelease } from "./semantic-selection";
 
 /**
  * What every generated record page shares: the record type resolved with its title field and
@@ -515,11 +516,7 @@ export const linkTablesToDetail = (
     const page = plan.source.body.pages.find((entry) => entry.id === pageId)!;
     for (const table of recordTables(plan.source, page, resolved)) {
       if (table.props.row_click !== undefined) continue;
-      const tableRelease = context.catalogue.releases.find(
-        (entry) =>
-          String(entry.blockId) === table.props.vortex.block.block_id &&
-          String(entry.releaseVersion) === table.props.vortex.block.release_version,
-      );
+      const tableRelease = studioBlockRelease(context.catalogue, table.props.vortex.block);
       if (tableRelease?.properties.some((entry) => entry.key === "row_click") !== true) {
         plan.details.push(
           `The table on ${quoted(page.name)} cannot open records. Choose a records table that supports opening rows.`,

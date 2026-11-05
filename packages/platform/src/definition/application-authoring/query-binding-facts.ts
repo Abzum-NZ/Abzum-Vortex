@@ -16,6 +16,7 @@ import {
 } from "../application-composition/source-composition";
 import type { StudioCompositionContext } from "./application-composition-model";
 import type { StudioQueryChoice } from "./contextual-palette";
+import { studioBlockRelease } from "./semantic-selection";
 
 /** Every record type of the draft and each of its fields as a binding sees it, by reference. */
 const draftBindingFields = (source: StudioCompositionContext["source"]) => {
@@ -78,11 +79,7 @@ export function studioQueryBindingFacts(
   const hasSubject =
     owner !== undefined && recordPageTypes.has(owner.page.type) && subject !== undefined;
   const releaseOf = (props: (typeof entries)[number]["items"][number]["props"]) =>
-    context.catalogue.releases.find(
-      (candidate) =>
-        candidate.blockId === props.vortex.block.block_id &&
-        candidate.releaseVersion === props.vortex.block.release_version,
-    );
+    studioBlockRelease(context.catalogue, props.vortex.block);
   const named = (value: unknown): string | undefined =>
     typeof value === "string" && value.trim() !== "" ? value.trim() : undefined;
   // The people directory is usually another application's record type, so it is named here.

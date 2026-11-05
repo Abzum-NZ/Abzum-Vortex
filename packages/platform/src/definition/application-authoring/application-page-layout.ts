@@ -10,6 +10,7 @@ import {
 } from "../application-composition/source-composition";
 import type { PageSlotAddress } from "../application-page-slots";
 import { storedItemRelease } from "./stored-composition";
+import { studioBlockRelease } from "./semantic-selection";
 import { judged, quoted, refuse, type Source, type Page } from "./application-structure";
 import type { StudioStructureContext, StudioStructureResult } from "./application-structure-common";
 
@@ -84,11 +85,7 @@ const blockProblem = (
 ): string | undefined => {
   if (target.allowed === undefined) return undefined;
   const blocked = items.filter((item) => {
-    const release = context.catalogue.releases.find(
-      (entry) =>
-        String(entry.blockId) === item.props.vortex.block.block_id &&
-        String(entry.releaseVersion) === item.props.vortex.block.release_version,
-    );
+    const release = studioBlockRelease(context.catalogue, item.props.vortex.block);
     return release === undefined || !target.allowed!.includes(release.paletteGroup);
   });
   if (blocked.length === 0) return undefined;

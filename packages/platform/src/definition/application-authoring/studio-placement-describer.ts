@@ -2,6 +2,7 @@ import { sourceItemTree, type SourceItem } from "../application-composition/sour
 import type { ApplicationSourceDocument } from "../application-source-contracts";
 import type { ImmutablePlatformBlockCatalogue } from "../application-composition/platform-block-release";
 import type { StudioPlacementDescriber } from "./semantic-outline";
+import { studioBlockRelease } from "./semantic-selection";
 
 type Release = ImmutablePlatformBlockCatalogue["releases"][number];
 
@@ -56,11 +57,7 @@ export const createStudioPlacementDescriber = (
     ),
   );
   return (placement) => {
-    const release = catalogue.releases.find(
-      (candidate) =>
-        String(candidate.blockId) === placement.block.block_id &&
-        String(candidate.releaseVersion) === placement.block.release_version,
-    );
+    const release = studioBlockRelease(catalogue, placement.block);
     const name = release?.name === undefined ? "Item" : String(release.name);
     const label = itemLabel(release, placement.settings, fieldLabels);
     return label === undefined ? name : `${name} · ${label}`;

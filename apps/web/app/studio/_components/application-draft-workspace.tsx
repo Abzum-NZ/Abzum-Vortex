@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import {
   describeFailure,
   type SourceIdentityReservation,
@@ -174,14 +174,20 @@ function ExistingApplicationWorkspace(props: ExistingProps) {
   };
 
   // The one outline of the draft: Structure, Outline and every label Studio shows are views of it.
+  // Drawn after the keystroke that changed the draft: the canvas and the field answer first. The
+  // commands and the canvas name blocks from the current draft.
   const describePlacement = useMemo(
     () => createStudioPlacementDescriber(catalogue, source),
     [catalogue, source],
   );
+  const outlineSource = useDeferredValue(source);
   const outline = useMemo(
     () =>
-      projectStudioSemanticOutline({ rootId: state.rootId, source, catalogue }, describePlacement),
-    [state.rootId, source, catalogue, describePlacement],
+      projectStudioSemanticOutline(
+        { rootId: state.rootId, source: outlineSource, catalogue },
+        createStudioPlacementDescriber(catalogue, outlineSource),
+      ),
+    [state.rootId, outlineSource, catalogue],
   );
   const labels = useMemo(() => studioOutlineLabels(outline), [outline]);
   // Every "Used in" entry and "Show me where" link opens its place in its own tab, selected.
