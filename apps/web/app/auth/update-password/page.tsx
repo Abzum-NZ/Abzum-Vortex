@@ -63,7 +63,7 @@ export default async function UpdatePasswordPage({
           maxLength={newPasswordPolicy.maximumLength}
           pattern={newPasswordPolicy.pattern}
           missing="Choose a password."
-          invalid={newPasswordPolicy.description}
+          invalid="This password does not meet the rules above."
         />
 
         <SubmitButton pendingLabel="Updating password…">Update password</SubmitButton>

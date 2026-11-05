@@ -65,7 +65,7 @@ export default async function RegisterPage({ searchParams }: RegisterPageProps) 
             maxLength={newPasswordPolicy.maximumLength}
             pattern={newPasswordPolicy.pattern}
             missing="Choose a password."
-            invalid={newPasswordPolicy.description}
+            invalid="This password does not meet the rules above."
           />
           <AuthCheckbox
             id="privacy-notice"
