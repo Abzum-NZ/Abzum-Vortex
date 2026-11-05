@@ -1,6 +1,6 @@
 "use client";
 import { useMemo, useRef, useState, type ReactNode } from "react";
-import type { ConditionNode } from "@vortex/platform/schema";
+import { canonicalJson, type ConditionNode } from "@vortex/platform/schema";
 import {
   describeCondition,
   describeStudioCompositionGate,
@@ -15,6 +15,7 @@ import {
   type StudioReactionSlot,
   type StudioSemanticSelection,
   type StudioStoredApplicationDraft,
+  useStudioSameByKey,
 } from "@vortex/ui/studio";
 import {
   ApplicationReactionConditionEditor,
@@ -84,11 +85,32 @@ export function useStudioBlockAccess({
   // The gate callback reads the latest handler, so the field values keep their identity between renders.
   const gateHandler = useRef(onGate);
   gateHandler.current = onGate;
+  // The permission picker reads the permissions, the roles that hold them and the modules' own
+  // permissions: the source it is handed stays the same object while those are unchanged.
+  const gateSourceKey = useMemo(
+    () =>
+      canonicalJson([
+        context.source.body.permissions,
+        context.source.body.roles,
+        context.source.body.modules.map((module) => module.permissions),
+      ]),
+    [context.source],
+  );
+  const gateSource = useStudioSameByKey(context.source, gateSourceKey);
+  const hasTarget = target !== undefined;
+  const slotsSet = studioReactionSlots
+    .filter((entry) => target?.placement[entry.slot] !== undefined)
+    .map((entry) => entry.slot)
+    .join(",");
+  const wordsKey = JSON.stringify([...words]);
+  const gatePermission = gate.kind === "available" ? (gate.permission ?? "") : "";
+  const gateReason = gate.kind === "available" ? "" : gate.reason;
+  // What the fields draw is a handful of values: the value keeps its identity until one changes.
   const access = useMemo<StudioAccessFieldValue>(() => {
     const permissionLabel =
       gate.kind === "available" && gate.permission !== null
-        ? (context.source.body.permissions.find((item) => item.key === gate.permission)?.label ??
-          context.source.body.modules
+        ? (gateSource.body.permissions.find((item) => item.key === gate.permission)?.label ??
+          gateSource.body.modules
             .flatMap((module) => module.permissions)
             .find((item) => item.key === gate.permission)?.label ??
           gate.permission)
@@ -105,7 +127,7 @@ export function useStudioBlockAccess({
         gate.kind === "available"
           ? {
               kind: "available",
-              source: context.source,
+              source: gateSource,
               permission: gate.permission ?? "",
               onChange: (next) => !disabled && gateHandler.current(next),
               problem: gateProblem,
@@ -127,7 +149,17 @@ export function useStudioBlockAccess({
               })),
             },
     };
-  }, [context.source, gate, target, words, disabled, gateProblem]);
+    // The values that decide the field's content are the keys below.
+  }, [
+    gateSource,
+    gatePermission,
+    gateReason,
+    hasTarget,
+    slotsSet,
+    wordsKey,
+    disabled,
+    gateProblem,
+  ]);
   const slotInfo = studioReactionSlots.find((entry) => entry.slot === slot)!;
   const dialog = (
     <StudioDialog
@@ -136,6 +168,7 @@ export function useStudioBlockAccess({
       title={slotInfo.title}
       description={slotInfo.help}
       closeLabel="Done"
+      focusDialog
     >
       {editing && (
         <ApplicationReactionConditionEditor

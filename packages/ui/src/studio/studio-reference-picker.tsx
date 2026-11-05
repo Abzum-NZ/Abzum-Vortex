@@ -91,7 +91,8 @@ export function StudioReferencePicker({
       itemToStringValue={(entry: StudioReferencePickerOption) => entry.value}
       isItemEqualToValue={(entry, selected) => entry.value === selected.value}
       onValueChange={(entry) => {
-        if (entry !== null && !entry.disabled) onChange(entry.value);
+        // Choosing the option already held changes nothing, so it sends nothing.
+        if (entry !== null && !entry.disabled && entry.value !== value) onChange(entry.value);
       }}
     >
       <InputGroup>

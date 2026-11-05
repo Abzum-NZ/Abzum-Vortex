@@ -13,6 +13,7 @@ import {
   studioSettingProblems,
   StudioInspectorActions,
   StudioInspectorGroup,
+  useStudioDraftHeld,
   studioSourceRecordTypes,
   type StudioCompositionContext,
   type StudioDataSelection,
@@ -71,7 +72,6 @@ import { StudioOptionsSourceEditor } from "./studio-options-source-editor";
 import { optionsFlowInputs, optionsFlowSeed } from "./module-field-options-flow";
 import { StudioLinkSection } from "./studio-link-section";
 import { useStudioDraftText } from "./use-studio-draft-text";
-import { useStudioDraftHeld } from "./use-studio-draft-held";
 import {
   studioEditProblem,
   type StudioCompiledFields,

@@ -15,6 +15,7 @@ export function StudioInspectorGroup({
   children,
   defaultOpen = true,
   persist = true,
+  forceOpen = false,
   hint,
   summary,
   action,
@@ -23,6 +24,8 @@ export function StudioInspectorGroup({
   children: ReactNode;
   defaultOpen?: boolean;
   persist?: boolean;
+  /** The section opens when this becomes true (a refusal inside it must be seen). */
+  forceOpen?: boolean;
   /** Instruction text for the whole section, shown in an info tooltip. */
   hint?: string;
   /** A short muted text after the title while the section is closed. */
@@ -42,6 +45,10 @@ export function StudioInspectorGroup({
       /* Storage may be disabled. */
     }
   }, [key, defaultOpen, persist]);
+  // Opened for the refusal, after the stored preference is read; the person can close it again.
+  useEffect(() => {
+    if (forceOpen) setOpen(true);
+  }, [forceOpen]);
   const toggle = (next: boolean) => {
     setOpen(next);
     if (!persist) return;

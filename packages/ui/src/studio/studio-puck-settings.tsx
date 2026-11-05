@@ -1,6 +1,14 @@
 "use client";
 
-import { useCallback, useContext, useMemo, useRef, useState, type ReactNode } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import { Puck, type ComponentConfig, type Field } from "@puckeditor/core";
 import {
   canonicalJson,
@@ -12,11 +20,20 @@ import {
 import { ItemGroup } from "../components/item";
 import { Icon } from "../icons";
 import {
+  StudioAccessFieldContext,
+  StudioLayoutFieldContext,
   StudioSettingFieldsContext,
+  StudioSettingTouchedContext,
   studioConditionField,
   studioConditionFieldName,
+  studioFeaturesField,
+  studioFeaturesFieldName,
   studioGateField,
   studioGateFieldName,
+  studioLayoutField,
+  studioLayoutFieldName,
+  studioOrderField,
+  studioOrderFieldName,
   studioQueryField,
   studioQueryFieldName,
   studioSettingField,
@@ -28,6 +45,8 @@ import { studioGridFeaturesProperty } from "./studio-grid-features";
 import { StudioHelp } from "./studio-field";
 import { StudioInspectorGroup } from "./studio-inspector-group";
 import { StudioInspectorActions, type StudioInspectorAction } from "./studio-inspector-actions";
+import { StudioOrderNamesContext, studioLayoutSummary } from "./studio-layout-fields";
+import { useStudioScreen } from "./studio-canvas-screen";
 import { studioReleaseIcon } from "./studio-puck-drawer";
 import { studioReactionSlots } from "./application-reaction-condition-commands";
 import { studioBlockReadsQuery } from "./application-composition-commands";
@@ -76,8 +95,14 @@ const studioFieldSettings = (
 
 const noProps: Readonly<Record<string, unknown>> = {};
 
-/** Who sees the block and when: the fields of the Visibility and access group. */
-const addAccessFields = (fields: Record<string, Field>): void => {
+/**
+ * The fields that are not settings: the grid features, the size and order, the permission gate and
+ * the conditions, drawn in the Grid features, Layout and Visibility and access groups.
+ */
+const addInspectorFields = (fields: Record<string, Field>): void => {
+  fields[studioFeaturesFieldName] = studioFeaturesField;
+  fields[studioLayoutFieldName] = studioLayoutField;
+  fields[studioOrderFieldName] = studioOrderField;
   fields[studioGateFieldName] = studioGateField;
   for (const reaction of studioReactionSlots)
     fields[studioConditionFieldName(reaction.slot)] = studioConditionField(
@@ -86,7 +111,10 @@ const addAccessFields = (fields: Record<string, Field>): void => {
     );
 };
 
-/** The fields of one placement: its shown settings first, every other prop hidden from the inspector. */
+/**
+ * The fields of one placement: its shown settings first, every other prop hidden from the
+ * inspector.
+ */
 const studioSettingFields = (
   release: PlatformBlockRelease,
   base: Readonly<Record<string, Field>>,
@@ -104,11 +132,29 @@ const studioSettingFields = (
     if (values !== undefined && !componentSettingApplies(property, values)) continue;
     fields[property.key] = studioSettingField(release, property, release.properties as never);
   }
-  addAccessFields(fields);
+  addInspectorFields(fields);
   for (const [key, field] of Object.entries(base))
     if (fields[key] === undefined) fields[key] = { ...field, visible: false } as Field;
   return fields;
 };
+
+/**
+ * The block's flow bindings and where it is used: sections that are not Puck fields. They have a
+ * context of their own, so their churn draws only them and not the fields.
+ */
+const StudioInspectorSectionsContext = createContext<
+  Readonly<{ workflows: ReactNode; usedIn: ReactNode }>
+>({ workflows: null, usedIn: null });
+
+function StudioInspectorSections() {
+  const { workflows, usedIn } = useContext(StudioInspectorSectionsContext);
+  return (
+    <>
+      {workflows}
+      {usedIn}
+    </>
+  );
+}
 
 /**
  * Lays the inspector out in groups: the settings in use first, the optional ones nobody has set in
@@ -155,7 +201,9 @@ function StudioInspectorFieldGroups({
     .map(([key, node]) => ({ key, node: <div key={key}>{node}</div> }));
   const more = controls.filter((control) => decided.current?.keys.has(control.key) === true);
   const primary = controls.filter((control) => !more.includes(control));
-  const access = context?.access;
+  const access = useContext(StudioAccessFieldContext)?.access;
+  const layout = useContext(StudioLayoutFieldContext)?.layout;
+  const { breakpoint } = useStudioScreen();
   return (
     <>
       {(primary.length > 0 || context?.settingsAfter || context?.notice) && (
@@ -202,6 +250,19 @@ function StudioInspectorFieldGroups({
           )}
         </StudioInspectorGroup>
       )}
+      {fields[studioFeaturesFieldName]}
+      {layout !== undefined && (
+        <StudioInspectorGroup
+          title="Layout"
+          defaultOpen={false}
+          forceOpen={layout.kind === "available" && layout.orderProblem !== undefined}
+          summary={studioLayoutSummary(layout, breakpoint)}
+        >
+          {fields[studioLayoutFieldName]}
+          {fields[studioOrderFieldName]}
+        </StudioInspectorGroup>
+      )}
+      <StudioInspectorSections />
     </>
   );
 }
@@ -240,7 +301,7 @@ export const withSettingFields = (
       if (release !== undefined) return studioSettingFields(release, resolved, data.props);
       // A block whose release the catalogue lacks still shows who sees it and when.
       const fields = hidden(resolved);
-      addAccessFields(fields);
+      addInspectorFields(fields);
       return fields;
     },
     renderFields: ({ fields }: { fields: Partial<Record<string, ReactNode>> }) => (
@@ -295,6 +356,11 @@ export function StudioBlockSettingFields({
   disabled,
   query,
   access,
+  layout,
+  orderNames,
+  features,
+  workflows,
+  usedIn,
   settingsAfter,
   notice,
   placementAlias,
@@ -310,8 +376,14 @@ export function StudioBlockSettingFields({
     /** The name of this instance, and its More menu. */
     name: string;
     actions: readonly StudioInspectorAction[];
+    /** The names of the blocks near this one in its order, for the order field. */
+    orderNames: ReadonlyMap<string, string>;
     /** The catalogue's releases, for the block's kind and description. */
     releases: readonly PlatformBlockRelease[];
+    /** The block's flow bindings, drawn by the Workflows group. */
+    workflows: ReactNode;
+    /** Where the block is used, drawn by the Used in group. */
+    usedIn: ReactNode;
   }
 >): ReactNode {
   const scope =
@@ -322,10 +394,11 @@ export function StudioBlockSettingFields({
   });
   const touch = useCallback(
     (key: string) =>
-      setTouched((previous) => ({
-        scope,
-        keys: new Set([...(previous.scope === scope ? previous.keys : []), key]),
-      })),
+      setTouched((previous) =>
+        previous.scope === scope && previous.keys.has(key)
+          ? previous
+          : { scope, keys: new Set([...(previous.scope === scope ? previous.keys : []), key]) },
+      ),
     [scope],
   );
   const value = useMemo(
@@ -333,19 +406,37 @@ export function StudioBlockSettingFields({
       choices,
       disabled,
       query,
-      access,
+      features,
       settingsAfter,
       notice,
       scope,
-      touched: touched.scope === scope ? touched.keys : noKeys,
       touch,
     }),
-    [choices, disabled, query, access, settingsAfter, notice, scope, touched, touch],
+    [choices, disabled, query, features, settingsAfter, notice, scope, touch],
   );
+  const touchedKeys = touched.scope === scope ? touched.keys : noKeys;
+  const accessValue = useMemo(() => ({ access, disabled }), [access, disabled]);
+  const layoutValue = useMemo(() => ({ layout, disabled }), [layout, disabled]);
+  const sections = useMemo(() => ({ workflows, usedIn }), [workflows, usedIn]);
   return (
     <StudioSettingFieldsContext.Provider value={value}>
-      <StudioBlockHeader titleId={titleId} name={name} actions={actions} releases={releases} />
-      {scope === placementAlias && <Puck.Fields wrapFields={false} />}
+      <StudioSettingTouchedContext.Provider value={touchedKeys}>
+        <StudioAccessFieldContext.Provider value={accessValue}>
+          <StudioLayoutFieldContext.Provider value={layoutValue}>
+            <StudioOrderNamesContext.Provider value={orderNames}>
+              <StudioInspectorSectionsContext.Provider value={sections}>
+                <StudioBlockHeader
+                  titleId={titleId}
+                  name={name}
+                  actions={actions}
+                  releases={releases}
+                />
+                {scope === placementAlias && <Puck.Fields wrapFields={false} />}
+              </StudioInspectorSectionsContext.Provider>
+            </StudioOrderNamesContext.Provider>
+          </StudioLayoutFieldContext.Provider>
+        </StudioAccessFieldContext.Provider>
+      </StudioSettingTouchedContext.Provider>
     </StudioSettingFieldsContext.Provider>
   );
 }

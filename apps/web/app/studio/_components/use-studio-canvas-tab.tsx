@@ -59,7 +59,7 @@ import { pageUsingLayout } from "../_lib/studio-view-request";
 import type { StudioApplicationCanvasFrames } from "../../_lib/studio-application-draft";
 import { studioMenuPosition } from "@vortex/platform/schema";
 import type { StudioInspectorAction } from "@vortex/ui/studio";
-import { ApplicationCompositionEditor } from "./application-composition-editor";
+import { StudioBlockInspector } from "./studio-block-inspector";
 import { StudioBlockSetupDialog, type StudioBlockSetupRequest } from "./studio-block-setup-dialog";
 import { StudioBlockDialogs } from "./studio-block-dialogs";
 import { StudioQuerySheet } from "./studio-query-sheet";
@@ -645,7 +645,7 @@ export function useStudioCanvasTab({
         inspector.status === "resolved" &&
         flowsInspector}
       {selected?.kind === "placement" && inspector.status === "resolved" && (
-        <ApplicationCompositionEditor
+        <StudioBlockInspector
           key={`${draft.lifetime}:${selectionKey}`}
           context={compositionContext}
           selection={selected}
@@ -658,6 +658,15 @@ export function useStudioCanvasTab({
           canvasArrangement={studioCanvasGridArrangement(gridStates.get(selected.placementAlias))}
           onCommand={commandComposition}
           onNewQuery={(use) => setQuerySheet({ use })}
+          workflows={placementWorkflows}
+          usedIn={
+            <>
+              <StudioLayoutOutletUses source={source} placementAlias={selected.placementAlias} />
+              {usedIn !== null && (
+                <StudioUsedIn source={source} target={usedIn} name={selectedName ?? "it"} />
+              )}
+            </>
+          }
         />
       )}
       {selected?.kind === "page" && inspector.status === "resolved" && (
@@ -668,12 +677,9 @@ export function useStudioCanvasTab({
           onEdit={commandPageValue}
         />
       )}
-      {inspector.status === "resolved" && placementWorkflows}
-      {selected?.kind === "placement" && (
-        <StudioLayoutOutletUses source={source} placementAlias={selected.placementAlias} />
-      )}
+      {selected?.kind === "page" && inspector.status === "resolved" && placementWorkflows}
       {selected?.kind === "flow" && flowDeleteNotice}
-      {usedIn !== null && (
+      {selected?.kind !== "placement" && usedIn !== null && (
         <StudioUsedIn source={source} target={usedIn} name={selectedName ?? "it"} />
       )}
     </StudioInspector>

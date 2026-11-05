@@ -65,7 +65,7 @@ export type StudioBehaviourEdit = (
 ) => string | true;
 
 /**
- * The Behaviour of a placed component or of the page: every event it raises (the events its block
+ * The Workflows of a placed component or of the page: every event it raises (the events its block
  * declares in the catalogue, or the page's own), each with the flow it runs. From here a builder
  * opens that flow, makes the event run another flow, creates a new one, combines two flows into
  * one, and sets how the event starts the flow (start condition, debounce, concurrency, exclusive
@@ -114,7 +114,7 @@ export function StudioBehaviourPanel({
   const bound = events.filter((entry) => entry.binding !== null).length;
   return (
     <StudioInspectorGroup
-      title="Behaviour"
+      title="Workflows"
       defaultOpen={bound > 0}
       summary={bound === 0 ? "No flows" : bound === 1 ? "1 flow" : `${bound} flows`}
     >
