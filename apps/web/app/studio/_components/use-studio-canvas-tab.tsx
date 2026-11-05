@@ -481,9 +481,11 @@ export function useStudioCanvasTab({
       : result.kind === "blocked"
         ? result.message
         : result.kind === "invalid"
-          ? selection?.kind === "application"
-            ? "Enter a name and description within their length limits."
-            : "Enter a name of at most 60 characters."
+          ? name.trim().length === 0
+            ? `Enter a name for the ${selection?.kind === "application" ? "application" : "page"}.`
+            : selection?.kind === "application"
+              ? "Enter a name and description within their length limits."
+              : "Enter a name of at most 60 characters."
           : "This item is not in the draft any more.";
   };
 

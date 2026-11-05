@@ -10,7 +10,10 @@ type Release = ImmutablePlatformBlockCatalogue["releases"][number];
 const textValue = (value: unknown): string | undefined =>
   typeof value === "string" && value.trim().length > 0 ? value.trim() : undefined;
 
-/** The item's accessible name, derived field label, or first text setting. */
+/**
+ * The item's accessible-name setting or derived field label; only a block that declares no
+ * accessible name falls back to its first text setting.
+ */
 const itemLabel = (
   release: Release | undefined,
   settings: Readonly<Record<string, unknown>>,
