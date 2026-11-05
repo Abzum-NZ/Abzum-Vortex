@@ -123,7 +123,7 @@ export default async function SignInPage({ searchParams }: SignInPageProps) {
           name="email"
           label="Email address"
           type="email"
-          autoComplete="email"
+          autoComplete="username"
           missing="Enter your email address."
           invalid="Enter an email address like name@example.com."
         />
