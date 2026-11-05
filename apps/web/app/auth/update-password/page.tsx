@@ -1,8 +1,6 @@
 import { NavigationLink } from "@vortex/ui/routing";
 import { newPasswordPolicy } from "@vortex/platform/server";
-import { Field, FieldDescription } from "@vortex/ui/components/field";
-import { Input } from "@vortex/ui/components/input";
-import { Label } from "@vortex/ui/components/label";
+import { AuthForm, AuthTextField } from "../_components/auth-form";
 import { AuthShell } from "../_components/auth-shell";
 import { SubmitButton } from "../_components/submit-button";
 import { updatePassword } from "../actions";
@@ -32,40 +30,44 @@ export default async function UpdatePasswordPage({
           {newPasswordPolicy.description}
         </p>
       ) : null}
-      <form className="flex flex-col gap-5" action={updatePassword}>
-        <Field>
-          <Label htmlFor="email">Email address</Label>
-          <Input id="email" name="email" type="email" autoComplete="email" required />
-        </Field>
-        <Field>
-          <Label htmlFor="token">Six-digit recovery code</Label>
-          <Input
-            id="token"
-            name="token"
-            type="text"
-            inputMode="numeric"
-            autoComplete="one-time-code"
-            pattern="[0-9]{6}"
-            maxLength={6}
-            required
-          />
-        </Field>
-        <Field>
-          <Label htmlFor="password">New password</Label>
-          <FieldDescription>{newPasswordPolicy.description}</FieldDescription>
-          <Input
-            id="password"
-            name="password"
-            type="password"
-            autoComplete="new-password"
-            minLength={newPasswordPolicy.minimumLength}
-            pattern={newPasswordPolicy.pattern}
-            title={newPasswordPolicy.description}
-            required
-          />
-        </Field>
+      <AuthForm action={updatePassword}>
+        <AuthTextField
+          id="email"
+          name="email"
+          label="Email address"
+          type="email"
+          autoComplete="email"
+          missing="Enter your email address."
+          invalid="Enter an email address like name@example.com."
+        />
+        <AuthTextField
+          id="token"
+          name="token"
+          label="Six-digit recovery code"
+          type="text"
+          inputMode="numeric"
+          autoComplete="one-time-code"
+          pattern="[0-9]{6}"
+          maxLength={6}
+          missing="Enter the six-digit code."
+          invalid="The code is six digits, with no spaces."
+        />
+        <AuthTextField
+          id="password"
+          name="password"
+          label="New password"
+          description={newPasswordPolicy.description}
+          type="password"
+          autoComplete="new-password"
+          minLength={newPasswordPolicy.minimumLength}
+          maxLength={newPasswordPolicy.maximumLength}
+          pattern={newPasswordPolicy.pattern}
+          missing="Choose a password."
+          invalid={newPasswordPolicy.description}
+        />
+
         <SubmitButton pendingLabel="Updating password…">Update password</SubmitButton>
-      </form>
+      </AuthForm>
     </AuthShell>
   );
 }

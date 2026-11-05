@@ -1,10 +1,8 @@
 import { NavigationLink } from "@vortex/ui/routing";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
-import { Field } from "@vortex/ui/components/field";
-import { Input } from "@vortex/ui/components/input";
-import { Label } from "@vortex/ui/components/label";
 import { Separator } from "@vortex/ui/components/separator";
+import { AuthForm, AuthTextField } from "../_components/auth-form";
 import { AuthShell } from "../_components/auth-shell";
 import { PreApplicationStatusNotice } from "../_components/pre-application-status-notice";
 import { StatusMessage } from "../_components/status-message";
@@ -112,7 +110,7 @@ export default async function SignInPage({ searchParams }: SignInPageProps) {
       }
     >
       <StatusMessage status={status} />
-      <form className="flex flex-col gap-5" action={signIn}>
+      <AuthForm action={signIn}>
         {continuation === undefined ? null : (
           <input
             type="hidden"
@@ -120,23 +118,27 @@ export default async function SignInPage({ searchParams }: SignInPageProps) {
             value={serializeSignInContinuation(continuation)}
           />
         )}
-        <Field>
-          <Label htmlFor="email">Email address</Label>
-          <Input id="email" name="email" type="email" autoComplete="email" required />
-        </Field>
-        <Field>
-          <Label htmlFor="password">Password</Label>
-          <Input
-            id="password"
-            name="password"
-            type="password"
-            autoComplete="current-password"
-            minLength={8}
-            required
-          />
-        </Field>
+        <AuthTextField
+          id="email"
+          name="email"
+          label="Email address"
+          type="email"
+          autoComplete="email"
+          missing="Enter your email address."
+          invalid="Enter an email address like name@example.com."
+        />
+        <AuthTextField
+          id="password"
+          name="password"
+          label="Password"
+          type="password"
+          autoComplete="current-password"
+          minLength={8}
+          missing="Enter your password."
+          invalid="Enter your password, at least 8 characters."
+        />
         <SubmitButton pendingLabel="Signing in…">Sign in</SubmitButton>
-      </form>
+      </AuthForm>
       {localDevelopmentSignInEnabled ? (
         <div className="flex flex-col gap-4 pt-1">
           <div className="relative flex items-center justify-center">
