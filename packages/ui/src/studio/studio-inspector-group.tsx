@@ -82,7 +82,9 @@ export function StudioInspectorGroup({
         {action}
       </div>
       <CollapsibleContent keepMounted>
-        <FieldGroup className="pb-3 pt-1">{children}</FieldGroup>
+        <div className="pb-3 pt-1">
+          <FieldGroup>{children}</FieldGroup>
+        </div>
       </CollapsibleContent>
     </Collapsible>
   );
