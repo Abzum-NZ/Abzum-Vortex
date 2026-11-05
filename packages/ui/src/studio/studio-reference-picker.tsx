@@ -66,9 +66,9 @@ export function StudioReferencePicker({
       .includes(query.trim().toLocaleLowerCase()),
   );
   const groups = [...new Set(matches.map((entry) => entry.group ?? ""))];
-  // The search text is empty whenever the list is open: what is shown before typing is the
+  // The search text is empty whenever the list opens: what is shown before typing is the
   // current selection, its label as the placeholder and its check in the list, never text the
-  // person has to clear.
+  // person has to clear. Focus alone (Tab, a dialog opening on its first field) opens nothing.
   const startSearch = () => {
     if (open) return;
     setQuery("");
@@ -81,7 +81,8 @@ export function StudioReferencePicker({
       open={open}
       onOpenChange={(next) => {
         setOpen(next);
-        if (!next) setQuery("");
+        // Opened by a pointer, ArrowDown or typing; the search starts empty each time.
+        if (!next || !open) setQuery("");
       }}
       inputValue={open ? query : (selected?.label ?? "")}
       onInputValueChange={(text) => setQuery(text)}
@@ -100,7 +101,6 @@ export function StudioReferencePicker({
           id={id}
           placeholder={selected?.label ?? "Search…"}
           {...accessibility}
-          onFocus={startSearch}
           onPointerDown={startSearch}
           aria-invalid={accessibility["aria-invalid"] || !known}
         />

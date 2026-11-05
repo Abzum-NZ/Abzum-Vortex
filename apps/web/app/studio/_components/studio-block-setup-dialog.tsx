@@ -16,6 +16,7 @@ import {
   StudioSettingFields,
   studioBlockChoices,
   studioGridDataSettings,
+  studioHasGridColumns,
   studioGroupedTableSettings,
   studioGroupedTableStart,
   studioSettingProblems,
@@ -88,6 +89,12 @@ export function StudioBlockSetupDialog({
   // edits, so the query choice follows the references themselves.
   const queriesKey = JSON.stringify(queries.map((candidate) => candidate.reference));
   const references = useMemo(() => JSON.parse(queriesKey) as string[], [queriesKey]);
+  // A grid lists records, so with no page query it starts on the first query that returns them,
+  // not on a grouped count.
+  const recordsKey = JSON.stringify(
+    queries.filter((candidate) => !candidate.grouped).map((candidate) => candidate.reference),
+  );
+  const recordReferences = useMemo(() => JSON.parse(recordsKey) as string[], [recordsKey]);
   // A new request starts from its defaults; a draft edit while it is open keeps what was typed.
   useEffect(() => {
     setValues(setupDefaults(request?.choice));
@@ -97,7 +104,8 @@ export function StudioBlockSetupDialog({
     setTouched(false);
     setQuery("");
   }, [request]);
-  // The chosen query stays while the draft still has it; otherwise the page's own query, then the first.
+  // The chosen query stays while the draft still has it; otherwise the page's own query, then the
+  // first (a grid's first records query).
   useEffect(() => {
     setQuery((current) =>
       request?.choice.needsQuery !== true
@@ -106,9 +114,11 @@ export function StudioBlockSetupDialog({
           ? current
           : request.pageQuery !== undefined && references.includes(request.pageQuery)
             ? request.pageQuery
-            : (references[0] ?? ""),
+            : ((studioHasGridColumns(request.choice.setup) ? recordReferences[0] : undefined) ??
+              references[0] ??
+              ""),
     );
-  }, [request, references]);
+  }, [request, references, recordReferences]);
   // A block without a query picks any field of the draft; one with a query, only that query's fields.
   const choices = useMemo(
     () => studioBlockChoices(draftChoices, query === "" ? null : query),
