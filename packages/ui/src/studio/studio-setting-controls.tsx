@@ -7,6 +7,7 @@ import { useEffect, useRef, useState, type ReactElement } from "react";
 import {
   canonicalJson,
   componentSettingApplies,
+  isRepeatableSlotIdentity,
   type BlockPropertySchemaContract,
   type SourceBlockPropertyValueContract,
 } from "@vortex/platform/schema";
@@ -243,6 +244,7 @@ function GroupControl({
   onChange,
   choices,
   disabled,
+  problems,
 }: ControlProps): ReactElement {
   if (property.kind !== "group") throw new TypeError("A group control needs a group setting.");
   const group = value?.kind === "group" ? value : undefined;
@@ -255,6 +257,7 @@ function GroupControl({
       values={group?.properties ?? {}}
       choices={choices}
       disabled={locked}
+      problems={problems}
       onChange={(properties) => onChange({ kind: "group", properties: { ...properties } })}
     />
   );
@@ -324,6 +327,36 @@ const entryHeading = (
       : { title: text?.kind === "text" ? text.value : undefined, summary: undefined };
 };
 
+/**
+ * Why an entry's identity cannot name a slot, or nothing when it can (an empty identity is the
+ * required setting's to report). The two rules the stored page applies: a builder key, and not the
+ * identity of another entry.
+ */
+const identityProblem = (
+  identity: Readonly<{ family: string; property: string }>,
+  entry: SourceBlockPropertyValueContract,
+  others: readonly SourceBlockPropertyValueContract[],
+  itemName: string,
+): string | undefined => {
+  const text = (item: SourceBlockPropertyValueContract) => {
+    const stored = item.kind === "group" ? item.properties[identity.property] : undefined;
+    return stored?.kind === "text" ? stored.value : "";
+  };
+  const own = text(entry);
+  if (own === "") return undefined;
+  if (!isRepeatableSlotIdentity(identity.family, own))
+    return "Use lowercase letters, digits and underscores, starting with a letter.";
+  return others.some((other) => text(other) === own)
+    ? `Another ${itemName} already uses this key.`
+    : undefined;
+};
+
+type HeldEntry = Readonly<{
+  entry: SourceBlockPropertyValueContract;
+  problem: string;
+  against: string;
+}>;
+
 function ListControl({
   id,
   property,
@@ -331,8 +364,17 @@ function ListControl({
   onChange,
   choices,
   disabled,
+  identity,
 }: ControlProps): ReactElement {
   const [newLabel, setNewLabel] = useState("");
+  // An entry whose identity cannot name a slot: its text stays in the entry, with its message, and
+  // never reaches the draft. It is dropped when the stored entry changes under it (Undo, a reload)
+  // and when focus leaves the entry, which then shows the identity the draft keeps.
+  const [held, setHeld] = useState<Readonly<Record<string, HeldEntry>>>({});
+  const dropHeld = (entryKey: string) =>
+    setHeld((previous) =>
+      Object.fromEntries(Object.entries(previous).filter(([key]) => key !== entryKey)),
+    );
   const [confirm, confirmDialog] = useConfirm();
   if (property.kind !== "list") throw new TypeError("A list control needs a list setting.");
   const items = value?.kind === "list" ? value.items : [];
@@ -400,27 +442,63 @@ function ListControl({
         disabled={disabled}
         empty="No entries yet."
         items={items.map((item, index) => {
-          const heading = entryHeading(item, property.item, choices);
+          const entryKey = keys.current[index]!;
+          const heldEntry = held[entryKey];
+          const holding = heldEntry?.against === canonicalJson(item) ? heldEntry : undefined;
+          const heading = entryHeading(holding?.entry ?? item, property.item, choices);
           return {
-            key: keys.current[index]!,
+            key: entryKey,
             title: heading.title ?? `${property.item.label} ${index + 1}`,
             summary: heading.summary,
             content: (
-              <StudioSettingControl
-                id={`${id}-${keys.current[index]}`}
-                property={property.item}
-                value={item}
-                choices={choices}
-                disabled={disabled}
-                onChange={(next) => {
-                  const replacement = next ?? initialValue(property.item, choices);
-                  if (replacement === undefined) return;
-                  write(
-                    items.map((entry, position) => (position === index ? replacement : entry)),
-                    keys.current,
-                  );
+              <div
+                className="contents"
+                onBlur={(event) => {
+                  if (
+                    holding !== undefined &&
+                    !event.currentTarget.contains(event.relatedTarget as Node | null)
+                  )
+                    dropHeld(entryKey);
                 }}
-              />
+              >
+                <StudioSettingControl
+                  id={`${id}-${entryKey}`}
+                  property={property.item}
+                  value={holding?.entry ?? item}
+                  choices={choices}
+                  disabled={disabled}
+                  problems={
+                    holding === undefined || identity === undefined
+                      ? undefined
+                      : { [identity.property]: holding.problem }
+                  }
+                  onChange={(next) => {
+                    const replacement = next ?? initialValue(property.item, choices);
+                    if (replacement === undefined) return;
+                    const problem =
+                      identity === undefined
+                        ? undefined
+                        : identityProblem(
+                            identity,
+                            replacement,
+                            items.filter((_, position) => position !== index),
+                            itemName,
+                          );
+                    if (problem !== undefined) {
+                      setHeld((previous) => ({
+                        ...previous,
+                        [entryKey]: { entry: replacement, problem, against: canonicalJson(item) },
+                      }));
+                      return;
+                    }
+                    dropHeld(entryKey);
+                    write(
+                      items.map((entry, position) => (position === index ? replacement : entry)),
+                      keys.current,
+                    );
+                  }}
+                />
+              </div>
             ),
           };
         })}
@@ -513,6 +591,8 @@ type SettingFieldsProps = Readonly<{
   onChange: (values: StudioSettingValues) => void;
   choices: StudioSettingChoices;
   disabled: boolean;
+  /** Messages for input held out of the values, by the key of the setting they belong to. */
+  problems?: Readonly<Record<string, string>> | undefined;
 }>;
 
 export function StudioSettingFields(props: SettingFieldsProps): ReactElement {
@@ -574,6 +654,7 @@ function SettingFields({
   onChange,
   choices,
   disabled,
+  problems,
 }: SettingFieldsProps): ReactElement {
   const [touched, setTouched] = useState<{ id: string; keys: ReadonlySet<string> }>({
     id: idPrefix,
@@ -603,12 +684,13 @@ function SettingFields({
               optional={!property.required}
               hint={property.help}
               error={
-                property.required &&
+                problems?.[property.key] ??
+                (property.required &&
                 property.showWhen !== undefined &&
                 property.defaultValue === undefined &&
                 value === undefined
                   ? conditionalRequiredMessage(property)
-                  : undefined
+                  : undefined)
               }
             >
               {(control) => (

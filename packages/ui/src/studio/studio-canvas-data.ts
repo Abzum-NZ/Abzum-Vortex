@@ -18,6 +18,7 @@ import {
   isStudioDraftSnapshot,
 } from "@vortex/platform/schema";
 import type { StudioCompositionDestination } from "./application-composition-commands";
+import { slotDeclaration } from "./application-composition-regions";
 import type { StudioPlacementDescriber } from "./semantic-outline";
 
 /** One compiled zone of the page (a content slot, or the default zone): its items, exactly as the published definition holds them. */
@@ -120,6 +121,27 @@ export type StudioPuckSelector = NonNullable<UiState["itemSelector"]>;
 
 /** Puck's name of the page's default zone, which holds the blocks of a page in the default frame. */
 const ROOT_ZONE = "root:default-zone";
+
+/**
+ * The keys of the repeating slots the items hold (a tab is stored as `tab_<key>`), by renderer key,
+ * in the order the items hold them. The canvas config declares a slot field for each, because Puck
+ * finds slots only through the config's fields.
+ */
+export const repeatingSlotKeys = (
+  catalogue: ImmutablePlatformBlockCatalogue,
+  items: readonly SourceItem[],
+): ReadonlyMap<string, readonly string[]> => {
+  const found = new Map<string, Set<string>>();
+  for (const item of sourceItemTree(items)) {
+    const release = storedItemRelease(catalogue, item);
+    if (release === undefined || release.slots.every((slot) => slot.repeats === undefined))
+      continue;
+    for (const [key] of readSourceItem(item, release).slots)
+      if (slotDeclaration(release, key)?.repeats !== undefined)
+        (found.get(item.type) ?? found.set(item.type, new Set()).get(item.type)!).add(key);
+  }
+  return new Map([...found].map(([type, keys]) => [type, [...keys]]));
+};
 
 /** Puck's name of the zone of a root slot, which holds the blocks of one content slot of the shell. */
 const rootSlotZone = (slot: string): string => `root:${slot}`;

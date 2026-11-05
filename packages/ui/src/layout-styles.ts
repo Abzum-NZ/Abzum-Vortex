@@ -336,7 +336,7 @@ export const LAYOUT_ONLY_STYLES_CSS = `
   pointer-events: none;
 }
 [data-vortex-studio-canvas] .vortex-puck-slot--required:empty {
-  min-height: 4rem;
+  min-height: calc(4rem / var(--vortex-canvas-scale, 1));
 }
 [data-vortex-studio-canvas] .vortex-puck-slot--optional:empty {
   display: none;
@@ -355,6 +355,14 @@ export const LAYOUT_ONLY_STYLES_CSS = `
 }
 [data-vortex-studio-canvas][data-vortex-dragging] .vortex-puck-slot--optional:empty::after {
   content: var(--vortex-slot-label);
+}
+/* The blocks stacked at the top level of a layout on the canvas are spaced by the page root's gap,
+   as in the running frame: the top level is Puck's default zone, so the gap is each following
+   block's own top margin (the blocks are Studio's own elements). The first star is Puck's default
+   zone; if an upgrade nests it deeper the gap is lost: walks/B5d-review-2/layout-gap-compare.cjs
+   (equal to the running frame) catches it. */
+[data-vortex-layout-root] > * > [data-vortex-layout-wrapper] + [data-vortex-layout-wrapper] {
+  margin-top: var(--vortex-layout-gap);
 }
 /* On Tablet and Phone a block only reorders within its slot, so an empty slot, which takes no
    drop there, draws no box. */
