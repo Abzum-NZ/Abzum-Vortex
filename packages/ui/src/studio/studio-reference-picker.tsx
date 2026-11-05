@@ -101,6 +101,12 @@ export function StudioReferencePicker({
           placeholder={selected?.label ?? "Search…"}
           {...accessibility}
           onPointerDown={startSearch}
+          onKeyDown={(event) => {
+            // Typing a character opens the list before the character lands, so the search is
+            // what was typed, not the held choice's label with it.
+            if (event.key.length === 1 && !event.ctrlKey && !event.metaKey && !event.altKey)
+              startSearch();
+          }}
           aria-invalid={accessibility["aria-invalid"] || !known}
         />
         <InputGroupAddon align="inline-end">
