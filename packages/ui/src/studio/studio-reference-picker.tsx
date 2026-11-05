@@ -81,8 +81,7 @@ export function StudioReferencePicker({
       open={open}
       onOpenChange={(next) => {
         setOpen(next);
-        // Opened by a pointer, ArrowDown or typing; the search starts empty each time.
-        if (!next || !open) setQuery("");
+        if (!next) setQuery("");
       }}
       inputValue={open ? query : (selected?.label ?? "")}
       onInputValueChange={(text) => setQuery(text)}
