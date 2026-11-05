@@ -7,6 +7,7 @@ import {
   useEffect,
   useRef,
   useState,
+  useSyncExternalStore,
   type FormEvent,
   type ReactNode,
 } from "react";
@@ -19,6 +20,10 @@ type Entry = Readonly<{ check: () => boolean; focus: () => void }>;
 type Register = (entry: Entry) => () => void;
 
 const FormContext = createContext<Register | undefined>(undefined);
+
+const neverChanges = (): (() => void) => () => {};
+const inBrowser = (): boolean => true;
+const onServer = (): boolean => false;
 
 /**
  * A sign-in style form that checks its fields itself instead of the browser's validation bubble:
@@ -35,6 +40,9 @@ export function AuthForm({
     entries.current.add(entry);
     return () => entries.current.delete(entry);
   }, []);
+  // The browser's own validation stays on until this script runs: without JavaScript (or before
+  // hydration) the form still refuses an empty or malformed submit itself.
+  const checksHere = useSyncExternalStore(neverChanges, inBrowser, onServer);
   const submit = (event: FormEvent<HTMLFormElement>): void => {
     const invalid = [...entries.current].filter((entry) => !entry.check());
     if (invalid.length === 0) return;
@@ -43,7 +51,12 @@ export function AuthForm({
   };
   return (
     <FormContext.Provider value={register}>
-      <form className="flex flex-col gap-5" action={action} onSubmit={submit} noValidate>
+      <form
+        className="flex flex-col gap-5"
+        action={action}
+        onSubmit={submit}
+        noValidate={checksHere}
+      >
         {children}
       </form>
     </FormContext.Provider>
