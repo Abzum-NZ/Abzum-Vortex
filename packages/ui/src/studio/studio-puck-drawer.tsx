@@ -120,10 +120,7 @@ export const studioReleaseIcon = (name: string): VortexIconName =>
  * (a control inside the draggable would nest one interactive element in another); the block's Add
  * button sits beside it, in `StudioBlockRow`.
  */
-function StudioDrawerItem({
-  children,
-  name,
-}: Readonly<{ children: ReactNode; name: string }>) {
+function StudioDrawerItem({ children, name }: Readonly<{ children: ReactNode; name: string }>) {
   const drawer = useContext(DrawerContext);
   const underlay = useDrawerRow(name);
   const choice = drawer?.choices.get(name);
