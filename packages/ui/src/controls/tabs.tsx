@@ -1,6 +1,6 @@
 "use client";
 
-import type { ReactElement } from "react";
+import { useContext, type ReactElement } from "react";
 import { isRepeatableSlotIdentity, repeatableSlotKey } from "@vortex/platform/schema";
 import { DefinitionRenderError } from "../definition-error";
 import { Tabs as ShadcnTabs, TabsContent, TabsList, TabsTrigger } from "../components/tabs";
@@ -11,6 +11,7 @@ import {
   type ControlRenderProps,
 } from "./control-context";
 import { useSeededState } from "./field-parts";
+import { RevealedSlotContext } from "./revealed-slot";
 
 export type TabsProps = ControlRenderProps<TabsPayload>;
 
@@ -77,10 +78,13 @@ export function Tabs(props: TabsProps): ReactElement {
       );
     projectedTab = projected;
   }
+  // The builder shows the tab that holds the selected block.
+  const revealedSlot = useContext(RevealedSlotContext);
+  const revealedTab = tabs.find((tab) => tab.slotKey === revealedSlot)?.key;
   const authoredDefault =
     repeatableSlot === undefined ? settings.choice<string>("default_tab", tabs[0]!.key) : undefined;
   const [selected, setSelected] = useSeededState<string>(
-    projectedTab ?? (isTab(authoredDefault) ? authoredDefault : tabs[0]!.key),
+    revealedTab ?? projectedTab ?? (isTab(authoredDefault) ? authoredDefault : tabs[0]!.key),
   );
   const active = isTab(selected) ? selected : tabs[0]!.key;
 

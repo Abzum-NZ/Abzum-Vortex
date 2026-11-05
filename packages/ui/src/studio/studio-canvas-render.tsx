@@ -2,7 +2,11 @@
 
 import { Item, ItemContent, ItemDescription, ItemTitle } from "../components/item";
 import { Component, useMemo, type ReactElement, type ReactNode } from "react";
-import { placementWrapperGeometry } from "../puck-config";
+import {
+  placementWrapperGeometry,
+  releasesByRendererKey,
+  withRepeatingSlots,
+} from "../puck-config";
 import type { ComponentConfig, Config, Field, PuckContext } from "@puckeditor/core";
 import {
   canonicalResponsivePlacement,
@@ -468,37 +472,80 @@ function CanvasBlock({
   );
 }
 
+/**
+ * By base config and catalogue, then by root slots: the canvas built once (`shell`, drawn from the
+ * base config alone) and the latest config made from it with the repeating keys then held.
+ */
 const canvasConfigs = new WeakMap<
   Config,
-  WeakMap<ImmutablePlatformBlockCatalogue, Map<string, Config>>
+  WeakMap<
+    ImmutablePlatformBlockCatalogue,
+    Map<string, Readonly<{ shell: Config; repeatingKey: string; config: Config }>>
+  >
 >();
+
+/** The shell with a slot field for each repeating key the page holds, hidden like every slot. */
+const withHeldRepeatingSlots = (
+  registry: PlatformComponentRegistry,
+  shell: Config,
+  repeating: ReadonlyMap<string, readonly string[]>,
+): Config => {
+  const config = withRepeatingSlots(registry, shell, repeating);
+  if (config === shell) return shell;
+  const components = { ...config.components } as Record<string, ComponentConfig>;
+  for (const rendererKey of repeating.keys()) {
+    const component = components[rendererKey];
+    if (component?.fields !== undefined)
+      components[rendererKey] = {
+        ...component,
+        fields: Object.fromEntries(
+          Object.entries(component.fields).map(([key, field]) => [
+            key,
+            field.type === "slot" ? { ...field, visible: false } : field,
+          ]),
+        ),
+      };
+  }
+  return { ...config, components } as Config;
+};
 
 /**
  * The canvas config: the one config's components and root, each component drawing its stored
- * item as above. The fields stay exactly as the one config declares them (each slot with its
- * `allow` list, every other prop an opaque object), because Puck finds slots through them and Studio edits
- * settings in its inspector. A block dropped from the palette is added by Studio's add command,
- * never kept from Puck's insert. The interim item Puck holds until then carries only the block's
- * identity and plain placement, in the stored spelling a stored block has, so it draws as the block with its release
- * defaults (Puck merges `defaultProps` under every block it draws, so they hold nothing else: a
- * stored block's own `vortex` replaces them). A block Studio cannot create yet
- * (its palette choice names why) is not insertable, so Puck does not let it be dragged.
+ * item as above. Each slot field keeps its `allow` list, because Puck finds slots through the
+ * static fields; a block's settings are Puck fields (`withSettingFields`). A change of the page's
+ * tab keys replaces only the static `fields` of the renderers that hold tabs
+ * (`withHeldRepeatingSlots`). A block dropped from the palette is added by Studio's
+ * add command, never kept from Puck's insert. The interim item Puck holds until then carries only
+ * the block's identity and plain placement, in the stored spelling a stored block has, so it draws
+ * as the block with its release defaults (Puck merges `defaultProps` under every block it draws,
+ * so they hold nothing else: a stored block's own `vortex` replaces them). A block Studio cannot
+ * create yet (its palette choice names why) is not insertable, so Puck does not let it be dragged.
  */
 export const studioCanvasConfig = (
-  config: Config,
+  baseConfig: Config,
   registry: PlatformComponentRegistry,
   fieldInputControlReleases: FieldInputControlReleaseMap,
   catalogue: ImmutablePlatformBlockCatalogue,
   /** The page's root slots with their labels: one slot field of the root for each content slot of its shell. */
   slots: readonly (readonly [key: string, label: string])[],
+  /** The keys of the repeating slots the page holds (a tab is `tab_<key>`), by renderer key. */
+  repeating: ReadonlyMap<string, readonly string[]>,
 ): Config => {
-  const slotKeys = slots.map(([key]) => key);
   const slotsKey = JSON.stringify(slots);
-  let canvas = canvasConfigs.get(config)?.get(catalogue)?.get(slotsKey);
-  if (canvas !== undefined) return canvas;
-  const releaseByKey = new Map(
-    registry.list().map(({ metadata }) => [metadata.rendererKey, metadata]),
-  );
+  const repeatingKey = JSON.stringify([...repeating]);
+  const bySlotsHeld = canvasConfigs.get(baseConfig)?.get(catalogue);
+  const cached = bySlotsHeld?.get(slotsKey);
+  if (cached !== undefined) {
+    if (cached.repeatingKey === repeatingKey) return cached.config;
+    // A change of the keys replaces only the static fields of the renderers that hold repeating
+    // slots: every render function, field renderer and the root keep their identity, so nothing
+    // remounts.
+    const config = withHeldRepeatingSlots(registry, cached.shell, repeating);
+    bySlotsHeld?.set(slotsKey, { shell: cached.shell, repeatingKey, config });
+    return config;
+  }
+  const slotKeys = slots.map(([key]) => key);
+  const releaseByKey = releasesByRendererKey(registry);
   const choices = studioPaletteChoices(catalogue, catalogue.releases);
   const notCreatable = new Set(
     choices
@@ -516,7 +563,7 @@ export const studioCanvasConfig = (
   );
   const components = Object.fromEntries(
     Object.entries(
-      config.components as Record<string, ComponentConfig<Record<string, unknown>>>,
+      baseConfig.components as Record<string, ComponentConfig<Record<string, unknown>>>,
     ).map(([type, component]) => [
       type,
       {
@@ -549,6 +596,7 @@ export const studioCanvasConfig = (
                 ) => Record<string, Field>;
                 return resolve({ ...data, props }, params);
               },
+          releaseByKey.get(type),
         ),
         render: (props: Record<string, unknown>) => (
           <CanvasBlockFrame component={component} registry={registry} props={props} />
@@ -559,8 +607,8 @@ export const studioCanvasConfig = (
       },
     ]),
   );
-  canvas = {
-    ...config,
+  const canvas = {
+    ...baseConfig,
     components,
     // The application frame is the canvas root: it draws the theme, appearance and shell around the
     // page. Puck's data holds only what the stored page holds, so the root has no props of its own
@@ -580,10 +628,13 @@ export const studioCanvasConfig = (
       ),
     },
   } as unknown as Config;
-  const byCatalogue = canvasConfigs.get(config) ?? new WeakMap();
-  const bySlots = byCatalogue.get(catalogue) ?? new Map<string, Config>();
-  bySlots.set(slotsKey, canvas);
+  const byCatalogue = canvasConfigs.get(baseConfig) ?? new WeakMap();
+  const bySlots =
+    byCatalogue.get(catalogue) ??
+    new Map<string, Readonly<{ shell: Config; repeatingKey: string; config: Config }>>();
+  const config = withHeldRepeatingSlots(registry, canvas, repeating);
+  bySlots.set(slotsKey, { shell: canvas, repeatingKey, config });
   byCatalogue.set(catalogue, bySlots);
-  canvasConfigs.set(config, byCatalogue);
-  return canvas;
+  canvasConfigs.set(baseConfig, byCatalogue);
+  return config;
 };

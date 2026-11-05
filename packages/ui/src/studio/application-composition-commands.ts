@@ -388,7 +388,6 @@ const applySettings = (
       target.region.page?.type === "guided_form",
     ).has(chosen.field.slice(chosen.field.lastIndexOf(".") + 1))
   ) {
-    console.info("[studio] composition settings refused", { reason: "form_field_duplicate" });
     return {
       kind: "refused",
       reason: "Another input in this form already shows that field. Choose a different field.",
@@ -485,16 +484,11 @@ const applySettings = (
     if (sideSheet) ensureStudioRecordSheet(current.catalogue, source, alias);
     validateStoredApplicationOutlets(current.catalogue, source);
   } catch (error) {
-    if (error instanceof StoredCompositionRefusal) {
-      console.info("[studio] composition settings refused", {
-        part: error.location,
-        reason: error.reason,
-      });
+    if (error instanceof StoredCompositionRefusal)
       return {
         kind: "refused",
         reason: `${release.name} can't take these settings. ${error.message}.`,
       };
-    }
     throw error;
   }
   // A board's card moves are saved through a flow: the first time the board is on, it gets the
@@ -823,9 +817,24 @@ export const describeStudioCompositionEdit = (
 
 /**
  * Return one whole native source. The runner checks the context inside the draft's envelope before
- * one history.edit.
+ * one history.edit. Every command passes here, so a refusal is logged here, once, whichever rule
+ * refused it.
  */
 export const applyStudioCompositionCommand = (
+  current: StudioCompositionContext,
+  selection: StudioSemanticSelection | null,
+  command: StudioCompositionCommand,
+): StudioCompositionCommandResult => {
+  const result = composeCommand(current, selection, command);
+  if (result.kind === "refused")
+    console.info("[studio] composition command refused", {
+      command: command.kind,
+      reason: result.reason,
+    });
+  return result;
+};
+
+const composeCommand = (
   current: StudioCompositionContext,
   selection: StudioSemanticSelection | null,
   command: StudioCompositionCommand,
@@ -964,10 +973,8 @@ export const applyStudioCompositionCommand = (
     if (sameValue(parsed, current.source)) return { kind: "invalid" };
     return { kind: "applied", source: parsed };
   } catch (error) {
-    if (error instanceof StoredCompositionRefusal || error instanceof StructureRefusal) {
-      console.info("[studio] composition command refused", error.message);
+    if (error instanceof StoredCompositionRefusal || error instanceof StructureRefusal)
       return { kind: "refused", reason: error.message };
-    }
     console.error("[studio] composition command could not be applied", error);
     return { kind: "invalid" };
   }
