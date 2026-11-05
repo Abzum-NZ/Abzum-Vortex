@@ -1,26 +1,22 @@
+import { fieldValueMatches } from "../../rules/condition-field-types";
 import {
-  fieldValueMatches,
   conditionFieldType as semanticTypeForField,
   conditionValueType,
   semanticTypeForLiteral,
   operatorAcceptsOperands,
   collectionElementType,
-  flowInstantMicros,
   type ConditionValueType,
   type OperandInfo,
-  builderKeySchema,
-  conditionMaximumNestingDepth,
-  conditionMaximumOperandCount,
-  conditionNodeSchema,
-  fieldIdSchema,
-  moduleFieldSchema,
-  moduleFieldValueSchemas,
-  type ConditionNode,
-  type JsonValue,
-  type ModuleField,
-  isRecord,
-  formatIsoDate,
-} from "@vortex/platform/schema";
+} from "../../rules/condition-types";
+import { flowInstantMicros } from "../../rules/flow-instant";
+import { builderKeySchema, fieldIdSchema } from "../../catalogue/identifiers";
+import { conditionMaximumNestingDepth, conditionMaximumOperandCount } from "../../catalogue/common";
+import { conditionNodeSchema, type ConditionNode } from "../module-foundation-contracts";
+import { moduleFieldSchema, type ModuleField } from "../module-contracts";
+import { moduleFieldValueSchemas } from "../../records/module-field-values";
+import type { JsonValue } from "../../catalogue/json-value";
+import { isRecord } from "../../catalogue/runtime-primitives";
+import { formatIsoDate } from "../../pages/date-format";
 
 type ComparisonCondition = Extract<ConditionNode, { kind: "comparison" }>;
 export type ConditionOperand = ComparisonCondition["left"];
@@ -572,8 +568,6 @@ const literalProblem = (
     ? `Enter a value for ${label}`
     : `${label} can't hold this value`;
 };
-
-export { literalMatchesType, isCollectionElementType } from "@vortex/platform/schema";
 
 /**
  * Whether the operator suits these operands, judging a typed value by its shape: a value that does

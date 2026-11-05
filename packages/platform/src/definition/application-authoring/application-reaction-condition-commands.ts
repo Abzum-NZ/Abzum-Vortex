@@ -1,37 +1,39 @@
 import {
   applicationRootIdSchema,
-  applicationSourceDocumentSchema,
   organizationIdSchema,
   revisionSchema,
   fingerprintSchema,
   timestampSchema,
-  sourceQualifiedConditionSchema,
   namespacedKeySchema,
   moduleRootIdSchema,
   recordTypeIdSchema,
   semanticVersionSchema,
-  moduleFieldSchema,
-  moduleFieldValueSchemas,
-  comparableConditionFieldType,
   builderKeySchema,
+} from "../../catalogue/identifiers";
+import {
+  applicationSourceDocumentSchema,
+  type ApplicationSourceDocument,
+} from "../application-source-contracts";
+import { sourceQualifiedConditionSchema } from "../definition-source-common";
+import { moduleFieldSchema, type ModuleField } from "../module-contracts";
+import { moduleFieldValueSchemas } from "../../records/module-field-values";
+import { comparableConditionFieldType, conditionValueType } from "../../rules/condition-types";
+import {
   sourceItemChildSlots,
   sourceItemTree,
   sourcePageItems,
   sourcePageZones,
-  conditionValueType,
-  type ApplicationSourceDocument,
-  type ConditionNode,
-  type ModuleField,
   type SourceItem,
   type SourceItemVortex,
   type SourcePageData,
-  applicationModuleKeys,
-  isRecord,
-  type StudioCompositionContext,
-  projectStudioFlowDraftChoices,
-  studioDraftRecordType,
-  type StudioSemanticSelection,
-} from "@vortex/platform/schema";
+} from "../application-composition/source-composition";
+import type { ConditionNode } from "../module-foundation-contracts";
+import { applicationModuleKeys } from "../application-module-sources";
+import { isRecord } from "../../catalogue/runtime-primitives";
+import type { StudioCompositionContext } from "./application-composition-model";
+import { projectStudioFlowDraftChoices } from "./application-flow-step-form";
+import { studioDraftRecordType } from "./application-flow-values";
+import type { StudioSemanticSelection } from "./semantic-selection";
 import {
   validateStudioCondition,
   type StudioConditionControlsContext,

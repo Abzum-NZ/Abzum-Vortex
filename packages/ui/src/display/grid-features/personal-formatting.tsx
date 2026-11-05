@@ -12,6 +12,8 @@ import {
   type GridViewFormatRule,
   type GridViewsState,
   type SelectedGridView,
+  createInitialStudioCondition,
+  describeCondition,
 } from "@vortex/platform/schema";
 import { Alert, AlertDescription } from "../../components/alert";
 import { Button } from "../../components/button";
@@ -28,7 +30,6 @@ import { Switch } from "../../components/switch";
 import { Icon } from "../../icons/icon";
 import { cn } from "../../lib/utils";
 import { StudioConditionControls } from "../../studio/condition-controls";
-import { createInitialStudioCondition, describeCondition } from "../../studio/condition-model";
 import {
   ConditionalFormatStyleControls,
   ConditionalFormatStyleSwatch,

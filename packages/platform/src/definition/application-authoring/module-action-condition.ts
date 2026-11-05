@@ -1,14 +1,12 @@
-import type {
-  ApplicationSourceDocument,
-  ConditionNode,
-  InlineModuleActionPrecondition,
-  JsonValue,
-} from "@vortex/platform/schema";
+import type { ApplicationSourceDocument } from "../application-source-contracts";
+import type { ConditionNode } from "../module-foundation-contracts";
+import type { InlineModuleActionPrecondition } from "../module-action-shape";
+import type { JsonValue } from "../../catalogue/json-value";
 import type {
   StudioConditionControlsContext,
   StudioConditionParameterType,
 } from "./condition-model";
-import { studioFieldChoiceOptions, studioFieldValueType } from "@vortex/platform/schema";
+import { studioFieldChoiceOptions, studioFieldValueType } from "./application-flow-values";
 
 /**
  * A named action's precondition in Studio's shared condition controls. The action stores its

@@ -29,12 +29,10 @@ import {
   type SourceFlow,
   type StudioFlowNewStepSettings,
   type StudioFlowStepType,
-} from "@vortex/platform/schema";
-import { StudioConditionControls } from "./condition-controls";
-import {
   studioFlowConditionFormula,
   type StudioFlowConditionContext,
-} from "./application-flow-condition";
+} from "@vortex/platform/schema";
+import { StudioConditionControls } from "./condition-controls";
 
 export type StudioFlowStepChoice = StudioFlowStepType;
 export type StudioFlowStepPickerContext = Readonly<{

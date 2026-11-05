@@ -23,10 +23,6 @@ import {
   StudioReferencePicker,
   StudioHelp,
   StudioInspectorGroup,
-  projectStudioFlowCondition,
-  studioFlowConditionFormula,
-  type StudioConditionValidation,
-  type StudioFlowConditionContext,
 } from "@vortex/ui/studio";
 import { StudioFormulaEditor, formulaReferenceName } from "./studio-formula-editor";
 import { StudioFlowValueControl } from "./studio-flow-value-control";
@@ -44,6 +40,10 @@ import {
   type StudioFlowReferenceChoice,
   type StudioFlowStepDraft,
   type StudioFlowValueSource,
+  projectStudioFlowCondition,
+  studioFlowConditionFormula,
+  type StudioConditionValidation,
+  type StudioFlowConditionContext,
 } from "@vortex/platform/schema";
 
 /**
