@@ -56,6 +56,8 @@ const kindWords = (item: StudioMenuItem) =>
 export function StudioMenuPanel({
   source,
   selectedAlias,
+  editing,
+  onEditingChange: setEditing,
   onSelect,
   onCommand,
   onOpenAccess,
@@ -64,6 +66,9 @@ export function StudioMenuPanel({
 }: Readonly<{
   source: ApplicationSourceDocument;
   selectedAlias: string | null;
+  /** The entry whose settings are open; held by the caller, so a redrawn panel keeps it. */
+  editing: string | null;
+  onEditingChange: (alias: string | null) => void;
   onSelect: (alias: string | null) => void;
   /** Opens the Access tab, where who can see an entry is set. */
   onOpenAccess: () => void;
@@ -76,7 +81,6 @@ export function StudioMenuPanel({
   const [dragging, setDragging] = useState<string | null>(null);
   const [dropTarget, setDropTarget] = useState<string | null>(null);
   const [confirm, confirmDialog] = useConfirm();
-  const [editing, setEditing] = useState<string | null>(null);
   const treeHost = useRef<HTMLDivElement>(null);
   const [newPage, setNewPage] = useState("");
   const [addingHeading, setAddingHeading] = useState(false);
