@@ -385,6 +385,8 @@ type BoardPlacementProjection =
       cause: BoardPlacementFailureCause;
       /** The underlying failure text, present only when the cause was a thrown error. */
       detail?: string;
+      /** The protected query's own refusal code, present only when the query refused. */
+      reasonCode?: string;
     }>;
 
 /**
@@ -529,7 +531,10 @@ export const projectBoardPlacement = async (
     });
     if (result.kind !== "available") return unavailable("board_query_unavailable");
     if (result.value.outcome === "refused")
-      return refused("board_query_refused", result.value.reasonCode);
+      return {
+        ...refused("board_query_refused", result.value.reasonCode),
+        reasonCode: result.value.reasonCode,
+      };
 
     const arranged = result.value;
     if (

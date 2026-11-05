@@ -231,6 +231,7 @@ export const displayRefusalReasons = [
   "not_permitted",
   "applications_not_read",
   "access_ended",
+  "installation_required",
   "not_found",
   "value_out_of_range",
   "dataset_limit_exceeded",

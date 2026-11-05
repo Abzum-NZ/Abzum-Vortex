@@ -37,6 +37,7 @@ import {
   fieldLabelsOf,
   fieldLinkTypesOf,
   logPlacementFailure,
+  placeInstallationRequired,
   placementSettingsOf,
   type PlacementModule,
   type PlacementQuery,
@@ -442,6 +443,7 @@ export const readRecordsTable = async (
     );
     data[placementId] = { status: "error" };
   } else if (resolved.kind === "refused") {
+    if (placeInstallationRequired(data, placementId, resolved.reasonCode)) return;
     console.error(
       `[page] data placement refused: class=${resolved.reasonCode === undefined ? "records_table" : "protected_query"} code=${resolved.reasonCode ?? "query_refused"}`,
     );

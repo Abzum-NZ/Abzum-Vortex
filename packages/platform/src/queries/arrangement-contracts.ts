@@ -377,6 +377,8 @@ const arrangementRefusalReasonCodes = [
   "dataset_limit_exceeded",
   /** The installed Query could not be resolved for the current Application release. */
   "query_unavailable",
+  /** A preview of a query over a system projection with no installed projection to read. */
+  "installation_required",
   "read_forbidden",
   "input_invalid",
   "field_unbounded",
