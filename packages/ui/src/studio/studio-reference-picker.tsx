@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import {
   Combobox,
   ComboboxCollection,
@@ -39,6 +39,8 @@ export function StudioReferencePicker({
   disabled,
   onChange,
   onSearch,
+  status = "No matching choices.",
+  footer,
   ...accessibility
 }: Readonly<{
   id?: string | undefined;
@@ -52,6 +54,10 @@ export function StudioReferencePicker({
    * searches them (a long list read page by page) instead of this picker filtering the loaded ones.
    */
   onSearch?: ((text: string) => void) | undefined;
+  /** What the list says when it holds no choice: for a caller's search, that it reads or found none. */
+  status?: string | undefined;
+  /** Drawn inside the list under the choices, such as the control that reads the next page. */
+  footer?: ReactNode;
   "aria-label"?: string | undefined;
   "aria-describedby"?: string | undefined;
   "aria-invalid"?: boolean | undefined;
@@ -127,7 +133,7 @@ export function StudioReferencePicker({
         </InputGroupAddon>
       </InputGroup>
       <ComboboxContent>
-        <ComboboxEmpty>No matching choices.</ComboboxEmpty>
+        <ComboboxEmpty>{status}</ComboboxEmpty>
         <ComboboxList>
           {groups.map((group) => (
             <ComboboxGroup
@@ -160,6 +166,7 @@ export function StudioReferencePicker({
             </ComboboxGroup>
           ))}
         </ComboboxList>
+        {footer}
       </ComboboxContent>
     </Combobox>
   );

@@ -214,10 +214,8 @@ function StudioRecordChoicesPage({
     ? "The records could not be read just now."
     : refusal !== null
       ? refusalNote(refusal)
-      : settled && pager.items.length === 0
-        ? searching
-          ? "No record matches that search."
-          : "There are no records of this type you may read yet."
+      : settled && pager.items.length === 0 && !searching
+        ? "There are no records of this type you may read yet."
         : undefined;
   const retry = pager.failed || refusal === "temporarily_unavailable";
   return (
@@ -228,6 +226,23 @@ function StudioRecordChoicesPage({
         value={recordId ?? ""}
         disabled={disabled}
         onSearch={setSearch}
+        status={pager.loading ? "Searching…" : "No record matches that search."}
+        // Inside the list, so the next page continues the search typed there.
+        footer={
+          pager.next !== undefined && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="w-full"
+              disabled={disabled || pager.loading}
+              onClick={pager.loadMore}
+            >
+              <ChevronsDown />
+              Show more records
+            </Button>
+          )
+        }
         aria-describedby={describedBy}
         aria-invalid={invalid === true || (!known && settled && pager.next === undefined)}
         unset={pager.loading && pager.items.length === 0 ? "Reading records" : "Choose a record"}
@@ -264,26 +279,12 @@ function StudioRecordChoicesPage({
         ) : (
           <FieldDescription>{note}</FieldDescription>
         ))}
-      <div className="flex flex-wrap gap-1">
-        {pager.next !== undefined && (
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            disabled={disabled}
-            onClick={pager.loadMore}
-          >
-            <ChevronsDown />
-            Show more records
-          </Button>
-        )}
-        {retry && (
-          <Button type="button" variant="ghost" size="sm" disabled={disabled} onClick={onRetry}>
-            <RotateCcw />
-            Try again
-          </Button>
-        )}
-      </div>
+      {retry && (
+        <Button type="button" variant="ghost" size="sm" disabled={disabled} onClick={onRetry}>
+          <RotateCcw />
+          Try again
+        </Button>
+      )}
     </>
   );
 }
