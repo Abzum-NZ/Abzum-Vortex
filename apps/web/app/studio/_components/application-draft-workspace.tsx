@@ -169,14 +169,15 @@ function ExistingApplicationWorkspace(props: ExistingProps) {
   }, []);
   const { source, state } = draft;
   const accessReservations = useRef<SourceIdentityReservation[]>([]);
+  // A place that has left the draft (a "Used in" entry drawn a moment before the edit that removed
+  // it) is refused by the selection, and the tab stays as it is.
   const openIn = (nextTab: StudioRailKey, next: StudioSemanticSelection) => {
-    setTab(nextTab);
-    draft.select(next);
+    if (draft.select(next)) setTab(nextTab);
   };
 
   // The one outline of the draft: Structure, Outline and every label Studio shows are views of it.
-  // Drawn after the keystroke that changed the draft: the canvas and the field answer first. The
-  // commands and the canvas name blocks from the current draft.
+  // Drawn from the draft as it stood once typing paused: the canvas and the field answer each key.
+  // The commands and the canvas name blocks from the current draft.
   const describePlacement = useMemo(
     () => createStudioPlacementDescriber(catalogue, source),
     [catalogue, source],
@@ -379,7 +380,8 @@ function ExistingApplicationWorkspace(props: ExistingProps) {
     return () => window.removeEventListener("keydown", shortcut, true);
   }, [draft]);
 
-  // The header's commands keep their identity between keystrokes, so its buttons are not drawn again.
+  // The header's commands keep their identity between keystrokes, so its buttons are not drawn
+  // again.
   const onApplication = useStable(() => {
     draft.select({ kind: "application", applicationRootId: state.rootId });
   });
