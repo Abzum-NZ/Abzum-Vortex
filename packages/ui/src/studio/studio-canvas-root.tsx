@@ -380,6 +380,12 @@ export function StudioCanvasIframe({
     setFrameDocument(frameDocument ?? null);
     return () => setFrameDocument(null);
   }, [setFrameDocument, frameDocument]);
+  // The iframe is Puck's and Puck gives it no title: it is named through the document Puck hands
+  // to this override (the standard `frameElement` of that document), so assistive technology
+  // announces the canvas.
+  useEffect(() => {
+    frameDocument?.defaultView?.frameElement?.setAttribute("title", "Canvas preview");
+  }, [frameDocument]);
   // A block chosen outside the canvas (the Outline, the inspector, an address) is brought into view,
   // found by Studio's own attribute on its wrapper. It may not be drawn yet (its slots wait), and
   // the slots around it are drawn after the scroll with heights that were estimates, so it is kept

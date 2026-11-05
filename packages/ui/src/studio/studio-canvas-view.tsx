@@ -219,6 +219,10 @@ export function StudioCanvasView({
         <div
           ref={setWell}
           data-vortex-studio-canvas-well=""
+          // A well that scrolls is a keyboard stop with a name, so the arrow keys scroll it; Fit never scrolls.
+          {...(zoom === "fit"
+            ? {}
+            : { role: "region", "aria-label": "Canvas scroll area", tabIndex: 0 })}
           // Fit shows the whole screen, so it never has anything to scroll to.
           className={`${WELL_CLASS} ${zoom === "fit" ? "overflow-hidden" : "overflow-auto"}`}
         >
