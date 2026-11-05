@@ -136,6 +136,10 @@ begin
             failure_sqlstate, failure_message;
           return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'query_unavailable');
       end;
+      -- The preview resolver's own refusal (installation_required) is passed on as it decided it.
+      if resolved ->> 'outcome' = 'refused' then
+        return resolved;
+      end if;
       if context_value is null or not (context_value ? 'applicationRootId') or resolved is null then
         return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'query_unavailable');
       end if;
@@ -278,6 +282,10 @@ begin
     end;
   else
     resolved := vortex_record.resolve_installed_module_query_internal(p_module_root_id, p_query_id);
+  end if;
+  -- The preview resolver's own refusal (installation_required) is passed on as it decided it.
+  if resolved ->> 'outcome' = 'refused' then
+    return resolved;
   end if;
   if resolved is null then
     return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'query_unavailable');

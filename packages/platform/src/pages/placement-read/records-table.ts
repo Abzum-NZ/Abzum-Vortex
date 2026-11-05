@@ -37,6 +37,7 @@ import {
   fieldLabelsOf,
   fieldLinkTypesOf,
   logPlacementFailure,
+  placeInstallationRequired,
   placementSettingsOf,
   type PlacementModule,
   type PlacementQuery,
@@ -441,18 +442,8 @@ export const readRecordsTable = async (
       "[page] data placement unavailable: class=protected_query code=query_unavailable",
     );
     data[placementId] = { status: "error" };
-  } else if (
-    resolved.kind === "refused" &&
-    previewing &&
-    resolved.reasonCode === "query_unavailable"
-  ) {
-    // A draft preview resolves a borrowed system query only through an active installation of the
-    // application, so a draft never installed has none: an expected refusal with its own sentence.
-    console.info(
-      "[page] data placement refused: class=protected_query code=query_unavailable (preview, application not installed)",
-    );
-    data[placementId] = { status: "refused", reason: "installation_required" };
   } else if (resolved.kind === "refused") {
+    if (placeInstallationRequired(data, placementId, resolved.reasonCode)) return;
     console.error(
       `[page] data placement refused: class=${resolved.reasonCode === undefined ? "records_table" : "protected_query"} code=${resolved.reasonCode ?? "query_refused"}`,
     );
