@@ -2,6 +2,7 @@ import {
   applicationAudienceSchema,
   applicationSourceDocumentSchema,
   type ApplicationAudience,
+  type ApplicationSourceDocument,
 } from "@vortex/platform/schema";
 import { resolveStudioAccessGate } from "./application-access-commands";
 import type {
@@ -63,6 +64,17 @@ const resolveGateTarget = (
   return { kind: "available", ...resolved } as const;
 };
 
+/**
+ * A use permission governs what the block starts: a block no workflow is bound to has nothing to
+ * use, and the page read would show it unavailable to everyone.
+ */
+const startsWorkflow = (source: ApplicationSourceDocument, alias: string) =>
+  source.body.flow_bindings.some((binding) => binding.control === alias);
+
+const NO_WORKFLOW =
+  "This block starts no workflow, so a use permission would only show it unavailable. " +
+  "Add a workflow to it first.";
+
 export const describeStudioCompositionGate = (
   context: StudioCompositionContext,
   selection: StudioSemanticSelection | null,
@@ -70,11 +82,15 @@ export const describeStudioCompositionGate = (
   try {
     const resolved = resolveGateTarget(context, selection, true);
     if (resolved.kind !== "available") return resolved;
+    const vortex = resolved.target.item.props.vortex;
     return {
       kind: "available",
-      permission: resolved.target.item.props.vortex.view_permission ?? null,
-      use: resolved.target.item.props.vortex.use_permission ?? null,
-      audience: resolved.target.item.props.vortex.application_audience ?? null,
+      permission: vortex.view_permission ?? null,
+      use: vortex.use_permission ?? null,
+      // A use permission set some other way can still be cleared here.
+      useOffered:
+        vortex.use_permission !== undefined || startsWorkflow(resolved.source, resolved.alias),
+      audience: vortex.application_audience ?? null,
     } as const;
   } catch (error) {
     console.error("[studio] block access could not be read", error);
@@ -141,6 +157,8 @@ export const applyStudioCompositionGate = (
   const use = named.includes("use") ? permissionOf(input.use) : undefined;
   if (view?.kind === "refused") return { kind: "refused", reason: view.message };
   if (use?.kind === "refused") return { kind: "refused", reason: use.message };
+  if (use?.key !== undefined && !startsWorkflow(source, alias))
+    return { kind: "refused", reason: NO_WORKFLOW };
   const audience = named.includes("audience")
     ? ((input.audience as ApplicationAudience | null) ?? undefined)
     : undefined;
@@ -149,8 +167,8 @@ export const applyStudioCompositionGate = (
     use: use !== undefined && use.key !== vortex.use_permission,
     audience: named.includes("audience") && audience !== vortex.application_audience,
   };
-  const unchanged = named.find((member) => !changes[member]);
-  if (unchanged !== undefined && !named.some((member) => changes[member])) {
+  if (!named.some((member) => changes[member])) {
+    const unchanged = named[0]!;
     const before = {
       gate: vortex.view_permission,
       use: vortex.use_permission,
@@ -161,7 +179,8 @@ export const applyStudioCompositionGate = (
       reason: unchangedWords[unchanged][before === undefined ? "none" : "same"],
     };
   }
-  // A gate or an audience hides the block from people outside it: what its form needs stays visible.
+  // A gate or an audience hides the block from people outside it: what its form needs stays
+  // visible.
   if (view?.key !== undefined || audience !== undefined) {
     const hidden = studioFormChangeRefusal(
       current.catalogue,
@@ -169,11 +188,10 @@ export const applyStudioCompositionGate = (
       target.region.zone.items,
       regionAfter(target, alias),
     );
-    if (hidden !== undefined && !studioFormShapeRefusal(hidden))
-      return {
-        kind: "refused",
-        reason: `A permission gate or audience hides this block from some people. ${studioPlacementReferenceSentence(hidden)}`,
-      };
+    if (hidden !== undefined && !studioFormShapeRefusal(hidden)) {
+      const why = "A permission gate or audience hides this block from some people.";
+      return { kind: "refused", reason: `${why} ${studioPlacementReferenceSentence(hidden)}` };
+    }
   }
   const working = workingCopy(target.region);
   const item = workingItem(working, target.steps, alias);

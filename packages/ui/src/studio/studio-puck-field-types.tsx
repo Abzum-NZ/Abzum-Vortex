@@ -111,6 +111,8 @@ export type StudioAccessFieldValue = Readonly<{
         problem?: string | undefined;
         /** The permission that lets people use the block, or an empty text. */
         use: string;
+        /** Whether the block starts a workflow (or has a use permission to clear). */
+        useOffered: boolean;
         onUse: (permission: string | null) => boolean;
         useProblem?: string | undefined;
         /** Who the block is offered to, or an empty text for everyone. */
@@ -465,6 +467,16 @@ const audienceChoices = [
   { value: "installers", label: "Installers", description: "People who may install applications" },
 ] as const;
 
+const gateHint =
+  "Show this block only to people who hold its permission. Page and menu permissions still " +
+  "apply. Clearing this gate adds no block permission requirement. Create permissions in Access.";
+const useHint =
+  "People who see the block but do not hold this permission cannot start its workflows. " +
+  "Clearing it adds no use requirement. Create permissions in Access.";
+const audienceHint =
+  "Who the block is offered to. Builders or Installers: only people who may build or install " +
+  "applications see it. The permission gate still applies.";
+
 /**
  * Who can see the block and use it: the permission that shows it, the permission that lets people
  * use it and who it is offered to. A refusal shows at its field until the draft changes.
@@ -484,12 +496,7 @@ const StudioGateField = memo(function StudioGateField({
   const disabled = context.disabled || readOnly;
   return (
     <div className="space-y-4">
-      <StudioField
-        label="Permission gate"
-        optional
-        error={gate.problem}
-        hint="Show this block only to people who hold its permission. Page and menu permissions still apply. Clearing this gate adds no block permission requirement. Create permissions in Access."
-      >
+      <StudioField label="Permission gate" optional error={gate.problem} hint={gateHint}>
         {(control) => (
           <StudioGateSelect
             id={control.id}
@@ -505,33 +512,26 @@ const StudioGateField = memo(function StudioGateField({
           />
         )}
       </StudioField>
-      <StudioField
-        label="Use permission"
-        optional
-        error={gate.useProblem}
-        hint="People who see the block but do not hold this permission cannot use it. Clearing it adds no use requirement. Create permissions in Access."
-      >
-        {(control) => (
-          <StudioGateSelect
-            id={control.id}
-            aria-describedby={control["aria-describedby"]}
-            aria-invalid={control["aria-invalid"]}
-            source={gate.source}
-            value={gate.use}
-            label="Use permission"
-            disabled={disabled}
-            onGate={(next) => next.kind === "existing" && gate.onUse(next.key)}
-            onClear={() => gate.onUse(null)}
-            allowCreate={false}
-            unsetLabel="No use permission"
-          />
-        )}
-      </StudioField>
-      <StudioField
-        label="Offered to"
-        error={gate.audienceProblem}
-        hint="Everyone sees the block. Builders or Installers show it only to people who may build or install applications."
-      >
+      {gate.useOffered ? (
+        <StudioField label="Use permission" optional error={gate.useProblem} hint={useHint}>
+          {(control) => (
+            <StudioGateSelect
+              id={control.id}
+              aria-describedby={control["aria-describedby"]}
+              aria-invalid={control["aria-invalid"]}
+              source={gate.source}
+              value={gate.use}
+              label="Use permission"
+              disabled={disabled}
+              onGate={(next) => next.kind === "existing" && gate.onUse(next.key)}
+              onClear={() => gate.onUse(null)}
+              allowCreate={false}
+              unsetLabel="No use permission"
+            />
+          )}
+        </StudioField>
+      ) : null}
+      <StudioField label="Offered to" error={gate.audienceProblem} hint={audienceHint}>
         {(control) => (
           <StudioReferencePicker
             id={control.id}

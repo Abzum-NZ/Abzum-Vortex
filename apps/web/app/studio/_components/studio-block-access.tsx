@@ -119,6 +119,7 @@ export function useStudioBlockAccess({
   const wordsKey = JSON.stringify([...words]);
   const gatePermission = gate.kind === "available" ? (gate.permission ?? "") : "";
   const gateUse = gate.kind === "available" ? (gate.use ?? "") : "";
+  const useOffered = gate.kind === "available" && gate.useOffered;
   const gateAudience = gate.kind === "available" ? (gate.audience ?? "") : "";
   const gateReason = gate.kind === "available" ? "" : gate.reason;
   // What the fields draw is a handful of values: the value keeps its identity until one changes.
@@ -148,6 +149,7 @@ export function useStudioBlockAccess({
               onChange: (next) => !disabled && handlers.current.onGate(next),
               problem: problems.gate,
               use: gateUse,
+              useOffered,
               onUse: (next) => !disabled && handlers.current.onUse(next),
               useProblem: problems.use,
               audience: gateAudience,
@@ -176,6 +178,7 @@ export function useStudioBlockAccess({
     gateSource,
     gatePermission,
     gateUse,
+    useOffered,
     gateAudience,
     gateReason,
     hasTarget,

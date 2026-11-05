@@ -218,6 +218,7 @@ const isPlacementProvenVisible = (placement: Record<string, unknown>): boolean =
     placement.visibilityCondition !== undefined ||
     placement.viewPermissionKey !== undefined ||
     placement.usePermissionKey !== undefined ||
+    placement.applicationAudience !== undefined ||
     !isRecord(placement.responsive)
   )
     return false;
