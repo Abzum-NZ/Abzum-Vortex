@@ -44,7 +44,7 @@ import { studioGridFeaturesProperty } from "./studio-grid-features";
 import { StudioHelp } from "./studio-field";
 import { StudioInspectorGroup } from "./studio-inspector-group";
 import { StudioInspectorActions, type StudioInspectorAction } from "./studio-inspector-actions";
-import { studioLayoutSummary } from "./studio-layout-fields";
+import { StudioOrderNamesContext, studioLayoutSummary } from "./studio-layout-fields";
 import { useStudioScreen } from "./studio-canvas-screen";
 import { studioReleaseIcon } from "./studio-puck-drawer";
 import { studioReactionSlots } from "./application-reaction-condition-commands";
@@ -356,6 +356,7 @@ export function StudioBlockSettingFields({
   query,
   access,
   layout,
+  orderNames,
   features,
   workflows,
   usedIn,
@@ -374,6 +375,8 @@ export function StudioBlockSettingFields({
     /** The name of this instance, and its More menu. */
     name: string;
     actions: readonly StudioInspectorAction[];
+    /** The names of the blocks near this one in its order, for the order field. */
+    orderNames: ReadonlyMap<string, string>;
     /** The catalogue's releases, for the block's kind and description. */
     releases: readonly PlatformBlockRelease[];
     /** The block's flow bindings, drawn by the Workflows group. */
@@ -418,15 +421,17 @@ export function StudioBlockSettingFields({
     <StudioSettingFieldsContext.Provider value={value}>
       <StudioAccessFieldContext.Provider value={accessValue}>
         <StudioLayoutFieldContext.Provider value={layoutValue}>
-          <StudioInspectorSectionsContext.Provider value={sections}>
-            <StudioBlockHeader
-              titleId={titleId}
-              name={name}
-              actions={actions}
-              releases={releases}
-            />
-            {scope === placementAlias && <Puck.Fields wrapFields={false} />}
-          </StudioInspectorSectionsContext.Provider>
+          <StudioOrderNamesContext.Provider value={orderNames}>
+            <StudioInspectorSectionsContext.Provider value={sections}>
+              <StudioBlockHeader
+                titleId={titleId}
+                name={name}
+                actions={actions}
+                releases={releases}
+              />
+              {scope === placementAlias && <Puck.Fields wrapFields={false} />}
+            </StudioInspectorSectionsContext.Provider>
+          </StudioOrderNamesContext.Provider>
         </StudioLayoutFieldContext.Provider>
       </StudioAccessFieldContext.Provider>
     </StudioSettingFieldsContext.Provider>

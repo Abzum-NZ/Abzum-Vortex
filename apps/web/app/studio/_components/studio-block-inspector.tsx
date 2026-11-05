@@ -184,8 +184,6 @@ export function StudioBlockInspector(props: Props) {
   // draws none of the Layout fields.
   const modelRef = useRef(model);
   modelRef.current = model;
-  const labelsRef = useRef(labels);
-  labelsRef.current = labels;
   const layoutKey = useMemo(() => {
     if (model.kind !== "available")
       return canonicalJson({
@@ -199,20 +197,29 @@ export function StudioBlockInspector(props: Props) {
       selectionKey,
       index,
       count: model.order.length,
-      near: studioOrderWindow(model.order, index).map((alias) => [
-        alias,
-        studioPlacementLabel(labels, alias) ?? "Item",
-      ]),
+      near: studioOrderWindow(model.order, index),
       orderProblem: orderProblem ?? null,
     });
-  }, [model, labels, breakpoint, selectionKey, orderProblem]);
+  }, [model, breakpoint, selectionKey, orderProblem]);
+  // The names the order field draws: its own value, so a typed label draws that field alone.
+  const namesKey = JSON.stringify(
+    model.kind === "available"
+      ? studioOrderWindow(model.order, model.order.indexOf(model.placementAlias)).map((alias) => [
+          alias,
+          studioPlacementLabel(labels, alias) ?? "Item",
+        ])
+      : [],
+  );
+  const orderNames = useMemo(
+    () => new Map<string, string>(JSON.parse(namesKey) as [string, string][]),
+    [namesKey],
+  );
   const layoutValue = useMemo<StudioLayoutFieldValue>(
     () =>
       modelRef.current.kind === "available"
         ? {
             kind: "available",
             model: modelRef.current,
-            labelOf: (alias) => studioPlacementLabel(labelsRef.current, alias) ?? "Item",
             onResize: (next) =>
               run.current(
                 { kind: "resize", breakpoint, layout: next },
@@ -265,10 +272,15 @@ export function StudioBlockInspector(props: Props) {
   });
   // The reference settings point at the fields of the data the block reads, or, for a block that
   // reads none, at the application's own fields.
-  const fieldsInUse = useMemo(
+  const fieldsInUseNow = useMemo(
     () => studioFormFieldsInUseFor(props.context, props.selection),
     [props.context, props.selection],
   );
+  // The set keeps its identity while it holds the same fields, so the settings do not draw for it.
+  const fieldsInUseLatest = useRef(fieldsInUseNow);
+  fieldsInUseLatest.current = fieldsInUseNow;
+  const fieldsInUseKey = JSON.stringify([...fieldsInUseNow].sort());
+  const fieldsInUse = useMemo(() => fieldsInUseLatest.current, [fieldsInUseKey]);
   const choices = useMemo(
     () => ({ ...studioBlockChoices(props.choices, settingsInputs.query), fieldsInUse }),
     [props.choices, settingsInputs.query, fieldsInUse],
@@ -524,6 +536,7 @@ export function StudioBlockInspector(props: Props) {
           releases={props.context.catalogue.releases}
           access={access}
           layout={layoutValue}
+          orderNames={orderNames}
           workflows={props.workflows}
           usedIn={props.usedIn}
           notice={settingsNotice ?? "This item's settings can't be changed here."}
@@ -646,6 +659,7 @@ export function StudioBlockInspector(props: Props) {
         query={queryValue}
         access={access}
         layout={layoutValue}
+        orderNames={orderNames}
         features={features}
         workflows={props.workflows}
         usedIn={props.usedIn}

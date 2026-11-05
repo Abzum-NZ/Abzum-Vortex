@@ -1,6 +1,6 @@
 "use client";
 
-import { useId } from "react";
+import { createContext, useContext, useId } from "react";
 import { ArrowDown, ArrowUp, Undo2 } from "lucide-react";
 import { Alert, AlertDescription } from "../components/alert";
 import { FieldLegend } from "../components/field";
@@ -25,6 +25,12 @@ import { useStudioDraftHeld } from "./use-studio-draft-held";
  */
 
 /**
+ * The names the outline gives the blocks the order field draws. They have a context of their own:
+ * typing a block's label changes its name, and only the order field draws for that.
+ */
+export const StudioOrderNamesContext = createContext<ReadonlyMap<string, string>>(new Map());
+
+/**
  * What the Layout fields need from the inspector: the block's model at the canvas screen, and the
  * commands that change its size and order.
  */
@@ -32,8 +38,6 @@ export type StudioLayoutFieldValue =
   | Readonly<{
       kind: "available";
       model: Extract<StudioCompositionEditorModel, { kind: "available" }>;
-      /** The name the outline gives a block of this area. */
-      labelOf: (alias: string) => string;
       /**
        * Sets the size on this screen (null returns it to the larger screen's); answers the
        * refusal's words, or undefined once the draft took it.
@@ -340,6 +344,7 @@ export function StudioOrderField({
   disabled,
 }: Readonly<{ value: StudioLayoutFieldValue; disabled: boolean }>) {
   const { breakpoint } = useStudioScreen();
+  const names = useContext(StudioOrderNamesContext);
   const hintId = useId();
   if (value.kind !== "available") return null;
   const { model } = value;
@@ -380,7 +385,7 @@ export function StudioOrderField({
             <span className="w-6 text-xs text-muted-foreground tabular-nums">
               {Math.max(0, index - orderNeighbours) + at + 1}
             </span>
-            <span className="truncate">{value.labelOf(alias)}</span>
+            <span className="truncate">{names.get(alias) ?? "Item"}</span>
           </li>
         ))}
       </ol>
