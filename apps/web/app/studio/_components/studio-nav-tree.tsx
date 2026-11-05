@@ -48,8 +48,11 @@ type NavProps = Omit<ComponentProps<"button">, "children"> &
     description?: string | undefined;
     selected?: boolean | undefined;
     hint?: string | undefined;
+    /** A branch of `StudioNavTree`: its children are shown, and the toggle that shows them. */
     expanded?: boolean | undefined;
     onToggle?: (() => void) | undefined;
+    /** The id of the list of children the toggle shows, while it is shown. */
+    toggleControls?: string | undefined;
     /** Marks a row of `StudioNavTree`: its key for the roving focus, and room for a chevron. */
     treeKey?: string | undefined;
   }>;
@@ -91,6 +94,7 @@ export function StudioNavItem({
   selected,
   expanded,
   onToggle,
+  toggleControls,
   treeKey,
   hint,
   className,
@@ -111,30 +115,11 @@ export function StudioNavItem({
         <button
           type="button"
           aria-current={selected ? "true" : undefined}
-          aria-expanded={expanded}
           data-tree-key={treeKey}
           {...props}
         />
       }
     >
-      {(onToggle !== undefined || (treeKey !== undefined && dragHandle === undefined)) && (
-        <span
-          className="flex size-6 shrink-0 items-center justify-center"
-          aria-hidden="true"
-          onClick={
-            onToggle === undefined
-              ? undefined
-              : (event) => {
-                  event.stopPropagation();
-                  onToggle();
-                }
-          }
-        >
-          {onToggle !== undefined && (
-            <Icon name={expanded ? "chevron-down" : "chevron-right"} className="size-4" />
-          )}
-        </span>
-      )}
       {icon !== undefined && (
         <Icon
           name={icon}
@@ -192,6 +177,35 @@ export function StudioNavItem({
         selected && "bg-accent",
       )}
     >
+      {onToggle !== undefined ? (
+        // The row's own arrow keys expand and collapse it; this toggle serves the pointer and
+        // screen readers, so it is not a second Tab stop.
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-xs"
+                tabIndex={-1}
+                className="shrink-0"
+                aria-label={`${expanded ? "Collapse" : "Expand"} ${label}`}
+                aria-expanded={expanded}
+                aria-controls={toggleControls}
+                onClick={onToggle}
+              />
+            }
+          >
+            <Icon name={expanded ? "chevron-down" : "chevron-right"} className="size-4" />
+          </TooltipTrigger>
+          <TooltipContent>
+            {expanded ? "Collapse" : "Expand"} {label}
+          </TooltipContent>
+        </Tooltip>
+      ) : (
+        treeKey !== undefined &&
+        dragHandle === undefined && <span className="size-6 shrink-0" aria-hidden="true" />
+      )}
       {dragHandle !== undefined && (
         <Tooltip>
           <TooltipTrigger
@@ -325,7 +339,7 @@ export type StudioNavNode = Readonly<{
  * Nested lists of rows with roving focus: the arrow keys follow the visible rows, left and right
  * collapse, expand, or visit the parent or first child. A row holds more than its button (a drag
  * handle, actions, a settings popover), which an ARIA tree does not allow, so the list carries no
- * tree roles; the selected row is `aria-current` and a branch says `aria-expanded`.
+ * tree roles; the selected row is `aria-current` and a branch's toggle button says `aria-expanded`.
  */
 export function StudioNavTree({
   nodes,
@@ -381,10 +395,10 @@ export function StudioNavTree({
             icon={node.icon}
             meta={node.meta}
             selected={node.selected}
-            aria-controls={open ? groupId : undefined}
             treeKey={node.key}
             expanded={branch ? open : undefined}
             onToggle={branch ? () => toggle(node) : undefined}
+            toggleControls={open ? groupId : undefined}
             tabIndex={node.props?.disabled || disabled ? -1 : node.key === current ? 0 : -1}
             disabled={disabled || node.props?.disabled}
             onFocus={() => setFocused(node.key)}
