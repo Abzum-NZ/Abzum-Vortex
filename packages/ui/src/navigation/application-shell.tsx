@@ -7,6 +7,7 @@ import {
   useRef,
   useState,
   type CSSProperties,
+  type KeyboardEvent,
   type MouseEvent,
   type ReactElement,
   type ReactNode,
@@ -259,6 +260,29 @@ const SWITCHER_NOTICE =
   "px-[var(--vortex-space-md)] py-[var(--vortex-space-sm)] text-sm text-muted-foreground";
 
 /**
+ * Down, Up, Home and End move between the switcher's applications (the disclosure pattern keeps
+ * them; Tab still visits each one).
+ */
+const moveBetweenApplications = (event: KeyboardEvent<HTMLUListElement>) => {
+  if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+  const buttons = [...event.currentTarget.querySelectorAll<HTMLButtonElement>("button:enabled")];
+  const at = buttons.indexOf(event.target as HTMLButtonElement);
+  const next =
+    event.key === "ArrowDown"
+      ? buttons[Math.min(at + 1, buttons.length - 1)]
+      : event.key === "ArrowUp"
+        ? buttons[Math.max(at - 1, 0)]
+        : event.key === "Home"
+          ? buttons[0]
+          : event.key === "End"
+            ? buttons.at(-1)
+            : undefined;
+  if (next === undefined || at === -1) return;
+  event.preventDefault();
+  next.focus();
+};
+
+/**
  * The application switcher: a popover with a search above the list of applications. It is not a
  * menu because a menu may hold only items, so its search field and results have no place in one.
  */
@@ -326,7 +350,7 @@ function ApplicationSwitcher({
         setOpen(next);
         if (next) {
           // The first open consumes the intent read, including one still in flight. Later opens
-          // read again, so closing the menu never retains its application list for another open.
+          // read again, so closing the switcher never keeps its application list for another open.
           if (intentRead.current === undefined) void read();
           intentRead.current = undefined;
         } else {
@@ -356,7 +380,7 @@ function ApplicationSwitcher({
         align="end"
         className="flex w-[min(28rem,calc(100vw-2rem))] min-w-56 flex-col gap-[var(--vortex-space-xs)]"
         aria-busy={switcher === undefined}
-        aria-label="Applications"
+        aria-label="Application switcher"
       >
         {source?.search === undefined ? null : (
           <div className="w-full">
@@ -461,7 +485,11 @@ function ApplicationSwitcher({
             No other applications
           </p>
         ) : (
-          <ul className="m-0 flex list-none flex-col gap-[var(--vortex-space-xs)] p-0">
+          <ul
+            aria-label="Applications"
+            className="m-0 flex list-none flex-col gap-[var(--vortex-space-xs)] p-0"
+            onKeyDown={moveBetweenApplications}
+          >
             {switcher.applications.map((application) => {
               const current = application.name === applicationName;
               return (
