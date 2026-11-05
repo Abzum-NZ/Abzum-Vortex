@@ -8,7 +8,7 @@ import {
 } from "@vortex/platform/schema";
 import type { Breakpoint } from "../definition-error";
 import { canvasOwnerData } from "./application-composition-page-data";
-import type { StudioCanvasOwner, StudioCompositionCommand } from "./application-composition-model";
+import type { StudioCanvasOwner, StudioDraftChange } from "./application-composition-model";
 import type { StudioSemanticSelection } from "./semantic-selection";
 import {
   pageDataJson,
@@ -75,7 +75,7 @@ export type StudioCanvasClassification =
   | Readonly<{
       kind: "change";
       selection: StudioSemanticSelection | null;
-      change: StudioCompositionCommand;
+      change: StudioDraftChange;
       expectedSource: ApplicationSourceDocument;
       /** The block to select once the draft has taken the change: the copy a Duplicate made. */
       select?: string;

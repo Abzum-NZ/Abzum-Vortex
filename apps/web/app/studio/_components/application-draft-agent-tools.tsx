@@ -19,7 +19,7 @@ import {
   type StudioItemLabelResult,
   type StudioBorrowedChoices,
   type StudioQueryChoice,
-  type StudioCompositionCommand,
+  type StudioDraftChange,
   type StudioCompositionSettings,
   type StudioCompositionContext,
   type StudioCompositionDestination,
@@ -290,7 +290,7 @@ export function ApplicationDraftAgentTools({
   command: (
     expected: StudioCompositionContext,
     expectedSelection: StudioSemanticSelection,
-    command: StudioCompositionCommand,
+    command: StudioDraftChange,
   ) => StudioCompositionOutcome;
   /**
    * The inspector's rename over the one draft. The agent passes no `merge`, so its rename is its
@@ -428,7 +428,7 @@ export function ApplicationDraftAgentTools({
   }, [history, contextNow]);
 
   const applyCommand = useCallback(
-    (target: StudioSemanticSelection, what: StudioCompositionCommand): StudioCompositionOutcome => {
+    (target: StudioSemanticSelection, what: StudioDraftChange): StudioCompositionOutcome => {
       if (!select(target)) return { kind: "invalid" };
       return actions.current.command(contextNow(), target, what);
     },

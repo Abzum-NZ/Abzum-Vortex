@@ -14,7 +14,7 @@ import type {
   StudioCompositionContext,
   StudioCompositionOwner,
   StudioCompositionWrapModel,
-  StudioCompositionCommandResult,
+  StudioDraftChangeResult,
 } from "./application-composition-model";
 import {
   type Region,
@@ -165,7 +165,7 @@ export const applyWrap = (
   current: StudioCompositionContext,
   selection: StudioSemanticSelection | null,
   command: unknown,
-): StudioCompositionCommandResult => {
+): StudioDraftChangeResult => {
   const input = closedPlain(command, ["kind", "blockId", "releaseVersion", "settings"]);
   if (
     input.kind !== "wrap" ||

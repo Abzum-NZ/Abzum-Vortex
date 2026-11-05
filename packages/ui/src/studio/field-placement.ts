@@ -13,7 +13,7 @@ import {
   type SourceItem,
 } from "@vortex/platform/schema";
 import {
-  applyStudioCompositionCommand,
+  applyDraftChange,
   describeStudioCompositionAddTargets,
   describeStudioCompositionSettings,
   type StudioCompositionContext,
@@ -379,7 +379,7 @@ export const applyStudioFieldPlacements = (
         }
         withQuery = { ...current, source: selected };
       }
-      const result = applyStudioCompositionCommand(withQuery, selection, {
+      const result = applyDraftChange(withQuery, selection, {
         kind: "settings",
         settings: { ...model.settings, [setting.key]: { kind: "list", items: written } },
         query: model.query,
@@ -419,7 +419,7 @@ export const applyStudioFieldPlacements = (
       if (content.some((item) => item.props.field === reference)) continue;
       // The input goes above the form's Save button, after the inputs already there.
       const submit = content.findIndex((item) => item.props.action_kind === "submit");
-      const result = applyStudioCompositionCommand(current, null, {
+      const result = applyDraftChange(current, null, {
         kind: "add",
         owner: { kind: "page", pageAlias: place.pageAlias },
         area: target.area,

@@ -22,8 +22,8 @@ import {
 } from "./application-composition-forms";
 import type {
   StudioCanvasOwner,
-  StudioCompositionCommand,
-  StudioCompositionCommandResult,
+  StudioDraftChange,
+  StudioDraftChangeResult,
   StudioCompositionContext,
 } from "./application-composition-model";
 import {
@@ -106,8 +106,8 @@ const dataAliases = (data: SourceZonedData): Set<string> =>
  */
 export const applyPageData = (
   context: StudioCompositionContext,
-  change: Extract<StudioCompositionCommand, { kind: "pageData" }>,
-): StudioCompositionCommandResult => {
+  change: Extract<StudioDraftChange, { kind: "pageData" }>,
+): StudioDraftChangeResult => {
   const { catalogue, source: current } = context;
   const { owner, data: edited } = change;
   const copies = new Map(change.copies);

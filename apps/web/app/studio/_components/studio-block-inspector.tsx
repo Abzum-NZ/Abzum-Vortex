@@ -32,7 +32,7 @@ import {
   studioCanvasGridKey,
   type StudioCanvasGridArrangement,
   type StudioQueryChoice,
-  type StudioCompositionCommand,
+  type StudioDraftChange,
   type StudioCompositionContext,
   type StudioCompositionOutcome,
   type StudioGridFeaturesProps,
@@ -72,7 +72,7 @@ type Props = Readonly<{
   onCommand: (
     expected: StudioCompositionContext,
     selection: StudioSemanticSelection,
-    command: StudioCompositionCommand,
+    command: StudioDraftChange,
     merge?: string,
   ) => StudioCompositionOutcome;
   /** One condition of the block (when it shows, is required, is read-only or is enabled). */
@@ -138,7 +138,7 @@ export function StudioBlockInspector(props: Props) {
    * took it. A size or an order says its refusal at its own field (`atField`).
    */
   const command = (
-    next: StudioCompositionCommand,
+    next: StudioDraftChange,
     merge?: string,
     done = "Changed.",
     fallback = "Nothing changed. Use a valid size or order.",
