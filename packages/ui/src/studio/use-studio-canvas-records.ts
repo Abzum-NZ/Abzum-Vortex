@@ -4,8 +4,8 @@ import {
   type ApplicationSourceDocument,
   type ImmutablePlatformBlockCatalogue,
   type SourceItem,
+  type StudioCompileFailure,
 } from "@vortex/platform/schema";
-import type { StudioCompileFailure } from "./compile-failure";
 import { itemsHold, recordKeys } from "./studio-canvas-data";
 import type { StudioCanvasGridChange, StudioCanvasGridRead } from "./studio-canvas-grid";
 import type { StudioCanvasRecords, StudioCanvasSample } from "./studio-canvas-metadata";

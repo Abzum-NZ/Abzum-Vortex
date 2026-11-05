@@ -49,13 +49,13 @@ import {
   applyStudioFlowCommand,
   studioFlowConditionContext,
   type StudioFlowCombineResult,
+  type StudioBehaviourResult,
+  type StudioBehaviourTarget,
 } from "@vortex/platform/schema";
 import { useAppearanceMode } from "@vortex/ui/appearance";
 import { useConfirm } from "@vortex/ui/components/confirm-dialog";
 import {
   applyStudioRowActionChange,
-  type StudioBehaviourResult,
-  type StudioBehaviourTarget,
   type StudioFlowStepPickerContext,
   type StudioInspectorAction,
 } from "@vortex/ui/studio";

@@ -1,5 +1,4 @@
 import "server-only";
-import type { StudioPreviewNotRunnable } from "@vortex/ui/studio";
 
 import {
   reconcilePreviewInstallation,
@@ -14,6 +13,7 @@ import {
   type IdentitySession,
   type OrganizationId,
   type PreviewDemand,
+  type StudioPreviewNotRunnable,
 } from "@vortex/platform/schema";
 import { humanOrganizationRequests } from "./server-composition";
 import {

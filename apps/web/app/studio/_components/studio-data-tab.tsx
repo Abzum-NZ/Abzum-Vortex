@@ -1,6 +1,5 @@
 "use client";
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { StudioStructureCommand } from "@vortex/ui/studio";
 import {
   peopleDirectory as directory,
   type ApplicationSourceDocument,
@@ -10,6 +9,7 @@ import {
   type StudioCompositionContext,
   type StudioDataSelection,
   type StudioRecordReader,
+  type StudioStructureCommand,
 } from "@vortex/platform/schema";
 import { useIntentPreload } from "../_lib/use-intent-preload";
 import { deferredStudioPart } from "./studio-deferred-part";

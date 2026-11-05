@@ -7,6 +7,10 @@ import {
   currentIso4217Alpha3CodeSetV2026_01_01,
   type ApplicationSourceDocument,
   type ApplicationUsePlace,
+  studioPageValueTypes,
+  type StudioPageValueCommand,
+  type StudioPageValueResult,
+  type StudioPageValueType,
 } from "@vortex/platform/schema";
 import {
   StudioDialog,
@@ -14,10 +18,6 @@ import {
   StudioAddButton,
   StudioRemoveButton,
   StudioInspectorGroup,
-  studioPageValueTypes,
-  type StudioPageValueCommand,
-  type StudioPageValueResult,
-  type StudioPageValueType,
   StudioOptionControl,
 } from "@vortex/ui/studio";
 import { StudioReferencesAlert, StudioUsedIn } from "./studio-used-in";

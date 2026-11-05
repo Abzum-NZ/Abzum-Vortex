@@ -23,6 +23,8 @@ import {
   createInitialStudioCondition,
   describeCondition,
   type StudioConditionControlsContext,
+  readStudioQueryFilter,
+  writeStudioQueryFilter,
 } from "@vortex/platform/schema";
 import { Button } from "../../components/button";
 import { Item, ItemContent, ItemGroup } from "../../components/item";
@@ -42,7 +44,6 @@ import {
 } from "../conditional-format-rule-controls";
 import { StudioInspectorActions } from "../studio-inspector-actions";
 import { StudioReferencePicker } from "../studio-reference-picker";
-import { readStudioQueryFilter, writeStudioQueryFilter } from "../studio-query-filter";
 
 type Value = SourceBlockPropertyValueContract;
 type GroupValue = Extract<Value, { kind: "group" }>;

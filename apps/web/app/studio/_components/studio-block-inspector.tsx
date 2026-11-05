@@ -25,6 +25,9 @@ import {
   type StudioSemanticSelection,
   type StudioSettingChoices,
   type StudioStoredApplicationDraft,
+  followFieldLabels,
+  studioQueryBindingFacts,
+  studioRecordBindingFields,
 } from "@vortex/platform/schema";
 import type { StudioCompiledFields } from "../_lib/studio-data-model";
 import { useStudioScreen } from "@vortex/ui/studio/puck-provider";
@@ -32,10 +35,7 @@ import { useStudioScreen } from "@vortex/ui/studio/puck-provider";
 import { useId, useMemo, useRef, useState, type ReactNode } from "react";
 import { studioPlacementLabel } from "../_lib/studio-labels";
 import {
-  followFieldLabels,
   StudioSelectionControlBinding,
-  studioQueryBindingFacts,
-  studioRecordBindingFields,
   StudioBlockSettingFields,
   studioGridFeaturesProperty,
   studioCanvasGridKey,

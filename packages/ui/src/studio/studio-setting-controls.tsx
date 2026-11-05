@@ -18,9 +18,9 @@ import {
   studioUnsetLabel,
   conditionalRequiredMessage,
   type ControlProps,
+  followFieldLabels,
+  studioTotalMeasureProperty,
 } from "@vortex/platform/schema";
-import { followFieldLabels } from "./follow-field-labels";
-import { studioTotalMeasureProperty } from "./grid-features/totals";
 import { Button } from "../components/button";
 import { Checkbox } from "../components/checkbox";
 import { Switch } from "../components/switch";

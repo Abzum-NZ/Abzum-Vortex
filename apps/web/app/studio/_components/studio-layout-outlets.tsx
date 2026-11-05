@@ -11,7 +11,6 @@ import {
   StudioInspectorGroup,
   StudioReferencePicker,
   StudioIconButton,
-  type StudioStructureCommand,
 } from "@vortex/ui/studio";
 import { Icon } from "@vortex/ui";
 import { Button } from "@vortex/ui/components/button";
@@ -27,6 +26,7 @@ import {
   type StudioPlacementDescriber,
   type StudioStructureResult,
   type StudioLayoutOutletValues,
+  type StudioStructureCommand,
 } from "@vortex/platform/schema";
 
 type Shell = ApplicationSourceDocument["body"]["shells"][number];

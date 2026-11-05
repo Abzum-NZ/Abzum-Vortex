@@ -1,11 +1,4 @@
 import type { ApplicationSourceDocument, ConditionNode } from "@vortex/platform/schema";
-import {
-  applyStudioPageValue,
-  settingsChangeOfPuckEdit,
-  type StudioPageValueCommand,
-  type StudioPageValueResult,
-  type StudioSettingsEdit,
-} from "@vortex/ui/studio";
 import type { StudioDraft, StudioDraftStep } from "./use-studio-draft";
 import {
   applyDraftChange,
@@ -22,6 +15,11 @@ import {
   type StudioApplicationConditionContext,
   type StudioReactionCommandResult,
   type StudioReactionSlot,
+  applyStudioPageValue,
+  settingsChangeOfPuckEdit,
+  type StudioPageValueCommand,
+  type StudioPageValueResult,
+  type StudioSettingsEdit,
 } from "@vortex/platform/schema";
 
 type DraftChangeOptions = Readonly<{

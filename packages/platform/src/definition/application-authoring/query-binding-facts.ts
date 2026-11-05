@@ -1,19 +1,21 @@
+import { fieldBindingValueType } from "../application-composition/query-binding-values";
 import {
-  fieldBindingValueType,
   pageBindingFacts,
-  peopleDirectory,
-  recordPageTypes,
   selectionControlSettingKey,
-  sourceItemTree,
-  sourcePageItems,
-  sourcePageShell,
   tablePublishesRecord,
   type QueryBindingField,
   type QueryBindingPageFacts,
   type QueryBindingPlacement,
-  type StudioCompositionContext,
-  type StudioQueryChoice,
-} from "@vortex/platform/schema";
+} from "../application-composition/query-binding-check";
+import { peopleDirectory } from "../module-links";
+import { recordPageTypes } from "../application-composition/compiled-query-bindings";
+import {
+  sourceItemTree,
+  sourcePageItems,
+  sourcePageShell,
+} from "../application-composition/source-composition";
+import type { StudioCompositionContext } from "./application-composition-model";
+import type { StudioQueryChoice } from "./contextual-palette";
 
 /** Every record type of the draft and each of its fields as a binding sees it, by reference. */
 const draftBindingFields = (source: StudioCompositionContext["source"]) => {

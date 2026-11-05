@@ -1,28 +1,33 @@
+import { PLATFORM_BLOCK_RELEASE_IDENTITIES } from "../application-composition-release-identities";
 import {
-  PLATFORM_BLOCK_RELEASE_IDENTITIES,
   sourcePageItems,
   sourcePageShell,
   type SourceItem,
-  takenIds,
+} from "../application-composition/source-composition";
+import { takenIds } from "./application-record-page-kinds";
+import {
   field,
   keyColumns,
   release,
   resolveRecordType,
   tableColumns,
   type Resolved,
-  freshAlias,
-  type Plan,
+} from "./application-record-page-shared";
+import { freshAlias, type Plan } from "./application-record-plan";
+import {
   admitBlocks,
-  blockItem,
   frameArea,
+  type StudioStructureContext,
+} from "./application-structure-common";
+import {
+  blockItem,
   judged,
   quoted,
   refuse,
   StructureRefusal,
   uniqueKey,
   type Page,
-  type StudioStructureContext,
-} from "@vortex/platform/schema";
+} from "./application-structure";
 
 /**
  * A generated home dashboard keeps one card count, one recent-records table and, where the record

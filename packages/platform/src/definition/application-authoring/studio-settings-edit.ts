@@ -1,12 +1,11 @@
+import { typedSourceSettingValue } from "../application-composition/block-property-schema";
+import { describeStudioCompositionSettings } from "./application-composition-commands";
+import type { StudioDraftChange, StudioCompositionContext } from "./application-composition-model";
 import {
-  typedSourceSettingValue,
-  describeStudioCompositionSettings,
-  type StudioDraftChange,
-  type StudioCompositionContext,
   settleStudioSetting,
   type StudioSettingChoices,
   type StudioSettingValues,
-} from "@vortex/platform/schema";
+} from "./studio-setting-model";
 import { followFieldLabels } from "./follow-field-labels";
 
 export type PuckItem = Readonly<{ type: string; props: Readonly<Record<string, unknown>> }>;

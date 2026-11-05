@@ -1,22 +1,28 @@
+import { changeableByPeople } from "../module-field-shape";
 import {
-  changeableByPeople,
   defaultOpenFlowSource,
   defaultSaveFlowSource,
-  PLATFORM_BLOCK_RELEASE_IDENTITIES,
-  sourcePageItems,
   type DefaultFlowAfter,
-  type SourceFlow,
+} from "../../workflows/default-flow-sources";
+import { PLATFORM_BLOCK_RELEASE_IDENTITIES } from "../application-composition-release-identities";
+import { sourcePageItems } from "../application-composition/source-composition";
+import type { SourceFlow } from "../../workflows/flow-source-contracts";
+import {
   fieldsPerStep,
   inputTypes,
   listing,
   lowerFirst,
   type StudioRecordPageCommand,
-  ensureRelatedAdds,
+} from "./application-record-page-kinds";
+import { ensureRelatedAdds } from "./application-record-page-detail";
+import {
   bindDefault,
   flowCreate,
   flowParts,
   freshAlias,
   type Plan,
+} from "./application-record-plan";
+import {
   companions,
   ensureDetailEdit,
   ensureListEdit,
@@ -27,16 +33,13 @@ import {
   resolveRecordType,
   type Field,
   type Resolved,
-  blockItem,
-  judged,
+} from "./application-record-page-shared";
+import { blockItem, judged, quoted, refuse, uniqueKey, type Page } from "./application-structure";
+import {
   pageData,
   placeNewPage,
-  quoted,
-  refuse,
-  uniqueKey,
-  type Page,
   type StudioStructureContext,
-} from "@vortex/platform/schema";
+} from "./application-structure-common";
 
 const formFields = (
   resolved: Resolved,

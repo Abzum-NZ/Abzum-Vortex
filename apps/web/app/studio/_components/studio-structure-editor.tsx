@@ -9,6 +9,9 @@ import {
   type StudioPageLayoutPlan,
   type StudioStructureResult,
   studioAccessGateChoices,
+  studioStructureDefaultShell,
+  studioStructureShellChoices,
+  type StudioStructureCommand,
 } from "@vortex/platform/schema";
 import { Icon } from "@vortex/ui";
 import { Button } from "@vortex/ui/components/button";
@@ -31,12 +34,7 @@ import {
 } from "@vortex/ui/components/dialog";
 import { studioNotice } from "./studio-save-state";
 import { StudioLimitNote, Reasoned, studioLimitReason } from "@vortex/ui/studio";
-import {
-  studioStructureDefaultShell,
-  studioStructureShellChoices,
-  StudioInspectorActions,
-  type StudioStructureCommand,
-} from "@vortex/ui/studio";
+import { StudioInspectorActions } from "@vortex/ui/studio";
 import { StudioOptionControl } from "@vortex/ui/studio";
 import { StudioField } from "./studio-field";
 import { StudioRecordPageForm } from "./studio-record-page-form";

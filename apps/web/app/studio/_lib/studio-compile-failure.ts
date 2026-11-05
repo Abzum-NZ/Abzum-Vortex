@@ -6,8 +6,8 @@ import {
   type SourceFlowTask,
   studioWords,
   type StudioDataSelection,
+  type StudioCompileFailure,
 } from "@vortex/platform/schema";
-import type { StudioCompileFailure } from "@vortex/ui/studio";
 
 /** Why the saved draft does not compile, in words, and the Data tab item to change when it is one. */
 type StudioCompileProblem = Readonly<{

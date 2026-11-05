@@ -1,13 +1,11 @@
-import {
-  canonicalJson,
-  recordsTableColumnFiltersFeature,
-  recordsTableInlineEditFeature,
-  recordsTablePivotFeature,
-  recordsTableTotalsFeature,
-  type RecordsTableFeatureKey,
-  type RecordsTableQueryFacts,
-  type SourceBlockPropertyValueContract,
-} from "@vortex/platform/schema";
+import { canonicalJson } from "../../canonical-json";
+import { recordsTableColumnFiltersFeature } from "../../application-composition/records-table-features/column-filters";
+import { recordsTableInlineEditFeature } from "../../application-composition/records-table-features/inline-edit";
+import { recordsTablePivotFeature } from "../../application-composition/records-table-features/pivot";
+import { recordsTableTotalsFeature } from "../../application-composition/records-table-features/totals";
+import type { RecordsTableFeatureKey } from "../../application-composition/records-table-features/index";
+import type { RecordsTableQueryFacts } from "../../application-composition/records-table-features/shared";
+import type { SourceBlockPropertyValueContract } from "../../application-composition/block-property-values";
 
 type Group = Extract<SourceBlockPropertyValueContract, { kind: "group" }>;
 const fieldValue = (field: string): SourceBlockPropertyValueContract => ({
