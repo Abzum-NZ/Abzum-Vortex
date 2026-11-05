@@ -1450,17 +1450,21 @@ const placesOf = (source: Source, uses: readonly Use[]): readonly ApplicationUse
 };
 
 /**
+ * A part named by its kind word ("flow 'Open the form'", "Summary value 'Credit'", "Table block")
+ * takes "the"; a sentence ("The application's home page", "A step of ...") and a block named as
+ * the Outline names it ("Data grid · Bob's list") do not.
+ */
+const namedByKind = (label: string): boolean =>
+  !label.includes(" · ") && /^(?!(?:A|An|The) )[^']*(?: '.*'| block)$/u.test(label);
+
+/**
  * The users of a part named in a sentence: "the flow 'Update credit use' and the Summary value
  * 'Credit'". A place a person cannot be given a name for is described as its place is.
  */
 export const describeApplicationUsers = (places: readonly ApplicationUsePlace[]): string => {
   const names = [
     ...new Set(
-      places.map((place) =>
-        place.label.includes("'") || place.label.endsWith(" block")
-          ? `the ${place.label}`
-          : place.label,
-      ),
+      places.map((place) => (namedByKind(place.label) ? `the ${place.label}` : place.label)),
     ),
   ];
   return names.length <= 1

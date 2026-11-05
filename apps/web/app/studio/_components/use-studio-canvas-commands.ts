@@ -61,7 +61,7 @@ export type StudioCanvasCommands = Readonly<{
     slot: StudioReactionSlot,
   ) => StudioReactionCommandResult;
   setLabels: (
-    selection: StudioSemanticSelection | null,
+    selection: StudioSemanticSelection,
     name: string,
     description: string,
     merge?: string,
