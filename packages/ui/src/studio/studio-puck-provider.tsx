@@ -17,6 +17,17 @@ import {
   definitionLimitReached,
   type ApplicationSourceDocument,
   type ImmutablePlatformBlockCatalogue,
+  type StudioCanvasOwner,
+  type StudioDraftChange,
+  type StudioCompositionOutcome,
+  type StudioCompositionAddTargetsModel,
+  type StudioCompositionDestination,
+  type StudioCompositionOwner,
+  type StudioSemanticSelection,
+  type StudioPlacementDescriber,
+  studioBlockName,
+  studioCanvasReferences,
+  sameCompositionValue,
 } from "@vortex/platform/schema";
 import {
   createContext,
@@ -36,14 +47,6 @@ import type { Breakpoint } from "../definition-error";
 import type { FieldInputControlReleaseMap } from "../registry";
 import type { PlatformThemeTokens } from "../theme";
 import type { StudioCompileFailure } from "./compile-failure";
-import type {
-  StudioCanvasOwner,
-  StudioDraftChange,
-  StudioCompositionOutcome,
-  StudioCompositionAddTargetsModel,
-  StudioCompositionDestination,
-  StudioCompositionOwner,
-} from "./application-composition-commands";
 import type { StudioCanvasFrame } from "./studio-canvas-projection";
 import {
   classifyCanvasChange,
@@ -51,8 +54,6 @@ import {
   isNoOpCanvasAction,
 } from "./studio-canvas-change";
 import type { StudioSettingsEdit } from "./studio-settings-edit";
-import type { StudioSemanticSelection } from "./semantic-selection";
-import type { StudioPlacementDescriber } from "./semantic-outline";
 import {
   destinationOfZone,
   itemsHold,
@@ -61,7 +62,6 @@ import {
   puckSelectedAlias,
   puckSelectorOf,
   rootSlotHolding,
-  studioBlockName,
   type StudioCanvasCompiledSlot,
   type StudioPuckLocate,
   type StudioPuckSelector,
@@ -86,8 +86,6 @@ import { studioPuckStyle } from "./studio-puck-style";
 import { studioPuckWords } from "./studio-puck-words";
 import type { StudioCanvasRecordsReader } from "./use-studio-canvas-records";
 import { useStudioCanvasChannelValue } from "./use-studio-canvas-channel";
-import { studioCanvasReferences } from "./studio-canvas-permissions";
-import { sameCompositionValue } from "./composition-references";
 import { createSlotLockStore, SlotLockProvider, type SlotLockStore } from "../slot-lock";
 
 export { studioScreens, useStudioScreen } from "./studio-canvas-screen";

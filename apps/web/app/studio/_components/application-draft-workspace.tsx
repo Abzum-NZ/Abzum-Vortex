@@ -1,14 +1,21 @@
 "use client";
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
-import { describeFailure, type SourceIdentityReservation } from "@vortex/platform/schema";
 import {
-  StudioFieldProblemsProvider,
+  describeFailure,
+  type SourceIdentityReservation,
   createStudioPlacementDescriber,
   projectStudioSemanticOutline,
   studioSemanticSelectionKey,
   type StudioSemanticSelection,
   type StudioStoredApplicationDraft,
-} from "@vortex/ui/studio";
+  applyStudioAccessCommand,
+  studioAccessIdentityReservations,
+  type StudioAccessCommand,
+  type StudioAccessResult,
+  type StudioNavigationApplication,
+  type StudioNavigationApplicationsStatus,
+} from "@vortex/platform/schema";
+import { StudioFieldProblemsProvider } from "@vortex/ui/studio";
 import { studioOutlineLabels } from "../_lib/studio-labels";
 import { studioPlaceSelection, studioTabOfSelection } from "../_lib/studio-places";
 import { describeStudioCompileFailure } from "../_lib/studio-compile-failure";
@@ -41,14 +48,6 @@ import { useStudioFlowsTab } from "./use-studio-flows-tab";
 import { useStudioMenuThemeTabs } from "./use-studio-menu-theme-tabs";
 import { useStudioReleasesTab } from "./use-studio-releases-tab";
 import { useStudioStructureCommand, useStudioStructureTab } from "./use-studio-structure-tab";
-import {
-  applyStudioAccessCommand,
-  studioAccessIdentityReservations,
-  type StudioAccessCommand,
-  type StudioAccessResult,
-  type StudioNavigationApplication,
-  type StudioNavigationApplicationsStatus,
-} from "@vortex/ui/studio";
 import { Button } from "@vortex/ui/components/button";
 import type { StudioStructureForm } from "./studio-structure-editor";
 

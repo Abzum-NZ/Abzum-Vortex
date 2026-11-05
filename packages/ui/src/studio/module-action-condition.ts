@@ -8,7 +8,7 @@ import type {
   StudioConditionControlsContext,
   StudioConditionParameterType,
 } from "./condition-model";
-import { studioFieldChoiceOptions, studioFieldValueType } from "./application-flow-values";
+import { studioFieldChoiceOptions, studioFieldValueType } from "@vortex/platform/schema";
 
 /**
  * A named action's precondition in Studio's shared condition controls. The action stores its

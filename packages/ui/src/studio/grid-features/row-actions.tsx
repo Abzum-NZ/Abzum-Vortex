@@ -11,9 +11,10 @@ import {
   recordsTableSettingMaximumItems,
   type ApplicationSourceDocument,
   type JsonValue,
+  type StudioActionChoice,
+  type StudioFlowCreateCommand,
+  type StudioFlowCreateChoices,
 } from "@vortex/platform/schema";
-import type { StudioActionChoice } from "../contextual-palette";
-import type { StudioFlowCreateCommand, StudioFlowCreateChoices } from "../application-flow-create";
 import { Input } from "../../components/input";
 import { Label } from "../../components/label";
 import { StudioOptionControl } from "../studio-setting-basic-controls";

@@ -15,13 +15,13 @@ import { Input } from "@vortex/ui/components/input";
 import { RadioGroup, RadioGroupItem } from "@vortex/ui/components/radio-group";
 import { Textarea } from "@vortex/ui/components/textarea";
 import type { ApplicationSourceDocument } from "@vortex/platform/schema";
+import { StudioOptionControl } from "@vortex/ui/studio";
 import {
   studioFlowCreateSavesChange,
   studioFlowEventTitle,
   type StudioFlowCreateChoices,
   type StudioFlowCreateCommand,
-  StudioOptionControl,
-} from "@vortex/ui/studio";
+} from "@vortex/platform/schema";
 
 /**
  * A new flow with the minimum valid shape, for a control's action. A rule that runs before a record

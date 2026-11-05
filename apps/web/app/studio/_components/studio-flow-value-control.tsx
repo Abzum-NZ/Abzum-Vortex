@@ -6,9 +6,9 @@ import { Checkbox } from "@vortex/ui/components/checkbox";
 import { Input } from "@vortex/ui/components/input";
 import { Textarea } from "@vortex/ui/components/textarea";
 import type { FlowFormula, FlowLiteral, FlowReference, FlowValue } from "@vortex/platform/schema";
+import { StudioOptionControl, StudioReferencePicker } from "@vortex/ui/studio";
 import {
-  StudioOptionControl,
-  StudioReferencePicker,
+  operationInputAccepts,
   describeStudioFlowValue,
   studioFixedLiteral,
   studioFixedLiteralType,
@@ -18,8 +18,7 @@ import {
   studioWords,
   type StudioFlowReferenceChoice,
   type StudioFlowValueSource,
-} from "@vortex/ui/studio";
-import { operationInputAccepts } from "@vortex/platform/schema";
+} from "@vortex/platform/schema";
 
 /**
  * One flow value: where it comes from (a fixed value, or something the flow can read at this step)

@@ -18,8 +18,8 @@ import {
   type StudioNavNode,
 } from "./studio-nav-tree";
 import type { StudioModuleOwnerApplication } from "./module-fields-editor";
-import type { StudioDataSelection } from "@vortex/ui/studio";
 import type { StudioDataModule } from "../_lib/studio-data-model";
+import type { StudioDataSelection } from "@vortex/platform/schema";
 
 const sameSelection = (left: StudioDataSelection | null, right: StudioDataSelection): boolean =>
   left !== null && JSON.stringify(left) === JSON.stringify(right);

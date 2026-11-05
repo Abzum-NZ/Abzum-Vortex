@@ -10,8 +10,8 @@ import {
   organizationIdSchema,
   type ApplicationRootId,
   type OrganizationId,
+  studioFlowLabel,
 } from "@vortex/platform/schema";
-import { studioFlowLabel } from "@vortex/ui/studio";
 import { loadInstalledContext, requestDependencies } from "./application-page/installed-context";
 import { resolveIdentitySession } from "../auth/_lib/session-server";
 import { humanOrganizationRequests } from "./server-composition";

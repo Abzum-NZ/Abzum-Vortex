@@ -11,13 +11,7 @@ import {
   type ApplicationSourceDocument,
   type ApplicationUsePlace,
   type ImmutablePlatformBlockCatalogue,
-} from "@vortex/platform/schema";
-import { useAppearanceMode } from "@vortex/ui/appearance";
-import { useConfirm } from "@vortex/ui/components/confirm-dialog";
-import {
   studioActionChoices,
-  applyStudioRowActionChange,
-  applyStudioFlowCommand,
   applyStudioFlowCreate,
   applyStudioFlowStart,
   deleteStudioFlow,
@@ -27,7 +21,6 @@ import {
   projectStudioFlowDraftChoices,
   projectStudioFlowStart,
   projectStudioFlowStepActions,
-  studioFlowConditionContext,
   studioFlowReferenceChoices,
   studioFlowFieldOptions,
   studioFlowStepTypesAt,
@@ -42,9 +35,6 @@ import {
   studioFlowValidationOptions,
   describeStudioFlowLocation,
   studioSemanticSelectionKey,
-  type StudioBehaviourResult,
-  type StudioBehaviourTarget,
-  type StudioFlowCombineResult,
   type StudioFlowCommand,
   type StudioFlowContext,
   type StudioFlowCreateCommand,
@@ -53,11 +43,21 @@ import {
   type StudioFlowPath,
   type StudioFlowSelection,
   type StudioFlowStartDraft,
-  type StudioFlowStepPickerContext,
-  type StudioInspectorAction,
   type StudioSemanticSelection,
   type StudioNavigationApplication,
   type StudioNavigationApplicationsStatus,
+} from "@vortex/platform/schema";
+import { useAppearanceMode } from "@vortex/ui/appearance";
+import { useConfirm } from "@vortex/ui/components/confirm-dialog";
+import {
+  applyStudioRowActionChange,
+  applyStudioFlowCommand,
+  studioFlowConditionContext,
+  type StudioBehaviourResult,
+  type StudioBehaviourTarget,
+  type StudioFlowCombineResult,
+  type StudioFlowStepPickerContext,
+  type StudioInspectorAction,
 } from "@vortex/ui/studio";
 import type { StudioDraft, StudioDraftStep } from "./use-studio-draft";
 import { deferredStudioPart } from "./studio-deferred-part";

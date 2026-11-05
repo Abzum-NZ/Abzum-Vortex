@@ -11,9 +11,9 @@ import {
   type QueryBindingField,
   type QueryBindingPageFacts,
   type QueryBindingPlacement,
+  type StudioCompositionContext,
+  type StudioQueryChoice,
 } from "@vortex/platform/schema";
-import type { StudioCompositionContext } from "./application-composition-commands";
-import type { StudioQueryChoice } from "./contextual-palette";
 
 /** Every record type of the draft and each of its fields as a binding sees it, by reference. */
 const draftBindingFields = (source: StudioCompositionContext["source"]) => {

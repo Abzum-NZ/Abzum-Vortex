@@ -8,8 +8,6 @@ import {
   type ApplicationSourceDocument,
   type ImmutablePlatformBlockCatalogue,
   type NavigationPermissionDecisions,
-} from "@vortex/platform/schema";
-import {
   describeStudioCompositionAddTargets,
   describeStudioCompositionDestinations,
   describeStudioCompositionWrap,
@@ -24,12 +22,15 @@ import {
   type StudioCompositionOwner,
   type StudioBorrowedChoices,
   type StudioSemanticOutline,
+  studioPageNestingLevels,
+  type StudioPlacementDescriber,
+} from "@vortex/platform/schema";
+import {
   reduceStudioCanvasGrid,
   studioCanvasGridArrangement,
   studioCanvasGridReads,
   type StudioCanvasGridChange,
   type StudioCanvasGridState,
-  studioPageNestingLevels,
 } from "@vortex/ui/studio";
 import { Icon, type FieldInputControlReleaseMap, type PlatformThemeTokens } from "@vortex/ui";
 import {
@@ -52,7 +53,6 @@ import type {
   StudioPuckInput,
 } from "@vortex/ui/studio/puck-provider";
 import { FirstRecordTypeEmptyState } from "../../_components/first-record-type-empty-state";
-import type { StudioPlacementDescriber } from "@vortex/ui/studio";
 import { studioDraftNavigation } from "../_lib/studio-draft-navigation";
 import { studioUseTargetOf } from "../_lib/studio-places";
 import { pageUsingLayout } from "../_lib/studio-view-request";

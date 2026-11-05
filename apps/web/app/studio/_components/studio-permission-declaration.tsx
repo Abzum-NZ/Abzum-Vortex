@@ -12,9 +12,12 @@ import {
   StudioInspectorGroup,
   Reasoned,
   StudioReferencePicker,
-  type StudioPermissionDeclaration as Declaration,
 } from "@vortex/ui/studio";
-import { applicationUses, changeableByPeople } from "@vortex/platform/schema";
+import {
+  applicationUses,
+  changeableByPeople,
+  type StudioPermissionDeclaration as Declaration,
+} from "@vortex/platform/schema";
 import { StudioPlaceList } from "./studio-used-in";
 import { StudioRecordScopeField } from "./studio-record-scope";
 import type { StudioAccessRun } from "./studio-access-role";

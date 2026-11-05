@@ -1,10 +1,9 @@
 import { useMemo, useRef } from "react";
-import { sameCompositionValue } from "./composition-references";
 import type { StudioCanvasModel } from "./studio-canvas-model";
 import type { StudioCanvasChannel, StudioCanvasFrameMetadata } from "./studio-canvas-metadata";
-import type { StudioCanvasReferences } from "./studio-canvas-permissions";
 import type { StudioPuckInput } from "./studio-puck-provider";
 import { useStudioCanvasRecords } from "./use-studio-canvas-records";
+import { sameCompositionValue, type StudioCanvasReferences } from "@vortex/platform/schema";
 
 /**
  * The value from an earlier render while the new one holds the same data. A value that is the

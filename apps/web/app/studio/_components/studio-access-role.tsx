@@ -36,6 +36,10 @@ import {
   TableHeader,
   TableRow,
 } from "@vortex/ui/components/table";
+import { StudioReferencePicker } from "@vortex/ui/studio";
+import { StudioField } from "./studio-field";
+import { Reasoned, StudioHelp, StudioIconButton, StudioOptionControl } from "@vortex/ui/studio";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@vortex/ui/components/tooltip";
 import {
   studioAccessColumns,
   studioAccessMenuEntries,
@@ -43,13 +47,9 @@ import {
   studioAccessRecordRows,
   studioRoleFieldAccess,
   studioRoleHolds,
-  StudioReferencePicker,
   type StudioAccessCommand,
   type StudioAccessPermission,
-} from "@vortex/ui/studio";
-import { StudioField } from "./studio-field";
-import { Reasoned, StudioHelp, StudioIconButton, StudioOptionControl } from "@vortex/ui/studio";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@vortex/ui/components/tooltip";
+} from "@vortex/platform/schema";
 
 type Role = ApplicationSourceDocument["body"]["roles"][number];
 /** One Access edit; `merge` joins a run of edits to one value (typing a name) into one Undo step. */

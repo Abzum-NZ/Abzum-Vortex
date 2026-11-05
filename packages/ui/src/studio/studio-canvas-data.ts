@@ -16,10 +16,9 @@ import {
   type StoredReservations,
   type SourcePageZone,
   isStudioDraftSnapshot,
+  type StudioCompositionDestination,
+  slotDeclaration,
 } from "@vortex/platform/schema";
-import type { StudioCompositionDestination } from "./application-composition-commands";
-import { slotDeclaration } from "./application-composition-regions";
-import type { StudioPlacementDescriber } from "./semantic-outline";
 
 /** One compiled zone of the page (a content slot, or the default zone): its items, exactly as the published definition holds them. */
 export type StudioCanvasCompiledSlot = readonly CompiledItem[];
@@ -366,26 +365,4 @@ export const storedDataProblem = (
   } catch (error: unknown) {
     return `STUDIO_CANVAS_STORED_DATA_REFUSED: ${error instanceof Error ? error.message : String(error)}`;
   }
-};
-
-/**
- * The name the outline and the inspector give a placed block ("Button: Open"), or `undefined` when
- * the block is not among the items or the describer has no name for it.
- */
-export const studioBlockName = (
-  describe: StudioPlacementDescriber,
-  items: readonly SourceItem[],
-  id: string,
-): string | undefined => {
-  const item = sourceItemTree(items).find((candidate) => candidate.props.id === id);
-  return item === undefined
-    ? undefined
-    : describe({
-        block: item.props.vortex.block,
-        settings: Object.fromEntries(
-          Object.entries(item.props).filter(
-            ([key, value]) => key !== "id" && key !== "vortex" && !Array.isArray(value),
-          ),
-        ),
-      });
 };

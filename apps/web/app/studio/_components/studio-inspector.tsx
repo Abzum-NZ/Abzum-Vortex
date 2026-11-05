@@ -12,13 +12,11 @@ import {
 } from "@vortex/ui/studio";
 import { Icon } from "@vortex/ui";
 import { Empty, EmptyMedia, EmptyTitle, EmptyDescription } from "@vortex/ui/components/empty";
-import type {
-  StudioInspectorAction,
-  resolveStudioSelectionInspectorContext,
-} from "@vortex/ui/studio";
+import type { StudioInspectorAction } from "@vortex/ui/studio";
 import { STUDIO_RAIL_BODY_CLASS, StudioPanelShell } from "./studio-frame";
 import { studioKindLabel } from "../_lib/studio-labels";
 import { useStudioDraftText } from "./use-studio-draft-text";
+import type { resolveStudioSelectionInspectorContext } from "@vortex/platform/schema";
 
 type InspectorContext = ReturnType<typeof resolveStudioSelectionInspectorContext>;
 

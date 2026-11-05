@@ -1,12 +1,8 @@
 "use client";
 import { useMemo, useRef, useState } from "react";
-import { applicationUses, type ApplicationSourceDocument } from "@vortex/platform/schema";
-import { Alert, AlertDescription } from "@vortex/ui/components/alert";
 import {
-  StudioDialog,
-  StudioField,
-  StudioReferencePicker,
-  studioActionBarMore,
+  applicationUses,
+  type ApplicationSourceDocument,
   studioMoveUnavailableReason,
   studioOutcomeText,
   describeStudioCompositionDestinations,
@@ -17,6 +13,13 @@ import {
   type StudioCompositionSettings,
   type StudioSemanticSelection,
   type StudioSettingChoices,
+} from "@vortex/platform/schema";
+import { Alert, AlertDescription } from "@vortex/ui/components/alert";
+import {
+  StudioDialog,
+  StudioField,
+  StudioReferencePicker,
+  studioActionBarMore,
 } from "@vortex/ui/studio";
 import type { StudioBlockDialogKind } from "@vortex/ui/studio/puck-provider";
 import { studioPlacementLabel } from "../_lib/studio-labels";

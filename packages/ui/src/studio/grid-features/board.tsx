@@ -1,7 +1,14 @@
 "use client";
 
 import { Field, FieldLabel } from "../../components/field";
-import { recordsTableBoardFeature, recordsTableSettingMaximumItems } from "@vortex/platform/schema";
+import {
+  recordsTableBoardFeature,
+  recordsTableSettingMaximumItems,
+  studioBoardTotalChoices,
+  type StudioBoardPipeline,
+  type StudioSettingChoices,
+  type StudioSettingValues,
+} from "@vortex/platform/schema";
 import { useId, type ReactElement } from "react";
 import { Trash2 } from "lucide-react";
 import type {
@@ -11,14 +18,12 @@ import type {
 } from "@vortex/platform/schema";
 import { Button } from "../../components/button";
 import { Input } from "../../components/input";
-import { studioBoardTotalChoices, type StudioBoardPipeline } from "../board-source";
 import {
   StudioReferencePicker,
   type StudioReferencePickerOption,
 } from "../studio-reference-picker";
 import { StudioSettingFields } from "../studio-setting-controls";
 import { StudioOptionControl } from "../studio-setting-basic-controls";
-import type { StudioSettingChoices, StudioSettingValues } from "../studio-setting-model";
 
 type GroupValue = Extract<SourceBlockPropertyValueContract, { kind: "group" }>;
 

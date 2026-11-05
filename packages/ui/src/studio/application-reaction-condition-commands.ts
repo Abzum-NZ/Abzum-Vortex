@@ -27,6 +27,10 @@ import {
   type SourcePageData,
   applicationModuleKeys,
   isRecord,
+  type StudioCompositionContext,
+  projectStudioFlowDraftChoices,
+  studioDraftRecordType,
+  type StudioSemanticSelection,
 } from "@vortex/platform/schema";
 import {
   validateStudioCondition,
@@ -36,10 +40,6 @@ import {
   type StudioConditionValidation,
   type StudioConditionValidationIssue,
 } from "./condition-model";
-import type { StudioCompositionContext } from "./application-composition-commands";
-import { projectStudioFlowDraftChoices } from "./application-flow-step-form";
-import { studioDraftRecordType } from "./application-flow-values";
-import type { StudioSemanticSelection } from "./semantic-selection";
 
 type SourceQualifiedCondition = NonNullable<SourceItemVortex["visibility_condition"]>;
 

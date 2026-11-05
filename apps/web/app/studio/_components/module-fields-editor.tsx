@@ -6,20 +6,9 @@ import { Alert, AlertDescription, AlertTitle } from "@vortex/ui/components/alert
 import { Button } from "@vortex/ui/components/button";
 import { useConfirm } from "@vortex/ui/components/confirm-dialog";
 import {
-  applyStudioFieldPlacements,
-  applyStudioFlowCreate,
-  studioFieldPlacements,
-  studioRelationshipChoices,
-  studioSettingProblems,
   StudioInspectorActions,
   StudioInspectorGroup,
   useStudioDraftHeld,
-  studioSourceRecordTypes,
-  type StudioCompositionContext,
-  type StudioDataSelection,
-  type StudioRecordReader,
-  type StudioSettingChoices,
-  type StudioSettingValues,
 } from "@vortex/ui/studio";
 import {
   calculationProblems,
@@ -55,6 +44,17 @@ import {
   type ModuleFieldType,
   type PeopleDirectoryOwner,
   type TotalSettings,
+  applyStudioFieldPlacements,
+  applyStudioFlowCreate,
+  studioFieldPlacements,
+  studioRelationshipChoices,
+  studioSettingProblems,
+  studioSourceRecordTypes,
+  type StudioCompositionContext,
+  type StudioDataSelection,
+  type StudioRecordReader,
+  type StudioSettingChoices,
+  type StudioSettingValues,
 } from "@vortex/platform/schema";
 import { StudioInspectorFooter, StudioInspectorHeader } from "./studio-inspector";
 import {

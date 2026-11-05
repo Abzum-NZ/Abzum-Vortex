@@ -29,6 +29,7 @@ export * from "./application-flow-bindings";
 export * from "./component-semantic-events";
 export * from "./flow-reference-environments";
 // The one flow validator is pure, so Studio judges a flow edit with it before the draft takes it.
+// The regions module keeps its own internal `refuse`, which would clash with the structure module's.
 export {
   validateFlow,
   operationInputAccepts,
@@ -65,3 +66,90 @@ export * from "./application-authoring/application-menu-commands";
 export * from "./application-authoring/application-structure";
 export * from "./application-authoring/studio-words";
 export * from "./source-change-summary";
+export * from "./application-authoring/application-access-commands";
+export * from "./application-authoring/application-composition-add";
+export * from "./application-authoring/application-composition-commands";
+export * from "./application-authoring/application-composition-forms";
+export * from "./application-authoring/application-composition-gate";
+export * from "./application-authoring/application-composition-model";
+export * from "./application-authoring/application-composition-page-data";
+export {
+  toolsFor,
+  isObject,
+  object,
+  validContext,
+  movableRegion,
+  publishedPage,
+  experiencePage,
+  PUBLISHED_PAGE_ADD_REASON,
+  regionRemovalCause,
+  removalRule,
+  regions,
+  studioPlacementOwner,
+  regionHostLevels,
+  releaseFor,
+  itemSlots,
+  itemReading,
+  pinnedRelease,
+  manifestMatches,
+  resolve,
+  sameSteps,
+  closedPlain,
+  parseDestination,
+  parseOwner,
+  sameDestination,
+  workingCopy,
+  zoneHandle,
+  regionAfter,
+  workingItem,
+  commitWorking,
+  validateRegion,
+  plainSource,
+  plainSettings,
+  settingsOf,
+  declarationSlotKeys,
+  slotDeclaration,
+  type Zone,
+  type Region,
+  type SlotStep,
+  type Target,
+} from "./application-authoring/application-composition-regions";
+export * from "./application-authoring/application-composition-wrap";
+export * from "./application-authoring/application-draft-history";
+export * from "./application-authoring/application-flow-background";
+export * from "./application-authoring/application-flow-commands";
+export * from "./application-authoring/application-flow-create";
+export * from "./application-authoring/application-flow-delete";
+export * from "./application-authoring/application-flow-model";
+export * from "./application-authoring/application-flow-shown-form";
+export * from "./application-authoring/application-flow-start";
+export * from "./application-authoring/application-flow-step-form";
+export * from "./application-authoring/application-flow-values";
+export * from "./application-authoring/application-item-labels";
+export * from "./application-authoring/application-layout-outlets";
+export * from "./application-authoring/application-page-layout";
+export * from "./application-authoring/application-record-page-detail";
+export * from "./application-authoring/application-record-page-kinds";
+export * from "./application-authoring/application-record-page-shared";
+export * from "./application-authoring/application-record-plan";
+export * from "./application-authoring/application-record-rules";
+export * from "./application-authoring/application-record-sheet";
+export * from "./application-authoring/application-structure-common";
+export * from "./application-authoring/board-quick-add";
+export * from "./application-authoring/board-source";
+export * from "./application-authoring/composition-references";
+export * from "./application-authoring/composition-starters";
+export * from "./application-authoring/contextual-palette";
+export * from "./application-authoring/default-record-query";
+export * from "./application-authoring/discovery-adapter";
+export * from "./application-authoring/field-placement";
+export * from "./application-authoring/grid-features/index";
+export * from "./application-authoring/grouped-table-preset";
+export * from "./application-authoring/palette-groups";
+export * from "./application-authoring/selection-inspector";
+export * from "./application-authoring/semantic-outline";
+export * from "./application-authoring/semantic-selection";
+export * from "./application-authoring/studio-canvas-permissions";
+export * from "./application-authoring/studio-composition-depth";
+export * from "./application-authoring/studio-placement-describer";
+export * from "./application-authoring/studio-setting-model";

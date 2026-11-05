@@ -25,14 +25,14 @@ import {
   ItemTitle,
 } from "@vortex/ui/components/item";
 import { Textarea } from "@vortex/ui/components/textarea";
+import { useStudioPlaceOpener } from "./studio-used-in";
+import { studioEditProblem, type StudioDataEdit } from "../_lib/studio-data-model";
 import {
   applyStudioFlowCreate,
   deleteStudioRecordRule,
   moveStudioRecordRule,
   studioRecordRules,
-} from "@vortex/ui/studio";
-import { useStudioPlaceOpener } from "./studio-used-in";
-import { studioEditProblem, type StudioDataEdit } from "../_lib/studio-data-model";
+} from "@vortex/platform/schema";
 
 /**
  * The before-save rules of a record type, such as "Enter the company name" or "A closed

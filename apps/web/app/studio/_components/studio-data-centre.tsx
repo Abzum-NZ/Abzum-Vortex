@@ -10,6 +10,7 @@ import {
   definitionLimits,
   type ApplicationSourceDocument,
   describeFailure,
+  type StudioDataSelection,
 } from "@vortex/platform/schema";
 import { ToggleGroup, ToggleGroupItem } from "@vortex/ui/components/toggle-group";
 import { Icon } from "@vortex/ui";
@@ -28,11 +29,7 @@ import { StudioPlaceList } from "./studio-used-in";
 import { Badge } from "@vortex/ui/components/badge";
 import { Spinner } from "@vortex/ui/components/spinner";
 import { Button } from "@vortex/ui/components/button";
-import {
-  StudioOptionControl,
-  StudioFieldTypeIcon,
-  type StudioDataSelection,
-} from "@vortex/ui/studio";
+import { StudioOptionControl, StudioFieldTypeIcon } from "@vortex/ui/studio";
 import {
   Table,
   TableBody,

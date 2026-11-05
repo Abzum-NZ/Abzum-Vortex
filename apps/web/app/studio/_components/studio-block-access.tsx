@@ -4,21 +4,21 @@ import {
   canonicalJson,
   type ApplicationAudience,
   type ConditionNode,
+  describeStudioCompositionGate,
+  type StudioCompositionContext,
+  type StudioSemanticSelection,
+  type StudioStoredApplicationDraft,
 } from "@vortex/platform/schema";
 import {
   describeCondition,
-  describeStudioCompositionGate,
   projectStudioReactionEditor,
   resolveStudioReactionTarget,
   StudioDialog,
   studioReactionSlots,
   type StudioAccessFieldValue,
   type StudioApplicationConditionContext,
-  type StudioCompositionContext,
   type StudioReactionCommandResult,
   type StudioReactionSlot,
-  type StudioSemanticSelection,
-  type StudioStoredApplicationDraft,
   useStudioSameByKey,
 } from "@vortex/ui/studio";
 import {

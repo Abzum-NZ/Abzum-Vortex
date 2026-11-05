@@ -19,8 +19,8 @@ import {
   type ImmutablePlatformBlockCatalogue,
   type PlatformBlockRelease,
   type ResponsivePlacement,
+  studioPaletteChoices,
 } from "@vortex/platform/schema";
-import { studioPaletteChoices } from "./contextual-palette";
 import { studioVortexField, withSettingFields } from "./studio-puck-settings";
 import type { FieldInputControlReleaseMap, PlatformComponentRegistry } from "../registry";
 import { useStudioCanvasGridEvents } from "./studio-canvas-grid";

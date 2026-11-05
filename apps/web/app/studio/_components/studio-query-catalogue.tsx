@@ -7,8 +7,9 @@ import {
   applicationUses,
   setInlineQueryExposure,
   type ApplicationSourceDocument,
+  type StudioDataSelection,
+  type StudioQueryInput,
 } from "@vortex/platform/schema";
-import type { StudioDataSelection, StudioQueryInput } from "@vortex/ui/studio";
 import { Icon } from "@vortex/ui";
 import { Badge } from "@vortex/ui/components/badge";
 import { Button } from "@vortex/ui/components/button";

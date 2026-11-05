@@ -5,11 +5,12 @@ import {
   storedShellReservations,
   type ApplicationSourceDocument,
   type ImmutablePlatformBlockCatalogue,
+  canvasOwnerData,
+  type StudioCanvasOwner,
+  type StudioDraftChange,
+  type StudioSemanticSelection,
 } from "@vortex/platform/schema";
 import type { Breakpoint } from "../definition-error";
-import { canvasOwnerData } from "./application-composition-page-data";
-import type { StudioCanvasOwner, StudioDraftChange } from "./application-composition-model";
-import type { StudioSemanticSelection } from "./semantic-selection";
 import {
   pageDataJson,
   puckZoneItems,

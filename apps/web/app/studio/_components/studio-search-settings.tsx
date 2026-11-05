@@ -11,8 +11,9 @@ import {
   type ApplicationSearchEntry,
   type ApplicationSearchPriority,
   type ApplicationSourceDocument,
+  type StudioDataSelection,
 } from "@vortex/platform/schema";
-import { StudioOptionControl, type StudioDataSelection } from "@vortex/ui/studio";
+import { StudioOptionControl } from "@vortex/ui/studio";
 import { Button } from "@vortex/ui/components/button";
 import { Checkbox } from "@vortex/ui/components/checkbox";
 import { Switch } from "@vortex/ui/components/switch";

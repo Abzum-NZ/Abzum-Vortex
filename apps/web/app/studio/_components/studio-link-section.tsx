@@ -2,8 +2,12 @@
 import { FieldLegend, FieldSet } from "@vortex/ui/components/field";
 import { Label } from "@vortex/ui/components/label";
 import { RadioGroup, RadioGroupItem } from "@vortex/ui/components/radio-group";
-import { StudioInspectorGroup, type StudioSettingValues } from "@vortex/ui/studio";
-import { peopleDirectory, type LinkCardinality } from "@vortex/platform/schema";
+import { StudioInspectorGroup } from "@vortex/ui/studio";
+import {
+  peopleDirectory,
+  type LinkCardinality,
+  type StudioSettingValues,
+} from "@vortex/platform/schema";
 
 type LinkTarget = Readonly<{ key: string; label: string; titleLabel: string | undefined }>;
 

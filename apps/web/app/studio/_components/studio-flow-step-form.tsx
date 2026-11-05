@@ -23,14 +23,18 @@ import {
   StudioReferencePicker,
   StudioHelp,
   StudioInspectorGroup,
-  describeStudioFlowValue,
   projectStudioFlowCondition,
   studioFlowConditionFormula,
+  type StudioConditionValidation,
+  type StudioFlowConditionContext,
+} from "@vortex/ui/studio";
+import { StudioFormulaEditor, formulaReferenceName } from "./studio-formula-editor";
+import { StudioFlowValueControl } from "./studio-flow-value-control";
+import {
+  describeStudioFlowValue,
   studioFlowLabel,
   studioFlowValueSourceOf,
   studioWords,
-  type StudioConditionValidation,
-  type StudioFlowConditionContext,
   type StudioFlowActionDraft,
   type StudioFlowControlDraft,
   type StudioFlowDraftChoices,
@@ -40,9 +44,7 @@ import {
   type StudioFlowReferenceChoice,
   type StudioFlowStepDraft,
   type StudioFlowValueSource,
-} from "@vortex/ui/studio";
-import { StudioFormulaEditor, formulaReferenceName } from "./studio-formula-editor";
-import { StudioFlowValueControl } from "./studio-flow-value-control";
+} from "@vortex/platform/schema";
 
 /**
  * The settings form of one flow step: one typed control per setting the step catalogue declares,

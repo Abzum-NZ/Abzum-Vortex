@@ -1118,6 +1118,7 @@ for (const file of files.filter(
         file === "packages/platform/src/pages/records-table-feature-projection.ts" ||
         file.startsWith("packages/ui/src/display/grid-features/") ||
         file.startsWith("packages/ui/src/studio/grid-features/") ||
+        file.startsWith("packages/platform/src/definition/application-authoring/grid-features/") ||
         file === "packages/ui/src/studio/studio-grid-features.tsx"),
   );
   for (const file of gridFiles) {

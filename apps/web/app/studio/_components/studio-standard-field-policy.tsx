@@ -6,13 +6,10 @@ import type { ApplicationSourceDocument } from "@vortex/platform/schema";
 import { Icon } from "@vortex/ui";
 import { Button } from "@vortex/ui/components/button";
 import { Switch } from "@vortex/ui/components/switch";
-import {
-  StudioIconButton,
-  StudioInspectorGroup,
-  studioStandardFieldPolicy,
-} from "@vortex/ui/studio";
+import { StudioIconButton, StudioInspectorGroup } from "@vortex/ui/studio";
 import { StudioRecordScopeField } from "./studio-record-scope";
 import type { StudioAccessRun } from "./studio-access-role";
+import { studioStandardFieldPolicy } from "@vortex/platform/schema";
 
 /**
  * The access one standard record permission (Read, Create, Update, Delete, Restore or Export)

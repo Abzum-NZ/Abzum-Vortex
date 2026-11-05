@@ -3,13 +3,13 @@ import { useMemo, useState, type FormEvent } from "react";
 import type { ApplicationSourceDocument } from "@vortex/platform/schema";
 import { Button } from "../components/button";
 import { Input } from "../components/input";
+import { StudioField } from "./studio-field";
+import { StudioReferencePicker } from "./studio-reference-picker";
 import {
   studioAccessGateChoices,
   studioAccessPermissions,
   type StudioAccessGate,
-} from "./application-access-commands";
-import { StudioField } from "./studio-field";
-import { StudioReferencePicker } from "./studio-reference-picker";
+} from "@vortex/platform/schema";
 
 const newChoice = "__new__";
 
