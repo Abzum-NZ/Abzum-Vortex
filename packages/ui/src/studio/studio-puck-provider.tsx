@@ -792,7 +792,7 @@ const restoreFocus = (final: boolean): void => {
       ? undefined
       : [
           ...document.querySelectorAll<HTMLElement>(
-            "[data-studio-rail-panel] button, [data-studio-rail-panel] [role=treeitem], [data-studio-rail-panel] a",
+            "[data-studio-rail-panel] button, [data-studio-rail-panel] [data-tree-key], [data-studio-rail-panel] a",
           ),
         ].find(
           (element) =>

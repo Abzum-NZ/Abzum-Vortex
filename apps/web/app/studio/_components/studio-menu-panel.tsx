@@ -165,7 +165,7 @@ export function StudioMenuPanel({
 
   const focusRow = (alias: string | undefined) => {
     requestAnimationFrame(() => {
-      const rows = treeHost.current?.querySelectorAll<HTMLButtonElement>('[role="treeitem"]');
+      const rows = treeHost.current?.querySelectorAll<HTMLButtonElement>("[data-tree-key]");
       rows?.forEach((row) => {
         if (row.dataset.treeKey === alias) row.focus();
       });
