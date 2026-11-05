@@ -2,7 +2,7 @@
 import { Alert, AlertDescription } from "@vortex/ui/components/alert";
 import { useIntentPreload } from "../_lib/use-intent-preload";
 import dynamic from "next/dynamic";
-import { useCallback, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useDeferredValue, useMemo, useState, type ReactNode } from "react";
 import {
   describeFailure,
   checkFlowFormula,
@@ -236,16 +236,21 @@ export function useStudioFlowsTab({
         : describeStudioFlowBehaviour(source, flowSelection, controlLabel),
     [source, flowSelection, controlLabel],
   );
+  // The choices are read only by the Flows tab and the Behaviour section: a flow being edited reads
+  // them at once, everything else after the keystroke has been drawn.
+  const choicesSource = useDeferredValue(source);
   const draftChoices = useMemo(
     () =>
-      projectStudioFlowDraftChoices({
-        rootId: state.rootId,
-        source,
-        catalogue,
-        applications: navigationTargets,
-        applicationsStatus: navigationStatus,
-      }),
-    [state.rootId, source, catalogue, navigationTargets, navigationStatus],
+      flowSelection === null
+        ? null
+        : projectStudioFlowDraftChoices({
+            rootId: state.rootId,
+            source,
+            catalogue,
+            applications: navigationTargets,
+            applicationsStatus: navigationStatus,
+          }),
+    [flowSelection, state.rootId, source, catalogue, navigationTargets, navigationStatus],
   );
   const flowChoices = useMemo(
     () =>
@@ -268,7 +273,7 @@ export function useStudioFlowsTab({
         : projectStudioFlowStart(
             source,
             flowSelection,
-            (control) => draftChoices.forms.find((form) => form.alias === control)?.fields ?? [],
+            (control) => draftChoices?.forms.find((form) => form.alias === control)?.fields ?? [],
           ),
     [source, flowSelection, draftChoices],
   );
@@ -276,10 +281,10 @@ export function useStudioFlowsTab({
   const createChoices = useMemo(
     () =>
       projectStudioFlowCreateChoices(
-        { rootId: state.rootId, source, catalogue, borrowed },
+        { rootId: state.rootId, source: choicesSource, catalogue, borrowed },
         controlLabel,
       ),
-    [state.rootId, source, catalogue, borrowed, controlLabel],
+    [state.rootId, choicesSource, catalogue, borrowed, controlLabel],
   );
 
   // The live snapshot inside a command: the history's current entry, never the rendered one.
@@ -418,7 +423,8 @@ export function useStudioFlowsTab({
     [context, flowSelection],
   );
   const pickerContext = (path: StudioFlowPath): StudioFlowStepPickerContext => {
-    if (outline === null || flowSelection === null) throw new Error("FLOW_PICKER_WITHOUT_FLOW");
+    if (outline === null || flowSelection === null || flowChoices === null)
+      throw new Error("FLOW_PICKER_WITHOUT_FLOW");
     const references = studioFlowReferenceChoices(
       source,
       outline.flow,
@@ -603,7 +609,7 @@ export function useStudioFlowsTab({
 
   // Keyed by flow and step only: an applied edit never remounts it, so typing keeps its focus.
   const inspector: ReactNode =
-    flowSelection === null || outline === null || start === null ? null : (
+    flowSelection === null || outline === null || start === null || flowChoices === null ? null : (
       <StudioFlowInspector
         key={`${selectionKey}:${stepId ?? ""}`}
         context={context}

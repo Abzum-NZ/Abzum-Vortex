@@ -115,6 +115,8 @@ const tool = (
   inputSchema: inputSchema(input),
 });
 
+/** How long after the editor opens the tools are announced to an agent. */
+const announceDelayMs = 4000;
 const buildApplicationTools = (): readonly StudioApplicationTool[] => [
   ...Object.entries(applicationAuthoringTools).map(([name, definition]) =>
     tool(
@@ -316,16 +318,21 @@ export function ApplicationDraftAgentTools({
 }) {
   const [runtime, setRuntime] = useState<ApplicationWebMcpRuntime>();
   const running = useRef(false);
-  // The tools are announced once the editor has drawn: after the browser is idle, never before.
+  // The tools are announced a few seconds after the editor opened, when the browser is idle: an
+  // agent does not need them to open the editor, and building them takes a quarter of a second.
   const [tools, setTools] = useState<readonly WebMcpToolDescriptor[]>([]);
   useEffect(() => {
+    let idle: number | undefined;
     const announce = () => setTools(descriptors());
-    if (typeof window.requestIdleCallback !== "function") {
-      const timer = setTimeout(announce, 1000);
-      return () => clearTimeout(timer);
-    }
-    const idle = window.requestIdleCallback(announce, { timeout: 3000 });
-    return () => window.cancelIdleCallback(idle);
+    const timer = setTimeout(() => {
+      if (typeof window.requestIdleCallback === "function")
+        idle = window.requestIdleCallback(announce, { timeout: 3000 });
+      else announce();
+    }, announceDelayMs);
+    return () => {
+      clearTimeout(timer);
+      if (idle !== undefined) window.cancelIdleCallback(idle);
+    };
   }, []);
   const { history, organizationId } = draft;
   const latest = useRef(draft);
