@@ -7,9 +7,7 @@ import {
   type ApplicationSourceDocument,
   type SourceFlow,
   type SourceFlowTask,
-} from "@vortex/platform/schema";
-import type { StudioSemanticSelection } from "./semantic-selection";
-import {
+  type StudioSemanticSelection,
   sameStudioFlowContext,
   samePath,
   studioFlowKeyFrom,
@@ -23,13 +21,11 @@ import {
   type StudioFlowPath,
   type StudioFlowSelection,
   type StudioFlowTaskListOutline,
-} from "./application-flow-model";
-import { addStudioBackgroundFlow } from "./application-flow-background";
-import { applyStudioFlowStepDraft } from "./application-flow-step-form";
-import { addStudioFlowShownForm } from "./application-flow-shown-form";
-import { studioFlowCallerNames } from "./application-flow-start";
-import { studioFlowLabel } from "./semantic-selection";
-import {
+  addStudioBackgroundFlow,
+  applyStudioFlowStepDraft,
+  addStudioFlowShownForm,
+  studioFlowCallerNames,
+  studioFlowLabel,
   newStep,
   noChangeGuard,
   flowRecordInput,
@@ -40,7 +36,7 @@ import {
   studioNewFormChoice,
   type StudioFlowCommand,
   type StudioFlowNewStepSettings,
-} from "./application-flow-commands";
+} from "@vortex/platform/schema";
 
 /**
  * Applying one flow command: the commands that change a step, its settings, its place or its

@@ -54,6 +54,12 @@ import {
   flowTaskChildLists,
   type FlowDefinition,
   type FlowTask,
+  studioUsesSignature,
+  type StudioActionChoice,
+  type StudioBorrowedChoices,
+  type StudioQueryChoice,
+  type StudioQueryInput,
+  type StudioRelationshipChoice,
 } from "@vortex/platform/schema";
 import {
   BuilderAuthorityError,
@@ -69,15 +75,7 @@ import {
   DefinitionCompilationError,
   readCurrentOrganizationThemeAfterAuthorization,
 } from "@vortex/platform/server";
-import { studioUsesSignature } from "@vortex/ui/studio/contextual-palette";
-import type {
-  StudioActionChoice,
-  StudioBorrowedChoices,
-  StudioCompileFailure,
-  StudioQueryChoice,
-  StudioQueryInput,
-  StudioRelationshipChoice,
-} from "@vortex/ui/studio";
+import type { StudioCompileFailure } from "@vortex/ui/studio";
 import { installedReleaseCatalogue } from "./definition-catalogue";
 import type {
   StudioCompiledFields,

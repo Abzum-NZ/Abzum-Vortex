@@ -12,7 +12,7 @@ import {
   SelectValue,
 } from "../components/select";
 import { Textarea } from "../components/textarea";
-import type { ControlProps } from "./studio-setting-model";
+import type { ControlProps } from "@vortex/platform/schema";
 
 /** A number typed as text: the draft is kept while it is not a number, and only a number is reported. */
 export function NumberControl({

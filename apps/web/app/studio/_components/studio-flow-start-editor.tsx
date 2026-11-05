@@ -11,14 +11,9 @@ import { Alert, AlertDescription } from "@vortex/ui/components/alert";
 import { useEffect, useState } from "react";
 import { Checkbox } from "@vortex/ui/components/checkbox";
 import { Input } from "@vortex/ui/components/input";
-import { flowStandardEventKindSchema, workflowValueTypeSchema } from "@vortex/platform/schema";
 import {
-  StudioEntryList,
-  useStudioEntryKeys,
-  StudioOptionControl,
-  StudioReferencePicker,
-  StudioAddButton,
-  StudioInspectorGroup,
+  flowStandardEventKindSchema,
+  workflowValueTypeSchema,
   studioWords,
   studioBindingSentence,
   type StudioFlowBindingInputDraft,
@@ -26,6 +21,14 @@ import {
   type StudioFlowStartDraft,
   type StudioFlowStartProjection,
   type StudioFlowTriggerDraft,
+} from "@vortex/platform/schema";
+import {
+  StudioEntryList,
+  useStudioEntryKeys,
+  StudioOptionControl,
+  StudioReferencePicker,
+  StudioAddButton,
+  StudioInspectorGroup,
 } from "@vortex/ui/studio";
 import { StudioField } from "./studio-field";
 import { useStudioDraftText } from "./use-studio-draft-text";

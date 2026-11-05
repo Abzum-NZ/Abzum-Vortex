@@ -8,8 +8,6 @@ import {
   moduleFieldTypeLabels,
   sourceApplicationBodySchema,
   type ApplicationSourceDocument,
-} from "@vortex/platform/schema";
-import {
   createStudioPlacementDescriber,
   describeStudioCompositionAddTargets,
   describeStudioCompositionRemoval,
@@ -26,7 +24,7 @@ import {
   type StudioSemanticOutlineNode,
   type StudioSemanticSelection,
   studioRemovalIndex,
-} from "@vortex/ui/studio";
+} from "@vortex/platform/schema";
 import { z } from "zod";
 import { WebMcpAdapter, type WebMcpToolDescriptor } from "../../_components/webmcp-adapter";
 import { previewStudioApplication } from "../preview-actions";

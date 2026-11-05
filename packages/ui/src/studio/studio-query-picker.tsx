@@ -11,7 +11,7 @@ import {
 } from "./studio-reference-picker";
 import { Label } from "../components/label";
 import { StudioHelp } from "./studio-field";
-import type { StudioQueryChoice } from "./contextual-palette";
+import type { StudioQueryChoice } from "@vortex/platform/schema";
 
 export const borrowableOption = (
   choice: Readonly<{ reference: string; label: string; borrowedFrom?: string | undefined }>,

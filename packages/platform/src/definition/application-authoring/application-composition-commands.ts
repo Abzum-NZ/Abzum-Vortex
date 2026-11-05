@@ -1,0 +1,981 @@
+import { sameCompositionValue as sameValue, sourceNames } from "./composition-references";
+import type {
+  ImmutablePlatformBlockCatalogue,
+  PlatformBlockRelease,
+} from "../application-composition/platform-block-release";
+import {
+  applicationSourceDocumentSchema,
+  type ApplicationSourceDocument,
+} from "../application-source-contracts";
+import {
+  sourceItemTree,
+  sourceSlotBreakpointOrders,
+  type SourceItem,
+} from "../application-composition/source-composition";
+import { sourcePlacementLayoutSchema } from "../application-composition/page-composition";
+import {
+  repeatableSlotItemIdentities,
+  repeatableSlotKey,
+  isRepeatableSlotIdentity,
+} from "../application-composition/placement-slots";
+import { conditionalFormatRuleFields } from "../application-composition/records-table-features/conditional-formatting";
+import { readRecordsTableFeatures } from "../application-composition/records-table-features/index";
+import { recordsTableInlineEditFeature } from "../application-composition/records-table-features/inline-edit";
+import type { SourceBlockPropertyValueContract } from "../application-composition/block-property-values";
+import { isStudioDraftSnapshot } from "./draft-snapshot";
+import {
+  boardModeOf,
+  boardMoveRecordTypeProblem,
+  createStudioBoardQuery,
+  ensureStudioBoardTotals,
+  studioBoardQueryFits,
+} from "./board-source";
+import { applyStudioFlowCreate } from "./application-flow-create";
+import { ensureStudioBoardQuickAdd } from "./board-quick-add";
+import { StructureRefusal } from "./application-structure";
+import { resolveStudioDataQuery } from "./default-record-query";
+import { ensureStudioRecordSheet } from "./application-record-sheet";
+import { placed } from "./application-record-page-shared";
+import { createStudioDiscoveryAdapter } from "./discovery-adapter";
+import {
+  studioOwnsSetting,
+  studioQueryOffered,
+  studioQueryChoices,
+  studioReleaseReadsQuery,
+} from "./contextual-palette";
+import {
+  adjustedSlotOrder,
+  StoredCompositionRefusal,
+  validateStoredApplicationOutlets,
+  removeFlowBindingsOf,
+} from "./stored-composition";
+import { studioFormChangeRefusal, studioFormFieldsInUse } from "./application-composition-forms";
+import {
+  pruneStudioGridFeatureColumns,
+  restoreStudioGridFeatureBindings,
+  studioGridDataSettings,
+} from "./grid-features/index";
+import {
+  releaseKey,
+  studioRemovalIndex,
+  studioRemovalRefusalAt,
+  type StudioRemovalIndex,
+} from "./studio-canvas-permissions";
+import type { StudioSemanticSelection } from "./semantic-selection";
+import type {
+  StudioCompositionBreakpoint,
+  StudioCompositionContext,
+  StudioDraftChange,
+  StudioCompositionSettingsModel,
+  StudioCompositionDestination,
+  StudioCompositionDestinationModel,
+  StudioCompositionOutcome,
+  StudioDraftChangeResult,
+  StudioCompositionRemovalModel,
+  StudioCompositionEditorModel,
+} from "./application-composition-model";
+import {
+  type Zone,
+  type SlotStep,
+  type Target,
+  refuse,
+  releaseFor,
+  itemSlots,
+  itemReading,
+  pinnedRelease,
+  manifestMatches,
+  resolve,
+  sameSteps,
+  closedPlain,
+  parseDestination,
+  sameDestination,
+  workingCopy,
+  zoneHandle,
+  workingItem,
+  regionAfter,
+  commitWorking,
+  validateRegion,
+  plainSource,
+  plainSettings,
+  movableRegion,
+  publishedPage,
+  slotDeclaration,
+} from "./application-composition-regions";
+import { applyAdd, commandSettings } from "./application-composition-add";
+import { applyWrap } from "./application-composition-wrap";
+import { applyPageData } from "./application-composition-page-data";
+import { applyStudioCompositionGate } from "./application-composition-gate";
+
+const breakpointValid = (value: unknown): value is StudioCompositionBreakpoint =>
+  value === "desktop" || value === "tablet" || value === "phone";
+const effective = <Value>(
+  values: { desktop: Value; tablet?: Value | undefined; phone?: Value | undefined },
+  breakpoint: StudioCompositionBreakpoint,
+): Value =>
+  breakpoint === "desktop"
+    ? values.desktop
+    : breakpoint === "tablet"
+      ? (values.tablet ?? values.desktop)
+      : (values.phone ?? values.tablet ?? values.desktop);
+
+/** Whether two readings of the draft are the same: the runner asks inside the draft's envelope. */
+export const sameStudioCompositionContext = (
+  expected: StudioCompositionContext,
+  current: StudioCompositionContext,
+): boolean =>
+  expected.organizationId === current.organizationId &&
+  expected.rootId === current.rootId &&
+  expected.key === current.key &&
+  expected.draftRevision === current.draftRevision &&
+  expected.localLifetime === current.localLifetime &&
+  expected.catalogue === current.catalogue &&
+  expected.source === current.source;
+
+type MoveDestination = {
+  destination: StudioCompositionDestination;
+  label: string;
+  steps: readonly SlotStep[];
+};
+
+/**
+ * Only actual non-repeatable slots in this original movable region are destinations. A layout
+ * slot that holds a page's content outlet is never one: it holds page content, not layout blocks.
+ */
+const moveDestinations = (
+  catalogue: ImmutablePlatformBlockCatalogue,
+  source: ApplicationSourceDocument,
+  target: Target,
+  alias: string,
+): MoveDestination[] => {
+  if (!movableRegion(target.region)) return [];
+  const shell = target.region.shell;
+  const outletSlots = new Set(
+    shell?.content_slots.map((slot) => `${slot.parent_placement}|${slot.parent_slot}`) ?? [],
+  );
+  const subtree = new Set<string>([
+    alias,
+    ...sourceItemTree([target.item]).map((item) => item.props.id),
+  ]);
+  const movedRelease = releaseFor(catalogue, target.item) ?? refuse();
+  const result: MoveDestination[] = [];
+  let selectedPathSupported = target.steps.length === 0;
+  const visit = (zone: Zone, steps: readonly SlotStep[]): void => {
+    if (sameSteps(steps, target.steps)) selectedPathSupported = true;
+    for (const item of zone.items) {
+      const parentAlias = item.props.id;
+      if (subtree.has(parentAlias)) continue;
+      const release = releaseFor(catalogue, item) ?? refuse();
+      const slots = itemSlots(catalogue, item);
+      for (const declaration of release.slots) {
+        if (declaration.repeats !== undefined) continue;
+        const child = slots.get(declaration.key);
+        if (child === undefined) continue;
+        const childSteps = [...steps, { parentAlias, slotKey: declaration.key }];
+        if (
+          !sameSteps(childSteps, target.steps) &&
+          !outletSlots.has(`${parentAlias}|${declaration.key}`) &&
+          declaration.allowedChildCategories.includes(movedRelease.paletteGroup)
+        )
+          result.push({
+            destination: { kind: "child", parentAlias, slotKey: declaration.key },
+            label: `${parentAlias} / ${declaration.label}`,
+            steps: childSteps,
+          });
+        visit(child, childSteps);
+      }
+    }
+  };
+  if (target.steps.length > 0) {
+    const topLevel =
+      shell === undefined ||
+      createStudioDiscoveryAdapter({ catalogue, surface: { kind: "authenticated" } })
+        .getPlacementChoices({ kind: "shell_layout" })
+        .some(
+          (choice) =>
+            choice.blockId === movedRelease.blockId &&
+            choice.releaseVersion === movedRelease.releaseVersion,
+        );
+    if (topLevel)
+      result.push({
+        destination: { kind: "root" },
+        label: shell === undefined ? "The main area of this page" : "The top of this layout",
+        steps: [],
+      });
+  }
+  visit(target.region.zone, []);
+  return selectedPathSupported
+    ? result.filter(
+        (candidate) =>
+          studioFormChangeRefusal(
+            catalogue,
+            source,
+            target.region.zone.items,
+            regionAfter(target, alias, candidate.steps),
+          ) === undefined,
+      )
+    : [];
+};
+
+/** The item with exactly these settings: each declared property it holds is replaced. */
+const withSettings = (
+  item: SourceItem,
+  release: PlatformBlockRelease,
+  settings: Readonly<Record<string, SourceBlockPropertyValueContract>>,
+): void => {
+  const declared = new Set(release.properties.map((property) => property.key));
+  const { id, ...rest } = item.props;
+  item.props = {
+    id,
+    ...plainSettings(settings),
+    ...Object.fromEntries(Object.entries(rest).filter(([key]) => !declared.has(key))),
+  } as SourceItem["props"];
+};
+
+/**
+ * A block's repeatable slots follow its settings: an entry the settings add gets an empty slot,
+ * and an entry they remove takes its slot away, which must be empty by then.
+ */
+const syncRepeatableSlots = (
+  item: SourceItem,
+  release: PlatformBlockRelease,
+  before: Readonly<Record<string, SourceBlockPropertyValueContract>>,
+  after: Readonly<Record<string, SourceBlockPropertyValueContract>>,
+): string | undefined => {
+  for (const declaration of release.slots) {
+    if (declaration.repeats === undefined) continue;
+    const kept = new Set(
+      repeatableSlotItemIdentities(declaration, after)
+        .filter((identity) => isRepeatableSlotIdentity(declaration.key, identity))
+        .map((identity) => repeatableSlotKey(declaration.key, identity)),
+    );
+    for (const identity of repeatableSlotItemIdentities(declaration, before)) {
+      const key = repeatableSlotKey(declaration.key, identity);
+      if (kept.has(key) || item.props[key] === undefined) continue;
+      if (Array.isArray(item.props[key]) && (item.props[key] as unknown[]).length > 0)
+        return `Its ${declaration.label} for '${identity}' still holds blocks. Move or remove them first`;
+      delete item.props[key];
+      const orders = item.props.vortex.slot_orders;
+      if (orders !== undefined) {
+        delete orders[key];
+        if (Object.keys(orders).length === 0) delete item.props.vortex.slot_orders;
+      }
+    }
+    for (const key of kept) if (item.props[key] === undefined) item.props[key] = [];
+  }
+  return undefined;
+};
+
+/**
+ * Which placed blocks the settings edit reaches: any block of a layout, and any block on a page
+ * that is not public and that no experience shows, in a content area whose blocks all name releases the source depends on.
+ * Settings keep a block's identity, so flow references and required content stay intact.
+ */
+const resolveSettings = (
+  context: StudioCompositionContext,
+  selection: StudioSemanticSelection | null,
+  reading = false,
+) => {
+  const catalogue = context.catalogue;
+  plainSource(context.source);
+  const resolved = resolve(context, selection, reading);
+  if (resolved === undefined) return { kind: "invalid" } as const;
+  const { source, target } = resolved;
+  const page = target.region.page;
+  if (target.region.shell === undefined && (page === undefined || publishedPage(source, page)))
+    return { kind: "unsupported" } as const;
+  const release = releaseFor(catalogue, target.item);
+  if (release === undefined || !manifestMatches(catalogue, source, target.region.zone.items))
+    return { kind: "unsupported" } as const;
+  // The region is judged as the draft holds it: the copy a command edits is made from a snapshot
+  // whose region has been judged before (the Inspector reads it first), so only a block that
+  // changed since is judged again.
+  validateRegion(
+    catalogue,
+    reading || !isStudioDraftSnapshot(context.source)
+      ? target.region
+      : (resolve(context, selection, true)?.target.region ?? target.region),
+  );
+  return { kind: "available", ...resolved, release } as const;
+};
+
+/** Whether a block reads its records from a query: a data or figures block, or one that has one. */
+export const studioBlockReadsQuery = (
+  release: PlatformBlockRelease,
+  props: Readonly<{ vortex?: unknown }>,
+): boolean =>
+  studioReleaseReadsQuery(release) || (props.vortex as { query?: unknown }).query !== undefined;
+
+const readsQuery = (release: PlatformBlockRelease, item: SourceItem): boolean =>
+  studioBlockReadsQuery(release, item.props);
+
+/** The field keys other inputs in the selected input's form already show (none outside a form). */
+export const studioFormFieldsInUseFor = (
+  context: StudioCompositionContext,
+  selection: StudioSemanticSelection | null,
+): ReadonlySet<string> => {
+  try {
+    const resolved = resolveSettings(context, selection, true);
+    if (resolved.kind !== "available") return noFieldsInUse;
+    return studioFormFieldsInUse(
+      context.catalogue,
+      resolved.target.region.zone.items,
+      resolved.alias,
+      resolved.target.region.page?.type === "guided_form",
+    );
+  } catch {
+    return noFieldsInUse;
+  }
+};
+const noFieldsInUse: ReadonlySet<string> = new Set();
+
+export const describeStudioCompositionSettings = (
+  context: StudioCompositionContext,
+  selection: StudioSemanticSelection | null,
+): StudioCompositionSettingsModel => {
+  try {
+    const resolved = resolveSettings(context, selection, true);
+    if (resolved.kind !== "available") return resolved;
+    const item = resolved.target.item;
+    return {
+      kind: "available",
+      placementAlias: resolved.alias,
+      signedIn: resolved.target.region.page?.type !== "public",
+      properties: resolved.release.properties,
+      settings: itemReading(context.catalogue, item).settings,
+      readsQuery: readsQuery(resolved.release, item),
+      query: item.props.vortex.query ?? null,
+    };
+  } catch {
+    return { kind: "invalid" };
+  }
+};
+
+/** The one settings edit: the block's complete set settings, and the query it reads. */
+const applySettings = (
+  current: StudioCompositionContext,
+  selection: StudioSemanticSelection | null,
+  command: unknown,
+): StudioDraftChangeResult => {
+  const input = closedPlain(command, ["kind", "settings", "query"]);
+  if (input.kind !== "settings" || (input.query !== null && typeof input.query !== "string"))
+    return { kind: "invalid" };
+  const resolved = resolveSettings(current, selection);
+  if (resolved.kind !== "available") return resolved;
+  const { source, target, alias, release } = resolved;
+  const settings = commandSettings(input.settings, release.properties);
+  // One form holds one input per field.
+  const derived = release.properties.find(
+    (property) => property.kind === "field_reference" && property.derivesFieldInput === true,
+  );
+  const chosen = derived === undefined ? undefined : settings[derived.key];
+  const before =
+    derived === undefined
+      ? undefined
+      : itemReading(current.catalogue, target.item).settings[derived.key];
+  if (
+    chosen?.kind === "field_reference" &&
+    !(before?.kind === "field_reference" && before.field === chosen.field) &&
+    studioFormFieldsInUse(
+      current.catalogue,
+      target.region.zone.items,
+      alias,
+      target.region.page?.type === "guided_form",
+    ).has(chosen.field.slice(chosen.field.lastIndexOf(".") + 1))
+  ) {
+    return {
+      kind: "refused",
+      reason: "Another input in this form already shows that field. Choose a different field.",
+    };
+  }
+  // Studio owns some settings: a settings edit keeps each exactly as stored.
+  const stored = itemReading(current.catalogue, target.item).settings;
+  for (const key of Object.keys(settings)) if (studioOwnsSetting(key)) delete settings[key];
+  for (const [key, value] of Object.entries(stored))
+    if (studioOwnsSetting(key)) settings[key] = value;
+  restoreStudioGridFeatureBindings(settings, release.properties, source.body.flow_bindings, alias);
+  pruneStudioGridFeatureColumns(settings);
+  let query = resolveStudioDataQuery(source, input.query as string | null);
+  const storedQuery = target.item.props.vortex.query ?? null;
+  if (query !== storedQuery) {
+    const choices = studioQueryChoices(source, current.borrowed);
+    const { title, ...data } = studioGridDataSettings(
+      release.properties,
+      choices.find((choice) => choice.reference === query),
+    );
+    Object.assign(settings, data);
+    // The title follows the data only while it is the previous data's default and no Heading
+    // directly above the grid already names it.
+    const previous = choices.find((choice) => choice.reference === storedQuery);
+    const holder = placed(source, alias);
+    const above = holder?.siblings[holder.siblings.indexOf(holder.item) - 1];
+    const authored = stored["title"];
+    if (
+      title !== undefined &&
+      above?.type !== "platform.renderer.heading" &&
+      (authored === undefined ||
+        (authored.kind === "text" && authored.value === previous?.recordTypePluralLabel))
+    )
+      settings["title"] = title;
+  }
+  if (
+    query !== null &&
+    (!readsQuery(release, target.item) || !studioQueryOffered(source, current.borrowed, query))
+  )
+    return { kind: "invalid" };
+  // A Data grid in Board mode reads an ordinary query grouped by its stage field. Choosing the
+  // pipeline binds the grid to the query that groups by it (an existing one, or a new one written
+  // like any other query, editable in Data); every other board setting is judged against it.
+  const board = boardModeOf(settings);
+  const readFeatures = readRecordsTableFeatures(settings["features"] as never);
+  const formatting =
+    readFeatures.kind === "read" ? readFeatures.features.conditionalFormatting : undefined;
+  const ruleFields =
+    board !== undefined && formatting?.enabled
+      ? [
+          ...new Set(
+            formatting.rules.filter((rule) => rule.enabled).flatMap(conditionalFormatRuleFields),
+          ),
+        ]
+      : [];
+  // A board writes its query and its totals into the draft's modules: they become the command's.
+  if (board !== undefined) source.body.modules = structuredClone(source.body.modules);
+  const moveProblem =
+    board === undefined ? undefined : boardMoveRecordTypeProblem(source, alias, board);
+  if (moveProblem !== undefined) return { kind: "refused", reason: moveProblem };
+  if (
+    board?.columnField !== undefined &&
+    board.cardTitleField !== undefined &&
+    (query === null || !studioBoardQueryFits(source, board, query, ruleFields))
+  ) {
+    const made = createStudioBoardQuery(source, board, sourceNames(source), query, ruleFields);
+    if ("problem" in made)
+      return {
+        kind: "refused",
+        reason: `${release.name} can't take these settings. ${made.problem}.`,
+      };
+    query = made.query;
+  }
+  if (board !== undefined && query !== null) ensureStudioBoardTotals(source, board, query);
+  const rowClick = settings.row_click;
+  const sideSheet =
+    rowClick?.kind === "group" &&
+    rowClick.properties.mode?.kind === "choice" &&
+    rowClick.properties.mode.value === "select";
+  try {
+    const working = workingCopy(target.region);
+    const item = workingItem(working, target.steps, alias);
+    const before = itemReading(current.catalogue, item).settings;
+    withSettings(item, release, settings);
+    const vortex = { ...item.props.vortex };
+    if (query === null) delete vortex.query;
+    else vortex.query = query;
+    item.props.vortex = vortex;
+    const slotProblem = syncRepeatableSlots(item, release, before, settings);
+    if (slotProblem !== undefined)
+      return {
+        kind: "refused",
+        reason: `${release.name} can't take these settings. ${slotProblem}.`,
+      };
+    commitWorking(current.catalogue, target.region, working);
+    if (sideSheet) ensureStudioRecordSheet(current.catalogue, source, alias);
+    validateStoredApplicationOutlets(current.catalogue, source);
+  } catch (error) {
+    if (error instanceof StoredCompositionRefusal)
+      return {
+        kind: "refused",
+        reason: `${release.name} can't take these settings. ${error.message}.`,
+      };
+    throw error;
+  }
+  // A board's card moves are saved through a flow: the first time the board is on, it gets the
+  // one flow that saves the moved card's new stage, so its pipeline and the action owning the
+  // stage apply. It stays when the board is switched off and is reused when it is switched on.
+  let flowed: ApplicationSourceDocument = source;
+  if (
+    board?.columnField !== undefined &&
+    !source.body.flow_bindings.some(
+      (binding) => binding.control === alias && binding.event === "card_moved",
+    )
+  ) {
+    const moved = applyStudioFlowCreate(
+      source,
+      {
+        kind: "action",
+        controlAlias: alias,
+        name: "Move card",
+        recordType: board.columnField.slice(0, board.columnField.lastIndexOf(".")),
+        event: "card_moved",
+      },
+      null,
+    );
+    if (moved.kind !== "applied") return moved;
+    flowed = moved.source;
+  }
+  // Quick add opens the record type's create form from a column, through one flow like the move.
+  if (board !== undefined) {
+    const added = ensureStudioBoardQuickAdd(flowed, alias, board, {
+      rootId: current.rootId,
+      catalogue: current.catalogue,
+    });
+    if (added.kind === "refused") return added;
+    flowed = added.source;
+  }
+  if (
+    readFeatures.kind === "read" &&
+    readFeatures.features.inlineEdit.enabled &&
+    query !== null &&
+    !flowed.body.flow_bindings.some(
+      (binding) => binding.control === alias && binding.event === recordsTableInlineEditFeature.key,
+    )
+  ) {
+    const chosen = studioQueryChoices(flowed, current.borrowed).find(
+      (entry) => entry.reference === query,
+    );
+    if (chosen === undefined)
+      return { kind: "refused", reason: "Inline editing: choose the grid's data first." };
+    const made = applyStudioFlowCreate(
+      flowed,
+      {
+        kind: "action",
+        controlAlias: alias,
+        name: `Save ${chosen.recordTypeLabel.toLowerCase()} (${alias})`,
+        recordType: chosen.recordType,
+        event: recordsTableInlineEditFeature.key,
+      },
+      current.borrowed,
+    );
+    if (made.kind !== "applied") return made;
+    flowed = made.source;
+  }
+  if (flowed !== source) return { kind: "applied", source: flowed };
+  // A board's totals and a record side sheet write outside the edited slot, so the draft is parsed
+  // as a whole. Otherwise only the slot changed and it was judged as stored data: the whole draft
+  // is parsed when it is saved, not for each key of a typing run.
+  const next =
+    sideSheet || (board !== undefined && query !== null)
+      ? applicationSourceDocumentSchema.parse(source)
+      : source;
+  return sameValue(next, current.source) ? { kind: "invalid" } : { kind: "applied", source: next };
+};
+
+type Removal = {
+  source: ApplicationSourceDocument;
+  target: Target;
+  alias: string;
+  /** Releases no block uses once the block and everything inside it leave the draft. */
+  unusedReleases: readonly string[];
+};
+type ResolvedRemoval =
+  | { kind: "available"; removal: Removal }
+  | Exclude<StudioCompositionRemovalModel, { kind: "available" }>;
+const resolveRemoval = (
+  context: StudioCompositionContext,
+  selection: StudioSemanticSelection | null,
+  reading = false,
+  known?: StudioRemovalIndex,
+): ResolvedRemoval => {
+  const catalogue = context.catalogue;
+  plainSource(context.source);
+  const resolved = resolve(context, selection, reading);
+  if (resolved === undefined) return { kind: "invalid" };
+  const { source, target, alias } = resolved;
+  // The steps to the block are walked once: inside a repeating area (a tab) a block cannot leave,
+  // and a slot may need its last block. A step not in the manifest is a mismatch, said before any
+  // removal sentence (the canvas has no mismatch to show).
+  let repeating = false;
+  let mismatch = false;
+  let last:
+    { declaration: { required: boolean }; child: { items: readonly unknown[] } } | undefined;
+  let zone = target.region.zone;
+  for (const step of target.steps) {
+    const parent = zone.items.find((item) => item.props.id === step.parentAlias);
+    const declaration =
+      parent === undefined
+        ? undefined
+        : slotDeclaration(releaseFor(catalogue, parent), step.slotKey);
+    const child = parent === undefined ? undefined : itemSlots(catalogue, parent).get(step.slotKey);
+    if (declaration === undefined || child === undefined) {
+      mismatch = true;
+      break;
+    }
+    repeating ||= declaration.repeats !== undefined;
+    last = { declaration, child };
+    zone = child;
+  }
+  if (
+    mismatch ||
+    releaseFor(catalogue, target.item) === undefined ||
+    !manifestMatches(catalogue, source, target.region.zone.items) ||
+    (target.region.parent !== undefined && !pinnedRelease(catalogue, source, target.region.parent))
+  )
+    return { kind: "unsupported", reason: "manifest_mismatch" };
+  validateRegion(catalogue, target.region);
+  // A block's own flow bindings leave with it (see applyRemoval); the one removal refusal says
+  // why it cannot leave, as for the action bar, the Delete key, the Outline and the canvas change.
+  const index = known ?? studioRemovalIndex(catalogue, source);
+  // A block name used twice is not a draft this command edits, whatever else is said about it.
+  if (index.placed !== index.aliases.size) return { kind: "invalid" };
+  const removed = sourceItemTree([target.item]);
+  const reason = studioRemovalRefusalAt(
+    catalogue,
+    source,
+    {
+      region: target.region,
+      alias,
+      repeating,
+      required: last?.declaration.required === true && last.child.items === target.zone.items,
+      siblings: target.zone.items,
+    },
+    new Set(removed.map((item) => item.props.id)),
+    index,
+  );
+  if (reason !== undefined) return { kind: "refused", reason };
+  const releaseUses = new Map(index.releaseUses);
+  for (const item of removed) {
+    const key = releaseKey(item.props.vortex.block);
+    releaseUses.set(key, releaseUses.get(key)! - 1);
+  }
+  return {
+    kind: "available",
+    removal: {
+      source,
+      target,
+      alias,
+      unusedReleases: [...releaseUses].filter(([, uses]) => uses === 0).map(([key]) => key),
+    },
+  };
+};
+
+/**
+ * Whether the selected block can leave the draft, and if not why. `index` is built once by a
+ * caller that asks for many blocks of one source (the agent's draft read).
+ */
+export const describeStudioCompositionRemoval = (
+  context: StudioCompositionContext,
+  selection: StudioSemanticSelection | null,
+  index?: StudioRemovalIndex,
+): StudioCompositionRemovalModel => {
+  try {
+    const resolved = resolveRemoval(context, selection, true, index);
+    return resolved.kind === "available"
+      ? {
+          kind: "available",
+          placementAlias: resolved.removal.alias,
+          willRemoveUnusedRelease: resolved.removal.unusedReleases.length > 0,
+        }
+      : resolved;
+  } catch (error) {
+    console.error("[studio] removal model failed", error);
+    return { kind: "invalid" };
+  }
+};
+
+const applyRemoval = (
+  current: StudioCompositionContext,
+  selection: StudioSemanticSelection | null,
+  command: unknown,
+): StudioDraftChangeResult => {
+  closedPlain(command, ["kind"]);
+  const resolved = resolveRemoval(current, selection);
+  if (resolved.kind === "refused") return resolved;
+  if (resolved.kind !== "available")
+    return { kind: resolved.kind === "invalid" ? "invalid" : "unsupported" };
+  const { source, target, alias, unusedReleases } = resolved.removal;
+  const working = workingCopy(target.region);
+  const zone = zoneHandle(working, target.steps);
+  const remaining = zone.items.filter((item) => item.props.id !== alias);
+  if (remaining.length !== zone.items.length - 1) return { kind: "invalid" };
+  // The block and everything inside it leave the slot and its declared tablet and phone orders.
+  zone.set(
+    remaining,
+    adjustedSlotOrder(
+      zone.order,
+      remaining.map((item) => item.props.id),
+    ),
+  );
+  commitWorking(current.catalogue, target.region, working);
+  removeFlowBindingsOf(
+    source.body,
+    new Set(sourceItemTree([target.item]).map((item) => item.props.id)),
+  );
+  validateStoredApplicationOutlets(current.catalogue, source);
+  source.body.platform_block_dependencies = source.body.platform_block_dependencies.filter(
+    (dependency) => !unusedReleases.includes(releaseKey(dependency)),
+  );
+  const parsed = applicationSourceDocumentSchema.parse(source);
+  return sameValue(parsed, current.source)
+    ? { kind: "invalid" }
+    : { kind: "applied", source: parsed };
+};
+
+/** The words for a command that did not apply, from its outcome. */
+export const studioOutcomeText = (result: StudioCompositionOutcome, fallback: string): string =>
+  result.kind === "stale"
+    ? "The draft or your selection changed. Try again."
+    : result.kind === "unsupported"
+      ? "This item does not support that change."
+      : (result.reason ?? fallback);
+
+/** Why a block cannot move anywhere, or undefined: the one wording for the menu and the dialog. */
+export const studioMoveUnavailableReason = (
+  model: StudioCompositionDestinationModel,
+): string | undefined =>
+  model.kind === "unsupported"
+    ? {
+        page_kind: "Blocks on this kind of page can't be moved.",
+        manifest_mismatch: "This page uses a block version Studio can't edit. Reload Studio.",
+      }[model.reason]
+    : model.kind === "invalid"
+      ? "This block's move destinations could not be read. Reload Studio."
+      : model.destinations.length === 0
+        ? "There is no other area this block can move to."
+        : undefined;
+
+export const describeStudioCompositionDestinations = (
+  context: StudioCompositionContext,
+  selection: StudioSemanticSelection | null,
+): StudioCompositionDestinationModel => {
+  try {
+    const resolved = resolve(context, selection, true);
+    if (resolved === undefined) return { kind: "invalid" };
+    const catalogue = context.catalogue;
+    const { target, source, alias } = resolved;
+    if (!movableRegion(target.region)) return { kind: "unsupported", reason: "page_kind" };
+    if (
+      !manifestMatches(catalogue, source, target.region.zone.items) ||
+      (target.region.parent !== undefined &&
+        !pinnedRelease(catalogue, source, target.region.parent))
+    )
+      return { kind: "unsupported", reason: "manifest_mismatch" };
+    validateRegion(catalogue, target.region);
+    return {
+      kind: "available",
+      destinations: moveDestinations(catalogue, source, target, alias).map(
+        ({ destination, label }) => ({
+          destination,
+          label,
+        }),
+      ),
+    };
+  } catch (error) {
+    console.error("[studio] move model failed", error);
+    return { kind: "invalid" };
+  }
+};
+
+/** Why a block on a published page keeps its size and order, or undefined. */
+const publishedLayoutReason = (
+  source: ApplicationSourceDocument,
+  page: ApplicationSourceDocument["body"]["pages"][number] | undefined,
+): string | undefined =>
+  page !== undefined && publishedPage(source, page)
+    ? "A block on a published page cannot have its size or order changed here."
+    : undefined;
+
+export const describeStudioCompositionEdit = (
+  context: StudioCompositionContext,
+  selection: StudioSemanticSelection | null,
+  breakpoint: StudioCompositionBreakpoint,
+): StudioCompositionEditorModel => {
+  try {
+    if (!breakpointValid(breakpoint)) return { kind: "invalid" };
+    const resolved = resolve(context, selection, true);
+    if (resolved === undefined) return { kind: "invalid" };
+    const catalogue = context.catalogue;
+    const { target, source, alias } = resolved;
+    const published = publishedLayoutReason(source, target.region.page);
+    if (published !== undefined) return { kind: "refused", reason: published };
+    if (
+      !manifestMatches(catalogue, source, target.region.zone.items) ||
+      (target.region.parent !== undefined &&
+        !pinnedRelease(catalogue, source, target.region.parent))
+    )
+      return { kind: "unsupported" };
+    // Validate the complete original region and reserved shell targets before offering controls.
+    validateRegion(catalogue, target.region);
+    const release = releaseFor(catalogue, target.item);
+    if (release === undefined) return { kind: "unsupported" };
+    const responsive = target.item.props.vortex.responsive;
+    return {
+      kind: "available",
+      placementAlias: alias,
+      order: [...sourceSlotBreakpointOrders(target.zone.items, target.zone.order)[breakpoint]],
+      explicitOrder: breakpoint === "desktop" || target.zone.order?.[breakpoint] !== undefined,
+      responsiveOrder: target.responsiveOrder,
+      layout: structuredClone(effective(responsive, breakpoint)),
+      explicitLayout: responsive[breakpoint] !== undefined,
+      capabilities: {
+        gridWidth: release.capabilities.gridWidth,
+        height: release.capabilities.height,
+        responsiveVisibility: release.capabilities.responsiveVisibility,
+      },
+    };
+  } catch {
+    return { kind: "invalid" };
+  }
+};
+
+/**
+ * Return one whole native source. The runner checks the context inside the draft's envelope before
+ * one history.edit. Every command passes here, so a refusal is logged here, once, whichever rule
+ * refused it.
+ */
+export const applyDraftChange = (
+  current: StudioCompositionContext,
+  selection: StudioSemanticSelection | null,
+  command: StudioDraftChange,
+): StudioDraftChangeResult => {
+  const result = composeCommand(current, selection, command);
+  if (result.kind === "refused")
+    console.info("[studio] composition command refused", {
+      command: command.kind,
+      reason: result.reason,
+    });
+  return result;
+};
+
+const composeCommand = (
+  current: StudioCompositionContext,
+  selection: StudioSemanticSelection | null,
+  command: StudioDraftChange,
+): StudioDraftChangeResult => {
+  try {
+    const catalogue = current.catalogue;
+    const kind = Object.getOwnPropertyDescriptor(command, "kind");
+    if (kind === undefined || kind.get !== undefined || kind.set !== undefined)
+      return { kind: "invalid" };
+    if (command.kind === "add") return applyAdd(current, command);
+    if (command.kind === "pageData") return applyPageData(current, command);
+    if (command.kind === "remove") {
+      return applyRemoval(current, selection, command);
+    }
+    if (command.kind === "settings") return applySettings(current, selection, command);
+    if (command.kind === "gate") return applyStudioCompositionGate(current, selection, command);
+    if (command.kind === "wrap") return applyWrap(current, selection, command);
+    const resolved = resolve(current, selection);
+    if (resolved === undefined) return { kind: "invalid" };
+    const { source, target, alias } = resolved;
+    if (
+      !manifestMatches(catalogue, source, target.region.zone.items) ||
+      (target.region.parent !== undefined &&
+        !pinnedRelease(catalogue, source, target.region.parent))
+    )
+      return { kind: "unsupported" };
+    if (command.kind === "move") {
+      closedPlain(command, ["kind", "destination"]);
+      if (!movableRegion(target.region)) return { kind: "unsupported" };
+      const destination = parseDestination(command.destination);
+      const resolvedDestination = moveDestinations(catalogue, source, target, alias).find(
+        (candidate) => sameDestination(candidate.destination, destination),
+      );
+      if (resolvedDestination === undefined) return { kind: "invalid" };
+      const working = workingCopy(target.region);
+      const from = zoneHandle(working, target.steps);
+      const moved = from.items.find((item) => item.props.id === alias);
+      if (moved === undefined || sameSteps(target.steps, resolvedDestination.steps))
+        return { kind: "invalid" };
+      // The block leaves its slot and every declared order there, then joins the end of the
+      // destination slot and of every order declared there.
+      const remaining = from.items.filter((item) => item !== moved);
+      from.set(
+        remaining,
+        adjustedSlotOrder(
+          from.order,
+          remaining.map((item) => item.props.id),
+        ),
+      );
+      const to = zoneHandle(working, resolvedDestination.steps);
+      const joined = [...to.items, moved];
+      to.set(
+        joined,
+        adjustedSlotOrder(
+          to.order,
+          joined.map((item) => item.props.id),
+        ),
+      );
+      commitWorking(catalogue, target.region, working);
+      validateStoredApplicationOutlets(catalogue, source);
+      const parsed = applicationSourceDocumentSchema.parse(source);
+      return sameValue(parsed, current.source)
+        ? { kind: "invalid" }
+        : { kind: "applied", source: parsed };
+    }
+    if (!breakpointValid(command.breakpoint)) return { kind: "invalid" };
+    const published = publishedLayoutReason(source, target.region.page);
+    if (published !== undefined) return { kind: "refused", reason: published };
+    const commandKeys = Reflect.ownKeys(command);
+    const allowedKeys =
+      command.kind === "order" ? ["kind", "breakpoint", "order"] : ["kind", "breakpoint", "layout"];
+    if (
+      commandKeys.length !== 3 ||
+      commandKeys.some((key) => typeof key !== "string" || !allowedKeys.includes(key))
+    )
+      return { kind: "invalid" };
+    const working = workingCopy(target.region);
+    if (command.kind === "order") {
+      if (command.breakpoint !== "desktop" && !target.responsiveOrder)
+        return { kind: "unsupported" };
+      const zone = zoneHandle(working, target.steps);
+      const desktop = zone.items.map((item) => item.props.id);
+      const order: { desktop: string[]; tablet?: string[]; phone?: string[] } = {
+        desktop,
+        ...(zone.order?.tablet === undefined ? {} : { tablet: [...zone.order.tablet] }),
+        ...(zone.order?.phone === undefined ? {} : { phone: [...zone.order.phone] }),
+      };
+      if (command.order === null) {
+        if (command.breakpoint === "desktop") return { kind: "invalid" };
+        delete order[command.breakpoint];
+      } else {
+        if (!Array.isArray(command.order)) return { kind: "invalid" };
+        const proposed: unknown[] = [...command.order];
+        // The order must name every item of this slot exactly once.
+        if (
+          proposed.length !== desktop.length ||
+          new Set(proposed).size !== proposed.length ||
+          proposed.some((id) => typeof id !== "string" || !desktop.includes(id))
+        )
+          return { kind: "invalid" };
+        order[command.breakpoint] = proposed as string[];
+      }
+      // A release without responsive order applies the same order at every breakpoint; retain
+      // explicit declarations while moving their values.
+      if (command.breakpoint === "desktop" && !target.responsiveOrder) {
+        if (order.tablet !== undefined) order.tablet = [...order.desktop];
+        if (order.phone !== undefined) order.phone = [...order.desktop];
+      }
+      const byId = new Map(zone.items.map((item) => [item.props.id, item]));
+      zone.set(
+        order.desktop.map((id) => byId.get(id)!),
+        order.tablet === undefined && order.phone === undefined
+          ? undefined
+          : {
+              ...(order.tablet === undefined ? {} : { tablet: order.tablet }),
+              ...(order.phone === undefined ? {} : { phone: order.phone }),
+            },
+      );
+    } else if (command.kind === "resize") {
+      const item = workingItem(working, target.steps, alias);
+      // The authored layout is the only layout: the edit replaces exactly this breakpoint.
+      const responsive = { ...item.props.vortex.responsive };
+      if (command.layout === null) {
+        if (command.breakpoint === "desktop") return { kind: "invalid" };
+        delete responsive[command.breakpoint];
+      } else {
+        const checked = sourcePlacementLayoutSchema.safeParse(command.layout);
+        if (!checked.success) return { kind: "invalid" };
+        responsive[command.breakpoint] = checked.data;
+      }
+      item.props.vortex = { ...item.props.vortex, responsive };
+    } else return { kind: "invalid" };
+    commitWorking(catalogue, target.region, working);
+    validateStoredApplicationOutlets(catalogue, source);
+    const parsed = applicationSourceDocumentSchema.parse(source);
+    if (sameValue(parsed, current.source)) return { kind: "invalid" };
+    return { kind: "applied", source: parsed };
+  } catch (error) {
+    if (error instanceof StoredCompositionRefusal || error instanceof StructureRefusal)
+      return { kind: "refused", reason: error.message };
+    console.error("[studio] composition command could not be applied", error);
+    return { kind: "invalid" };
+  }
+};

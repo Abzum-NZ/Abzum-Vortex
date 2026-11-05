@@ -6,17 +6,13 @@ import {
   sourcePageItems,
   sourcePageShell,
   type SourceItem,
-} from "@vortex/platform/schema";
-import { removeFlowBindingsOf } from "@vortex/platform/schema";
-import {
   studioPlacementRemovalReference,
   type StudioPlacementReferenceReason,
-} from "./application-composition-commands";
-import { sourceNames, type StudioPlacementReference } from "./composition-references";
-import { settingsOf } from "./application-composition-regions";
-import type { StudioSemanticSelection } from "./semantic-selection";
-import { applyStudioItemLabels } from "./application-item-labels";
-import {
+  sourceNames,
+  type StudioPlacementReference,
+  settingsOf,
+  type StudioSemanticSelection,
+  applyStudioItemLabels,
   blockItem,
   cleanName,
   emptyPageData,
@@ -32,25 +28,22 @@ import {
   type Source,
   type StudioStructureContext,
   type StudioStructureResult,
-} from "./application-structure-common";
-import { addRecordPage } from "./application-record-pages";
-import { takenIds, type StudioRecordPageCommand } from "./application-record-page-kinds";
-import {
+  takenIds,
+  type StudioRecordPageCommand,
   ensureDetailEdit,
   ensureListEdit,
   resolveRecordType,
-} from "./application-record-page-shared";
+  type Plan,
+  movePage,
+  type StudioPageLayoutCommand,
+  editLayoutOutlet,
+  type StudioLayoutOutletCommand,
+} from "@vortex/platform/schema";
+import { removeFlowBindingsOf } from "@vortex/platform/schema";
+import { addRecordPage } from "./application-record-pages";
 import { ensureFormCancel } from "./application-record-page-form";
 import { ensureHomeDashboard } from "./application-home-dashboard";
-import type { Plan } from "./application-record-plan";
-import { movePage, type StudioPageLayoutCommand } from "./application-page-layout";
-import { editLayoutOutlet, type StudioLayoutOutletCommand } from "./application-layout-outlets";
 import { placeMenuShell, placementsOf } from "@vortex/platform/schema";
-export {
-  studioLayoutOutletTargets,
-  studioLayoutOutletPlacementUses,
-  type StudioLayoutOutletValues,
-} from "./application-layout-outlets";
 
 /**
  * The Structure tab's edits: add, rename and remove pages and layouts, add the pages of a record
@@ -60,8 +53,6 @@ export {
  * before it reaches the draft history. A refusal says where the problem is, in words a builder
  * reads, and changes nothing.
  */
-
-export type { StudioStructureContext, StudioStructureResult } from "./application-structure-common";
 
 export type StudioStructureCommand =
   | (Readonly<{ kind: "add_page"; name: string; shellAlias: string | null; addToMenu: boolean }> &

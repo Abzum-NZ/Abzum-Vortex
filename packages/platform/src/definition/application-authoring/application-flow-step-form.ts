@@ -1,0 +1,1359 @@
+import { builderKeySchema } from "../../catalogue/identifiers";
+import { flowFormulaSchema, type FlowLiteral, type FlowValue } from "../../workflows/flow-values";
+import {
+  flowSavedRecordTargetProperties,
+  type FlowTaskPropertyType,
+} from "../../workflows/flow-task-registry";
+import { sourcePageShell } from "../application-composition/source-composition";
+import type { ApplicationSourceDocument } from "../application-source-contracts";
+import type { FlowFormula } from "../../workflows/flow-formula-tree";
+import {
+  flowMessageActionLimits,
+  readFlowMessageActions,
+} from "../../workflows/flow-message-actions";
+import { flowReadFieldsScalarTypeForField } from "../../workflows/flow-read-fields";
+import type { ImmutablePlatformBlockCatalogue } from "../application-composition/platform-block-release";
+import type { SourceFlow, SourceFlowTask } from "../../workflows/flow-source-contracts";
+import {
+  studioFlowLabel,
+  traverseStudioSemanticSelectionDraft,
+  type StudioSemanticPlacementOwner,
+} from "./semantic-selection";
+import {
+  describeStudioFlowLocation,
+  studioFlowDefinitionOf,
+  studioWords,
+  type StudioFlowPath,
+} from "./application-flow-model";
+import {
+  studioDraftRecordType,
+  studioFlowEventChoices,
+  studioFieldValueType,
+  studioFlowValueOf,
+  studioFlowValueSourceOf,
+  studioKeyProblem,
+  type StudioFlowValueSource,
+} from "./application-flow-values";
+
+/**
+ * The settings form of one flow step, generated from the step catalogue's declaration of its type
+ * (or, for a control step, from the flow contract's shape of it), with one typed control per
+ * declared property type. Every registered step type and every control step has a form; a step
+ * whose type is not in the catalogue is refused with where it is. The form's edited values are one
+ * step draft, which `applyStudioFlowStepDraft` turns back into the stored task.
+ */
+
+/** The editor keeps an invalid expression in the step draft until it is corrected. */
+export type StudioFlowCalculation = Readonly<{
+  formula: FlowFormula | undefined;
+  error?: string;
+}>;
+
+const formulaCalculation = (value: FlowValue): StudioFlowCalculation | undefined =>
+  value.kind === "formula" ? { formula: value.formula } : undefined;
+
+const calculationFormula = (
+  calculation: StudioFlowCalculation,
+  label: string,
+): Readonly<{ ok: true; value: FlowValue }> | Readonly<{ ok: false; reason: string }> => {
+  if (calculation.formula === undefined && calculation.error !== undefined)
+    return { ok: false, reason: `${label}: ${calculation.error}` };
+  const parsed = flowFormulaSchema.safeParse(calculation.formula);
+  return parsed.success
+    ? { ok: true, value: { kind: "formula", formula: parsed.data } }
+    : { ok: false, reason: `${label}: this calculation is not valid.` };
+};
+
+// ─── What the draft offers a step ────────────────────────────────────────────────────────────
+
+/** Where the Navigate targets stand: they are read beside the editor's first load. */
+export type StudioNavigationApplicationsStatus = "loading" | "ready" | "failed";
+
+/** An installed application a Navigate step can open, with the keys of its pages. */
+export type StudioNavigationApplication = Readonly<{
+  key: string;
+  label: string;
+  homePageKey: string;
+  pageKeys: readonly string[];
+}>;
+
+export type StudioFlowNamedEntry = Readonly<{
+  name: string;
+  label: string;
+  type: string | undefined;
+  required: boolean;
+  initialValue?: FlowValue;
+  /** An operation's declared input: only values of its type fit, never a whole set of values. */
+  typed?: true;
+}>;
+
+/** The parts of the draft a step setting can point at, read from the draft being edited. */
+export type StudioFlowDraftChoices = Readonly<{
+  recordTypes: readonly Readonly<{ key: string; label: string }>[];
+  pages: readonly Readonly<{ key: string; label: string; recordType: string | null }>[];
+  forms: readonly Readonly<{
+    alias: string;
+    label: string;
+    fields: readonly StudioFlowNamedEntry[];
+  }>[];
+  actions: readonly Readonly<{
+    key: string;
+    label: string;
+    recordType: string;
+    inputs: readonly StudioFlowNamedEntry[];
+  }>[];
+  queries: readonly Readonly<{ key: string; label: string }>[];
+  connections: readonly Readonly<{ key: string; label: string }>[];
+  /**
+   * The components a message can appear under or in, on the pages the flow is bound on: a form or
+   * section shows it inline, a Notice slot receives it by name.
+   */
+  messagePlacements: readonly Readonly<{ alias: string; label: string; kind: "inline" | "slot" }>[];
+  /** The page values every page the flow is bound on declares, for a step that sets one. */
+  pageValues: readonly Readonly<{ name: string; label: string; type: string }>[];
+  /**
+   * The other applications of the organisation the builder may open, with their pages, for a
+   * Navigate step that opens a page (and record) there.
+   */
+  applications: readonly StudioNavigationApplication[];
+  /** Whether those applications are still being read, are read, or could not be read. */
+  applicationsStatus: StudioNavigationApplicationsStatus;
+}>;
+
+/**
+ * A placement as the builder named it: its title, label or name setting, else the outline's own
+ * label for it.
+ */
+const placementTitle = (
+  node: Readonly<{ label: string; settings: Readonly<Record<string, unknown>> }>,
+): string => {
+  for (const key of ["title", "label", "name"]) {
+    const value = node.settings[key];
+    if (typeof value === "string" && value.trim() !== "") return value.trim();
+  }
+  return node.label;
+};
+
+/** How serious a message is, by the name a Show message step stores. */
+const messageSeverityOptions: readonly Readonly<{ value: string; label: string }>[] = [
+  { value: "info", label: "Information" },
+  { value: "success", label: "Success" },
+  { value: "warning", label: "Warning" },
+  { value: "error", label: "Error" },
+];
+
+/** Where a message can show, by the name a Show message step stores. */
+const messageTargetOptions: readonly Readonly<{ value: string; label: string }>[] = [
+  { value: "dialog", label: "In a dialog" },
+  { value: "toast", label: "As a toast" },
+  { value: "banner", label: "In the page banner" },
+  { value: "inline", label: "Under a field, form or section" },
+  { value: "slot", label: "In a Notice slot" },
+];
+
+const actionInputType = (type: string): string => type;
+
+const navigationPendingHelp = {
+  loading: "Loading the other applications…",
+  failed: "The other applications could not be read. Reload Studio to try again.",
+} as const;
+
+type NavigationOption = Readonly<{ value: string; label: string }>;
+
+/** While the targets are not ready, what the step already names stays among the options. */
+const keepNamedWhilePending = (
+  status: StudioNavigationApplicationsStatus,
+  options: readonly NavigationOption[],
+  named: string | undefined,
+): readonly NavigationOption[] =>
+  status !== "ready" &&
+  named !== undefined &&
+  named !== "" &&
+  !options.some((entry) => entry.value === named)
+    ? [...options, { value: named, label: studioWords(named) }]
+    : options;
+
+/** The applications a Navigate step can open. */
+const navigationApplicationOptions = (
+  choices: Pick<StudioFlowDraftChoices, "applications" | "applicationsStatus">,
+  named: string | undefined,
+): readonly NavigationOption[] =>
+  keepNamedWhilePending(
+    choices.applicationsStatus,
+    choices.applications.map((entry) => ({ value: entry.key, label: entry.label })),
+    named,
+  );
+
+/** The pages of the application a Navigate step names. */
+const navigationPageOptions = (
+  choices: Pick<StudioFlowDraftChoices, "applications" | "applicationsStatus">,
+  application: string | undefined,
+  named: string | undefined,
+): readonly NavigationOption[] =>
+  keepNamedWhilePending(
+    choices.applicationsStatus,
+    choices.applications
+      .find((entry) => entry.key === application)
+      ?.pageKeys.map((page) => ({ value: page, label: studioWords(page) })) ?? [],
+    named,
+  );
+
+/** Everything a step setting can point at in the draft: record types, pages, forms, module actions, queries and connections. */
+export const projectStudioFlowDraftChoices = (
+  draft: Readonly<{
+    rootId: Parameters<typeof traverseStudioSemanticSelectionDraft>[0]["rootId"];
+    source: ApplicationSourceDocument;
+    catalogue: ImmutablePlatformBlockCatalogue;
+    flow?: SourceFlow;
+    applications?: readonly StudioNavigationApplication[];
+    applicationsStatus?: StudioNavigationApplicationsStatus;
+  }>,
+): StudioFlowDraftChoices => {
+  const source = draft.source;
+  const forms: { alias: string; label: string; fields: StudioFlowNamedEntry[] }[] = [];
+  const open: { alias: string; fields: StudioFlowNamedEntry[] }[] = [];
+  const owners = new Map<string, StudioSemanticPlacementOwner>();
+  const messagePlacements: { alias: string; label: string; kind: "inline" | "slot" }[] = [];
+  const pagesFor = (owner: StudioSemanticPlacementOwner): string[] =>
+    owner.kind === "page"
+      ? [owner.pageAlias]
+      : source.body.pages
+          .filter((page) => sourcePageShell(page.composition) === owner.shellAlias)
+          .map((page) => page.id);
+  traverseStudioSemanticSelectionDraft(draft, ({ phase, node }) => {
+    if (node.kind !== "placement") return;
+    const release = draft.catalogue.releases.find(
+      (candidate) =>
+        String(candidate.blockId) === node.block.block_id &&
+        String(candidate.releaseVersion) === node.block.release_version,
+    );
+    const isForm = release?.supportedEvents.includes("form_submit") === true;
+    if (phase === "exit") {
+      if (isForm) open.pop();
+      return;
+    }
+    owners.set(node.selection.placementAlias, node.owner);
+    const blockKey = release?.key;
+    if (blockKey === "platform.display.notice")
+      messagePlacements.push({
+        alias: node.selection.placementAlias,
+        label: placementTitle(node),
+        kind: "slot",
+      });
+    else if (
+      blockKey === "platform.layout.container" ||
+      (blockKey?.startsWith("platform.form.") === true &&
+        blockKey !== "platform.form.validation_message")
+    )
+      messagePlacements.push({
+        alias: node.selection.placementAlias,
+        label: placementTitle(node),
+        kind: "inline",
+      });
+    const name = node.settings.name;
+    const fieldProperty = release?.properties.find(
+      (property) => property.kind === "field_reference" && property.derivesFieldInput === true,
+    );
+    const reference = fieldProperty === undefined ? undefined : node.settings[fieldProperty.key];
+    const dot = typeof reference === "string" ? reference.lastIndexOf(".") : -1;
+    const found =
+      typeof reference === "string" && dot > 0
+        ? studioDraftRecordType(source, reference.slice(0, dot), null)
+        : undefined;
+    const field = found?.record.fields.find(
+      (field) => field.key === String(reference).slice(dot + 1),
+    );
+    if (!isForm && open.length > 0) {
+      if (field !== undefined)
+        open[open.length - 1]!.fields.push({
+          name: field.key,
+          label: field.label,
+          type: studioFieldValueType(field.type),
+          required: field.required,
+          initialValue: {
+            kind: "literal",
+            literal: { type: "json", value: field.default ?? null },
+          },
+        });
+      else if (typeof name === "string")
+        open[open.length - 1]!.fields.push({
+          name,
+          label: typeof node.settings.label === "string" ? node.settings.label : studioWords(name),
+          type: undefined,
+          required: node.settings.required === true,
+        });
+    }
+    if (isForm) {
+      const entry = {
+        alias: node.selection.placementAlias,
+        label: placementTitle(node),
+        fields: [] as StudioFlowNamedEntry[],
+      };
+      forms.push(entry);
+      open.push(entry);
+    }
+  });
+  const controls = source.body.flow_bindings
+    .filter(
+      (binding) =>
+        draft.flow !== undefined &&
+        (binding.flow === draft.flow.id || binding.flow === draft.flow.key),
+    )
+    .map((binding) => binding.control);
+  const invokingPages = [
+    ...new Set(
+      controls.flatMap((control) => {
+        // The page itself is the control of its own events.
+        if (source.body.pages.some((page) => page.id === control)) return [control];
+        const owner = owners.get(control);
+        return owner === undefined ? [] : pagesFor(owner);
+      }),
+    ),
+  ];
+  const availableForms =
+    draft.flow === undefined
+      ? forms
+      : forms.filter((form) => {
+          const owner = owners.get(form.alias);
+          if (owner === undefined || invokingPages.length === 0) return false;
+          const pages = pagesFor(owner);
+          return invokingPages.every((page) => pages.includes(page));
+        });
+  const onInvokingPages = (alias: string): boolean => {
+    const owner = owners.get(alias);
+    if (draft.flow === undefined) return true;
+    if (owner === undefined || invokingPages.length === 0) return false;
+    const pages = pagesFor(owner);
+    return invokingPages.every((page) => pages.includes(page));
+  };
+  const boundPages = source.body.pages.filter((page) => invokingPages.includes(page.id));
+  return {
+    messagePlacements: messagePlacements.filter((entry) => onInvokingPages(entry.alias)),
+    applications: draft.applications ?? [],
+    applicationsStatus: draft.applicationsStatus ?? "ready",
+    pageValues: Object.entries(boundPages[0]?.values ?? {})
+      .filter(([name, declaration]) =>
+        boundPages.every((page) => page.values?.[name]?.type === declaration.type),
+      )
+      .map(([name, declaration]) => ({ name, label: declaration.label, type: declaration.type })),
+    recordTypes: source.body.modules.flatMap((module) =>
+      module.record_types.map((record) => ({
+        key: `${module.key}:${record.key}`,
+        label: `${record.name} (${module.name})`,
+      })),
+    ),
+    pages: source.body.pages.map((page) => ({
+      key: page.key,
+      label: page.name,
+      recordType:
+        page.type === "detail" && "record_type" in page && typeof page.record_type === "string"
+          ? page.record_type
+          : null,
+    })),
+    forms: availableForms,
+    actions: source.body.modules.flatMap((module) =>
+      module.actions.map((action) => ({
+        key: action.key,
+        label: action.label,
+        recordType: `${module.key}:${action.record_type}`,
+        inputs: action.inputs.map((input) => ({
+          name: input.key,
+          label: input.label,
+          type: actionInputType(input.type),
+          required: input.required,
+          typed: true as const,
+        })),
+      })),
+    ),
+    queries: source.body.modules.flatMap((module) =>
+      module.queries.map((query) => ({
+        key: `${module.key}:${query.key}`,
+        label: query.label ?? studioWords(query.key),
+      })),
+    ),
+    connections: source.body.connection_bindings.map((binding) => ({
+      key: binding.id,
+      label: studioWords(binding.id),
+    })),
+  };
+};
+
+// ─── The form ────────────────────────────────────────────────────────────────────────────────
+
+/** How one setting is edited. Each maps to one stored value shape, chosen by the declared property type. */
+export type StudioFlowPropertyControl =
+  | "value"
+  | "message"
+  | "key"
+  | "record_type"
+  | "page"
+  | "application"
+  | "form"
+  | "query"
+  | "flow"
+  | "operation"
+  | "connection"
+  | "field"
+  | "relationship"
+  | "calculation"
+  | "field_values"
+  | "read_fields"
+  | "input_map"
+  | "message_actions";
+
+/** One field of a record type, as a field mapping row offers it. */
+export type StudioFlowRecordField = Readonly<{
+  key: string;
+  label: string;
+  type: string;
+  valueType: string | undefined;
+  required: boolean;
+  options: readonly Readonly<{ value: string; label: string }>[];
+}>;
+
+export type StudioFlowPropertyField = Readonly<{
+  key: string;
+  label: string;
+  required: boolean;
+  control: StudioFlowPropertyControl;
+  /** The value type a value control expects; undefined accepts any. */
+  valueType: string | undefined;
+  keyType?: "builder_key" | "namespaced_key";
+  /** For a name-value map: the names this setting expects here, such as a page's parameters. */
+  entries?: readonly StudioFlowNamedEntry[];
+  /** For field values: the fields of the step's record type. */
+  fields?: readonly StudioFlowRecordField[];
+  /** For a field: the fields it can name, each stored as `<record type>.<field>`. */
+  options?: readonly Readonly<{ value: string; label: string }>[];
+  /** For a message's actions: the page flows an action may start, with the inputs each asks for. */
+  actionFlows?: readonly StudioFlowActionTarget[];
+  /** For a message's actions: how many it may offer (three in a dialog, one elsewhere). */
+  actionLimit?: number;
+  help?: string;
+}>;
+
+/** A flow a message action may start, and the inputs it asks for. */
+export type StudioFlowActionTarget = Readonly<{
+  value: string;
+  label: string;
+  entries: readonly StudioFlowNamedEntry[];
+}>;
+
+/** One action of a message as its form edits it: a label, the flow it starts and that flow's inputs. */
+export type StudioFlowActionDraft = Readonly<{
+  label: string;
+  flow: string;
+  inputs: readonly Readonly<{ name: string; source: StudioFlowValueSource }>[];
+}>;
+
+export type StudioFlowPropertyDraft =
+  | Readonly<{ kind: "value"; source: StudioFlowValueSource }>
+  /** A fixed text: a key, or a pointer at a part of the draft (a record type, a page, a form…). */
+  | Readonly<{ kind: "text"; value: string }>
+  | Readonly<{ kind: "calculation"; calculation: StudioFlowCalculation }>
+  | Readonly<{ kind: "whole"; source: StudioFlowValueSource }>
+  | Readonly<{
+      kind: "fields";
+      entries: readonly Readonly<{ field: string; source: StudioFlowValueSource }>[];
+    }>
+  /** The fields a selected-record read returns, as `<record type>.<field>` references. */
+  | Readonly<{ kind: "read_fields"; fields: readonly string[] }>
+  | Readonly<{
+      kind: "map";
+      entries: readonly Readonly<{ name: string; source: StudioFlowValueSource }>[];
+    }>
+  /** A message's actions, in the order they are offered. */
+  | Readonly<{ kind: "actions"; actions: readonly StudioFlowActionDraft[] }>
+  /** A stored value the form shows but does not rebuild (a formula, a nested map); kept until replaced. */
+  | Readonly<{ kind: "kept"; value: FlowValue }>;
+
+export type StudioFlowControlDraft =
+  | Readonly<{ kind: "if"; condition: FlowFormula }>
+  | Readonly<{ kind: "stop"; outcome: string }>
+  | Readonly<{
+      kind: "run_flow";
+      flow: string;
+      inputs: readonly Readonly<{ name: string; source: StudioFlowValueSource }>[];
+    }>
+  | Readonly<{ kind: "for_each"; items: StudioFlowValueSource; maximumItems: number }>
+  | Readonly<{
+      kind: "switch";
+      value: StudioFlowValueSource;
+      cases: readonly Readonly<{ key: string; when: FlowLiteral }>[];
+    }>
+  | Readonly<{ kind: "none" }>;
+
+/** The whole edited form of one step: its description, its settings and, for a control step, its shape. */
+export type StudioFlowStepDraft = Readonly<{
+  description: string;
+  properties: Readonly<Record<string, StudioFlowPropertyDraft | null>>;
+  control: StudioFlowControlDraft | null;
+}>;
+
+export type StudioFlowStepForm =
+  | Readonly<{
+      kind: "available";
+      fields: readonly StudioFlowPropertyField[];
+      draft: StudioFlowStepDraft;
+      /** For a control step: what it can point at (other flows, forms). */
+      controlEntries?: readonly StudioFlowNamedEntry[];
+    }>
+  | Readonly<{ kind: "unavailable"; reason: string }>;
+
+const propertyLabels: Readonly<Record<string, string>> = {
+  record_type: "Record type",
+  record: "Record to change",
+  values: "Field values",
+  selected_owner_group_id: "Owner group",
+  action_inputs: "Inputs of the action it runs",
+  page: "Page",
+  parameters: "Page parameters",
+  operation: "Operation",
+  inputs: "Inputs",
+  form: "Form",
+  message: "Message",
+  target: "Where it shows",
+  severity: "Severity",
+  title: "Title",
+  component: "Component",
+  actions: "Actions it offers",
+  result_type: "Result type",
+  mode: "Wait for it",
+  to: "New value",
+  query: "Query",
+  flow: "Flow",
+  formula: "Calculation",
+  variable: "Variable",
+  value: "Value",
+  field: "Field",
+  details: "What it covers (list of lines)",
+  choice: "Opt-in that goes with a yes",
+  confirm_label: "Confirm button",
+  event_id: "Event",
+  event: "Event",
+  refusal_feedback: "Messages when declined",
+};
+
+const controlFor = (type: FlowTaskPropertyType): StudioFlowPropertyControl | undefined => {
+  switch (type) {
+    case "message_text":
+      return "message";
+    case "builder_key":
+    case "namespaced_key":
+    case "placement_id":
+      return "key";
+    case "record_type_id":
+      return "record_type";
+    case "page_id":
+      return "page";
+    case "application_key":
+      return "application";
+    case "form_id":
+      return "form";
+    case "query_id":
+      return "query";
+    case "flow_id":
+      return "flow";
+    case "protected_operation_key":
+      return "operation";
+    case "connection_binding_id":
+      return "connection";
+    case "field_id":
+      return "field";
+    case "relationship_id":
+      return "relationship";
+    case "formula":
+      return "calculation";
+    case "field_values":
+      return "field_values";
+    case "input_map":
+      return "input_map";
+    case "message_actions":
+      return "message_actions";
+    case "any_value":
+    case "record_change_list":
+      return "value";
+    default:
+      return "value";
+  }
+};
+
+const literalText = (value: FlowValue | undefined): string | undefined =>
+  value?.kind === "literal" && typeof value.literal.value === "string"
+    ? value.literal.value
+    : undefined;
+
+const mapEntries = (
+  value: FlowValue,
+): readonly Readonly<{ name: string; source: StudioFlowValueSource }>[] | undefined =>
+  value.kind === "map"
+    ? Object.entries(value.entries).map(([name, entry]) => ({
+        name,
+        source: studioFlowValueSourceOf(entry),
+      }))
+    : undefined;
+
+const recordFields = (
+  source: Readonly<ApplicationSourceDocument>,
+  reference: string | undefined,
+  moduleKey: string | null,
+): StudioFlowRecordField[] | undefined => {
+  if (reference === undefined) return undefined;
+  const found = studioDraftRecordType(source, reference, moduleKey);
+  return found?.record.fields.map((field) => ({
+    key: field.key,
+    label: field.label,
+    type: field.type,
+    valueType: studioFieldValueType(field.type),
+    required: field.required,
+    options:
+      field.type === "choice"
+        ? ((field.settings as { options?: { value: string; label: string }[] }).options ?? []).map(
+            (option) => ({ value: option.value, label: option.label }),
+          )
+        : [],
+  }));
+};
+
+/**
+ * The record type a step's field values are written against: its own, or the record that started a
+ * save rule, or the record an action's flow runs on.
+ */
+const stepRecordType = (
+  flow: SourceFlow,
+  properties: Readonly<Record<string, FlowValue>>,
+): string | undefined =>
+  literalText(properties.record_type) ??
+  (flow.execution === "transaction"
+    ? ((flow.triggers ?? []).flatMap((trigger) =>
+        "recordTypeId" in trigger ? [trigger.recordTypeId] : [],
+      )[0] ??
+      (flow.recordInput === undefined
+        ? undefined
+        : flow.inputs?.[flow.recordInput]?.recordTypeIds?.[0]))
+    : undefined);
+
+/** The fields a field setting can name: of the step's record type, or of the record the flow runs for. */
+export const studioFlowFieldOptions = (
+  source: Readonly<ApplicationSourceDocument>,
+  flow: SourceFlow,
+  moduleKey: string | null,
+  properties: Readonly<Record<string, FlowValue>>,
+): readonly Readonly<{ value: string; label: string }>[] | undefined => {
+  const recordType =
+    stepRecordType(flow, properties) ??
+    (flow.triggers ?? []).flatMap((trigger) =>
+      "recordTypeId" in trigger ? [trigger.recordTypeId] : [],
+    )[0] ??
+    (flow.recordInput === undefined
+      ? undefined
+      : flow.inputs?.[flow.recordInput]?.recordTypeIds?.[0]);
+  return recordFields(source, recordType, moduleKey)?.map((field) => ({
+    value: `${recordType}.${field.key}`,
+    label: field.label,
+  }));
+};
+
+/** The named action whose choice option a Save record step saves, when it saves exactly one owned option. */
+const ownedOptionAction = (
+  choices: StudioFlowDraftChoices,
+  source: Readonly<ApplicationSourceDocument>,
+  properties: Readonly<Record<string, FlowValue>>,
+) => {
+  const recordType = literalText(properties.record_type);
+  const values = properties.values;
+  const entries = values?.kind === "map" ? Object.entries(values.entries) : [];
+  if (recordType === undefined || entries.length !== 1) return undefined;
+  const [field, value] = entries[0]!;
+  const option = literalText(value);
+  const found = studioDraftRecordType(source, recordType, null);
+  const action = found?.module.actions.find(
+    (candidate) =>
+      candidate.record_type === found.record.key &&
+      candidate.sets_choice_field === field &&
+      candidate.sets_choice_option === option,
+  );
+  return action === undefined
+    ? undefined
+    : choices.actions.find((candidate) => candidate.key === action.key);
+};
+
+/** The names an input map expects here, from what the step points at. */
+const expectedEntries = (
+  task: Extract<SourceFlowTask, { properties: unknown }>,
+  key: string,
+  choices: StudioFlowDraftChoices,
+  source: Readonly<ApplicationSourceDocument>,
+): readonly StudioFlowNamedEntry[] | undefined => {
+  const properties = task.properties;
+  if (task.type === "interface.navigate" && key === "parameters") {
+    // A page of another application may show a record; its record type is known only there. The
+    // record comes from the flow (a fixed record id would not hold in another installation).
+    if (properties.application !== undefined)
+      return [
+        { name: "record_id", label: "Record to open", type: "record_reference", required: false },
+      ];
+    const page = choices.pages.find((candidate) => candidate.key === literalText(properties.page));
+    return page?.recordType === null || page === undefined
+      ? undefined
+      : [{ name: "record_id", label: "Record to open", type: "record_reference", required: true }];
+  }
+  if (task.type === "operation.call" && key === "inputs")
+    return choices.actions.find((candidate) => candidate.key === literalText(properties.operation))
+      ?.inputs;
+  if (task.type === "interface.show_form" && key === "inputs")
+    return choices.forms.find((candidate) => candidate.alias === literalText(properties.form))
+      ?.fields;
+  if (task.type === "record.save" && key === "action_inputs")
+    return ownedOptionAction(choices, source, properties)?.inputs;
+  return undefined;
+};
+
+const help: Readonly<Record<string, string>> = {
+  "record.save record":
+    "Leave it unset to create a new record. Set it to the record the page shows, or one an earlier step saved, to change that record.",
+  "record.save values":
+    "All the answers of a form, or the fields one by one: each from a fixed value, an input or an earlier step.",
+  "record.save action_inputs":
+    "Saving an option that a named action owns runs that action; give the inputs it asks for.",
+  "interface.show_message actions":
+    "Buttons the message offers, each starting another flow of this application. A dialog offers up to three, any other message one.",
+  "interface.navigate parameters": "A record page opens the record you name here.",
+  "interface.navigate application":
+    "Leave it unset to open a page of this application, or choose another application of the organisation.",
+  "interface.navigate page":
+    "The page to open; with another application, one of its pages, or leave it unset to open that application's home page.",
+  "interface.navigate application_root":
+    "Opens the home page of an application by its identity, for the application a step just installed. Use it instead of the application and page above.",
+  "interface.verify requires":
+    "recent_sign_in asks for the password (a sign-in within the last 15 minutes); two_step asks for a recent sign-in and the code from the authenticator app, which the person can set up in the step. The step that follows still checks again.",
+  "interface.wizard steps":
+    "The names of the steps, in order, as a list of two to eight different texts. Every step of the flow that uses guided steps lists the same names.",
+  "interface.wizard step": "The step the flow is at now: one of the names in the list.",
+  "interface.wizard working":
+    "A progress message with a spinner, shown until the next dialog opens, for a step that works in the background.",
+};
+
+/** The selected-record read a step stores: its field references, or the stored value when unreadable. */
+const readFieldsDraft = (value: FlowValue): StudioFlowPropertyDraft => {
+  if (
+    value.kind !== "literal" ||
+    value.literal.type !== "json" ||
+    !Array.isArray(value.literal.value)
+  )
+    return { kind: "kept", value };
+  const fields = value.literal.value.flatMap((entry) =>
+    typeof entry === "object" &&
+    entry !== null &&
+    !Array.isArray(entry) &&
+    typeof (entry as { field?: unknown }).field === "string"
+      ? [(entry as { field: string }).field]
+      : [],
+  );
+  return { kind: "read_fields", fields };
+};
+
+/** A message's actions as its form edits them; kept as stored when one is not a plain label and flow. */
+const actionsDraft = (value: FlowValue): StudioFlowPropertyDraft => {
+  const stored = readFlowMessageActions(value);
+  if (stored === undefined) return { kind: "kept", value };
+  const actions: StudioFlowActionDraft[] = [];
+  for (const action of stored) {
+    const label = literalText(action.label);
+    const flow = literalText(action.flow);
+    if (label === undefined || flow === undefined) return { kind: "kept", value };
+    actions.push({
+      label,
+      flow,
+      inputs: Object.entries(action.inputs).map(([name, entry]) => ({
+        name,
+        source: studioFlowValueSourceOf(entry),
+      })),
+    });
+  }
+  return { kind: "actions", actions };
+};
+
+const propertyDraft = (type: FlowTaskPropertyType, value: FlowValue): StudioFlowPropertyDraft => {
+  const control = controlFor(type);
+  switch (control) {
+    case "message_actions":
+      return actionsDraft(value);
+    case "key":
+    case "record_type":
+    case "page":
+    case "application":
+    case "form":
+    case "query":
+    case "flow":
+    case "operation":
+    case "connection":
+    case "field":
+    case "relationship": {
+      const text = literalText(value);
+      return text === undefined ? { kind: "kept", value } : { kind: "text", value: text };
+    }
+    case "calculation": {
+      const calculation = formulaCalculation(value);
+      return calculation === undefined
+        ? { kind: "kept", value }
+        : { kind: "calculation", calculation };
+    }
+    case "field_values": {
+      const entries = mapEntries(value);
+      if (entries !== undefined)
+        return {
+          kind: "fields",
+          entries: entries.map((entry) => ({ field: entry.name, source: entry.source })),
+        };
+      return value.kind === "reference"
+        ? { kind: "whole", source: studioFlowValueSourceOf(value) }
+        : { kind: "kept", value };
+    }
+    case "input_map": {
+      const entries = mapEntries(value);
+      return entries === undefined
+        ? { kind: "whole", source: studioFlowValueSourceOf(value) }
+        : { kind: "map", entries };
+    }
+    default:
+      return { kind: "value", source: studioFlowValueSourceOf(value) };
+  }
+};
+
+const controlDraft = (task: SourceFlowTask): StudioFlowControlDraft | null | undefined => {
+  if ("properties" in task) return null;
+  const entries = (inputs: Readonly<Record<string, FlowValue>>) =>
+    Object.entries(inputs).map(([name, value]) => ({
+      name,
+      source: studioFlowValueSourceOf(value),
+    }));
+  switch (task.type) {
+    case "if":
+      return "condition" in task ? { kind: "if", condition: task.condition } : undefined;
+    case "stop":
+      return "outcome" in task ? { kind: "stop", outcome: task.outcome } : undefined;
+    case "run_flow":
+      return "flowId" in task
+        ? { kind: "run_flow", flow: task.flowId, inputs: entries(task.inputs) }
+        : undefined;
+    case "for_each":
+      return "items" in task
+        ? {
+            kind: "for_each",
+            items: studioFlowValueSourceOf(task.items),
+            maximumItems: task.maximumItems,
+          }
+        : undefined;
+    case "switch":
+      return "cases" in task
+        ? {
+            kind: "switch",
+            value: studioFlowValueSourceOf(task.value),
+            cases: task.cases.map((entry) => ({ key: entry.key, when: entry.when })),
+          }
+        : undefined;
+    case "sequential":
+      return { kind: "none" };
+    default:
+      return undefined;
+  }
+};
+
+/** The form of one step, or why it has none, named by where the step is. */
+export const projectStudioFlowStepForm = (
+  source: Readonly<ApplicationSourceDocument>,
+  flow: SourceFlow,
+  siblings: readonly SourceFlow[],
+  moduleKey: string | null,
+  task: SourceFlowTask,
+  path: StudioFlowPath,
+  choices: StudioFlowDraftChoices,
+): StudioFlowStepForm => {
+  const where = describeStudioFlowLocation(flow, path);
+  const description = task.description ?? "";
+  if (!("properties" in task)) {
+    const control = controlDraft(task);
+    if (control === undefined || control === null)
+      return {
+        kind: "unavailable",
+        reason: `${where}: Studio does not know this kind of step (${task.type}), so it cannot be edited. Remove it or replace it with a known step.`,
+      };
+    const controlEntries =
+      control.kind === "run_flow"
+        ? Object.entries(
+            siblings.find(
+              (candidate) => candidate.id === control.flow || candidate.key === control.flow,
+            )?.inputs ?? {},
+          ).map(([name, declaration]) => ({
+            name,
+            label: studioWords(name),
+            type: declaration.type,
+            required: declaration.required,
+          }))
+        : undefined;
+    return {
+      kind: "available",
+      fields: [],
+      draft: { description, properties: {}, control },
+      ...(controlEntries === undefined ? {} : { controlEntries }),
+    };
+  }
+  const definition = studioFlowDefinitionOf(task.type, task.version);
+  if (definition === undefined)
+    return {
+      kind: "unavailable",
+      reason: `${where}: the ${studioWords(task.type)} step (version ${task.version}) is not in the step catalogue, so it cannot be edited. Remove it or replace it with a known step.`,
+    };
+  const unknown = Object.keys(task.properties).find(
+    (key) => !Object.hasOwn(definition.properties, key),
+  );
+  if (unknown !== undefined)
+    return {
+      kind: "unavailable",
+      reason: `${where}, ${studioWords(unknown)}: the step catalogue does not declare this setting, so the step cannot be edited. Remove the step or replace it.`,
+    };
+  const recordType = stepRecordType(flow, task.properties);
+  // In a save transaction a step changes only the saved record, so it has no target to name.
+  const namesNoTarget =
+    definition.transactionScope === "saved_record" && flow.execution === "transaction";
+  const fields = Object.entries(definition.properties)
+    .filter(
+      ([key]) =>
+        !(namesNoTarget && (flowSavedRecordTargetProperties as readonly string[]).includes(key)),
+    )
+    .map(([key, declaration]): StudioFlowPropertyField => {
+      const control =
+        task.type === "event.announce" && key === "event"
+          ? "field"
+          : task.type === "record.read_fields" && key === "fields"
+            ? "read_fields"
+            : controlFor(declaration.type)!;
+      const entries =
+        control === "input_map" ? expectedEntries(task, key, choices, source) : undefined;
+      const recordFieldList =
+        control === "field_values" || control === "read_fields"
+          ? recordFields(source, recordType, moduleKey)
+          : undefined;
+      const messageStep =
+        task.type === "interface.show_message" || task.type === "interface.clear_message";
+      const options =
+        task.type === "event.announce" && key === "event"
+          ? studioFlowEventChoices(source, flow, moduleKey, task.properties.record)
+          : messageStep && key === "target"
+            ? messageTargetOptions
+            : task.type === "interface.show_message" && key === "severity"
+              ? messageSeverityOptions
+              : messageStep && key === "component"
+                ? choices.messagePlacements.map((entry) => ({
+                    value: entry.alias,
+                    label: `${entry.label} (${entry.kind === "slot" ? "Notice slot" : "inline"})`,
+                  }))
+                : task.type === "interface.navigate" && key === "application"
+                  ? navigationApplicationOptions(choices, literalText(task.properties.application))
+                  : task.type === "interface.navigate" &&
+                      key === "page" &&
+                      task.properties.application !== undefined
+                    ? navigationPageOptions(
+                        choices,
+                        literalText(task.properties.application),
+                        literalText(task.properties.page),
+                      )
+                    : task.type === "interface.set_value" && key === "value"
+                      ? choices.pageValues.map((entry) => ({
+                          value: entry.name,
+                          label: entry.label,
+                        }))
+                      : control === "read_fields" && recordType !== undefined
+                        ? (recordFieldList ?? [])
+                            .filter(
+                              (entry) => flowReadFieldsScalarTypeForField(entry.type) !== undefined,
+                            )
+                            .map((entry) => ({
+                              value: `${recordType}.${entry.key}`,
+                              label: entry.label,
+                            }))
+                        : control === "field"
+                          ? studioFlowFieldOptions(source, flow, moduleKey, task.properties)
+                          : undefined;
+      const valueType =
+        control === "value" && declaration.type === "record_change_list"
+          ? "json"
+          : control === "value" && declaration.type !== "any_value"
+            ? declaration.type
+            : control === "message"
+              ? "text"
+              : undefined;
+      const hint =
+        task.type === "interface.navigate" &&
+        key === "application" &&
+        choices.applicationsStatus !== "ready"
+          ? navigationPendingHelp[choices.applicationsStatus]
+          : help[`${task.type} ${key}`];
+      const actionFlows =
+        control === "message_actions"
+          ? siblings
+              .filter(
+                (candidate) => candidate.id !== flow.id && candidate.execution === "interactive",
+              )
+              .map((candidate) => ({
+                value: candidate.id,
+                label: studioFlowLabel(candidate),
+                entries: Object.entries(candidate.inputs ?? {}).map(([name, declaration]) => ({
+                  name,
+                  label: studioWords(name),
+                  type: declaration.type,
+                  required: declaration.required,
+                })),
+              }))
+          : undefined;
+      return {
+        key,
+        label: propertyLabels[key] ?? studioWords(key),
+        required: declaration.required,
+        control,
+        valueType,
+        ...(declaration.type === "builder_key" || declaration.type === "namespaced_key"
+          ? { keyType: declaration.type }
+          : {}),
+        ...(entries === undefined ? {} : { entries }),
+        ...(recordFieldList === undefined ? {} : { fields: recordFieldList }),
+        ...(options === undefined ? {} : { options }),
+        ...(actionFlows === undefined
+          ? {}
+          : {
+              actionFlows,
+              actionLimit:
+                literalText(task.properties.target) === "dialog"
+                  ? flowMessageActionLimits.dialog
+                  : flowMessageActionLimits.other,
+            }),
+        ...(hint === undefined ? {} : { help: hint }),
+      };
+    });
+  const properties = Object.fromEntries(
+    Object.entries(definition.properties).map(([key, declaration]) => [
+      key,
+      Object.hasOwn(task.properties, key)
+        ? task.type === "record.read_fields" && key === "fields"
+          ? readFieldsDraft(task.properties[key]!)
+          : propertyDraft(declaration.type, task.properties[key]!)
+        : null,
+    ]),
+  );
+  return {
+    kind: "available",
+    fields,
+    draft: { description, properties, control: null },
+  };
+};
+
+// ─── Back to the stored task ─────────────────────────────────────────────────────────────────
+
+type Refused = Readonly<{ ok: false; reason: string }>;
+type Built<T> = Readonly<{ ok: true; value: T }> | Refused;
+
+const entryMap = (
+  entries: readonly Readonly<{ name: string; source: StudioFlowValueSource }>[],
+  label: string,
+): Built<Record<string, FlowValue>> => {
+  const map: Record<string, FlowValue> = {};
+  for (const entry of entries) {
+    if (!builderKeySchema.safeParse(entry.name).success)
+      return {
+        ok: false,
+        reason: `${label}: name each entry with lowercase words joined by underscores, such as record_id.`,
+      };
+    if (Object.hasOwn(map, entry.name))
+      return {
+        ok: false,
+        reason: `${label}: ${studioWords(entry.name)} is given twice. Give each entry once.`,
+      };
+    map[entry.name] = studioFlowValueOf(entry.source);
+  }
+  return { ok: true, value: map };
+};
+
+const propertyValue = (
+  flow: SourceFlow,
+  field: StudioFlowPropertyField,
+  draft: StudioFlowPropertyDraft,
+  label: string,
+  recordFieldKeys: ReadonlySet<string> | undefined,
+): Built<FlowValue> => {
+  switch (draft.kind) {
+    case "kept":
+      return { ok: true, value: draft.value };
+    case "value":
+    case "whole":
+      return { ok: true, value: studioFlowValueOf(draft.source) };
+    case "calculation":
+      return calculationFormula(draft.calculation, label);
+    case "text": {
+      const text = draft.value.trim();
+      if (text.length === 0)
+        return {
+          ok: false,
+          reason: `${label}: choose a value, or leave the setting unset if it is optional.`,
+        };
+      if (field.keyType !== undefined) {
+        const problem = studioKeyProblem(field.keyType, text, label);
+        if (problem !== undefined) return { ok: false, reason: problem };
+      }
+      return { ok: true, value: { kind: "literal", literal: { type: "text", value: text } } };
+    }
+    case "fields": {
+      const map: Record<string, FlowValue> = {};
+      for (const entry of draft.entries) {
+        if (recordFieldKeys !== undefined && !recordFieldKeys.has(entry.field))
+          return {
+            ok: false,
+            reason: `${label}: the record type has no field ${studioWords(entry.field)}. Choose one of its fields.`,
+          };
+        if (Object.hasOwn(map, entry.field))
+          return {
+            ok: false,
+            reason: `${label}: ${studioWords(entry.field)} is set twice. Set each field once.`,
+          };
+        map[entry.field] = studioFlowValueOf(entry.source);
+      }
+      return { ok: true, value: { kind: "map", entries: map } };
+    }
+    case "read_fields": {
+      if (draft.fields.length === 0)
+        return { ok: false, reason: `${label}: choose at least one field to read.` };
+      if (draft.fields.length > 20)
+        return { ok: false, reason: `${label}: choose at most 20 fields.` };
+      return {
+        ok: true,
+        value: {
+          kind: "literal",
+          literal: {
+            type: "json",
+            value: draft.fields.map((field) => ({
+              alias: field.slice(field.lastIndexOf(".") + 1),
+              field,
+            })),
+          },
+        },
+      };
+    }
+    case "map": {
+      const built = entryMap(draft.entries, label);
+      return built.ok ? { ok: true, value: { kind: "map", entries: built.value } } : built;
+    }
+    case "actions": {
+      const limit = field.actionLimit ?? flowMessageActionLimits.other;
+      if (draft.actions.length === 0)
+        return { ok: false, reason: `${label}: add an action, or leave the setting unset.` };
+      if (draft.actions.length > limit)
+        return {
+          ok: false,
+          reason: `${label}: this message offers at most ${limit} ${limit === 1 ? "action" : "actions"}.`,
+        };
+      const items: FlowValue[] = [];
+      for (const [index, action] of draft.actions.entries()) {
+        const where = `${label}, action ${index + 1}`;
+        if (action.label.trim().length === 0)
+          return { ok: false, reason: `${where}: write the label of the button.` };
+        if (action.flow.length === 0)
+          return { ok: false, reason: `${where}: choose the flow it starts.` };
+        const inputs = entryMap(action.inputs, where);
+        if (!inputs.ok) return inputs;
+        items.push({
+          kind: "map",
+          entries: {
+            label: { kind: "literal", literal: { type: "text", value: action.label.trim() } },
+            flow: { kind: "literal", literal: { type: "text", value: action.flow } },
+            inputs: { kind: "map", entries: inputs.value },
+          },
+        });
+      }
+      return { ok: true, value: { kind: "array", items } };
+    }
+  }
+};
+
+const valueOrKept = (source: StudioFlowValueSource): FlowValue => studioFlowValueOf(source);
+
+/**
+ * The stored task a step draft writes: every declared setting from its control, the description,
+ * and a control step's own shape. Child step lists and policies are kept as they are.
+ */
+export const applyStudioFlowStepDraft = (
+  source: Readonly<ApplicationSourceDocument>,
+  flow: SourceFlow,
+  moduleKey: string | null,
+  task: SourceFlowTask,
+  path: StudioFlowPath,
+  draft: StudioFlowStepDraft,
+): Built<SourceFlowTask> => {
+  const where = describeStudioFlowLocation(flow, path);
+  const description = draft.description.trim();
+  if (description.length > 1_000)
+    return { ok: false, reason: `${where}, Description: use at most 1000 characters.` };
+  const base = { ...task } as SourceFlowTask & { description?: string };
+  if (description.length === 0) delete base.description;
+  else base.description = description;
+  if (!("properties" in task)) {
+    const control = draft.control;
+    if (control === null || control.kind !== (task.type === "sequential" ? "none" : task.type))
+      return { ok: false, reason: `${where}: this step changed kind. Select it again.` };
+    const next = base as Record<string, unknown>;
+    switch (control.kind) {
+      case "if":
+        if (!flowFormulaSchema.safeParse(control.condition).success)
+          return { ok: false, reason: `${where}, Condition: this condition is not valid.` };
+        next.condition = control.condition;
+        break;
+      case "stop": {
+        const problem = studioKeyProblem("builder_key", control.outcome, `${where}, Outcome`);
+        if (problem !== undefined) return { ok: false, reason: problem };
+        next.outcome = control.outcome;
+        break;
+      }
+      case "run_flow": {
+        const inputs = entryMap(control.inputs, `${where}, Inputs`);
+        if (!inputs.ok) return inputs;
+        next.flowId = control.flow;
+        next.inputs = inputs.value;
+        break;
+      }
+      case "for_each":
+        if (!Number.isSafeInteger(control.maximumItems) || control.maximumItems < 1)
+          return { ok: false, reason: `${where}, Most items: enter a whole number of at least 1.` };
+        next.items = valueOrKept(control.items);
+        next.maximumItems = control.maximumItems;
+        break;
+      case "switch": {
+        const keys = new Set<string>();
+        for (const entry of control.cases) {
+          const problem = studioKeyProblem("builder_key", entry.key, `${where}, Case name`);
+          if (problem !== undefined) return { ok: false, reason: problem };
+          if (keys.has(entry.key))
+            return {
+              ok: false,
+              reason: `${where}: two cases are called ${studioWords(entry.key)}. Name each case once.`,
+            };
+          keys.add(entry.key);
+        }
+        const cases = (task as Extract<SourceFlowTask, { type: "switch" }>).cases;
+        if (cases.length !== control.cases.length)
+          return { ok: false, reason: `${where}: the cases changed. Select the step again.` };
+        next.value = valueOrKept(control.value);
+        next.cases = cases.map((entry, index) => ({
+          ...entry,
+          key: control.cases[index]!.key,
+          when: control.cases[index]!.when,
+        }));
+        break;
+      }
+      case "none":
+        break;
+    }
+    return { ok: true, value: next as SourceFlowTask };
+  }
+  const definition = studioFlowDefinitionOf(task.type, task.version);
+  if (definition === undefined)
+    return {
+      ok: false,
+      reason: `${where}: this kind of step is not in the step catalogue, so it cannot be changed.`,
+    };
+  const recordType =
+    stepRecordType(
+      flow,
+      Object.fromEntries(
+        Object.entries(draft.properties).flatMap(([key, value]) =>
+          key === "record_type" && value?.kind === "text"
+            ? [
+                [
+                  key,
+                  { kind: "literal", literal: { type: "text", value: value.value } } as FlowValue,
+                ],
+              ]
+            : [],
+        ),
+      ),
+    ) ?? stepRecordType(flow, task.properties);
+  const recordFieldKeys =
+    recordType === undefined
+      ? undefined
+      : new Set(
+          studioDraftRecordType(source, recordType, moduleKey)?.record.fields.map(
+            (field) => field.key,
+          ) ?? [],
+        );
+  const properties: Record<string, FlowValue> = {};
+  for (const [key, declaration] of Object.entries(definition.properties)) {
+    const label = `${where}, ${propertyLabels[key] ?? studioWords(key)}`;
+    const value = Object.hasOwn(draft.properties, key) ? draft.properties[key]! : undefined;
+    if (value === null || value === undefined) {
+      if (declaration.required)
+        return { ok: false, reason: `${label} is required. Give it a value.` };
+      continue;
+    }
+    const field: StudioFlowPropertyField = {
+      key,
+      label,
+      required: declaration.required,
+      control: controlFor(declaration.type)!,
+      valueType: undefined,
+      ...(declaration.type === "builder_key" || declaration.type === "namespaced_key"
+        ? { keyType: declaration.type }
+        : {}),
+    };
+    const built = propertyValue(flow, field, value, label, recordFieldKeys);
+    if (!built.ok) return built;
+    properties[key] = built.value;
+  }
+  for (const key of Object.keys(draft.properties))
+    if (!Object.hasOwn(definition.properties, key))
+      return {
+        ok: false,
+        reason: `${where}, ${studioWords(key)}: the step catalogue does not declare this setting.`,
+      };
+  return { ok: true, value: { ...base, properties } as SourceFlowTask };
+};
+
+/**
+ * The form's fields as the draft now stands: the fields a mapping offers follow the record type
+ * chosen, and the names a map expects follow the page, action or form chosen, before Apply.
+ */
+export const refreshStudioFlowStepFields = (
+  source: Readonly<ApplicationSourceDocument>,
+  flow: SourceFlow,
+  moduleKey: string | null,
+  task: SourceFlowTask,
+  draft: StudioFlowStepDraft,
+  choices: StudioFlowDraftChoices,
+  fields: readonly StudioFlowPropertyField[],
+): readonly StudioFlowPropertyField[] => {
+  if (!("properties" in task)) return fields;
+  const properties: Record<string, FlowValue> = { ...task.properties };
+  for (const [key, value] of Object.entries(draft.properties)) {
+    if (value === null) delete properties[key];
+    else if (value.kind === "text")
+      properties[key] = { kind: "literal", literal: { type: "text", value: value.value } };
+    else if (value.kind === "fields")
+      properties[key] = {
+        kind: "map",
+        entries: Object.fromEntries(
+          value.entries.map((entry) => [entry.field, studioFlowValueOf(entry.source)]),
+        ),
+      };
+  }
+  const current = { ...task, properties };
+  const recordType = stepRecordType(flow, properties);
+  return fields.map((field): StudioFlowPropertyField => {
+    if (field.control === "field_values")
+      return { ...field, fields: recordFields(source, recordType, moduleKey) ?? [] };
+    if (field.control !== "input_map") return field;
+    const entries = expectedEntries(current, field.key, choices, source);
+    if (entries !== undefined) return { ...field, entries };
+    const rest: { -readonly [K in keyof StudioFlowPropertyField]?: StudioFlowPropertyField[K] } = {
+      ...field,
+    };
+    delete rest.entries;
+    return rest as StudioFlowPropertyField;
+  });
+};

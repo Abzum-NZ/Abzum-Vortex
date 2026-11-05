@@ -25,9 +25,15 @@ import {
   type BlockPropertySchemaContract,
   type QueryBindingPageFacts,
   type SourceBlockPropertyValueContract,
+  type StudioQueryChoice,
+  conditionalRequiredMessage,
+  settleStudioSetting,
+  studioSettingProblems,
+  type SettingValue,
+  type StudioSettingChoices,
+  type StudioSettingValues,
 } from "@vortex/platform/schema";
 import { Item } from "../components/item";
-import type { StudioQueryChoice } from "./contextual-palette";
 import { StudioField } from "./studio-field";
 import { StudioEditButton } from "./studio-icon-buttons";
 import { StudioGateSelect } from "./studio-gate-select";
@@ -40,14 +46,6 @@ import {
 } from "./studio-setting-controls";
 import { StudioQueryBindings } from "./studio-query-bindings";
 import { StudioQueryPicker } from "./studio-query-picker";
-import {
-  conditionalRequiredMessage,
-  settleStudioSetting,
-  studioSettingProblems,
-  type SettingValue,
-  type StudioSettingChoices,
-  type StudioSettingValues,
-} from "./studio-setting-model";
 import { studioTotalMeasureProperty } from "./grid-features/totals";
 import { StudioGridFeatures, type StudioGridFeaturesProps } from "./studio-grid-features";
 import {

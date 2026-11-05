@@ -67,6 +67,6 @@ types, the projection schema, the Table release's `features` setting group (and 
 `defaultProps`) and the refusal sentences derive from it. Studio, both publication passes and the
 runtime projection call the same `check`. The UI view registry (`gridFeatureViews`,
 `packages/ui/src/display/grid-features/registry.tsx`) and the Studio registry
-(`studioGridFeatures`, `packages/ui/src/studio/grid-features/index.ts`) are keyed by the definition
+(`studioGridFeatures`, `packages/platform/src/definition/application-authoring/grid-features/index.ts`) are keyed by the definition
 objects. The blocking guard rule `grid-feature-definition` keeps feature key literals in their
 definition files.

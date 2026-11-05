@@ -9,7 +9,7 @@ import {
   studioUnsetLabel,
   type ControlProps,
   type SettingValue,
-} from "./studio-setting-model";
+} from "@vortex/platform/schema";
 
 /**
  * The controls of the reference settings: one by name (pages, record types, queries, actions,

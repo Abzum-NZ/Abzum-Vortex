@@ -6,23 +6,17 @@ import {
   sourcePageItems,
   type DefaultFlowAfter,
   type SourceFlow,
-} from "@vortex/platform/schema";
-import {
   fieldsPerStep,
   inputTypes,
   listing,
   lowerFirst,
   type StudioRecordPageCommand,
-} from "./application-record-page-kinds";
-import { ensureRelatedAdds } from "./application-record-page-detail";
-import {
+  ensureRelatedAdds,
   bindDefault,
   flowCreate,
   flowParts,
   freshAlias,
   type Plan,
-} from "./application-record-plan";
-import {
   companions,
   ensureDetailEdit,
   ensureListEdit,
@@ -33,8 +27,6 @@ import {
   resolveRecordType,
   type Field,
   type Resolved,
-} from "./application-record-page-shared";
-import {
   blockItem,
   judged,
   pageData,
@@ -44,7 +36,7 @@ import {
   uniqueKey,
   type Page,
   type StudioStructureContext,
-} from "./application-structure-common";
+} from "@vortex/platform/schema";
 
 const formFields = (
   resolved: Resolved,

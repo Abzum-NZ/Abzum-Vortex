@@ -1,26 +1,28 @@
 import type { ApplicationSourceDocument, ConditionNode } from "@vortex/platform/schema";
 import {
-  applyDraftChange,
-  applyStudioItemLabels,
   applyStudioPageValue,
   applyStudioReactionCondition,
-  sameStudioCompositionContext,
   settingsChangeOfPuckEdit,
-  studioBlockChoices,
-  studioSemanticSelectionKey,
   type StudioApplicationConditionContext,
-  type StudioDraftChange,
-  type StudioCompositionContext,
-  type StudioCompositionOutcome,
-  type StudioItemLabelResult,
   type StudioPageValueCommand,
   type StudioPageValueResult,
   type StudioReactionCommandResult,
   type StudioReactionSlot,
-  type StudioSemanticSelection,
   type StudioSettingsEdit,
 } from "@vortex/ui/studio";
 import type { StudioDraft, StudioDraftStep } from "./use-studio-draft";
+import {
+  applyDraftChange,
+  applyStudioItemLabels,
+  sameStudioCompositionContext,
+  studioBlockChoices,
+  studioSemanticSelectionKey,
+  type StudioDraftChange,
+  type StudioCompositionContext,
+  type StudioCompositionOutcome,
+  type StudioItemLabelResult,
+  type StudioSemanticSelection,
+} from "@vortex/platform/schema";
 
 type DraftChangeOptions = Readonly<{
   /** Consecutive edits with this key (typing into one field) are one Undo step. */

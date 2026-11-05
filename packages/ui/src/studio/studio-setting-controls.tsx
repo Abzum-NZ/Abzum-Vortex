@@ -10,6 +10,14 @@ import {
   isRepeatableSlotIdentity,
   type BlockPropertySchemaContract,
   type SourceBlockPropertyValueContract,
+  type SettingValue,
+  type StudioSettingValues,
+  type StudioSettingChoices,
+  initialValue,
+  settleStudioSetting,
+  studioUnsetLabel,
+  conditionalRequiredMessage,
+  type ControlProps,
 } from "@vortex/platform/schema";
 import { followFieldLabels } from "./follow-field-labels";
 import { studioTotalMeasureProperty } from "./grid-features/totals";
@@ -36,16 +44,6 @@ import {
   StudioRecordControl,
   StudioReferenceControl,
 } from "./studio-reference-controls";
-import {
-  type SettingValue,
-  type StudioSettingValues,
-  type StudioSettingChoices,
-  initialValue,
-  settleStudioSetting,
-  studioUnsetLabel,
-  conditionalRequiredMessage,
-  type ControlProps,
-} from "./studio-setting-model";
 import {
   NumberControl,
   RichTextControl,

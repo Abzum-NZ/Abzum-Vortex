@@ -1,7 +1,13 @@
 "use client";
 import { Card } from "@vortex/ui/components/card";
 import { Fragment, useMemo, useState } from "react";
-import { applicationUses, type ApplicationSourceDocument } from "@vortex/platform/schema";
+import {
+  applicationUses,
+  type ApplicationSourceDocument,
+  studioAccessMenuEntries,
+  studioAccessPermissions,
+  studioStandardFieldPolicy,
+} from "@vortex/platform/schema";
 import { Icon } from "@vortex/ui";
 import { Button } from "@vortex/ui/components/button";
 import { Badge } from "@vortex/ui/components/badge";
@@ -13,14 +19,7 @@ import {
   TableHeader,
   TableRow,
 } from "@vortex/ui/components/table";
-import {
-  studioAccessMenuEntries,
-  studioAccessPermissions,
-  studioStandardFieldPolicy,
-  StudioGateSelect,
-  StudioHelp,
-  StudioIconButton,
-} from "@vortex/ui/studio";
+import { StudioGateSelect, StudioHelp, StudioIconButton } from "@vortex/ui/studio";
 import { StudioPermissionDeclaration } from "./studio-permission-declaration";
 import { StudioStandardFieldPolicy } from "./studio-standard-field-policy";
 import type { StudioAccessRun } from "./studio-access-role";

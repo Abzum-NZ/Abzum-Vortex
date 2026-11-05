@@ -15,9 +15,9 @@ import {
   ItemHeader,
   ItemTitle,
 } from "@vortex/ui/components/item";
-import { applyStudioFlowCreate, studioRecordSubscribers } from "@vortex/ui/studio";
 import { useStudioPlaceOpener } from "./studio-used-in";
 import { studioEditProblem, type StudioDataEdit } from "../_lib/studio-data-model";
+import { applyStudioFlowCreate, studioRecordSubscribers } from "@vortex/platform/schema";
 
 /**
  * The after-save subscribers of a record type, such as "Create a follow-up activity". Each is a

@@ -15,13 +15,7 @@ import { Button } from "@vortex/ui/components/button";
 import { Checkbox } from "@vortex/ui/components/checkbox";
 import { Input } from "@vortex/ui/components/input";
 import { Textarea } from "@vortex/ui/components/textarea";
-import {
-  StudioInspectorGroup,
-  StudioOptionControl,
-  StudioSettingFields,
-  type StudioSettingChoices,
-  type StudioSettingValues,
-} from "@vortex/ui/studio";
+import { StudioInspectorGroup, StudioOptionControl, StudioSettingFields } from "@vortex/ui/studio";
 import {
   fieldTypeKeys,
   moduleFieldTypeLabels,
@@ -38,6 +32,8 @@ import {
   type linkDependencyCandidates,
   type ModuleFieldType,
   type TotalSettings,
+  type StudioSettingChoices,
+  type StudioSettingValues,
 } from "@vortex/platform/schema";
 import { StudioField } from "./studio-field";
 import { StudioPlaceList } from "./studio-used-in";

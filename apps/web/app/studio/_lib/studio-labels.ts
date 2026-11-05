@@ -2,7 +2,7 @@ import {
   studioSemanticSelectionKey,
   type StudioSemanticOutlineNode,
   type StudioSemanticSelection,
-} from "@vortex/ui/studio";
+} from "@vortex/platform/schema";
 
 /** The words a builder sees for each kind of item; aliases and internal kind names never appear. */
 export const studioKindLabel = (

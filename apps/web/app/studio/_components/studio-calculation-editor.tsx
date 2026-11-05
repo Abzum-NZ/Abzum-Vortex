@@ -12,8 +12,10 @@ import {
   type CalculationSettings,
   type FormulaField,
   type ModuleField,
+  studioFieldValueType,
+  studioWords,
 } from "@vortex/platform/schema";
-import { StudioOptionControl, studioFieldValueType, studioWords } from "@vortex/ui/studio";
+import { StudioOptionControl } from "@vortex/ui/studio";
 import { Input } from "@vortex/ui/components/input";
 import { StudioFormulaEditor } from "./studio-formula-editor";
 

@@ -1,7 +1,10 @@
 "use client";
 import { Badge } from "@vortex/ui/components/badge";
-import { studioSemanticSelectionKey, type StudioSemanticOutlineNode } from "@vortex/ui/studio";
 import { StudioNavTree, type StudioNavNode } from "./studio-nav-tree";
+import {
+  studioSemanticSelectionKey,
+  type StudioSemanticOutlineNode,
+} from "@vortex/platform/schema";
 
 /** Both semantic navigators use the same keyboard tree and selection. */
 export function StudioOutline({

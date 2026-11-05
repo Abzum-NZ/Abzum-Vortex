@@ -14,6 +14,7 @@ import {
   saveDefinitionDraftCommandSchema,
   sourceApplicationThemeSchema,
   translateDefinitionRuleFailures,
+  type StudioStoredApplicationDraft,
 } from "@vortex/platform/schema";
 import { findPinnedPlatformThemeRelease } from "./_lib/pinned-platform-theme-release";
 import {
@@ -50,7 +51,6 @@ import type {
   StudioOrganizationThemeSave,
   StudioThemeResolution,
 } from "./_lib/studio-theme-options";
-import type { StudioStoredApplicationDraft } from "@vortex/ui/studio";
 import { readStudioPersonLabel } from "../_lib/studio-person-labels";
 import { scheduleStudioPreviewMove } from "../_lib/studio-application-preview";
 import type { StudioPersonLabel } from "../_lib/studio-application-restore-contracts";

@@ -19,6 +19,7 @@ import {
   VORTEX_ICON_NAMES,
   type ApplicationSourceDocument,
   type VortexIconName,
+  studioAccessGateChoices,
 } from "@vortex/platform/schema";
 import { Icon, IconLibraryProvider } from "@vortex/ui";
 import { resolveVortexIconName } from "@vortex/ui/icons";
@@ -36,7 +37,6 @@ import {
   type StudioMenuResult,
 } from "@vortex/platform/schema";
 import { StudioHelp, StudioOptionControl } from "@vortex/ui/studio";
-import { studioAccessGateChoices } from "@vortex/ui/studio";
 import { StudioNavTree, type StudioNavNode } from "./studio-nav-tree";
 import { StudioPanelShell, StudioSection } from "./studio-frame";
 import { StudioField } from "./studio-field";

@@ -15,20 +15,16 @@ import {
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader } from "@vortex/ui/components/empty";
 import { Input } from "@vortex/ui/components/input";
 import { Item, ItemContent, ItemGroup } from "@vortex/ui/components/item";
+import { StudioHelp, StudioOptionControl } from "@vortex/ui/studio";
+import { studioStructureDefaultShell, studioStructureShellChoices } from "@vortex/ui/studio";
+import { StudioField } from "./studio-field";
 import {
-  StudioHelp,
-  StudioOptionControl,
   studioRecordPageChoices,
   studioRecordPageKinds,
   type StudioRecordPageCommand,
   type StudioRecordPageKind,
-} from "@vortex/ui/studio";
-import {
-  studioStructureDefaultShell,
-  studioStructureShellChoices,
   type StudioStructureResult,
-} from "@vortex/ui/studio";
-import { StudioField } from "./studio-field";
+} from "@vortex/platform/schema";
 
 /**
  * "Add page for a record type": pick one of the application's own record types and a page kind,

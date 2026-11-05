@@ -3,18 +3,15 @@ import {
   sourcePageItems,
   sourcePageShell,
   type SourceItem,
-} from "@vortex/platform/schema";
-import { takenIds } from "./application-record-page-kinds";
-import {
+  takenIds,
   field,
   keyColumns,
   release,
   resolveRecordType,
   tableColumns,
   type Resolved,
-} from "./application-record-page-shared";
-import { freshAlias, type Plan } from "./application-record-plan";
-import {
+  freshAlias,
+  type Plan,
   admitBlocks,
   blockItem,
   frameArea,
@@ -25,7 +22,7 @@ import {
   uniqueKey,
   type Page,
   type StudioStructureContext,
-} from "./application-structure-common";
+} from "@vortex/platform/schema";
 
 /**
  * A generated home dashboard keeps one card count, one recent-records table and, where the record

@@ -4,16 +4,14 @@ import {
   type FlowFormula,
   type FlowLiteral,
   type JsonValue,
+  studioFlowReferenceToken,
+  type StudioFlowReferenceChoice,
 } from "@vortex/platform/schema";
 import type {
   StudioConditionControlsContext,
   StudioConditionOperandRole,
   StudioConditionParameterType,
 } from "./condition-model";
-import {
-  studioFlowReferenceToken,
-  type StudioFlowReferenceChoice,
-} from "./application-flow-values";
 
 /**
  * A flow decision's condition in Studio's shared condition controls. The flow stores its condition

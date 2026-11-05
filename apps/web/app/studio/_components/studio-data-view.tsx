@@ -7,7 +7,6 @@ import {
   StudioInspectorActions,
   StudioInspectorGroup,
   StudioOptionControl,
-  type StudioDataSelection,
 } from "@vortex/ui/studio";
 import {
   deleteInlineRecordType,
@@ -19,6 +18,7 @@ import {
   type ApplicationUsePlace,
   type RecordSettingsContext,
   type ModuleExtensionPointUse,
+  type StudioDataSelection,
 } from "@vortex/platform/schema";
 import { Alert, AlertDescription, AlertTitle } from "@vortex/ui/components/alert";
 import { Button } from "@vortex/ui/components/button";

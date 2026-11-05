@@ -19,6 +19,7 @@ import {
   type RecordsTableFeatureState,
   type RecordsTableQueryFacts,
   type SourceBlockPropertyValueContract,
+  type StudioQueryChoice,
 } from "@vortex/platform/schema";
 import { Button } from "../../components/button";
 import { Item, ItemContent, ItemGroup } from "../../components/item";
@@ -31,7 +32,6 @@ import { cn } from "../../lib/utils";
 import { StudioConditionControls } from "../condition-controls";
 import { createInitialStudioCondition, describeCondition } from "../condition-model";
 import type { StudioConditionControlsContext } from "../condition-model";
-import type { StudioQueryChoice } from "../contextual-palette";
 import {
   ConditionalFormatStyleControls,
   ConditionalFormatStyleSwatch,

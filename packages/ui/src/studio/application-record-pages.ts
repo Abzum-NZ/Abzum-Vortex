@@ -1,3 +1,6 @@
+import { addList } from "./application-record-page-list";
+import { addForm, addGuided } from "./application-record-page-form";
+import { ensureHomeDashboard } from "./application-home-dashboard";
 import {
   kindWords,
   lowerFirst,
@@ -5,13 +8,9 @@ import {
   studioRecordPageKinds,
   takenIds,
   type StudioRecordPageCommand,
-} from "./application-record-page-kinds";
-import { companions, resolveRecordType } from "./application-record-page-shared";
-import { addDetail } from "./application-record-page-detail";
-import { addList } from "./application-record-page-list";
-import { addForm, addGuided } from "./application-record-page-form";
-import { ensureHomeDashboard } from "./application-home-dashboard";
-import {
+  companions,
+  resolveRecordType,
+  addDetail,
   cleanName,
   judged,
   quoted,
@@ -19,8 +18,8 @@ import {
   type Source,
   type StudioStructureContext,
   type StudioStructureResult,
-} from "./application-structure-common";
-import type { Plan } from "./application-record-plan";
+  type Plan,
+} from "@vortex/platform/schema";
 
 export const addRecordPage = (
   context: StudioStructureContext,
