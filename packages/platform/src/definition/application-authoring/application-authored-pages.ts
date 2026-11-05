@@ -1,9 +1,19 @@
 import type { ApplicationAudience } from "../../catalogue/application-link";
 import type { ApplicationSourceDocument } from "../application-source-contracts";
-import { sourceItemTree, type SourceItem } from "../application-composition/source-composition";
+import {
+  sourceItemTree,
+  sourcePageItems,
+  sourcePageZones,
+  type SourceItem,
+  type SourceZonedData,
+} from "../application-composition/source-composition";
 import { sourcePageDataAt } from "../application-page-slots";
 import { applyDraftChange, logCompositionRefusal } from "./application-composition-commands";
-import { studioPageDataRefusal } from "./application-composition-page-data";
+import { studioWorkflowRemovalRefusal } from "./application-composition-gate";
+import {
+  studioNewPageDataRefusal,
+  studioPageDataRefusal,
+} from "./application-composition-page-data";
 import type {
   StudioCanvasOwner,
   StudioCompositionContext,
@@ -11,6 +21,7 @@ import type {
 } from "./application-composition-model";
 import { regions } from "./application-composition-regions";
 import { sameCompositionValue } from "./composition-references";
+import { studioRemovalRefusal } from "./studio-canvas-permissions";
 
 type Access = Readonly<{
   gate: string | undefined;
@@ -22,6 +33,7 @@ type GateMembers = {
   use?: string | null;
   audience?: ApplicationAudience | null;
 };
+type OwnedData = Readonly<{ owner: StudioCanvasOwner; data: SourceZonedData }>;
 
 const blocksOf = (source: ApplicationSourceDocument): SourceItem[] =>
   regions(source).flatMap((region) => sourceItemTree(region.zone.items));
@@ -45,63 +57,104 @@ const accessChange = (item: SourceItem, was: Access | undefined): GateMembers | 
   return Object.keys(change).length === 0 ? undefined : change;
 };
 
-/** Every page (or guided step) and layout of both sources whose blocks the edit replaced. */
-const changedOwners = (
-  current: ApplicationSourceDocument,
+/** The data of each step of a page (its one data when it has no steps). */
+const pageData = (page: ApplicationSourceDocument["body"]["pages"][number]): OwnedData[] => {
+  const composition = page.composition;
+  const steps = "step_content" in composition ? Object.keys(composition.step_content) : [undefined];
+  return steps.flatMap((step) => {
+    const data = sourcePageDataAt(page, step);
+    return data === undefined ? [] : [{ owner: { kind: "page", pageAlias: page.id, step }, data }];
+  });
+};
+
+/** Every page, guided step and layout of a draft, with its data. */
+const ownedData = (source: ApplicationSourceDocument): OwnedData[] => [
+  ...source.body.pages.flatMap(pageData),
+  ...source.body.shells.map((shell): OwnedData => ({
+    owner: { kind: "layout", shellAlias: shell.id },
+    data: shell.layout,
+  })),
+];
+
+const ownerKey = (owner: StudioCanvasOwner): string =>
+  owner.kind === "layout"
+    ? `layout:${owner.shellAlias}`
+    : `page:${owner.pageAlias}:${owner.step ?? ""}`;
+
+/**
+ * Why the edited pages, steps and layouts may not replace the current ones, or undefined: a
+ * changed one has the canvas's whole-page refusals, a new one those of blocks added, and the
+ * blocks of a step the edit drops leave only where every removal route lets them. A page or layout
+ * deleted whole is judged by the platform review (what still names it is refused there).
+ */
+const pageDataRefusal = (
+  context: StudioCompositionContext,
   edited: ApplicationSourceDocument,
-): { owner: StudioCanvasOwner; data: Parameters<typeof studioPageDataRefusal>[2] }[] => {
-  const owners: ReturnType<typeof changedOwners> = [];
-  for (const page of edited.body.pages) {
-    const was = current.body.pages.find((item) => item.id === page.id);
-    if (was === undefined) continue;
-    const composition = page.composition;
-    const steps =
-      "step_content" in composition ? Object.keys(composition.step_content) : [undefined];
-    for (const step of steps) {
-      const before = sourcePageDataAt(was, step);
-      const data = sourcePageDataAt(page, step);
-      if (before !== undefined && data !== undefined && !sameCompositionValue(before, data))
-        owners.push({ owner: { kind: "page", pageAlias: page.id, step }, data });
-    }
+): string | undefined => {
+  const { catalogue, source: current } = context;
+  const was = new Map(ownedData(current).map(({ owner, data }) => [ownerKey(owner), data]));
+  const kept = new Set<string>();
+  for (const { owner, data } of ownedData(edited)) {
+    const key = ownerKey(owner);
+    kept.add(key);
+    const before = was.get(key);
+    const reason =
+      before === undefined
+        ? studioNewPageDataRefusal(context, edited, owner, data)
+        : sameCompositionValue(before, data)
+          ? undefined
+          : studioPageDataRefusal(context, owner, data);
+    if (reason !== undefined) return reason;
   }
-  for (const shell of edited.body.shells) {
-    const was = current.body.shells.find((item) => item.id === shell.id);
-    if (was !== undefined && !sameCompositionValue(was.layout, shell.layout))
-      owners.push({ owner: { kind: "layout", shellAlias: shell.id }, data: shell.layout });
+  for (const page of current.body.pages) {
+    const now = edited.body.pages.find((item) => item.id === page.id);
+    const dropped = pageData(page).filter(({ owner }) => !kept.has(ownerKey(owner)));
+    if (now === undefined || dropped.length === 0) continue;
+    const stays = new Set(sourcePageItems(now.composition).map((item) => item.props.id));
+    const leaving = new Set(
+      dropped.flatMap(({ data }) =>
+        sourcePageZones(data)
+          .flatMap(([, items]) => sourceItemTree(items))
+          .map((item) => item.props.id)
+          .filter((alias) => !stays.has(alias)),
+      ),
+    );
+    const gone = leaving.size === 0 ? undefined : studioRemovalRefusal(catalogue, current, leaving);
+    if (gone !== undefined) return gone;
   }
-  return owners;
+  return undefined;
 };
 
 /**
  * A whole-source edit that replaces pages or layouts (the draft agent's page and flow tools) runs
- * the rules of the commands that make the same changes, so no route has fewer refusals: each
- * replaced page's data has the canvas's whole-page refusals (a published page, where a block may
- * leave, a form kept whole), and each block whose gate, use permission or audience changed is
- * changed by the `gate` command itself, on the edited source with the access as it was.
+ * the rules of the commands that make the same changes, so no route has fewer refusals: the
+ * whole-page refusals above, no block losing its last workflow while it keeps a use permission,
+ * and each block whose gate, use permission or audience changed is changed by the `gate` command
+ * itself, on a copy of the edited source with the access as it was. Nothing is applied unless
+ * every check passes.
  */
 export const applyStudioAuthoredSource = (
   context: StudioCompositionContext,
   edited: ApplicationSourceDocument,
 ): StudioDraftChangeResult => {
-  const { source: current } = context;
-  for (const { owner, data } of changedOwners(current, edited)) {
-    const reason = studioPageDataRefusal(context, owner, data);
-    if (reason !== undefined) {
-      logCompositionRefusal("pageData", reason);
-      return { kind: "refused", reason };
-    }
+  const reason =
+    pageDataRefusal(context, edited) ?? studioWorkflowRemovalRefusal(context.source, edited);
+  if (reason !== undefined) {
+    logCompositionRefusal("pages", reason);
+    return { kind: "refused", reason };
   }
-  const was = new Map(blocksOf(current).map((item) => [item.props.id, accessOf(item)]));
-  if (!blocksOf(edited).some((item) => accessChange(item, was.get(item.props.id)) !== undefined))
-    return { kind: "applied", source: edited };
+  const was = new Map(blocksOf(context.source).map((item) => [item.props.id, accessOf(item)]));
+  const changes = new Map<string, GateMembers>();
+  for (const item of blocksOf(edited)) {
+    const members = accessChange(item, was.get(item.props.id));
+    if (members !== undefined) changes.set(item.props.id, members);
+  }
+  if (changes.size === 0) return { kind: "applied", source: edited };
   // The access goes back to what each block had; the command then makes each change, with its
   // own refusals.
   let source = structuredClone(edited);
-  const changes: { alias: string; members: GateMembers }[] = [];
   for (const item of blocksOf(source)) {
-    const members = accessChange(item, was.get(item.props.id));
-    if (members === undefined) continue;
-    changes.push({ alias: item.props.id, members });
+    if (!changes.has(item.props.id)) continue;
     const before = was.get(item.props.id);
     const vortex = item.props.vortex;
     if (before?.gate === undefined) delete vortex.view_permission;
@@ -111,20 +164,14 @@ export const applyStudioAuthoredSource = (
     if (before?.audience === undefined) delete vortex.application_audience;
     else vortex.application_audience = before.audience;
   }
-  for (const { alias, members } of changes) {
+  for (const [alias, members] of changes) {
     const result = applyDraftChange(
       { ...context, source },
       { kind: "placement", placementAlias: alias },
       { kind: "gate", ...members },
     );
-    if (result.kind === "refused") return result;
-    if (result.kind !== "applied") {
-      console.error("[studio] an edited block's access could not be checked", result.kind);
-      return {
-        kind: "refused",
-        reason: "A block's access could not be checked, so nothing was changed.",
-      };
-    }
+    // A refusal is logged by the command; anything else is a fault it logged.
+    if (result.kind !== "applied") return result;
     source = result.source;
   }
   return { kind: "applied", source };

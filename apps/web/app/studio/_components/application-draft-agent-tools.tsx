@@ -590,13 +590,12 @@ export function ApplicationDraftAgentTools({
           // Pages and layouts replaced here have the refusals of the commands that make the same
           // changes: the gate, a published page, where a block may leave, a form kept whole.
           const checked = applyStudioAuthoredSource(contextNow(), reviewed.source);
+          if (checked.kind === "refused")
+            return { outcome: "refused", message: `${checked.reason} Nothing was applied.` };
           if (checked.kind !== "applied")
             return {
-              outcome: "refused",
-              message:
-                checked.kind === "refused"
-                  ? `${checked.reason} Nothing was applied.`
-                  : "The edit could not be checked. Nothing was applied.",
+              outcome: "invalid",
+              message: "The edit could not be checked. Nothing was applied.",
             };
           const edited = latest.current.run(
             () => ({ kind: "edit", source: checked.source, result: true }),

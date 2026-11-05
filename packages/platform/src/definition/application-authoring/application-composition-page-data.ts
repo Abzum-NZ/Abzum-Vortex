@@ -154,6 +154,29 @@ export const studioPageDataRefusal = (
 };
 
 /**
+ * Why a page, guided step or layout that only the edited draft has may not take its data, or
+ * undefined: everything on it is new, so a published page takes none of it and no form sits in
+ * another, as for any block added.
+ */
+export const studioNewPageDataRefusal = (
+  context: StudioCompositionContext,
+  edited: ApplicationSourceDocument,
+  owner: StudioCanvasOwner,
+  data: SourceZonedData,
+): string | undefined => {
+  const page =
+    owner.kind === "page"
+      ? edited.body.pages.find((item) => item.id === owner.pageAlias)
+      : undefined;
+  if (page !== undefined && publishedPage(edited, page) && dataItems(data).length > 0)
+    return PUBLISHED_PAGE_ADD_REASON;
+  const broken = studioFormChangeRefusal(context.catalogue, edited, [], dataItems(data));
+  return broken === undefined
+    ? undefined
+    : studioFormChangeRefusalSentence(broken, studioPlacementReferenceSentence);
+};
+
+/**
  * The one whole-page write: the data of what the canvas shows (a page, a guided step or a layout)
  * placed in the current draft. The canvas's Duplicate and a drag across slots come here; they have
  * the refusals of their buttons and of Remove and Move, then the same validation as any other
