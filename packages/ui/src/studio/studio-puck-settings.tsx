@@ -48,6 +48,7 @@ import { StudioInspectorActions, type StudioInspectorAction } from "./studio-ins
 import { StudioOrderNamesContext, studioLayoutSummary } from "./studio-layout-fields";
 import { useStudioScreen } from "./studio-canvas-screen";
 import { studioReleaseIcon } from "./studio-puck-drawer";
+import { studioPuckStyle } from "./studio-puck-style";
 import { studioReactionSlots } from "./application-reaction-condition-commands";
 import { studioBlockReadsQuery } from "./application-composition-commands";
 import { studioOwnsSetting, studioReleaseReadsQuery } from "./contextual-palette";
@@ -443,7 +444,13 @@ export function StudioBlockSettingFields({
                   actions={actions}
                   releases={releases}
                 />
-                {scope === placementAlias && <Puck.Fields wrapFields={false} />}
+                {scope === placementAlias && (
+                  // The Puck colour and font map again: in a narrow window the inspector is a sheet
+                  // outside the provider's wrapper, where Puck's form would take its own font.
+                  <div className="contents" style={studioPuckStyle}>
+                    <Puck.Fields wrapFields={false} />
+                  </div>
+                )}
               </StudioInspectorSectionsContext.Provider>
             </StudioOrderNamesContext.Provider>
           </StudioLayoutFieldContext.Provider>
