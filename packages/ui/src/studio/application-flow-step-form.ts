@@ -16,6 +16,7 @@ import {
   type SourceFlowTask,
 } from "@vortex/platform/schema";
 import {
+  studioBlockRelease,
   studioFlowLabel,
   traverseStudioSemanticSelectionDraft,
   type StudioSemanticPlacementOwner,
@@ -223,11 +224,7 @@ export const projectStudioFlowDraftChoices = (
           .map((page) => page.id);
   traverseStudioSemanticSelectionDraft(draft, ({ phase, node }) => {
     if (node.kind !== "placement") return;
-    const release = draft.catalogue.releases.find(
-      (candidate) =>
-        String(candidate.blockId) === node.block.block_id &&
-        String(candidate.releaseVersion) === node.block.release_version,
-    );
+    const release = studioBlockRelease(draft.catalogue, node.block);
     const isForm = release?.supportedEvents.includes("form_submit") === true;
     if (phase === "exit") {
       if (isForm) open.pop();

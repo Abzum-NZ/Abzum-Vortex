@@ -49,6 +49,7 @@ import {
   studioWords,
 } from "./application-flow-model";
 import {
+  studioBlockRelease,
   traverseStudioSemanticSelectionDraft,
   type StudioSemanticSelection,
 } from "./semantic-selection";
@@ -250,11 +251,7 @@ export const projectStudioFlowCreateChoices = (
   traverseStudioSemanticSelectionDraft(draft, ({ phase, node }) => {
     if (phase !== "enter" || node.kind !== "placement") return;
     const alias = node.selection.placementAlias;
-    const release = draft.catalogue.releases.find(
-      (candidate) =>
-        String(candidate.blockId) === node.block.block_id &&
-        String(candidate.releaseVersion) === node.block.release_version,
-    );
+    const release = studioBlockRelease(draft.catalogue, node.block);
     const owner = node.owner;
     const page =
       owner.kind === "page"

@@ -1,6 +1,6 @@
 "use client";
 import { WebMcpStatus, type ApplicationWebMcpRuntime } from "@vortex/ui";
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   applicationSourceDocumentSchema,
   canonicalJson,
@@ -115,7 +115,7 @@ const tool = (
   inputSchema: inputSchema(input),
 });
 
-const applicationTools: readonly StudioApplicationTool[] = [
+const buildApplicationTools = (): readonly StudioApplicationTool[] => [
   ...Object.entries(applicationAuthoringTools).map(([name, definition]) =>
     tool(
       name as ApplicationAuthoringToolName,
@@ -253,14 +253,20 @@ const applicationTools: readonly StudioApplicationTool[] = [
     false,
   ),
 ];
-const descriptors = applicationTools.map(
-  ({ name, description, inputSchema: schema, readOnly }) => ({
+/**
+ * The tools are built on first use: turning every authoring input into a JSON Schema takes a
+ * quarter of a second, which must not delay opening the editor.
+ */
+let builtTools: readonly StudioApplicationTool[] | undefined;
+const applicationTools = (): readonly StudioApplicationTool[] =>
+  (builtTools ??= buildApplicationTools());
+const descriptors = (): readonly WebMcpToolDescriptor[] =>
+  applicationTools().map(({ name, description, inputSchema: schema, readOnly }) => ({
     name,
     description,
     inputSchema: schema,
     readOnly,
-  }),
-);
+  }));
 
 const collect = (
   node: StudioSemanticOutlineNode,
@@ -310,7 +316,17 @@ export function ApplicationDraftAgentTools({
 }) {
   const [runtime, setRuntime] = useState<ApplicationWebMcpRuntime>();
   const running = useRef(false);
-  const tools = useMemo(() => descriptors, []);
+  // The tools are announced once the editor has drawn: after the browser is idle, never before.
+  const [tools, setTools] = useState<readonly WebMcpToolDescriptor[]>([]);
+  useEffect(() => {
+    const announce = () => setTools(descriptors());
+    if (typeof window.requestIdleCallback !== "function") {
+      const timer = setTimeout(announce, 1000);
+      return () => clearTimeout(timer);
+    }
+    const idle = window.requestIdleCallback(announce, { timeout: 3000 });
+    return () => window.cancelIdleCallback(idle);
+  }, []);
   const { history, organizationId } = draft;
   const latest = useRef(draft);
   latest.current = draft;
@@ -468,7 +484,7 @@ export function ApplicationDraftAgentTools({
     ): Promise<unknown> => {
       if (signal?.aborted)
         return { outcome: "cancelled", message: "The call was cancelled before anything changed." };
-      const found = applicationTools.find((item) => item.name === descriptor.name);
+      const found = applicationTools().find((item) => item.name === descriptor.name);
       if (found === undefined) return { outcome: "refused", reason: "UNKNOWN_TOOL" };
       const parsed = found.input.safeParse(candidate);
       if (!parsed.success)
