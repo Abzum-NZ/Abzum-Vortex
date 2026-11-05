@@ -281,6 +281,7 @@ const walkContract = (
     case "null":
     case "undefined":
     case "never":
+      return;
     // A checked opaque value (a record link, an amount of money, a rich-text block): no contract
     // position lies inside it.
     case "custom":
