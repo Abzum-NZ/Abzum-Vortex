@@ -417,7 +417,9 @@ const targetInCopy = (
 ): Target | undefined => {
   const index = regions(snapshot).findIndex((each) => each.zone.items === target.region.zone.items);
   const region = index < 0 ? undefined : regions(copy)[index];
-  return region === undefined ? undefined : { ...target, region: { ...region, zone: target.region.zone } };
+  return region === undefined
+    ? undefined
+    : { ...target, region: { ...region, zone: target.region.zone } };
 };
 
 const resolveBlock = (
@@ -541,7 +543,10 @@ const ownBlockAt = (working: Working, items: SourceItem[], index: number): Sourc
   const item = items[index]!;
   const own = copied.get(working)!;
   if (own.has(item)) return item;
-  const next = { ...item, props: { ...item.props, vortex: { ...item.props.vortex } } } as SourceItem;
+  const next = {
+    ...item,
+    props: { ...item.props, vortex: { ...item.props.vortex } },
+  } as SourceItem;
   own.add(next);
   items[index] = next;
   return next;
