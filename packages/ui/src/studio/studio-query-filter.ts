@@ -9,7 +9,7 @@ import type {
   StudioConditionControlsContext,
   StudioConditionOperator,
   StudioConditionParameterType,
-} from "./condition-model";
+} from "@vortex/platform/schema";
 
 type Comparison = Extract<ConditionNode, { kind: "comparison" }>;
 type Operand = Comparison["left"];

@@ -8,19 +8,15 @@ import {
   type StudioCompositionContext,
   type StudioSemanticSelection,
   type StudioStoredApplicationDraft,
-} from "@vortex/platform/schema";
-import {
   describeCondition,
   projectStudioReactionEditor,
   resolveStudioReactionTarget,
-  StudioDialog,
   studioReactionSlots,
-  type StudioAccessFieldValue,
   type StudioApplicationConditionContext,
   type StudioReactionCommandResult,
   type StudioReactionSlot,
-  useStudioSameByKey,
-} from "@vortex/ui/studio";
+} from "@vortex/platform/schema";
+import { StudioDialog, type StudioAccessFieldValue, useStudioSameByKey } from "@vortex/ui/studio";
 import {
   ApplicationReactionConditionEditor,
   useStudioReactionFields,

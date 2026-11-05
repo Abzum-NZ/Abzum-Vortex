@@ -15,6 +15,7 @@ import {
   sourceApplicationThemeSchema,
   translateDefinitionRuleFailures,
   type StudioStoredApplicationDraft,
+  type StudioApplicationConditionContextResult,
 } from "@vortex/platform/schema";
 import { findPinnedPlatformThemeRelease } from "./_lib/pinned-platform-theme-release";
 import {
@@ -39,7 +40,6 @@ import {
 import { describeStudioCompileFailure } from "./_lib/studio-compile-failure";
 import { resolveIdentitySession } from "../auth/_lib/session-server";
 import { readSavedStudioApplicationConditionContext } from "../_lib/studio-application-condition-context";
-import type { StudioApplicationConditionContextResult } from "@vortex/ui/studio";
 import {
   studioApplicationSourceReviewRequestSchema,
   studioApplicationSourceReviewResultSchema,

@@ -20,6 +20,9 @@ import {
   type RecordsTableQueryFacts,
   type SourceBlockPropertyValueContract,
   type StudioQueryChoice,
+  createInitialStudioCondition,
+  describeCondition,
+  type StudioConditionControlsContext,
 } from "@vortex/platform/schema";
 import { Button } from "../../components/button";
 import { Item, ItemContent, ItemGroup } from "../../components/item";
@@ -30,8 +33,6 @@ import { ToggleGroup, ToggleGroupItem } from "../../components/toggle-group";
 import { Icon } from "../../icons/icon";
 import { cn } from "../../lib/utils";
 import { StudioConditionControls } from "../condition-controls";
-import { createInitialStudioCondition, describeCondition } from "../condition-model";
-import type { StudioConditionControlsContext } from "../condition-model";
 import {
   ConditionalFormatStyleControls,
   ConditionalFormatStyleSwatch,

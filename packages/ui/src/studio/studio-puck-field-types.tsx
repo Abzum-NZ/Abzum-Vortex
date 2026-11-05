@@ -32,13 +32,13 @@ import {
   type SettingValue,
   type StudioSettingChoices,
   type StudioSettingValues,
+  type StudioReactionSlot,
 } from "@vortex/platform/schema";
 import { Item } from "../components/item";
 import { StudioField } from "./studio-field";
 import { StudioEditButton } from "./studio-icon-buttons";
 import { StudioGateSelect } from "./studio-gate-select";
 import { StudioReferencePicker } from "./studio-reference-picker";
-import type { StudioReactionSlot } from "./application-reaction-condition-commands";
 import {
   StudioSettingControl,
   StudioSettingNote,

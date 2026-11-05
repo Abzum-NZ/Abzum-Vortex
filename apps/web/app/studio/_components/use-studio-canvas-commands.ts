@@ -1,13 +1,9 @@
 import type { ApplicationSourceDocument, ConditionNode } from "@vortex/platform/schema";
 import {
   applyStudioPageValue,
-  applyStudioReactionCondition,
   settingsChangeOfPuckEdit,
-  type StudioApplicationConditionContext,
   type StudioPageValueCommand,
   type StudioPageValueResult,
-  type StudioReactionCommandResult,
-  type StudioReactionSlot,
   type StudioSettingsEdit,
 } from "@vortex/ui/studio";
 import type { StudioDraft, StudioDraftStep } from "./use-studio-draft";
@@ -22,6 +18,10 @@ import {
   type StudioCompositionOutcome,
   type StudioItemLabelResult,
   type StudioSemanticSelection,
+  applyStudioReactionCondition,
+  type StudioApplicationConditionContext,
+  type StudioReactionCommandResult,
+  type StudioReactionSlot,
 } from "@vortex/platform/schema";
 
 type DraftChangeOptions = Readonly<{
