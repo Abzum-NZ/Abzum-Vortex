@@ -1,6 +1,8 @@
-import type {
-  ApplicationSourceDocument,
-  ImmutablePlatformBlockCatalogue,
+import {
+  sourceItemTree,
+  type ApplicationSourceDocument,
+  type ImmutablePlatformBlockCatalogue,
+  type SourceItem,
 } from "@vortex/platform/schema";
 import type { StudioPlacementDescriber } from "./semantic-outline";
 
@@ -66,4 +68,26 @@ export const createStudioPlacementDescriber = (
     const label = itemLabel(release, placement.settings, fieldLabels);
     return label === undefined ? name : `${name} · ${label}`;
   };
+};
+
+/**
+ * The name the outline and the inspector give a placed block ("Button: Open"), or `undefined` when
+ * the block is not among the items or the describer has no name for it.
+ */
+export const studioBlockName = (
+  describe: StudioPlacementDescriber,
+  items: readonly SourceItem[],
+  id: string,
+): string | undefined => {
+  const item = sourceItemTree(items).find((candidate) => candidate.props.id === id);
+  return item === undefined
+    ? undefined
+    : describe({
+        block: item.props.vortex.block,
+        settings: Object.fromEntries(
+          Object.entries(item.props).filter(
+            ([key, value]) => key !== "id" && key !== "vortex" && !Array.isArray(value),
+          ),
+        ),
+      });
 };

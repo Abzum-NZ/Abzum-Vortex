@@ -61,11 +61,11 @@ import {
   puckSelectedAlias,
   puckSelectorOf,
   rootSlotHolding,
-  studioBlockName,
   type StudioCanvasCompiledSlot,
   type StudioPuckLocate,
   type StudioPuckSelector,
 } from "./studio-canvas-data";
+import { studioBlockName } from "./studio-placement-describer";
 import { toast } from "../components/sonner";
 import { studioCanvasOverrides } from "./studio-canvas-actions";
 import type { StudioCanvasGridChange, StudioCanvasGridRead } from "./studio-canvas-grid";

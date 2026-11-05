@@ -18,8 +18,7 @@ import {
   releaseFor,
   type Region,
 } from "./application-composition-regions";
-import { studioBlockName } from "./studio-canvas-data";
-import { createStudioPlacementDescriber } from "./studio-placement-describer";
+import { createStudioPlacementDescriber, studioBlockName } from "./studio-placement-describer";
 import type { StudioPlacementDescriber } from "./semantic-outline";
 import { studioLayoutOutletPlacementUses } from "./application-layout-outlets";
 import {

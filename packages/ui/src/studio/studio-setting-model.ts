@@ -24,7 +24,36 @@ import {
   type StudioQueryField,
   type StudioRelationshipChoice,
 } from "./contextual-palette";
-import type { StudioRecordReader } from "./studio-record-reference-control";
+
+/** One record a record reference can point at: its identity and the title the person reads. */
+export type StudioRecordChoice = Readonly<{ recordId: string; label: string }>;
+
+/**
+ * One page of the records of a record type, read from the builder's preview of the saved draft
+ * with their preview access, or why none can be read.
+ */
+export type StudioRecordPage =
+  | Readonly<{ kind: "available"; records: readonly StudioRecordChoice[]; next?: string }>
+  /** The record type is not in the saved draft yet. */
+  | Readonly<{ kind: "not_saved" }>
+  /** The saved draft has no query that lists these records by their title. */
+  | Readonly<{ kind: "no_list" }>
+  | Readonly<{ kind: "refused" }>
+  | Readonly<{ kind: "temporarily_unavailable" }>;
+
+/**
+ * Reads one page of records of a draft record type (`<module>:<record>`), after a keyset
+ * continuation token, narrowed by a search text to the records whose searchable fields (those the
+ * record type marks searchable) hold it. Each page holds at most 40 records.
+ */
+export type StudioRecordReader = (
+  request: Readonly<{
+    recordType: string;
+    after?: string;
+    search?: string;
+  }>,
+  signal?: AbortSignal,
+) => Promise<StudioRecordPage>;
 
 /** A typed authored setting value, or `undefined` for a setting left unset (its default applies). */
 export type SettingValue = SourceBlockPropertyValueContract | undefined;
