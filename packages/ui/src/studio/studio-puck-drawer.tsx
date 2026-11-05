@@ -115,12 +115,12 @@ export const studioReleaseIcon = (name: string): VortexIconName =>
   resolveVortexIconName(name) ?? RELEASE_ICONS[name] ?? "blocks";
 
 /**
- * Puck's `drawerItem` override: one block of the drawer as a shadcn `Item` with its icon, name and
+ * What Puck's `Drawer.Item` draws for one block: a shadcn `Item` with its icon, name and
  * description. The card is what Puck's draggable element wraps, so it holds no control of its own
  * (a control inside the draggable would nest one interactive element in another); the block's Add
  * button sits beside it, in `StudioBlockRow`.
  */
-export function StudioDrawerItem({
+function StudioDrawerItem({
   children,
   name,
 }: Readonly<{ children: ReactNode; name: string }>) {
