@@ -180,7 +180,8 @@ function StudioRecordChoicesPage({
 }>): ReactElement {
   const [refusal, setRefusal] = useState<Refusal | null>(null);
   const [search, setSearch] = useState("");
-  // The record the person picked, kept by its title while a search lists other records.
+  // The chosen record as a page or a search last listed it, kept by its title while the list holds
+  // other records.
   const [picked, setPicked] = useState<StudioRecordChoice | undefined>(undefined);
   const pager = useRecordChoicePager<StudioRecordChoice>({
     open: true,
@@ -202,6 +203,10 @@ function StudioRecordChoicesPage({
       return { items: page.records, ...(page.next === undefined ? {} : { next: page.next }) };
     },
   });
+  // The chosen record is known by its title once any page or search lists it.
+  const listed = pager.items.find((record) => record.recordId === recordId);
+  const relabelled = picked?.recordId !== listed?.recordId || picked?.label !== listed?.label;
+  if (listed !== undefined && relabelled) setPicked(listed);
   const settled = !pager.loading && !pager.failed;
   const searching = search.trim() !== "";
   const heldPick = picked?.recordId === recordId ? picked : undefined;
@@ -269,10 +274,7 @@ function StudioRecordChoicesPage({
             : []),
           ...pager.items.map((record) => ({ value: record.recordId, label: record.label })),
         ]}
-        onChange={(next) => {
-          setPicked(pager.items.find((record) => record.recordId === next));
-          onPick(next);
-        }}
+        onChange={onPick}
       />
       {note !== undefined &&
         (pager.failed || refusal !== null ? (
