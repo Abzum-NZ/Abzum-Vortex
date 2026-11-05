@@ -19,14 +19,7 @@ import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "..
 import { Alert, AlertDescription } from "../components/alert";
 import { Button } from "../components/button";
 import { InputGroup, InputGroupAddon, InputGroupInput } from "../components/input-group";
-import {
-  Item,
-  ItemActions,
-  ItemContent,
-  ItemDescription,
-  ItemMedia,
-  ItemTitle,
-} from "../components/item";
+import { Item, ItemContent, ItemDescription, ItemMedia, ItemTitle } from "../components/item";
 import { Label } from "../components/label";
 import {
   Select,
@@ -77,10 +70,10 @@ const DrawerContext = createContext<DrawerContextValue | null>(null);
  * Puck 0.24 draws every drawer item twice (a visual copy under the draggable one) with the one
  * function it is given for the row. The two copies mount in the order Puck draws them, the visual
  * copy first, so of the two rows of one block the one that mounts first is the visual copy. It is
- * hidden from keyboard and assistive technology, so a block is listed once and its Add button
- * exists once. Puck's own draggable element around the live row keeps the keyboard attributes
- * Puck gives it (a tab stop and a "draggable" role): Studio's route is the Add button, and
- * the row is not changed in Puck's markup (accepted limit, recorded in the PR).
+ * hidden from keyboard and assistive technology, so a block is listed once. Puck's own draggable
+ * element around the live row keeps the keyboard attributes Puck gives it (a tab stop and a
+ * "draggable" role): Studio's route is the Add button beside it, and the row is not changed in
+ * Puck's markup.
  */
 const mountedRows = new Map<string, number>();
 function useDrawerRow(name: string): boolean {
@@ -123,8 +116,9 @@ export const studioReleaseIcon = (name: string): VortexIconName =>
 
 /**
  * Puck's `drawerItem` override: one block of the drawer as a shadcn `Item` with its icon, name and
- * description. Its Add button adds the block to the chosen place, so a block never needs a drag;
- * when the block cannot be added the button stays focusable, says why in a tooltip and does nothing.
+ * description. The card is what Puck's draggable element wraps, so it holds no control of its own
+ * (a control inside the draggable would nest one interactive element in another); the block's Add
+ * button sits beside it, in `StudioBlockRow`.
  */
 export function StudioDrawerItem({
   children,
@@ -132,10 +126,44 @@ export function StudioDrawerItem({
 }: Readonly<{ children: ReactNode; name: string }>) {
   const drawer = useContext(DrawerContext);
   const underlay = useDrawerRow(name);
-  const descriptionId = useId();
   const choice = drawer?.choices.get(name);
   const draggable = drawer?.notDroppable.has(name) === false;
   if (drawer === null || choice === undefined) return <>{children}</>;
+  const reason = drawer.blocked ?? choice.unavailable;
+  return (
+    <Item
+      size="sm"
+      variant="outline"
+      className={cn(
+        "flex-nowrap pr-12",
+        reason !== undefined && "opacity-70",
+        draggable && "cursor-grab active:cursor-grabbing",
+      )}
+      {...(underlay ? { inert: true, "aria-hidden": true } : {})}
+    >
+      <ItemMedia variant="icon">
+        <Icon name={studioReleaseIcon(choice.icon)} />
+      </ItemMedia>
+      <Tooltip>
+        <TooltipTrigger render={<ItemContent className="min-w-0" />}>
+          <ItemTitle>{choice.name}</ItemTitle>
+          <ItemDescription className="line-clamp-2">{choice.description}</ItemDescription>
+        </TooltipTrigger>
+        <TooltipContent className="max-w-prose">{choice.description}</TooltipContent>
+      </Tooltip>
+    </Item>
+  );
+}
+
+/**
+ * A block's Add button: it adds the block to the chosen place, so a block never needs a drag; when
+ * the block cannot be added the button stays focusable, says why in a tooltip and does nothing.
+ */
+function StudioBlockAdd({ name }: Readonly<{ name: string }>) {
+  const drawer = useContext(DrawerContext);
+  const descriptionId = useId();
+  const choice = drawer?.choices.get(name);
+  if (drawer === null || choice === undefined) return null;
   const reason = drawer.blocked ?? choice.unavailable;
   const addButton = (
     <Button
@@ -150,46 +178,26 @@ export function StudioDrawerItem({
     </Button>
   );
   return (
-    <Item
-      size="sm"
-      variant="outline"
-      className={cn(
-        "flex-nowrap",
-        reason !== undefined && "opacity-70",
-        draggable && "cursor-grab active:cursor-grabbing",
+    <div className="absolute inset-y-0 right-2 flex items-center">
+      <span id={descriptionId} className="sr-only">
+        {choice.description}
+      </span>
+      {reason === undefined ? (
+        <Tooltip>
+          <TooltipTrigger render={addButton} />
+          <TooltipContent className="max-w-prose">
+            Add {choice.name}: {choice.description}
+          </TooltipContent>
+        </Tooltip>
+      ) : (
+        <Reasoned
+          reason={reason}
+          describedBy={reason === drawer.limitReason ? drawer.limitId : undefined}
+        >
+          {addButton}
+        </Reasoned>
       )}
-      {...(underlay ? { inert: true, "aria-hidden": true } : {})}
-    >
-      <ItemMedia variant="icon">
-        <Icon name={studioReleaseIcon(choice.icon)} />
-      </ItemMedia>
-      <Tooltip>
-        <TooltipTrigger render={<ItemContent className="min-w-0" />}>
-          <ItemTitle>{choice.name}</ItemTitle>
-          <ItemDescription id={descriptionId} className="line-clamp-2">
-            {choice.description}
-          </ItemDescription>
-        </TooltipTrigger>
-        <TooltipContent className="max-w-prose">{choice.description}</TooltipContent>
-      </Tooltip>
-      <ItemActions>
-        {reason === undefined ? (
-          <Tooltip>
-            <TooltipTrigger render={addButton} />
-            <TooltipContent className="max-w-prose">
-              Add {choice.name}: {choice.description}
-            </TooltipContent>
-          </Tooltip>
-        ) : (
-          <Reasoned
-            reason={reason}
-            describedBy={reason === drawer.limitReason ? drawer.limitId : undefined}
-          >
-            {addButton}
-          </Reasoned>
-        )}
-      </ItemActions>
-    </Item>
+    </div>
   );
 }
 
@@ -232,13 +240,19 @@ const blockedReason = (
   return disabledReason ?? "Studio is busy; try again in a moment.";
 };
 
-/** One block of the list: Puck's draggable `Drawer.Item`, drawn by `StudioDrawerItem`. */
+/**
+ * One block of the list: Puck's draggable `Drawer.Item`, drawn by `StudioDrawerItem`, with the
+ * block's Add button over its right edge as a sibling of the draggable, not inside it.
+ */
 function StudioBlockRow({ name }: Readonly<{ name: string }>) {
   const drawer = useContext(DrawerContext);
   return (
-    <Drawer.Item name={name} isDragDisabled={drawer?.notDroppable.has(name) === true}>
-      {StudioDrawerItem}
-    </Drawer.Item>
+    <div className="relative">
+      <Drawer.Item name={name} isDragDisabled={drawer?.notDroppable.has(name) === true}>
+        {StudioDrawerItem}
+      </Drawer.Item>
+      <StudioBlockAdd name={name} />
+    </div>
   );
 }
 
