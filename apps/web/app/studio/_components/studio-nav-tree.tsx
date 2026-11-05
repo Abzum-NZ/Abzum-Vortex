@@ -48,7 +48,7 @@ type NavProps = Omit<ComponentProps<"button">, "children"> &
     description?: string | undefined;
     selected?: boolean | undefined;
     hint?: string | undefined;
-    /** A branch of `StudioNavTree`: its children are shown, and the toggle that shows them. */
+    /** A branch of `StudioNavTree`: whether its children are shown, and the toggle for them. */
     expanded?: boolean | undefined;
     onToggle?: (() => void) | undefined;
     /** The id of the list of children the toggle shows, while it is shown. */

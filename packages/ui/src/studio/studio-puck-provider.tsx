@@ -793,25 +793,27 @@ const restoreFocus = (final: boolean): boolean => {
     focusBeforeReopen = null;
     return true;
   }
-  // Every tab's panel stays drawn, hidden, so only the shown panel's controls are candidates.
+  // Every tab's panel stays drawn, hidden, so only shown and enabled controls are candidates.
+  const usable = (element: HTMLElement | null): element is HTMLElement =>
+    element !== null && element.getClientRects().length > 0 && !element.matches(":disabled");
   const shown = [
     ...document.querySelectorAll<HTMLElement>(
       "[data-studio-rail-panel] button, [data-studio-rail-panel] a",
     ),
-  ].filter((element) => element.getClientRects().length > 0 && !element.matches(":disabled"));
+  ].filter(usable);
   const byId = wanted.id === "" ? null : document.getElementById(wanted.id);
   const found =
     (wanted.treeKey === ""
       ? undefined
       : shown.find((element) => element.dataset.treeKey === wanted.treeKey)) ??
-    byId ??
+    (usable(byId) ? byId : undefined) ??
     (wanted.label === ""
       ? undefined
       : shown.find(
           (element) =>
             (element.getAttribute("aria-label") ?? element.textContent?.trim()) === wanted.label,
         ));
-  if (found !== undefined && found !== null) {
+  if (found !== undefined) {
     focusBeforeReopen = null;
     found.focus();
     return true;
@@ -820,8 +822,8 @@ const restoreFocus = (final: boolean): boolean => {
   return final;
 };
 /**
- * The rail panel draws its rows a few frames after the reopened workspace, and they stay disabled
- * while the change that reopened it is saved: look that long.
+ * The rail panel draws its rows a few frames after the reopened workspace, and they may stay
+ * disabled while the change that reopened it is saved: look that long.
  */
 const RESTORE_FOCUS_MS = 3000;
 
