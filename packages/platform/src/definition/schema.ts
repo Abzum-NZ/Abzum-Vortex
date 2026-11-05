@@ -67,6 +67,7 @@ export * from "./application-authoring/application-structure";
 export * from "./application-authoring/studio-words";
 export * from "./source-change-summary";
 export * from "./application-authoring/application-access-commands";
+export * from "./application-authoring/application-authored-pages";
 export * from "./application-authoring/application-composition-add";
 export * from "./application-authoring/application-composition-commands";
 export * from "./application-authoring/application-composition-forms";
