@@ -31,10 +31,13 @@ import { StudioField } from "./studio-field";
 import { StudioEditButton } from "./studio-icon-buttons";
 import { StudioGateSelect } from "./studio-gate-select";
 import type { StudioReactionSlot } from "./application-reaction-condition-commands";
-import { StudioSettingControl } from "./studio-setting-controls";
+import {
+  StudioSettingControl,
+  StudioSettingNote,
+  studioSiblingSettingKeys,
+} from "./studio-setting-controls";
 import { StudioQueryBindings } from "./studio-query-bindings";
 import { StudioQueryPicker } from "./studio-query-picker";
-import { StudioSettingNote } from "./studio-setting-controls";
 import {
   conditionalRequiredMessage,
   settleStudioSetting,
@@ -211,17 +214,28 @@ const studioCustomField = (label: string, key: string, studio: StudioFieldKind):
     render: () => null as never,
   }) satisfies CustomField<unknown>;
 
+/**
+ * The field of each declared setting, made once: the inspector asks for its fields on every edit
+ * of the block, and a field that is the same object lets its control keep its place.
+ */
+const settingFields = new WeakMap<BlockPropertySchemaContract, Field>();
+
 /** The field of a declared setting. */
 export const studioSettingField = (
   release: Readonly<{ blockId: string; releaseVersion: number | string }>,
   property: BlockPropertySchemaContract,
   properties: readonly BlockPropertySchemaContract[],
-): Field =>
-  studioCustomField(
+): Field => {
+  const made = settingFields.get(property);
+  if (made !== undefined) return made;
+  const field = studioCustomField(
     property.label,
     `${release.blockId}@${release.releaseVersion}:${property.key}`,
     { kind: "setting", property, properties },
   );
+  settingFields.set(property, field);
+  return field;
+};
 
 /** The field that chooses the data a block reads. */
 export const studioQueryField: Field = studioCustomField("Data", studioQueryFieldName, {
@@ -253,8 +267,6 @@ export const studioFeaturesField: Field = studioCustomField("Features", studioFe
 export const studioConditionField = (slot: StudioReactionSlot, title: string): Field =>
   studioCustomField(title, studioConditionFieldName(slot), { kind: "condition", slot });
 
-const noProps: Readonly<Record<string, unknown>> = {};
-
 /**
  * The typed settings a block's plain props hold; a prop that is not a valid value of its
  * declaration is left out.
@@ -280,19 +292,36 @@ type SettingFieldRenderProps = Readonly<{
 }>;
 
 /**
+ * Puck hands every field a new props object when any setting of the block changes: a field draws
+ * again only when its own value, its read-only state or its change function differs.
+ */
+const sameSettingField = (
+  before: Readonly<{ setting: SettingKind; field: SettingFieldRenderProps }>,
+  after: Readonly<{ setting: SettingKind; field: SettingFieldRenderProps }>,
+) =>
+  before.setting === after.setting &&
+  before.field.readOnly === after.field.readOnly &&
+  before.field.onChange === after.field.onChange &&
+  JSON.stringify(before.field.value ?? null) === JSON.stringify(after.field.value ?? null);
+
+/**
  * One setting as a field: its label, hint and message around its control; held input stays in the
  * control.
  */
-function StudioSettingField({
+const StudioSettingField = memo(function StudioSettingField({
   setting,
   field,
 }: Readonly<{ setting: SettingKind; field: SettingFieldRenderProps }>) {
   const { property, properties } = setting;
   const context = useContext(StudioSettingFieldsContext);
   const getPuck = useGetPuck();
-  // The selected block's values, subscribed to: the label note and the total measure depend on the
-  // sibling settings.
-  const props = usePuckSelector((state) => state.selectedItem?.props) ?? noProps;
+  // The sibling settings this field's notes and measure read, subscribed to as one string: a
+  // keystroke in a setting that no other field reads draws no other field.
+  const siblingKeys = studioSiblingSettingKeys(property, properties);
+  const siblingsKey = usePuckSelector((state) => {
+    const current = state.selectedItem?.props;
+    return JSON.stringify(siblingKeys.map((key) => current?.[key] ?? null));
+  });
   // Input that is not valid yet: the control shows it and the field says why; Puck never sees it.
   const [held, setHeld] = useState<Readonly<{ value: SettingValue; problem: string }> | null>(null);
   const plain = field.value;
@@ -307,9 +336,16 @@ function StudioSettingField({
     // The plain value is compared by content: Puck hands over a fresh object for the same setting.
     [plainKey, property],
   );
+  const values = useMemo(() => {
+    const read = JSON.parse(siblingsKey) as unknown[];
+    const siblings: Record<string, unknown> = {};
+    studioSiblingSettingKeys(property, properties).forEach((key, at) => {
+      if (read[at] !== null) siblings[key] = read[at];
+    });
+    return studioTypedSettings(siblings, properties);
+  }, [siblingsKey, property, properties]);
   if (context === null) return null;
   const { choices, disabled, scope, touched, touch } = context;
-  const values = studioTypedSettings(props, properties);
   const change = (next: SettingValue) => {
     touch(property.key);
     const now = studioTypedSettings(getPuck().selectedItem?.props ?? {}, properties);
@@ -372,7 +408,7 @@ function StudioSettingField({
       />
     </div>
   );
-}
+}, sameSettingField);
 
 /** The data a block reads and the bindings of its inputs, in the inspector's own commands. */
 function StudioQueryField({ readOnly }: Readonly<{ readOnly: boolean }>) {
