@@ -23,6 +23,7 @@ export function StudioGateSelect({
   onGate,
   onClear,
   allowCreate = true,
+  unsetLabel = "No block permission gate",
   ...accessibility
 }: Readonly<{
   id?: string | undefined;
@@ -36,6 +37,8 @@ export function StudioGateSelect({
   /** Only block gates are optional; clearing leaves the containing page's access in force. */
   onClear?: (() => boolean) | undefined;
   allowCreate?: boolean;
+  /** What the empty choice says when the gate can be cleared. */
+  unsetLabel?: string;
 }>) {
   const choices = useMemo(() => studioAccessGateChoices(source), [source]);
   const [creating, setCreating] = useState(false);
@@ -59,7 +62,7 @@ export function StudioGateSelect({
         aria-label={label}
         value={creating ? newChoice : value}
         disabled={disabled}
-        unset={onClear === undefined ? undefined : "No block permission gate"}
+        unset={onClear === undefined ? undefined : unsetLabel}
         options={[
           ...(unoffered
             ? [

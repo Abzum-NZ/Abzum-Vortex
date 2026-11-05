@@ -199,7 +199,7 @@ release versions remain distinct from the schema revision used to describe them.
 | --- | --- |
 | Geometry, responsive display settings, same-slot sibling order or breakpoint display-order override | Patch: presentation only. Preserve authored order when comparing; do not sort it away. |
 | Move an existing placement across parents, slots, shells, pages or guided steps; replace a selected shell | Major: inherited access, binding context or form meaning can change. This is not merely moving its displayed position. |
-| Placement or ancestor view/use permission added, removed or changed | Major: access meaning changes, including removal of a restriction. |
+| Placement or ancestor view or use permission or audience added, removed or changed | Major: access meaning changes, including removal of a restriction. |
 | Existing setting literal/reference or exact platform-block dependency/release/fingerprint changes | Major: the current contract declares no property-specific presentation-only downgrade. Never infer one from a setting name. |
 | Optional, non-public, non-guided presentation-only placement added | Minor only when its complete subtree introduces no access gate, executable/data reference or required-slot effect; otherwise major. |
 | Empty optional shell slot added; allowed child categories widened; a slot made optional | Minor: a compatible extension or relaxation. |

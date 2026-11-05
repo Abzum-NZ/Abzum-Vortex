@@ -1,4 +1,5 @@
 import type {
+  ApplicationAudience,
   ApplicationRootId,
   ApplicationSourceDocument,
   ImmutablePlatformBlockCatalogue,
@@ -34,7 +35,7 @@ export type StudioCanvasOwner =
   | Readonly<{ kind: "page"; pageAlias: string; step: string | undefined }>
   | Readonly<{ kind: "layout"; shellAlias: string }>;
 
-export type StudioCompositionCommand =
+export type StudioDraftChange =
   | Readonly<{
       kind: "order";
       breakpoint: StudioCompositionBreakpoint;
@@ -59,8 +60,17 @@ export type StudioCompositionCommand =
       data: SourceZonedData;
       copies: readonly (readonly [original: string, copy: string])[];
     }>
-  /** Set or clear only this block's view gate, keeping its settings, content and bindings. */
-  | Readonly<{ kind: "gate"; gate: string | null }>
+  /**
+   * Set or clear the block's access, keeping its settings, content and bindings: the permission
+   * that shows it (`gate`), the permission that lets people use it (`use`) and who it is offered
+   * to (`audience`). A member that is absent is left alone; null clears it.
+   */
+  | Readonly<{
+      kind: "gate";
+      gate?: string | null;
+      use?: string | null;
+      audience?: ApplicationAudience | null;
+    }>
   /**
    * Puts the selected block into a new container block of this release, which takes the block's
    * place. The block keeps its name, settings and orders; the container's first fixed slot that
@@ -159,7 +169,7 @@ export type StudioCompositionDestinationModel =
   | Readonly<{ kind: "unsupported"; reason: "page_kind" | "manifest_mismatch" }>
   | Readonly<{ kind: "invalid" }>;
 
-export type StudioCompositionCommandResult =
+export type StudioDraftChangeResult =
   /** `placementAlias` names the new block of an add. */
   | Readonly<{ kind: "applied"; source: ApplicationSourceDocument; placementAlias?: string }>
   /** An add the stored composition refuses; `reason` names the place and the rule. */
@@ -168,7 +178,7 @@ export type StudioCompositionCommandResult =
 
 /** What became of one command in the workspace: its kind, why if refused, the new block if added. */
 export type StudioCompositionOutcome = Readonly<{
-  kind: StudioCompositionCommandResult["kind"];
+  kind: StudioDraftChangeResult["kind"];
   reason?: string;
   placementAlias?: string;
 }>;

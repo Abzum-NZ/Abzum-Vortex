@@ -59,12 +59,12 @@ import type { StudioSemanticSelection } from "./semantic-selection";
 import type {
   StudioCompositionBreakpoint,
   StudioCompositionContext,
-  StudioCompositionCommand,
+  StudioDraftChange,
   StudioCompositionSettingsModel,
   StudioCompositionDestination,
   StudioCompositionDestinationModel,
   StudioCompositionOutcome,
-  StudioCompositionCommandResult,
+  StudioDraftChangeResult,
   StudioCompositionRemovalModel,
   StudioCompositionEditorModel,
 } from "./application-composition-model";
@@ -361,7 +361,7 @@ const applySettings = (
   current: StudioCompositionContext,
   selection: StudioSemanticSelection | null,
   command: unknown,
-): StudioCompositionCommandResult => {
+): StudioDraftChangeResult => {
   const input = closedPlain(command, ["kind", "settings", "query"]);
   if (input.kind !== "settings" || (input.query !== null && typeof input.query !== "string"))
     return { kind: "invalid" };
@@ -674,7 +674,7 @@ const applyRemoval = (
   current: StudioCompositionContext,
   selection: StudioSemanticSelection | null,
   command: unknown,
-): StudioCompositionCommandResult => {
+): StudioDraftChangeResult => {
   closedPlain(command, ["kind"]);
   const resolved = resolveRemoval(current, selection);
   if (resolved.kind === "refused") return resolved;
@@ -820,11 +820,11 @@ export const describeStudioCompositionEdit = (
  * one history.edit. Every command passes here, so a refusal is logged here, once, whichever rule
  * refused it.
  */
-export const applyStudioCompositionCommand = (
+export const applyDraftChange = (
   current: StudioCompositionContext,
   selection: StudioSemanticSelection | null,
-  command: StudioCompositionCommand,
-): StudioCompositionCommandResult => {
+  command: StudioDraftChange,
+): StudioDraftChangeResult => {
   const result = composeCommand(current, selection, command);
   if (result.kind === "refused")
     console.info("[studio] composition command refused", {
@@ -837,8 +837,8 @@ export const applyStudioCompositionCommand = (
 const composeCommand = (
   current: StudioCompositionContext,
   selection: StudioSemanticSelection | null,
-  command: StudioCompositionCommand,
-): StudioCompositionCommandResult => {
+  command: StudioDraftChange,
+): StudioDraftChangeResult => {
   try {
     const catalogue = current.catalogue;
     const kind = Object.getOwnPropertyDescriptor(command, "kind");

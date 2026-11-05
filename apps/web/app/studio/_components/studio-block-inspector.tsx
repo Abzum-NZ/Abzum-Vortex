@@ -32,7 +32,7 @@ import {
   studioCanvasGridKey,
   type StudioCanvasGridArrangement,
   type StudioQueryChoice,
-  type StudioCompositionCommand,
+  type StudioDraftChange,
   type StudioCompositionContext,
   type StudioCompositionOutcome,
   type StudioGridFeaturesProps,
@@ -72,7 +72,7 @@ type Props = Readonly<{
   onCommand: (
     expected: StudioCompositionContext,
     selection: StudioSemanticSelection,
-    command: StudioCompositionCommand,
+    command: StudioDraftChange,
     merge?: string,
   ) => StudioCompositionOutcome;
   /** One condition of the block (when it shows, is required, is read-only or is enabled). */
@@ -117,7 +117,12 @@ export function StudioBlockInspector(props: Props) {
   const [problemArea, setProblemArea] = useState<"settings" | "features">("settings");
   // A success is announced to a screen reader; a refusal stays on screen for everyone.
   const [message, setMessage] = useState<
-    Readonly<{ text: string; failed: boolean; area: "gate" | "settings"; at: number }>
+    Readonly<{
+      text: string;
+      failed: boolean;
+      area: "gate" | "use" | "audience" | "settings";
+      at: number;
+    }>
   >({ text: "", failed: false, area: "settings", at: 0 });
   // The refusal belongs to the draft it was made against: another change by any path clears it.
   const [refusedOn, setRefusedOn] = useState(props.context.source);
@@ -133,7 +138,7 @@ export function StudioBlockInspector(props: Props) {
    * took it. A size or an order says its refusal at its own field (`atField`).
    */
   const command = (
-    next: StudioCompositionCommand,
+    next: StudioDraftChange,
     merge?: string,
     done = "Changed.",
     fallback = "Nothing changed. Use a valid size or order.",
@@ -149,7 +154,14 @@ export function StudioBlockInspector(props: Props) {
     setMessage((previous) => ({
       text: text ?? done,
       failed: text !== undefined && !atField,
-      area: next.kind === "gate" ? "gate" : "settings",
+      area:
+        next.kind !== "gate"
+          ? "settings"
+          : next.use !== undefined
+            ? "use"
+            : next.audience !== undefined
+              ? "audience"
+              : "gate",
       at: previous.at + 1,
     }));
     return text;
@@ -259,13 +271,31 @@ export function StudioBlockInspector(props: Props) {
     selection: props.selection,
     saved: props.saved,
     disabled: props.disabled,
-    gateProblem: message.failed && message.area === "gate" ? message.text : undefined,
+    problems: {
+      gate: message.failed && message.area === "gate" ? message.text : undefined,
+      use: message.failed && message.area === "use" ? message.text : undefined,
+      audience: message.failed && message.area === "audience" ? message.text : undefined,
+    },
     onGate: (permission) =>
       command(
         { kind: "gate", gate: permission },
         undefined,
         "Permission gate changed.",
         "This block's permission gate could not be changed. Nothing was changed.",
+      ) === undefined,
+    onUse: (permission) =>
+      command(
+        { kind: "gate", use: permission },
+        undefined,
+        "Use permission changed.",
+        "This block's use permission could not be changed. Nothing was changed.",
+      ) === undefined,
+    onAudience: (audience) =>
+      command(
+        { kind: "gate", audience },
+        undefined,
+        "Audience changed.",
+        "Who this block is offered to could not be changed. Nothing was changed.",
       ) === undefined,
     onReaction: props.onReaction,
   });
