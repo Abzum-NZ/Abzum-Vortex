@@ -90,6 +90,7 @@ Lanes live under VORTEX_LANES_ROOT (${lanesRoot}).`;
 const usage = `Usage:
   node tooling/supabase/lane.mjs init <n>
   node tooling/supabase/lane.mjs sync <n> <worktreePath>
+  node tooling/supabase/lane.mjs claim <n> <worktreePath>
   node tooling/supabase/lane.mjs start <n> [worktreePath]
   node tooling/supabase/lane.mjs stop <n> [worktreePath]
   node tooling/supabase/lane.mjs reset <n> <worktreePath>
@@ -163,6 +164,7 @@ const databaseRunning = (lane) => {
     fail(`Cannot inspect lane ${lane} database: ${result.stderr.trim()}`);
   return result.status === 0 && result.stdout.trim() === "true";
 };
+const claimWindowMs = 30 * 60_000;
 /** The lane's lease. A stale lease is deleted only when the caller holds the lane's lock (`prune`). */
 const readLease = async (lane, prune = false) => {
   if (lane === sharedLane && databaseRunning(lane))
@@ -185,7 +187,9 @@ const readLease = async (lane, prune = false) => {
     lease.port !== laneDatabasePort(lane)
   )
     fail(`Lane ${lane} has an invalid lease.`);
-  if (!existsSync(lease.worktree) || !databaseRunning(lane)) {
+  // A lease younger than the claim window holds its lane while the stack is still starting.
+  const claimed = Date.now() - Date.parse(lease.startedAt) < claimWindowMs;
+  if (!existsSync(lease.worktree) || (!claimed && !databaseRunning(lane))) {
     if (prune) {
       await rm(leasePath(lane));
       log(`Cleared stale lease for lane ${lane}.`);
@@ -194,6 +198,12 @@ const readLease = async (lane, prune = false) => {
   }
   return lease;
 };
+const writeLease = (lane, worktree, lease) =>
+  writeFile(
+    leasePath(lane),
+    `${JSON.stringify({ worktree, startedAt: lease?.startedAt ?? new Date().toISOString(), port: laneDatabasePort(lane) }, null, 2)}
+`,
+  );
 const requireLeaseHolder = async (lane, worktree, required = false, prune = false) => {
   const lease = await readLease(lane, prune);
   if (lease && !sameWorktree(lease.worktree, worktree))
@@ -900,6 +910,7 @@ if (command === "status" || command === "free") {
         entry.initialized &&
         !entry.running &&
         !entry.lease &&
+        !existsSync(path.join(laneDirectory(entry.number), "operation.lock")) &&
         entry.blocked === undefined,
     );
     process.stdout.write(`${free !== undefined && roomForAnother ? free.number : "none"}\n`);
@@ -999,6 +1010,18 @@ try {
             `Lane ${lane} is running without a lease; its worktree runs start to claim it before anyone syncs it.`,
           );
         await sync(lane, worktree);
+      });
+      break;
+    case "claim":
+      if (worktreeArgument === undefined || lane === sharedLane) fail(usage);
+      requireInitialized(lane);
+      await locked(async () => {
+        await requireNotBlocked(lane);
+        const lease = await requireLeaseHolder(lane, worktree, false, true);
+        if (!lease && databaseRunning(lane))
+          fail(`Lane ${lane} is running without a lease; its worktree runs start to claim it.`);
+        await writeLease(lane, worktree, lease);
+        log(`Lane ${lane} claimed by ${worktree}.`);
       });
       break;
     case "start":
