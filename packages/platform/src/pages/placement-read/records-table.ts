@@ -441,7 +441,11 @@ export const readRecordsTable = async (
       "[page] data placement unavailable: class=protected_query code=query_unavailable",
     );
     data[placementId] = { status: "error" };
-  } else if (resolved.kind === "refused" && previewing && resolved.reasonCode === "query_unavailable") {
+  } else if (
+    resolved.kind === "refused" &&
+    previewing &&
+    resolved.reasonCode === "query_unavailable"
+  ) {
     // A draft preview resolves a borrowed system query only through an active installation of the
     // application, so a draft never installed has none: an expected refusal with its own sentence.
     console.info(
