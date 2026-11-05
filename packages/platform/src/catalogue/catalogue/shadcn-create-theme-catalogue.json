@@ -130,6 +130,13 @@
           },
           "contrastDerivations": [
             {
+              "token": "muted_text",
+              "mode": "light",
+              "from": "oklch(0.556 0 0)",
+              "to": "oklch(0.537 0 0)",
+              "requirement": "4.5:1 on the background, card, muted, accent, secondary and sidebar surfaces"
+            },
+            {
               "token": "ring",
               "mode": "light",
               "from": "oklch(0.708 0 0)",
@@ -182,6 +189,13 @@
             "releaseVersion": "4.21.0"
           },
           "contrastDerivations": [
+            {
+              "token": "muted_text",
+              "mode": "light",
+              "from": "oklch(0.553 0.013 58.071)",
+              "to": "oklch(0.538 0.013 58.071)",
+              "requirement": "4.5:1 on the background, card, muted, accent, secondary and sidebar surfaces"
+            },
             {
               "token": "ring",
               "mode": "light",
@@ -236,6 +250,13 @@
           },
           "contrastDerivations": [
             {
+              "token": "muted_text",
+              "mode": "light",
+              "from": "oklch(0.552 0.016 285.938)",
+              "to": "oklch(0.538 0.016 285.938)",
+              "requirement": "4.5:1 on the background, card, muted, accent, secondary and sidebar surfaces"
+            },
+            {
               "token": "ring",
               "mode": "light",
               "from": "oklch(0.705 0.015 286.067)",
@@ -288,6 +309,13 @@
             "releaseVersion": "4.21.0"
           },
           "contrastDerivations": [
+            {
+              "token": "muted_text",
+              "mode": "light",
+              "from": "oklch(0.551 0.027 264.364)",
+              "to": "oklch(0.537 0.027 264.364)",
+              "requirement": "4.5:1 on the background, card, muted, accent, secondary and sidebar surfaces"
+            },
             {
               "token": "ring",
               "mode": "light",
@@ -394,8 +422,8 @@
               "token": "muted_text",
               "mode": "light",
               "from": "oklch(0.58 0.031 107.3)",
-              "to": "oklch(0.566 0.031 107.3)",
-              "requirement": "4.5:1 on background"
+              "to": "oklch(0.536 0.031 107.3)",
+              "requirement": "4.5:1 on the background, card, muted, accent, secondary and sidebar surfaces"
             },
             {
               "token": "ring",
@@ -455,6 +483,13 @@
           },
           "contrastDerivations": [
             {
+              "token": "muted_text",
+              "mode": "light",
+              "from": "oklch(0.56 0.021 213.5)",
+              "to": "oklch(0.535 0.021 213.5)",
+              "requirement": "4.5:1 on the background, card, muted, accent, secondary and sidebar surfaces"
+            },
+            {
               "token": "ring",
               "mode": "light",
               "from": "oklch(0.723 0.014 214.4)",
@@ -507,6 +542,13 @@
             "releaseVersion": "4.21.0"
           },
           "contrastDerivations": [
+            {
+              "token": "muted_text",
+              "mode": "light",
+              "from": "oklch(0.547 0.021 43.1)",
+              "to": "oklch(0.539 0.021 43.1)",
+              "requirement": "4.5:1 on the background, card, muted, accent, secondary and sidebar surfaces"
+            },
             {
               "token": "ring",
               "mode": "light",

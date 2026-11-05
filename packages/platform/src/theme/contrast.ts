@@ -12,6 +12,9 @@ export const WCAG_AA_NON_TEXT_MIN_CONTRAST = 3.0;
 /** The vocabulary's brand fill, which the renderer also paints on the surface as the accent. */
 const ACCENT_TOKEN_KEY = "primary";
 
+/** The vocabulary's muted text, which the renderer paints on every background-role surface. */
+const MUTED_TEXT_TOKEN_KEY = "muted_text";
+
 export const DEFAULT_LIGHT_SURFACE = "#FFFFFF";
 export const DEFAULT_DARK_SURFACE = "#000000";
 
@@ -341,6 +344,29 @@ export function validateThemeContrast(
           message: `Text color token "${key}" has insufficient dark mode contrast ratio (${darkRatio.toFixed(2)}:1 < ${WCAG_AA_NORMAL_TEXT_MIN_CONTRAST}:1) against ${surfaceName} (${darkSurface})`,
           tokenKey: key,
         });
+      }
+    }
+
+    // Muted text is drawn on every background-role surface (card, popover, muted, accent, sidebar),
+    // not only on the page surface, so it must read on each of them.
+    if (key === MUTED_TEXT_TOKEN_KEY) {
+      for (const surfaceKey of Object.keys(tokens).sort()) {
+        const painted = tokens[surfaceKey];
+        if (painted?.kind !== "color_pair" || painted.role !== "background") continue;
+        if (surfaceKey === surface.key) continue;
+        for (const [mode, foreground, background, canvas] of [
+          ["light", token.light, painted.light, lightSurface],
+          ["dark", token.dark, painted.dark, darkSurface],
+        ] as const) {
+          const ratio = contrastRatio(foreground, background, canvas);
+          if (ratio < WCAG_AA_NORMAL_TEXT_MIN_CONTRAST)
+            addFailure({
+              code: "INSUFFICIENT_CONTRAST",
+              family: "invalid_value",
+              message: `Text color token "${key}" has insufficient ${mode} mode contrast ratio (${ratio.toFixed(2)}:1 < ${WCAG_AA_NORMAL_TEXT_MIN_CONTRAST}:1) against "${surfaceKey}"`,
+              tokenKey: key,
+            });
+        }
       }
     }
 
