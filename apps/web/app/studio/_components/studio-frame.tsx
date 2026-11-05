@@ -254,7 +254,13 @@ function StudioRail<Key extends string>({
   onToggleCollapsed: (() => void) | undefined;
 }>) {
   return (
-    <div className="flex w-fit min-w-18 shrink-0 flex-col items-center gap-1 overflow-y-auto border-r border-sidebar-border bg-sidebar px-1 py-2 text-sidebar-foreground">
+    // The rail is as wide as its longest label in the active style's trigger padding, at least 72 px.
+    <div
+      className={cn(
+        "flex w-fit min-w-18 shrink-0 flex-col items-center gap-1 overflow-y-auto",
+        "border-r border-sidebar-border bg-sidebar px-1 py-2 text-sidebar-foreground",
+      )}
+    >
       {onToggleCollapsed !== undefined && (
         <Tooltip>
           <TooltipTrigger
@@ -332,9 +338,11 @@ function RailTab<Key extends string>({
               aria-haspopup={modal ? "dialog" : undefined}
               onClick={() => onChoose(tab.key)}
               className={cn(
-                "h-16 w-full flex-none flex-col justify-center gap-1 text-xs group-data-vertical/tabs:justify-center",
+                "h-16 w-full flex-none flex-col justify-center gap-1 text-xs",
+                "group-data-vertical/tabs:justify-center",
                 "text-muted-foreground hover:bg-sidebar-accent/60 hover:text-foreground",
-                "data-active:text-sidebar-accent-foreground dark:data-active:text-sidebar-accent-foreground",
+                "data-active:text-sidebar-accent-foreground",
+                "dark:data-active:text-sidebar-accent-foreground",
               )}
             />
           }
