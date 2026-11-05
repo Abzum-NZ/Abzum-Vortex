@@ -1,5 +1,6 @@
 "use client";
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+import { useStable } from "./use-stable";
 import {
   describeFailure,
   type SourceIdentityReservation,
@@ -378,6 +379,15 @@ function ExistingApplicationWorkspace(props: ExistingProps) {
     return () => window.removeEventListener("keydown", shortcut, true);
   }, [draft]);
 
+  // The header's commands keep their identity between keystrokes, so its buttons are not drawn again.
+  const onApplication = useStable(() => {
+    draft.select({ kind: "application", applicationRootId: state.rootId });
+  });
+  const onUndo = useStable(() => draft.undo());
+  const onRedo = useStable(() => draft.redo());
+  const onInstall = useStable(() => releases.openInstall());
+  const onPreview = useStable(() => releases.openPreview());
+  const onPublish = useStable(() => releases.openPublish());
   return (
     <StudioFieldProblemsProvider>
       <StudioPlaceOpenerProvider opener={placeOpener}>
@@ -404,23 +414,21 @@ function ExistingApplicationWorkspace(props: ExistingProps) {
                 <StudioHeader
                   frame={place.frame}
                   applicationName={source.body.name}
-                  onApplication={() => {
-                    draft.select({ kind: "application", applicationRootId: state.rootId });
-                  }}
+                  onApplication={onApplication}
                   saveState={<StudioSaveState draft={draft} />}
                   canUndo={state.canUndo}
                   canRedo={state.canRedo}
                   undoDisabled={draft.historyBlocked}
-                  onUndo={draft.undo}
-                  onRedo={draft.redo}
+                  onUndo={onUndo}
+                  onRedo={onRedo}
                   applicationHref={releases.openHref}
                   install={releases.install}
-                  onInstall={releases.openInstall}
+                  onInstall={onInstall}
                   installPending={releases.actionPending === "install"}
-                  onPreview={releases.openPreview}
+                  onPreview={onPreview}
                   previewPending={releases.previewPending}
                   previewDisabled={draft.locked}
-                  onPublish={releases.openPublish}
+                  onPublish={onPublish}
                   publishDisabled={draft.locked}
                   publishPending={releases.actionPending === "publish"}
                 />

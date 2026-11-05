@@ -1,6 +1,13 @@
 "use client";
 import { Item, ItemContent, ItemGroup } from "@vortex/ui/components/item";
-import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
+import {
+  createContext,
+  useContext,
+  useDeferredValue,
+  useMemo,
+  useState,
+  type ReactNode,
+} from "react";
 import {
   applicationUses,
   describeApplicationUsers,
@@ -131,7 +138,9 @@ export function StudioUsedIn({
   name: string;
   onBeforeOpen?: () => void;
 }>) {
-  const places = useMemo(() => applicationUses(source, target), [source, target]);
+  // A read of the whole draft: drawn after the keystroke that changed it, like the Outline.
+  const shown = useDeferredValue(source);
+  const places = useMemo(() => applicationUses(shown, target), [shown, target]);
   return (
     <StudioInspectorGroup
       title="Used in"

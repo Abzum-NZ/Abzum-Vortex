@@ -162,15 +162,19 @@ export function useStudioFlowsTab({
       catalogue,
     ],
   );
+  // A page is the control of its own events (load, record loaded). The names are read by content, so
+  // a keystroke in a block does not give the label function, and with it the create choices, a new
+  // identity before the deferred pass.
+  const pageNameKey = JSON.stringify(source.body.pages.map((entry) => [entry.id, entry.name]));
+  const pageNames = useMemo(
+    () => new Map(source.body.pages.map((entry) => [entry.id, entry.name])),
+    [pageNameKey],
+  );
   const controlLabel = useCallback(
     (alias: string) =>
       labels.get(studioSemanticSelectionKey({ kind: "placement", placementAlias: alias })) ??
-      // The page is the control of its own events (load, record loaded).
-      (() => {
-        const page = source.body.pages.find((entry) => entry.id === alias);
-        return page === undefined ? "a control" : `the page ${page.name}`;
-      })(),
-    [labels, source],
+      (pageNames.has(alias) ? `the page ${pageNames.get(alias)}` : "a control"),
+    [labels, pageNames],
   );
   const outline = useMemo(() => {
     if (flowSelection === null) return null;
