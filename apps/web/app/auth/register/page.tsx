@@ -19,7 +19,7 @@ export default async function RegisterPage({ searchParams }: RegisterPageProps) 
       title="Start with your email"
       description="Use an email address you can verify. You will receive a one-time confirmation code before you can sign in."
       footer={
-        <p className="text-center text-sm text-muted-foreground">
+        <p className="text-center text-sm">
           Already have an account?{" "}
           <NavigationLink
             className="font-medium text-foreground underline underline-offset-4 hover:text-primary transition-colors"
