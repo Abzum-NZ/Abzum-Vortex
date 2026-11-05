@@ -391,7 +391,11 @@ const StudioSettingField = memo(function StudioSettingField({
       (problem) => !before.has(problem),
     );
     if (problems.length > 0) {
-      setHeld({ value: next, problem: problems.join(" ") });
+      const problem = problems.join(" ");
+      // An expected refusal, logged once when the field starts holding it, not on every keystroke.
+      if (held?.problem !== problem)
+        console.info(`[studio] a setting value was refused: ${property.key}: ${problem}`);
+      setHeld({ value: next, problem });
       return;
     }
     setHeld(null);

@@ -6,7 +6,6 @@ import { Item, ItemContent, ItemGroup, ItemSeparator } from "@vortex/ui/componen
 import { useStudioFieldProblems } from "@vortex/ui/studio";
 import { Fragment, useState, type ReactNode } from "react";
 import { FormattedTime, Icon } from "@vortex/ui";
-import { Badge } from "@vortex/ui/components/badge";
 import { Button } from "@vortex/ui/components/button";
 import { Spinner } from "@vortex/ui/components/spinner";
 import {
@@ -108,42 +107,26 @@ export function StudioSaveState({ draft }: Readonly<{ draft: StudioDraft }>) {
             : "Saved";
   const loading = draft.isHeld("reopening");
 
-  const badge = (
-    <Badge
-      variant="ghost"
-      className={cn(
-        "h-6 gap-1.5 px-2 text-xs font-medium",
-        status.kind === "failed" && !hasFieldProblems
-          ? "bg-warning/10 text-warning"
-          : notSaved
-            ? "bg-destructive/10 text-destructive"
-            : "text-muted-foreground",
-      )}
-    >
-      {busy ? (
-        <Spinner className="size-3" aria-hidden="true" />
-      ) : (
-        <Icon
-          name={
-            status.kind === "failed" && !hasFieldProblems
-              ? "history"
-              : notSaved
-                ? "circle"
-                : "check"
-          }
-          className="size-3"
-        />
-      )}
-      {label}
-    </Badge>
-  );
-
-  const badgeTrigger = (
-    <Button
-      type="button"
-      variant="ghost"
-      className="h-auto rounded-full border-0 p-0 hover:bg-transparent aria-expanded:bg-transparent active:translate-y-0"
+  const tone =
+    status.kind === "failed" && !hasFieldProblems
+      ? "bg-warning/10 text-warning"
+      : notSaved
+        ? "bg-destructive/10 text-destructive"
+        : "text-muted-foreground";
+  const chipIcon = busy ? (
+    <Spinner className="size-3" aria-hidden="true" />
+  ) : (
+    <Icon
+      name={
+        status.kind === "failed" && !hasFieldProblems ? "history" : notSaved ? "circle" : "check"
+      }
+      className="size-3"
     />
+  );
+  // The one chip: a ghost button at the theme's own small size, so its radius and padding follow
+  // the active style.
+  const chip = (
+    <Button type="button" variant="ghost" size="xs" className={cn("font-medium", tone)} />
   );
 
   return (
@@ -156,8 +139,9 @@ export function StudioSaveState({ draft }: Readonly<{ draft: StudioDraft }>) {
       >
         {notSaved ? (
           <Popover>
-            <PopoverTrigger aria-label={`${label}: show save details`} render={badgeTrigger}>
-              {badge}
+            <PopoverTrigger aria-label={`${label}: show save details`} render={chip}>
+              {chipIcon}
+              {label}
             </PopoverTrigger>
             <PopoverContent data-studio-save-state className="space-y-3">
               <PopoverTitle>Your latest change is not saved</PopoverTitle>
@@ -197,7 +181,10 @@ export function StudioSaveState({ draft }: Readonly<{ draft: StudioDraft }>) {
           </Popover>
         ) : (
           <Tooltip>
-            <TooltipTrigger render={badgeTrigger}>{badge}</TooltipTrigger>
+            <TooltipTrigger render={chip}>
+              {chipIcon}
+              {label}
+            </TooltipTrigger>
             <TooltipContent>
               {busy ? (
                 label

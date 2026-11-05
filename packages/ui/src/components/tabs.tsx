@@ -8,7 +8,7 @@ function Tabs({ className, orientation = "horizontal", ...props }: TabsPrimitive
   return (
     <TabsPrimitive.Root
       data-slot="tabs"
-      data-orientation={orientation}
+      orientation={orientation}
       className={cn("cn-tabs group/tabs flex data-horizontal:flex-col", className)}
       {...props}
     />
