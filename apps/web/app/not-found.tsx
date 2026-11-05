@@ -11,7 +11,9 @@ export default function NotFound() {
   return (
     <main className="mx-auto flex min-h-svh w-full max-w-xl flex-col justify-center gap-4 p-6">
       <Alert variant="info">
-        <AlertTitle>Page not found</AlertTitle>
+        <AlertTitle>
+          <h1>Page not found</h1>
+        </AlertTitle>
         <AlertDescription>This address does not lead to a page you can open.</AlertDescription>
       </Alert>
       <div>
