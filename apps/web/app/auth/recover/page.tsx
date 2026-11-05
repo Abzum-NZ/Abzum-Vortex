@@ -1,7 +1,5 @@
 import { NavigationLink } from "@vortex/ui/routing";
-import { Field } from "@vortex/ui/components/field";
-import { Input } from "@vortex/ui/components/input";
-import { Label } from "@vortex/ui/components/label";
+import { AuthForm, AuthTextField } from "../_components/auth-form";
 import { AuthShell } from "../_components/auth-shell";
 import { StatusMessage } from "../_components/status-message";
 import { SubmitButton } from "../_components/submit-button";
@@ -29,13 +27,18 @@ export default async function RecoverPage({ searchParams }: RecoverPageProps) {
       }
     >
       <StatusMessage status={status} />
-      <form className="flex flex-col gap-5" action={requestRecovery}>
-        <Field>
-          <Label htmlFor="email">Email address</Label>
-          <Input id="email" name="email" type="email" autoComplete="email" required />
-        </Field>
+      <AuthForm action={requestRecovery}>
+        <AuthTextField
+          id="email"
+          name="email"
+          label="Email address"
+          type="email"
+          autoComplete="email"
+          missing="Enter your email address."
+          invalid="Enter an email address like name@example.com."
+        />
         <SubmitButton pendingLabel="Requesting code…">Send recovery code</SubmitButton>
-      </form>
+      </AuthForm>
     </AuthShell>
   );
 }
