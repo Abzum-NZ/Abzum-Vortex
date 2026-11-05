@@ -552,9 +552,14 @@ const applySettings = (
     flowed = made.source;
   }
   if (flowed !== source) return { kind: "applied", source: flowed };
-  // The block this edit rebuilt was judged as stored data and every other block is the draft's own
-  // object: the whole draft is parsed when it is saved, not for each key of a typing run.
-  return sameValue(source, current.source) ? { kind: "invalid" } : { kind: "applied", source };
+  // A board's totals and a record side sheet write outside the edited slot, so the draft is parsed
+  // as a whole. Otherwise only the slot changed and it was judged as stored data: the whole draft
+  // is parsed when it is saved, not for each key of a typing run.
+  const next =
+    sideSheet || (board !== undefined && query !== null)
+      ? applicationSourceDocumentSchema.parse(source)
+      : source;
+  return sameValue(next, current.source) ? { kind: "invalid" } : { kind: "applied", source: next };
 };
 
 type Removal = {
