@@ -35,7 +35,7 @@ export type StudioCanvasOwner =
   | Readonly<{ kind: "page"; pageAlias: string; step: string | undefined }>
   | Readonly<{ kind: "layout"; shellAlias: string }>;
 
-export type StudioCompositionCommand =
+export type StudioDraftChange =
   | Readonly<{
       kind: "order";
       breakpoint: StudioCompositionBreakpoint;
@@ -169,7 +169,7 @@ export type StudioCompositionDestinationModel =
   | Readonly<{ kind: "unsupported"; reason: "page_kind" | "manifest_mismatch" }>
   | Readonly<{ kind: "invalid" }>;
 
-export type StudioCompositionCommandResult =
+export type StudioDraftChangeResult =
   /** `placementAlias` names the new block of an add. */
   | Readonly<{ kind: "applied"; source: ApplicationSourceDocument; placementAlias?: string }>
   /** An add the stored composition refuses; `reason` names the place and the rule. */
@@ -178,7 +178,7 @@ export type StudioCompositionCommandResult =
 
 /** What became of one command in the workspace: its kind, why if refused, the new block if added. */
 export type StudioCompositionOutcome = Readonly<{
-  kind: StudioCompositionCommandResult["kind"];
+  kind: StudioDraftChangeResult["kind"];
   reason?: string;
   placementAlias?: string;
 }>;

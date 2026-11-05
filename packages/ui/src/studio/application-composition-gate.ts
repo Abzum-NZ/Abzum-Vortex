@@ -7,7 +7,7 @@ import {
 import { resolveStudioAccessGate } from "./application-access-commands";
 import type {
   StudioCompositionContext,
-  StudioCompositionCommandResult,
+  StudioDraftChangeResult,
 } from "./application-composition-model";
 import {
   closedPlain,
@@ -125,7 +125,7 @@ export const applyStudioCompositionGate = (
   current: StudioCompositionContext,
   selection: StudioSemanticSelection | null,
   command: unknown,
-): StudioCompositionCommandResult => {
+): StudioDraftChangeResult => {
   const named =
     typeof command === "object" && command !== null
       ? members.filter((member) => Object.hasOwn(command, member))

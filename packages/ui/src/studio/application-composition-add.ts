@@ -48,7 +48,7 @@ import type {
   StudioCompositionAddTarget,
   StudioCompositionAddTargetsModel,
   StudioCompositionOwner,
-  StudioCompositionCommandResult,
+  StudioDraftChangeResult,
 } from "./application-composition-model";
 import {
   type Region,
@@ -468,7 +468,7 @@ export const newBlockItem = (
 export const applyAdd = (
   current: StudioCompositionContext,
   command: unknown,
-): StudioCompositionCommandResult => {
+): StudioDraftChangeResult => {
   const input = closedPlain(command, [
     "kind",
     "owner",

@@ -38,7 +38,7 @@ import type { PlatformThemeTokens } from "../theme";
 import type { StudioCompileFailure } from "./compile-failure";
 import type {
   StudioCanvasOwner,
-  StudioCompositionCommand,
+  StudioDraftChange,
   StudioCompositionOutcome,
   StudioCompositionAddTargetsModel,
   StudioCompositionDestination,
@@ -164,7 +164,7 @@ export type StudioPuckInput = Readonly<{
    */
   onCanvasChange: (
     selection: StudioSemanticSelection | null,
-    change: StudioCompositionCommand,
+    change: StudioDraftChange,
     expectedSource: ApplicationSourceDocument,
   ) => StudioCompositionOutcome;
   /**

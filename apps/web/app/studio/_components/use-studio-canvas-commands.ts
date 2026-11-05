@@ -1,6 +1,6 @@
 import type { ApplicationSourceDocument, ConditionNode } from "@vortex/platform/schema";
 import {
-  applyStudioCompositionCommand,
+  applyDraftChange,
   applyStudioItemLabels,
   applyStudioPageValue,
   applyStudioReactionCondition,
@@ -9,7 +9,7 @@ import {
   studioBlockChoices,
   studioSemanticSelectionKey,
   type StudioApplicationConditionContext,
-  type StudioCompositionCommand,
+  type StudioDraftChange,
   type StudioCompositionContext,
   type StudioCompositionOutcome,
   type StudioItemLabelResult,
@@ -36,22 +36,22 @@ export type StudioCanvasCommands = Readonly<{
   liveContext: () => StudioCompositionContext;
   runDraftChange: (
     selection: StudioSemanticSelection | null,
-    change: StudioCompositionCommand,
+    change: StudioDraftChange,
     options?: DraftChangeOptions,
   ) => StudioCompositionOutcome;
   commandComposition: (
     expected: StudioCompositionContext,
     expectedSelection: StudioSemanticSelection,
-    change: StudioCompositionCommand,
+    change: StudioDraftChange,
     merge?: string,
   ) => StudioCompositionOutcome;
   onSettingsEdit: (edit: StudioSettingsEdit, merge: string) => StudioCompositionOutcome;
   onCanvasChange: (
     selection: StudioSemanticSelection | null,
-    change: StudioCompositionCommand,
+    change: StudioDraftChange,
     expectedSource: ApplicationSourceDocument,
   ) => StudioCompositionOutcome;
-  runAdd: (change: Extract<StudioCompositionCommand, { kind: "add" }>) => string | true;
+  runAdd: (change: Extract<StudioDraftChange, { kind: "add" }>) => string | true;
   commandPageValue: (command: StudioPageValueCommand) => StudioPageValueResult;
   commandReaction: (
     expected: StudioCompositionContext,
@@ -112,7 +112,7 @@ export function useStudioCanvasCommands({
           !sameStudioCompositionContext(options.expected, context)
         )
           return { kind: "keep", result: { kind: "stale" } };
-        const result = applyStudioCompositionCommand(context, selection, change);
+        const result = applyDraftChange(context, selection, change);
         if (result.kind === "applied")
           return {
             kind: "edit",
