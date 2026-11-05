@@ -11,7 +11,10 @@ const titles: Readonly<Record<StudioUnavailableKind, string>> = {
   no_change: "has no changes",
 };
 
-/** The one place a Studio page shows a loader that did not return the draft, with the sentence for its reason (the reason code itself is never shown). */
+/**
+ * The one place a Studio page shows a loader that did not return the draft, with the sentence for
+ * its reason (the reason code itself is never shown).
+ */
 export function StudioUnavailable({
   subject,
   result,
