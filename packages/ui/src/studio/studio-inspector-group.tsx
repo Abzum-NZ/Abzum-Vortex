@@ -24,7 +24,7 @@ export function StudioInspectorGroup({
   children: ReactNode;
   defaultOpen?: boolean;
   persist?: boolean;
-  /** The section stays open while this holds (a refusal inside it must be seen). */
+  /** The section opens when this becomes true (a refusal inside it must be seen). */
   forceOpen?: boolean;
   /** Instruction text for the whole section, shown in an info tooltip. */
   hint?: string;
@@ -33,8 +33,7 @@ export function StudioInspectorGroup({
   /** One icon button at the right of the header. */
   action?: ReactNode;
 }>) {
-  const [opened, setOpen] = useState(defaultOpen);
-  const open = opened || forceOpen;
+  const [open, setOpen] = useState(defaultOpen);
   const summaryId = useId();
   const key = "vortex:studio:inspector:v2:" + title;
   useEffect(() => {
@@ -46,6 +45,10 @@ export function StudioInspectorGroup({
       /* Storage may be disabled. */
     }
   }, [key, defaultOpen, persist]);
+  // Opened for the refusal, after the stored preference is read; the person can close it again.
+  useEffect(() => {
+    if (forceOpen) setOpen(true);
+  }, [forceOpen]);
   const toggle = (next: boolean) => {
     setOpen(next);
     if (!persist) return;

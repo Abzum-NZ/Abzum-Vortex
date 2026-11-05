@@ -145,12 +145,15 @@ type StudioQueryFieldValue = Readonly<{
   after?: ReactNode;
 }>;
 
-/**
- * The settings the person has edited since the selected block was chosen (the label note reads
- * them).
- */
+/** The selection the fields belong to, and how a field marks its setting as edited. */
 type StudioSettingFieldsContextValue = Omit<StudioSettingFieldsValue, "access" | "layout"> &
-  Readonly<{ scope: string; touched: ReadonlySet<string>; touch: (key: string) => void }>;
+  Readonly<{ scope: string; touch: (key: string) => void }>;
+
+/**
+ * The settings the person has edited since the selected block was chosen. Only the notes read
+ * them, so the first edit of a setting draws the notes and not every setting.
+ */
+export const StudioSettingTouchedContext = createContext<ReadonlySet<string>>(new Set());
 
 /**
  * Who sees the block, and its size and order, each in a context of its own: they change with the
@@ -345,7 +348,7 @@ const StudioSettingField = memo(function StudioSettingField({
     return studioTypedSettings(siblings, properties);
   }, [siblingsKey, property, properties]);
   if (context === null) return null;
-  const { choices, disabled, scope, touched, touch } = context;
+  const { choices, disabled, scope, touch } = context;
   const change = (next: SettingValue) => {
     touch(property.key);
     const now = studioTypedSettings(getPuck().selectedItem?.props ?? {}, properties);
@@ -396,19 +399,24 @@ const StudioSettingField = memo(function StudioSettingField({
           />
         )}
       </StudioField>
-      <StudioSettingNote
+      <StudioSettingFieldNote
         property={property}
         properties={properties}
         values={values}
         choices={choices}
         disabled={disabled}
         scope={scope}
-        touched={touched}
         onUseFieldLabel={() => change(undefined)}
       />
     </div>
   );
 }, sameSettingField);
+
+/** The notes under a setting, with the edited settings they read from their own context. */
+function StudioSettingFieldNote(props: Omit<Parameters<typeof StudioSettingNote>[0], "touched">) {
+  const touched = useContext(StudioSettingTouchedContext);
+  return <StudioSettingNote {...props} touched={touched} />;
+}
 
 /** The data a block reads and the bindings of its inputs, in the inspector's own commands. */
 function StudioQueryField({ readOnly }: Readonly<{ readOnly: boolean }>) {

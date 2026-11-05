@@ -23,6 +23,7 @@ import {
   StudioAccessFieldContext,
   StudioLayoutFieldContext,
   StudioSettingFieldsContext,
+  StudioSettingTouchedContext,
   studioConditionField,
   studioConditionFieldName,
   studioFeaturesField,
@@ -409,31 +410,33 @@ export function StudioBlockSettingFields({
       settingsAfter,
       notice,
       scope,
-      touched: touched.scope === scope ? touched.keys : noKeys,
       touch,
     }),
-    [choices, disabled, query, features, settingsAfter, notice, scope, touched, touch],
+    [choices, disabled, query, features, settingsAfter, notice, scope, touch],
   );
+  const touchedKeys = touched.scope === scope ? touched.keys : noKeys;
   const accessValue = useMemo(() => ({ access, disabled }), [access, disabled]);
   const layoutValue = useMemo(() => ({ layout, disabled }), [layout, disabled]);
   const sections = useMemo(() => ({ workflows, usedIn }), [workflows, usedIn]);
   return (
     <StudioSettingFieldsContext.Provider value={value}>
-      <StudioAccessFieldContext.Provider value={accessValue}>
-        <StudioLayoutFieldContext.Provider value={layoutValue}>
-          <StudioOrderNamesContext.Provider value={orderNames}>
-            <StudioInspectorSectionsContext.Provider value={sections}>
-              <StudioBlockHeader
-                titleId={titleId}
-                name={name}
-                actions={actions}
-                releases={releases}
-              />
-              {scope === placementAlias && <Puck.Fields wrapFields={false} />}
-            </StudioInspectorSectionsContext.Provider>
-          </StudioOrderNamesContext.Provider>
-        </StudioLayoutFieldContext.Provider>
-      </StudioAccessFieldContext.Provider>
+      <StudioSettingTouchedContext.Provider value={touchedKeys}>
+        <StudioAccessFieldContext.Provider value={accessValue}>
+          <StudioLayoutFieldContext.Provider value={layoutValue}>
+            <StudioOrderNamesContext.Provider value={orderNames}>
+              <StudioInspectorSectionsContext.Provider value={sections}>
+                <StudioBlockHeader
+                  titleId={titleId}
+                  name={name}
+                  actions={actions}
+                  releases={releases}
+                />
+                {scope === placementAlias && <Puck.Fields wrapFields={false} />}
+              </StudioInspectorSectionsContext.Provider>
+            </StudioOrderNamesContext.Provider>
+          </StudioLayoutFieldContext.Provider>
+        </StudioAccessFieldContext.Provider>
+      </StudioSettingTouchedContext.Provider>
     </StudioSettingFieldsContext.Provider>
   );
 }

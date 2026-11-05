@@ -15,6 +15,7 @@ import {
   type StudioReactionSlot,
   type StudioSemanticSelection,
   type StudioStoredApplicationDraft,
+  useStudioSameByKey,
 } from "@vortex/ui/studio";
 import {
   ApplicationReactionConditionEditor,
@@ -86,8 +87,6 @@ export function useStudioBlockAccess({
   gateHandler.current = onGate;
   // The permission picker reads the permissions, the roles that hold them and the modules' own
   // permissions: the source it is handed stays the same object while those are unchanged.
-  const latestSource = useRef(context.source);
-  latestSource.current = context.source;
   const gateSourceKey = useMemo(
     () =>
       canonicalJson([
@@ -97,7 +96,7 @@ export function useStudioBlockAccess({
       ]),
     [context.source],
   );
-  const gateSource = useMemo(() => latestSource.current, [gateSourceKey]);
+  const gateSource = useStudioSameByKey(context.source, gateSourceKey);
   const hasTarget = target !== undefined;
   const slotsSet = studioReactionSlots
     .filter((entry) => target?.placement[entry.slot] !== undefined)

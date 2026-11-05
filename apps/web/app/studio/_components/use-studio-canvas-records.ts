@@ -1,7 +1,8 @@
-import { useCallback, useMemo, useRef } from "react";
+import { useCallback, useMemo } from "react";
 import type { ApplicationRootId, ApplicationSourceDocument } from "@vortex/platform/schema";
 import {
   studioDraftChoices,
+  useStudioSameByKey,
   type StudioCanvasGridRead,
   type StudioRecordReader,
 } from "@vortex/ui/studio";
@@ -109,13 +110,11 @@ export function useStudioCanvasRecords({
   );
   // The choices are made again for each draft change but hold the same content for nearly all of
   // them (a typed label changes none): they keep their identity, so the settings do not draw.
-  const draftChoicesLatest = useRef(draftChoicesNow);
-  draftChoicesLatest.current = draftChoicesNow;
-  const draftChoicesKey = JSON.stringify(draftChoicesNow);
-  const draftChoices = useMemo(
-    () => draftChoicesLatest.current,
-    [draftChoicesKey, readRecordChoices, applicationName, view.borrowedChoices],
-  );
+  const draftChoices = useStudioSameByKey(draftChoicesNow, JSON.stringify(draftChoicesNow), [
+    readRecordChoices,
+    applicationName,
+    view.borrowedChoices,
+  ]);
   // The values the selected block's page declares, which a display can show.
   const blockChoicesNow = useMemo(
     () => ({
@@ -128,10 +127,11 @@ export function useStudioCanvasRecords({
     }),
     [draftChoices, canvasPage],
   );
-  const blockChoicesLatest = useRef(blockChoicesNow);
-  blockChoicesLatest.current = blockChoicesNow;
-  const blockChoicesKey = JSON.stringify(blockChoicesNow.pageValues);
-  const blockChoices = useMemo(() => blockChoicesLatest.current, [draftChoices, blockChoicesKey]);
+  const blockChoices = useStudioSameByKey(
+    blockChoicesNow,
+    JSON.stringify(blockChoicesNow.pageValues),
+    [draftChoices],
+  );
   // The records of the canvas's data blocks, read once per area for the compiled saved revision,
   // when the builder's preview runs that revision's data shape.
   const readCanvasRecords = useCallback(

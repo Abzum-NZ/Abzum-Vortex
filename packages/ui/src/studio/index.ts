@@ -96,6 +96,7 @@ export {
   studioOrderWindow,
   type StudioLayoutFieldValue,
 } from "./studio-layout-fields";
+export { useStudioSameByKey } from "./use-studio-same-by-key";
 export * from "./studio-inspector-actions";
 export * from "./studio-field-type-icon";
 export {

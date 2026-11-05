@@ -38,6 +38,7 @@ import {
   type StudioGridFeaturesProps,
   studioOrderMoves,
   studioOrderWindow,
+  useStudioSameByKey,
   type StudioLayoutFieldValue,
   type StudioCompositionSettings,
   type StudioCompositionSettingsModel,
@@ -202,57 +203,55 @@ export function StudioBlockInspector(props: Props) {
     });
   }, [model, breakpoint, selectionKey, orderProblem]);
   // The names the order field draws: its own value, so a typed label draws that field alone.
-  const namesKey = JSON.stringify(
+  const nearNames: [string, string][] =
     model.kind === "available"
       ? studioOrderWindow(model.order, model.order.indexOf(model.placementAlias)).map((alias) => [
           alias,
           studioPlacementLabel(labels, alias) ?? "Item",
         ])
-      : [],
+      : [];
+  const orderNames = useStudioSameByKey(
+    new Map<string, string>(nearNames),
+    JSON.stringify(nearNames),
   );
-  const orderNames = useMemo(
-    () => new Map<string, string>(JSON.parse(namesKey) as [string, string][]),
-    [namesKey],
-  );
-  const layoutValue = useMemo<StudioLayoutFieldValue>(
-    () =>
-      modelRef.current.kind === "available"
-        ? {
-            kind: "available",
-            model: modelRef.current,
-            onResize: (next) =>
-              run.current(
-                { kind: "resize", breakpoint, layout: next },
-                next === null ? undefined : `size:${selectionKey}:${breakpoint}`,
-                "Size changed.",
-                undefined,
-                true,
-              ),
-            onOrder: (next) => changeOrderRef.current(next),
-            onMove: (direction) => {
-              const current = modelRef.current;
-              if (current.kind !== "available") return undefined;
-              const index = current.order.indexOf(current.placementAlias);
-              const to = index + direction;
-              if (index < 0 || to < 0 || to >= current.order.length) return undefined;
-              const next = [...current.order];
-              const [moved] = next.splice(index, 1);
-              next.splice(to, 0, moved!);
-              return changeOrderRef.current(next);
-            },
-            orderProblem,
-          }
-        : {
-            kind: "refused",
-            reason:
-              modelRef.current.kind === "refused"
-                ? modelRef.current.reason
-                : modelRef.current.kind === "unsupported"
-                  ? "This area uses an item type that cannot be edited here. Nothing was changed."
-                  : "This item is not in the current draft.",
+  const layoutValue = useStudioSameByKey<StudioLayoutFieldValue>(
+    model.kind === "available"
+      ? {
+          kind: "available",
+          model,
+          onResize: (next) =>
+            run.current(
+              { kind: "resize", breakpoint, layout: next },
+              next === null ? undefined : `size:${selectionKey}:${breakpoint}`,
+              "Size changed.",
+              undefined,
+              true,
+            ),
+          onOrder: (next) => changeOrderRef.current(next),
+          // The kept value moves within the latest order, which may differ outside its window.
+          onMove: (direction) => {
+            const current = modelRef.current;
+            if (current.kind !== "available") return undefined;
+            const index = current.order.indexOf(current.placementAlias);
+            const to = index + direction;
+            if (index < 0 || to < 0 || to >= current.order.length) return undefined;
+            const next = [...current.order];
+            const [moved] = next.splice(index, 1);
+            next.splice(to, 0, moved!);
+            return changeOrderRef.current(next);
           },
-    // The key says when the value changes.
-    [layoutKey],
+          orderProblem,
+        }
+      : {
+          kind: "refused",
+          reason:
+            model.kind === "refused"
+              ? model.reason
+              : model.kind === "unsupported"
+                ? "This area uses an item type that cannot be edited here. Nothing was changed."
+                : "This item is not in the current draft.",
+        },
+    layoutKey,
   );
   // Who sees the block and when: its gate and conditions are fields of the Visibility and access group.
   const { access, dialog: conditionDialog } = useStudioBlockAccess({
@@ -277,10 +276,10 @@ export function StudioBlockInspector(props: Props) {
     [props.context, props.selection],
   );
   // The set keeps its identity while it holds the same fields, so the settings do not draw for it.
-  const fieldsInUseLatest = useRef(fieldsInUseNow);
-  fieldsInUseLatest.current = fieldsInUseNow;
-  const fieldsInUseKey = JSON.stringify([...fieldsInUseNow].sort());
-  const fieldsInUse = useMemo(() => fieldsInUseLatest.current, [fieldsInUseKey]);
+  const fieldsInUse = useStudioSameByKey(
+    fieldsInUseNow,
+    JSON.stringify([...fieldsInUseNow].sort()),
+  );
   const choices = useMemo(
     () => ({ ...studioBlockChoices(props.choices, settingsInputs.query), fieldsInUse }),
     [props.choices, settingsInputs.query, fieldsInUse],

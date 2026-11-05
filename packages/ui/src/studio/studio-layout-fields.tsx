@@ -131,7 +131,10 @@ const layoutOf = (
 /** How many neighbours the order field draws on each side of the selected block. */
 const orderNeighbours = 2;
 
-/** The selected block and up to two neighbours on each side: the order field never draws a whole slot. */
+/**
+ * The selected block and up to two neighbours on each side: the order field never draws a whole
+ * slot.
+ */
 export const studioOrderWindow = (order: readonly string[], index: number): readonly string[] =>
   index < 0 ? [] : order.slice(Math.max(0, index - orderNeighbours), index + orderNeighbours + 1);
 
