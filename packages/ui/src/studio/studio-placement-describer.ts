@@ -30,6 +30,8 @@ const itemLabel = (
     const label = reference === undefined ? undefined : fieldLabels.get(reference);
     if (label !== undefined) return label;
   }
+  // A block that declares its accessible name is never named by another text (an empty message).
+  if (named !== undefined) return undefined;
   for (const property of release?.properties ?? []) {
     const label = textValue(settings[property.key as string]);
     if (property.kind === "text" && label !== undefined) return label;
@@ -37,7 +39,7 @@ const itemLabel = (
   return undefined;
 };
 
-/** "Button · New company": the block's display name from its release, then the item's own label. */
+/** "Button · New company": the block's display name from its release, then the item's label. */
 export const createStudioPlacementDescriber = (
   catalogue: ImmutablePlatformBlockCatalogue,
   source: ApplicationSourceDocument,

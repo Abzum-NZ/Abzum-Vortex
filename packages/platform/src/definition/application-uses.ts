@@ -1457,7 +1457,9 @@ export const describeApplicationUsers = (places: readonly ApplicationUsePlace[])
   const names = [
     ...new Set(
       places.map((place) =>
-        place.label.includes("'") || place.label.endsWith(" block")
+        // Only a label that starts with a lowercase kind word ("flow 'Open the form'") takes
+        // "the"; a person's title ("Data grid · Bob's list") and "The application's ..." do not.
+        /^[a-z]/u.test(place.label) && (place.label.includes("'") || place.label.endsWith(" block"))
           ? `the ${place.label}`
           : place.label,
       ),

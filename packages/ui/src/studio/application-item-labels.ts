@@ -11,12 +11,18 @@ export type StudioItemLabelResult =
 
 type Navigation = ApplicationSourceDocument["body"]["navigation"];
 
-/** The schema's own rules for each text a label edit sets, so a change is checked where it is made. */
+/**
+ * The schema's own rules for each text a label edit sets, so a change is checked where it is
+ * made.
+ */
 const bodyFields = sourceApplicationBodySchema.shape;
 const pageName = bodyFields.pages.element.options[0].shape.name;
 const shellName = bodyFields.shells.element.shape.name;
 
-/** Menu entries that follow a page's name (their label is the page's old name) take its new name. */
+/**
+ * Menu entries that follow a page's name (their label is the page's old name) take its new
+ * name.
+ */
 const renamedMenuEntries = (
   items: Navigation,
   pageKey: string,

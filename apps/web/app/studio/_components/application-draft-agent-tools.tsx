@@ -293,8 +293,8 @@ export function ApplicationDraftAgentTools({
     command: StudioCompositionCommand,
   ) => StudioCompositionOutcome;
   /**
-   * The inspector's rename over the one draft. The agent passes no `merge`, so its rename is its own
-   * Undo step.
+   * The inspector's rename over the one draft. The agent passes no `merge`, so its rename is its
+   * own Undo step.
    */
   rename: (
     selection: StudioSemanticSelection,

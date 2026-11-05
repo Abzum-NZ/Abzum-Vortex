@@ -68,7 +68,7 @@ const studioPlacementReferrers = (
     });
 
 const studioPlacementUsersSentence = (users: string): string =>
-  `This block is used by ${users}. Change that reference first.`;
+  `This block is used by ${users}${/[?!]$/u.test(users) ? "" : "."} Change that reference first.`;
 
 /**
  * Why a block cannot be duplicated, or undefined: a form, or a block holding a field input, because
@@ -173,7 +173,7 @@ export const studioRemovalIndex = (
       if (item === undefined) return undefined;
       describe ??= createStudioPlacementDescriber(catalogue, source);
       // The sentence ends with its own full stop, so a name that ends in one (a message) loses it.
-      return studioBlockName(describe, [item], alias)?.replace(/[.!?]+$/, "");
+      return studioBlockName(describe, [item], alias)?.replace(/\.+$/u, "");
     },
     host: (alias) => {
       let held = hosts.get(alias);
