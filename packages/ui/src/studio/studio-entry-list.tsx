@@ -9,7 +9,7 @@ import {
   type ReactNode,
 } from "react";
 import { ArrowDown, ArrowUp, ChevronRight, CircleAlert, GripVertical, Trash2 } from "lucide-react";
-import { ItemContent, ItemGroup } from "../components/item";
+import { ItemGroup } from "../components/item";
 import { Button } from "../components/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../components/tooltip";
 import { cn } from "../lib/utils";
@@ -137,7 +137,7 @@ export function StudioEntryList({
             <div
               key={item.key}
               role="listitem"
-              className={cn("group/entry", dragging === index && "opacity-50")}
+              className={cn("group/entry flex flex-col", dragging === index && "opacity-50")}
               onDragOver={(event) => {
                 if (dragging === null) return;
                 event.preventDefault();
@@ -149,122 +149,120 @@ export function StudioEntryList({
                 setDragging(null);
               }}
             >
-              <ItemContent>
-                <div
-                  className={cn(
-                    "flex min-h-9 items-center gap-1 rounded-md px-1 hover:bg-muted focus-within:bg-muted",
-                    expanded && "bg-muted",
-                  )}
-                >
-                  {onMove !== undefined && (
-                    <span
-                      draggable={movable}
-                      aria-hidden="true"
-                      className={cn(
-                        "text-muted-foreground",
-                        movable ? "cursor-grab active:cursor-grabbing" : "opacity-50",
-                      )}
-                      onDragStart={(event) => {
-                        event.dataTransfer.effectAllowed = "move";
-                        event.dataTransfer.setData("text/plain", item.key);
-                        const row = event.currentTarget.closest("[data-slot=item]");
-                        if (row !== null) event.dataTransfer.setDragImage(row, 0, 0);
-                        setDragging(index);
-                      }}
-                      onDragEnd={() => setDragging(null)}
-                    >
-                      <GripVertical className="size-4" />
-                    </span>
-                  )}
-                  <Button
-                    ref={(element) => {
-                      if (element === null) headings.current.delete(item.key);
-                      else headings.current.set(item.key, element);
+              <div
+                className={cn(
+                  "flex min-h-9 items-center gap-1 rounded-md px-1 hover:bg-muted focus-within:bg-muted",
+                  expanded && "bg-muted",
+                )}
+              >
+                {onMove !== undefined && (
+                  <span
+                    draggable={movable}
+                    aria-hidden="true"
+                    className={cn(
+                      "text-muted-foreground",
+                      movable ? "cursor-grab active:cursor-grabbing" : "opacity-50",
+                    )}
+                    onDragStart={(event) => {
+                      event.dataTransfer.effectAllowed = "move";
+                      event.dataTransfer.setData("text/plain", item.key);
+                      const row = event.currentTarget.closest("[role=listitem]");
+                      if (row !== null) event.dataTransfer.setDragImage(row, 0, 0);
+                      setDragging(index);
                     }}
-                    type="button"
-                    variant="ghost"
-                    size="xs"
-                    className="h-auto min-h-9 min-w-0 flex-1 justify-start text-left"
-                    aria-expanded={item.content === undefined ? undefined : expanded}
-                    aria-keyshortcuts={movable ? "Alt+ArrowUp Alt+ArrowDown" : undefined}
-                    onClick={() => {
-                      if (item.content !== undefined) setOpen(expanded ? null : item.key);
-                    }}
-                    onKeyDown={(event) => {
-                      if (!event.altKey) return;
-                      if (event.key === "ArrowUp" || event.key === "ArrowDown") {
-                        event.preventDefault();
-                        move(index, event.key === "ArrowUp" ? index - 1 : index + 1);
-                      }
-                    }}
+                    onDragEnd={() => setDragging(null)}
                   >
-                    {item.content !== undefined && (
-                      <ChevronRight
-                        className={cn(
-                          "size-4 shrink-0 text-muted-foreground transition-transform",
-                          expanded && "rotate-90",
-                        )}
-                      />
-                    )}
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate text-sm font-medium">{item.title}</span>
-                      {item.summary !== undefined && item.summary !== "" && (
-                        <span
-                          className={cn(
-                            "block truncate text-xs font-normal",
-                            expanded
-                              ? "text-foreground"
-                              : "text-muted-foreground group-hover/entry:text-foreground group-focus-within/entry:text-foreground",
-                          )}
-                        >
-                          {item.summary}
-                        </span>
+                    <GripVertical className="size-4" />
+                  </span>
+                )}
+                <Button
+                  ref={(element) => {
+                    if (element === null) headings.current.delete(item.key);
+                    else headings.current.set(item.key, element);
+                  }}
+                  type="button"
+                  variant="ghost"
+                  size="xs"
+                  className="h-auto min-h-9 min-w-0 flex-1 justify-start text-left"
+                  aria-expanded={item.content === undefined ? undefined : expanded}
+                  aria-keyshortcuts={movable ? "Alt+ArrowUp Alt+ArrowDown" : undefined}
+                  onClick={() => {
+                    if (item.content !== undefined) setOpen(expanded ? null : item.key);
+                  }}
+                  onKeyDown={(event) => {
+                    if (!event.altKey) return;
+                    if (event.key === "ArrowUp" || event.key === "ArrowDown") {
+                      event.preventDefault();
+                      move(index, event.key === "ArrowUp" ? index - 1 : index + 1);
+                    }
+                  }}
+                >
+                  {item.content !== undefined && (
+                    <ChevronRight
+                      className={cn(
+                        "size-4 shrink-0 text-muted-foreground transition-transform",
+                        expanded && "rotate-90",
                       )}
-                    </span>
-                    {item.invalid === true && (
-                      <CircleAlert
-                        className="size-4 shrink-0 text-destructive"
-                        aria-label="Has a problem"
-                      />
-                    )}
-                  </Button>
-                  <span className="flex shrink-0 items-center opacity-0 group-hover/entry:opacity-100 group-focus-within/entry:opacity-100">
-                    {onMove !== undefined && (
-                      <>
-                        <StudioIconButton
-                          label={`Move ${itemName} up`}
-                          disabled={!movable || index === 0}
-                          onClick={() => move(index, index - 1)}
-                        >
-                          <ArrowUp />
-                        </StudioIconButton>
-                        <StudioIconButton
-                          label={`Move ${itemName} down`}
-                          disabled={!movable || index === items.length - 1}
-                          onClick={() => move(index, index + 1)}
-                        >
-                          <ArrowDown />
-                        </StudioIconButton>
-                      </>
-                    )}
-                    {onRemove !== undefined && (
-                      <StudioIconButton
-                        label={`Remove ${itemName}`}
-                        disabled={disabled}
-                        destructive
-                        onClick={() => onRemove(index)}
+                    />
+                  )}
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-medium">{item.title}</span>
+                    {item.summary !== undefined && item.summary !== "" && (
+                      <span
+                        className={cn(
+                          "block truncate text-xs font-normal",
+                          expanded
+                            ? "text-foreground"
+                            : "text-muted-foreground group-hover/entry:text-foreground group-focus-within/entry:text-foreground",
+                        )}
                       >
-                        <Trash2 />
-                      </StudioIconButton>
+                        {item.summary}
+                      </span>
                     )}
                   </span>
+                  {item.invalid === true && (
+                    <CircleAlert
+                      className="size-4 shrink-0 text-destructive"
+                      aria-label="Has a problem"
+                    />
+                  )}
+                </Button>
+                <span className="flex shrink-0 items-center opacity-0 group-hover/entry:opacity-100 group-focus-within/entry:opacity-100">
+                  {onMove !== undefined && (
+                    <>
+                      <StudioIconButton
+                        label={`Move ${itemName} up`}
+                        disabled={!movable || index === 0}
+                        onClick={() => move(index, index - 1)}
+                      >
+                        <ArrowUp />
+                      </StudioIconButton>
+                      <StudioIconButton
+                        label={`Move ${itemName} down`}
+                        disabled={!movable || index === items.length - 1}
+                        onClick={() => move(index, index + 1)}
+                      >
+                        <ArrowDown />
+                      </StudioIconButton>
+                    </>
+                  )}
+                  {onRemove !== undefined && (
+                    <StudioIconButton
+                      label={`Remove ${itemName}`}
+                      disabled={disabled}
+                      destructive
+                      onClick={() => onRemove(index)}
+                    >
+                      <Trash2 />
+                    </StudioIconButton>
+                  )}
+                </span>
+              </div>
+              {item.content !== undefined && (
+                <div hidden={!expanded} className="space-y-4 px-1 pt-2 pb-4">
+                  {item.content}
                 </div>
-                {item.content !== undefined && (
-                  <div hidden={!expanded} className="space-y-4 px-1 pt-2 pb-4">
-                    {item.content}
-                  </div>
-                )}
-              </ItemContent>
+              )}
             </div>
           );
         })}
