@@ -174,19 +174,20 @@ function ExistingApplicationWorkspace(props: ExistingProps) {
   };
 
   // The one outline of the draft: Structure, Outline and every label Studio shows are views of it.
-  // Drawn after the keystroke that changed the draft: the canvas and the field answer first.
-  const outlineSource = useDeferredValue(source);
+  // Drawn after the keystroke that changed the draft: the canvas and the field answer first. The
+  // commands and the canvas name blocks from the current draft.
   const describePlacement = useMemo(
-    () => createStudioPlacementDescriber(catalogue, outlineSource),
-    [catalogue, outlineSource],
+    () => createStudioPlacementDescriber(catalogue, source),
+    [catalogue, source],
   );
+  const outlineSource = useDeferredValue(source);
   const outline = useMemo(
     () =>
       projectStudioSemanticOutline(
         { rootId: state.rootId, source: outlineSource, catalogue },
-        describePlacement,
+        createStudioPlacementDescriber(catalogue, outlineSource),
       ),
-    [state.rootId, outlineSource, catalogue, describePlacement],
+    [state.rootId, outlineSource, catalogue],
   );
   const labels = useMemo(() => studioOutlineLabels(outline), [outline]);
   // Every "Used in" entry and "Show me where" link opens its place in its own tab, selected.
