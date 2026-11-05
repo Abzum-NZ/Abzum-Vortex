@@ -275,9 +275,8 @@ export const readStudioCanvasRecords = async (
       page === undefined
         ? undefined
         : request.area === shellLayoutZone
-          ? draft.source.body.shells.find(
-              (shell) => shell.id === sourcePageShell(page.composition),
-            )?.layout.content
+          ? draft.source.body.shells.find((shell) => shell.id === sourcePageShell(page.composition))
+              ?.layout.content
           : address === undefined
             ? undefined
             : sourcePageSlotAt(page, address)?.items;
