@@ -74,10 +74,35 @@ import {
   plainSettings,
   settingsOf,
   PUBLISHED_PAGE_ADD_REASON,
+  declarationSlotKeys,
   publishedPage,
 } from "./application-composition-regions";
 import { FORM_CONTAINER_KEY, NESTED_FORM_REASON } from "./application-composition-forms";
 import type { StudioPlacementDescriber } from "./semantic-outline";
+
+/**
+ * What the author calls the entry of a repeating slot (a tab) that is stored under `slotKey`: its
+ * label, else its key, as the block itself shows it.
+ */
+const repeatingEntryName = (
+  item: SourceItem,
+  declaration: Readonly<{
+    key: string;
+    repeats?: Readonly<{ items: string; identity: string }> | undefined;
+  }>,
+  slotKey: string,
+): string => {
+  const identity = slotKey.slice(declaration.key.length + 1);
+  const entries = declaration.repeats === undefined ? [] : item.props[declaration.repeats.items];
+  const entry = (Array.isArray(entries) ? entries : []).find(
+    (candidate: unknown) =>
+      typeof candidate === "object" &&
+      candidate !== null &&
+      (candidate as Record<string, unknown>)[declaration.repeats!.identity] === identity,
+  ) as Record<string, unknown> | undefined;
+  const label = entry?.label;
+  return typeof label === "string" && label.trim().length > 0 ? label : identity;
+};
 
 const blockCounts = new WeakMap<ImmutablePlatformBlockCatalogue, WeakMap<SourceItem, number>>();
 const countBlocks = (catalogue: ImmutablePlatformBlockCatalogue, items: readonly SourceItem[]) => {
@@ -261,47 +286,57 @@ export const addPlaces = (
         const ordinal = (ordinals.get(String(release.name)) ?? 0) + 1;
         ordinals.set(String(release.name), ordinal);
         const childInForm = inForm || release.key === FORM_CONTAINER_KEY;
-        for (const declaration of release.slots) {
-          if (declaration.repeats !== undefined) continue;
-          const parentAlias = item.props.id;
-          const childSteps = [...steps, { parentAlias, slotKey: declaration.key }];
-          const outlet = outlets.get(`${parentAlias}|${declaration.key}`);
-          places.push({
-            region,
-            steps: childSteps,
-            ...(outlet === undefined ? {} : { outlet }),
-            target: Object.freeze<StudioCompositionAddTarget>({
-              id: `${area}|${parentAlias}|${declaration.key}`,
-              area,
-              destination: { kind: "child", parentAlias, slotKey: declaration.key },
-              label: `${describePlacement?.({ block: item.props.vortex.block, settings: settingsOf(item) }) ?? `${release.name} ${ordinal}`}: ${declaration.label}${outlet === undefined ? "" : ` (page content: ${outlet})`}`,
-              depth: hostLevels + childSteps.length,
-              placed,
-              choices:
-                outlet === undefined
-                  ? limited(
-                      hostLevels + childSteps.length,
-                      formChoices(
-                        childInForm,
-                        studioPaletteChoices(
-                          catalogue,
-                          discovery.getPlacementChoices({
-                            kind: "slot",
-                            parent: {
-                              blockId: release.blockId,
-                              releaseVersion: release.releaseVersion,
-                            },
-                            slotKey: declaration.key,
-                          }),
+        for (const declaration of release.slots)
+          for (const slotKey of declarationSlotKeys(declaration, slots.keys())) {
+            const parentAlias = item.props.id;
+            const childSteps = [...steps, { parentAlias, slotKey }];
+            const outlet = outlets.get(`${parentAlias}|${slotKey}`);
+            const label = [
+              describePlacement?.({ block: item.props.vortex.block, settings: settingsOf(item) }) ??
+                `${release.name} ${ordinal}`,
+              ": ",
+              declaration.label,
+              declaration.repeats === undefined
+                ? ""
+                : ` (${repeatingEntryName(item, declaration, slotKey)})`,
+              outlet === undefined ? "" : ` (page content: ${outlet})`,
+            ].join("");
+            places.push({
+              region,
+              steps: childSteps,
+              ...(outlet === undefined ? {} : { outlet }),
+              target: Object.freeze<StudioCompositionAddTarget>({
+                id: `${area}|${parentAlias}|${slotKey}`,
+                area,
+                destination: { kind: "child", parentAlias, slotKey },
+                label,
+                depth: hostLevels + childSteps.length,
+                placed,
+                choices:
+                  outlet === undefined
+                    ? limited(
+                        hostLevels + childSteps.length,
+                        formChoices(
+                          childInForm,
+                          studioPaletteChoices(
+                            catalogue,
+                            discovery.getPlacementChoices({
+                              kind: "slot",
+                              parent: {
+                                blockId: release.blockId,
+                                releaseVersion: release.releaseVersion,
+                              },
+                              slotKey,
+                            }),
+                          ),
                         ),
-                      ),
-                    )
-                  : [],
-            }),
-          });
-          const child = slots.get(declaration.key);
-          if (child !== undefined) visit(child.items, childSteps, childInForm);
-        }
+                      )
+                    : [],
+              }),
+            });
+            const child = slots.get(slotKey);
+            if (child !== undefined) visit(child.items, childSteps, childInForm);
+          }
       }
     };
     visit(region.zone.items, [], false);
@@ -514,16 +549,11 @@ export const applyAdd = (
   try {
     placeItem(catalogue, source, place, input.index, item);
   } catch (error) {
-    if (error instanceof StoredCompositionRefusal) {
-      console.info("[studio] composition add refused", {
-        part: error.location,
-        reason: error.reason,
-      });
+    if (error instanceof StoredCompositionRefusal)
       return {
         kind: "refused",
         reason: `${choice.name} can't go into ${place.target.label}. ${error.message}.`,
       };
-    }
     throw error;
   }
   syncStoredBlockDependencies(source);
