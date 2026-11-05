@@ -252,7 +252,13 @@ export const validateComponentSettingValue = (
       break;
     case "text": {
       const text = (value as { value: string }).value;
-      if (text.length < declaration.minLength || text.length > declaration.maxLength)
+      // A text that must have content is not satisfied by spaces alone (an accessible name that
+      // reads as blank cannot be drawn).
+      if (
+        text.length < declaration.minLength ||
+        text.length > declaration.maxLength ||
+        (declaration.minLength > 0 && text.trim().length === 0)
+      )
         report("invalid_value");
       if (isUnsafeComponentSettingText(text)) report("unsafe_content");
       break;

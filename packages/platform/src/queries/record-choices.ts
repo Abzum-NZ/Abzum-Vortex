@@ -38,6 +38,12 @@ const recordChoiceTargetSchema = z
   })
   .strict();
 
+/**
+ * A record picker's search: narrows the records to those whose searchable fields (the fields the
+ * record type marks searchable) hold this text.
+ */
+export const recordChoiceSearchSchema = z.string().trim().min(1).max(100);
+
 const recordChoiceCommandSchema = z
   .object({
     targets: z.array(recordChoiceTargetSchema).min(1).max(20),
@@ -66,8 +72,7 @@ const recordChoiceCommandSchema = z
       })
       .strict()
       .optional(),
-    /** Narrows the records to those whose title or another searchable field holds this text. */
-    search: z.string().trim().min(1).max(100).optional(),
+    search: recordChoiceSearchSchema.optional(),
     pageSize: z.number().int().min(1).max(recordChoicePageSizes.maximum),
     /** Opaque: the position each target's records reached on the previous page. */
     continuationToken: z.string().min(1).max(65_536).optional(),

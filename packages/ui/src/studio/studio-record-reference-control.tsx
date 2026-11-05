@@ -26,12 +26,14 @@ export type StudioRecordPage =
 
 /**
  * Reads one page of records of a draft record type (`<module>:<record>`), after a keyset
- * continuation token. Each page holds at most 40 records.
+ * continuation token, narrowed by a search text to the records whose searchable fields (those the
+ * record type marks searchable) hold it. Each page holds at most 40 records.
  */
 export type StudioRecordReader = (
   request: Readonly<{
     recordType: string;
     after?: string;
+    search?: string;
   }>,
   signal?: AbortSignal,
 ) => Promise<StudioRecordPage>;
@@ -177,11 +179,22 @@ function StudioRecordChoicesPage({
   onRetry: () => void;
 }>): ReactElement {
   const [refusal, setRefusal] = useState<Refusal | null>(null);
+  const [search, setSearch] = useState("");
+  // The chosen record as a page or a search last listed it, kept by its title while the list holds
+  // other records.
+  const [picked, setPicked] = useState<StudioRecordChoice | undefined>(undefined);
   const pager = useRecordChoicePager<StudioRecordChoice>({
     open: true,
-    search: "",
-    read: async (_search, after, signal) => {
-      const page = await read({ recordType, ...(after === undefined ? {} : { after }) }, signal);
+    search,
+    read: async (text, after, signal) => {
+      const page = await read(
+        {
+          recordType,
+          ...(after === undefined ? {} : { after }),
+          ...(text === "" ? {} : { search: text }),
+        },
+        signal,
+      );
       if (page.kind !== "available") {
         setRefusal(page.kind);
         return page.kind === "temporarily_unavailable" ? undefined : { items: [] };
@@ -190,14 +203,23 @@ function StudioRecordChoicesPage({
       return { items: page.records, ...(page.next === undefined ? {} : { next: page.next }) };
     },
   });
+  // The chosen record is known by its title once any page or search lists it.
+  const listed = pager.items.find((record) => record.recordId === recordId);
+  const relabelled = picked?.recordId !== listed?.recordId || picked?.label !== listed?.label;
+  if (listed !== undefined && relabelled) setPicked(listed);
   const settled = !pager.loading && !pager.failed;
+  const searching = search.trim() !== "";
+  const heldPick = picked?.recordId === recordId ? picked : undefined;
   const known =
-    recordId === undefined || pager.items.some((record) => record.recordId === recordId);
+    recordId === undefined ||
+    searching ||
+    heldPick !== undefined ||
+    pager.items.some((record) => record.recordId === recordId);
   const note = pager.failed
     ? "The records could not be read just now."
     : refusal !== null
       ? refusalNote(refusal)
-      : settled && pager.items.length === 0
+      : settled && pager.items.length === 0 && !searching
         ? "There are no records of this type you may read yet."
         : undefined;
   const retry = pager.failed || refusal === "temporarily_unavailable";
@@ -207,11 +229,37 @@ function StudioRecordChoicesPage({
         id={id}
         aria-label={`${label}: record`}
         value={recordId ?? ""}
-        disabled={disabled || pager.loading}
+        disabled={disabled}
+        onSearch={setSearch}
+        status={pager.loading ? "Searching…" : "No record matches that search."}
+        // Inside the list, so the next page continues the search typed there.
+        footer={(backToSearch) =>
+          pager.next !== undefined && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="w-full"
+              disabled={disabled}
+              onClick={() => {
+                pager.loadMore();
+                backToSearch();
+              }}
+            >
+              <ChevronsDown />
+              Show more records
+            </Button>
+          )
+        }
         aria-describedby={describedBy}
         aria-invalid={invalid === true || (!known && settled && pager.next === undefined)}
-        unset={pager.loading ? "Reading records" : "Choose a record"}
+        unset={pager.loading && pager.items.length === 0 ? "Reading records" : "Choose a record"}
         options={[
+          ...(heldPick !== undefined &&
+          !searching &&
+          !pager.items.some((r) => r.recordId === recordId)
+            ? [{ value: heldPick.recordId, label: heldPick.label }]
+            : []),
           ...(!known && recordId !== undefined
             ? [
                 {
@@ -236,26 +284,12 @@ function StudioRecordChoicesPage({
         ) : (
           <FieldDescription>{note}</FieldDescription>
         ))}
-      <div className="flex flex-wrap gap-1">
-        {pager.next !== undefined && (
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            disabled={disabled}
-            onClick={pager.loadMore}
-          >
-            <ChevronsDown />
-            Show more records
-          </Button>
-        )}
-        {retry && (
-          <Button type="button" variant="ghost" size="sm" disabled={disabled} onClick={onRetry}>
-            <RotateCcw />
-            Try again
-          </Button>
-        )}
-      </div>
+      {retry && (
+        <Button type="button" variant="ghost" size="sm" disabled={disabled} onClick={onRetry}>
+          <RotateCcw />
+          Try again
+        </Button>
+      )}
     </>
   );
 }
