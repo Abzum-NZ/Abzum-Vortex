@@ -9,7 +9,7 @@ import {
   type ReactNode,
 } from "react";
 import { ArrowDown, ArrowUp, ChevronRight, CircleAlert, GripVertical, Trash2 } from "lucide-react";
-import { Item, ItemContent, ItemGroup } from "../components/item";
+import { ItemContent, ItemGroup } from "../components/item";
 import { Button } from "../components/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../components/tooltip";
 import { cn } from "../lib/utils";
@@ -134,11 +134,10 @@ export function StudioEntryList({
         {items.map((item, index) => {
           const expanded = open === item.key && item.content !== undefined;
           return (
-            <Item
+            <div
               key={item.key}
-              size="xs"
               role="listitem"
-              className={cn("group/entry p-0", dragging === index && "opacity-50")}
+              className={cn("group/entry", dragging === index && "opacity-50")}
               onDragOver={(event) => {
                 if (dragging === null) return;
                 event.preventDefault();
@@ -184,7 +183,8 @@ export function StudioEntryList({
                     }}
                     type="button"
                     variant="ghost"
-                    className="h-auto min-w-0 flex-1 justify-start gap-1.5 px-0 py-1.5 text-left"
+                    size="xs"
+                    className="h-auto min-h-9 min-w-0 flex-1 justify-start text-left"
                     aria-expanded={item.content === undefined ? undefined : expanded}
                     aria-keyshortcuts={movable ? "Alt+ArrowUp Alt+ArrowDown" : undefined}
                     onClick={() => {
@@ -265,7 +265,7 @@ export function StudioEntryList({
                   </div>
                 )}
               </ItemContent>
-            </Item>
+            </div>
           );
         })}
       </ItemGroup>

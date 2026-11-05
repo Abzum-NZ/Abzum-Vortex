@@ -253,7 +253,7 @@ function StudioRail<Key extends string>({
   onToggleCollapsed: (() => void) | undefined;
 }>) {
   return (
-    <div className="flex w-18 shrink-0 flex-col items-center gap-1 overflow-y-auto border-r border-sidebar-border bg-sidebar px-1 py-2 text-sidebar-foreground">
+    <div className="flex w-24 shrink-0 flex-col items-center gap-1 overflow-y-auto border-r border-sidebar-border bg-sidebar px-1 py-2 text-sidebar-foreground">
       {onToggleCollapsed !== undefined && (
         <Tooltip>
           <TooltipTrigger
@@ -276,10 +276,7 @@ function StudioRail<Key extends string>({
           </TooltipContent>
         </Tooltip>
       )}
-      <TabsList
-        aria-label={label}
-        className="min-h-0 w-full flex-1 justify-start gap-1 rounded-none bg-transparent p-0"
-      >
+      <TabsList aria-label={label} variant="line" className="min-h-0 w-full flex-1 justify-start">
         {tabs.map((tab, index) => (
           <RailTab
             key={tab.key}
@@ -332,7 +329,7 @@ function RailTab<Key extends string>({
               aria-haspopup={modal ? "dialog" : undefined}
               onClick={() => onChoose(tab.key)}
               className={cn(
-                "h-13 w-full flex-none flex-col justify-center gap-1 rounded-lg border-0 px-0.5 py-0 text-xs shadow-none group-data-vertical/tabs:justify-center data-active:shadow-none",
+                "h-16 w-full flex-none flex-col justify-center gap-1 border-0 text-xs shadow-none group-data-vertical/tabs:justify-center data-active:shadow-none",
                 "text-muted-foreground hover:bg-sidebar-accent/60 hover:text-foreground",
                 "data-active:bg-sidebar-accent data-active:text-sidebar-accent-foreground dark:data-active:bg-sidebar-accent dark:data-active:text-sidebar-accent-foreground",
                 "before:absolute before:inset-y-3 before:-left-1 before:w-0.75 before:rounded-full before:bg-primary before:opacity-0 data-active:before:opacity-100",
