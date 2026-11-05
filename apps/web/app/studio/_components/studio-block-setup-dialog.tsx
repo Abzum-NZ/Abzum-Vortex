@@ -91,10 +91,7 @@ export function StudioBlockSetupDialog({
   const references = useMemo(() => JSON.parse(queriesKey) as string[], [queriesKey]);
   // A grid lists records, so with no page query it starts on the first query that returns them,
   // not on a grouped count.
-  const recordsKey = JSON.stringify(
-    queries.filter((candidate) => !candidate.grouped).map((candidate) => candidate.reference),
-  );
-  const recordReferences = useMemo(() => JSON.parse(recordsKey) as string[], [recordsKey]);
+  const firstRecordsQuery = queries.find((candidate) => !candidate.grouped)?.reference;
   // A new request starts from its defaults; a draft edit while it is open keeps what was typed.
   useEffect(() => {
     setValues(setupDefaults(request?.choice));
@@ -114,11 +111,11 @@ export function StudioBlockSetupDialog({
           ? current
           : request.pageQuery !== undefined && references.includes(request.pageQuery)
             ? request.pageQuery
-            : ((studioHasGridColumns(request.choice.setup) ? recordReferences[0] : undefined) ??
+            : ((studioHasGridColumns(request.choice.setup) ? firstRecordsQuery : undefined) ??
               references[0] ??
               ""),
     );
-  }, [request, references, recordReferences]);
+  }, [request, references, firstRecordsQuery]);
   // A block without a query picks any field of the draft; one with a query, only that query's fields.
   const choices = useMemo(
     () => studioBlockChoices(draftChoices, query === "" ? null : query),
