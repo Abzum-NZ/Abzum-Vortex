@@ -71,6 +71,7 @@ export * from "./application-authoring/application-composition-add";
 export * from "./application-authoring/application-composition-commands";
 export * from "./application-authoring/application-composition-forms";
 export * from "./application-authoring/application-composition-gate";
+export * from "./application-authoring/application-authored-pages";
 export * from "./application-authoring/application-composition-model";
 export * from "./application-authoring/application-composition-page-data";
 export {

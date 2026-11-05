@@ -100,6 +100,59 @@ const dataItems = (data: SourceZonedData) => sourcePageZones(data).flatMap(([, i
 const dataAliases = (data: SourceZonedData): Set<string> =>
   storedZoneAliases({ items: dataItems(data), order: undefined });
 
+/** The block names that are in the current data and not in the edited data. */
+const removedAliases = (current: SourceZonedData, edited: SourceZonedData): Set<string> => {
+  const kept = dataAliases(edited);
+  return new Set([...dataAliases(current)].filter((alias) => !kept.has(alias)));
+};
+
+/**
+ * Why a whole page's (or layout's) data may not replace the current data, or undefined: Duplicate
+ * has the refusals of its button, a page published outside the application takes no new block,
+ * a block leaves only where every removal route lets it, and every form stays whole. The one set
+ * of refusals for the canvas's whole-page write and for the draft agent's page replacement.
+ */
+export const studioPageDataRefusal = (
+  context: StudioCompositionContext,
+  owner: StudioCanvasOwner,
+  edited: SourceZonedData,
+  copyPairs: readonly (readonly [original: string, copy: string])[] = [],
+): string | undefined => {
+  const { catalogue, source: current } = context;
+  const copies = new Map(copyPairs);
+  const { data: targetData, page: target } = canvasOwnerData(current, owner);
+  // Duplicate has the same refusals as its button, whichever draft the button was drawn from.
+  const originals = sourceItemTree(dataItems(targetData));
+  for (const original of copies.keys()) {
+    const item = originals.find((entry) => entry.props.id === original);
+    const refusal = item === undefined ? undefined : studioDuplicateRefusal(catalogue, item);
+    if (refusal !== undefined) return refusal;
+  }
+  // A page published outside the application takes no new block: not a copy, not a drop.
+  const before = dataAliases(targetData);
+  if (
+    target !== undefined &&
+    publishedPage(current, target) &&
+    [...dataAliases(edited)].some((alias) => !before.has(alias))
+  )
+    return PUBLISHED_PAGE_ADD_REASON;
+  // Where a block may not leave from, whichever draft the canvas's reasons were read from: the
+  // one refusal every removal route shares.
+  const removed = removedAliases(targetData, edited);
+  const gone = removed.size === 0 ? undefined : studioRemovalRefusal(catalogue, current, removed);
+  if (gone !== undefined) return gone;
+  // Dragging keeps every form whole, by the same rule as Move.
+  const broken = studioFormChangeRefusal(
+    catalogue,
+    current,
+    dataItems(targetData),
+    dataItems(edited),
+  );
+  return broken === undefined
+    ? undefined
+    : studioFormChangeRefusalSentence(broken, studioPlacementReferenceSentence);
+};
+
 /**
  * The one whole-page write: the data of what the canvas shows (a page, a guided step or a layout)
  * placed in the current draft. The canvas's Duplicate and a drag across slots come here; they have
@@ -112,41 +165,10 @@ export const applyPageData = (
 ): StudioDraftChangeResult => {
   const { catalogue, source: current } = context;
   const { owner, data: edited } = change;
+  const refusal = studioPageDataRefusal(context, owner, edited, change.copies);
+  if (refusal !== undefined) return { kind: "refused", reason: refusal };
   const copies = new Map(change.copies);
-  const { data: targetData, page: target } = canvasOwnerData(current, owner);
-  // Duplicate has the same refusals as its button, whichever draft the button was drawn from.
-  const originals = sourceItemTree(dataItems(targetData));
-  for (const original of copies.keys()) {
-    const item = originals.find((entry) => entry.props.id === original);
-    const refusal = item === undefined ? undefined : studioDuplicateRefusal(catalogue, item);
-    if (refusal !== undefined) return { kind: "refused", reason: refusal };
-  }
-  // A page published outside the application takes no new block: not a copy, not a drop.
-  const before = dataAliases(targetData);
-  const kept = dataAliases(edited);
-  if (
-    target !== undefined &&
-    publishedPage(current, target) &&
-    [...kept].some((alias) => !before.has(alias))
-  )
-    return { kind: "refused", reason: PUBLISHED_PAGE_ADD_REASON };
-  // Where a block may not leave from, whichever draft the canvas's reasons were read from: the
-  // one refusal every removal route shares.
-  const removed = new Set([...before].filter((alias) => !kept.has(alias)));
-  const gone = removed.size === 0 ? undefined : studioRemovalRefusal(catalogue, current, removed);
-  if (gone !== undefined) return { kind: "refused", reason: gone };
-  // Dragging keeps every form whole, by the same rule as Move.
-  const broken = studioFormChangeRefusal(
-    catalogue,
-    current,
-    dataItems(targetData),
-    dataItems(edited),
-  );
-  if (broken !== undefined)
-    return {
-      kind: "refused",
-      reason: studioFormChangeRefusalSentence(broken, studioPlacementReferenceSentence),
-    };
+  const removed = removedAliases(canvasOwnerData(current, owner).data, edited);
   const next = structuredClone(current) as ApplicationSourceDocument;
   if (owner.kind === "layout") {
     const nextShell = next.body.shells.find((item) => item.id === owner.shellAlias);
