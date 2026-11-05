@@ -2,6 +2,7 @@ import { NavigationLink } from "@vortex/ui/routing";
 import { newPasswordPolicy } from "@vortex/platform/server";
 import { AuthForm, AuthTextField } from "../_components/auth-form";
 import { AuthShell } from "../_components/auth-shell";
+import { StatusMessage } from "../_components/status-message";
 import { SubmitButton } from "../_components/submit-button";
 import { updatePassword } from "../actions";
 
@@ -25,11 +26,7 @@ export default async function UpdatePasswordPage({
         </div>
       }
     >
-      {status === "invalid_password" ? (
-        <p role="alert" className="text-sm text-destructive">
-          {newPasswordPolicy.description}
-        </p>
-      ) : null}
+      <StatusMessage status={status} />
       <AuthForm action={updatePassword}>
         <AuthTextField
           id="email"

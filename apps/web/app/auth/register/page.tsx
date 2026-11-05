@@ -31,11 +31,6 @@ export default async function RegisterPage({ searchParams }: RegisterPageProps) 
       }
     >
       <StatusMessage status={notice === undefined ? "registration_closed" : status} />
-      {notice !== undefined && status === "invalid_password" ? (
-        <p role="alert" className="text-sm text-destructive">
-          {newPasswordPolicy.description}
-        </p>
-      ) : null}
       {notice !== undefined && (
         <AuthForm action={register}>
           <p className="text-sm text-muted-foreground">
