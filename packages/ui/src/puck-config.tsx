@@ -535,7 +535,10 @@ type PlacementBlockProps = {
   fieldInputControlReleases: FieldInputControlReleases;
 };
 
-/** One prop: the same value, or JSON data that holds the same content (Puck rebuilds objects it walks). */
+/**
+ * One prop: the same value, or JSON data that holds the same content (Puck rebuilds the objects
+ * it walks).
+ */
 const sameProp = (left: unknown, right: unknown): boolean => {
   if (Object.is(left, right)) return true;
   if (typeof left !== "object" || typeof right !== "object" || left === null || right === null)

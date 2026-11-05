@@ -538,7 +538,7 @@ export const workingCopy = (region: Region): Working => {
   return working;
 };
 
-/** The block at `index` of an own list, as a copy of its own that a command may set properties of. */
+/** The block at `index` of an own list, as the copy's own block that a command may set props of. */
 const ownBlockAt = (working: Working, items: SourceItem[], index: number): SourceItem => {
   const item = items[index]!;
   const own = copied.get(working)!;
