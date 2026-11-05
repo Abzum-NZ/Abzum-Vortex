@@ -136,11 +136,14 @@ begin
             failure_sqlstate, failure_message;
           return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'query_unavailable');
       end;
+      if context_value is null or not (context_value ? 'applicationRootId') then
+        return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'query_unavailable');
+      end if;
       -- The preview resolver's own refusal (installation_required) is passed on as it decided it.
       if resolved ->> 'outcome' = 'refused' then
         return resolved;
       end if;
-      if context_value is null or not (context_value ? 'applicationRootId') or resolved is null then
+      if resolved is null then
         return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'query_unavailable');
       end if;
       context_organization_id := (context_value ->> 'organizationId')::uuid;
