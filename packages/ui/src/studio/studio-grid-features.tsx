@@ -291,12 +291,7 @@ export function StudioGridFeatures({
       kind: "group",
       properties: {
         ...(declaration?.defaultValue?.kind === "group" ? declaration.defaultValue.properties : {}),
-        ...studioGridFeatureStart(
-          key,
-          facts,
-          pipelines.find((pipeline) => pipeline.reference === facts.board?.stageFields[0])
-            ?.titleField,
-        ),
+        ...studioGridFeatureStart(key, facts, pipelines),
         enabled: { kind: "boolean", value: true },
       },
     };

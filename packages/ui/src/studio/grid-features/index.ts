@@ -37,6 +37,7 @@ import type {
   StudioQueryField,
   StudioRelationshipChoice,
 } from "../contextual-palette";
+import type { StudioBoardPipeline } from "../board-source";
 
 /** The block's setup settings include a grid's column list, so its rows are the data's records. */
 export const studioHasGridColumns = (
@@ -272,18 +273,19 @@ export const studioGroupingStart = (
 export const studioGridFeatureStart = (
   key: RecordsTableFeatureKey,
   facts: Pick<RecordsTableQueryFacts, "fields" | "groupBy" | "grouped" | "board">,
-  boardTitleField: string | undefined,
+  pipelines: readonly Pick<StudioBoardPipeline, "reference" | "titleField">[],
 ): Readonly<Record<string, SourceBlockPropertyValueContract>> => {
   const stageField = facts.board?.stageFields[0];
+  const titleField = pipelines.find((pipeline) => pipeline.reference === stageField)?.titleField;
   return {
     ...studioGridFeatureStartSettings[key],
     ...(key === recordsTableGroupingFeature.key ? studioGroupingStart(facts) : {}),
     ...(key === recordsTableBoardFeature.key && stageField !== undefined
       ? {
           column_field: { kind: "field_reference", field: stageField },
-          ...(boardTitleField === undefined
+          ...(titleField === undefined
             ? {}
-            : { card_title_field: { kind: "field_reference", field: boardTitleField } }),
+            : { card_title_field: { kind: "field_reference", field: titleField } }),
         }
       : {}),
   };
