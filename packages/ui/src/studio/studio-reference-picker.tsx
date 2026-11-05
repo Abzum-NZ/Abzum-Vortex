@@ -38,6 +38,7 @@ export function StudioReferencePicker({
   unset,
   disabled,
   onChange,
+  onSearch,
   ...accessibility
 }: Readonly<{
   id?: string | undefined;
@@ -46,12 +47,21 @@ export function StudioReferencePicker({
   unset?: string | undefined;
   disabled?: boolean;
   onChange: (value: string) => void;
+  /**
+   * The search text as it is typed. A picker that passes it shows `options` as given: the caller
+   * searches them (a long list read page by page) instead of this picker filtering the loaded ones.
+   */
+  onSearch?: ((text: string) => void) | undefined;
   "aria-label"?: string | undefined;
   "aria-describedby"?: string | undefined;
   "aria-invalid"?: boolean | undefined;
 }>) {
   const [open, setOpen] = useState(false);
-  const [query, setQuery] = useState("");
+  const [query, setSearchText] = useState("");
+  const setQuery = (text: string): void => {
+    setSearchText(text);
+    onSearch?.(text);
+  };
   const known = value === "" || options.some((option) => option.value === value);
   const entries: StudioReferencePickerOption[] = [
     ...(unset === undefined ? [] : [{ value: "", label: unset }]),
@@ -59,12 +69,16 @@ export function StudioReferencePicker({
     ...options,
   ];
   const selected = entries.find((entry) => entry.value === value) ?? null;
-  const matches = entries.filter((entry) =>
-    [entry.label, entry.group, entry.description]
-      .join(" ")
-      .toLocaleLowerCase()
-      .includes(query.trim().toLocaleLowerCase()),
-  );
+  const searching = query.trim() !== "";
+  const matches =
+    onSearch === undefined
+      ? entries.filter((entry) =>
+          [entry.label, entry.group, entry.description]
+            .join(" ")
+            .toLocaleLowerCase()
+            .includes(query.trim().toLocaleLowerCase()),
+        )
+      : entries.filter((entry) => !searching || entry.value !== "");
   const groups = [...new Set(matches.map((entry) => entry.group ?? ""))];
   // The search text is empty whenever the list is open: what is shown before typing is the
   // current selection, its label as the placeholder and its check in the list, never text the

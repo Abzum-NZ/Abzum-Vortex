@@ -40,6 +40,8 @@ const requestSchema = z
     pageSize: z.number().int().min(1).max(200),
     continuationToken: z.string().min(1).max(65_536).optional(),
     pageDirection: z.enum(["forward", "backward"]).optional(),
+    /** Narrows the records to those whose title or another searchable field holds this text. */
+    search: z.string().trim().min(1).max(100).optional(),
   })
   .strict();
 
@@ -345,7 +347,9 @@ export const readStudioDataRecords = async (
       sort: [],
       sortableFieldIds: [],
       filterableFieldIds: [],
+      // No declared list: the engine searches every field the record type marks searchable.
       searchableFieldIds: [],
+      ...(request.search === undefined ? {} : { search: request.search }),
       pageSize: request.pageSize,
       ...(request.continuationToken === undefined
         ? {}

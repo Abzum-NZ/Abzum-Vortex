@@ -37,7 +37,7 @@ export function useStudioCanvasRecords({
   // time with their preview access through the same reader as the Data tab's results, once the
   // preview runs the saved revision's data shape.
   const readRecordChoices = useCallback<StudioRecordReader>(
-    async ({ recordType, after }, signal) => {
+    async ({ recordType, after, search }, signal) => {
       const separator = recordType.indexOf(":");
       const result = await readWhenPreviewReady(
         draft.preview,
@@ -54,6 +54,7 @@ export function useStudioCanvasRecords({
               recordKey: recordType.slice(separator + 1),
               pageSize: 40,
               ...(after === undefined ? {} : { continuationToken: after }),
+              ...(search === undefined ? {} : { search }),
             },
             signal,
           ),
