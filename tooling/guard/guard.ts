@@ -47,7 +47,7 @@ const baselineMigrationFiles = new Map([
   ["supabase/migrations/20261014000200_baseline_schema_and_functions.sql", 105368],
   ["supabase/migrations/20261014000300_baseline_constraints_grants_and_policies.sql", 5241],
   ["supabase/migrations/20261014000400_baseline_system_data_and_storage.sql", 705],
-  ["supabase/migrations/20261014001100_collapse_schemas_and_owner_roles.sql", 53870],
+  ["supabase/migrations/20261014001100_collapse_schemas_and_owner_roles.sql", 53860],
 ]);
 const read = (file: string) => readFileSync(resolve(root, file), "utf8").replaceAll("\r\n", "\n");
 const lineAt = (content: string, offset: number) => content.slice(0, offset).split("\n").length;

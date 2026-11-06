@@ -12,7 +12,6 @@
 drop extension pgtap;
 
 -- The one postgres-owned function on the list (it deleted GoTrue sessions for identity disablement).
--- guard-allow: migration-owner-role The integration function is owned by postgres and must be dropped by its owner.
 drop function vortex_identity.complete_identity_disablement(p_command_id uuid, p_correlation_id uuid, p_outcome text);
 
 -- The inventory role owns this reader but holds no USAGE on its schema, so it is lent USAGE for the
