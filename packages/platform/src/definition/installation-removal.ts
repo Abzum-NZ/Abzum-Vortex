@@ -14,6 +14,7 @@ import { canonicalJson } from "./canonical-json";
 import type { RequestDatabaseTransaction } from "../db/request-transaction";
 import {
   installationProblem,
+  requestAnswerProblem,
   type StoreReceiptCompletion,
   installationTargetFacts,
   readBuilderOperationDeadlines,
@@ -169,10 +170,7 @@ export const readApplicationRemoval = async (
   );
   if (result.kind === "available") return result.value;
   if (failure !== undefined) throw failure;
-  installationProblem(
-    "removal_read_unavailable",
-    result.kind === "unavailable" ? "refused" : "temporarily_unavailable",
-  );
+  requestAnswerProblem(result.kind, "removal_read_unavailable");
 };
 
 const sameRemoval = (left: RemovalExpected, right: RemovalExpected): boolean =>

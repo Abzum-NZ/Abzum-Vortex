@@ -35,21 +35,26 @@ const loadWorkspacePlace = async (
   applicationKey: string,
 ): Promise<
   | { kind: "available"; place: StudioWorkspacePlace }
-  | { kind: "refused" | "temporarily_unavailable"; reason: string }
+  | { kind: "refused" | "temporarily_unavailable" }
 > => {
+  // Each answer that is not available is said by the page in the words of its kind; every read
+  // below logs its own failure once, so the page adds a line only where no read did.
   const { resolution: resolved, email } = await resolveIdentitySessionWithEmail();
-  if (resolved.kind !== "active" || email === undefined)
-    return { kind: "refused", reason: "Sign in to open Studio." };
+  // Not signed in.
+  if (resolved.kind !== "active" || email === undefined) return { kind: "refused" };
   const launcher = await loadOrganizationLauncher(resolved.session);
+  // A launcher read that failed for now is not a refusal: the person is told to try again.
+  if (launcher.kind === "temporarily_unavailable") return { kind: "temporarily_unavailable" };
   const entry =
-    launcher?.kind === "available"
+    launcher.kind === "available"
       ? launcher.entries.find((candidate) => candidate.organizationId === organizationId)
       : undefined;
+  // The organisation is not one of the person's: an expected refusal, and no read logged it.
   if (entry === undefined) {
-    console.error(
-      `[studio] workspace place unavailable: session ${resolved.kind}, launcher ${launcher?.kind ?? "not read"}`,
+    console.info(
+      `[studio] workspace place refused: organisation not in the launcher (${launcher.kind})`,
     );
-    return { kind: "refused", reason: "This organisation is not available to your account." };
+    return { kind: "refused" };
   }
   // The installed applications are read beside the settings: neither needs the other.
   const applicationsRead = loadPermittedApplicationsAtAddress(
@@ -65,40 +70,19 @@ const loadWorkspacePlace = async (
     organizationSelectionCandidateSchema.parse({ organizationId }),
     (transaction) => readCurrentOrganizationAppStoreAddressAfterAuthorization(transaction),
   );
-  if (settings.kind === "temporarily_unavailable") {
-    console.error(
-      `[studio] App Store address read unavailable: ${settings.databaseCode ?? settings.cause ?? "unknown"}`,
-    );
-    return {
-      kind: "temporarily_unavailable",
-      reason: "The organisation's App Store address could not be read. Try again shortly.",
-    };
-  }
-  if (settings.kind !== "available") {
-    console.error(
-      `[studio] App Store address read refused: ${settings.code ?? settings.cause ?? "no cause"}`,
-    );
-    return {
-      kind: "refused",
-      reason: "You do not have access to this organisation's App Store address.",
-    };
-  }
-  if (settings.value === null)
-    return {
-      kind: "refused",
-      reason:
-        "This organisation has no App Store address. An organisation administrator sets it in the organisation settings.",
-    };
-  if (settings.value === "invalid")
-    return {
-      kind: "refused",
-      reason:
-        "This organisation's App Store address is not an application address. An organisation administrator corrects it in the organisation settings.",
-    };
+  // The request runner logged a refused or failed read once.
+  if (settings.kind !== "available")
+    return { kind: settings.kind === "temporarily_unavailable" ? settings.kind : "refused" };
+  // No App Store address, or one that names no application: an administrator sets it in the
+  // organisation settings.
+  if (settings.value === null || settings.value === "invalid") return { kind: "refused" };
   const applications = await applicationsRead;
-  if (applications.kind !== "available")
+  // Some of this read's refusals are answered before any request runs, so it is said here.
+  if (applications.kind === "unavailable")
+    console.info("[studio] installed applications could not be read: unavailable");
+  else if (applications.kind === "temporarily_unavailable")
     console.error(
-      `[studio] installed applications could not be read: ${applications.kind}${applications.kind === "temporarily_unavailable" && applications.cause !== undefined ? ` (${applications.cause})` : ""}`,
+      `[studio] installed applications could not be read: ${applications.cause ?? "no cause"}`,
     );
   // The installed Studio release shapes the frame the editor shows.
   const studioApplicationEntry =
@@ -146,11 +130,7 @@ const loadWorkspacePlace = async (
   // either from being unhandled (what the editor receives is unchanged).
   void Promise.allSettled([standingRead, navigationTargets]);
   // A read that failed for now is not an uninstalled Studio: the person is told to try again.
-  const unavailableNow = {
-    kind: "temporarily_unavailable",
-    reason: "The App Store address could not be resolved. Try again shortly.",
-  } as const;
-  if (applications.kind === "temporarily_unavailable") return unavailableNow;
+  if (applications.kind === "temporarily_unavailable") return { kind: "temporarily_unavailable" };
   const studioResolved =
     studioApplicationEntry === undefined
       ? undefined
@@ -161,17 +141,15 @@ const loadWorkspacePlace = async (
           studioApplicationEntry.key,
           studioApplicationEntry.homePageKey,
         );
-  if (studioResolved?.kind === "temporarily_unavailable") return unavailableNow;
+  if (studioResolved?.kind === "temporarily_unavailable")
+    return { kind: "temporarily_unavailable" };
+  // Studio is not installed for the person in this organisation.
   if (
     studioApplicationEntry === undefined ||
     studioResolved?.kind !== "application_page" ||
     studioResolved.installedContext === undefined
-  ) {
-    return {
-      kind: "refused",
-      reason: "Studio is not installed for your account in this organisation.",
-    };
-  }
+  )
+    return { kind: "refused" };
   const studioInstalled = {
     name: studioApplicationEntry.name,
     homePageKey: studioApplicationEntry.homePageKey,
@@ -197,8 +175,8 @@ export default async function StudioApplicationPage({
   params: Promise<{ organizationId: string; applicationRootId: string }>;
   searchParams: Promise<{ tab?: string; section?: string; module?: string; record?: string }>;
 }) {
-  const [{ organizationId, applicationRootId }, { tab, section, module, record }] =
-    await Promise.all([params, searchParams]);
+  const [{ organizationId, applicationRootId }, query] = await Promise.all([params, searchParams]);
+  const { tab, section, module, record } = query;
   const session = await continueStudioSession();
   if (session.kind === "temporarily_unavailable")
     return <StudioUnavailable subject="Application draft" result={session} />;
@@ -222,14 +200,24 @@ export default async function StudioApplicationPage({
     loadWorkspacePlace(result.organizationId, result.draft.rootId, result.draft.key),
     loadStudioOrganizationHome(result.organizationId),
   ]);
-  if (place.kind !== "available")
+  if (place.kind !== "available") {
+    // Reload opens the address shown, its view included; a refusal offers none.
+    const shown = new URLSearchParams(
+      Object.entries(query).filter(
+        (entry): entry is [string, string] => typeof entry[1] === "string",
+      ),
+    ).toString();
+    const address = `/studio/${organizationId}/${applicationRootId}`;
     return (
       <StudioUnavailable
         subject="App Store address"
-        result={{ kind: place.kind, reason: place.reason }}
-        reloadHref={`/studio/${organizationId}/${applicationRootId}`}
+        result={place}
+        {...(place.kind === "temporarily_unavailable"
+          ? { reloadHref: shown === "" ? address : `${address}?${shown}` }
+          : {})}
       />
     );
+  }
   // The owner of a used Module is named and linked from this list; without it the key is shown.
   if (home.kind !== "available")
     console.error(`[studio] application list for module owners unavailable: ${home.kind}`);

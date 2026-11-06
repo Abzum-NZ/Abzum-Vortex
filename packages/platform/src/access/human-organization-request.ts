@@ -64,12 +64,17 @@ export class HumanOrganizationRequestRestart extends Error {
 
 const loggedRequestFailures = new WeakSet<object>();
 
-/** The request runner logs every failure it catches, once; a caller that catches the same error object adds no second line. */
+/**
+ * The request runner logs every answer that is not available, once, and marks the error it caught.
+ * A caller that catches that same error, or throws a new one restating the answer (marked here),
+ * adds no second line. A mark is no property of the error: its identity and output are unchanged.
+ */
 export const requestFailureLogged = (error: unknown): boolean =>
   typeof error === "object" && error !== null && loggedRequestFailures.has(error);
 
-export const markRequestFailureLogged = (error: unknown): void => {
+export const markRequestFailureLogged = <Failure>(error: Failure): Failure => {
   if (typeof error === "object" && error !== null) loggedRequestFailures.add(error);
+  return error;
 };
 
 /** A scope already resolved and locked by the enclosing admitted segment. */
@@ -216,8 +221,11 @@ export const createHumanOrganizationRequestService = (
         (!builderKeySchema.safeParse(address.tenantShortName).success ||
           !builderKeySchema.safeParse(address.organizationShortName).success ||
           !namespacedKeySchema.safeParse(address.applicationKey).success))
-    )
+    ) {
+      // Every answer that is not available is logged here once, these early ones too.
+      console.info("[access] human organisation request refused: invalid session or scope input");
       return { kind: "unavailable" };
+    }
     let selected = verifiedCandidate?.success ? verifiedCandidate.data : undefined;
     let accountDisplayName: string | undefined;
 
@@ -231,9 +239,12 @@ export const createHumanOrganizationRequestService = (
       issuedAt = now.toISOString();
       correlationId = correlationIdSchema.parse(newCorrelationId());
     } catch (error) {
-      return { kind: "temporarily_unavailable", cause: describeFailure(error) };
+      const cause = describeFailure(error);
+      console.error(`[access] human organisation request failed: ${cause}`);
+      return { kind: "temporarily_unavailable", cause };
     }
     if (Date.parse(verifiedSession.data.accessTokenExpiresAt) <= Date.parse(issuedAt)) {
+      console.info("[access] human organisation request refused: access token expired");
       appendTelemetry(correlationId, "refused", startedAtMs);
       return { kind: "unavailable" };
     }
@@ -246,6 +257,9 @@ export const createHumanOrganizationRequestService = (
       (verifiedSession.data.multiFactorAuthenticatedAt !== undefined &&
         Date.parse(verifiedSession.data.multiFactorAuthenticatedAt) > Date.parse(issuedAt))
     ) {
+      console.info(
+        "[access] human organisation request refused: authentication time in the future",
+      );
       appendTelemetry(correlationId, "refused", startedAtMs);
       return { kind: "unavailable" };
     }
