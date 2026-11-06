@@ -1109,7 +1109,6 @@ begin
       end
       and registration.registration_owner_id = case
         when item.value ->> 'ownerKind' = 'platform'
-          -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
           then 'cabe121e-0baf-4084-9471-cce915d460a8'::uuid
         else (item.value ->> 'applicationRootId')::uuid
       end

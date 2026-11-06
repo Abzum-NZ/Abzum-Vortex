@@ -813,7 +813,6 @@ $$;
 reset role;
 
 -- request_event_dispatch_wakeup.sql
--- guard-allow: migration-owner-role One of the postgres-owned integration functions (target architecture section 4).
 create or replace function vortex_platform.request_event_dispatch_wakeup()
 returns trigger
 language plpgsql

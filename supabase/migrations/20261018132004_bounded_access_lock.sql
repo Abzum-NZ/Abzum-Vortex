@@ -498,7 +498,6 @@ security invoker
 set search_path = ''
 as $function$
 declare
-  -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
   platform_owner_id constant uuid := 'cabe121e-0baf-4084-9471-cce915d460a8';
   stewardship vortex_access.organization_stewardship_requirements%rowtype;
   platform_registration vortex_access.permission_registrations%rowtype;
@@ -954,7 +953,6 @@ declare
   current_registration vortex_access.permission_registrations%rowtype;
   resulting_version bigint;
   expected_count bigint;
-  -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
   platform_owner_id constant uuid := 'cabe121e-0baf-4084-9471-cce915d460a8';
   catalogue_fingerprint constant text :=
     'sha256:1e5cceb04465d940f163ec926af7423efc9b37788551b00766d768fe9089195b';

@@ -245,9 +245,7 @@ reset role;
 --   drop function if exists vortex_identity.before_user_created(jsonb);
 --   reset role;
 --   revoke usage on schema vortex_identity from supabase_auth_admin;
--- guard-allow: migration-owner-role The GoTrue-owned auth table requires postgres to attach this approved integration trigger.
 drop trigger if exists vortex_signup_privacy_acknowledgment on auth.users;
--- guard-allow: migration-owner-role The GoTrue-owned auth table requires postgres for the approved integration trigger.
 create trigger vortex_signup_privacy_acknowledgment
   after insert on auth.users
   for each row execute function vortex_identity.append_signup_privacy_acknowledgment();
