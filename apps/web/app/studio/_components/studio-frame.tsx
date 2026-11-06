@@ -796,80 +796,84 @@ export function StudioFrame<Key extends string>({
             />
           )}
         </div>
-        <ResizablePanelGroup
-          orientation="horizontal"
-          onLayoutChanged={layoutChanged}
-          className="min-h-0 min-w-0 flex-1"
+        {/* The page's one main landmark and its one level-1 heading: the skip link lands here. The panels and
+            their resize handles are inside it (a separator outside every landmark is an axe `region`
+            violation); the panels are named regions, not asides, which a main may not contain. */}
+        <main
+          id={APPLICATION_MAIN_CONTENT_ID}
+          tabIndex={-1}
+          className="flex min-h-0 min-w-0 flex-1 outline-none"
         >
-          {showPanel && (
-            <>
-              <SidePanel
-                id="studio-panel"
-                panelRef={panelRef}
-                sizeKey={`panel:${loaded}:${sizeClass}`}
-                size={width}
-                limits={panelLimits}
-              >
-                <aside
-                  ref={setDockHost}
-                  aria-label={`${active?.label ?? ""} panel`}
-                  className="h-full min-h-0"
-                />
-              </SidePanel>
-              <ResizableHandle
-                aria-label={`Resize the ${active?.label ?? ""} panel`}
-                onPointerDownCapture={() => {
-                  movedHandle.current = "panel";
-                }}
-                onKeyDownCapture={resizeByKey("panel")}
-              />
-            </>
-          )}
-          <ResizablePanel id="studio-canvas" minSize="20rem">
-            {/* The page's one main landmark and its one level-1 heading: the skip link lands here. */}
-            <main
-              id={APPLICATION_MAIN_CONTENT_ID}
-              tabIndex={-1}
-              className="flex h-full min-h-0 min-w-0 flex-col bg-background outline-none"
-            >
-              <h1 className="sr-only">
-                {applicationName}: {active?.label}
-              </h1>
-              {canvas({
-                inspectorOpen:
-                  hasInspector && (dockInspector ? inspectorOpen : narrowInspectorOpen),
-                toggleInspector: hasInspector ? toggleInspector : undefined,
-                focused,
-                focusCanvas,
-              })}
-            </main>
-          </ResizablePanel>
-          {showInspector && (
-            <>
-              <ResizableHandle
-                aria-label="Resize the inspector"
-                onPointerDownCapture={() => {
-                  movedHandle.current = "inspector";
-                }}
-                onKeyDownCapture={resizeByKey("inspector")}
-              />
-              <SidePanel
-                id="studio-inspector"
-                panelRef={inspectorRef}
-                sizeKey={`inspector:${loaded}:${sizeClass}`}
-                size={inspectorWidth}
-                limits={inspectorLimits}
-              >
-                <aside
-                  aria-label={inspectorLabel}
-                  className="flex h-full min-h-0 flex-col bg-sidebar"
+          <ResizablePanelGroup
+            orientation="horizontal"
+            onLayoutChanged={layoutChanged}
+            className="min-h-0 min-w-0 flex-1"
+          >
+            {showPanel && (
+              <>
+                <SidePanel
+                  id="studio-panel"
+                  panelRef={panelRef}
+                  sizeKey={`panel:${loaded}:${sizeClass}`}
+                  size={width}
+                  limits={panelLimits}
                 >
-                  <PaneSlot host={hosts?.inspector ?? null} />
-                </aside>
-              </SidePanel>
-            </>
-          )}
-        </ResizablePanelGroup>
+                  <section
+                    ref={setDockHost}
+                    aria-label={`${active?.label ?? ""} panel`}
+                    className="h-full min-h-0"
+                  />
+                </SidePanel>
+                <ResizableHandle
+                  aria-label={`Resize the ${active?.label ?? ""} panel`}
+                  onPointerDownCapture={() => {
+                    movedHandle.current = "panel";
+                  }}
+                  onKeyDownCapture={resizeByKey("panel")}
+                />
+              </>
+            )}
+            <ResizablePanel id="studio-canvas" minSize="20rem">
+              <div className="flex h-full min-h-0 min-w-0 flex-col bg-background">
+                <h1 className="sr-only">
+                  {applicationName}: {active?.label}
+                </h1>
+                {canvas({
+                  inspectorOpen:
+                    hasInspector && (dockInspector ? inspectorOpen : narrowInspectorOpen),
+                  toggleInspector: hasInspector ? toggleInspector : undefined,
+                  focused,
+                  focusCanvas,
+                })}
+              </div>
+            </ResizablePanel>
+            {showInspector && (
+              <>
+                <ResizableHandle
+                  aria-label="Resize the inspector"
+                  onPointerDownCapture={() => {
+                    movedHandle.current = "inspector";
+                  }}
+                  onKeyDownCapture={resizeByKey("inspector")}
+                />
+                <SidePanel
+                  id="studio-inspector"
+                  panelRef={inspectorRef}
+                  sizeKey={`inspector:${loaded}:${sizeClass}`}
+                  size={inspectorWidth}
+                  limits={inspectorLimits}
+                >
+                  <section
+                    aria-label={inspectorLabel}
+                    className="flex h-full min-h-0 flex-col bg-sidebar"
+                  >
+                    <PaneSlot host={hosts?.inspector ?? null} />
+                  </section>
+                </SidePanel>
+              </>
+            )}
+          </ResizablePanelGroup>
+        </main>
       </div>
       <Sheet
         open={hasInspector && !dockInspector && narrowInspectorOpen}
