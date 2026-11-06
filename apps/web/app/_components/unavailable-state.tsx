@@ -50,7 +50,7 @@ export function UnavailableState({
       <Empty>
         <EmptyHeader>
           <EmptyTitle>
-            <h1>{title}</h1>
+            <h1 className="text-xl leading-snug font-medium">{title}</h1>
           </EmptyTitle>
           <EmptyDescription className="text-foreground">
             {sentence}
