@@ -19,6 +19,12 @@ flowchart LR
     REFRESH[Session refresh] -. does not update confirmation times .-> VERIFY
 ```
 
+## Two-step verification on development instances
+
+An organisation administrator can turn off the two-step verification requirement for the organisation on a development instance. When the setting is off, an action that would ask for a recent multi-factor confirmation accepts a recent primary sign-in instead. The setting is honoured only on an instance marked as a development instance, which local development setup sets; on a production instance the setting cannot be turned off and a stored off value is ignored. The required evidence is read when the action runs, so a change takes effect on the next action.
+
+Turning the setting off needs a recent primary sign-in, and the current two-step code when the person has a verified second factor; turning it on needs only the recent sign-in. Tenant governance actions, which add or remove the people who administer a tenant, always ask for the multi-factor confirmation whatever the setting says. The check fails closed: a missing setting, or a second factor that cannot be read, keeps the requirement on.
+
 ## Minimum evidence and ownership
 
 The verified Identity result and safe server session may carry `primaryAuthenticatedAt` and `multiFactorAuthenticatedAt`. Each is independently optional. They are derived from the current verified provider session, not supplied by a browser or copied from an ordinary record. No raw token, authentication-method list, provider identity details or new authentication-history table is introduced.

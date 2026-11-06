@@ -1339,7 +1339,7 @@
                 "kind": "literal",
                 "literal": {
                   "type": "text",
-                  "value": "two_step"
+                  "value": "platform_two_step"
                 }
               },
               "message": {
@@ -1515,7 +1515,7 @@
                 "kind": "literal",
                 "literal": {
                   "type": "text",
-                  "value": "two_step"
+                  "value": "platform_two_step"
                 }
               },
               "message": {
@@ -1801,7 +1801,7 @@
                 "kind": "literal",
                 "literal": {
                   "type": "text",
-                  "value": "two_step"
+                  "value": "platform_two_step"
                 }
               },
               "message": {

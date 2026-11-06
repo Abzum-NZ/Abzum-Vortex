@@ -6,7 +6,6 @@
 -- of the postgres-owned integration functions (target architecture section 4). It replaces
 -- vortex_identity.complete_identity_disablement, which the database review cleanup drops.
 
--- guard-allow: migration-owner-role The integration function reads GoTrue's auth.sessions, which only postgres may read.
 create or replace function vortex_identity.identity_session_is_current(
   p_identity_id uuid,
   p_session_id uuid

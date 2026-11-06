@@ -175,7 +175,11 @@ begin
               vortex_access.evaluate_record_permission_row_scope_internal(
                 context_value, checked_at,
                 vortex_access.recent_authentication_deadline_internal(
-                  context_value, checked_at, assessed.declaration -> 'recentAuthentication'
+                  context_value, checked_at,
+                  vortex_access.effective_authentication_requirement_internal(
+                    (context_value ->> 'organizationId')::uuid,
+                    assessed.declaration -> 'recentAuthentication'
+                  )
                 ),
                 (assessed.declaration -> 'target' ->> 'applicationRootId')::uuid,
                 assessed.declaration -> 'action', alt.value, assessed.record_id,

@@ -30,11 +30,8 @@ import { studioCanvasMetadata, useStudioCanvasChannel } from "./studio-canvas-me
 import { studioCanvasVisible, useStudioCanvasView } from "./studio-canvas-scale";
 import { useStudioScreen } from "./studio-canvas-screen";
 import { studioPuckIframeCss } from "./studio-puck-style";
-import {
-  useStudioCanvas,
-  useStudioCanvasDragging,
-  useStudioFrameDocumentSetter,
-} from "./studio-puck-provider";
+import { useStudioGridHolders } from "./studio-canvas-status";
+import { useStudioCanvasDragging, useStudioFrameDocumentSetter } from "./studio-puck-provider";
 
 const resolvePageHref = () => "#";
 
@@ -547,12 +544,10 @@ export function StudioCanvasIframe({
   // well's and the page's own scrolls tell the slots that wait, once per frame.
   const viewRef = useRef(view);
   viewRef.current = view;
-  const { gridHolders } = useStudioCanvas().model;
+  const readGridHolders = useStudioGridHolders();
   const interactive = previewMode === "interactive";
   const interactiveRef = useRef(interactive);
   interactiveRef.current = interactive;
-  const gridHoldersRef = useRef(gridHolders);
-  gridHoldersRef.current = gridHolders;
   const documentRef = useRef(frameDocument);
   documentRef.current = frameDocument;
   const waiting = useRef(new Set<() => void>());
@@ -564,7 +559,7 @@ export function StudioCanvasIframe({
       near: (element, holder) => {
         // While grids are arranged their column controls need the keyboard: the slots that hold a
         // grid are drawn at once; the others wait as they do when blocks are edited.
-        if (interactiveRef.current && gridHoldersRef.current.has(holder)) return true;
+        if (interactiveRef.current && readGridHolders().has(holder)) return true;
         const visible = studioCanvasVisible(viewRef.current);
         const box = element.getBoundingClientRect();
         // Until the well has laid the frame out, the first screens are what is near.
@@ -601,7 +596,7 @@ export function StudioCanvasIframe({
         if (moved !== 0) scroller.scrollTop += moved;
       },
     }),
-    [],
+    [readGridHolders],
   );
   useEffect(() => {
     const well = view.well;

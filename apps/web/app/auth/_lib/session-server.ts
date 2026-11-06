@@ -375,6 +375,31 @@ export const readMfaFactor = async (): Promise<
 };
 
 /**
+ * Whether the signed-in person has a verified authenticator, read live from the provider for the
+ * request that asks (never stored): true or false when the provider answers, undefined when it
+ * cannot, which the database treats as enrolled.
+ */
+export const readHasVerifiedSecondFactor = async (): Promise<boolean | undefined> => {
+  try {
+    const { boundary } = await mfaBoundary();
+    const factors = await boundary.client.auth.mfa.listFactors();
+    if (factors.error) throw factors.error;
+    const staged = boundary.stage.snapshot();
+    if (staged.refused || staged.mutations.length)
+      throw new Error("MFA factor read changed the session");
+    // Any verified factor kind counts, as the identity verifier treats them all as a second factor.
+    return factors.data.all.some((factor) => factor.status === "verified");
+  } catch (error) {
+    return mapWebError(error, {
+      route: "auth/mfa",
+      operation: "read-second-factor",
+      code: "MFA_READ_FAILED",
+      fallback: undefined,
+    });
+  }
+};
+
+/**
  * Enrols a new authenticator for the signed-in person. The issuer is Vortex and the account label is
  * their email address, so the QR code (an SVG data address) and the text key name the same account.
  * The QR code and the key are shown once to that person; never log them or put them in an address.

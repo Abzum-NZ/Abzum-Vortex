@@ -244,6 +244,7 @@ export function useStudioActionFlows({
   const messageActionRef = useRef<
     (message: FlowMessageIntent, offered: FlowMessageAction) => void | Promise<unknown>
   >(() => undefined);
+  const verification = useMemo(() => stepUpVerification(() => active.current?.flows.address), []);
   const { host, element, banner } = useFlowIntentHost({
     // Every form a flow shows here declares its own fields; none is a form placed on a page.
     renderForm: (form, controls) => ({
@@ -265,7 +266,7 @@ export function useStudioActionFlows({
     }),
     navigation,
     state: runtimeState,
-    verification: stepUpVerification,
+    verification,
     guidedLeaveLabel: "Back to the editor",
     onMessageAction: (message, action) => messageActionRef.current(message, action),
     // Install or upgrade is left out of a confirmation for a person who may not install.

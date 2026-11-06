@@ -28,7 +28,8 @@ import { studioCanvasVisible, useStudioCanvasView } from "./studio-canvas-scale"
 import { StudioCanvasIframe } from "./studio-canvas-root";
 import { studioCrossSlotReason, useStudioScreen } from "./studio-canvas-screen";
 import { useStudioCanvasChannel } from "./studio-canvas-metadata";
-import { useStudioCanvas, useStudioCanvasDragging } from "./studio-puck-provider";
+import { useStudioCanvasBar, useStudioCanvasStatus } from "./studio-canvas-status";
+import { useStudioCanvasDragging } from "./studio-puck-provider";
 import { studioFieldTypes } from "./studio-puck-field-types";
 import { studioCanvasPermissionReason, studioBlockName } from "@vortex/platform/schema";
 
@@ -97,7 +98,8 @@ function BarAction({ label, reason, onAct, tooltip, stop, onStop, children }: Ba
  */
 function StudioActionBar({ id, type }: Readonly<{ id: string; type: string }>) {
   const getPuck = useGetPuck();
-  const { input, model } = useStudioCanvas();
+  const bar = useStudioCanvasBar();
+  const status = useStudioCanvasStatus();
   const { references } = useStudioCanvasChannel();
   const { breakpoint, label: screenLabel } = useStudioScreen();
   const view = useStudioCanvasView();
@@ -132,17 +134,17 @@ function StudioActionBar({ id, type }: Readonly<{ id: string; type: string }>) {
   const parent = puck.getParentById(id);
   // The name the outline and the inspector use: the block's own item ("Button: Open").
   const name =
-    studioBlockName(input.describePlacement, model.items, id) ??
+    studioBlockName(bar.describePlacement, bar.items, id) ??
     puck.config.components[type]?.label ??
     type;
   // Why a forbidden action is unavailable when the draft itself names no reason.
   const knownCause =
-    model.readOnlyCause !== undefined
+    status.readOnlyCause !== undefined
       ? "This page is shown read-only, so its blocks can't be changed here."
-      : !input.canvasShown
+      : !status.canvasShown
         ? "The canvas is not on show."
-        : input.disabled
-          ? (input.disabledReason ?? "Studio is busy; try again in a moment.")
+        : status.disabled
+          ? (status.disabledReason ?? "Studio is busy; try again in a moment.")
           : breakpoint !== "desktop"
             ? `This is the ${screenLabel.toLowerCase()} view. Change blocks on Desktop.`
             : undefined;
@@ -150,7 +152,7 @@ function StudioActionBar({ id, type }: Readonly<{ id: string; type: string }>) {
   const reasonFor = (reference: string | undefined, permitted: boolean) =>
     reference ?? (permitted ? undefined : unavailable);
   // A full application cannot take another block: Duplicate says so instead of failing on save.
-  const placed = input.palette?.placed ?? 0;
+  const placed = bar.placed;
   const duplicateNamed =
     studioLimitReason("compositionPlacements", placed) ??
     studioCanvasPermissionReason(references, id, "duplicate");
@@ -311,7 +313,7 @@ function StudioActionBar({ id, type }: Readonly<{ id: string; type: string }>) {
       return;
     }
     if (action === "move" || action === "wrap" || action === "usedIn") {
-      input.blockActions.open(id, action);
+      bar.blockActions.open(id, action);
       return;
     }
     if ((action === "duplicate" ? duplicateReason : deleteReason) !== undefined) return;
@@ -381,7 +383,7 @@ function StudioActionBar({ id, type }: Readonly<{ id: string; type: string }>) {
         </BarAction>
         <StudioCanvasMore
           id={id}
-          actions={input.blockActions}
+          actions={bar.blockActions}
           reasons={{ move: moveReason, wrap: knownCause, remove: deleteReason }}
           tooltip={tooltip}
           onChoose={act}

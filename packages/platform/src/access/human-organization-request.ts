@@ -119,6 +119,13 @@ export type HumanOrganizationRequestDependencies = Readonly<{
   clock?: () => Date;
   correlationId?: () => string;
   telemetry?: ServiceTelemetryPort;
+  /**
+   * Reads, for the current request only, whether the signed-in person has a verified second
+   * factor: true or false when the provider answers, undefined when it cannot. Only the entry
+   * point that holds the person's session supplies it; the database treats an absent fact as
+   * enrolled.
+   */
+  readSecondFactor?: () => Promise<boolean | undefined>;
 }>;
 
 /**
@@ -209,6 +216,7 @@ export const createHumanOrganizationRequestService = (
       organizationShortName: string;
       applicationKey: string;
     }>,
+    secondFactor?: Readonly<{ hasSecondFactor: boolean }>,
   ): Promise<HumanOrganizationRequestResult<Result> | Special> => {
     const verifiedSession = identitySessionSchema.safeParse(session);
     const verifiedCandidate =
@@ -424,6 +432,9 @@ export const createHumanOrganizationRequestService = (
                       }),
                 }
               : {}),
+            ...(secondFactor === undefined
+              ? {}
+              : { hasSecondFactor: secondFactor.hasSecondFactor }),
             issuedAt,
             expiresAt: verifiedSession.data.accessTokenExpiresAt,
             accessVersion: scope.accessVersion,
@@ -671,6 +682,32 @@ export const createHumanOrganizationRequestService = (
       ) => Promise<Result>,
     ): Promise<HumanOrganizationRequestResult<Result>> =>
       runWithMode("access_change", session, candidate, operation),
+    /**
+     * An access change that also states, for this one call, whether the person has a verified
+     * second factor, read live by the trusted entry point. Only the two-step setting change uses it.
+     */
+    runAccessChangeWithSecondFactor: <Result>(
+      session: IdentitySession,
+      candidate: OrganizationSelectionCandidate,
+      operation: (
+        transaction: RequestDatabaseTransaction,
+        scope: SelectedOrganizationScope,
+        issuedAt: string,
+      ) => Promise<Result>,
+      secondFactor: Readonly<{ hasSecondFactor: boolean }> | undefined,
+    ): Promise<HumanOrganizationRequestResult<Result>> =>
+      runWithMode(
+        "access_change",
+        session,
+        candidate,
+        operation,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        secondFactor,
+      ),
     runAccessChangeWithRefusal: <Result>(
       session: IdentitySession,
       candidate: OrganizationSelectionCandidate,
