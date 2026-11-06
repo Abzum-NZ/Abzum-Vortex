@@ -293,7 +293,8 @@ const GridRow = memo(function GridRow({
             "flex min-w-0 items-center overflow-hidden px-[var(--vortex-space-sm)] whitespace-nowrap",
             "scroll-mt-[var(--grid-row-height)]",
             slot.kind === "data" && cellAlignment(slot.column),
-            slot.kind !== "data" && "justify-center",
+            slot.kind === "actions" && "justify-end",
+            slot.kind !== "data" && slot.kind !== "actions" && "justify-center",
             slot.sticky &&
               "sticky z-10 bg-card group-hover/row:bg-muted group-data-[state=selected]/row:bg-muted",
           )}
