@@ -156,7 +156,8 @@ const previewRows = (append: DefinitionReleaseAppend, context: SessionContext) =
 /**
  * No release writes or write locks: preview releases the revision's one compile, `compile`, which
  * the builder has usually produced already, judged once more as a release against the published
- * history.
+ * history. A revision already released is compiled too, against the current platform catalogue,
+ * never run from its immutable release (Decision 10).
  */
 export const planApplicationPreview = async (
   context: SessionContext,
@@ -179,16 +180,6 @@ export const planApplicationPreview = async (
     sourceFingerprint: candidate.draft.sourceFingerprint,
     currentReleaseRevision: candidate.draft.publishedRevision ?? null,
   };
-  // A released draft already has a validated immutable release and exact pins. Reuse it;
-  // publication's new-revision comparison deliberately refuses republishing that revision.
-  if (candidate.draft.publishedRevision === candidate.draft.draftRevision)
-    return {
-      accessVersion: context.accessVersion,
-      application,
-      ownedRoots,
-      usedRoots: [],
-      releases: [],
-    };
   const inlineKeys = new Set(source.body.modules.map((source) => source.key));
   const usedKeys = applicationModuleKeys(source).filter((key) => !inlineKeys.has(key));
   const usedPages = await snapshot.readModuleReleaseAnchors(
@@ -201,7 +192,12 @@ export const planApplicationPreview = async (
     return { rootId: page.rootId, currentReleaseRevision: page.anchorReleaseRevision };
   });
   const { releasePlan: compiled, releaseHistory } = await compile();
-  assertReleasable(compiled, releaseHistory, permissions);
+  assertReleasable(
+    compiled,
+    releaseHistory,
+    permissions,
+    candidate.draft.publishedRevision === candidate.draft.draftRevision,
+  );
   return {
     accessVersion: context.accessVersion,
     application,
