@@ -23,7 +23,7 @@
       },
       "muted_text": {
         "kind": "color_pair",
-        "light": "oklch(0.556 0 0)",
+        "light": "oklch(0.529 0 0)",
         "dark": "oklch(0.708 0 0)",
         "role": "foreground"
       },
@@ -271,7 +271,7 @@
       },
       "muted_text": {
         "kind": "color_pair",
-        "light": "oklch(0.553 0.013 58.071)",
+        "light": "oklch(0.527 0.013 58.071)",
         "dark": "oklch(0.709 0.01 56.259)",
         "role": "foreground"
       },
@@ -519,8 +519,8 @@
       },
       "muted_text": {
         "kind": "color_pair",
-        "light": "oklch(0.552 0.016 285.938)",
-        "dark": "oklch(0.705 0.015 286.067)",
+        "light": "oklch(0.526 0.016 285.938)",
+        "dark": "oklch(0.71 0.015 286.067)",
         "role": "foreground"
       },
       "border_color": {
@@ -767,8 +767,8 @@
       },
       "muted_text": {
         "kind": "color_pair",
-        "light": "oklch(0.551 0.027 264.364)",
-        "dark": "oklch(0.707 0.022 261.325)",
+        "light": "oklch(0.528 0.027 264.364)",
+        "dark": "oklch(0.712 0.022 261.325)",
         "role": "foreground"
       },
       "border_color": {
@@ -1015,7 +1015,7 @@
       },
       "muted_text": {
         "kind": "color_pair",
-        "light": "oklch(0.542 0.034 322.5)",
+        "light": "oklch(0.529 0.034 322.5)",
         "dark": "oklch(0.711 0.019 323.02)",
         "role": "foreground"
       },
@@ -1263,7 +1263,7 @@
       },
       "muted_text": {
         "kind": "color_pair",
-        "light": "oklch(0.566 0.031 107.3)",
+        "light": "oklch(0.527 0.031 107.3)",
         "dark": "oklch(0.737 0.021 106.9)",
         "role": "foreground"
       },
@@ -1511,7 +1511,7 @@
       },
       "muted_text": {
         "kind": "color_pair",
-        "light": "oklch(0.56 0.021 213.5)",
+        "light": "oklch(0.524 0.021 213.5)",
         "dark": "oklch(0.723 0.014 214.4)",
         "role": "foreground"
       },
@@ -1759,7 +1759,7 @@
       },
       "muted_text": {
         "kind": "color_pair",
-        "light": "oklch(0.547 0.021 43.1)",
+        "light": "oklch(0.527 0.021 43.1)",
         "dark": "oklch(0.714 0.014 41.2)",
         "role": "foreground"
       },
@@ -2007,7 +2007,7 @@
       },
       "muted_text": {
         "kind": "color_pair",
-        "light": "oklch(0.556 0 0)",
+        "light": "oklch(0.529 0 0)",
         "dark": "oklch(0.708 0 0)",
         "role": "foreground"
       },
@@ -2255,7 +2255,7 @@
       },
       "muted_text": {
         "kind": "color_pair",
-        "light": "oklch(0.556 0 0)",
+        "light": "oklch(0.529 0 0)",
         "dark": "oklch(0.708 0 0)",
         "role": "foreground"
       },
@@ -2503,7 +2503,7 @@
       },
       "muted_text": {
         "kind": "color_pair",
-        "light": "oklch(0.556 0 0)",
+        "light": "oklch(0.529 0 0)",
         "dark": "oklch(0.708 0 0)",
         "role": "foreground"
       },
@@ -2751,7 +2751,7 @@
       },
       "muted_text": {
         "kind": "color_pair",
-        "light": "oklch(0.556 0 0)",
+        "light": "oklch(0.529 0 0)",
         "dark": "oklch(0.708 0 0)",
         "role": "foreground"
       },
@@ -2999,7 +2999,7 @@
       },
       "muted_text": {
         "kind": "color_pair",
-        "light": "oklch(0.556 0 0)",
+        "light": "oklch(0.529 0 0)",
         "dark": "oklch(0.708 0 0)",
         "role": "foreground"
       },
@@ -3247,7 +3247,7 @@
       },
       "muted_text": {
         "kind": "color_pair",
-        "light": "oklch(0.556 0 0)",
+        "light": "oklch(0.529 0 0)",
         "dark": "oklch(0.708 0 0)",
         "role": "foreground"
       },
@@ -3495,7 +3495,7 @@
       },
       "muted_text": {
         "kind": "color_pair",
-        "light": "oklch(0.556 0 0)",
+        "light": "oklch(0.529 0 0)",
         "dark": "oklch(0.708 0 0)",
         "role": "foreground"
       },
@@ -3743,7 +3743,7 @@
       },
       "muted_text": {
         "kind": "color_pair",
-        "light": "oklch(0.556 0 0)",
+        "light": "oklch(0.529 0 0)",
         "dark": "oklch(0.708 0 0)",
         "role": "foreground"
       },
@@ -3991,7 +3991,7 @@
       },
       "muted_text": {
         "kind": "color_pair",
-        "light": "oklch(0.556 0 0)",
+        "light": "oklch(0.529 0 0)",
         "dark": "oklch(0.708 0 0)",
         "role": "foreground"
       },
@@ -4239,7 +4239,7 @@
       },
       "muted_text": {
         "kind": "color_pair",
-        "light": "oklch(0.556 0 0)",
+        "light": "oklch(0.529 0 0)",
         "dark": "oklch(0.708 0 0)",
         "role": "foreground"
       },
@@ -4487,7 +4487,7 @@
       },
       "muted_text": {
         "kind": "color_pair",
-        "light": "oklch(0.556 0 0)",
+        "light": "oklch(0.529 0 0)",
         "dark": "oklch(0.708 0 0)",
         "role": "foreground"
       },
@@ -4735,7 +4735,7 @@
       },
       "muted_text": {
         "kind": "color_pair",
-        "light": "oklch(0.556 0 0)",
+        "light": "oklch(0.529 0 0)",
         "dark": "oklch(0.708 0 0)",
         "role": "foreground"
       },
@@ -4983,7 +4983,7 @@
       },
       "muted_text": {
         "kind": "color_pair",
-        "light": "oklch(0.556 0 0)",
+        "light": "oklch(0.529 0 0)",
         "dark": "oklch(0.708 0 0)",
         "role": "foreground"
       },
@@ -5231,7 +5231,7 @@
       },
       "muted_text": {
         "kind": "color_pair",
-        "light": "oklch(0.556 0 0)",
+        "light": "oklch(0.529 0 0)",
         "dark": "oklch(0.708 0 0)",
         "role": "foreground"
       },
@@ -5479,7 +5479,7 @@
       },
       "muted_text": {
         "kind": "color_pair",
-        "light": "oklch(0.556 0 0)",
+        "light": "oklch(0.529 0 0)",
         "dark": "oklch(0.708 0 0)",
         "role": "foreground"
       },
@@ -5727,7 +5727,7 @@
       },
       "muted_text": {
         "kind": "color_pair",
-        "light": "oklch(0.556 0 0)",
+        "light": "oklch(0.529 0 0)",
         "dark": "oklch(0.708 0 0)",
         "role": "foreground"
       },
@@ -5975,7 +5975,7 @@
       },
       "muted_text": {
         "kind": "color_pair",
-        "light": "oklch(0.556 0 0)",
+        "light": "oklch(0.529 0 0)",
         "dark": "oklch(0.708 0 0)",
         "role": "foreground"
       },
@@ -6223,7 +6223,7 @@
       },
       "muted_text": {
         "kind": "color_pair",
-        "light": "oklch(0.556 0 0)",
+        "light": "oklch(0.529 0 0)",
         "dark": "oklch(0.708 0 0)",
         "role": "foreground"
       },
@@ -6471,7 +6471,7 @@
       },
       "muted_text": {
         "kind": "color_pair",
-        "light": "oklch(0.556 0 0)",
+        "light": "oklch(0.529 0 0)",
         "dark": "oklch(0.708 0 0)",
         "role": "foreground"
       },
@@ -6719,7 +6719,7 @@
       },
       "muted_text": {
         "kind": "color_pair",
-        "light": "oklch(0.556 0 0)",
+        "light": "oklch(0.529 0 0)",
         "dark": "oklch(0.708 0 0)",
         "role": "foreground"
       },
@@ -6967,7 +6967,7 @@
       },
       "muted_text": {
         "kind": "color_pair",
-        "light": "oklch(0.556 0 0)",
+        "light": "oklch(0.529 0 0)",
         "dark": "oklch(0.708 0 0)",
         "role": "foreground"
       },
@@ -7215,7 +7215,7 @@
       },
       "muted_text": {
         "kind": "color_pair",
-        "light": "oklch(0.556 0 0)",
+        "light": "oklch(0.529 0 0)",
         "dark": "oklch(0.708 0 0)",
         "role": "foreground"
       },
@@ -7463,7 +7463,7 @@
       },
       "muted_text": {
         "kind": "color_pair",
-        "light": "oklch(0.556 0 0)",
+        "light": "oklch(0.529 0 0)",
         "dark": "oklch(0.708 0 0)",
         "role": "foreground"
       },
@@ -7711,7 +7711,7 @@
       },
       "muted_text": {
         "kind": "color_pair",
-        "light": "oklch(0.556 0 0)",
+        "light": "oklch(0.529 0 0)",
         "dark": "oklch(0.708 0 0)",
         "role": "foreground"
       },
@@ -7959,7 +7959,7 @@
       },
       "muted_text": {
         "kind": "color_pair",
-        "light": "oklch(0.556 0 0)",
+        "light": "oklch(0.529 0 0)",
         "dark": "oklch(0.708 0 0)",
         "role": "foreground"
       },
@@ -8207,7 +8207,7 @@
       },
       "muted_text": {
         "kind": "color_pair",
-        "light": "oklch(0.556 0 0)",
+        "light": "oklch(0.529 0 0)",
         "dark": "oklch(0.708 0 0)",
         "role": "foreground"
       },
@@ -8455,7 +8455,7 @@
       },
       "muted_text": {
         "kind": "color_pair",
-        "light": "oklch(0.556 0 0)",
+        "light": "oklch(0.529 0 0)",
         "dark": "oklch(0.708 0 0)",
         "role": "foreground"
       },
@@ -8703,7 +8703,7 @@
       },
       "muted_text": {
         "kind": "color_pair",
-        "light": "oklch(0.556 0 0)",
+        "light": "oklch(0.529 0 0)",
         "dark": "oklch(0.708 0 0)",
         "role": "foreground"
       },
@@ -8951,7 +8951,7 @@
       },
       "muted_text": {
         "kind": "color_pair",
-        "light": "oklch(0.556 0 0)",
+        "light": "oklch(0.529 0 0)",
         "dark": "oklch(0.708 0 0)",
         "role": "foreground"
       },
@@ -9199,7 +9199,7 @@
       },
       "muted_text": {
         "kind": "color_pair",
-        "light": "oklch(0.556 0 0)",
+        "light": "oklch(0.529 0 0)",
         "dark": "oklch(0.708 0 0)",
         "role": "foreground"
       },
@@ -9447,7 +9447,7 @@
       },
       "muted_text": {
         "kind": "color_pair",
-        "light": "oklch(0.556 0 0)",
+        "light": "oklch(0.529 0 0)",
         "dark": "oklch(0.708 0 0)",
         "role": "foreground"
       },
@@ -9695,7 +9695,7 @@
       },
       "muted_text": {
         "kind": "color_pair",
-        "light": "oklch(0.556 0 0)",
+        "light": "oklch(0.529 0 0)",
         "dark": "oklch(0.708 0 0)",
         "role": "foreground"
       },
@@ -9943,7 +9943,7 @@
       },
       "muted_text": {
         "kind": "color_pair",
-        "light": "oklch(0.556 0 0)",
+        "light": "oklch(0.529 0 0)",
         "dark": "oklch(0.708 0 0)",
         "role": "foreground"
       },
@@ -10191,7 +10191,7 @@
       },
       "muted_text": {
         "kind": "color_pair",
-        "light": "oklch(0.556 0 0)",
+        "light": "oklch(0.529 0 0)",
         "dark": "oklch(0.708 0 0)",
         "role": "foreground"
       },
@@ -10439,7 +10439,7 @@
       },
       "muted_text": {
         "kind": "color_pair",
-        "light": "oklch(0.556 0 0)",
+        "light": "oklch(0.529 0 0)",
         "dark": "oklch(0.708 0 0)",
         "role": "foreground"
       },
@@ -10687,7 +10687,7 @@
       },
       "muted_text": {
         "kind": "color_pair",
-        "light": "oklch(0.556 0 0)",
+        "light": "oklch(0.529 0 0)",
         "dark": "oklch(0.708 0 0)",
         "role": "foreground"
       },
@@ -10935,7 +10935,7 @@
       },
       "muted_text": {
         "kind": "color_pair",
-        "light": "oklch(0.556 0 0)",
+        "light": "oklch(0.529 0 0)",
         "dark": "oklch(0.708 0 0)",
         "role": "foreground"
       },
@@ -11183,7 +11183,7 @@
       },
       "muted_text": {
         "kind": "color_pair",
-        "light": "oklch(0.556 0 0)",
+        "light": "oklch(0.529 0 0)",
         "dark": "oklch(0.708 0 0)",
         "role": "foreground"
       },
@@ -11431,7 +11431,7 @@
       },
       "muted_text": {
         "kind": "color_pair",
-        "light": "oklch(0.556 0 0)",
+        "light": "oklch(0.529 0 0)",
         "dark": "oklch(0.708 0 0)",
         "role": "foreground"
       },
@@ -11679,7 +11679,7 @@
       },
       "muted_text": {
         "kind": "color_pair",
-        "light": "oklch(0.556 0 0)",
+        "light": "oklch(0.529 0 0)",
         "dark": "oklch(0.708 0 0)",
         "role": "foreground"
       },
@@ -11927,7 +11927,7 @@
       },
       "muted_text": {
         "kind": "color_pair",
-        "light": "oklch(0.556 0 0)",
+        "light": "oklch(0.529 0 0)",
         "dark": "oklch(0.708 0 0)",
         "role": "foreground"
       },
@@ -12175,7 +12175,7 @@
       },
       "muted_text": {
         "kind": "color_pair",
-        "light": "oklch(0.556 0 0)",
+        "light": "oklch(0.529 0 0)",
         "dark": "oklch(0.708 0 0)",
         "role": "foreground"
       },
@@ -12423,7 +12423,7 @@
       },
       "muted_text": {
         "kind": "color_pair",
-        "light": "oklch(0.556 0 0)",
+        "light": "oklch(0.529 0 0)",
         "dark": "oklch(0.708 0 0)",
         "role": "foreground"
       },
@@ -12671,7 +12671,7 @@
       },
       "muted_text": {
         "kind": "color_pair",
-        "light": "oklch(0.556 0 0)",
+        "light": "oklch(0.529 0 0)",
         "dark": "oklch(0.708 0 0)",
         "role": "foreground"
       },
@@ -12919,7 +12919,7 @@
       },
       "muted_text": {
         "kind": "color_pair",
-        "light": "oklch(0.556 0 0)",
+        "light": "oklch(0.529 0 0)",
         "dark": "oklch(0.708 0 0)",
         "role": "foreground"
       },
@@ -13167,7 +13167,7 @@
       },
       "muted_text": {
         "kind": "color_pair",
-        "light": "oklch(0.556 0 0)",
+        "light": "oklch(0.529 0 0)",
         "dark": "oklch(0.708 0 0)",
         "role": "foreground"
       },
@@ -13415,7 +13415,7 @@
       },
       "muted_text": {
         "kind": "color_pair",
-        "light": "oklch(0.556 0 0)",
+        "light": "oklch(0.529 0 0)",
         "dark": "oklch(0.708 0 0)",
         "role": "foreground"
       },
@@ -13663,7 +13663,7 @@
       },
       "muted_text": {
         "kind": "color_pair",
-        "light": "oklch(0.556 0 0)",
+        "light": "oklch(0.529 0 0)",
         "dark": "oklch(0.708 0 0)",
         "role": "foreground"
       },
@@ -13911,7 +13911,7 @@
       },
       "muted_text": {
         "kind": "color_pair",
-        "light": "oklch(0.556 0 0)",
+        "light": "oklch(0.529 0 0)",
         "dark": "oklch(0.708 0 0)",
         "role": "foreground"
       },
@@ -14159,7 +14159,7 @@
       },
       "muted_text": {
         "kind": "color_pair",
-        "light": "oklch(0.556 0 0)",
+        "light": "oklch(0.529 0 0)",
         "dark": "oklch(0.708 0 0)",
         "role": "foreground"
       },
@@ -14407,7 +14407,7 @@
       },
       "muted_text": {
         "kind": "color_pair",
-        "light": "oklch(0.556 0 0)",
+        "light": "oklch(0.529 0 0)",
         "dark": "oklch(0.708 0 0)",
         "role": "foreground"
       },
@@ -14655,7 +14655,7 @@
       },
       "muted_text": {
         "kind": "color_pair",
-        "light": "oklch(0.556 0 0)",
+        "light": "oklch(0.529 0 0)",
         "dark": "oklch(0.708 0 0)",
         "role": "foreground"
       },
@@ -14903,7 +14903,7 @@
       },
       "muted_text": {
         "kind": "color_pair",
-        "light": "oklch(0.556 0 0)",
+        "light": "oklch(0.529 0 0)",
         "dark": "oklch(0.708 0 0)",
         "role": "foreground"
       },
@@ -15151,7 +15151,7 @@
       },
       "muted_text": {
         "kind": "color_pair",
-        "light": "oklch(0.556 0 0)",
+        "light": "oklch(0.529 0 0)",
         "dark": "oklch(0.708 0 0)",
         "role": "foreground"
       },
@@ -15399,7 +15399,7 @@
       },
       "muted_text": {
         "kind": "color_pair",
-        "light": "oklch(0.556 0 0)",
+        "light": "oklch(0.529 0 0)",
         "dark": "oklch(0.708 0 0)",
         "role": "foreground"
       },
