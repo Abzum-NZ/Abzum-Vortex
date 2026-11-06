@@ -76,19 +76,20 @@ export const STUDIO_ROOT_CSS = variablesRule(
  * Studio's theme for the organisation its address names (`/studio/<organisation>/...`): Studio's
  * platform theme with that organisation's theme applied, or undefined where Studio keeps its own
  * theme (no organisation named, not signed in, or an organisation the person is not a member of).
- * An organisation theme that cannot be read now fails loudly; Studio is never drawn in a theme
- * nobody chose.
+ * An organisation theme that cannot be read now is `temporarily_unavailable`: Studio's own
+ * layout fails loudly into its route error state, and is never drawn in a theme nobody chose.
  */
 const loadStudioOrganizationTheme = cache(
-  async (organizationId: string | undefined): Promise<ApplicationTheme | undefined> => {
+  async (
+    organizationId: string | undefined,
+  ): Promise<ApplicationTheme | undefined | "temporarily_unavailable"> => {
     if (organizationId === undefined || !organizationIdSchema.safeParse(organizationId).success)
       return undefined;
     const resolution = await resolveIdentitySession();
     if (resolution.kind !== "active") return undefined;
     const load = await loadOrganizationTheme(resolution.session, organizationId);
     if (load.kind === "unavailable") return undefined;
-    if (load.kind === "temporarily_unavailable")
-      throw new Error("STUDIO_ORGANIZATION_THEME_UNAVAILABLE");
+    if (load.kind === "temporarily_unavailable") return "temporarily_unavailable";
     const theme = applyOrganizationTheme(STUDIO_THEME_ROOT, load.theme.selection);
     return theme === STUDIO_THEME_ROOT ? undefined : theme;
   },
@@ -99,6 +100,7 @@ export async function loadStudioDocumentTheme(
   organizationId: string,
 ): Promise<typeof STUDIO_DOCUMENT_THEME> {
   const theme = await loadStudioOrganizationTheme(organizationId);
+  if (theme === "temporarily_unavailable") throw new Error("STUDIO_ORGANIZATION_THEME_UNAVAILABLE");
   return theme === undefined ? STUDIO_DOCUMENT_THEME : studioDocumentThemeOf(theme);
 }
 
@@ -132,7 +134,9 @@ export async function loadDocumentTheme(): Promise<DocumentTheme> {
   const [tenant, organization, application] = segments;
   if (tenant === "studio") {
     const studio = await loadStudioOrganizationTheme(organization);
-    if (studio === undefined)
+    // The document root cannot show an error state: it keeps Studio's own theme while the layout
+    // below it (inside Studio's route error state) reports the refusal.
+    if (studio === undefined || studio === "temporarily_unavailable")
       return { attributes: studioDocumentAttributes, style: {}, stylesheet: "studio" };
     return {
       attributes: Object.fromEntries(
