@@ -1,13 +1,12 @@
 import "server-only";
 
 import { cacheSignal } from "react";
-import { runtimePreviewOf, type InstalledRuntimeContext } from "@vortex/platform/server";
 import {
+  runtimePreviewOf,
+  type InstalledRuntimeContext,
   logRefusal,
-  sameId,
-  type IdentitySession,
-  type PageDefinition,
-} from "@vortex/platform/schema";
+} from "@vortex/platform/server";
+import { sameId, type IdentitySession, type PageDefinition } from "@vortex/platform/schema";
 import {
   materializeStudioPreviewDemand,
   readStudioPreviewState,

@@ -1,7 +1,7 @@
 import "server-only";
 
 import { performance } from "node:perf_hooks";
-import { logRefusal, asRecord } from "../catalogue/runtime-primitives";
+import { asRecord } from "../catalogue/runtime-primitives";
 import type { DatabaseRow } from "../db/request-transaction";
 import { withRuntimeTransaction } from "../db/request-transaction";
 import {
@@ -12,6 +12,7 @@ import {
   type EventDispatcherTransactionRunner,
 } from "./dispatcher";
 import { exactRecord } from "./event-record-shapes";
+import { logRefusal } from "../access/request-failure";
 
 /**
  * The scheduled recovery source is a caller-supplied label only: it never

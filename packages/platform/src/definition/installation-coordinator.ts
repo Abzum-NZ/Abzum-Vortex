@@ -15,7 +15,7 @@ import {
   type PreparedApplicationRoleTemplates,
 } from "../access/organization-access-catalogue";
 import type { ApplicationRootId, ModuleRootId, OrganizationId } from "../catalogue/identifiers";
-import { sameId, logRefusal } from "../catalogue/runtime-primitives";
+import { sameId } from "../catalogue/runtime-primitives";
 import type { SystemApplicationBoundReleaseSetResult } from "./definition-consumer-read";
 import type { ModuleContribution } from "./module-contracts";
 import {
@@ -82,6 +82,7 @@ import {
   changeContributions,
   requireLifecycleResult,
 } from "./installation-coordinator-state";
+import { logRefusal } from "../access/request-failure";
 
 /**
  * The App-owned protected Application lifecycle: prepare, install or deliberately upgrade to one

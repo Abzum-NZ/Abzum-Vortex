@@ -1,6 +1,6 @@
 import "server-only";
 
-import { databaseCode } from "../catalogue/runtime-primitives";
+import { databaseCode, describeFailure } from "../catalogue/runtime-primitives";
 import { BuilderAuthorityError } from "../definition/builder-authority";
 import { DefinitionError, isValidationRefusal } from "../definition/definition-error";
 import { FirstInstallUnavailable } from "../definition/installation-first-install";
@@ -101,7 +101,9 @@ const installationProblemClass = (problem: InstallationProblem["problem"]): Requ
 
 /**
  * A request its caller abandoned (the browser left the page) is stopped on purpose. The database
- * layer raises it as a plain error named for its layer, and the platform as an abort.
+ * layer raises it as a plain error named for its layer, and the platform as an abort. A connection
+ * reset is not matched here: the database pool and outbound calls raise the same `ECONNRESET`, and
+ * those are faults; the one reader of a client's upload says its own stop.
  */
 const requestStopped = (error: unknown): boolean =>
   error instanceof Error &&
@@ -161,4 +163,16 @@ export const classifyRequestFailure = (
 export const logClassifiedFailure = (line: string, error: unknown): void => {
   if (classifyRequestFailure(error, { addressed: false }).level === "info") console.info(line);
   else console.error(line);
+};
+
+/**
+ * The one server-side line for a refusal or a caught failure: the route or service, the operation,
+ * a stable reason code and, when there is one, the safe description of its cause (class names and
+ * codes only). Ids may be part of `op`; personal data, values and secrets never are. Without a
+ * cause it is an expected refusal and information; with one the cause's class decides the level.
+ */
+export const logRefusal = (route: string, op: string, code: string, cause?: unknown): void => {
+  const message = `[${route}] ${op} refused: code=${code}`;
+  if (cause === undefined) console.info(message);
+  else logClassifiedFailure(`${message} cause=${describeFailure(cause)}`, cause);
 };

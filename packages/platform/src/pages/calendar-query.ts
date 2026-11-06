@@ -11,7 +11,7 @@ import {
 
 import type { IdentitySession, OrganizationSelectionCandidate } from "../access/identity-access";
 import type { JsonValue } from "../catalogue/common";
-import { isRecord, sameId, logRefusal } from "../catalogue/runtime-primitives";
+import { isRecord, sameId } from "../catalogue/runtime-primitives";
 import type { BlockPropertyValueContract } from "../definition/application-composition/block-property-values";
 import {
   type CalendarMapping,
@@ -32,6 +32,7 @@ import {
   type RecordLinkResolver,
 } from "./component-data-projection";
 import type { calendarPayloadSchema } from "./display-payload-calendar";
+import { logRefusal } from "../access/request-failure";
 
 type ModuleRelease = InstalledRuntimeContext["releaseSet"]["modules"][number];
 type ModuleQuery = ModuleRelease["content"]["queries"][number];
