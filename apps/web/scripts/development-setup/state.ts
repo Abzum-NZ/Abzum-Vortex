@@ -59,7 +59,7 @@ export const findRepositoryRoot = (start = process.cwd()): string => {
  * The lane a Supabase workdir is, or undefined for any other directory. The lane table lives once,
  * in `tooling/supabase/lane.mjs`; this asks it (`lane.mjs which`) instead of keeping a copy.
  */
-export const laneOfWorkdir = (workdir: string): { lane: number; shared: boolean } | undefined => {
+export const laneOfWorkdir = (workdir: string): { lane: number } | undefined => {
   const result = spawnSync(
     process.execPath,
     [join(findRepositoryRoot(), "tooling/supabase/lane.mjs"), "which", workdir],
@@ -70,7 +70,7 @@ export const laneOfWorkdir = (workdir: string): { lane: number; shared: boolean 
     throw new Error("lane.mjs which failed: " + String(result.stderr).trim());
   // `null` is the answer for a directory that is not a lane; any failure above is an error.
   return z
-    .object({ lane: z.number().int(), shared: z.boolean() })
+    .object({ lane: z.number().int() })
     .nullable()
     .transform((answer) => answer ?? undefined)
     .parse(JSON.parse(result.stdout));
@@ -185,11 +185,9 @@ export const prepareSetupState = async (
   const parsed = z.record(z.uuid(), setupStateDocumentSchema).safeParse(document ?? {});
   const lane = process.env.VORTEX_SUPABASE_WORKDIR ?? findRepositoryRoot();
   const selected = laneOfWorkdir(lane);
-  const reset = selected?.shared
-    ? "inspect the shared lane state"
-    : selected
-      ? `node tooling/supabase/lane.mjs reset ${selected.lane} .`
-      : "reset the selected local database explicitly";
+  const reset = selected
+    ? `node tooling/supabase/lane.mjs reset ${selected.lane} .`
+    : "reset the selected local database explicitly";
   if (!parsed.success)
     throw stateFailure(
       `Development setup state for ${lane} is old or malformed. Reset with ${reset}.`,
