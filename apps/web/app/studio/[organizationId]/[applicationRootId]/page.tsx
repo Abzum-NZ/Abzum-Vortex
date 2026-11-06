@@ -186,11 +186,14 @@ export default async function StudioApplicationPage({
           [request],
           initial.draft.draftRevision,
         );
-  // A draft saved behind the one just read cannot be drawn now: reload, as for any temporary failure.
-  if (result.kind === "stale")
+  // The draft moved between the two reads (an expected race): said once, and the editor is reloaded
+  // as for any temporary failure.
+  if (result.kind === "stale") {
+    console.info("[studio] application draft moved while the editor opened: STUDIO_DRAFT_STALE");
     return (
       <StudioUnavailable subject="Application draft" result={{ kind: "temporarily_unavailable" }} />
     );
+  }
   if (result.kind !== "available")
     return <StudioUnavailable subject="Application draft" result={result} />;
   const view = result.views[0]!;
@@ -217,8 +220,7 @@ export default async function StudioApplicationPage({
     );
   }
   // The owner of a used Module is named and linked from this list; without it the key is shown.
-  if (home.kind !== "available")
-    console.error(`[studio] application list for module owners unavailable: ${home.kind}`);
+  // The home read logged an answer that is not available, once.
   const applications =
     home.kind === "available"
       ? home.roots.map((root) => ({ key: root.key, rootId: root.rootId, name: root.name }))

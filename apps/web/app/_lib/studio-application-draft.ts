@@ -486,9 +486,9 @@ export const studioCompileFailure = (error: unknown): StudioCompileFailure => {
 
 /**
  * Classification, permission and detached draft read share one verified request transaction. The
- * visible editor asks for its own view, projected from the saved revision's single compile.
+ * visible editor asks for its own view, projected from the saved revision's single compile. Only a
+ * read that names the revision it expects can answer `stale`: the saved draft is not at it.
  */
-/** Only a read that names the revision it expects can find the saved draft behind it. */
 export async function loadStudioApplicationDraft(
   candidateOrganizationId: string,
   candidateRootId: string,

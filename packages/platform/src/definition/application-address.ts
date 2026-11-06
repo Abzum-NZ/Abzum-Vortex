@@ -46,7 +46,7 @@ import {
   createHumanOrganizationRequestService,
   type BoundHumanOrganizationRequest,
 } from "../access/human-organization-request";
-import { logReadFailure } from "../access/request-failure";
+import { logClassifiedFailure } from "../access/request-failure";
 import { decideOrganizationAccessBatch } from "../access/organization-access-decision-access";
 import { readCurrentOrganizationDefaultApplicationAfterAuthorization } from "../access/organization-runtime-settings-administration";
 import {
@@ -267,6 +267,20 @@ const logApplicationRefusal = (applicationKey: string, reasonCodes: readonly str
       ? "APPLICATION_HAS_NO_PAGE"
       : `APPLICATION_ACCESS_${reasonCodes.join("+").toUpperCase()}`,
   );
+
+/**
+ * An answer the permitted-applications read gives before any request runs, logged once here (the
+ * request runner logs its own answers): a refusal at info, a fault at error.
+ */
+const answeredBeforeRequest = <const Answer extends Readonly<{ kind: string }>>(
+  answer: Answer,
+  reason: string,
+): Answer => {
+  const line = `[application-address] permitted applications read ${answer.kind}: ${reason}`;
+  if (answer.kind === "temporarily_unavailable") console.error(line);
+  else console.info(line);
+  return answer;
+};
 
 const describeApplicationAddressFailure = (error: unknown): string => {
   const parts: string[] = [];
@@ -1246,16 +1260,20 @@ async function readPermittedApplications(
     !organizationShortName.success ||
     isReservedTenantSegment(tenantShortNameCandidate)
   )
-    return { kind: "unavailable" };
+    return answeredBeforeRequest({ kind: "unavailable" }, "invalid session or address");
   if (!authorityId.success)
-    return { kind: "temporarily_unavailable", cause: "identity_authority_id_invalid" };
+    return answeredBeforeRequest(
+      { kind: "temporarily_unavailable", cause: "identity_authority_id_invalid" },
+      "identity_authority_id_invalid",
+    );
   if (Date.parse(parsedSession.data.accessTokenExpiresAt) <= Date.now())
-    return { kind: "unavailable" };
+    return answeredBeforeRequest({ kind: "unavailable" }, "access token expired");
 
   let addressedApplicationKey: string | undefined;
   if (applicationKeyCandidate !== undefined) {
     const parsedApplicationKey = namespacedKeySchema.safeParse(applicationKeyCandidate);
-    if (!parsedApplicationKey.success) return { kind: "unavailable" };
+    if (!parsedApplicationKey.success)
+      return answeredBeforeRequest({ kind: "unavailable" }, "invalid application key");
     addressedApplicationKey = parsedApplicationKey.data;
   }
 
@@ -1272,7 +1290,7 @@ async function readPermittedApplications(
       if (rows.length !== 1) throw new Error("INVALID_APPLICATION_ADDRESS_RESULT");
       return addressCandidateReadSchema.parse(rows[0]?.address);
     });
-    if (read.kind !== "available") return read;
+    if (read.kind !== "available") return answeredBeforeRequest(read, `address ${read.kind}`);
 
     const requests = createHumanOrganizationRequestService({
       identityAuthorityId: authorityId.data,
@@ -1283,7 +1301,8 @@ async function readPermittedApplications(
     // pages alone. The launcher still builds the full permitted list below.
     if (addressedApplicationKey !== undefined) {
       const candidate = read.applications.find((entry) => entry.key === addressedApplicationKey);
-      if (candidate === undefined) return { kind: "unavailable" };
+      if (candidate === undefined)
+        return answeredBeforeRequest({ kind: "unavailable" }, "application not at the address");
       const permitted = await permittedApplication(
         permissions,
         requests,
@@ -1378,7 +1397,10 @@ async function readPermittedApplications(
   } catch (error) {
     // The place the read failed is the one that logs it (the request runner logs its own answers).
     const cause = describeApplicationAddressFailure(error);
-    logReadFailure(`[application-address] permitted applications read failed: ${cause}`, error);
+    logClassifiedFailure(
+      `[application-address] permitted applications read failed: ${cause}`,
+      error,
+    );
     return { kind: "temporarily_unavailable", cause };
   }
 }

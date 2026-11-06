@@ -14,7 +14,7 @@ import {
   type RuntimeTransactionRunner,
 } from "../db/request-transaction";
 import { describeFailure } from "../catalogue/runtime-primitives";
-import { logReadFailure } from "../access/request-failure";
+import { logClassifiedFailure } from "../access/request-failure";
 
 type LauncherRow = DatabaseRow & {
   organization_id: unknown;
@@ -64,7 +64,7 @@ export const createOrganizationLauncherService = (
         });
         return organizationLauncherResolutionSchema.parse({ kind: "available", entries });
       } catch (error) {
-        logReadFailure(
+        logClassifiedFailure(
           `[identity] ORGANIZATION_LAUNCHER_READ_FAILED: ${describeFailure(error)}`,
           error,
         );

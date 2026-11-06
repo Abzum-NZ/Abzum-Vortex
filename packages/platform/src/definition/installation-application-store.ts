@@ -2,6 +2,7 @@ import "server-only";
 
 import { z } from "zod";
 import type { HumanOrganizationRequestResult } from "../access/human-organization-request";
+import { logClassifiedFailure } from "../access/request-failure";
 import { requestFailureLogged } from "../access/request-failure-mark";
 import type { IdentitySession, OrganizationSelectionCandidate } from "../access/identity-access";
 import type { JsonValue } from "../catalogue/common";
@@ -303,12 +304,18 @@ const commandFailure = (problem: InstallationProblemShape): ApplicationStoreResu
 const commandFailureOf = (error: unknown): ApplicationStoreResult => {
   if (error instanceof FirstInstallUnavailable) {
     if (!requestFailureLogged(error))
-      console.error(`[installation] application command unavailable: ${describeFailure(error)}`);
+      logClassifiedFailure(
+        `[installation] application command unavailable: ${describeFailure(error)}`,
+        error,
+      );
     return error.reason === "already_installed" ? "conflict" : { kind: "unavailable" };
   }
   if (error instanceof InstallationProblem && error.code === "first_install_latest_release_moved") {
     if (!requestFailureLogged(error))
-      console.error(`[installation] application release changed: ${describeFailure(error)}`);
+      logClassifiedFailure(
+        `[installation] application release changed: ${describeFailure(error)}`,
+        error,
+      );
     return releaseChanged();
   }
   return commandFailure(classifyInstallationFailure(error));

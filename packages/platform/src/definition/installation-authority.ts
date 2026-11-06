@@ -295,10 +295,8 @@ export const requireInstallationAuthority = async (
         cause: error,
       });
     if (
-      error instanceof Error &&
-      "code" in error &&
-      String((error as { readonly code?: unknown }).code) ===
-        "BUILDER_RECENT_AUTHENTICATION_REQUIRED"
+      error instanceof BuilderAuthorityError &&
+      error.code === "BUILDER_RECENT_AUTHENTICATION_REQUIRED"
     )
       installationProblem("recent_authentication_required", "authentication_required", undefined, {
         cause: error,
