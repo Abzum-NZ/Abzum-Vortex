@@ -20,6 +20,7 @@ const protectedReadModelKeys = [
   "activity_entry",
   "application_store_entries",
   "connection_instances",
+  "organization_security_settings",
 ] as const;
 export const protectedReadModelKeySchema = z.enum(protectedReadModelKeys);
 
@@ -54,4 +55,5 @@ export const boundedProtectedReadModelSortKeys: Partial<
     "listing_order",
   ],
   connection_instances: ["record_id", "destination_key", "state"],
+  organization_security_settings: ["record_id", "require_step_up"],
 };

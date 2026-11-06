@@ -369,7 +369,7 @@ const submittedFieldForDiagnostic = (
     typeof bindingInput.name !== "string" ||
     // The private form adapter supplies these from the whole answer, selection or page subject,
     // so a same-named registered field does not prove this value came from that field.
-    ["values", "selected_owner_group_id", "record"].includes(bindingInput.name)
+    ["values", "selected_owner_group_id", "record", "record_revision"].includes(bindingInput.name)
   )
     return undefined;
   return hasVisibleOwningFormField(installation, binding.controlId, bindingInput.name)

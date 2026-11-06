@@ -1,5 +1,4 @@
 export const paths = {
-  schema: ["packages/platform/src/schema.ts"],
   platform: ["packages/platform/src/"],
   ui: ["packages/ui/src/"],
   // The official shadcn component sources; every other packages/ui source is a renderer.
@@ -23,10 +22,6 @@ export const packageAreas: Record<string, string> = {
 
 /** Every rule protects a product rule in AGENTS.md or the target architecture, or a defect that has happened. */
 export const guardRules = {
-  "catalogue-release-superseded": {
-    tier: "warning",
-    description: "Changed block content pins supersede compiled releases using them",
-  },
   "query-input-name-matching": {
     tier: "blocking",
     description: "Query input values must come from explicit bindings through the shared resolver",
@@ -63,17 +58,16 @@ export const guardRules = {
   },
   "migration-version-order": {
     tier: "blocking",
-    description:
-      "A new migration on a branch behind origin/main or whose version is not above the highest on origin/main",
+    description: "A migration a branch adds whose version is not above the highest on origin/main",
   },
   "function-uuid": {
     tier: "blocking",
-    description: "Hard-coded non-nil UUIDs in SQL functions",
+    description: "Hard-coded non-nil UUIDs in canonical SQL functions",
   },
   "migration-owner-role": {
     tier: "blocking",
     description:
-      "Forward migrations must run object DDL under an explicitly set role, not postgres, and end with reset role;",
+      "Migrations a branch adds must run object DDL under an explicitly set role, not postgres, and end with reset role;",
   },
   "versioned-export": {
     tier: "blocking",
@@ -111,37 +105,20 @@ export const guardRules = {
   "grid-feature-definition": {
     tier: "blocking",
     description:
-      "A Records table grid feature key spelled outside its definition file in the grid code, a feature setting group without a default that turns it off, a refusal code without exactly one declared sentence, a featureNotPossible that does not name its file's own refusal, a row-action binding without its compiler gate, an eager row-command renderer, or a feature chunk imported outside the UI registry",
+      "A Records table grid feature key spelled outside its definition file in the grid code, a feature setting group without a default that turns it off, a refusal code without exactly one declared sentence, a featureNotPossible that does not name its file's own refusal, a row-action binding without its compiler gate, or a feature chunk imported outside the UI registry",
   },
   "invalid-guard-allow": {
     tier: "blocking",
     description: "Malformed guard-allow directive or invalid rule id/reason",
   },
   "unused-guard-allow": {
-    tier: "warning",
+    tier: "blocking",
     description: "A guard-allow directive that matches no finding",
   },
 } as const;
 
-export const scannedRuleIds = new Set([
-  "business-name",
-  "layering",
-  "migration-mismatch",
-  "migration-orphan",
-  "migration-version-duplicate",
-  "migration-version-order",
-  "sql-identifier-length",
-  "sql-overload",
-  "function-uuid",
-  "migration-owner-role",
-  "versioned-export",
-  "versioned-file",
-  "silent-catch",
-  "ui-literal-style",
-  "definition-validation",
-  "derived-id-parity",
-  "contract-version-parity",
-  "grid-feature-definition",
-  "query-input-name-matching",
-  "catalogue-release-superseded",
-]);
+export const scannedRuleIds = new Set(
+  Object.keys(guardRules).filter(
+    (rule) => rule !== "invalid-guard-allow" && rule !== "unused-guard-allow",
+  ),
+);

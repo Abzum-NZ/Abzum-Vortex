@@ -49,7 +49,7 @@ export const classifyFlowSegments = (
       kind: "server", id, section: "finally", guard: [], tasks: [], firstTaskPath: [],
       inputs, outputs: {}, outputMembers: {}, carriedInputs: {}, carriedOutputs: {},
       carriedRetainKeys: [], finalOutputExpressions: completionExpressions, finalOutputTypes,
-      changes: false, accessChange: false, multiTransaction: false, preScopeLock: null,
+      changes: false, accessChange: false, readsSecondFactor: false, multiTransaction: false, preScopeLock: null,
       setBasedChanges: [], endsWithBackendRun: false,
       fingerprint: fingerprintCanonicalValue({ section: "finally", tasks: [], inputs, finalOutputExpressions: completionExpressions, finalOutputTypes }),
       labels: [],

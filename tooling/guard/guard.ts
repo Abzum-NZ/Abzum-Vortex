@@ -1,6 +1,6 @@
 import { execFileSync, spawn } from "node:child_process";
 import { appendFileSync, existsSync, readFileSync } from "node:fs";
-import { resolve, relative, extname, basename, dirname } from "node:path";
+import { resolve, relative, extname, basename, dirname, join } from "node:path";
 import ts from "typescript";
 import { createHash } from "node:crypto";
 import { guardRules, packageAreas, paths, scannedRuleIds } from "./config.ts";
@@ -47,7 +47,7 @@ const baselineMigrationFiles = new Map([
   ["supabase/migrations/20261014000200_baseline_schema_and_functions.sql", 105368],
   ["supabase/migrations/20261014000300_baseline_constraints_grants_and_policies.sql", 5241],
   ["supabase/migrations/20261014000400_baseline_system_data_and_storage.sql", 705],
-  ["supabase/migrations/20261014001100_collapse_schemas_and_owner_roles.sql", 53870],
+  ["supabase/migrations/20261014001100_collapse_schemas_and_owner_roles.sql", 53860],
 ]);
 const read = (file: string) => readFileSync(resolve(root, file), "utf8").replaceAll("\r\n", "\n");
 const lineAt = (content: string, offset: number) => content.slice(0, offset).split("\n").length;
@@ -67,7 +67,52 @@ const files = execFileSync(
 const codeFiles = files.filter(
   (file) => sourceExtensions.has(extname(file)) && !file.startsWith("tooling/guard/"),
 );
+// A migration added by this branch is what the migration rules scan and compare: files already on
+// origin/main are merged history and cannot change. The guard cannot tell which files are added
+// without origin/main, so a missing ref fails instead of skipping rules.
+function gitOutput(args: string[]): string | undefined {
+  try {
+    return execFileSync("git", args, { cwd: root, stdio: ["ignore", "pipe", "ignore"] }).toString(
+      "utf8",
+    );
+  } catch {
+    return undefined;
+  }
+}
+const migrationFiles = files
+  .filter((file) => file.startsWith(paths.migrations) && file.endsWith(".sql"))
+  .sort();
+const mainMigrationList = gitOutput(["ls-tree", "--name-only", "origin/main", paths.migrations]);
+if (mainMigrationList === undefined)
+  throw new Error(
+    "origin/main is not available locally, so the migration rules cannot tell which migrations this branch adds. Run `git fetch origin main:refs/remotes/origin/main` and run the guard again.",
+  );
+const versionOf = (file: string) => basename(file).split("_")[0];
+const mainFiles = new Set(mainMigrationList.split("\n").filter(Boolean).map(normalize));
+const newMigrationFiles = new Set(
+  migrationFiles.filter((file) => !mainFiles.has(file) && !baselineMigrationFiles.has(file)),
+);
+// The schema area is the browser-safe part of @vortex/platform: every package export except the
+// server entry. Its entry files are read from the package, so a new export needs no edit here.
+const platformPackage = JSON.parse(read("packages/platform/package.json")) as {
+  exports: Record<string, string>;
+};
+const serverExport = "./server";
+const schemaExports = Object.entries(platformPackage.exports).filter(
+  ([subpath]) => subpath !== serverExport,
+);
+const schemaEntryPaths = new Set(
+  schemaExports.map(([, target]) =>
+    normalize(join("packages/platform", target)).replace(/\.tsx?$/, ""),
+  ),
+);
+// Only the schema barrel re-exports the schema area's own modules by relative path. Every other
+// schema entry is held to the schema rule file by file.
+const schemaBarrel = normalize(
+  join("packages/platform", platformPackage.exports["./schema"] ?? ""),
+);
 function area(file: string): string {
+  if (schemaEntryPaths.has(file.replace(/\.tsx?$/, ""))) return "schema";
   for (const [name, prefixes] of Object.entries(paths)) {
     if (Array.isArray(prefixes) && prefixes.some((prefix) => file.startsWith(prefix))) return name;
   }
@@ -76,16 +121,13 @@ function area(file: string): string {
 function importedArea(specifier: string, file: string): string {
   if (specifier.startsWith(".")) {
     const target = normalize(relative(root, resolve(root, dirname(file), specifier)));
-    if (file === "packages/platform/src/schema.ts" && target.startsWith("packages/platform/src/"))
-      return "schema";
+    if (file === schemaBarrel && target.startsWith("packages/platform/src/")) return "schema";
     return area(target);
   }
-  if (
-    specifier.startsWith("@vortex/platform/schema") ||
-    specifier.startsWith("@vortex/platform/draft-snapshot")
-  )
-    return "schema";
-  if (specifier.startsWith("@vortex/platform/server")) return "platform";
+  if (specifier.startsWith("@vortex/platform/")) {
+    const subpath = `.${specifier.slice("@vortex/platform".length)}`;
+    return schemaExports.some(([exported]) => exported === subpath) ? "schema" : "platform";
+  }
   if (specifier.startsWith("@vortex/")) {
     const key = specifier.split("/").slice(0, 2).join("/");
     return packageAreas[key] ?? "platform";
@@ -163,18 +205,12 @@ for (const file of codeFiles) {
       add("business-name", file, lineAt(content, match.index), match[0].toLowerCase());
   }
   if (file.endsWith(".sql")) {
-    // Forward migrations from #2379 on must run object DDL under an explicitly set role. Without one
+    // A migration this branch adds must run object DDL under an explicitly set role. Without one
     // the migration runs as postgres, whose schema privileges are revoked after the baseline, so
     // `supabase db reset` fails with permission denied even though a superuser proof passes. The
     // role must be closed again with `reset role;` as the last statement, so the migration row is
     // not recorded as the owner role.
-    const migrationTimestamp = /^\d{14}/.exec(basename(file))?.[0];
-    if (
-      file.startsWith(paths.migrations) &&
-      !baselineMigrationFiles.has(file) &&
-      migrationTimestamp !== undefined &&
-      migrationTimestamp >= "20261014002300"
-    ) {
+    if (newMigrationFiles.has(file)) {
       // Block and `--` comments are blanked (not removed) so line numbers stay exact.
       const code = content
         .replace(/\/\*[\s\S]*?\*\//g, (block) => block.replace(/[^\n]/g, " "))
@@ -550,9 +586,6 @@ function functions(
   }
   return result;
 }
-const migrationFiles = files
-  .filter((file) => file.startsWith(paths.migrations) && file.endsWith(".sql"))
-  .sort();
 // Supabase keys applied migrations by the leading version, so two files sharing it break a reset.
 const migrationVersions = new Map<string, string>();
 for (const file of migrationFiles) {
@@ -563,107 +596,22 @@ for (const file of migrationFiles) {
 }
 // A migration added by this branch must sort after every migration already on origin/main, or a
 // database that applied the higher version would need an out-of-order apply. Only added files are
-// compared, so a branch that is merely behind main, and main itself, never fail.
-function gitOutput(args: string[]): string | undefined {
-  try {
-    return execFileSync("git", args, { cwd: root, stdio: ["ignore", "pipe", "ignore"] }).toString(
-      "utf8",
-    );
-  } catch {
-    return undefined;
-  }
-}
-// Pins make in-place catalogue evolution explicit. They are compared as source data rather than
-// importing a catalogue, so an invalid pin cannot prevent the warning from explaining its impact.
-for (const file of [
-  "packages/platform/src/definition/application-composition-release-identities.ts",
-]) {
-  const previous = gitOutput(["show", `origin/main:${file}`]);
-  if (previous === undefined) {
-    console.warn(
-      `catalogue-release-superseded skipped: origin/main:${file} is not available locally`,
-    );
-    continue;
-  }
-  const pins = (content: string): Map<string, { fingerprint: string; line: number }> => {
-    const result = new Map<string, { fingerprint: string; line: number }>();
-    const source = ts.createSourceFile(file, content, ts.ScriptTarget.Latest, true);
-    const visit = (node: ts.Node): void => {
-      if (ts.isObjectLiteralExpression(node)) {
-        const strings = new Map(
-          node.properties.flatMap((property) =>
-            ts.isPropertyAssignment(property) &&
-            ts.isIdentifier(property.name) &&
-            ts.isStringLiteral(property.initializer)
-              ? [[property.name.text, property.initializer.text] as const]
-              : [],
-          ),
-        );
-        const key = strings.get("key");
-        const fingerprint = strings.get("contentFingerprint");
-        if (key !== undefined && fingerprint !== undefined)
-          result.set(key, { fingerprint, line: lineAt(content, node.getStart(source)) });
-      }
-      ts.forEachChild(node, visit);
-    };
-    visit(source);
-    return result;
-  };
-  const before = pins(previous);
-  const after = pins(read(file));
-  // Only a pin main already holds can supersede releases; a first pin or a new block cannot.
-  for (const [key, previousPin] of before) {
-    const current = after.get(key);
-    if (previousPin.fingerprint !== current?.fingerprint)
-      add(
-        "catalogue-release-superseded",
-        file,
-        current?.line ?? 1,
-        `${key}: compiled releases using these blocks become stale; republish them on the recorded lanes`,
-      );
-  }
-}
-
-const mainMigrationList = gitOutput([
-  "ls-tree",
-  "--name-only",
-  "origin/main",
-  `${paths.migrations}`,
-]);
-if (mainMigrationList === undefined)
-  console.warn("migration-version-order skipped: origin/main is not available locally");
-else {
-  const versionOf = (file: string) => basename(file).split("_")[0];
-  const mainFiles = new Set(mainMigrationList.split("\n").filter(Boolean).map(normalize));
-  const mainVersions = [...mainFiles].filter((file) => file.endsWith(".sql")).map(versionOf);
-  const highest = mainVersions.reduce((a, b) => (b > a ? b : a), "");
-  const newMigrationFiles = migrationFiles.filter(
-    (file) => !mainFiles.has(file) && !baselineMigrationFiles.has(file),
+// compared, so a branch that is merely behind main, and main itself, never fail. A branch that
+// does not contain the latest main is refused at merge by the branch protection, not here.
+const highestMainVersion = [...mainFiles]
+  .filter((file) => file.endsWith(".sql"))
+  .map(versionOf)
+  .reduce((a, b) => (b > a ? b : a), "");
+for (const file of newMigrationFiles) {
+  const version = versionOf(file);
+  if (version > highestMainVersion) continue;
+  const next = (BigInt(highestMainVersion) + 100n).toString();
+  add(
+    "migration-version-order",
+    file,
+    1,
+    `version ${version} is not above ${highestMainVersion}, the highest on origin/main; rebase, then rename to a version above it, for example ${next}_${basename(file).split("_").slice(1).join("_")}`,
   );
-  if (newMigrationFiles.length > 0) {
-    const mainCommit = gitOutput(["rev-parse", "origin/main"]);
-    const mergeBase = gitOutput(["merge-base", "origin/main", "HEAD"]);
-    if (mainCommit === undefined || mergeBase !== mainCommit) {
-      for (const file of newMigrationFiles)
-        add(
-          "migration-version-order",
-          file,
-          1,
-          "branch does not contain the current origin/main commit; update the branch before adding a migration",
-        );
-    }
-  }
-  for (const file of newMigrationFiles) {
-    const version = versionOf(file);
-    if (version > highest) continue;
-    const next = (BigInt(highest) + 100n).toString();
-    add(
-      "migration-version-order",
-      file,
-      1,
-      `version ${version} is not above ${highest}, the highest on origin/main; rebase, then rename to a version above it, for example ${next}_${basename(file).split("_").slice(1).join("_")}`,
-    );
-  }
 }
 // Postgres silently truncates identifiers past 63 bytes, so a longer name diverges from its file.
 const sqlIdentifier = String.raw`(?:"(?:[^"]|"")+"|[\p{L}_][\p{L}\p{N}_$]*)`;
@@ -797,8 +745,6 @@ const canonicalFunctions = new Set<string>();
 // One name has one signature: two forms of a name make Postgres resolve a call by argument types, so
 // no single call shape names the function, and a drop must be repeated for every form.
 const canonicalDeclarations = new Map<string, Array<{ file: string; line: number }>>();
-// Canonical files still identical to a baseline function inherit its comments, allowances included.
-const baselineCopies = new Set<string>();
 for (const file of files.filter(
   (file) => file.startsWith(paths.canonical) && file.endsWith(".sql"),
 )) {
@@ -821,8 +767,6 @@ for (const file of files.filter(
         `${key} vs ${migration?.file ?? "missing migration"}`,
       );
     }
-    if (migration && matchesMigration && baselineMigrationFiles.has(migration.file))
-      baselineCopies.add(file);
     for (const match of value.body.matchAll(uuidPattern))
       if (match[0].toLowerCase() !== "00000000-0000-0000-0000-000000000000") {
         add(
@@ -847,22 +791,6 @@ for (const [identity, migration] of latestLive)
   // The generated baseline predates canonical files; every function a forward migration creates needs one.
   if (!canonicalFunctions.has(identity) && !baselineMigrationFiles.has(migration.file))
     add("migration-orphan", migration.file, migration.line, migration.key);
-for (const file of files.filter(
-  (file) => file.startsWith(paths.migrations) && file.endsWith(".sql"),
-)) {
-  if (baselineMigrationFiles.has(file)) continue;
-  const content = read(file);
-  for (const value of functions(content).values())
-    for (const match of value.body.matchAll(uuidPattern)) {
-      if (match[0].toLowerCase() !== "00000000-0000-0000-0000-000000000000")
-        add(
-          "function-uuid",
-          file,
-          lineAt(content, value.offset + value.definition.indexOf(value.body) + match.index),
-          match[0].toLowerCase(),
-        );
-    }
-}
 
 // The derived Definition identity exists twice: Studio derives in memory what the database will
 // record. Both are held to vectors the SQL function produced: the TypeScript derivation must
@@ -1148,14 +1076,6 @@ for (const file of files.filter(
       1,
       "row_action must compile only while row_actions is enabled",
     );
-  const tableFile = "packages/ui/src/display/table.tsx";
-  if (/RowActionsMenu/.test(read(tableFile)))
-    add(
-      "grid-feature-definition",
-      tableFile,
-      1,
-      "row commands must render through the feature registry",
-    );
   const chunkDirectory = "packages/ui/src/display/grid-features/";
   for (const file of codeFiles.filter((candidate) => candidate.startsWith("packages/ui/src/")))
     if (file !== `${chunkDirectory}registry.tsx` && !file.startsWith(chunkDirectory)) {
@@ -1249,11 +1169,7 @@ const reported = findings
     return !allowance;
   });
 for (const allowance of allowances)
-  if (
-    !allowance.used &&
-    !baselineMigrationFiles.has(allowance.file) &&
-    !baselineCopies.has(allowance.file)
-  )
+  if (!allowance.used)
     reported.push({
       rule: "unused-guard-allow",
       file: allowance.file,

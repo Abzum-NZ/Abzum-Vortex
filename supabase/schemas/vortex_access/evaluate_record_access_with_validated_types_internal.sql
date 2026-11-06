@@ -402,7 +402,10 @@ begin
   end if;
 
   auth_deadline := vortex_access.recent_authentication_deadline_internal(
-    ctx, checked_at, p_declaration -> 'recentAuthentication'
+    ctx, checked_at,
+    vortex_access.effective_authentication_requirement_internal(
+      (ctx ->> 'organizationId')::uuid, p_declaration -> 'recentAuthentication'
+    )
   );
 
   select coalesce(

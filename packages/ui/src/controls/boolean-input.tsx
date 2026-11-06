@@ -3,6 +3,7 @@
 import type { ReactElement } from "react";
 import { Checkbox } from "../components/checkbox";
 import { Field, FieldLabel } from "../components/field";
+import { Reasoned } from "../components/reasoned";
 import { Switch } from "../components/switch";
 import { setFieldChange } from "../flow-runtime/flow-cycle";
 import type { BooleanInputPayload } from "./projected-data";
@@ -13,6 +14,7 @@ import {
 } from "./control-context";
 import {
   describedBy,
+  FieldHelpTooltip,
   FieldLabelText,
   FieldMessages,
   inactiveNote,
@@ -27,7 +29,9 @@ export type BooleanInputProps = ControlRenderProps<BooleanInputPayload>;
 
 /**
  * Checkbox or switch emitting only its declared `field_changed` event with a typed boolean.
- * Space toggles either variant once, and Enter toggles the switch.
+ * Space toggles either variant once, and Enter toggles the switch. Its help is a tooltip on an
+ * information icon beside the label; a control that is unavailable with a reason (projected
+ * data) stays focusable and says the reason in a tooltip (`Reasoned`).
  */
 export function BooleanInput(props: BooleanInputProps): ReactElement {
   const context = resolveControlContext<BooleanInputPayload>(props, [
@@ -46,7 +50,7 @@ export function BooleanInput(props: BooleanInputProps): ReactElement {
   const disabled =
     context.inactive || settings.boolean("disabled") || draftFeedback?.disabled === true;
   const error = context.values?.error;
-  const note = inactiveNote(context);
+  const reason = disabled ? inactiveNote(context) : undefined;
 
   const [checked, setChecked] = useSeededState(context.values?.value ?? false);
   useFormField(fieldKey, props.placementId, checked, undefined, {
@@ -77,7 +81,10 @@ export function BooleanInput(props: BooleanInputProps): ReactElement {
     });
   };
 
-  const described = describedBy(ids, help, error, note, draftFeedback);
+  const described = describedBy(ids, help, error, undefined, draftFeedback);
+  // A control with a reason is aria-disabled by `Reasoned` (a disabled control gets no hover or
+  // focus, so it could not show why); one without a reason is disabled outright.
+  const hardDisabled = disabled && reason === undefined;
   return (
     <Field
       orientation="horizontal"
@@ -90,37 +97,40 @@ export function BooleanInput(props: BooleanInputProps): ReactElement {
       data-vortex-field-key={fieldKey}
       data-vortex-variant={variant}
     >
-      {variant === "switch" ? (
-        <Switch
-          id={ids.control}
-          checked={checked}
-          onCheckedChange={change}
-          disabled={disabled}
-          aria-labelledby={ids.label}
-          aria-invalid={error !== undefined}
-          {...described}
-        />
-      ) : (
-        <Checkbox
-          id={ids.control}
-          name={fieldKey}
-          checked={checked}
-          onCheckedChange={change}
-          disabled={disabled}
-          required={required}
-          aria-labelledby={ids.label}
-          aria-invalid={error !== undefined}
-          {...described}
-        />
-      )}
+      <Reasoned reason={reason}>
+        {variant === "switch" ? (
+          <Switch
+            id={ids.control}
+            checked={checked}
+            onCheckedChange={change}
+            disabled={hardDisabled}
+            aria-labelledby={ids.label}
+            aria-invalid={error !== undefined}
+            {...described}
+          />
+        ) : (
+          <Checkbox
+            id={ids.control}
+            name={fieldKey}
+            checked={checked}
+            onCheckedChange={change}
+            disabled={hardDisabled}
+            required={required}
+            aria-labelledby={ids.label}
+            aria-invalid={error !== undefined}
+            {...described}
+          />
+        )}
+      </Reasoned>
       <FieldLabel id={ids.label} htmlFor={ids.control}>
         <FieldLabelText label={label} required={required} />
       </FieldLabel>
+      {help === undefined ? null : <FieldHelpTooltip id={ids.help} help={help} label={label} />}
       <FieldMessages
         ids={ids}
-        help={help}
+        help={undefined}
         error={error}
-        note={note}
+        note={undefined}
         draftFeedback={draftFeedback}
       />
     </Field>

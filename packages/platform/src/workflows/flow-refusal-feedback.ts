@@ -13,6 +13,7 @@ export const flowRefusalFeedbackCodeSchema = z.enum([
   "role_acceptance_required",
   "recent_authentication_required",
   "multi_factor_required",
+  "development_instance_required",
   "role_settings_change_required",
   "role_key_in_use",
   "application_storage_incompatible",
@@ -55,6 +56,8 @@ export const flowRefusalFeedbackSentences: Readonly<Record<FlowRefusalFeedbackCo
     "Your verification ran out before this finished, and nothing was changed. Start it again to verify and carry on.",
   recent_authentication_required:
     "Your sign-in is too old for this change, and nothing was changed. Start it again to sign in and carry on.",
+  development_instance_required:
+    "Two-step verification can be turned off only on a development instance. Nothing was changed.",
   role_acceptance_required: "This role revision needs accepting before it can be assigned.",
   role_key_in_use: "A role with this key already exists.",
   role_settings_change_required:

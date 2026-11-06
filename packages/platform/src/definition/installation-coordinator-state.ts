@@ -15,7 +15,7 @@ import {
   type ModuleRootId,
   type OrganizationId,
 } from "../catalogue/identifiers";
-import { sameId } from "../catalogue/runtime-primitives";
+import { databaseCode, sameId } from "../catalogue/runtime-primitives";
 import {
   moduleInstallationBindingSchema,
   type ApplicationInstallationLifecycleResult,
@@ -109,6 +109,11 @@ export const toCoordinatorError = (
   error: unknown,
 ): DefinitionError<ApplicationInstallationCoordinatorErrorCode> => {
   if (isCoordinatorError(error)) return error;
+  // The database states a stale sign-in (V3150) or a missing two-step proof (V3152) itself.
+  const stated = databaseCode(error);
+  if (stated === "V3150")
+    return fail("APPLICATION_INSTALLATION_RECENT_AUTHENTICATION_REQUIRED", error);
+  if (stated === "V3152") return fail("APPLICATION_INSTALLATION_MULTI_FACTOR_REQUIRED", error);
   // A stale sign-in keeps its meaning, so the person is told to sign in again.
   if (error instanceof InstallationProblem && error.problem.kind === "authentication_required")
     return fail("APPLICATION_INSTALLATION_RECENT_AUTHENTICATION_REQUIRED", error);

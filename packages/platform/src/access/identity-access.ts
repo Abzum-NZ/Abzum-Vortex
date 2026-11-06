@@ -519,6 +519,7 @@ const humanSessionContextSchema = z
     accessTokenIssuedAt: timestampSchema.optional(),
     primaryAuthenticatedAt: timestampSchema.optional(),
     multiFactorAuthenticatedAt: timestampSchema.optional(),
+    hasSecondFactor: z.boolean().optional(),
     delegatedContext: delegatedContextSchema.optional(),
     supportContext: supportContextSchema.optional(),
   })

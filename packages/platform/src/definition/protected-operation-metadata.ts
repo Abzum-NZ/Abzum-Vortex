@@ -6,6 +6,11 @@ type ProtectedOperationMetadata = Readonly<{
   transaction: "read" | "change" | "access_change";
   workflow: "single" | "multi_transaction";
   preScopeLock?: "organization_account";
+  /**
+   * The operation relies on the request context stating whether the person has a verified second
+   * factor, so a flow segment that calls it reads that fact when it is admitted. Others never do.
+   */
+  readsSecondFactor?: true;
   /** The operation sends or calls out beyond the database, so a test run does not run it. */
   externalEffect?: true;
 }>;
@@ -202,6 +207,12 @@ export const protectedOperationMetadata: Record<
     authorityKind: "permission",
     transaction: "change",
     workflow: "multi_transaction",
+  },
+  change_organization_step_up_setting: {
+    authorityKind: "permission",
+    transaction: "access_change",
+    workflow: "single",
+    readsSecondFactor: true,
   },
   prepare_role_assignment: { authorityKind: "permission", transaction: "read", workflow: "single" },
 };

@@ -106,7 +106,6 @@ as $function$
     select declaration.*
     from vortex_access.platform_permission_declarations as declaration
     where declaration.owner_kind = 'platform'
-      -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
       and declaration.owner_id = 'cabe121e-0baf-4084-9471-cce915d460a8'::uuid
   ),
   valid as (
@@ -160,7 +159,6 @@ as $function$
     from vortex_access.permission_catalogue_entries as entry
     where entry.organization_id = p_organization_id
       and entry.registration_kind = 'platform'
-      -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
       and entry.registration_owner_id = 'cabe121e-0baf-4084-9471-cce915d460a8'::uuid
       and entry.registration_revision = 6
   )
@@ -180,7 +178,6 @@ as $function$
         and history.revision = registration.revision
       where registration.organization_id = p_organization_id
         and registration.registration_kind = 'platform'
-        -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
         and registration.registration_owner_id = 'cabe121e-0baf-4084-9471-cce915d460a8'::uuid
         and registration.state = 'active'
         and registration.revision = 6
@@ -209,7 +206,6 @@ as $function$
       from vortex_access.permission_registration_revisions as history
       where history.organization_id = p_organization_id
         and history.registration_kind = 'platform'
-        -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
         and history.registration_owner_id = 'cabe121e-0baf-4084-9471-cce915d460a8'::uuid
         and history.revision <> 6
     )
@@ -225,7 +221,6 @@ as $function$
       from entries as entry
       except all
       select null::uuid, 'platform'::text,
-        -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
         'cabe121e-0baf-4084-9471-cce915d460a8'::uuid,
         expected.permission_id, expected.permission_key, expected.label,
         expected.description, null::uuid, null::jsonb, null::jsonb,
@@ -237,7 +232,6 @@ as $function$
     and (select pg_catalog.count(*) from vortex_access.permission_continuities as continuity
       where continuity.organization_id = p_organization_id
         and continuity.registration_kind = 'platform'
-        -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
         and continuity.registration_owner_id = 'cabe121e-0baf-4084-9471-cce915d460a8'::uuid) = 23
     and not exists (
       select 1 from expected
@@ -246,7 +240,6 @@ as $function$
         where continuity.organization_id = p_organization_id
           and continuity.application_root_id is null
           and continuity.registration_kind = 'platform'
-          -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
           and continuity.registration_owner_id = 'cabe121e-0baf-4084-9471-cce915d460a8'::uuid
           and continuity.owner_kind = 'platform'
           and continuity.owner_id = continuity.registration_owner_id
@@ -293,7 +286,6 @@ declare
   current_registration vortex_access.permission_registrations%rowtype;
   resulting_version bigint;
   expected_count bigint;
-  -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
   platform_owner_id constant uuid := 'cabe121e-0baf-4084-9471-cce915d460a8';
   catalogue_fingerprint constant text :=
     'sha256:60d2c42cab03723fda56198083a70e8703792587546379372334d99609b15538';

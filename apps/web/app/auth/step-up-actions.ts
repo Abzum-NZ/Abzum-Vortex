@@ -2,15 +2,19 @@
 
 import {
   builderRecentAuthentication,
+  readCurrentOrganizationStepUpSettingAfterAuthorization,
   roleAcceptanceAuthentication,
   signInWithPassword,
 } from "@vortex/platform/server";
+import { humanOrganizationRequests } from "../_lib/server-composition";
 import { mapWebError } from "../_lib/web-error-mapper";
 import { getIdentityJourneyConfiguration } from "./_lib/authority-configuration";
 import {
   bootstrapIdentitySession,
   enrollMfaFactor,
+  readHasVerifiedSecondFactor,
   readMfaFactor,
+  resolveIdentitySession,
   resolveVerifiedIdentity,
   verifyMfaFactor,
 } from "./_lib/session-server";
@@ -40,20 +44,74 @@ export type StepUpState =
       signedInRecently: boolean;
       /** The person gave an authenticator code within the window a role change asks for. */
       twoStepRecently: boolean;
+      /**
+       * Whether the organisation asks for the authenticator code at all. False only when the
+       * database says so; a setting that cannot be read leaves it true, so the code is asked for.
+       */
+      organizationRequiresTwoStep: boolean;
+      /** Whether the person has any verified second factor (unknown counts as yes). */
+      hasSecondFactor: boolean;
       /** The authenticator they have, or that they have none yet. */
       authenticator:
         Readonly<{ kind: "challenge"; factorId: string }> | Readonly<{ kind: "setup" }>;
     }>
   | Readonly<{ kind: "unavailable" }>;
 
+export type StepUpAddress = Readonly<{
+  tenantShortName: string;
+  organizationShortName: string;
+  applicationKey: string;
+}>;
+
+const validAddressPart = (value: unknown): value is string =>
+  typeof value === "string" && value.length > 0 && value.length <= 200;
+
+/**
+ * Whether the organisation at this address asks for the authenticator code. True unless the
+ * database answers that it does not: a refused or failed read (logged once by the request runner)
+ * keeps the code asked for. The database decides again where the protected step runs.
+ */
+const readOrganizationRequiresTwoStep = async (
+  address: StepUpAddress | undefined,
+): Promise<boolean> => {
+  if (
+    address === undefined ||
+    typeof address !== "object" ||
+    address === null ||
+    !validAddressPart(address.tenantShortName) ||
+    !validAddressPart(address.organizationShortName) ||
+    !validAddressPart(address.applicationKey)
+  )
+    return true;
+  const resolved = await resolveIdentitySession();
+  if (resolved.kind !== "active") return true;
+  const result = await humanOrganizationRequests().runAddressed(
+    resolved.session,
+    {
+      tenantShortName: address.tenantShortName,
+      organizationShortName: address.organizationShortName,
+      applicationKey: address.applicationKey,
+    },
+    (bound) => readCurrentOrganizationStepUpSettingAfterAuthorization(bound.transaction),
+  );
+  return result.kind !== "available" || result.value.requireStepUp;
+};
+
 /** What the person has already proven in this session, and what they could still give. */
-export async function readStepUpState(): Promise<StepUpState> {
+export async function readStepUpState(address: StepUpAddress | undefined): Promise<StepUpState> {
   const identity = await resolveVerifiedIdentity();
   if (identity === undefined) return { kind: "unavailable" };
   const factor = await readMfaFactor();
   if (factor.kind === "unavailable") return { kind: "unavailable" };
+  const organizationRequiresTwoStep = await readOrganizationRequiresTwoStep(address);
+  // Any verified factor counts, as the database's fact does; an answer that cannot be read counts
+  // as enrolled, so the code is asked for.
+  const hasSecondFactor =
+    factor.kind === "challenge" || ((await readHasVerifiedSecondFactor()) ?? true);
   return {
     kind: "ready",
+    organizationRequiresTwoStep,
+    hasSecondFactor,
     signedInRecently: recentWithin(
       identity.primaryAuthenticatedAt,
       builderRecentAuthentication.maximumAgeSeconds,

@@ -33,7 +33,10 @@ import { platformPermissionSource } from "../../../_lib/platform-permission-sour
 import { pageAddressSchema } from "../../../_lib/page-address-schema";
 import { isOwnSiteJsonRequest, readJsonBody } from "../../_lib/own-site-request";
 import { getIdentityAuthorityConfiguration } from "../../../auth/_lib/authority-configuration";
-import { resolveIdentitySession } from "../../../auth/_lib/session-server";
+import {
+  readHasVerifiedSecondFactor,
+  resolveIdentitySession,
+} from "../../../auth/_lib/session-server";
 import { privateJsonResponse as privateResponse } from "../../../_lib/private-response";
 import { mapWebError } from "../../../_lib/web-error-mapper";
 import {
@@ -206,6 +209,7 @@ export const createFlowInvocationHandler =
               applicationStore: applicationStoreService(),
               backend: backendAdapter(),
               channel,
+              readSecondFactor: readHasVerifiedSecondFactor,
               telemetry: appTelemetry,
               releaseCatalogue: installedReleaseCatalogue,
               continuationKey: getQueryContinuationKey(),
