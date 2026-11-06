@@ -21,11 +21,15 @@ import {
   type WebPrivateInvalidationSourceResult,
 } from "./private-invalidation-client";
 
-/** The browser has no request runner: a failed step is one error line in the console. */
-const logFailure = (op: string, code: string, error: unknown): void =>
-  console.error(
-    `[mounted-record-pin-watch] ${op} failed: code=${code} cause=${describeFailure(error)}`,
-  );
+/**
+ * The browser has no request runner: a failed step is one console line. A request the page
+ * abandoned (an `AbortError`) is information, as on the server; any other failure is an error.
+ */
+const logFailure = (op: string, code: string, error: unknown): void => {
+  const line = `[mounted-record-pin-watch] ${op} failed: code=${code} cause=${describeFailure(error)}`;
+  if (error instanceof Error && error.name === "AbortError") console.info(line);
+  else console.error(line);
+};
 
 const membershipSchema = mountedRecordPinAssociationSchema
   .extend({
