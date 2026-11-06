@@ -72,7 +72,10 @@ export type FieldFormState = Readonly<{
   publicDisplay: SourceField["public_display"];
   settings: StudioSettingValues;
   defaultValue: StudioSettingValues;
-  /** A calculation's or a total's settings, as its formula or total editor holds them; empty for other types. */
+  /**
+   * A calculation's or a total's settings, as its formula or total editor holds them; empty for
+   * other types.
+   */
   computed: Plain;
   /** How many records may link to one linked record; read only for a link. */
   cardinality: LinkCardinality;
@@ -159,7 +162,7 @@ function PublishedOptionColours({
   );
 }
 
-/** One yes or no setting of the field: a checkbox and its label, with the reason when it is fixed. */
+/** One yes or no setting of the field: a switch and its label, with the reason when it is fixed. */
 function FieldFlag({
   name,
   text,
@@ -288,7 +291,7 @@ export function FieldGeneralSection({
         name="required"
         text="Required"
         checked={required}
-        disabled={disabled || requiredReason !== undefined}
+        disabled={disabled}
         reason={requiredReason}
         onChange={onRequired}
       />
@@ -318,7 +321,10 @@ export function FieldFormatSection({
   type: ModuleFieldType;
   hint: string | undefined;
   candidates: ReturnType<typeof linkDependencyCandidates> | undefined;
-  /** What "Open …" goes to when the options depend on another link; absent when it cannot be opened. */
+  /**
+   * What "Open …" goes to when the options depend on another link; absent when it cannot be
+   * opened.
+   */
   linkTarget: Readonly<{ label: string; open: () => void }> | undefined;
   calculation: Readonly<{
     key: string;
