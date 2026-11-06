@@ -217,20 +217,6 @@ const highestImpact = (reasons: readonly VersionImpactReason[]): VersionImpact =
 };
 
 /**
- * The reason a release answers when the platform republished a connection type or service
- * operation it pins. The Application and each inline Module use this one reason.
- */
-const platformPinsChangedReason: VersionImpactReason = {
-  impact: "minor",
-  code: "dependency_requirement_changed",
-  location: { componentKind: "dependency", property: "version_requirement" },
-};
-
-/** Whether the platform pins of a stored release differ from the ones a compile resolves now. */
-const platformPinsChanged = (stored: readonly unknown[], resolved: readonly unknown[]): boolean =>
-  canonicalJson(platformPins(stored)) !== canonicalJson(platformPins(resolved));
-
-/**
  * Compiles every inline Module once, in dependency order, against the current release of each
  * Module it depends on, and appends a release at `version` for each one that changed; that same
  * output is compared with the latest release and judged as the release. A sibling released
@@ -304,25 +290,15 @@ const releaseInlineModules = async (
     const repinned =
       latest !== null &&
       (pins.length !== latestPins.size || pins.some((pin) => !latestPins.has(pin)));
-    const dependencyManifest = manifestFor(dependencies, output, resolution);
-    // A connection type or service operation the platform republished is a change of this Module
-    // even when its content is unchanged: it is released again against it, or it stays superseded.
-    const platformChanged =
-      latest !== null && platformPinsChanged(latest.dependencyManifest ?? [], dependencyManifest);
-    const released = impact.outcome !== "no_change" || repinned || platformChanged;
-    const reasons =
-      impact.outcome !== "no_change"
-        ? impact.reasons
-        : platformChanged
-          ? [platformPinsChangedReason]
-          : [];
+    const released = impact.outcome !== "no_change" || repinned;
+    const reasons = impact.outcome === "no_change" ? [] : impact.reasons;
     if (released) assertReleasable(compiled, module.releaseHistory, catalogue.permissions);
     const append: DefinitionReleaseAppend = {
       draft: module.draft,
       compilationOutput: output,
       assignedVersion: version,
       reasons,
-      dependencyManifest,
+      dependencyManifest: manifestFor(dependencies, output, resolution),
       resolutionSnapshot: resolution,
       validationContractVersion: definitionContractVersion,
       releaseNote,
@@ -422,7 +398,13 @@ const publicationReasons = (
     canonicalJson(candidate.latestPlatformPins) ===
     canonicalJson(platformPins(application.manifest))
       ? []
-      : [platformPinsChangedReason];
+      : [
+          {
+            impact: "minor",
+            code: "dependency_requirement_changed",
+            location: { componentKind: "dependency", property: "version_requirement" },
+          },
+        ];
   return [
     ...(own.outcome === "release_required" ? own.reasons : []),
     ...modules.flatMap((module) => module.reasons),
@@ -514,10 +496,9 @@ export const planApplicationPublication = async (
 /**
  * The inline Modules whose current release already is what their publication would leave current.
  * A Module qualifies when its source fingerprint equals its release's, every sibling it depends on
- * qualifies, and its release pins exactly the releases its dependencies resolve to now and nothing
- * else. Its publication would compile it, find no change and no new pin, and not release it, so a
- * draft compile takes the release as it is instead of compiling it again. A Module that also pins
- * platform content (a connection type, a service operation) is always compiled and judged there.
+ * qualifies, and its release pins exactly the releases its dependencies resolve to now. Its
+ * publication would compile it, find no change and no new pin, and not release it, so a draft
+ * compile takes the release as it is instead of compiling it again.
  */
 export const releasedUnchangedModules = async (
   transaction: DefinitionPublicationReader,
@@ -581,13 +562,11 @@ export const releasedUnchangedModules = async (
     if (dependencies.some((key) => inlineKeys.has(key) && !unchanged.has(key))) continue;
     const release = currentReleases.get(source.key);
     if (release === undefined) continue;
-    // A Module that pins a connection type or service operation is judged by its compile, which
-    // compares those pins with what the catalogue resolves now (releaseInlineModules).
-    if (release.published.dependencyManifest.some((dependency) => dependency.kind !== "module"))
-      continue;
     const pinned = new Set(
-      release.published.dependencyManifest.map(
-        (dependency) => `${String(dependency.rootId).toLowerCase()}:${String(dependency.revision)}`,
+      release.published.dependencyManifest.map((dependency) =>
+        dependency.kind === "module"
+          ? `${String(dependency.rootId).toLowerCase()}:${String(dependency.revision)}`
+          : dependency.kind,
       ),
     );
     const expected: string[] = [];
