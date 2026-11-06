@@ -514,7 +514,6 @@ export function StudioFrame<Key extends string>({
   const [inspectorOpen, setInspectorOpen] = useHeldWorkspace("inspectorOpen", true);
   const [narrowPanelOpen, setNarrowPanelOpen] = useState(false);
   const [narrowInspectorOpen, setNarrowInspectorOpen] = useState(false);
-  const inspectorSheet = useRef<HTMLDivElement>(null);
   const [focused, setFocused] = useHeldWorkspace("focused", false);
   const hasInspector = inspector !== null;
   const [beforeFocus, setBeforeFocus] = useHeldWorkspace("beforeFocus", panelsBeforeFocus);
@@ -544,7 +543,10 @@ export function StudioFrame<Key extends string>({
           ? event.target.closest('[role="dialog"], [role="alertdialog"]')
           : null;
       if ((!event.ctrlKey && !event.metaKey) || event.altKey || event.shiftKey) return;
-      if (event.key === "." && (dialog === null || dialog === inspectorSheet.current)) {
+      if (
+        event.key === "." &&
+        (dialog === null || dialog.hasAttribute("data-studio-inspector-sheet"))
+      ) {
         event.preventDefault();
         toggleInspector();
       }
@@ -848,7 +850,11 @@ export function StudioFrame<Key extends string>({
         open={hasInspector && !dockInspector && narrowInspectorOpen}
         onOpenChange={setNarrowInspectorOpen}
       >
-        <SheetContent ref={inspectorSheet} side="right" className="w-96 max-w-full overflow-y-auto">
+        <SheetContent
+          data-studio-inspector-sheet
+          side="right"
+          className="w-96 max-w-full overflow-y-auto"
+        >
           <SheetHeader className="sr-only">
             <SheetTitle>{inspectorLabel}</SheetTitle>
             <SheetDescription>Settings for the selected item.</SheetDescription>

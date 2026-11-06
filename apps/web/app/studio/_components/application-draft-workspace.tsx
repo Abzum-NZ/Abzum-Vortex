@@ -370,9 +370,11 @@ function ExistingApplicationWorkspace(props: ExistingProps) {
       const redo = key === "y" ? !event.shiftKey : key === "z" && event.shiftKey;
       if (key !== "z" && !redo) return;
       event.preventDefault();
-      // A modal owns its actions. Also prevent native Undo reaching the previously focused input.
-      if (target instanceof Element && target.closest('[role="dialog"], [role="alertdialog"]'))
-        return;
+      // A modal owns its actions, except the inspector Sheet below the docking width: the header's
+      // Undo and Redo sit behind its backdrop. Also prevent native Undo reaching the previously focused input.
+      const dialog =
+        target instanceof Element ? target.closest('[role="dialog"], [role="alertdialog"]') : null;
+      if (dialog !== null && !dialog.hasAttribute("data-studio-inspector-sheet")) return;
       if (redo) draft.redo();
       else draft.undo();
     };
