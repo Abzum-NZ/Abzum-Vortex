@@ -244,7 +244,8 @@ export function StudioThemePanel({
       <Tooltip>
         <TooltipTrigger render={<Badge variant="outline" />}>Organisation</TooltipTrigger>
         <TooltipContent>
-          Follows the organisation theme ({names}). Choose another value to override.
+          Follows the organisation theme ({names}): a setting at the platform default follows it.
+          Choose another value to override.
         </TooltipContent>
       </Tooltip>
     );

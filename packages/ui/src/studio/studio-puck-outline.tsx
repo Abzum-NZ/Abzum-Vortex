@@ -7,7 +7,7 @@ import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "..
 import { Spinner } from "../components/spinner";
 import { Icon } from "../icons";
 import { studioPuckStyle } from "./studio-puck-style";
-import { useStudioCanvas } from "./studio-puck-provider";
+import { useStudioCanvasStatus } from "./studio-canvas-status";
 
 /**
  * Puck's outline in a region of Studio's own: the Puck colour map, an accessible name, a height of
@@ -18,8 +18,7 @@ import { useStudioCanvas } from "./studio-puck-provider";
  * route (accepted 3 Nov).
  */
 export function StudioOutlineRegion({ children }: Readonly<{ children: ReactNode }>) {
-  const canvas = useStudioCanvas();
-  const inert = canvas.input.disabled === true;
+  const inert = useStudioCanvasStatus().disabled;
   return (
     <div
       role="region"
@@ -38,7 +37,7 @@ export function StudioOutlineRegion({ children }: Readonly<{ children: ReactNode
  * waits for its compile (Puck holds no data then), or the empty state when no page is open.
  */
 export function StudioPuckOutline({ open }: Readonly<{ open: boolean }>) {
-  const canvas = useStudioCanvas();
+  const { ready } = useStudioCanvasStatus();
   if (!open)
     return (
       <Empty>
@@ -53,7 +52,7 @@ export function StudioPuckOutline({ open }: Readonly<{ open: boolean }>) {
         </EmptyHeader>
       </Empty>
     );
-  if (canvas.model.shown === undefined)
+  if (!ready)
     return (
       <Empty>
         <EmptyHeader>

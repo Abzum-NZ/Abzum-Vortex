@@ -8,6 +8,7 @@ import {
   organizationIdSchema,
 } from "@vortex/platform/schema";
 import {
+  ApplicationThemeResolutionError,
   DEFAULT_PLATFORM_THEME_RELEASE,
   resolveApplicationTheme,
   STUDIO_THEME,
@@ -78,24 +79,47 @@ export const STUDIO_ROOT_CSS = variablesRule(
   studioDocumentStyle,
 );
 
+type StudioChromeTheme = Readonly<{
+  /** The organisation's theme resolved over Studio's own, or undefined where Studio keeps its own. */
+  theme: ApplicationTheme | undefined;
+  /** The organisation's stored theme no longer resolves, so Studio keeps its own and says so. */
+  unresolvable: boolean;
+}>;
+
+const studioOwnChrome: StudioChromeTheme = { theme: undefined, unresolvable: false };
+
 /**
  * Studio's theme for the organisation its address names (`/studio/<organisation>/...`): Studio's
- * platform theme with that organisation's theme applied, or undefined where Studio keeps its own
- * theme (no organisation named, not signed in, an organisation the person is not a member of, or
- * an organisation theme that cannot be read just now: the read has logged why, and the document
- * root and Studio's layout agree on Studio's own theme, so nothing is thrown above every boundary).
+ * platform theme with that organisation's theme applied. Studio keeps its own theme where no
+ * organisation is named, the person is not signed in or not a member, the organisation theme cannot
+ * be read just now (the read has logged why), or the stored organisation theme no longer resolves
+ * (logged once here, and the organisation theme page says so): Studio's chrome never goes down with
+ * a theme nobody can open it to fix. Applications keep failing loudly. The document root, Studio's
+ * layout and the organisation theme page of one request share this one answer.
  */
-const loadStudioOrganizationTheme = cache(
-  async (organizationId: string | undefined): Promise<ApplicationTheme | undefined> => {
+export const loadStudioChromeTheme = cache(
+  async (organizationId: string | undefined): Promise<StudioChromeTheme> => {
     if (organizationId === undefined || !organizationIdSchema.safeParse(organizationId).success)
-      return undefined;
+      return studioOwnChrome;
     const resolution = await resolveIdentitySession();
-    if (resolution.kind !== "active") return undefined;
+    if (resolution.kind !== "active") return studioOwnChrome;
     const load = await loadOrganizationTheme(resolution.session, organizationId);
-    if (load.kind !== "available") return undefined;
-    const theme = resolveApplicationTheme(STUDIO_THEME, load.theme.selection);
-    // An organisation theme that changes nothing Studio draws leaves Studio its own stylesheet.
-    return canonicalJson(theme.selection) === studioSelection ? undefined : theme;
+    if (load.kind !== "available") return studioOwnChrome;
+    try {
+      const theme = resolveApplicationTheme(STUDIO_THEME, load.theme.selection);
+      // An organisation theme that changes nothing Studio draws leaves Studio its own stylesheet.
+      return {
+        theme: canonicalJson(theme.selection) === studioSelection ? undefined : theme,
+        unresolvable: false,
+      };
+    } catch (error) {
+      if (!(error instanceof ApplicationThemeResolutionError)) throw error;
+      console.error(
+        "[studio] the organisation theme does not resolve over Studio's theme, so Studio keeps its own:",
+        error.failures,
+      );
+      return { theme: undefined, unresolvable: true };
+    }
   },
 );
 
@@ -103,7 +127,7 @@ const loadStudioOrganizationTheme = cache(
 export async function loadStudioDocumentTheme(
   organizationId: string,
 ): Promise<typeof STUDIO_DOCUMENT_THEME> {
-  const theme = await loadStudioOrganizationTheme(organizationId);
+  const { theme } = await loadStudioChromeTheme(organizationId);
   return theme === undefined ? STUDIO_DOCUMENT_THEME : studioDocumentThemeOf(theme);
 }
 
@@ -136,7 +160,7 @@ export async function loadDocumentTheme(): Promise<DocumentTheme> {
     .map((segment) => decodeURIComponent(segment));
   const [tenant, organization, application] = segments;
   if (tenant === "studio") {
-    const studio = await loadStudioOrganizationTheme(organization);
+    const { theme: studio } = await loadStudioChromeTheme(organization);
     if (studio === undefined)
       return { attributes: studioDocumentAttributes, style: {}, stylesheet: "studio" };
     return {

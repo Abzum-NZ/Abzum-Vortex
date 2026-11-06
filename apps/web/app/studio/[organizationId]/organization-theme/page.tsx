@@ -9,6 +9,7 @@ import { continueStudioSession } from "../../_lib/studio-session";
 import { studioThemeOptions } from "../../_lib/studio-theme-catalogue";
 import { StudioUnavailable } from "../../_components/studio-unavailable";
 import { StudioOrganizationTheme } from "../../_components/studio-organization-theme";
+import { loadStudioChromeTheme } from "../../../_lib/document-theme";
 import { loadOrganizationLauncher } from "../../../_lib/organization-context";
 import { loadOrganizationTheme } from "../../../_lib/organization-theme";
 import { humanOrganizationRequests } from "../../../_lib/server-composition";
@@ -58,6 +59,7 @@ export default async function StudioOrganizationThemePage({
   if (permitted.kind !== "available") return unavailable(permitted.kind);
   const theme = themeRead.theme;
   const canChange = permitted.value;
+  const { unresolvable } = await loadStudioChromeTheme(organizationId);
   return (
     <StudioOrganizationTheme
       key={theme.revision}
@@ -68,6 +70,7 @@ export default async function StudioOrganizationThemePage({
       selection={authoredApplicationThemeSelection(organizationThemeFullSelection(theme.selection))}
       revision={theme.revision}
       canChange={canChange}
+      unresolvable={unresolvable}
     />
   );
 }
