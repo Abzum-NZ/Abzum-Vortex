@@ -284,8 +284,7 @@ const exactApplicationDependenciesMatch = (
   if (
     theme.length !== 1 ||
     theme[0]!.catalogueThemeId !== base.catalogueThemeId ||
-    theme[0]!.releaseVersion !== base.releaseVersion ||
-    theme[0]!.contentFingerprint !== base.contentFingerprint
+    theme[0]!.releaseVersion !== base.releaseVersion
   )
     return false;
   // The compiler places authoritative target evidence on each target, so the stored flow-target

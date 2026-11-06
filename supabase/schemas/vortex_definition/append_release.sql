@@ -496,24 +496,23 @@ begin
         raise exception using errcode = '22023', message = 'Platform block dependency has invalid evidence';
       end if;
     elsif supplied_kind = 'platform_theme' then
+      -- The theme is pinned by identity and version only: its tokens resolve at run time from the
+      -- current catalogue, so its content is no part of the release.
       if exists (
         select 1 from pg_catalog.jsonb_object_keys(supplied_dependency) as supplied(key)
-        where supplied.key not in (
-          'kind', 'catalogueThemeId', 'releaseVersion', 'contentFingerprint'
-        )
-      ) or (select pg_catalog.count(*) from pg_catalog.jsonb_object_keys(supplied_dependency)) <> 4 then
+        where supplied.key not in ('kind', 'catalogueThemeId', 'releaseVersion')
+      ) or (select pg_catalog.count(*) from pg_catalog.jsonb_object_keys(supplied_dependency)) <> 3 then
         raise exception using errcode = '22023', message = 'Platform theme dependency has an invalid shape';
       end if;
       supplied_reference := supplied_dependency ->> 'catalogueThemeId';
       supplied_version := supplied_dependency ->> 'releaseVersion';
-      supplied_content_fingerprint := supplied_dependency ->> 'contentFingerprint';
+      supplied_content_fingerprint := null;
       supplied_target_root_id := null;
       supplied_target_release_revision := null;
       supplied_catalogue_item_id := null;
       if supplied_reference !~ '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
         or supplied_reference = '00000000-0000-0000-0000-000000000000'
-        or supplied_version !~ '^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$'
-        or supplied_content_fingerprint !~ '^sha256:[a-f0-9]{64}$' then
+        or supplied_version !~ '^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$' then
         raise exception using errcode = '22023', message = 'Platform theme dependency has invalid evidence';
       end if;
     elsif supplied_kind in (
@@ -1258,8 +1257,7 @@ begin
           )
           when 'platform_theme' then pg_catalog.jsonb_build_object(
             'kind', 'platform_theme', 'catalogueThemeId', dependency.dependency_reference,
-            'releaseVersion', dependency.dependency_version,
-            'contentFingerprint', dependency.dependency_content_fingerprint
+            'releaseVersion', dependency.dependency_version
           )
           else dependency.dependency_entry
         end order by
