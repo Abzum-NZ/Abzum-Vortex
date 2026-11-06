@@ -31,6 +31,7 @@ import {
   suspendOrganizationAccountCommandSchema,
   updateOwnProfileCommandSchema,
 } from "../access/organization-local-administration";
+import { changeOrganizationStepUpSettingCommandSchema } from "../access/organization-step-up-setting-administration";
 import { organizationStewardshipAppointmentCommandSchema } from "../access/organization-stewardship";
 import { jsonValueSchema, type JsonValue } from "../catalogue/common";
 import { organizationIdSchema, timestampSchema, type TenantId } from "../catalogue/identifiers";
@@ -214,6 +215,7 @@ type ProtectedOperationServices = Readonly<{
     | "closeOrganizationAccount"
     | "readOwnProfile"
     | "updateOwnProfile"
+    | "changeStepUpSetting"
     | "createOrganizationInvitation"
     | "revokeOrganizationInvitation"
   >;
@@ -1021,6 +1023,39 @@ const operations: Readonly<Record<PlatformServiceOperationKey, Operation>> = Obj
           time_zone: value.timeZone ?? "",
         }),
       ),
+  }),
+  change_organization_step_up_setting: operation({
+    schema: changeOrganizationStepUpSettingCommandSchema,
+    command: (inputs) => ({
+      expectedRevision: inputs.expected_revision,
+      requireStepUp: inputs.require_step_up,
+    }),
+    run: async (services, caller, command) => {
+      const result = await services.accessAdministration.changeStepUpSetting(
+        caller.session,
+        caller.selection,
+        command,
+      );
+      if (result.kind !== "available") return result;
+      const value = result.value;
+      if (value.outcome === "conflict") return "conflict";
+      if (value.outcome === "refused") {
+        logRefusal("protected-operation", "change step-up setting", value.refusalReason);
+        return {
+          kind: "confirmed_failure",
+          outcome: "refused",
+          diagnostic: flowRefusalFeedbackSchema.parse({ code: value.refusalReason }),
+        };
+      }
+      return {
+        kind: "available",
+        value: {
+          revision: value.revision,
+          require_step_up: value.requireStepUp,
+          access_version: value.accessVersion,
+        },
+      };
+    },
   }),
   update_own_profile: operation({
     schema: updateOwnProfileCommandSchema,

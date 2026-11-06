@@ -265,4 +265,5 @@ export type AccessAdministrationContext = Readonly<{
   newRoleAssignmentId: () => string;
   newDelegationAuthorityId: () => string;
   newActivityId: () => string;
+  readSecondFactor?: () => Promise<boolean | undefined>;
 }>;

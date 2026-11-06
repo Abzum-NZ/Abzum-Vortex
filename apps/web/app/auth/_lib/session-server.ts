@@ -375,6 +375,16 @@ export const readMfaFactor = async (): Promise<
 };
 
 /**
+ * Whether the signed-in person has a verified authenticator, read live from the provider for the
+ * request that asks (never stored): true or false when the provider answers, undefined when it
+ * cannot, which the database treats as enrolled.
+ */
+export const readHasVerifiedSecondFactor = async (): Promise<boolean | undefined> => {
+  const factor = await readMfaFactor();
+  return factor.kind === "unavailable" ? undefined : factor.kind === "challenge";
+};
+
+/**
  * Enrols a new authenticator for the signed-in person. The issuer is Vortex and the account label is
  * their email address, so the QR code (an SVG data address) and the text key name the same account.
  * The QR code and the key are shown once to that person; never log them or put them in an address.

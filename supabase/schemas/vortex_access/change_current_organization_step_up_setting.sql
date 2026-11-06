@@ -75,8 +75,21 @@ begin
         select 1 from vortex_platform.instance_profile as profile
         where profile.kind = 'development'
       ) then
-        raise exception using errcode = '42501',
-          message = 'Two-step verification can be turned off only on a development instance';
+        -- Off a development instance the answer is a refusal that keeps its Activity entry.
+        activity_result := vortex_record.append_organization_activity_entry(
+          context_organization_id, p_activity_id, now_value,
+          'organization_account', context_account_id, action_key,
+          array[context_organization_id]::uuid[], array[]::uuid[], vortex_platform.channel(),
+          context_correlation_id, 'refused'
+        );
+        if activity_result is distinct from 'inserted' then
+          raise exception using errcode = '40001',
+            message = 'Organization step-up setting refusal Activity is stale';
+        end if;
+        return pg_catalog.jsonb_build_object(
+          'outcome', 'refused', 'refusalReason', 'development_instance_required',
+          'accessVersion', context_access_version
+        );
       end if;
       exit when not has_second_factor;
       requirement := pg_catalog.jsonb_build_object('kind', 'multi_factor', 'maximumAgeSeconds', 3600);
@@ -147,7 +160,7 @@ begin
   if stored.revision <> p_expected_revision then
     return pg_catalog.jsonb_build_object(
       'outcome', 'conflict', 'revision', stored.revision,
-      'requireStepUp', stored.require_step_up
+      'requireStepUp', stored.require_step_up, 'accessVersion', context_access_version
     );
   end if;
   if stored.require_step_up = p_require_step_up then

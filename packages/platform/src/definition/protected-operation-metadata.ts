@@ -203,5 +203,10 @@ export const protectedOperationMetadata: Record<
     transaction: "change",
     workflow: "multi_transaction",
   },
+  change_organization_step_up_setting: {
+    authorityKind: "permission",
+    transaction: "access_change",
+    workflow: "single",
+  },
   prepare_role_assignment: { authorityKind: "permission", transaction: "read", workflow: "single" },
 };

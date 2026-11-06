@@ -100,6 +100,7 @@ export const PLATFORM_SERVICE_OPERATIONS = deepFreeze({
   create_application: entry(sources.create_application),
   review_application_publication: entry(sources.review_application_publication),
   publish_application: entry(sources.publish_application),
+  change_organization_step_up_setting: entry(sources.change_organization_step_up_setting),
 });
 
 /** Every registered release, in registration order, for the publication catalogue. */

@@ -118,6 +118,13 @@ export type HumanOrganizationRequestDependencies = Readonly<{
   clock?: () => Date;
   correlationId?: () => string;
   telemetry?: ServiceTelemetryPort;
+  /**
+   * Reads, for the current request only, whether the signed-in person has a verified second
+   * factor: true or false when the provider answers, undefined when it cannot. Only the entry
+   * point that holds the person's session supplies it; the database treats an absent fact as
+   * enrolled.
+   */
+  readSecondFactor?: () => Promise<boolean | undefined>;
 }>;
 
 /**
