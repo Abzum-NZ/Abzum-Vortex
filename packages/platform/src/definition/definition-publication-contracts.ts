@@ -136,9 +136,19 @@ export type ResolvableConnectionTypeRelease = Readonly<{
   compilationOutput: ConnectionOutput;
 }>;
 
+export type ReleaseCataloguePins = Readonly<{
+  validationContractVersion: string;
+  pins: readonly ExactDefinitionDependency[];
+}>;
+
 export interface DefinitionPublicationReader {
   readCandidate(rootId: string): Promise<DefinitionPublicationCandidate | undefined>;
   /** The internal Module roots one Application owns. */
+  /**
+   * The platform catalogue pins (blocks, theme, connection types, operations) of the Application's current release, with the contract
+   * the release was validated under; undefined before its first release.
+   */
+  readReleaseCataloguePins(rootId: string): Promise<ReleaseCataloguePins | undefined>;
   readOwnedModuleRoots(applicationRootId: string): Promise<readonly OwnedModuleRoot[]>;
   /** Published records and field capabilities, without materialising the owned Module releases. */
   readOwnedModulePublication(applicationRootId: string): Promise<
