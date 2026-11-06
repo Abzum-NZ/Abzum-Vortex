@@ -37,8 +37,8 @@ begin
         'applicationRootId', 'sessionId', 'issuedAt', 'expiresAt',
         'accessVersion', 'correlationId', 'identityId', 'organizationAccountId',
         'authenticationStrength', 'accessTokenIssuedAt', 'primaryAuthenticatedAt',
-        'multiFactorAuthenticatedAt', 'delegatedContext', 'supportContext',
-        'channel'
+        'multiFactorAuthenticatedAt', 'hasSecondFactor', 'delegatedContext',
+        'supportContext', 'channel'
       ];
       if not candidate ? 'identityAuthorityId'
         or not vortex_platform.is_non_nil_uuid(candidate ->> 'identityAuthorityId') then
@@ -93,6 +93,13 @@ begin
     where not supplied.key = any (allowed_keys)
   ) then
     raise exception using errcode = '22023', message = 'Vortex request context has an unknown field';
+  end if;
+
+  -- The fact that the person has a verified second factor, set by the trusted entry point only for
+  -- the requests that need it; absent means the person is treated as enrolled.
+  if candidate ? 'hasSecondFactor'
+    and pg_catalog.jsonb_typeof(candidate -> 'hasSecondFactor') <> 'boolean' then
+    raise exception using errcode = '22023', message = 'Vortex request context has an invalid second-factor fact';
   end if;
 
   if candidate ? 'channel'

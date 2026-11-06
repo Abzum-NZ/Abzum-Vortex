@@ -76,12 +76,14 @@ const readPrivateFormSubmission = (candidate: unknown): PrivateFormSubmission | 
  *
  * `subject` is the record the form was rendered for, named by the surface from its own address. A
  * binding that declares a `record` caller input the answers do not carry receives that record's
- * identity. It is only a candidate: the protected save decides whether the person may change it.
+ * identity, and one that declares `record_revision` receives the revision the form showed (the
+ * protected operation compares it with the stored one). Both are only candidates: the protected
+ * save or operation decides whether the person may change the record.
  */
 export const adaptFormSubmitInputs = (
   declared: Readonly<Record<string, FlowBindingInput>>,
   callerInputs: Readonly<Record<string, unknown>>,
-  subject?: Readonly<{ recordId: string }>,
+  subject?: Readonly<{ recordId: string; revision?: number }>,
 ): Readonly<Record<string, unknown>> | undefined => {
   const submission = readPrivateFormSubmission(callerInputs);
   if (submission === undefined) return undefined;
@@ -115,6 +117,8 @@ export const adaptFormSubmitInputs = (
       adapted[input.name] = submission.values[input.name];
     else if (input.name === "record" && subject !== undefined)
       adapted[input.name] = subject.recordId;
+    else if (input.name === "record_revision" && subject?.revision !== undefined)
+      adapted[input.name] = subject.revision;
     else return undefined;
   }
   return adapted;

@@ -560,6 +560,10 @@ const startFlowInternal = async <Value>(
       throw error;
     }
   };
+  const readSecondFactor = async (): Promise<{ hasSecondFactor: boolean } | undefined> => {
+    const hasSecondFactor = await dependencies.requests.readSecondFactor?.();
+    return hasSecondFactor === undefined ? undefined : { hasSecondFactor };
+  };
   for (let attempt = 0; attempt < 3; attempt += 1) {
     try {
       const result =
@@ -572,7 +576,16 @@ const startFlowInternal = async <Value>(
               () => undefined,
             )
           : mode === "access_change"
-            ? await requests.runAccessChange(request.session, request.selection, operation)
+            ? segment?.readsSecondFactor === true
+              ? // Only a segment that calls the two-step setting change asks the provider, fresh;
+                // an unreadable answer is left out and the database treats the person as enrolled.
+                await requests.runAccessChangeWithSecondFactor(
+                  request.session,
+                  request.selection,
+                  operation,
+                  await readSecondFactor(),
+                )
+              : await requests.runAccessChange(request.session, request.selection, operation)
             : await requests.run(request.session, request.selection, operation);
       if (result.kind !== "available") return { kind: "refused" };
       if (result.value.kind !== "workflow_pending") return result.value;
