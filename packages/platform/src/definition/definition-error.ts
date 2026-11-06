@@ -1,5 +1,5 @@
 import { ZodError } from "zod";
-import { markRequestFailureLogged } from "../access/request-failure-mark";
+import { markRequestFailureLogged, requestFailureLogged } from "../access/request-failure-mark";
 import { DefinitionCompilationError } from "./compilation-error";
 
 /**
@@ -93,6 +93,8 @@ export const unexpectedDefinitionFailure = <Code extends string>(
   context: string,
 ): DefinitionError<Code> => {
   const error = new DefinitionError(code, { cause });
+  // A failure an inner source already logged is not logged again by the failure that wraps it.
+  if (requestFailureLogged(cause)) return markRequestFailureLogged(error);
   // A rule refusing the draft is an answer the author sees, not a fault: one line, no stack.
   if (isValidationRefusal(cause))
     console.info(`[definition] ${context} refused (${code}): ${describeCause(cause)}`);
