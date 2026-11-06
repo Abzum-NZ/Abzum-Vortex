@@ -188,7 +188,8 @@ export const verifyDefinitionCatalogueDependencies = async (
     )
       continue;
     // A platform-theme dependency exists only in an Application manifest, and the sole
-    // Application validation contract is the current definition contract.
+    // Application validation contract is the current definition contract. It pins the theme by
+    // identity and version only: its tokens resolve at run time from the current catalogue.
     if (validationContractVersion !== definitionContractVersion) return "invalid";
     const catalogueThemeId = platformIdSchema.safeParse(dependency.catalogueThemeId);
     if (!catalogueThemeId.success) return "invalid";
@@ -202,8 +203,6 @@ export const verifyDefinitionCatalogueDependencies = async (
       release.releaseVersion !== dependency.releaseVersion
     )
       return "invalid";
-    // A theme's content never supersedes a release: tokens resolve at run time from the current
-    // catalogue, so the pin is the theme's identity and version only.
   }
   return "valid";
 };

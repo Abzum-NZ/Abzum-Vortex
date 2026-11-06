@@ -15,7 +15,6 @@ export const STUDIO_THEME = applicationThemeSchema.parse({
     kind: "platform_theme",
     catalogueThemeId: DEFAULT_PLATFORM_THEME_RELEASE.catalogueThemeId,
     releaseVersion: DEFAULT_PLATFORM_THEME_RELEASE.releaseVersion,
-    contentFingerprint: DEFAULT_PLATFORM_THEME_RELEASE.contentFingerprint,
   },
   selection: STUDIO_THEME_SELECTION,
 });

@@ -2,7 +2,11 @@ import "server-only";
 
 import { cache, type CSSProperties } from "react";
 import { headers } from "next/headers";
-import { DEFAULT_APPLICATION_THEME_SELECTION, organizationIdSchema } from "@vortex/platform/schema";
+import {
+  canonicalJson,
+  DEFAULT_APPLICATION_THEME_SELECTION,
+  organizationIdSchema,
+} from "@vortex/platform/schema";
 import {
   ApplicationThemeResolutionError,
   DEFAULT_PLATFORM_THEME_RELEASE,
@@ -46,6 +50,7 @@ const studioDocumentThemeOf = (theme: ApplicationTheme) => {
 
 /** The same Studio root props serve the document's first paint and client-side route transitions. */
 const studioTheme = resolveApplicationTheme(STUDIO_THEME, undefined);
+const studioSelection = canonicalJson(studioTheme.selection);
 export const STUDIO_DOCUMENT_THEME = studioDocumentThemeOf(studioTheme);
 
 /**
@@ -102,7 +107,11 @@ export const loadStudioChromeTheme = cache(
     if (load.kind !== "available") return studioOwnChrome;
     try {
       const theme = resolveApplicationTheme(STUDIO_THEME, load.theme.selection);
-      return { theme: theme === studioTheme ? undefined : theme, unresolvable: false };
+      // An organisation theme that changes nothing Studio draws leaves Studio its own stylesheet.
+      return {
+        theme: canonicalJson(theme.selection) === studioSelection ? undefined : theme,
+        unresolvable: false,
+      };
     } catch (error) {
       if (!(error instanceof ApplicationThemeResolutionError)) throw error;
       console.error(

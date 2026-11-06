@@ -164,10 +164,7 @@ export const materialiseApplicationTheme = (
       },
     };
   }
-  const base = {
-    ...canonicalThemeDependency(authored.base),
-    contentFingerprint: release.contentFingerprint,
-  };
+  const base = canonicalThemeDependency(authored.base);
   const resolved = resolvedApplicationThemeSchema.parse({
     base,
     selection: selection.resolved.selection,

@@ -185,7 +185,8 @@ resolves the theme every surface draws (application pages, Studio's chrome, the 
 per dimension the application's own choice, else the organisation's, else the platform's, resolved
 over the current catalogue release the theme pins. A theme catalogue change therefore reaches every
 installed application on its next page load, and a theme content change never supersedes a release
-(blocks and connection types still do). A selection that no longer resolves fails loudly.
+or refuses a publication (blocks and connection types still do): the theme pin carries no content
+fingerprint. A selection that no longer resolves fails loudly.
 
 ## Decision 7 — Applications are delivered as packages, and custom logic follows a ladder
 

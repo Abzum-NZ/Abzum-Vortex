@@ -84,12 +84,15 @@ export const themeTokenValueSchema = z.discriminatedUnion("kind", [
     .strict(),
 ]);
 
+/**
+ * A release pins its platform theme by identity and version only: the theme's tokens resolve at run
+ * time from the current catalogue, so its content is never part of the pin.
+ */
 const exactPlatformThemeDependencySchema = z
   .object({
     kind: sourceProvenanceUnchanged(z.literal("platform_theme")),
     catalogueThemeId: sourceProvenanceUnchanged(platformIdSchema),
     releaseVersion: sourceProvenanceUnchanged(semanticVersionSchema),
-    contentFingerprint: sourceProvenanceUnchanged(fingerprintSchema),
   })
   .strict();
 
