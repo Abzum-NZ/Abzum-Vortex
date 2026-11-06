@@ -3,6 +3,7 @@ import "server-only";
 import { cache } from "react";
 import { headers } from "next/headers";
 import {
+  ApplicationThemeResolutionError,
   DEFAULT_PLATFORM_THEME_RELEASE,
   PREVIEW_SEED_RECORD_BOUND,
   readViewerPresentationAfterAuthorization,
@@ -161,12 +162,21 @@ export const loadApplicationStartTheme = cache(
     );
     if (resolved.kind !== "application_page" || resolved.installedContext === undefined)
       return undefined;
-    const themed = await loadApplicationTheme(
-      resolution.session,
-      resolved.read.organizationId,
-      resolved.installedContext.releaseSet.application.content.theme,
-    );
-    return themed.kind === "available" ? themed.theme : undefined;
+    try {
+      const themed = await loadApplicationTheme(
+        resolution.session,
+        resolved.read.organizationId,
+        resolved.installedContext.releaseSet.application.content.theme,
+      );
+      return themed.kind === "available" ? themed.theme : undefined;
+    } catch (error) {
+      // The start theme is a first-paint hint for the document root. A theme that no longer
+      // resolves fails the application itself (its frame and page throw, and the application's
+      // error boundary shows it), so the document keeps the platform loader rather than failing
+      // the whole document a second time.
+      if (error instanceof ApplicationThemeResolutionError) return undefined;
+      throw error;
+    }
   },
 );
 

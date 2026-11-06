@@ -46,15 +46,18 @@ export type ApplicationThemeLoad =
 /**
  * The theme one installed application is drawn with in an organisation: its stored theme resolved
  * through the organisation's by the one resolution function. The organisation read is the request's
- * shared one, so the frame, the page and the document root add no read.
+ * shared one, and the answer is the request's too, so the frame, the page and the document root add
+ * no read and share one resolution (or one failure).
  */
-export const loadApplicationTheme = async (
-  session: IdentitySession,
-  organizationId: string,
-  stored: StoredApplicationTheme,
-): Promise<ApplicationThemeLoad> => {
-  const organization = await loadOrganizationTheme(session, organizationId);
-  return organization.kind === "available"
-    ? { kind: "available", theme: resolveApplicationTheme(stored, organization.theme.selection) }
-    : organization;
-};
+export const loadApplicationTheme = cache(
+  async (
+    session: IdentitySession,
+    organizationId: string,
+    stored: StoredApplicationTheme,
+  ): Promise<ApplicationThemeLoad> => {
+    const organization = await loadOrganizationTheme(session, organizationId);
+    return organization.kind === "available"
+      ? { kind: "available", theme: resolveApplicationTheme(stored, organization.theme.selection) }
+      : organization;
+  },
+);
