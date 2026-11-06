@@ -149,3 +149,12 @@ export const classifyRequestFailure = (
       : refusal();
   return code === "P0002" && scope.addressed ? refusal() : fault();
 };
+
+/**
+ * The one line for a read that failed outside the request runner (which logs its own answers): at
+ * the level its class decides, so a refusal or a moved state is information and a fault an error.
+ */
+export const logReadFailure = (line: string, error: unknown): void => {
+  if (classifyRequestFailure(error, { addressed: false }).level === "info") console.info(line);
+  else console.error(line);
+};

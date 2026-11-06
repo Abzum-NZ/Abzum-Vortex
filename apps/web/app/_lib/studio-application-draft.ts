@@ -1185,12 +1185,10 @@ export const loadStudioApplicationDraft = async (
       return result.value.kind === "available"
         ? { kind: "available", ...result.value.value }
         : declined("application-draft", result.value);
-    return declined(
-      "application-draft",
-      result.kind === "temporarily_unavailable"
-        ? { kind: "temporarily_unavailable", reason: "request_failed" }
-        : { kind: "refused", reason: "organization_unavailable" },
-    );
+    // The request runner logged this answer once, with its class; the loader adds no second line.
+    return result.kind === "temporarily_unavailable"
+      ? { kind: "temporarily_unavailable", reason: "request_failed" }
+      : { kind: "refused", reason: "organization_unavailable" };
   } catch (error) {
     return loadFailure("application-draft", error);
   }

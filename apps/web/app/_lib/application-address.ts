@@ -142,7 +142,7 @@ export const resolveApplicationAddress = cache(
           ? undefined
           : await loadOrganizationTheme(session, read.organizationId);
       if (organization !== undefined && organization.kind !== "available")
-        return { kind: "temporarily_unavailable" };
+        return { kind: organization.kind };
       const experience =
         found?.theme === undefined || organization === undefined
           ? found
@@ -162,8 +162,9 @@ export const resolveApplicationAddress = cache(
       addressed.context === undefined
         ? undefined
         : await loadOrganizationTheme(session, read.organizationId);
+    // A refused theme read is a refusal, never "try again"; the runner logged either, once.
     if (organization !== undefined && organization.kind !== "available")
-      return { kind: "temporarily_unavailable" };
+      return { kind: organization.kind };
     return {
       kind: "application_page",
       read,

@@ -77,13 +77,6 @@ const loadWorkspacePlace = async (
   // organisation settings.
   if (settings.value === null || settings.value === "invalid") return { kind: "refused" };
   const applications = await applicationsRead;
-  // Some of this read's refusals are answered before any request runs, so it is said here.
-  if (applications.kind === "unavailable")
-    console.info("[studio] installed applications could not be read: unavailable");
-  else if (applications.kind === "temporarily_unavailable")
-    console.error(
-      `[studio] installed applications could not be read: ${applications.cause ?? "no cause"}`,
-    );
   // The installed Studio release shapes the frame the editor shows.
   const studioApplicationEntry =
     applications.kind === "available"
@@ -93,7 +86,7 @@ const loadWorkspacePlace = async (
   // address reads start now, run beside the reads below, and reach the editor when they finish.
   const navigationTargets: StudioNavigationTargets =
     applications.kind !== "available"
-      ? // Said once above, where the read failed; the editor is told it failed.
+      ? // Logged once where the read failed; the editor is told it failed.
         Promise.resolve({ kind: "failed" } as const)
       : Promise.all(
           applications.applications

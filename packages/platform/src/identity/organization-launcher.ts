@@ -14,7 +14,7 @@ import {
   type RuntimeTransactionRunner,
 } from "../db/request-transaction";
 import { describeFailure } from "../catalogue/runtime-primitives";
-import { classifyRequestFailure } from "../access/request-failure";
+import { logReadFailure } from "../access/request-failure";
 
 type LauncherRow = DatabaseRow & {
   organization_id: unknown;
@@ -64,11 +64,10 @@ export const createOrganizationLauncherService = (
         });
         return organizationLauncherResolutionSchema.parse({ kind: "available", entries });
       } catch (error) {
-        // A moved state (a serialization conflict) is information, a platform fault is an error.
-        const line = `[identity] ORGANIZATION_LAUNCHER_READ_FAILED: ${describeFailure(error)}`;
-        if (classifyRequestFailure(error, { addressed: false }).level === "info")
-          console.info(line);
-        else console.error(line);
+        logReadFailure(
+          `[identity] ORGANIZATION_LAUNCHER_READ_FAILED: ${describeFailure(error)}`,
+          error,
+        );
         return organizationLauncherResolutionSchema.parse({ kind: "temporarily_unavailable" });
       }
     },

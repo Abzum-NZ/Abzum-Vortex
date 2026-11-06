@@ -46,6 +46,7 @@ import {
   createHumanOrganizationRequestService,
   type BoundHumanOrganizationRequest,
 } from "../access/human-organization-request";
+import { logReadFailure } from "../access/request-failure";
 import { decideOrganizationAccessBatch } from "../access/organization-access-decision-access";
 import { readCurrentOrganizationDefaultApplicationAfterAuthorization } from "../access/organization-runtime-settings-administration";
 import {
@@ -1375,7 +1376,10 @@ async function readPermittedApplications(
       applications,
     });
   } catch (error) {
-    return { kind: "temporarily_unavailable", cause: describeApplicationAddressFailure(error) };
+    // The place the read failed is the one that logs it (the request runner logs its own answers).
+    const cause = describeApplicationAddressFailure(error);
+    logReadFailure(`[application-address] permitted applications read failed: ${cause}`, error);
+    return { kind: "temporarily_unavailable", cause };
   }
 }
 
