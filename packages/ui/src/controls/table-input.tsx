@@ -31,6 +31,7 @@ import {
 } from "./field-parts";
 import { useFormField, useFormFieldError, useFormFieldPublisher } from "./form-context";
 import type { TableInputPayload, TypedTableValue } from "./projected-data";
+import { Tooltip, TooltipContent, TooltipTrigger } from "../components/tooltip";
 
 const EMPTY_ROWS: TypedTableValue = [];
 const TYPES = [
@@ -384,17 +385,23 @@ export function TableInput(props: ControlRenderProps<TableInputPayload>): ReactE
                 );
               })}
             </div>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              aria-label={`Remove row ${index + 1}`}
-              title={`Remove row ${index + 1}`}
-              disabled={locked}
-              onClick={() => change(rows.filter((_, rowIndex) => rowIndex !== index))}
-            >
-              <Icon name="close" aria-hidden="true" />
-            </Button>
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    aria-label={`Remove row ${index + 1}`}
+                    disabled={locked}
+                    onClick={() => change(rows.filter((_, rowIndex) => rowIndex !== index))}
+                  />
+                }
+              >
+                <Icon name="close" aria-hidden="true" />
+              </TooltipTrigger>
+              <TooltipContent>{`Remove row ${index + 1}`}</TooltipContent>
+            </Tooltip>
           </div>
         ))}
         <Button

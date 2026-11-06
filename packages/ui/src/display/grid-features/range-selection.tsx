@@ -7,6 +7,7 @@ import { GRID_ROOT, isInteractiveGridTarget } from "../table-interaction";
 import { rangeToTsv } from "./range-copy";
 import { RangeStatusBar, type StatusBarRange } from "./range-status-bar";
 import { GridToolbarSlot } from "./toolbar";
+import { Tooltip, TooltipContent, TooltipTrigger } from "../../components/tooltip";
 
 const Find = lazy(() => import("./find"));
 type Point = Readonly<{ row: number; column: number }>;
@@ -315,12 +316,16 @@ function RangeSelection({ context, surface }: GridFeatureInteractionProps): Reac
       {settled === undefined ? null : (
         <GridToolbarSlot area="supplement">
           {settings?.rangeSelect ? (
-            <span
-              className="max-w-40 truncate text-xs text-muted-foreground"
-              title="Shift + arrows or drag to select a range on this page"
-            >
-              Range selected
-            </span>
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <span tabIndex={0} className="max-w-40 truncate text-xs text-muted-foreground" />
+                }
+              >
+                Range selected
+              </TooltipTrigger>
+              <TooltipContent>Shift + arrows or drag to select a range on this page</TooltipContent>
+            </Tooltip>
           ) : null}
           {settings?.statusBar !== undefined ? (
             <RangeStatusBar context={context} range={settled} />
