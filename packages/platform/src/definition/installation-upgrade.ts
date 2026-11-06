@@ -4,9 +4,10 @@ import { createHash } from "node:crypto";
 import type { RequestDatabaseTransaction } from "../db/request-transaction";
 import { prepareApplicationRoleTemplatesForHumanRequest } from "../access/application-role-template-adapter";
 import { createBuilderAuthority } from "../access/builder-authority";
-import type {
-  createHumanOrganizationRequestService,
-  HumanOrganizationRequestResult,
+import {
+  markRequestFailureLogged,
+  type createHumanOrganizationRequestService,
+  type HumanOrganizationRequestResult,
 } from "../access/human-organization-request";
 import type { PlatformPermissionSource } from "../access/platform-permissions";
 import type {
@@ -33,6 +34,7 @@ import {
   InstallationProblem,
   installationOperation,
   installationProblem,
+  requestAnswerProblem,
   installationTargetFacts,
   readInstallationAuthorityDeadlines,
   readInstallationDatabaseTime,
@@ -40,7 +42,6 @@ import {
   readInstallationUpgradeRoot,
   requireInstallationAuthority,
   type InstallationHumanContext,
-  type InstallationProblemShape,
   type ReceiptStep,
 } from "./installation-authority";
 import {
@@ -408,7 +409,7 @@ export const readUpgradeAuthorizedState = async (
   session: IdentitySession,
   allowEqual: boolean,
 ): Promise<UpgradeAuthorizedState> => {
-  let captured: InstallationProblemShape | undefined;
+  let captured: { error: unknown } | undefined;
   const scopeCandidate = {
     organizationId: selector.organizationId,
     applicationRootId: selector.rootId,
@@ -474,17 +475,27 @@ export const readUpgradeAuthorizedState = async (
           checkedAt: completedAt,
         };
       } catch (error) {
-        captured = classifyInstallationFailure(error);
+        captured = { error };
         throw error;
       }
     },
   );
   if (result.kind === "available") return result.value;
+  // The failure this wraps was logged once, by the runner or (a cause it could not mark) by the
+  // classification: the wrapper adds no line.
   if (captured !== undefined)
-    throw new InstallationProblem(captured, "transaction_failure_captured");
-  if (result.kind === "unavailable")
-    return installationProblem("upgrade_request_unavailable", "refused");
-  return installationProblem("upgrade_request_temporarily_unavailable", "temporarily_unavailable");
+    throw markRequestFailureLogged(
+      new InstallationProblem(
+        classifyInstallationFailure(captured.error),
+        "transaction_failure_captured",
+      ),
+    );
+  return requestAnswerProblem(
+    result.kind,
+    result.kind === "unavailable"
+      ? "upgrade_request_unavailable"
+      : "upgrade_request_temporarily_unavailable",
+  );
 };
 
 /**
@@ -522,8 +533,11 @@ const humanDefinitionAccess = (
           applicationReleaseRevision: target.applicationReleaseRevision,
         }),
     );
+    // The runner logged its answer once: the restatement adds no line.
     if (result.kind !== "available")
-      throw new DefinitionError("APPLICATION_INSTALLATION_RELEASE_UNAVAILABLE");
+      throw markRequestFailureLogged(
+        new DefinitionError("APPLICATION_INSTALLATION_RELEASE_UNAVAILABLE"),
+      );
     return result.value;
   },
   async prepareRegistrationCandidate(target, releaseSet) {

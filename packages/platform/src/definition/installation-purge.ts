@@ -8,6 +8,7 @@ import type { FlowRefusalFeedback } from "../workflows/flow-refusal-feedback";
 import { databaseErrorCode } from "./definition-error";
 import {
   installationProblem,
+  requestAnswerProblem,
   readInstallationHumanContext,
   readInstallationOrdinaryRoot,
   requireInstallationAuthority,
@@ -136,10 +137,7 @@ export const readApplicationPurge = async (
   );
   if (result.kind === "available") return result.value;
   if (failure !== undefined) throw failure;
-  return installationProblem(
-    "purge_read_unavailable",
-    result.kind === "unavailable" ? "refused" : "temporarily_unavailable",
-  );
+  return requestAnswerProblem(result.kind, "purge_read_unavailable");
 };
 
 /**
@@ -193,10 +191,7 @@ export const purgeApplication = async (
   );
   if (result.kind === "available") return result.value;
   if (failure !== undefined) throw failure;
-  return installationProblem(
-    "purge_unavailable",
-    result.kind === "unavailable" ? "refused" : "temporarily_unavailable",
-  );
+  return requestAnswerProblem(result.kind, "purge_unavailable");
 };
 
 /**
@@ -237,8 +232,5 @@ export const requireApplicationChangeStepUp = async (
   );
   if (result.kind === "available") return;
   if (failure !== undefined) throw failure;
-  installationProblem(
-    "step_up_unavailable",
-    result.kind === "unavailable" ? "refused" : "temporarily_unavailable",
-  );
+  requestAnswerProblem(result.kind, "step_up_unavailable");
 };

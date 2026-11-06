@@ -3,6 +3,10 @@ import "server-only";
 import type { RequestDatabaseTransaction } from "../db/request-transaction";
 import { randomUUID } from "node:crypto";
 import {
+  markRequestFailureLogged,
+  requestFailureLogged,
+} from "../access/human-organization-request";
+import {
   identitySessionSchema,
   sessionContextSchema,
   type IdentitySession,
@@ -133,7 +137,8 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
   /**
    * Only registration changes hold Access exclusively. Storage and runtime reads hold it shared.
    * The request runner reports only a coarse outcome, so
-   * the typed failure is captured before the transaction rolls back.
+   * the typed failure is captured before the transaction rolls back. The runner logged the failure
+   * (or its own answer) once, so the typed failure restating it adds no line.
    */
   const inInstallerTransaction = async <Result>(
     mode: "runAccessChange" | "runChange",
@@ -146,7 +151,14 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
       scope: SelectedOrganizationScope,
     ) => Promise<Result>,
   ): Promise<Result> => {
-    const captured: { failure?: DefinitionError<ApplicationInstallationCoordinatorErrorCode> } = {};
+    const captured: {
+      failure?: DefinitionError<ApplicationInstallationCoordinatorErrorCode>;
+      cause?: unknown;
+    } = {};
+    const restating = (
+      failure: DefinitionError<ApplicationInstallationCoordinatorErrorCode>,
+      cause: unknown,
+    ) => (requestFailureLogged(cause) ? markRequestFailureLogged(failure) : failure);
     const outcome = await dependencies.installerRequests[mode](
       session,
       { organizationId },
@@ -161,18 +173,21 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
           return await operation(transaction, authority, scope);
         } catch (error) {
           captured.failure = toCoordinatorError(error);
+          captured.cause = error;
           throw error;
         }
       },
     ).catch((error: unknown) => {
-      throw captured.failure ?? toCoordinatorError(error);
+      throw restating(captured.failure ?? toCoordinatorError(error), error);
     });
     if (outcome.kind === "available") return outcome.value;
-    if (captured.failure !== undefined) throw captured.failure;
-    throw fail(
-      outcome.kind === "unavailable"
-        ? "APPLICATION_INSTALLATION_REFUSED"
-        : "APPLICATION_INSTALLATION_TEMPORARILY_UNAVAILABLE",
+    if (captured.failure !== undefined) throw restating(captured.failure, captured.cause);
+    throw markRequestFailureLogged(
+      fail(
+        outcome.kind === "unavailable"
+          ? "APPLICATION_INSTALLATION_REFUSED"
+          : "APPLICATION_INSTALLATION_TEMPORARILY_UNAVAILABLE",
+      ),
     );
   };
 

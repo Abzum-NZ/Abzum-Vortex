@@ -10,6 +10,7 @@ import {
   type BuilderConferredPermission,
   type BuilderOperation,
 } from "./builder-authority";
+import { markRequestFailureLogged } from "../access/human-organization-request";
 import {
   LiveContextRefused,
   readLiveHumanContext,
@@ -98,6 +99,24 @@ export function installationProblem(
     { kind, ...(unavailableReason === undefined ? {} : { unavailableReason }) },
     detail,
     options,
+  );
+}
+
+/**
+ * The problem restating a request the runner answered without running its check: refused at its
+ * scope, or failed for now (a database refusing connections). The runner logged that answer once,
+ * so the restatement is marked and adds no line.
+ */
+export function requestAnswerProblem(
+  answer: "unavailable" | "temporarily_unavailable",
+  detail: string,
+  refused: InstallationProblemShape = { kind: "refused" },
+): never {
+  throw markRequestFailureLogged(
+    new InstallationProblem(
+      answer === "unavailable" ? refused : { kind: "temporarily_unavailable" },
+      detail,
+    ),
   );
 }
 
