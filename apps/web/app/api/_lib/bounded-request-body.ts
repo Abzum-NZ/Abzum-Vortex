@@ -37,8 +37,10 @@ const readBoundedRequestBytes = async (
       }
       chunks.push(value);
     }
-  } catch (error) {
-    logRefusal("request-body", "bounded read", "body_unreadable", error);
+  } catch {
+    // The stream is the client's own upload: a failed read is the client resetting or breaking it,
+    // an expected end of its request, so it is one information line and never a platform fault.
+    logRefusal("request-body", "bounded read", "body_unreadable");
     return { kind: "unreadable" };
   }
 
