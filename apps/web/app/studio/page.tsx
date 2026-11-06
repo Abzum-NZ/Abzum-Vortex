@@ -17,7 +17,7 @@ export default async function StudioLandingPage() {
     return <StudioUnavailable subject="Studio" result={resolved} reloadHref="/studio" />;
   const launcher = await loadOrganizationLauncher(resolved.session);
   if (launcher.kind !== "available") {
-    console.error(`[studio] landing could not list organisations: ${launcher.kind}`);
+    // The launcher read logged this answer once, where it arose.
     return (
       <main className="mx-auto max-w-4xl space-y-4 p-6">
         <h1 className="text-2xl font-semibold">Studio</h1>

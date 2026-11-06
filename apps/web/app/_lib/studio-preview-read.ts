@@ -107,16 +107,11 @@ export const openStudioPreviewRead = async (
       );
     let reconciled = await reconcile();
     signal?.throwIfAborted();
-    if (reconciled.kind === "temporarily_unavailable" && reconciled.databaseCode === "40001") {
-      console.info(
-        "[studio] retrying preview reconcile after serialization conflict: STUDIO_PREVIEW_RECONCILE_RETRY",
-      );
+    // The request runner logged the conflict once; the retry adds no line.
+    if (reconciled.kind === "temporarily_unavailable" && reconciled.databaseCode === "40001")
       reconciled = await reconcile();
-    }
     if (reconciled.kind !== "available") {
-      console.error(
-        `[studio] preview records unchecked: STUDIO_PREVIEW_RECORDS_UNCHECKED kind=${reconciled.kind}`,
-      );
+      // The request runner logged this answer once, with its class: a refusal at info, a fault at error.
       return reconciled.kind === "temporarily_unavailable"
         ? { kind: "temporarily_unavailable" }
         : { kind: "refused" };
@@ -136,14 +131,8 @@ export const openStudioPreviewRead = async (
     firstInstalled.kind === "temporarily_unavailable" && firstInstalled.databaseCode === "40001"
       ? await loadInstalledContext(session, dependencies, selection)
       : firstInstalled;
-  if (installed !== firstInstalled)
-    console.info(
-      "[studio] retried preview context after serialization conflict: STUDIO_PREVIEW_CONTEXT_RETRY",
-    );
   if (installed.kind !== "available") {
-    console.error(
-      `[studio] preview context unavailable: STUDIO_PREVIEW_CONTEXT_UNAVAILABLE kind=${installed.kind}`,
-    );
+    // The request runner logged this answer once, with its class: a refusal at info, a fault at error.
     return installed.kind === "temporarily_unavailable"
       ? { kind: "temporarily_unavailable" }
       : { kind: "refused" };

@@ -3,11 +3,11 @@ import "server-only";
 import type { RequestDatabaseTransaction } from "../db/request-transaction";
 import { prepareApplicationRoleTemplatesForHumanRequest } from "../access/application-role-template-adapter";
 import { createBuilderAuthority } from "../access/builder-authority";
-import {
-  markRequestFailureLogged,
-  type createHumanOrganizationRequestService,
-  type HumanOrganizationRequestResult,
+import type {
+  createHumanOrganizationRequestService,
+  HumanOrganizationRequestResult,
 } from "../access/human-organization-request";
+import { markRequestFailureLogged } from "../access/request-failure-mark";
 import type { BuilderOperation } from "./builder-authority";
 import type {
   IdentitySession,

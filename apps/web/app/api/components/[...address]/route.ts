@@ -9,8 +9,8 @@ import {
   serveComponentBundle,
   type ComponentBundleObjectStore,
   type ServeComponentBundleResult,
+  logRefusal,
 } from "@vortex/platform/server";
-import { logRefusal } from "@vortex/platform/schema";
 import { isComponentOriginRequest } from "../_lib/component-origin";
 import {
   hostedStorageSigningConfiguration,

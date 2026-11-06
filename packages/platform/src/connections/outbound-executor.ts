@@ -5,7 +5,7 @@ import { request as httpsRequest } from "node:https";
 import { BlockList, isIP } from "node:net";
 import type { LookupFunction } from "node:net";
 import type { ConnectionTypeSourceDocument } from "../definition/definition-source";
-import { logRefusal } from "../catalogue/runtime-primitives";
+import { logRefusal } from "../access/request-failure";
 
 type ConnectionType = ConnectionTypeSourceDocument["body"];
 type ConnectionOperation = ConnectionType["operations"][number];

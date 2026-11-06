@@ -1,6 +1,6 @@
 import "server-only";
 
-import { requestFailureLogged } from "../access/human-organization-request";
+import { requestFailureLogged } from "../access/request-failure-mark";
 import { describeFailure } from "../catalogue/runtime-primitives";
 import { InstallationProblem, type InstallationProblemShape } from "./installation-authority";
 import { DefinitionError, classifyDatabaseError } from "./definition-error";

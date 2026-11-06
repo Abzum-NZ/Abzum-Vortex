@@ -10,7 +10,7 @@ import {
   type BuilderConferredPermission,
   type BuilderOperation,
 } from "./builder-authority";
-import { markRequestFailureLogged } from "../access/human-organization-request";
+import { markRequestFailureLogged } from "../access/request-failure-mark";
 import {
   LiveContextRefused,
   readLiveHumanContext,
@@ -295,10 +295,8 @@ export const requireInstallationAuthority = async (
         cause: error,
       });
     if (
-      error instanceof Error &&
-      "code" in error &&
-      String((error as { readonly code?: unknown }).code) ===
-        "BUILDER_RECENT_AUTHENTICATION_REQUIRED"
+      error instanceof BuilderAuthorityError &&
+      error.code === "BUILDER_RECENT_AUTHENTICATION_REQUIRED"
     )
       installationProblem("recent_authentication_required", "authentication_required", undefined, {
         cause: error,

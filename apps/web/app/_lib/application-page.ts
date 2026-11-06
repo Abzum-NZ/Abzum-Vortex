@@ -1,4 +1,4 @@
-import { logRefusal, sameId, splitProjectedPage } from "@vortex/platform/schema";
+import { sameId, splitProjectedPage } from "@vortex/platform/schema";
 import "server-only";
 
 import type { BoundHumanOrganizationRequest } from "@vortex/platform/server";
@@ -20,6 +20,7 @@ import type {
   PageLoadOptions,
 } from "./application-page/types";
 import { loadApplicationPageInternal } from "./application-page/load";
+import { logRefusal } from "@vortex/platform/server";
 
 /**
  * Composes the one server model of an installed application page: the permission-filtered page,

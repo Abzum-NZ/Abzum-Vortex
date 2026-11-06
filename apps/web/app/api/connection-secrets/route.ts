@@ -1,7 +1,6 @@
 import type { NextRequest } from "next/server";
 import { z } from "zod";
-import { logRefusal } from "@vortex/platform/schema";
-import { storeConnectionSecret } from "@vortex/platform/server";
+import { storeConnectionSecret, logRefusal } from "@vortex/platform/server";
 import { resolveApplicationAddress } from "../../_lib/application-address";
 import { pageAddressSchema } from "../../_lib/page-address-schema";
 import { privateJsonResponse } from "../../_lib/private-response";
