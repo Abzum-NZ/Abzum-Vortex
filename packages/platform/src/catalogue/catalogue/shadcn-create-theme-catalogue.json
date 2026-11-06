@@ -133,8 +133,8 @@
               "token": "muted_text",
               "mode": "light",
               "from": "oklch(0.556 0 0)",
-              "to": "oklch(0.537 0 0)",
-              "requirement": "4.5:1 on the background, card, muted, accent, secondary and sidebar surfaces"
+              "to": "oklch(0.529 0 0)",
+              "requirement": "4.5:1 on the background, card, muted, accent, secondary and sidebar surfaces, and on the input, border and muted fills at half strength"
             },
             {
               "token": "ring",
@@ -193,8 +193,8 @@
               "token": "muted_text",
               "mode": "light",
               "from": "oklch(0.553 0.013 58.071)",
-              "to": "oklch(0.538 0.013 58.071)",
-              "requirement": "4.5:1 on the background, card, muted, accent, secondary and sidebar surfaces"
+              "to": "oklch(0.527 0.013 58.071)",
+              "requirement": "4.5:1 on the background, card, muted, accent, secondary and sidebar surfaces, and on the input, border and muted fills at half strength"
             },
             {
               "token": "ring",
@@ -253,8 +253,8 @@
               "token": "muted_text",
               "mode": "light",
               "from": "oklch(0.552 0.016 285.938)",
-              "to": "oklch(0.538 0.016 285.938)",
-              "requirement": "4.5:1 on the background, card, muted, accent, secondary and sidebar surfaces"
+              "to": "oklch(0.526 0.016 285.938)",
+              "requirement": "4.5:1 on the background, card, muted, accent, secondary and sidebar surfaces, and on the input, border and muted fills at half strength"
             },
             {
               "token": "ring",
@@ -313,8 +313,8 @@
               "token": "muted_text",
               "mode": "light",
               "from": "oklch(0.551 0.027 264.364)",
-              "to": "oklch(0.537 0.027 264.364)",
-              "requirement": "4.5:1 on the background, card, muted, accent, secondary and sidebar surfaces"
+              "to": "oklch(0.528 0.027 264.364)",
+              "requirement": "4.5:1 on the background, card, muted, accent, secondary and sidebar surfaces, and on the input, border and muted fills at half strength"
             },
             {
               "token": "ring",
@@ -370,6 +370,13 @@
           },
           "contrastDerivations": [
             {
+              "token": "muted_text",
+              "mode": "light",
+              "from": "oklch(0.542 0.034 322.5)",
+              "to": "oklch(0.529 0.034 322.5)",
+              "requirement": "4.5:1 on the background, card, muted, accent, secondary and sidebar surfaces, and on the input, border and muted fills at half strength"
+            },
+            {
               "token": "ring",
               "mode": "light",
               "from": "oklch(0.711 0.019 323.02)",
@@ -422,8 +429,8 @@
               "token": "muted_text",
               "mode": "light",
               "from": "oklch(0.58 0.031 107.3)",
-              "to": "oklch(0.536 0.031 107.3)",
-              "requirement": "4.5:1 on the background, card, muted, accent, secondary and sidebar surfaces"
+              "to": "oklch(0.527 0.031 107.3)",
+              "requirement": "4.5:1 on the background, card, muted, accent, secondary and sidebar surfaces, and on the input, border and muted fills at half strength"
             },
             {
               "token": "ring",
@@ -486,8 +493,8 @@
               "token": "muted_text",
               "mode": "light",
               "from": "oklch(0.56 0.021 213.5)",
-              "to": "oklch(0.535 0.021 213.5)",
-              "requirement": "4.5:1 on the background, card, muted, accent, secondary and sidebar surfaces"
+              "to": "oklch(0.524 0.021 213.5)",
+              "requirement": "4.5:1 on the background, card, muted, accent, secondary and sidebar surfaces, and on the input, border and muted fills at half strength"
             },
             {
               "token": "ring",
@@ -546,8 +553,8 @@
               "token": "muted_text",
               "mode": "light",
               "from": "oklch(0.547 0.021 43.1)",
-              "to": "oklch(0.539 0.021 43.1)",
-              "requirement": "4.5:1 on the background, card, muted, accent, secondary and sidebar surfaces"
+              "to": "oklch(0.527 0.021 43.1)",
+              "requirement": "4.5:1 on the background, card, muted, accent, secondary and sidebar surfaces, and on the input, border and muted fills at half strength"
             },
             {
               "token": "ring",
