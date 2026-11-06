@@ -14,6 +14,8 @@ const ACCENT_TOKEN_KEY = "primary";
 
 /** The vocabulary's muted text, which the renderer paints on every background-role surface. */
 const MUTED_TEXT_TOKEN_KEY = "muted_text";
+/** Fills without the background role that the renderer also draws muted text on. */
+const MUTED_TEXT_FILL_KEYS: readonly string[] = ["secondary", "sidebar_accent"];
 
 export const DEFAULT_LIGHT_SURFACE = "#FFFFFF";
 export const DEFAULT_DARK_SURFACE = "#000000";
@@ -347,12 +349,14 @@ export function validateThemeContrast(
       }
     }
 
-    // Muted text is drawn on every background-role surface (card, popover, muted, accent, sidebar),
-    // not only on the page surface, so it must read on each of them.
+    // Muted text is drawn on every background-role surface (card, popover, muted, accent, sidebar)
+    // and on the secondary and sidebar-accent fills, not only on the page surface, so it must read
+    // on each of them.
     if (key === MUTED_TEXT_TOKEN_KEY) {
       for (const surfaceKey of Object.keys(tokens).sort()) {
         const painted = tokens[surfaceKey];
-        if (painted?.kind !== "color_pair" || painted.role !== "background") continue;
+        if (painted?.kind !== "color_pair") continue;
+        if (painted.role !== "background" && !MUTED_TEXT_FILL_KEYS.includes(surfaceKey)) continue;
         if (surfaceKey === surface.key) continue;
         for (const [mode, foreground, background, canvas] of [
           ["light", token.light, painted.light, lightSurface],

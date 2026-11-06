@@ -520,7 +520,7 @@
       "muted_text": {
         "kind": "color_pair",
         "light": "oklch(0.526 0.016 285.938)",
-        "dark": "oklch(0.705 0.015 286.067)",
+        "dark": "oklch(0.71 0.015 286.067)",
         "role": "foreground"
       },
       "border_color": {
@@ -768,7 +768,7 @@
       "muted_text": {
         "kind": "color_pair",
         "light": "oklch(0.528 0.027 264.364)",
-        "dark": "oklch(0.707 0.022 261.325)",
+        "dark": "oklch(0.712 0.022 261.325)",
         "role": "foreground"
       },
       "border_color": {
