@@ -379,6 +379,22 @@ const inRailOrPanel = (rail: HTMLElement | null, target: EventTarget | null): bo
   rail !== null && target instanceof Node && rail.contains(target);
 
 /**
+ * Who answers Studio's keyboard shortcuts pressed on a target. A dialog, alert dialog, menu or list
+ * popup owns its keys (`"popup"`), except the inspector's Sheet below the docking width
+ * (`"inspector"`): the header's Undo and Redo sit behind its backdrop, so Undo, Redo and the
+ * inspector key still work there. A key the canvas passes on is dispatched on the window, not on an
+ * element: it is Studio's (`"studio"`).
+ */
+export const studioKeyLayer = (target: EventTarget | null): "studio" | "inspector" | "popup" => {
+  const layer =
+    target instanceof Element
+      ? target.closest('[role="dialog"], [role="alertdialog"], [role="menu"], [role="listbox"]')
+      : null;
+  if (layer === null) return "studio";
+  return layer.hasAttribute("data-studio-inspector-sheet") ? "inspector" : "popup";
+};
+
+/**
  * A resizable side panel that opens at the width it keeps. The width is applied on mount and again
  * when `sizeKey` changes (another rail tab, or the stored widths arriving), never when the window
  * resizes: the panel keeps its pixel width and the canvas takes the difference.
@@ -538,23 +554,17 @@ export function StudioFrame<Key extends string>({
   }, [dockInspector, hasInspector]);
   useEffect(() => {
     const shortcut = (event: globalThis.KeyboardEvent) => {
-      const dialog =
-        event.target instanceof Element
-          ? event.target.closest('[role="dialog"], [role="alertdialog"]')
-          : null;
       if ((!event.ctrlKey && !event.metaKey) || event.altKey || event.shiftKey) return;
-      if (
-        event.key === "." &&
-        (dialog === null || dialog.hasAttribute("data-studio-inspector-sheet"))
-      ) {
+      const layer = studioKeyLayer(event.target);
+      if (event.key === "." && layer !== "popup") {
         event.preventDefault();
         toggleInspector();
       }
-      if (event.key === "\\" && dialog === null) {
+      if (event.key === "\\" && layer === "studio") {
         event.preventDefault();
         focusCanvas();
       }
-      if (event.key === "b" && dialog === null && wide && hasPanel) {
+      if (event.key === "b" && layer === "studio" && wide && hasPanel) {
         event.preventDefault();
         toggleCollapsed();
       }

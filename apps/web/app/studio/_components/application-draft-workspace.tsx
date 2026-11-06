@@ -24,7 +24,7 @@ import { ApplicationDraftAgentTools } from "./application-draft-agent-tools";
 import type { StudioModuleOwnerApplication } from "./module-fields-editor";
 import { useStudioAccessTab } from "./studio-access-tab";
 import { useStudioDataTab } from "./studio-data-tab";
-import { StudioFrame } from "./studio-frame";
+import { StudioFrame, studioKeyLayer } from "./studio-frame";
 import {
   isStudioRailKey,
   isStudioReleasesSection,
@@ -355,12 +355,6 @@ function ExistingApplicationWorkspace(props: ExistingProps) {
   const canvasShown = railShowsCanvas(tab);
   useEffect(() => {
     const shortcut = (event: KeyboardEvent) => {
-      const target = event.target;
-      if (
-        target instanceof HTMLElement &&
-        (target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName))
-      )
-        return;
       if ((!event.ctrlKey && !event.metaKey) || event.altKey) return;
       // The physical key, so the shortcuts also work on layouts that do not type Latin letters.
       const key =
@@ -369,12 +363,19 @@ function ExistingApplicationWorkspace(props: ExistingProps) {
       // Puck's own hotkeys have nothing to go back to.
       const redo = key === "y" ? !event.shiftKey : key === "z" && event.shiftKey;
       if (key !== "z" && !redo) return;
+      const target = event.target;
+      // A text field keeps the browser's own Undo and Redo of its typing. Puck's hotkeys listen on
+      // the document and cancel that default, so the key goes no further than the field.
+      if (
+        target instanceof HTMLElement &&
+        (target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName))
+      ) {
+        event.stopPropagation();
+        return;
+      }
+      // Nor does the browser undo in the field that had the focus before.
       event.preventDefault();
-      // A modal owns its actions, except the inspector Sheet below the docking width: the header's
-      // Undo and Redo sit behind its backdrop. Also prevent native Undo reaching the previously focused input.
-      const dialog =
-        target instanceof Element ? target.closest('[role="dialog"], [role="alertdialog"]') : null;
-      if (dialog !== null && !dialog.hasAttribute("data-studio-inspector-sheet")) return;
+      if (studioKeyLayer(target) === "popup") return;
       if (redo) draft.redo();
       else draft.undo();
     };
