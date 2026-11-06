@@ -380,8 +380,23 @@ export const readMfaFactor = async (): Promise<
  * cannot, which the database treats as enrolled.
  */
 export const readHasVerifiedSecondFactor = async (): Promise<boolean | undefined> => {
-  const factor = await readMfaFactor();
-  return factor.kind === "unavailable" ? undefined : factor.kind === "challenge";
+  try {
+    const { boundary } = await mfaBoundary();
+    const factors = await boundary.client.auth.mfa.listFactors();
+    if (factors.error) throw factors.error;
+    const staged = boundary.stage.snapshot();
+    if (staged.refused || staged.mutations.length)
+      throw new Error("MFA factor read changed the session");
+    // Any verified factor kind counts, as the identity verifier treats them all as a second factor.
+    return factors.data.all.some((factor) => factor.status === "verified");
+  } catch (error) {
+    return mapWebError(error, {
+      route: "auth/mfa",
+      operation: "read-second-factor",
+      code: "MFA_READ_FAILED",
+      fallback: undefined,
+    });
+  }
 };
 
 /**

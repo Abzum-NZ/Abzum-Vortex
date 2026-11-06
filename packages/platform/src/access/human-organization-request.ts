@@ -215,6 +215,7 @@ export const createHumanOrganizationRequestService = (
       organizationShortName: string;
       applicationKey: string;
     }>,
+    secondFactor?: Readonly<{ hasSecondFactor: boolean }>,
   ): Promise<HumanOrganizationRequestResult<Result> | Special> => {
     const verifiedSession = identitySessionSchema.safeParse(session);
     const verifiedCandidate =
@@ -430,9 +431,9 @@ export const createHumanOrganizationRequestService = (
                       }),
                 }
               : {}),
-            ...(verifiedSession.data.hasSecondFactor === undefined
+            ...(secondFactor === undefined
               ? {}
-              : { hasSecondFactor: verifiedSession.data.hasSecondFactor }),
+              : { hasSecondFactor: secondFactor.hasSecondFactor }),
             issuedAt,
             expiresAt: verifiedSession.data.accessTokenExpiresAt,
             accessVersion: scope.accessVersion,
@@ -675,6 +676,32 @@ export const createHumanOrganizationRequestService = (
       ) => Promise<Result>,
     ): Promise<HumanOrganizationRequestResult<Result>> =>
       runWithMode("access_change", session, candidate, operation),
+    /**
+     * An access change that also states, for this one call, whether the person has a verified
+     * second factor, read live by the trusted entry point. Only the two-step setting change uses it.
+     */
+    runAccessChangeWithSecondFactor: <Result>(
+      session: IdentitySession,
+      candidate: OrganizationSelectionCandidate,
+      operation: (
+        transaction: RequestDatabaseTransaction,
+        scope: SelectedOrganizationScope,
+        issuedAt: string,
+      ) => Promise<Result>,
+      secondFactor: Readonly<{ hasSecondFactor: boolean }> | undefined,
+    ): Promise<HumanOrganizationRequestResult<Result>> =>
+      runWithMode(
+        "access_change",
+        session,
+        candidate,
+        operation,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        secondFactor,
+      ),
     runAccessChangeWithRefusal: <Result>(
       session: IdentitySession,
       candidate: OrganizationSelectionCandidate,

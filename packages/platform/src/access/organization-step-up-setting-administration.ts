@@ -135,19 +135,22 @@ export const createAccessAdministrationStepUpSettingOperations = ({
       );
     }
     const hasSecondFactor = await readSecondFactor?.();
-    const stamped: IdentitySession =
-      hasSecondFactor === undefined ? session : { ...session, hasSecondFactor };
-    return requests.runAccessChange(stamped, candidate, async (transaction) => {
-      const rows = await transaction.query<ChangeRow>`
+    return requests.runAccessChangeWithSecondFactor(
+      session,
+      candidate,
+      async (transaction) => {
+        const rows = await transaction.query<ChangeRow>`
         select vortex_access.change_current_organization_step_up_setting(
           ${command.data.expectedRevision}::bigint,
           ${command.data.requireStepUp}::boolean,
           ${activityId}::uuid
         ) as result
       `;
-      const parsed = changeResultSchema.safeParse(rows[0]?.result);
-      if (rows.length !== 1 || !parsed.success) throw unavailableError(unavailableCode);
-      return parsed.data;
-    });
+        const parsed = changeResultSchema.safeParse(rows[0]?.result);
+        if (rows.length !== 1 || !parsed.success) throw unavailableError(unavailableCode);
+        return parsed.data;
+      },
+      hasSecondFactor === undefined ? undefined : { hasSecondFactor },
+    );
   },
 });
