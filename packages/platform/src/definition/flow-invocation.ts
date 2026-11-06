@@ -110,6 +110,8 @@ export type FlowControlOptionRequest = Readonly<{
 
 export type InvocationDependencies = Readonly<{
   boundRequest?: BoundHumanOrganizationRequest;
+  /** The entry point's live read of whether the person has a verified second factor. */
+  readSecondFactor?: () => Promise<boolean | undefined>;
   authorityId: IdentityAuthorityId;
   /** The application catalogue's install and upgrade journeys, run under the initiator's authority. */
   applicationStore: ApplicationStoreService;
@@ -225,6 +227,9 @@ export async function invokeInstalledFlow(
     identityAuthorityId: authorityId,
     telemetry,
     channel: dependencies.channel,
+    ...(dependencies.readSecondFactor === undefined
+      ? {}
+      : { readSecondFactor: dependencies.readSecondFactor }),
     ...(dependencies.boundRequest === undefined ? {} : { boundRequest: dependencies.boundRequest }),
   };
   const requests = createHumanOrganizationRequestService({

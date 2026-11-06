@@ -46,6 +46,10 @@ export {
   readOrganizationThemeChangePermittedAfterAuthorization,
   type OrganizationThemeRead,
 } from "./organization-theme-administration";
+export {
+  readCurrentOrganizationStepUpSettingAfterAuthorization,
+  type OrganizationStepUpSetting,
+} from "./organization-step-up-setting-administration";
 export { createOrganizationLocalAdministrationService } from "./organization-local-administration-access";
 export {
   decideOrganizationAccessBatch,

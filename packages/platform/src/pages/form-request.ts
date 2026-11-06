@@ -30,7 +30,7 @@ import type { ComponentFlowBinding } from "../definition/application-flow-bindin
 export const adaptPrivateFormSubmit = (
   binding: ComponentFlowBinding,
   callerInputs: Readonly<Record<string, unknown>>,
-  subject?: Readonly<{ recordId: string }>,
+  subject?: Readonly<{ recordId: string; revision?: number }>,
 ): Readonly<Record<string, unknown>> | undefined =>
   binding.event === "form_submit"
     ? adaptFormSubmitInputs(binding.flow.inputs, callerInputs, subject)

@@ -25,7 +25,8 @@ begin
       'access_grant_changed',
       'public_policy_changed',
       'federation_mirror_changed',
-      'mcp_authorization_changed'
+      'mcp_authorization_changed',
+      'authentication_requirement_changed'
     ) then
     raise exception using errcode = '22023', message = 'Access-version increment input is invalid';
   end if;

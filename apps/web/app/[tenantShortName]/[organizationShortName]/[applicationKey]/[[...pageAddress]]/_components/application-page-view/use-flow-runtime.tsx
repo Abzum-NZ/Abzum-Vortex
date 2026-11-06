@@ -389,6 +389,15 @@ export function useFlowRuntime({
     },
     [currentData, dialogState, formCancelledRef, model, navigation, resolvePageHref, router],
   );
+  const verification = useMemo(
+    () =>
+      stepUpVerification(() => ({
+        tenantShortName: application.tenantShortName,
+        organizationShortName: application.organizationShortName,
+        applicationKey: application.applicationKey,
+      })),
+    [application.tenantShortName, application.organizationShortName, application.applicationKey],
+  );
   const messageActionRef = useRef<
     (message: FlowMessageIntent, offered: FlowMessageAction) => void | Promise<unknown>
   >(() => undefined);
@@ -400,7 +409,7 @@ export function useFlowRuntime({
     renderForm,
     navigation: navigationEnvironment,
     state: runtimeState,
-    verification: stepUpVerification,
+    verification,
     onMessageAction: (message, action) => messageActionRef.current(message, action),
     setPanel: (panel, state) => setPanelRef.current?.(panel, state),
   });
