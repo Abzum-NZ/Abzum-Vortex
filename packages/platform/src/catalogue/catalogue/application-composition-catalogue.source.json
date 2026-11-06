@@ -2275,6 +2275,31 @@
         "required": false
       },
       {
+        "kind": "choice",
+        "key": "variant",
+        "label": "Variant",
+        "help": "How a yes or no field or a choice is drawn: checkbox or switch, dropdown or radio buttons",
+        "required": false,
+        "options": [
+          {
+            "key": "checkbox",
+            "label": "Checkbox"
+          },
+          {
+            "key": "switch",
+            "label": "Switch"
+          },
+          {
+            "key": "select",
+            "label": "Select dropdown"
+          },
+          {
+            "key": "radio",
+            "label": "Radio buttons"
+          }
+        ]
+      },
+      {
         "kind": "text",
         "key": "publishes_parameter",
         "label": "Page parameter",

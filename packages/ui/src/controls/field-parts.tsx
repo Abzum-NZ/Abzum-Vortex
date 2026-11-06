@@ -8,8 +8,10 @@ import {
   type FocusEvent,
   type ReactElement,
 } from "react";
+import { InfoIcon } from "lucide-react";
 import type { TypedFieldValue } from "@vortex/platform/schema";
 import { FieldDescription, FieldError } from "../components/field";
+import { Tooltip, TooltipContent, TooltipTrigger } from "../components/tooltip";
 import { FlowRuntimeStateContext } from "../flow-runtime/flow-runtime-state-context";
 import { InlineMessageContent, inlineMessageLive } from "../flow-runtime/inline-message";
 import type { PageMessage } from "../flow-runtime/messages";
@@ -164,6 +166,33 @@ export function FieldLabelText({
           {" *"}
         </span>
       ) : null}
+    </>
+  );
+}
+
+/**
+ * A field's help as a tooltip on an information icon beside its label (help lives in tooltips, not
+ * in a paragraph under the control). The text is also in the page for assistive technology, under
+ * the id the control's `aria-describedby` names.
+ */
+export function FieldHelpTooltip({
+  id,
+  help,
+  label,
+}: Readonly<{ id: string; help: string; label: string }>): ReactElement {
+  return (
+    <>
+      <Tooltip>
+        <TooltipTrigger
+          render={<button type="button" aria-label={`About ${label}`} data-vortex-field-help="" />}
+        >
+          <InfoIcon className="size-3.5 text-muted-foreground" aria-hidden="true" />
+        </TooltipTrigger>
+        <TooltipContent className="max-w-80">{help}</TooltipContent>
+      </Tooltip>
+      <span id={id} className="sr-only">
+        {help}
+      </span>
     </>
   );
 }
