@@ -19,7 +19,8 @@ export type OrganizationThemeLoad =
 /**
  * The organisation theme of one organisation, as any member of it may read it. One read per
  * request and organisation: the document root, the application frame and the page of one request
- * share it. A read that fails is reported, never replaced by "no organisation theme".
+ * share it. A read that fails is reported (the request runner logs it once), never replaced by
+ * "no organisation theme".
  */
 export const loadOrganizationTheme = cache(
   async (session: IdentitySession, organizationId: string): Promise<OrganizationThemeLoad> => {
@@ -29,15 +30,7 @@ export const loadOrganizationTheme = cache(
       (transaction) => readCurrentOrganizationThemeAfterAuthorization(transaction),
     );
     if (result.kind === "available") return { kind: "available", theme: result.value };
-    // A person who is not a member of the organisation is refused: expected, not a fault.
-    if (result.kind === "unavailable")
-      console.info(
-        `[organization-theme] read refused: ${result.code ?? result.cause ?? "no cause"}`,
-      );
-    else
-      console.error(
-        `[organization-theme] read unavailable: ${result.databaseCode ?? result.cause ?? "unknown"}`,
-      );
+    // The request runner already logged a refused or failed read, once.
     return { kind: result.kind };
   },
 );

@@ -3,9 +3,10 @@ import "server-only";
 import type { RequestDatabaseTransaction } from "../db/request-transaction";
 import { prepareApplicationRoleTemplatesForHumanRequest } from "../access/application-role-template-adapter";
 import { createBuilderAuthority } from "../access/builder-authority";
-import type {
-  createHumanOrganizationRequestService,
-  HumanOrganizationRequestResult,
+import {
+  markRequestFailureLogged,
+  type createHumanOrganizationRequestService,
+  type HumanOrganizationRequestResult,
 } from "../access/human-organization-request";
 import type { BuilderOperation } from "./builder-authority";
 import type {
@@ -164,7 +165,10 @@ const firstInstallDefinitionAccess = (
     );
     if (result.kind !== "available") {
       if (callbackFailure !== undefined) throw callbackFailure;
-      throw new DefinitionError("APPLICATION_INSTALLATION_RELEASE_UNAVAILABLE");
+      // The runner logged its answer once: the restatement adds no line.
+      throw markRequestFailureLogged(
+        new DefinitionError("APPLICATION_INSTALLATION_RELEASE_UNAVAILABLE"),
+      );
     }
     return result.value;
   },

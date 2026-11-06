@@ -33,6 +33,7 @@ import {
   InstallationProblem,
   installationOperation,
   installationProblem,
+  requestAnswerProblem,
   readInstallationHumanContext,
   readInstallationPermissionDeadline,
   requireInstallationAuthority,
@@ -252,9 +253,13 @@ export const inInstallerRequest = async <Value>(
   );
   if (result.kind === "available") return result.value;
   if (failure !== undefined) throw failure;
-  return result.kind === "temporarily_unavailable"
-    ? installationProblem("installation_roles_request_unavailable", "temporarily_unavailable")
-    : refusedFor("installation_roles_request_refused", "installation_authority");
+  return requestAnswerProblem(
+    result.kind,
+    result.kind === "unavailable"
+      ? "installation_roles_request_refused"
+      : "installation_roles_request_unavailable",
+    { kind: "refused", memberRoleRefusal: "installation_authority" },
+  );
 };
 
 /** Proves one platform permission in the open installer transaction, refusing it by name. */

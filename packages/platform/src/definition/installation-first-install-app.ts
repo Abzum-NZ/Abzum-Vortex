@@ -18,6 +18,7 @@ import type { SystemApplicationBoundReleaseSetResult } from "./definition-consum
 import {
   installationOperation,
   installationProblem,
+  requestAnswerProblem,
   readInstallationAuthorityDeadlines,
   readInstallationDatabaseTime,
   readInstallationHumanContext,
@@ -240,9 +241,12 @@ const runFirstInstallChange = async <Value>(
   );
   if (result.kind === "available") return result.value;
   if (callbackFailure !== undefined) throw callbackFailure;
-  if (result.kind === "unavailable")
-    return installationProblem("first_install_request_refused", "refused");
-  return installationProblem("first_install_request_unavailable", "temporarily_unavailable");
+  return requestAnswerProblem(
+    result.kind,
+    result.kind === "unavailable"
+      ? "first_install_request_refused"
+      : "first_install_request_unavailable",
+  );
 };
 
 /** The application's latest published version, read under the installation authority in its own request. */
