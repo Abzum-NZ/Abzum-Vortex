@@ -17,13 +17,13 @@ import {
 } from "@vortex/platform/server";
 import { OrganizationLauncherPage } from "./_components/organization-launcher-page";
 import {
+  AddressTemporarilyUnavailable,
   OrganizationAddressState,
-  SignInTemporarilyUnavailable,
+  readAccountMenuLauncher,
 } from "./_components/address-states";
 import { openPermittedApplication } from "./_components/open-application";
 import { continueSessionOrEnd } from "../../auth/_lib/session-redirect";
 import { resolveIdentitySessionWithEmail } from "../../auth/_lib/session-server";
-import { loadOrganizationLauncher } from "../../_lib/organization-context";
 import {
   applicationPageAddressPath as addressPath,
   organizationAddressPath as launcherPath,
@@ -56,7 +56,7 @@ export default async function OrganizationPage({ params }: OrganizationPageProps
   }
 
   if (identity.kind === "temporarily_unavailable")
-    return <SignInTemporarilyUnavailable retryHref={retryHref} />;
+    return <AddressTemporarilyUnavailable cause="sign_in" />;
   if (email === undefined) throw new Error("Active identity session resolved without an email");
   const context = { session: identity.session, email, tenantShortName, organizationShortName };
 
@@ -95,9 +95,8 @@ export default async function OrganizationPage({ params }: OrganizationPageProps
       ),
     );
 
-  const launcher = await loadOrganizationLauncher(identity.session);
-  if (launcher.kind !== "available")
-    throw new Error(`Organisation launcher unavailable for the account menu: ${launcher.kind}`);
+  const launcher = await readAccountMenuLauncher(identity.session);
+  if (launcher.kind === "unavailable") return launcher.page;
   const organization = launcher.entries.find(
     (entry) =>
       entry.tenantShortName === tenantShortName &&

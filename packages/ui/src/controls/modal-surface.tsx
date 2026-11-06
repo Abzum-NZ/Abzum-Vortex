@@ -1,7 +1,15 @@
 "use client";
 
-import type { ReactElement } from "react";
+import { useContext, type ReactElement } from "react";
 import { Icon } from "../icons/icon";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "../components/card";
 import { Button } from "../components/button";
 import {
   Dialog,
@@ -26,6 +34,7 @@ import {
   type ControlRenderProps,
 } from "./control-context";
 import { useSeededState } from "./field-parts";
+import { EditingCanvasContext } from "./revealed-slot";
 
 type ModalSurfaceKind = "dialog" | "drawer";
 export type DrawerPlacement = "left" | "right" | "top" | "bottom";
@@ -88,6 +97,7 @@ export function ModalSurface<Values extends ModalSurfacePayload>({
   const settings = readControlSettings(props, context.location);
   const size = settings.choice<SurfaceSize>("size", "medium");
   const title = context.accessibleName ?? props.metadata.name;
+  const editing = useContext(EditingCanvasContext);
   const [open, setOpen] = useSeededState(context.values?.open ?? settings.boolean("open"));
 
   const dismiss = (): void => {
@@ -110,6 +120,24 @@ export function ModalSurface<Values extends ModalSurfacePayload>({
     "data-vortex-size": size,
     ...(dataAttributes ?? {}),
   };
+
+  // The editor draws the surface in the page with its content, closed or not: a closed one has no
+  // surface of its own to place blocks in.
+  if (editing)
+    return (
+      <Card className="border border-dashed" {...sharedDataAttributes}>
+        <CardHeader>
+          <CardTitle>{title}</CardTitle>
+          <CardDescription>
+            {kind === "dialog" ? "Dialog" : "Drawer"}: opens over the page when a flow shows it.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>{props.slots.content ?? null}</CardContent>
+        {props.slots.actions === undefined || props.slots.actions === null ? null : (
+          <CardFooter>{props.slots.actions}</CardFooter>
+        )}
+      </Card>
+    );
 
   const closeClassName = cn("absolute", kind === "dialog" ? "top-2 right-2" : "top-3 right-3");
 

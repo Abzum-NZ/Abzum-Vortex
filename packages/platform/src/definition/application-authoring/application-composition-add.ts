@@ -89,7 +89,7 @@ import type { StudioPlacementDescriber } from "./semantic-outline";
  * What the author calls the entry of a repeating slot (a tab) that is stored under `slotKey`: its
  * label, else its key, as the block itself shows it.
  */
-const repeatingEntryName = (
+export const repeatingEntryName = (
   item: SourceItem,
   declaration: Readonly<{
     key: string;

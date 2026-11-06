@@ -571,6 +571,37 @@ export function useStudioCanvasTab({
     </>
   );
 
+  // What the inspector says instead of a form when the selection is changed elsewhere.
+  const inspectorNote =
+    selected?.kind === "placement"
+      ? undefined
+      : selected?.kind === "flow" || selected?.kind === "flow_step"
+        ? tab === "flows"
+          ? undefined
+          : "Open this flow in the Flows tab to change it."
+        : selected === null
+          ? undefined
+          : selected.kind === "navigation"
+            ? "Change this menu entry in the Menu tab."
+            : selected.kind === "shell"
+              ? undefined
+              : selected.kind === "role"
+                ? tab === "access"
+                  ? undefined
+                  : "Change this role in the Access tab."
+                : selected.kind === "module" ||
+                    selected.kind === "record_type" ||
+                    selected.kind === "field" ||
+                    selected.kind === "query"
+                  ? "Change this in the Data tab."
+                  : "This item cannot be edited here.";
+  // Whether the inspector holds settings of the selection (a name form, or a block, page, layout
+  // or flow editor) and not only a note pointing to another tab.
+  const inspectorEdits =
+    selected !== null &&
+    inspector.status === "resolved" &&
+    (editable || inspectorNote === undefined);
+
   const inspectorPanel = (
     <StudioInspector
       inspector={inspector}
@@ -594,30 +625,7 @@ export function useStudioCanvasTab({
           : undefined
       }
       extraActions={selected?.kind === "flow" ? flowDeleteActions : []}
-      note={
-        selected?.kind === "placement"
-          ? undefined
-          : selected?.kind === "flow" || selected?.kind === "flow_step"
-            ? tab === "flows"
-              ? undefined
-              : "Open this flow in the Flows tab to change it."
-            : selected === null
-              ? undefined
-              : selected.kind === "navigation"
-                ? "Change this menu entry in the Menu tab."
-                : selected.kind === "shell"
-                  ? undefined
-                  : selected.kind === "role"
-                    ? tab === "access"
-                      ? undefined
-                      : "Change this role in the Access tab."
-                    : selected.kind === "module" ||
-                        selected.kind === "record_type" ||
-                        selected.kind === "field" ||
-                        selected.kind === "query"
-                      ? "Change this in the Data tab."
-                      : "This item cannot be edited here."
-      }
+      note={inspectorNote}
     >
       {selected?.kind === "shell" &&
         source.body.shells
@@ -1047,6 +1055,7 @@ export function useStudioCanvasTab({
     puck,
     panels,
     inspector: inspectorPanel,
+    inspectorEdits,
     centre,
     toolbar,
     dialog,

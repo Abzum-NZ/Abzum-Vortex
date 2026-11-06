@@ -446,6 +446,9 @@ function ExistingApplicationWorkspace(props: ExistingProps) {
                   {access.panel}
                 </>
               }
+              inspectorEditsSelection={
+                draft.selected !== null && (tab === "data" || canvas.inspectorEdits)
+              }
               inspector={
                 tab === "access" || tab === "releases"
                   ? null

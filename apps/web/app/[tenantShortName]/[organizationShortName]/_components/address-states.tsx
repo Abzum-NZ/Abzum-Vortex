@@ -25,6 +25,7 @@ import { loadOrganizationLauncher } from "../../../_lib/organization-context";
 import { resolveOrganizationLandingPath } from "../../../_lib/organization-landing";
 import { platformBlockReleasesFor } from "../../../_lib/platform-block-releases";
 import { OrganizationAddressStatePage } from "./organization-launcher-page";
+import { TryAgainButton } from "./try-again-button";
 
 /**
  * What an address shows when it shows no application page. Outside an application the viewer may
@@ -133,6 +134,27 @@ const stateContent = (
 };
 
 /**
+ * The organisations the account menu lists. A launcher that cannot be read just now (the launcher
+ * read has logged why) answers the address's temporarily-unavailable state; any other answer is a
+ * fault and throws.
+ */
+export async function readAccountMenuLauncher(
+  session: IdentitySession,
+): Promise<
+  | Extract<Awaited<ReturnType<typeof loadOrganizationLauncher>>, { kind: "available" }>
+  | Readonly<{ kind: "unavailable"; page: ReactElement }>
+> {
+  const launcher = await loadOrganizationLauncher(session);
+  if (launcher.kind === "available") return launcher;
+  if (launcher.kind === "temporarily_unavailable")
+    return {
+      kind: "unavailable",
+      page: <AddressTemporarilyUnavailable cause="read" />,
+    };
+  throw new Error(`Organisation launcher unavailable for the account menu: ${launcher.kind}`);
+}
+
+/**
  * The address state inside the organisation shell, so the header, the organisation switcher and
  * the account menu with sign out stay available, with the state's one way forward.
  */
@@ -141,9 +163,8 @@ export async function OrganizationAddressState({
   state,
 }: Readonly<{ context: AddressContext; state: AddressState }>): Promise<ReactElement> {
   const { session, email, tenantShortName, organizationShortName } = context;
-  const launcher = await loadOrganizationLauncher(session);
-  if (launcher.kind !== "available")
-    throw new Error(`Organisation launcher unavailable for the account menu: ${launcher.kind}`);
+  const launcher = await readAccountMenuLauncher(session);
+  if (launcher.kind === "unavailable") return launcher.page;
   const entry = launcher.entries.find(
     (candidate) =>
       candidate.tenantShortName === tenantShortName &&
@@ -181,20 +202,26 @@ export async function OrganizationAddressState({
   );
 }
 
-/** The sign-in itself could not be checked right now, so no account or organisation is known. */
-export function SignInTemporarilyUnavailable({
-  retryHref,
-}: Readonly<{ retryHref: string }>): ReactElement {
+/**
+ * An address that cannot be shown just now, outside the organisation shell: the sign-in could not
+ * be checked, so no account or organisation is known, or the organisations the shell lists could
+ * not be read.
+ */
+export function AddressTemporarilyUnavailable({
+  cause,
+}: Readonly<{ cause: "sign_in" | "read" }>): ReactElement {
   return (
     <AuthShell
       addressState="temporarily_unavailable"
       eyebrow="Application access"
       title="This address is temporarily unavailable"
-      description="Your sign-in could not be checked just now. Try loading this address again."
+      description={
+        cause === "sign_in"
+          ? "Your sign-in could not be checked just now. Try loading this address again."
+          : "Your sign-in is active, but this address could not be loaded just now. Try again."
+      }
     >
-      <Button variant="outline" nativeButton={false} render={<NavigationLink href={retryHref} />}>
-        Try again
-      </Button>
+      <TryAgainButton />
     </AuthShell>
   );
 }
