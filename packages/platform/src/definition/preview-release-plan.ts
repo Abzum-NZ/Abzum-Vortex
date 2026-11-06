@@ -3,14 +3,13 @@ import "server-only";
 import type { SessionContext } from "../access/identity-access";
 import type { DefinitionPublicationHistory } from "./definition-compilation-contracts";
 import type { ExactDefinitionDependency } from "./definition-store-contracts";
+import type { PlatformPermissionSource } from "../access/platform-permissions";
 import { applicationModuleKeys } from "./application-module-sources";
 import type { ApplicationReleasePlan } from "./application-publication";
-import { verifyDefinitionCatalogueDependencies } from "./definition-consumer-read-definition";
 import { assertReleasable } from "./definition-publication-compilation";
 import {
   refuse,
   type DefinitionDraftCandidate,
-  type DefinitionPublicationCatalogue,
   type DefinitionPublicationReader,
   type DefinitionReleaseAppend,
   type OwnedModuleRoot,
@@ -157,13 +156,14 @@ const previewRows = (append: DefinitionReleaseAppend, context: SessionContext) =
 /**
  * No release writes or write locks: preview releases the revision's one compile, `compile`, which
  * the builder has usually produced already, judged once more as a release against the published
- * history (a revision already released is not judged again).
+ * history. A revision already released is compiled too, against the current platform catalogue,
+ * never run from its immutable release (Decision 10).
  */
 export const planApplicationPreview = async (
   context: SessionContext,
   snapshot: DefinitionPublicationReader,
   candidate: DefinitionDraftCandidate,
-  catalogue: DefinitionPublicationCatalogue,
+  permissions: PlatformPermissionSource,
   compile: () => Promise<
     Readonly<{
       releasePlan: ApplicationReleasePlan;
@@ -180,27 +180,6 @@ export const planApplicationPreview = async (
     sourceFingerprint: candidate.draft.sourceFingerprint,
     currentReleaseRevision: candidate.draft.publishedRevision ?? null,
   };
-  // A released revision runs as released while the platform catalogue still matches the pins it
-  // was published with; one the catalogue has since superseded is previewed from a compile of the
-  // draft instead (the preview is of the draft anyway).
-  if (candidate.draft.publishedRevision === candidate.draft.draftRevision) {
-    const released = await snapshot.readReleaseCataloguePins(String(candidate.draft.rootId));
-    if (
-      released !== undefined &&
-      (await verifyDefinitionCatalogueDependencies(
-        released.pins,
-        catalogue,
-        released.validationContractVersion,
-      )) === "valid"
-    )
-      return {
-        accessVersion: context.accessVersion,
-        application,
-        ownedRoots,
-        usedRoots: [],
-        releases: [],
-      };
-  }
   const inlineKeys = new Set(source.body.modules.map((source) => source.key));
   const usedKeys = applicationModuleKeys(source).filter((key) => !inlineKeys.has(key));
   const usedPages = await snapshot.readModuleReleaseAnchors(
@@ -213,10 +192,12 @@ export const planApplicationPreview = async (
     return { rootId: page.rootId, currentReleaseRevision: page.anchorReleaseRevision };
   });
   const { releasePlan: compiled, releaseHistory } = await compile();
-  // A released revision was judged as a release when it was published, and the history binding
-  // refuses a candidate at the revision it follows: only a revision still to be released is judged.
-  if (candidate.draft.publishedRevision !== candidate.draft.draftRevision)
-    assertReleasable(compiled, releaseHistory, catalogue.permissions);
+  assertReleasable(
+    compiled,
+    releaseHistory,
+    permissions,
+    candidate.draft.publishedRevision === candidate.draft.draftRevision,
+  );
   return {
     accessVersion: context.accessVersion,
     application,

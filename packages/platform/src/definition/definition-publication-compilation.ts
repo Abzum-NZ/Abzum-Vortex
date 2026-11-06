@@ -90,6 +90,12 @@ const parsedCompilationRequest = <Schema extends z.ZodType>(
   return parsed.data;
 };
 
+/** The rules that a release is a new version, which a revision already released cannot be. */
+const newReleaseRules: ReadonlySet<string> = new Set([
+  "vortex.definition.publication_change_required",
+  "vortex.definition.candidate_version_binding",
+]);
+
 const assertFinalPublicationValidation = (
   request:
     | z.output<typeof applicationCompilationRequestSchema>
@@ -98,6 +104,7 @@ const assertFinalPublicationValidation = (
   dependencyOutputs: readonly DefinitionCompilationOutput[],
   releaseHistory: DefinitionPublicationHistory,
   permissions: PlatformPermissionSource,
+  alreadyReleased: boolean,
 ): void => {
   const validation = validateDefinitionSet({
     permissions,
@@ -106,8 +113,11 @@ const assertFinalPublicationValidation = (
     dependencyOutputs,
     publishedHistoryEvidence: [releaseHistory],
   });
-  if (!validation.valid) {
-    const first = validation.failures[0]!;
+  const failures = alreadyReleased
+    ? validation.failures.filter((failure) => !newReleaseRules.has(failure.ruleCode))
+    : validation.failures;
+  if (failures.length > 0) {
+    const first = failures[0]!;
     throw new DefinitionCompilationError(
       first.ruleCode,
       first.family,
@@ -277,6 +287,8 @@ export const assertReleasable = (
   }>,
   releaseHistory: DefinitionPublicationHistory,
   permissions: PlatformPermissionSource,
+  /** A preview of the revision already released: every publish rule but its newness applies. */
+  alreadyReleased = false,
 ): void => {
   const output = compiled.output;
   if (
@@ -290,6 +302,7 @@ export const assertReleasable = (
     compiled.dependencyOutputs,
     releaseHistory,
     permissions,
+    alreadyReleased,
   );
 };
 

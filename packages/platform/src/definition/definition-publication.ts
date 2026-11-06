@@ -730,26 +730,34 @@ export const createDatabaseDefinitionPublicationService = (
           return refuse("DEFINITION_DRAFT_STALE_OR_MISSING");
         const overlay = createDraftModuleOverlay(reader, context, candidate.draft);
         // The revision the builder already compiled is released as it was compiled.
-        return planApplicationPreview(context, overlay, candidate, catalogue, async () => {
-          const compilation = await compileDraftSnapshot(
-            context,
-            reader,
-            overlay,
-            catalogue,
-            candidate,
-          );
-          const releaseHistory =
-            compilation.publicationHistory ??
-            applicationCandidate(
+        return planApplicationPreview(
+          context,
+          overlay,
+          candidate,
+          catalogue.permissions,
+          async () => {
+            const compilation = await compileDraftSnapshot(
               context,
-              await reader.readCandidate(command.data.rootId),
-              command.data,
-            ).releaseHistory;
-          if (releaseHistory.anchorReleaseRevision !== (candidate.draft.publishedRevision ?? null))
-            return refuse("DEFINITION_DRAFT_STALE_OR_MISSING");
-          retainApplicationDraftPublicationHistory(compilation, releaseHistory);
-          return { releasePlan: compilation.releasePlan, releaseHistory };
-        });
+              reader,
+              overlay,
+              catalogue,
+              candidate,
+            );
+            const releaseHistory =
+              compilation.publicationHistory ??
+              applicationCandidate(
+                context,
+                await reader.readCandidate(command.data.rootId),
+                command.data,
+              ).releaseHistory;
+            if (
+              releaseHistory.anchorReleaseRevision !== (candidate.draft.publishedRevision ?? null)
+            )
+              return refuse("DEFINITION_DRAFT_STALE_OR_MISSING");
+            retainApplicationDraftPublicationHistory(compilation, releaseHistory);
+            return { releasePlan: compilation.releasePlan, releaseHistory };
+          },
+        );
       });
     },
 

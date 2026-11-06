@@ -120,8 +120,6 @@ export const createDraftModuleOverlay = (
       once(["candidate", rootId.toLowerCase()], () => storedReader.readCandidate(rootId)),
     readDraftCandidate: (rootId) => storedReader.readDraftCandidate(rootId),
     isApplicationDraftCurrent: (candidate) => storedReader.isApplicationDraftCurrent(candidate),
-    readReleaseCataloguePins: (rootId) =>
-      once(["pins", rootId.toLowerCase()], () => storedReader.readReleaseCataloguePins(rootId)),
     readModuleReleaseAnchors: (organizationId, keys) =>
       once(["anchors", organizationId, keys], () =>
         storedReader.readModuleReleaseAnchors(organizationId, keys),
@@ -211,7 +209,6 @@ export const createDraftModuleOverlay = (
 
   const transaction: DefinitionPublicationTransaction = {
     isApplicationDraftCurrent: (candidate) => reader.isApplicationDraftCurrent(candidate),
-    readReleaseCataloguePins: (rootId) => reader.readReleaseCataloguePins(rootId),
     async readModuleReleaseAnchors(organizationId, keys) {
       const missing = keys.filter((key) => !releasesByKey.has(key));
       const stored = await reader.readModuleReleaseAnchors(organizationId, missing);

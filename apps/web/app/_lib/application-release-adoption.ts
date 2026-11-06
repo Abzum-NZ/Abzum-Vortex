@@ -156,7 +156,7 @@ export type ApplicationReleaseStanding =
       mayInstall: boolean;
     }>
   | Readonly<{ kind: "not_published" }>
-  /** The latest release pins platform definitions the platform has since superseded: publish again. */
+  /** The latest release pins platform definitions since superseded: publish again. */
   | Readonly<{ kind: "republish_required" }>
   /** The person may not manage installations here, or the review cannot be made now. */
   | Readonly<{ kind: "unknown"; appStoreHref?: string }>;

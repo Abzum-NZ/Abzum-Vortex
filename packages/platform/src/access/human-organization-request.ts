@@ -476,7 +476,8 @@ export const createHumanOrganizationRequestService = (
         roleSettingsChangeRequired ||
         roleKeyInUse ||
         (error instanceof Error && error.name === "FirstInstallUnavailable") ||
-        // "Republish required": the release pins platform definitions since superseded. A state, not a fault.
+        // "Republish required": the release pins platform definitions since superseded. A state,
+        // not a fault.
         (error instanceof Error &&
           error.name === "InstallationProblem" &&
           (error as InstallationProblem).problem.unavailableReason === "republish_required") ||

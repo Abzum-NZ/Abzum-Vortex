@@ -67,7 +67,6 @@ import type {
   DefinitionDraftCandidate,
   DefinitionPublicationCandidate,
   DefinitionPublicationReader,
-  ReleaseCataloguePins,
   DefinitionPublicationTransaction,
   DefinitionReleaseAppend,
   OwnedModuleRoot,
@@ -426,25 +425,6 @@ class DatabasePublicationReader implements DefinitionPublicationReader {
     for (const memoKey of [...this.moduleReleasePageReads.keys()])
       if ((JSON.parse(memoKey) as unknown[])[1] === key)
         this.moduleReleasePageReads.delete(memoKey);
-  }
-
-  async readReleaseCataloguePins(rootId: string): Promise<ReleaseCataloguePins | undefined> {
-    const rows = await this.transaction.query`
-      select vortex_definition.read_release_catalogue_pins(${rootId}::uuid) as release_pins
-    `;
-    const read = parseOneRow(
-      rows,
-      z.object({
-        release_pins: z
-          .object({
-            validationContractVersion: z.string(),
-            pins: z.array(exactDefinitionDependencySchema),
-          })
-          .strict()
-          .nullable(),
-      }),
-    ).release_pins;
-    return read === null ? undefined : read;
   }
 
   async readOwnedModuleRoots(applicationRootId: string): Promise<readonly OwnedModuleRoot[]> {

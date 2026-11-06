@@ -59,7 +59,9 @@ const standingWords = (
       return {
         icon: "triangle-alert",
         headline: "Republish required",
-        text: "The published version uses platform definitions that have since changed. Publish the application again so people can install or upgrade to a current version.",
+        text:
+          "The published version uses platform definitions that have since changed. Publish the " +
+          "application again so people can install or upgrade to a current version.",
       };
     case "not_published":
       return null;
