@@ -2289,6 +2289,7 @@
       "record_type": "organization_security_settings",
       "inputs": [],
       "select": [
+        "organization_id",
         "require_step_up",
         "instance_profile",
         "can_turn_off",

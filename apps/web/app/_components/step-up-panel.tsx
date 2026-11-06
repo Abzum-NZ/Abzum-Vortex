@@ -17,7 +17,7 @@ import { AuthenticatorCode, EnrolAuthenticator, ProofForm } from "./authenticato
 type Ready = Extract<StepUpState, { kind: "ready" }>;
 
 /**
- * Whether this step needs the authenticator's code. `platform_two_step` always does. `two_step`
+ * Whether this step needs the authenticator's code. `platform_two_step` always does; `two_step_if_enrolled` only for a person who has an authenticator. `two_step`
  * does unless the organisation turned the requirement off. A person who signed in again here and
  * has an authenticator gives its code too, so the session this step leaves is as strong as the one
  * signing in produces. The database decides again where the protected step runs.

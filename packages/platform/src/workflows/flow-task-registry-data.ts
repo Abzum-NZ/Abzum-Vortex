@@ -597,11 +597,11 @@ const registeredDefinitions: Record<FlowRegisteredTaskTypeKey, DefinitionInput> 
   "interface.verify": {
     title: "Verify the person",
     summary:
-      "Asks the person to prove who they are inside the flow, when the next step needs it: signing in again for a recent sign-in (`requires` is recent_sign_in), or a recent sign-in and the code from their authenticator app for two-step verification (`requires` is two_step, which follows the organisation's two-step setting, or platform_two_step, which no setting waives). The step is answered at once when they have already done it. The platform checks the proof again where the protected step runs.",
+      "Asks the person to prove who they are inside the flow, when the next step needs it: signing in again for a recent sign-in (`requires` is recent_sign_in), or a recent sign-in and the code from their authenticator app for two-step verification (`requires` is two_step, which follows the organisation's two-step setting, or platform_two_step, which no setting waives; two_step_if_enrolled asks for the code only from a person who has an authenticator). The step is answered at once when they have already done it. The platform checks the proof again where the protected step runs.",
     runLocations: ["browser"],
     effect: "interface",
     properties: {
-      /** recent_sign_in, two_step or platform_two_step. */
+      /** recent_sign_in, two_step, platform_two_step or two_step_if_enrolled. */
       requires: { ...required("builder_key"), default: { type: "text", value: "recent_sign_in" } },
       /** What the verification is for, in a sentence ("Publishing needs a recent sign-in."). */
       message: required("message_text"),

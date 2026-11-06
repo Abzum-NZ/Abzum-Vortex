@@ -2944,7 +2944,7 @@
                 "properties": {
                   "requires": {
                     "kind": "literal",
-                    "literal": { "type": "text", "value": "two_step" }
+                    "literal": { "type": "text", "value": "two_step_if_enrolled" }
                   },
                   "message": {
                     "kind": "literal",

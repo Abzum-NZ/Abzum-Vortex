@@ -326,6 +326,25 @@ const publishShippedPrivacyNotice = async (
   log(`privacy notice ${signupPrivacyNoticeSetting.versionLabel} published`);
 };
 
+const queryLocalDatabaseAsOwner = (
+  sql: string,
+  failure: string,
+): readonly Readonly<Record<string, unknown>>[] => {
+  const cli = join(findRepositoryRoot(), "node_modules", "supabase", "dist", "supabase.js");
+  const result = spawnSync(
+    process.execPath,
+    [cli, "db", "query", "--local", "--output", "json", ...supabaseWorkdirArguments(), sql],
+    { cwd: findRepositoryRoot(), encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] },
+  );
+  if (result.error) throw result.error;
+  if (result.status !== 0) throw new Error(`${failure}: ${result.stderr.trim()}`);
+  const output: unknown = JSON.parse(result.stdout);
+  const rows =
+    typeof output === "object" && output !== null && "rows" in output ? output.rows : undefined;
+  if (!Array.isArray(rows)) throw new Error(`${failure}: the query returned no rows list.`);
+  return rows;
+};
+
 export const runDevelopmentSetup = async (
   argv: readonly string[],
 ): Promise<Readonly<{ organizationId: string; stewardIdentityId: string }>> => {
@@ -343,31 +362,21 @@ export const runDevelopmentSetup = async (
     return value;
   });
   await prepareSetupState(databaseSystemId, async (organizationId) => {
-    const cli = join(findRepositoryRoot(), "node_modules", "supabase", "dist", "supabase.js");
-    const result = spawnSync(
-      process.execPath,
-      [
-        cli,
-        "db",
-        "query",
-        "--local",
-        "--output",
-        "json",
-        ...supabaseWorkdirArguments(),
-        `select exists (select 1 from vortex_identity.organizations where organization_id = '${organizationId}'::uuid) as present`,
-      ],
-      { cwd: findRepositoryRoot(), encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] },
+    const rows = queryLocalDatabaseAsOwner(
+      `select exists (select 1 from vortex_identity.organizations where organization_id = '${organizationId}'::uuid) as present`,
+      "Unable to validate local setup state",
     );
-    if (result.error) throw result.error;
-    if (result.status !== 0)
-      throw new Error(`Unable to validate local setup state: ${result.stderr.trim()}`);
-    const output: unknown = JSON.parse(result.stdout);
-    const rows =
-      typeof output === "object" && output !== null && "rows" in output ? output.rows : undefined;
-    if (!Array.isArray(rows) || rows.length !== 1 || typeof rows[0]?.present !== "boolean")
+    if (rows.length !== 1 || typeof rows[0]?.present !== "boolean")
       throw new Error("Invalid local setup state query result.");
     return rows[0].present;
   });
+  // Local development setup is the one place that marks this database a development instance:
+  // the organisation setting that turns two-step verification off honours only that marker.
+  queryLocalDatabaseAsOwner(
+    "select vortex_platform.set_instance_profile_internal('development')",
+    "Unable to mark the instance as a development instance",
+  );
+  log("instance marked as a development instance");
   const stewardIdentityId = await resolveFirstOwnerIdentity(args.firstOwner);
   log(`first owner identity ${stewardIdentityId}`);
 
