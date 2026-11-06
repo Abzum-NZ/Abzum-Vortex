@@ -310,14 +310,12 @@ export const readApplicationReleaseStanding = async (
     review.kind === "confirmed_failure" &&
     review.diagnostic.code === "application_republish_required"
   ) {
-    console.info("[release-standing] latest release uses superseded platform definitions");
     return { kind: "republish_required" };
   }
   if (review === "conflict" || review === "uncertain" || review.kind !== "available") {
-    const message = `[release-standing] review ${typeof review === "string" ? review : review.kind}`;
-    // Every outcome but an uncertain one was classified, and logged with its cause where it arose.
-    if (review === "uncertain") console.error(message);
-    else console.info(message);
+    // Every outcome but an uncertain one was classified, and logged once with its cause where it
+    // arose: only an uncertain one is said here.
+    if (review === "uncertain") console.error("[release-standing] review uncertain");
     return appStoreHref === undefined ? { kind: "unknown" } : { kind: "unknown", appStoreHref };
   }
   const value = review.value as Readonly<Record<string, unknown>>;
