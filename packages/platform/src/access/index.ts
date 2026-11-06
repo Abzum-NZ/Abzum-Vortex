@@ -87,3 +87,4 @@ export {
   type HumanDefinitionPublicationPreparationResult,
   type HumanDefinitionPublicationResult,
 } from "./definition-publication";
+export { logRefusal } from "./request-failure";

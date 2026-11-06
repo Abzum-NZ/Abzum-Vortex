@@ -2,7 +2,6 @@ import type { NextRequest, NextResponse } from "next/server";
 import {
   containedComponentIdSchema,
   jsonValueSchema,
-  logRefusal,
   recordIdSchema,
   revisionSchema,
 } from "@vortex/platform/schema";
@@ -13,6 +12,7 @@ import { pageAddressSchema } from "../../_lib/page-address-schema";
 import { resolveIdentitySession } from "../../auth/_lib/session-server";
 import { privateJsonResponse as privateResponse } from "../../_lib/private-response";
 import { isOwnSiteJsonRequest, readJsonBody } from "../_lib/own-site-request";
+import { logRefusal } from "@vortex/platform/server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

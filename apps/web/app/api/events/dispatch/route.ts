@@ -1,10 +1,10 @@
 import type { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-import { logRefusal } from "@vortex/platform/schema";
 import {
   authenticateEventDispatcher,
   createEventDispatcherWakeup,
   eventDispatcherWakeupLimits,
+  logRefusal,
 } from "@vortex/platform/server";
 import { backendAdapter } from "../../../_lib/backend-adapter";
 import { eventConsumers } from "../../../_lib/event-consumers";

@@ -1,7 +1,7 @@
 import "server-only";
 
 import type { IdentitySession, OrganizationSelectionCandidate } from "../../access/identity-access";
-import { isRecord, logRefusal, sameId } from "../../catalogue/runtime-primitives";
+import { isRecord, sameId } from "../../catalogue/runtime-primitives";
 import type { BlockPropertyValueContract } from "../../definition/application-composition/block-property-values";
 import { recordsTableContractOrLog } from "../../definition/application-composition/records-display";
 import type { RecordsTableInlineEditor } from "../../definition/application-composition/records-table-features/projections/inline-edit";
@@ -27,6 +27,7 @@ import type { BoardPlacementFailureCause } from "../board-query";
 import type { RecordsTableFilterTarget } from "../records-table-query";
 
 import { optionParentValues, optionsSourceNarrowing } from "../../definition/field-options-source";
+import { logRefusal } from "../../access/request-failure";
 /** The parent field a choice or link field's options follow, as the page reads it. */
 const narrowedBy = (
   optionsSource: Parameters<typeof optionsSourceNarrowing>[0],
