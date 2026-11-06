@@ -21,6 +21,7 @@ import {
   EmptyTitle,
 } from "@vortex/ui/components/empty";
 import { AuthShell } from "../../../auth/_components/auth-shell";
+import { organizationAddressPath } from "../../../_lib/address-paths";
 import { loadOrganizationLauncher } from "../../../_lib/organization-context";
 import { resolveOrganizationLandingPath } from "../../../_lib/organization-landing";
 import { platformBlockReleasesFor } from "../../../_lib/platform-block-releases";
@@ -133,6 +134,27 @@ const stateContent = (
 };
 
 /**
+ * The organisations the account menu lists. A launcher that cannot be read just now is a temporary
+ * refusal, logged once at info, and answers the page's own temporarily-unavailable state; any other
+ * answer is a fault and throws.
+ */
+export async function readAccountMenuLauncher(
+  session: IdentitySession,
+  retryHref: string,
+): Promise<
+  | Extract<Awaited<ReturnType<typeof loadOrganizationLauncher>>, { kind: "available" }>
+  | Readonly<{ kind: "unavailable"; page: ReactElement }>
+> {
+  const launcher = await loadOrganizationLauncher(session);
+  if (launcher.kind === "available") return launcher;
+  if (launcher.kind === "temporarily_unavailable") {
+    console.info("[web] the account menu's organisations could not be read just now; try again");
+    return { kind: "unavailable", page: <SignInTemporarilyUnavailable retryHref={retryHref} /> };
+  }
+  throw new Error(`Organisation launcher unavailable for the account menu: ${launcher.kind}`);
+}
+
+/**
  * The address state inside the organisation shell, so the header, the organisation switcher and
  * the account menu with sign out stay available, with the state's one way forward.
  */
@@ -141,9 +163,11 @@ export async function OrganizationAddressState({
   state,
 }: Readonly<{ context: AddressContext; state: AddressState }>): Promise<ReactElement> {
   const { session, email, tenantShortName, organizationShortName } = context;
-  const launcher = await loadOrganizationLauncher(session);
-  if (launcher.kind !== "available")
-    throw new Error(`Organisation launcher unavailable for the account menu: ${launcher.kind}`);
+  const launcher = await readAccountMenuLauncher(
+    session,
+    organizationAddressPath(tenantShortName, organizationShortName),
+  );
+  if (launcher.kind === "unavailable") return launcher.page;
   const entry = launcher.entries.find(
     (candidate) =>
       candidate.tenantShortName === tenantShortName &&

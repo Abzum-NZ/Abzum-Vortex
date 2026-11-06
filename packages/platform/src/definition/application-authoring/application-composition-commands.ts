@@ -100,8 +100,9 @@ import {
   movableRegion,
   publishedPage,
   slotDeclaration,
+  declarationSlotKeys,
 } from "./application-composition-regions";
-import { applyAdd, commandSettings } from "./application-composition-add";
+import { applyAdd, commandSettings, repeatingEntryName } from "./application-composition-add";
 import { applyWrap } from "./application-composition-wrap";
 import { applyPageData } from "./application-composition-page-data";
 import { applyStudioCompositionGate } from "./application-composition-gate";
@@ -138,8 +139,9 @@ type MoveDestination = {
 };
 
 /**
- * Only actual non-repeatable slots in this original movable region are destinations. A layout
- * slot that holds a page's content outlet is never one: it holds page content, not layout blocks.
+ * Only actual slots (each tab of a Tabs block is one) in this original movable region are
+ * destinations. A layout slot that holds a page's content outlet is never one: it holds page
+ * content, not layout blocks.
  */
 const moveDestinations = (
   catalogue: ImmutablePlatformBlockCatalogue,
@@ -166,23 +168,28 @@ const moveDestinations = (
       if (subtree.has(parentAlias)) continue;
       const release = releaseFor(catalogue, item) ?? refuse();
       const slots = itemSlots(catalogue, item);
-      for (const declaration of release.slots) {
-        if (declaration.repeats !== undefined) continue;
-        const child = slots.get(declaration.key);
-        if (child === undefined) continue;
-        const childSteps = [...steps, { parentAlias, slotKey: declaration.key }];
-        if (
-          !sameSteps(childSteps, target.steps) &&
-          !outletSlots.has(`${parentAlias}|${declaration.key}`) &&
-          declaration.allowedChildCategories.includes(movedRelease.paletteGroup)
-        )
-          result.push({
-            destination: { kind: "child", parentAlias, slotKey: declaration.key },
-            label: `${parentAlias} / ${declaration.label}`,
-            steps: childSteps,
-          });
-        visit(child, childSteps);
-      }
+      for (const declaration of release.slots)
+        for (const slotKey of declarationSlotKeys(declaration, slots.keys())) {
+          const child = slots.get(slotKey);
+          if (child === undefined) continue;
+          const childSteps = [...steps, { parentAlias, slotKey }];
+          if (
+            !sameSteps(childSteps, target.steps) &&
+            !outletSlots.has(`${parentAlias}|${slotKey}`) &&
+            declaration.allowedChildCategories.includes(movedRelease.paletteGroup)
+          )
+            result.push({
+              destination: { kind: "child", parentAlias, slotKey },
+              // A tab of a Tabs block is named as the Add places name it.
+              label: `${parentAlias} / ${declaration.label}${
+                declaration.repeats === undefined
+                  ? ""
+                  : ` (${repeatingEntryName(item, declaration, slotKey)})`
+              }`,
+              steps: childSteps,
+            });
+          visit(child, childSteps);
+        }
     }
   };
   if (target.steps.length > 0) {

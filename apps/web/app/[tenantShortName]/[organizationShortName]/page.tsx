@@ -18,12 +18,12 @@ import {
 import { OrganizationLauncherPage } from "./_components/organization-launcher-page";
 import {
   OrganizationAddressState,
+  readAccountMenuLauncher,
   SignInTemporarilyUnavailable,
 } from "./_components/address-states";
 import { openPermittedApplication } from "./_components/open-application";
 import { continueSessionOrEnd } from "../../auth/_lib/session-redirect";
 import { resolveIdentitySessionWithEmail } from "../../auth/_lib/session-server";
-import { loadOrganizationLauncher } from "../../_lib/organization-context";
 import {
   applicationPageAddressPath as addressPath,
   organizationAddressPath as launcherPath,
@@ -95,9 +95,8 @@ export default async function OrganizationPage({ params }: OrganizationPageProps
       ),
     );
 
-  const launcher = await loadOrganizationLauncher(identity.session);
-  if (launcher.kind !== "available")
-    throw new Error(`Organisation launcher unavailable for the account menu: ${launcher.kind}`);
+  const launcher = await readAccountMenuLauncher(identity.session, retryHref);
+  if (launcher.kind === "unavailable") return launcher.page;
   const organization = launcher.entries.find(
     (entry) =>
       entry.tenantShortName === tenantShortName &&
