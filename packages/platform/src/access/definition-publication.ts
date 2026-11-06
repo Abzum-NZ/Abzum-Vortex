@@ -5,7 +5,7 @@ import {
   organizationIdSchema,
   timestampSchema,
 } from "../catalogue/identifiers";
-import { databaseTimestamp, sameId } from "../catalogue/runtime-primitives";
+import { databaseCode, databaseTimestamp, sameId } from "../catalogue/runtime-primitives";
 import { canonicalJson } from "../definition/canonical-json";
 import {
   prepareDefinitionPublicationCommandSchema,
@@ -143,6 +143,16 @@ const databaseSurfaceRefusal = (error: unknown): string | undefined => {
   return undefined;
 };
 
+/** Whether the database refused for a stale sign-in (V3150), as the error or one of its causes. */
+const databaseRecentSignInRefusal = (error: unknown): boolean => {
+  let current: unknown = error;
+  for (let depth = 0; depth < 8 && current instanceof Error; depth += 1) {
+    if (databaseCode(current) === "V3150") return true;
+    current = current.cause;
+  }
+  return false;
+};
+
 const classifyFailure = (error: unknown): Failure => {
   if (error instanceof DefinitionError && error.code === "DEFINITION_IDENTITY_RETIRED")
     return {
@@ -181,6 +191,9 @@ const classifyFailure = (error: unknown): Failure => {
           ? "release_permission_missing"
           : "recent_authentication_required",
     };
+  // The database asks for the same recent sign-in, so a request that skipped the check above is refused alike.
+  if (databaseRecentSignInRefusal(error))
+    return { kind: "refused", reason: "recent_authentication_required" };
   const compilation = compilationRefusal(error);
   if (compilation !== undefined) {
     const block = compilation.location?.segments.find((segment) => segment.kind === "block");
@@ -404,9 +417,10 @@ export const createHumanDefinitionPublisher = (
       } catch (error) {
         failure = safeFailure(error, mode);
         if (
-          error instanceof BuilderAuthorityError &&
-          (error.code === "BUILDER_PERMISSION_REFUSED" ||
-            error.code === "BUILDER_RECENT_AUTHENTICATION_REQUIRED")
+          (error instanceof BuilderAuthorityError &&
+            (error.code === "BUILDER_PERMISSION_REFUSED" ||
+              error.code === "BUILDER_RECENT_AUTHENTICATION_REQUIRED")) ||
+          databaseRecentSignInRefusal(error)
         )
           throw new ExpectedBuilderPublicationRefusal();
         // Throw through runChange: even a post-append result mismatch must roll back.

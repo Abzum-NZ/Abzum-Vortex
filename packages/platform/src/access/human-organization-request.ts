@@ -44,6 +44,7 @@ import {
   DefinitionError,
   isValidationRefusal,
 } from "../definition/definition-error";
+import type { InstallationProblem } from "../definition/installation-authority";
 
 type ResolvedRequestTransactionRunner = <Scope, Result>(
   resolve: (transaction: RequestDatabaseTransaction) => Promise<ResolvedRequestContext<Scope>>,
@@ -475,6 +476,11 @@ export const createHumanOrganizationRequestService = (
         roleSettingsChangeRequired ||
         roleKeyInUse ||
         (error instanceof Error && error.name === "FirstInstallUnavailable") ||
+        // "Republish required": the release pins platform definitions since superseded. A state,
+        // not a fault.
+        (error instanceof Error &&
+          error.name === "InstallationProblem" &&
+          (error as InstallationProblem).problem.unavailableReason === "republish_required") ||
         // Nothing to publish, or a person the builder authority does not allow: the answers the
         // platform is there to give, so the log, the telemetry and the answer all say refused.
         (error instanceof DefinitionError &&
