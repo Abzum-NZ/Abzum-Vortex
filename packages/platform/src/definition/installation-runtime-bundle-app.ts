@@ -3,7 +3,6 @@ import "server-only";
 import { createHash } from "node:crypto";
 import { jsonValueSchema, type JsonValue } from "../catalogue/common";
 import { applicationRootIdSchema } from "../catalogue/identifiers";
-import { logRefusal } from "../catalogue/runtime-primitives";
 import { resolvePageComposition } from "../pages/page-composition-resolution";
 import { canonicalJson } from "./canonical-json";
 import {
@@ -30,6 +29,7 @@ import {
   classifyDatabaseError,
   unexpectedDefinitionFailure,
 } from "./definition-error";
+import { logRefusal } from "../access/request-failure";
 
 type BundleIndexRow = DatabaseRow & { readonly bundle_index: unknown };
 type BundlePartsRow = DatabaseRow & { readonly bundle_parts: unknown };

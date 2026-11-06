@@ -1,7 +1,5 @@
 import "server-only";
 
-import { logRefusal } from "@vortex/platform/schema";
-
 import {
   Agent as HttpAgent,
   request as requestHttp,
@@ -15,6 +13,7 @@ import { finished } from "node:stream/promises";
 import WebSocket from "ws";
 import type { IdentityVerificationExecution } from "@vortex/platform/server";
 import { createOwnedNetworkLookup, type OwnedNetworkLookup } from "./owned-network-lookup";
+import { logRefusal } from "@vortex/platform/server";
 
 const maximumProviderBodyBytes = 65_536;
 const maximumProviderRequests = 32;

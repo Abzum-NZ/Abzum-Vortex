@@ -1,5 +1,4 @@
 import type { NextRequest } from "next/server";
-import { logRefusal } from "@vortex/platform/schema";
 import { resolveIdentitySession } from "../../../auth/_lib/session-server";
 import {
   runStudioFlowTest,
@@ -7,6 +6,7 @@ import {
 } from "../../../_lib/studio-flow-test-run";
 import { privateJsonResponse } from "../../../_lib/private-response";
 import { isOwnSiteJsonRequest, readJsonBody } from "../../_lib/own-site-request";
+import { logRefusal } from "@vortex/platform/server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

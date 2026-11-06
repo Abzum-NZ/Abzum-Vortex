@@ -5,7 +5,6 @@ import {
   applicationSourceDocumentSchema,
   changeInlineModuleField,
   fingerprintSchema,
-  logRefusal,
 } from "@vortex/platform/schema";
 import { z } from "zod";
 import { loadStudioApplicationDraft } from "../_lib/studio-application-draft";
@@ -15,6 +14,7 @@ import {
   applicationAuthoringTools,
   type ApplicationAuthoringToolName,
 } from "./_lib/application-authoring-tools";
+import { logRefusal } from "@vortex/platform/server";
 
 const requestSchema = z
   .object({
