@@ -58,7 +58,6 @@ const failureKind = (error: unknown): FailureKind => {
         "DEFINITION_CONTEXT_REFUSED",
         "DEFINITION_RELEASE_NOT_FOUND",
         "DEFINITION_RELEASE_INTEGRITY_FAILED",
-        "DEFINITION_DEPENDENCY_SUPERSEDED",
         "INVALID_DEFINITION_RESTORE_COMMAND",
       ].includes(error.code)
     )

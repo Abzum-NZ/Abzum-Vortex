@@ -47,7 +47,6 @@ import {
   isDefinitionContextFailure,
   isLiveDefinitionSystemContext,
   storedConsumerReleaseEvidenceSchema,
-  verifyDefinitionCatalogueDependencies,
   type StoredConsumerReleaseEvidence,
 } from "./definition-consumer-read-definition";
 import { hasAuthenticStoredCustomerDefinitionRelease } from "./definition-release-integrity";
@@ -70,7 +69,6 @@ const definitionHistoryErrorCodes = [
   "DEFINITION_CONTEXT_REFUSED",
   "DEFINITION_STORED_DATA_INVALID",
   "DEFINITION_RELEASE_INTEGRITY_FAILED",
-  "DEFINITION_DEPENDENCY_SUPERSEDED",
   "RELEASE_CONTRACT_SUPERSEDED",
   "DEFINITION_HISTORY_FAILED",
   "DEFINITION_RESTORE_FAILED",
@@ -422,23 +420,6 @@ const verifyRestoreEvidence = async (
     !identitiesMatchSource(release)
   )
     throw new DefinitionError("DEFINITION_RELEASE_INTEGRITY_FAILED");
-
-  let catalogueResult: Awaited<ReturnType<typeof verifyDefinitionCatalogueDependencies>>;
-  try {
-    catalogueResult = await verifyDefinitionCatalogueDependencies(
-      release.dependencyManifest,
-      catalogue,
-      release.validationContractVersion,
-    );
-  } catch (cause) {
-    throw new DefinitionError("DEFINITION_RESTORE_FAILED", { cause });
-  }
-  if (catalogueResult === "superseded")
-    throw new DefinitionError("DEFINITION_DEPENDENCY_SUPERSEDED", {
-      sentence:
-        "Republish required: this release uses superseded platform definitions. Publish the current draft instead of restoring this release.",
-    });
-  if (catalogueResult !== "valid") throw new DefinitionError("DEFINITION_RELEASE_INTEGRITY_FAILED");
 
   return {
     source,
