@@ -179,16 +179,6 @@ export const planApplicationPreview = async (
     sourceFingerprint: candidate.draft.sourceFingerprint,
     currentReleaseRevision: candidate.draft.publishedRevision ?? null,
   };
-  // A released draft already has a validated immutable release and exact pins. Reuse it;
-  // publication's new-revision comparison deliberately refuses republishing that revision.
-  if (candidate.draft.publishedRevision === candidate.draft.draftRevision)
-    return {
-      accessVersion: context.accessVersion,
-      application,
-      ownedRoots,
-      usedRoots: [],
-      releases: [],
-    };
   const inlineKeys = new Set(source.body.modules.map((source) => source.key));
   const usedKeys = applicationModuleKeys(source).filter((key) => !inlineKeys.has(key));
   const usedPages = await snapshot.readModuleReleaseAnchors(
