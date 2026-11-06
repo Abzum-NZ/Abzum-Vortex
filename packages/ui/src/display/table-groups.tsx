@@ -200,7 +200,7 @@ function GroupSection({
         >
           <Icon name={open ? "chevron-down" : "chevron-right"} aria-hidden="true" />
         </TooltipTrigger>
-        <TooltipContent>{open ? "Close the group" : "Open the group"}</TooltipContent>
+        <TooltipContent>{`${open ? "Close" : "Open"} ${group.label}`}</TooltipContent>
       </Tooltip>
       <span
         id={id}

@@ -48,29 +48,51 @@ function ComboboxInput({ onKeyDown, ...props }: ComboboxPrimitive.Input.Props) {
   );
 }
 
-function ComboboxTrigger({ className, ...props }: ComboboxPrimitive.Trigger.Props) {
+/** The icon-only trigger: its required name is also its tooltip. */
+function ComboboxTrigger({
+  className,
+  ...props
+}: ComboboxPrimitive.Trigger.Props & { "aria-label": string }) {
   return (
-    <ComboboxPrimitive.Trigger
-      data-slot="combobox-trigger"
-      render={<InputGroupButton size="icon-xs" variant="ghost" />}
-      className={cn("cn-combobox-trigger", className)}
-      {...props}
-    >
-      <Icon name="chevron-down" className="cn-combobox-trigger-icon pointer-events-none" />
-    </ComboboxPrimitive.Trigger>
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <ComboboxPrimitive.Trigger
+            data-slot="combobox-trigger"
+            render={<InputGroupButton size="icon-xs" variant="ghost" />}
+            className={cn("cn-combobox-trigger", className)}
+            {...props}
+          />
+        }
+      >
+        <Icon name="chevron-down" className="cn-combobox-trigger-icon pointer-events-none" />
+      </TooltipTrigger>
+      <TooltipContent>{props["aria-label"]}</TooltipContent>
+    </Tooltip>
   );
 }
 
-function ComboboxClear({ className, ...props }: ComboboxPrimitive.Clear.Props) {
+/** The icon-only clear button: its required name is also its tooltip. */
+function ComboboxClear({
+  className,
+  ...props
+}: ComboboxPrimitive.Clear.Props & { "aria-label": string }) {
   return (
-    <ComboboxPrimitive.Clear
-      data-slot="combobox-clear"
-      render={<InputGroupButton variant="ghost" size="icon-xs" />}
-      className={cn("cn-combobox-clear", className)}
-      {...props}
-    >
-      <Icon name="close" className="cn-combobox-clear-icon pointer-events-none" />
-    </ComboboxPrimitive.Clear>
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <ComboboxPrimitive.Clear
+            data-slot="combobox-clear"
+            render={<InputGroupButton variant="ghost" size="icon-xs" />}
+            className={cn("cn-combobox-clear", className)}
+            {...props}
+          />
+        }
+      >
+        <Icon name="close" className="cn-combobox-clear-icon pointer-events-none" />
+      </TooltipTrigger>
+      <TooltipContent>{props["aria-label"]}</TooltipContent>
+    </Tooltip>
   );
 }
 

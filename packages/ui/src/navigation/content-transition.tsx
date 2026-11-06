@@ -10,7 +10,7 @@ import {
   type ReactElement,
   type ReactNode,
 } from "react";
-import { motion, useReducedMotion } from "motion/react";
+import { motion } from "motion/react";
 import { readMotionTiming, type MotionTiming } from "./motion-tokens";
 import { markDocumentHydrated } from "./page-hold";
 
@@ -90,17 +90,17 @@ export function ContentTransition({
   busy?: boolean;
   children: ReactNode;
 }>): ReactElement {
-  const reducedMotion = useReducedMotion();
   const outletRef = useRef<HTMLDivElement>(null);
   const [timings, setTimings] = useState<OutletTimings>();
   useLayoutEffect(() => {
     if (outletRef.current !== null) setTimings(readOutletTimings(outletRef.current));
   }, []);
   useEffect(() => markDocumentHydrated(), []);
-  const motionAllowed = reducedMotion !== true;
-  const swapIn = motionAllowed ? timings?.swapIn : undefined;
-  const swapOut = motionAllowed ? timings?.swapOut : undefined;
-  const dim = motionAllowed ? timings?.dim : undefined;
+  // The platform stylesheet sets every motion token to 0ms under reduced motion, which reads as no
+  // timing: the tokens alone carry the person's choice.
+  const swapIn = timings?.swapIn;
+  const swapOut = timings?.swapOut;
+  const dim = timings?.dim;
   const animated = swapIn !== undefined;
 
   // What the current page last rendered, as committed: the leaving copy keeps showing it.
