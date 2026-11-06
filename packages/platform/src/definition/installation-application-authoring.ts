@@ -232,6 +232,8 @@ export const createApplicationAuthoringService = (environment: ApplicationAuthor
         // What the draft changes against the published version, counted as the version history
         // counts it (undefined for a first release or when nothing changed).
         let changeSentence: string | undefined;
+        // The draft's field names by qualified reference, so the review names fields, not keys.
+        const fieldNames = new Map<string, string>();
         const read = await environment.requests.runChange(
           session,
           { organizationId },
@@ -241,6 +243,11 @@ export const createApplicationAuthoringService = (environment: ApplicationAuthor
             });
             draftRevision = draft.draftRevision;
             applicationName = draft.source.kind === "application" ? draft.source.body.name : "";
+            if (draft.source.kind === "application")
+              for (const module of draft.source.body.modules)
+                for (const record of module.record_types)
+                  for (const field of record.fields)
+                    fieldNames.set(`${module.key}:${record.key}.${field.key}`, field.label);
             const published = draft.publishedRevision;
             if (published !== undefined && draft.source.kind === "application") {
               // The published version is the page of one that ends at the anchor.
@@ -295,7 +302,12 @@ export const createApplicationAuthoringService = (environment: ApplicationAuthor
           ...(changeSentence === undefined ? [] : [changeSentence]),
           ...(addedFields.length === 0
             ? []
-            : [`${addedFields.length} new fields: ${addedFields.slice(0, 5).join(", ")}`]),
+            : [
+                `${addedFields.length} new fields: ${addedFields
+                  .slice(0, 5)
+                  .map((reference) => fieldNames.get(reference) ?? reference)
+                  .join(", ")}`,
+              ]),
         ];
         return {
           kind: "available",

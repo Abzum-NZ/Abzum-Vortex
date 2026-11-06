@@ -466,7 +466,7 @@ export function ApplicationReleaseHistory({
               <EmptyTitle>Not published yet</EmptyTitle>
               <EmptyDescription>
                 A release is a numbered copy of your application that your organisation can install.
-                Publish to create version 1.
+                Publish to create the first version, 1.0.0.
               </EmptyDescription>
             </EmptyHeader>
             <EmptyContent>

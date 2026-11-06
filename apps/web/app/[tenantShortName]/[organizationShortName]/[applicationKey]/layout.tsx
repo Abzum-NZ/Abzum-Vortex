@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { DateFormatProvider } from "@vortex/ui";
 import { withPageReadAttribution } from "../../../_lib/page-read-attribution";
 import { loadApplicationFrame } from "../../../_lib/application-frame";
 import { AddressTemporarilyUnavailable } from "../_components/address-states";
@@ -35,7 +36,11 @@ async function readCurrentApplicationFrame({
     );
   return (
     <>
-      {frame.preview === undefined ? null : <DraftPreviewNotice {...frame.preview} />}
+      {frame.preview === undefined ? null : (
+        <DateFormatProvider locale={frame.locale} timeZone={frame.timeZone}>
+          <DraftPreviewNotice {...frame.preview} />
+        </DateFormatProvider>
+      )}
       <ApplicationFrame model={frame}>{children}</ApplicationFrame>
     </>
   );
