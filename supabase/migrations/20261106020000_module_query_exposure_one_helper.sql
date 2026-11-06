@@ -1,17 +1,20 @@
--- B7D-B3b (B7DA-SQL-1): the exposure rule of a Module query lives in one helper that both query
--- resolvers call before anything else is decided. An Application reads a query of a Module it
--- only uses when that Module exposes it (or the query lists a record type by its own identity, or
--- the Application owns the Module). Before this, prepare_module_query_internal applied the rule
--- after the resolver and read_module_query_inputs never applied it, so a private query of another
--- Application's system-projection Module answered installation_required in a Studio preview with
--- no installation and query_unavailable once installed, and the installed path returned the input
--- declarations of a private query. Now every caller gets the same answer from the resolvers: null,
--- which they all turn into query_unavailable, for a private query, a missing query and an unknown
--- Module alike, in a preview with or without an installation and on the installed path. The rule
--- is deleted from prepare_module_query_internal (one way only).
--- No migration after 20261106010000 rewrites these functions in place (the regprocedures were
--- searched): the bodies below are the whole definitions and equal the canonical files in
--- supabase/schemas.
+-- B7D-B3b (B7DA-SQL-1): the exposure rule of a Module query lives in one helper,
+-- vortex_record.module_query_is_readable_internal, which answers true or false (never null: a query
+-- without an exposure is private). An Application reads a query of a Module it only uses when that
+-- Module exposes it (or the query lists a record type by its own identity, or the Application owns
+-- the Module). Both query resolvers apply it once the query is found, before anything that depends
+-- on the installation, the record type or its storage, and return null, which every caller turns
+-- into query_unavailable: a private query, a missing query and an unknown Module answer alike, in a
+-- preview with or without an installation and on the installed path. Before this,
+-- prepare_module_query_internal applied the rule after the resolver and read_module_query_inputs
+-- never applied it, so a private query of another Application's system-projection Module answered
+-- installation_required in a Studio preview with no installation, and the installed path returned
+-- the input declarations of a private query. The rule is deleted from
+-- prepare_module_query_internal (one way only). The grid views' lookup of a query's record type
+-- (save_grid_view, grid_view_document_for_viewer_internal) applies the same helper, so a saved or
+-- supplied view naming a private query resolves to nothing, like a missing one.
+-- No migration rewrites these functions in place (pg_get_functiondef searched): the bodies below
+-- are the whole definitions and equal the canonical files in supabase/schemas.
 set role vortex_record_adapter;
 
 create or replace function vortex_record.module_query_is_readable_internal(
@@ -24,16 +27,17 @@ language sql
 stable
 set search_path = ''
 as $function$
-  -- The one exposure rule of a Module query, applied by both resolvers before anything else is
-  -- decided, so a refusal never tells a private query from a missing one: an Application reads a
-  -- query of a Module it only uses when that Module exposes it (the rule the Studio picker, the
-  -- draft compile and publication apply). A record type's own listing carries its record type's
-  -- identity and follows record access instead.
+  -- The one exposure rule of a Module query, applied once the query is found, before anything that
+  -- depends on the installation, the record type or its storage, so a refusal never tells a private
+  -- query from a missing one: an Application reads a query of a Module it only uses when that
+  -- Module exposes it (the rule the Studio picker, the draft compile and publication apply). A
+  -- record type's own listing carries its record type's identity and follows record access
+  -- instead. It answers true or false, never null: a query without an exposure is private.
   select coalesce(
       pg_catalog.lower(p_query ->> 'queryId') = pg_catalog.lower(p_query #>> '{recordType,recordTypeId}'),
       false
     )
-    or p_query ->> 'exposure' = 'exposed'
+    or p_query ->> 'exposure' is not distinct from 'exposed'
     or exists (
       select 1
       from vortex_definition.roots as root
@@ -48,9 +52,11 @@ alter function vortex_record.module_query_is_readable_internal(uuid,jsonb,uuid)
 
 revoke all on function vortex_record.module_query_is_readable_internal(uuid,jsonb,uuid)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
+grant execute on function vortex_record.module_query_is_readable_internal(uuid,jsonb,uuid)
+  to vortex_owner;
 
 comment on function vortex_record.module_query_is_readable_internal(uuid,jsonb,uuid) is
-  'Private: whether the Application may read one query of a Module: a record type''s own listing, a query its Module exposes, or any query of a Module the Application owns.';
+  'Private: whether the Application may read one query of a Module (true or false, never null): a record type''s own listing, a query its Module exposes, or any query of a Module the Application owns. The one exposure rule: the installed and preview query resolvers and the grid views'' query lookup apply it.';
 
 create or replace function vortex_record.resolve_preview_module_query_internal(
   p_module_root_id uuid,
@@ -210,9 +216,9 @@ begin
     or query_item #>> '{recordType,state}' is distinct from 'resolved' then
     return null;
   end if;
-  if not vortex_record.module_query_is_readable_internal(
+  if vortex_record.module_query_is_readable_internal(
     p_module_root_id, query_item, (installation ->> 'applicationRootId')::uuid
-  ) then
+  ) is not true then
     return null;
   end if;
 
@@ -423,7 +429,7 @@ revoke all on function vortex_record.resolve_preview_module_query_internal(uuid,
 grant execute on function vortex_record.resolve_preview_module_query_internal(uuid, uuid)
   to vortex_record_adapter;
 comment on function vortex_record.resolve_preview_module_query_internal(uuid, uuid) is
-  'Private preview-only resolver for one query and its exact pinned record type and active preview storage identity (a system projection resolves the draft''s query over the installed record type with no preview storage, and returns the refusal installation_required when there is no installed projection to read: no active installation binding the Module, or a draft whose record type or permissions differ from it); it returns null, before anything else is decided, for a query the Application may not read (a private query of another Application''s Module), so no refusal tells a private query from a missing one; it validates the current human-owned unexpired preview and never falls back to an active installation.';
+  'Private preview-only resolver for one query and its exact pinned record type and active preview storage identity (a system projection resolves the draft''s query over the installed record type with no preview storage, and returns the refusal installation_required when there is no installed projection to read: no active installation binding the Module, or a draft whose record type or permissions differ from it); it returns null, once the query is found and before anything that depends on the installation or the record type, for a query the Application may not read (a private query of another Application''s Module, module_query_is_readable_internal), so no refusal tells a private query from a missing one; it validates the current human-owned unexpired preview and never falls back to an active installation.';
 
 CREATE OR REPLACE FUNCTION vortex_record.resolve_installed_module_query_internal(p_module_root_id uuid, p_query_id uuid) RETURNS jsonb
     LANGUAGE plpgsql STABLE
@@ -490,9 +496,9 @@ begin
     or not coalesce(pg_catalog.pg_input_is_valid(query_item #>> '{recordType,recordTypeId}', 'uuid'), false) then
     return null;
   end if;
-  if not vortex_record.module_query_is_readable_internal(
+  if vortex_record.module_query_is_readable_internal(
     p_module_root_id, query_item, (installation ->> 'applicationRootId')::uuid
-  ) then
+  ) is not true then
     return null;
   end if;
   type_module_root_id := (query_item #>> '{recordType,moduleRootId}')::uuid;
@@ -544,7 +550,7 @@ $$;
 alter function vortex_record.resolve_installed_module_query_internal(uuid,uuid) owner to vortex_record_adapter;
 
 
-COMMENT ON FUNCTION vortex_record.resolve_installed_module_query_internal(p_module_root_id uuid, p_query_id uuid) IS 'Private: the exact installed Module query and its record type, or null when either is unavailable to the current installation or the Application may not read the query (a private query of another Application''s Module).';
+COMMENT ON FUNCTION vortex_record.resolve_installed_module_query_internal(p_module_root_id uuid, p_query_id uuid) IS 'Private: the exact installed Module query and its record type, or null when either is unavailable to the current installation or the Application may not read the query (a private query of another Application''s Module, module_query_is_readable_internal).';
 
 REVOKE ALL ON FUNCTION vortex_record.resolve_installed_module_query_internal(p_module_root_id uuid, p_query_id uuid) FROM PUBLIC;
 
@@ -1316,6 +1322,330 @@ grant execute on function vortex_record.prepare_module_query_internal(uuid, uuid
   to vortex_owner;
 
 comment on function vortex_record.prepare_module_query_internal(uuid, uuid, bigint, jsonb, jsonb, jsonb, text, jsonb) is
-  'Shared owner-only Module query preparation for list and summary reads: derives organisation and application authority from validated_human_request_context(), resolves one installed query or the exact current human-owned preview pins, revalidates preview prior plans, exact active field mappings and preview catalogue/field bounds without using the installed read-scan routes, refuses a preview of a used Module''s record type with read_forbidden when the same read plan decision admits no read alternative, validates declared inputs and the published filter narrowed by the declared user filter, and returns the exact access predicate, pushed filter and residual per-row condition with bound inputs; it never accepts authority or identity from caller values.';
+  'Shared owner-only Module query preparation for list and summary reads: derives organisation and application authority from validated_human_request_context(), resolves one installed query or the exact current human-owned preview pins, revalidates preview prior plans, exact active field mappings and preview catalogue/field bounds without using the installed read-scan routes, refuses a preview of a used Module''s record type with read_forbidden when the same read plan decision admits no read alternative, refuses a private query of a Module the Application does not own as query_unavailable, like a missing one (decided by the resolvers), validates declared inputs and the published filter narrowed by the declared user filter, and returns the exact access predicate, pushed filter and residual per-row condition with bound inputs; it never accepts authority or identity from caller values.';
+
+reset role;
+set role vortex_owner;
+
+create or replace function vortex_platform.grid_view_document_for_viewer_internal(
+  p_query_id uuid, p_document jsonb, p_installation jsonb, p_plan jsonb, p_visible_fields jsonb
+)
+returns jsonb
+language plpgsql
+volatile
+security definer
+set search_path = ''
+as $function$
+declare
+  context_value jsonb;
+  record_type_id uuid;
+  declaration jsonb;
+  eligibility jsonb;
+  readable text[] := '{}'::text[];
+  filters jsonb;
+  sorts jsonb;
+  formatting jsonb;
+  omitted integer := 0;
+  omitted_sorts integer := 0;
+  omitted_formatting integer := 0;
+  document jsonb := p_document;
+begin
+  if pg_catalog.jsonb_array_length(p_document -> 'filters') = 0
+    and pg_catalog.jsonb_array_length(p_document -> 'sort') = 0
+    and pg_catalog.jsonb_array_length(p_document -> 'formatting') = 0 then
+    return pg_catalog.jsonb_build_object(
+      'document', document, 'hiddenFilters', 0, 'hiddenSorts', 0, 'hiddenFormatting', 0);
+  end if;
+  context_value := vortex_access.validated_human_request_context();
+  -- Resolve only releases pinned by this validated installation, including record-type listings,
+  -- and only a query the Application may read (a private query of another Application's Module
+  -- resolves to nothing, like a missing one).
+  select target.record_type_id into record_type_id
+  from (
+    select distinct (query.value #>> '{recordType,recordTypeId}')::uuid as record_type_id
+    from pg_catalog.jsonb_array_elements(p_installation -> 'moduleBindings') as binding(value)
+    join vortex_definition.releases as release
+      on release.root_id = (binding.value ->> 'moduleRootId')::uuid
+      and release.release_revision = (binding.value ->> 'moduleReleaseRevision')::bigint
+    cross join lateral pg_catalog.jsonb_array_elements(
+      release.compilation_output #> '{canonical,content,queries}'
+    ) as query(value)
+    where (query.value ->> 'queryId')::uuid = p_query_id
+      and vortex_record.module_query_is_readable_internal(
+        (binding.value ->> 'moduleRootId')::uuid, query.value,
+        (p_installation ->> 'applicationRootId')::uuid
+      )
+    union
+    select p_query_id
+    where p_plan -> 'recordTypes' ? pg_catalog.lower(p_query_id::text)
+  ) as target;
+  if record_type_id is not null then
+    declaration := vortex_record.record_type_read_declaration_internal(
+      p_plan, record_type_id, (context_value ->> 'applicationRootId')::uuid
+    );
+    if declaration is not null then
+      -- A saved operand stays only on a field every record the reader reaches exposes (the query
+      -- engine's field bounds) and the reader's column
+      -- decision (the visible fields) offers.
+      eligibility := vortex_access.resolve_record_read_field_bounds_internal(declaration);
+      select coalesce(pg_catalog.array_agg(pg_catalog.lower(field.value)), '{}'::text[])
+      into readable
+      from pg_catalog.jsonb_array_elements_text(eligibility -> 'readableFieldIds') as field(value)
+      where coalesce(p_visible_fields -> pg_catalog.lower(record_type_id::text), '[]'::jsonb)
+        ? pg_catalog.lower(field.value);
+    end if;
+  end if;
+  if p_document ? 'filters' then
+    select coalesce(pg_catalog.jsonb_agg(filter.value order by filter.ordinal), '[]'::jsonb)
+    into filters
+    from pg_catalog.jsonb_array_elements(p_document -> 'filters')
+      with ordinality as filter(value, ordinal)
+    where pg_catalog.lower(filter.value ->> 'fieldId') = any(readable);
+    omitted := pg_catalog.jsonb_array_length(p_document -> 'filters') - pg_catalog.jsonb_array_length(filters);
+    document := document || pg_catalog.jsonb_build_object('filters', filters);
+  end if;
+  if p_document ? 'sort' then
+    select coalesce(pg_catalog.jsonb_agg(sort.value order by sort.ordinal), '[]'::jsonb)
+    into sorts
+    from pg_catalog.jsonb_array_elements(p_document -> 'sort')
+      with ordinality as sort(value, ordinal)
+    where pg_catalog.lower(sort.value ->> 'fieldId') = any(readable);
+    omitted_sorts := pg_catalog.jsonb_array_length(p_document -> 'sort') - pg_catalog.jsonb_array_length(sorts);
+    document := document || pg_catalog.jsonb_build_object('sort', sorts);
+  end if;
+  if p_document ? 'formatting' then
+    -- A rule leaves with everything it stores (its comparison values and targets) unless every
+    -- field it reads, in its condition or its cells, is one this viewer can read now.
+    select coalesce(pg_catalog.jsonb_agg(rule.value order by rule.ordinal), '[]'::jsonb)
+    into formatting
+    from pg_catalog.jsonb_array_elements(p_document -> 'formatting')
+      with ordinality as rule(value, ordinal)
+    where vortex_platform.grid_view_condition_field_ids_internal(rule.value -> 'condition', 1) is not null
+      and not exists (
+        select 1
+        from pg_catalog.unnest(
+          vortex_platform.grid_view_condition_field_ids_internal(rule.value -> 'condition', 1)
+          || array(select pg_catalog.lower(cell.value)
+            from pg_catalog.jsonb_array_elements_text(rule.value -> 'target' -> 'fields') as cell(value))
+        ) as used(field_id)
+        where used.field_id <> all (readable)
+      );
+    omitted_formatting := pg_catalog.jsonb_array_length(p_document -> 'formatting')
+      - pg_catalog.jsonb_array_length(formatting);
+    document := document || pg_catalog.jsonb_build_object('formatting', formatting);
+  end if;
+  if omitted > 0 or omitted_sorts > 0 or omitted_formatting > 0 then
+    raise log 'Grid view state omitted code=GRID_VIEW_FIELDS_WITHHELD filters=% sorts=% formatting=%',
+      omitted, omitted_sorts, omitted_formatting;
+  end if;
+  return pg_catalog.jsonb_build_object(
+    'document', document, 'hiddenFilters', omitted, 'hiddenSorts', omitted_sorts,
+    'hiddenFormatting', omitted_formatting);
+end
+$function$;
+
+revoke all on function vortex_platform.grid_view_document_for_viewer_internal(uuid, jsonb, jsonb, jsonb, jsonb)
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_adapter;
+alter function vortex_platform.grid_view_document_for_viewer_internal(uuid, jsonb, jsonb, jsonb, jsonb)
+  owner to vortex_owner;
+comment on function vortex_platform.grid_view_document_for_viewer_internal(uuid, jsonb, jsonb, jsonb, jsonb) is
+  'Removes saved filter values, sorts and formatting rules outside the reader''s current column decision and field bounds before a selected document leaves the database; owner-only, with counts for the omission notice.';
+
+create or replace function vortex_platform.save_grid_view(
+  p_page_id uuid,
+  p_placement_id uuid,
+  p_query_id uuid,
+  p_view_id uuid,
+  p_expected_revision bigint,
+  p_name text,
+  p_document jsonb
+)
+returns jsonb
+language plpgsql
+volatile
+security definer
+set search_path = ''
+as $function$
+declare
+  scope record;
+  stored vortex_platform.grid_views%rowtype;
+  held_found boolean;
+  owned_count bigint;
+  installation jsonb;
+  access_plan jsonb;
+  record_type_id uuid;
+  field_types jsonb;
+  field_nulls jsonb;
+  format_rule jsonb;
+  written_at timestamptz := pg_catalog.clock_timestamp();
+begin
+  if p_page_id is null or not vortex_platform.is_non_nil_uuid(p_page_id::text)
+    or p_placement_id is null or not vortex_platform.is_non_nil_uuid(p_placement_id::text)
+    or p_query_id is null or not vortex_platform.is_non_nil_uuid(p_query_id::text)
+    or (p_view_id is null) <> (p_expected_revision is null)
+    or (p_view_id is not null and not vortex_platform.is_non_nil_uuid(p_view_id::text))
+    or (p_expected_revision is not null
+      and p_expected_revision not between 1 and 9007199254740990)
+    -- A new view needs a name and a document; a change may leave either as it is.
+    or (p_view_id is null and (p_name is null or p_document is null))
+    or (p_name is not null and (p_name <> pg_catalog.btrim(p_name)
+      or pg_catalog.char_length(p_name) not between 1 and 80))
+    or (p_document is not null
+      and not vortex_platform.grid_view_document_valid_internal(p_document, 'named_view')) then
+    raise exception using errcode = '22023', message = 'Grid view save is invalid';
+  end if;
+
+  select context.* into strict scope from vortex_platform.grid_view_scope_internal() as context;
+
+  -- A personal rule reads fields that exist and that the author can read now; the projection that
+  -- recipients receive is the check, so a rule it would omit for the author is refused here.
+  if p_document is not null and pg_catalog.jsonb_array_length(p_document -> 'formatting') > 0 then
+    installation := vortex_definition.read_current_active_installation();
+    access_plan := vortex_record.resolve_installation_access_plan_internal(installation);
+    select distinct (query.value #>> '{recordType,recordTypeId}')::uuid into record_type_id
+    from pg_catalog.jsonb_array_elements(installation -> 'moduleBindings') as binding(value)
+    join vortex_definition.releases as release
+      on release.root_id = (binding.value ->> 'moduleRootId')::uuid
+      and release.release_revision = (binding.value ->> 'moduleReleaseRevision')::bigint
+    cross join lateral pg_catalog.jsonb_array_elements(
+      release.compilation_output #> '{canonical,content,queries}') as query(value)
+    where (query.value ->> 'queryId')::uuid = p_query_id
+      -- A private query of another Application's Module resolves to nothing, like a missing one.
+      and vortex_record.module_query_is_readable_internal(
+        (binding.value ->> 'moduleRootId')::uuid, query.value,
+        (installation ->> 'applicationRootId')::uuid
+      );
+    -- Record-type listings use their record type as the query identity.
+    if record_type_id is null and access_plan -> 'recordTypes' ? p_query_id::text then
+      record_type_id := p_query_id;
+    end if;
+    if (vortex_platform.grid_view_document_for_viewer_internal(
+        p_query_id, p_document, installation, access_plan,
+        case when record_type_id is null then '{}'::jsonb else pg_catalog.jsonb_build_object(
+          pg_catalog.lower(record_type_id::text),
+          vortex_record.resolve_record_type_visible_field_ids_internal(record_type_id, access_plan)
+        ) end) ->> 'hiddenFormatting')::integer > 0 then
+      return pg_catalog.jsonb_build_object('outcome', 'formatting_refused', 'cause', 'field_not_readable');
+    end if;
+    -- A field the mapping does not know stays out, so a rule naming it is refused as rule_invalid.
+    select pg_catalog.jsonb_object_agg(field.value ->> 'fieldId', kind.value),
+      pg_catalog.jsonb_object_agg(field.value ->> 'fieldId', 'null'::jsonb)
+    into field_types, field_nulls
+    from pg_catalog.jsonb_array_elements(installation -> 'moduleBindings') as binding(value)
+    join vortex_definition.releases as release
+      on release.root_id = (binding.value ->> 'moduleRootId')::uuid
+      and release.release_revision = (binding.value ->> 'moduleReleaseRevision')::bigint
+    cross join lateral pg_catalog.jsonb_array_elements(
+      release.compilation_output #> '{canonical,content,recordTypes}') as record_type(value)
+    cross join lateral pg_catalog.jsonb_array_elements(record_type.value -> 'fields') as field(value)
+    cross join lateral (select vortex_access.condition_field_type_internal(field.value)) as kind(value)
+    where (record_type.value ->> 'recordTypeId')::uuid = record_type_id
+      and kind.value is not null;
+    for format_rule in select value from pg_catalog.jsonb_array_elements(p_document -> 'formatting')
+    loop
+      begin
+        perform vortex_access.evaluate_query_condition_internal(
+          format_rule -> 'condition', field_types, field_nulls,
+          '{"today":"date","start_of_week":"date","end_of_week":"date","start_of_month":"date","end_of_month":"date"}'::jsonb,
+          '{"today":null,"start_of_week":null,"end_of_week":null,"start_of_month":null,"end_of_month":null}'::jsonb,
+          true);
+      exception when invalid_parameter_value then
+        return pg_catalog.jsonb_build_object('outcome', 'formatting_refused', 'cause', 'rule_invalid');
+      end;
+    end loop;
+  end if;
+
+  perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(
+    scope.organization_id::text || ':' || scope.application_root_id::text || ':' ||
+    p_page_id::text || ':' || p_placement_id::text || ':views',
+    0
+  ));
+
+  if p_view_id is null then
+    select pg_catalog.count(*) into owned_count
+    from vortex_platform.grid_views as owned
+    where owned.organization_id = scope.organization_id
+      and owned.organization_account_id = scope.organization_account_id
+      and owned.application_root_id = scope.application_root_id
+      and owned.page_id = p_page_id
+      and owned.placement_id = p_placement_id
+      and owned.kind = 'named_view';
+    if owned_count >= 50 then
+      return pg_catalog.jsonb_build_object('outcome', 'limit');
+    end if;
+    insert into vortex_platform.grid_views (
+      view_id, tenant_id, organization_id, organization_account_id, application_root_id,
+      page_id, placement_id, kind, query_id, revision, release_revision, name, scope,
+      document, created_at, updated_at
+    ) values (
+      pg_catalog.gen_random_uuid(), scope.tenant_id, scope.organization_id,
+      scope.organization_account_id, scope.application_root_id, p_page_id, p_placement_id,
+      'named_view', p_query_id,
+      pg_catalog.nextval('vortex_platform.grid_view_revision_seq'::regclass),
+      scope.release_revision, p_name, 'personal', p_document, written_at, written_at
+    )
+    returning * into stored;
+    return pg_catalog.jsonb_build_object(
+      'outcome', 'saved', 'viewId', stored.view_id, 'revision', stored.revision);
+  end if;
+
+  -- Only a view the person owns or that is shared with them can be named at all.
+  if not vortex_platform.grid_view_visible_internal(
+    scope.organization_id, scope.organization_account_id, scope.application_root_id,
+    p_page_id, p_placement_id, p_view_id
+  ) then
+    return pg_catalog.jsonb_build_object('outcome', 'not_found');
+  end if;
+
+  select held.* into stored
+  from vortex_platform.grid_views as held
+  where held.view_id = p_view_id
+    and held.organization_id = scope.organization_id
+  for update;
+  held_found := found;
+  if not held_found then
+    return pg_catalog.jsonb_build_object('outcome', 'not_found');
+  end if;
+
+  -- Only the owner, or someone who may share table views, changes a view.
+  if stored.organization_account_id <> scope.organization_account_id
+    and not vortex_platform.grid_view_may_share_internal() then
+    return pg_catalog.jsonb_build_object('outcome', 'forbidden');
+  end if;
+
+  if stored.revision <> p_expected_revision then
+    return pg_catalog.jsonb_build_object(
+      'outcome', 'conflict',
+      'revision', stored.revision,
+      'name', stored.name,
+      'queryId', stored.query_id
+    );
+  end if;
+
+  update vortex_platform.grid_views as held
+  set query_id = case when p_document is null then held.query_id else p_query_id end,
+    name = coalesce(p_name, held.name),
+    document = coalesce(p_document, held.document),
+    revision = pg_catalog.nextval('vortex_platform.grid_view_revision_seq'::regclass),
+    release_revision = scope.release_revision,
+    updated_at = written_at
+  where held.view_id = stored.view_id
+  returning held.* into stored;
+
+  return pg_catalog.jsonb_build_object(
+    'outcome', 'saved', 'viewId', stored.view_id, 'revision', stored.revision);
+end
+$function$;
+
+revoke all on function vortex_platform.save_grid_view(uuid, uuid, uuid, uuid, bigint, text, jsonb)
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_record_adapter;
+grant execute on function vortex_platform.save_grid_view(uuid, uuid, uuid, uuid, bigint, text, jsonb)
+  to vortex_request;
+
+comment on function vortex_platform.save_grid_view(uuid, uuid, uuid, uuid, bigint, text, jsonb) is
+  'Creates a named grid view of the current person, or renames or replaces one at the expected revision (the owner, or someone who may share table views), or returns the stored revision as a conflict.';
+
+alter function vortex_platform.save_grid_view(uuid, uuid, uuid, uuid, bigint, text, jsonb)
+  owner to vortex_owner;
 
 reset role;
