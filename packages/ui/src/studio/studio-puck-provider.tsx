@@ -68,7 +68,7 @@ import {
 import { toast } from "../components/sonner";
 import { studioCanvasOverrides } from "./studio-canvas-actions";
 import type { StudioCanvasGridChange, StudioCanvasGridRead } from "./studio-canvas-grid";
-import { useStudioCanvasModel, type StudioCanvasModel } from "./studio-canvas-model";
+import { useStudioCanvasModel } from "./studio-canvas-model";
 import {
   studioInitialBreakpoint,
   studioInitialUi,
@@ -85,6 +85,12 @@ import { studioPuckStyle } from "./studio-puck-style";
 import { studioPuckWords } from "./studio-puck-words";
 import type { StudioCanvasRecordsReader } from "./use-studio-canvas-records";
 import { useStudioCanvasChannelValue } from "./use-studio-canvas-channel";
+import {
+  StudioCanvasBarContext,
+  StudioCanvasStatusContext,
+  StudioGridHoldersContext,
+  useStudioCanvasStatusValue,
+} from "./studio-canvas-status";
 import { useSettledValue } from "./use-settled-value";
 import { createSlotLockStore, SlotLockProvider, type SlotLockStore } from "../slot-lock";
 
@@ -220,30 +226,11 @@ export const whenNotDragging = (gate: RefObject<StudioDragGate>, apply: () => vo
   else apply();
 };
 
-/** What the canvas and the palette read from the one Puck editor around the workspace. */
-export type StudioCanvasContextValue = Readonly<{
-  input: StudioPuckInput;
-  model: StudioCanvasModel;
-  /** Why the last canvas change was refused; empty while the draft shows as it was edited. */
-  refusal: string;
-  /** The document of the canvas's iframe, which Puck's `iframe` override hands to Studio's own. */
-  frameDocument: Document | null;
-}>;
-
 /** What the iframe override sets once the canvas document exists; it changes for no edit. */
 const StudioFrameDocumentSetter = createContext<(document: Document | null) => void>(() => {});
 
 export const useStudioFrameDocumentSetter = (): ((document: Document | null) => void) =>
   useContext(StudioFrameDocumentSetter);
-
-const StudioCanvasContext = createContext<StudioCanvasContextValue | null>(null);
-
-/** The open page's canvas model; only inside the workspace's Puck editor. */
-export function useStudioCanvas(): StudioCanvasContextValue {
-  const value = useContext(StudioCanvasContext);
-  if (value === null) throw new Error("The Studio canvas is used outside its Puck editor");
-  return value;
-}
 
 const usePuckSelector = createUsePuck();
 
@@ -705,66 +692,75 @@ export function StudioPuckProvider({
     [indexedJson],
   );
   const refusal = refused?.area === model.area ? refused.message : "";
-  const value = useMemo(
-    (): StudioCanvasContextValue => ({ input, model, refusal, frameDocument }),
-    [input, model, refusal, frameDocument],
+  const status = useStudioCanvasStatusValue(input, model, refusal);
+  const { describePlacement, blockActions } = input;
+  const modelItems = model.items;
+  const bar = useMemo(
+    () => ({ describePlacement, items: modelItems, placed, blockActions }),
+    [describePlacement, modelItems, placed, blockActions],
   );
+  // The iframe override asks which slots hold a grid when a slot comes near; a new set needs no redraw.
+  const readGridHolders = useCallback(() => latest.current.model.gridHolders, []);
   if (!stylesheetApplied) return null;
   return (
     <StudioFrameDocumentSetter.Provider value={setFrameDocument}>
-      <StudioCanvasContext.Provider value={value}>
-        <StudioCanvasChannelContext.Provider value={channel}>
-          {/* Puck's own wrapper reads its font and spacing from the tokens too, so the map sits above it.
+      <StudioCanvasStatusContext.Provider value={status}>
+        <StudioCanvasBarContext.Provider value={bar}>
+          <StudioGridHoldersContext.Provider value={readGridHolders}>
+            <StudioCanvasChannelContext.Provider value={channel}>
+              {/* Puck's own wrapper reads its font and spacing from the tokens too, so the map sits above it.
           The Outline and Blocks regions repeat it on their own roots: below the wide breakpoint they
           are drawn in a Sheet outside this element. */}
-          <div className="contents" style={studioPuckStyle}>
-            <SlotLockProvider store={slotLock}>
-              <IndexedSlotsProvider keys={indexedSlots}>
-                <Puck
-                  key={model.slotsKey}
-                  config={config}
-                  data={initial}
-                  onChange={change}
-                  onAction={onAction}
-                  iframe={IFRAME}
-                  viewports={studioViewports}
-                  ui={opened.current.ui}
-                  // Puck's own wrapper fills the workspace, so the canvas has the height of its
-                  // well.
-                  height="100%"
-                  overrides={studioCanvasOverrides}
-                  metadata={metadata}
-                  permissions={permissions}
-                  dictionary={studioPuckWords}
-                >
-                  <StudioPuckSync
-                    config={config}
-                    repeatingKeys={model.repeatingKeys}
-                    onIndexed={setIndexedJson}
-                    frameDocument={frameDocument}
-                    data={shown}
-                    resync={resync}
-                    area={model.area}
-                    dragGate={dragGate}
-                    canvasShown={input.canvasShown}
-                    arrangeGrid={input.arrangeGrid === true}
-                    onArrangeGrid={input.onArrangeGrid}
-                    onArrangeableGrids={input.onArrangeableGrids}
-                    arrangeable={model.arrangeable}
-                    selectedAlias={input.selectedPlacementAlias}
-                    synchronizing={synchronizing}
-                    deriving={deriving}
-                    showSelection={showSelection}
-                    getPuckRef={getPuckRef}
-                    slotLock={slotLock}
-                  />
-                  <div className="flex h-full min-h-0 flex-col">{children}</div>
-                </Puck>
-              </IndexedSlotsProvider>
-            </SlotLockProvider>
-          </div>
-        </StudioCanvasChannelContext.Provider>
-      </StudioCanvasContext.Provider>
+              <div className="contents" style={studioPuckStyle}>
+                <SlotLockProvider store={slotLock}>
+                  <IndexedSlotsProvider keys={indexedSlots}>
+                    <Puck
+                      key={model.slotsKey}
+                      config={config}
+                      data={initial}
+                      onChange={change}
+                      onAction={onAction}
+                      iframe={IFRAME}
+                      viewports={studioViewports}
+                      ui={opened.current.ui}
+                      // Puck's own wrapper fills the workspace, so the canvas has the height of its
+                      // well.
+                      height="100%"
+                      overrides={studioCanvasOverrides}
+                      metadata={metadata}
+                      permissions={permissions}
+                      dictionary={studioPuckWords}
+                    >
+                      <StudioPuckSync
+                        config={config}
+                        repeatingKeys={model.repeatingKeys}
+                        onIndexed={setIndexedJson}
+                        frameDocument={frameDocument}
+                        data={shown}
+                        resync={resync}
+                        area={model.area}
+                        dragGate={dragGate}
+                        canvasShown={input.canvasShown}
+                        arrangeGrid={input.arrangeGrid === true}
+                        onArrangeGrid={input.onArrangeGrid}
+                        onArrangeableGrids={input.onArrangeableGrids}
+                        arrangeable={model.arrangeable}
+                        selectedAlias={input.selectedPlacementAlias}
+                        synchronizing={synchronizing}
+                        deriving={deriving}
+                        showSelection={showSelection}
+                        getPuckRef={getPuckRef}
+                        slotLock={slotLock}
+                      />
+                      <div className="flex h-full min-h-0 flex-col">{children}</div>
+                    </Puck>
+                  </IndexedSlotsProvider>
+                </SlotLockProvider>
+              </div>
+            </StudioCanvasChannelContext.Provider>
+          </StudioGridHoldersContext.Provider>
+        </StudioCanvasBarContext.Provider>
+      </StudioCanvasStatusContext.Provider>
     </StudioFrameDocumentSetter.Provider>
   );
 }

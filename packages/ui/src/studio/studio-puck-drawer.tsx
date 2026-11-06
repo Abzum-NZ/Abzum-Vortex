@@ -3,6 +3,7 @@
 import { Drawer, createUsePuck, useGetPuck } from "@puckeditor/core";
 import {
   createContext,
+  memo,
   useCallback,
   useContext,
   useDeferredValue,
@@ -43,7 +44,8 @@ import {
 import { StudioLimitNote, Reasoned } from "./studio-limit";
 import { zoneOfDestination } from "./studio-canvas-data";
 import { studioScreens, useStudioScreen } from "./studio-canvas-screen";
-import { useStudioCanvas, type StudioCanvasAddRequest } from "./studio-puck-provider";
+import { useStudioCanvasStatus, type StudioCanvasStatus } from "./studio-canvas-status";
+import type { StudioCanvasAddRequest, StudioCanvasPalette } from "./studio-puck-provider";
 import { studioPuckStyle } from "./studio-puck-style";
 
 const usePuckSelector = createUsePuck();
@@ -292,13 +294,38 @@ function StudioBlockList({
  * drawn by `StudioDrawerItem`. Each block drags with Puck's own drag and drop (`Drawer.Item`),
  * or is added with its Add button.
  */
-export function StudioBlocksPanel() {
-  const { input, model } = useStudioCanvas();
+export function StudioBlocksPanel({
+  visible,
+  palette,
+}: Readonly<{
+  /** Whether the Blocks tab is the one shown. */
+  visible: boolean;
+  /** The block palette; absent when no page is open. */
+  palette: StudioCanvasPalette | undefined;
+}>) {
+  const status = useStudioCanvasStatus();
   const screen = useStudioScreen();
-  const palette = input.palette;
+  // The panel stays mounted to keep its search and place while another tab is shown, and then it
+  // works nothing out: it holds what it was given when it was last shown, and the body below
+  // (which only a change of that redraws) is worked out again once the tab is shown again.
+  const held = useRef({ palette, status, screen });
+  if (visible) held.current = { palette, status, screen };
+  return <StudioBlocksBody visible={visible} given={held.current} />;
+}
+
+type BlocksGiven = Readonly<{
+  palette: StudioCanvasPalette | undefined;
+  status: StudioCanvasStatus;
+  screen: Readonly<{ breakpoint: string }>;
+}>;
+
+const StudioBlocksBody = memo(function StudioBlocksBody({
+  visible,
+  given: { palette, status, screen },
+}: Readonly<{ visible: boolean; given: BlocksGiven }>) {
   // No page is open: the panel says so itself.
-  if (palette === undefined || !model.open) return null;
-  if (model.shown === undefined)
+  if (palette === undefined || !status.open) return null;
+  if (!status.ready)
     return (
       <BlocksEmpty
         title="Blocks unavailable"
@@ -322,17 +349,19 @@ export function StudioBlocksPanel() {
     );
   return (
     <StudioBlocksDrawer
-      targets={places.targets.filter((target) => model.zoneKeys.has(target.area))}
-      blocked={blockedReason(model.editable, model.readOnlyCause, screen, input.disabledReason)}
+      visible={visible}
+      targets={places.targets.filter((target) => status.zoneKeys.has(target.area))}
+      blocked={blockedReason(status.editable, status.readOnlyCause, screen, status.disabledReason)}
       owner={palette.owner}
       message={palette.message}
-      slotOfArea={model.slotOfZoneKey}
-      preferredArea={model.defaultZoneKey}
+      slotOfArea={status.slotOfZoneKey}
+      preferredArea={status.defaultZoneKey}
     />
   );
-}
+});
 
 function StudioBlocksDrawer({
+  visible,
   targets,
   blocked,
   owner,
@@ -340,6 +369,7 @@ function StudioBlocksDrawer({
   slotOfArea,
   preferredArea,
 }: Readonly<{
+  visible: boolean;
   /** The places of the page (or step) the canvas shows. */
   targets: readonly StudioCompositionAddTarget[];
   blocked: string | undefined;
@@ -408,9 +438,15 @@ function StudioBlocksDrawer({
           ? definitionLimitMessage("compositionDepth")
           : undefined;
   // Whether a block may be dropped is read once for every block of the list, not once per row.
-  const blockedKey = usePuckSelector((state) =>
-    [...choices.keys()].filter((name) => !state.getPermissions({ type: name }).insert).join(","),
-  );
+  // Puck runs this on each of its changes, so while another tab is shown it answers as it did.
+  const heldBlockedKey = useRef("");
+  const blockedKey = usePuckSelector((state) => {
+    if (!visible) return heldBlockedKey.current;
+    heldBlockedKey.current = [...choices.keys()]
+      .filter((name) => !state.getPermissions({ type: name }).insert)
+      .join(",");
+    return heldBlockedKey.current;
+  });
   const notDroppable = useMemo(
     (): ReadonlySet<string> => new Set(blockedKey === "" ? [] : blockedKey.split(",")),
     [blockedKey],

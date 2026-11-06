@@ -9,7 +9,7 @@ import { sameCompositionValue, type StudioCanvasReferences } from "@vortex/platf
  * The value from an earlier render while the new one holds the same data. A value that is the
  * same object costs nothing; a new object is compared once, not written out as text.
  */
-const useStableValue = <T>(value: T): T => {
+export const useStableValue = <T>(value: T): T => {
   const held = useRef<{ value: T } | null>(null);
   if (held.current === null || !sameCompositionValue(held.current.value, value))
     held.current = { value };

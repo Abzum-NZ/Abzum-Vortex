@@ -13,7 +13,8 @@ import { Tabs, TabsList, TabsTrigger } from "../components/tabs";
 import { Icon } from "../icons";
 import { StudioCanvasViewProvider } from "./studio-canvas-scale";
 import { useStudioScreen } from "./studio-canvas-screen";
-import { useStudioCanvas } from "./studio-puck-provider";
+import { useStudioCanvasStatus } from "./studio-canvas-status";
+import type { StudioPuckInput } from "./studio-puck-provider";
 import type { StudioCompileFailure } from "@vortex/platform/schema";
 
 const READ_ONLY_HINT =
@@ -78,25 +79,34 @@ export function StudioCanvasView({
   zoom,
   onFitZoom,
   note,
-}: Readonly<{
-  /** Something the strip above the canvas says beside the canvas's own controls. */
-  note?: ReactNode;
-  /** Device width is preserved while the page frame scales inside the well. */
-  zoom: number | "fit";
-  /** Reports the measured Fit percentage to the workspace zoom controls. */
-  onFitZoom: (percent: number) => void;
-}>) {
-  const { input, model, refusal } = useStudioCanvas();
+  compileFailure,
+  platformThemeTokens,
+  fieldInputControlReleases,
+  arrangeGrid,
+  onArrangeGrid,
+  onSelectPlacement,
+}: Readonly<
+  Pick<
+    StudioPuckInput,
+    | "compileFailure"
+    | "platformThemeTokens"
+    | "fieldInputControlReleases"
+    | "arrangeGrid"
+    | "onArrangeGrid"
+    | "onSelectPlacement"
+  >
+> &
+  Readonly<{
+    /** Something the strip above the canvas says beside the canvas's own controls. */
+    note?: ReactNode;
+    /** Device width is preserved while the page frame scales inside the well. */
+    zoom: number | "fit";
+    /** Reports the measured Fit percentage to the workspace zoom controls. */
+    onFitZoom: (percent: number) => void;
+  }>) {
+  const model = useStudioCanvasStatus();
+  const { disabled, refusal, open, ready } = model;
   const { breakpoint, label, width } = useStudioScreen();
-  const {
-    disabled,
-    compileFailure,
-    platformThemeTokens,
-    fieldInputControlReleases,
-    arrangeGrid,
-    onArrangeGrid,
-  } = input;
-  const { open, shown } = model;
   const [well, setWell] = useState<HTMLDivElement | null>(null);
   // The canvas is a device screen: the iframe is as wide as the chosen screen and as tall as the
   // well, in the iframe's own pixels. The zoom only scales the iframe as a whole.
@@ -141,7 +151,7 @@ export function StudioCanvasView({
         value={model.step ?? ""}
         onValueChange={(step) => {
           // The selected block belongs to the step that leaves the canvas.
-          void input.onSelectPlacement(null);
+          void onSelectPlacement(null);
           model.chooseStep(String(step));
         }}
       >
@@ -154,7 +164,7 @@ export function StudioCanvasView({
         </TabsList>
       </Tabs>
     );
-  if (shown === undefined || platformThemeTokens === null || fieldInputControlReleases === null)
+  if (!ready || platformThemeTokens === null || fieldInputControlReleases === null)
     return (
       <div className="flex min-h-0 flex-1 flex-col gap-3 px-4">
         {steps}
