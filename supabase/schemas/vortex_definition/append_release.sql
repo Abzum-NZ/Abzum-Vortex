@@ -140,7 +140,8 @@ begin
             'permissionId', permission_id
           ),
           -- An ordinary publication asks for the recent primary sign-in the TypeScript builder
-          -- authority asks for; a system Application asks for its two-step verification below.
+          -- authority asks (builderRecentAuthentication); a system Application asks for its
+          -- two-step verification below.
           'recentAuthentication', case
             when permission_key = 'platform.organization.definition_releases.manage'
               and not system_publication

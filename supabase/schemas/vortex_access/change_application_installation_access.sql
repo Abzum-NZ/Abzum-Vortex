@@ -19,9 +19,6 @@ declare
   changed record;
   assignment_to_revoke record;
   append_result text;
-  context_value jsonb;
-  requirement jsonb;
-  acceptance record;
 begin
   if p_activity_id is null
     or p_activity_id = '00000000-0000-0000-0000-000000000000'::uuid
@@ -40,59 +37,7 @@ begin
   -- registration read below cannot change before the coordinator rechecks it.
   select locked.* into strict authority
   from vortex_access.lock_application_installation_authority() as locked;
-  context_value := vortex_access.validated_human_request_context();
-
-  -- Preparing templates that confer any permission is accepting them. The TypeScript builder
-  -- authority asks for a recent primary sign-in and then a two-step verification within the hour;
-  -- the same two are asked here, so a request that skips that check is refused the same way. A
-  -- template list that cannot be read counts as conferring. Accepting never assigns a role, and
-  -- the delegated-scope bound is enforced when a role is assigned.
-  if p_change = 'prepare' and (
-    pg_catalog.jsonb_typeof(p_prepared_templates -> 'templates') is distinct from 'array'
-    or exists (
-      select 1
-      from pg_catalog.jsonb_array_elements(p_prepared_templates -> 'templates') as item(value)
-      where pg_catalog.jsonb_typeof(item.value -> 'livePermissions') is distinct from 'array'
-        or pg_catalog.jsonb_array_length(item.value -> 'livePermissions') > 0
-    )
-  ) then
-    foreach requirement in array array[
-      pg_catalog.jsonb_build_object('kind', 'primary', 'maximumAgeSeconds', 900),
-      pg_catalog.jsonb_build_object('kind', 'multi_factor', 'maximumAgeSeconds', 3600)
-    ] loop
-      select evaluated.* into strict acceptance
-      from vortex_access.evaluate_organization_permission_eligibility(
-        pg_catalog.jsonb_build_object(
-          'operationKey', 'platform.organization.application_role_templates.accept',
-          'action', pg_catalog.jsonb_build_object('actionKind', 'manage'),
-          'target', pg_catalog.jsonb_build_object('kind', 'organization'),
-          'requiredPermission', vortex_access.required_platform_permission(
-            'platform.organization.applications.manage'
-          ),
-          'recentAuthentication', requirement,
-          'authority', pg_catalog.jsonb_build_object('kind', 'permission')
-        )
-      ) as evaluated;
-      if acceptance.outcome = 'refused' and acceptance.reason_code = 'authentication_unsatisfied' then
-        raise exception using errcode = 'V3150',
-          message = 'Accepting role templates needs a recent sign-in';
-      end if;
-      if acceptance.outcome = 'refused' and acceptance.reason_code = 'multi_factor_unsatisfied' then
-        raise exception using errcode = 'V3152',
-          message = 'Accepting role templates needs a recent two-step verification';
-      end if;
-      if acceptance.outcome is distinct from 'eligible'
-        or acceptance.target_kind is distinct from 'organization'
-        or acceptance.target_application_root_id is not null
-        or acceptance.organization_id is distinct from authority.organization_id
-        or acceptance.organization_account_id is distinct from authority.organization_account_id
-        or acceptance.access_version is distinct from authority.access_version
-        or acceptance.correlation_id is distinct from authority.correlation_id then
-        raise exception using errcode = '42501',
-          message = 'Application installation authority is unavailable';
-      end if;
-    end loop;
-  end if;
+  perform vortex_access.validated_human_request_context();
 
   select registration.* into current_registration
   from vortex_access.permission_registrations as registration
@@ -228,7 +173,7 @@ grant execute on function vortex_access.change_application_installation_access(
 comment on function vortex_access.change_application_installation_access(
   uuid, uuid, text, jsonb
 ) is
-  'Authority-checked Application permission registration change for installation; derives actor and correlation from validated human context, asks a recent sign-in and two-step verification when the prepared templates confer any permission, and grants no access.';
+  'Authority-checked Application permission registration change for installation; derives actor and correlation from validated human context and grants no access.';
 
 alter function vortex_access.change_application_installation_access(p_activity_id uuid, p_application_root_id uuid, p_change text, p_prepared_templates jsonb) owner to vortex_owner;
 

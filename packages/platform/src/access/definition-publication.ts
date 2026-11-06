@@ -417,9 +417,10 @@ export const createHumanDefinitionPublisher = (
       } catch (error) {
         failure = safeFailure(error, mode);
         if (
-          error instanceof BuilderAuthorityError &&
-          (error.code === "BUILDER_PERMISSION_REFUSED" ||
-            error.code === "BUILDER_RECENT_AUTHENTICATION_REQUIRED")
+          (error instanceof BuilderAuthorityError &&
+            (error.code === "BUILDER_PERMISSION_REFUSED" ||
+              error.code === "BUILDER_RECENT_AUTHENTICATION_REQUIRED")) ||
+          databaseRecentSignInRefusal(error)
         )
           throw new ExpectedBuilderPublicationRefusal();
         // Throw through runChange: even a post-append result mismatch must roll back.
