@@ -1,6 +1,4 @@
 import { randomUUID } from "node:crypto";
-import { spawnSync } from "node:child_process";
-import { join } from "node:path";
 import { developmentSetupManifestFor } from "./manifest";
 import { signupPrivacyNoticeSetting } from "@vortex/definitions";
 import {
@@ -23,7 +21,7 @@ import {
   requireLocalDevelopmentEnvironment,
   requireLocalSupabaseBinding,
   resolveFirstOwnerIdentity,
-  supabaseWorkdirArguments,
+  queryLocalDatabaseAsOwner,
 } from "./guards";
 import { createConfiguredTenantAdministrationService } from "@vortex/platform/server";
 import { createDatabaseSystemApplicationBoundReleaseSetService } from "@vortex/platform/server";
@@ -32,11 +30,8 @@ import {
   developmentPublicationCatalogue,
   verifyRecordedShippedApplicationRoots,
 } from "./definitions";
-import {
-  refreshShippedApplications,
-  refreshStudioApplications,
-  type InstallFacts,
-} from "./install";
+import { refreshShippedApplications, type InstallFacts } from "./install";
+import { refreshStudioApplications } from "./platform-refresh";
 import { grantStewardDefinitionRole, grantStewardInstallerRole } from "./installer-access";
 import { grantFirstOwnerApplicationRoles } from "./first-owner-application-roles";
 import {
@@ -44,7 +39,7 @@ import {
   mintSystemContext,
   nominatedOwnerSession,
 } from "./development-authority";
-import { findRepositoryRoot, loadSetupState, prepareSetupState } from "./state";
+import { loadSetupState, prepareSetupState } from "./state";
 import { loadLocalWebEnvironment } from "../demo-setup/local-environment";
 import { createInProcessEventDispatcher } from "../../app/_lib/event-dispatch";
 
@@ -324,25 +319,6 @@ const publishShippedPrivacyNotice = async (
   if (published.outcome === "refused")
     throw new DevelopmentSetupRefusal(`The privacy notice was not published (${published.code}).`);
   log(`privacy notice ${signupPrivacyNoticeSetting.versionLabel} published`);
-};
-
-const queryLocalDatabaseAsOwner = (
-  sql: string,
-  failure: string,
-): readonly Readonly<Record<string, unknown>>[] => {
-  const cli = join(findRepositoryRoot(), "node_modules", "supabase", "dist", "supabase.js");
-  const result = spawnSync(
-    process.execPath,
-    [cli, "db", "query", "--local", "--output", "json", ...supabaseWorkdirArguments(), sql],
-    { cwd: findRepositoryRoot(), encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] },
-  );
-  if (result.error) throw result.error;
-  if (result.status !== 0) throw new Error(`${failure}: ${result.stderr.trim()}`);
-  const output: unknown = JSON.parse(result.stdout);
-  const rows =
-    typeof output === "object" && output !== null && "rows" in output ? output.rows : undefined;
-  if (!Array.isArray(rows)) throw new Error(`${failure}: the query returned no rows list.`);
-  return rows;
 };
 
 export const runDevelopmentSetup = async (

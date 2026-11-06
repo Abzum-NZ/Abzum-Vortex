@@ -17,19 +17,12 @@ import {
 import {
   createDatabaseSystemApplicationBoundReleaseSetService,
   createPreparedInstallationRuntimeSourceReader,
-  listOrganizationBuilderRoots,
-  type HumanOrganizationRequestResult,
-  type OrganizationBuilderRoot,
   resolveModuleContributions,
   readInstallationBindings,
   type TrustedApplicationRootOriginKind,
 } from "@vortex/platform/server";
 import { releaseSetContainsCustomComponents } from "../../app/_lib/definition-catalogue";
-import {
-  developmentPublicationCatalogue,
-  publishShippedDefinitions,
-  publishStudioApplicationDraft,
-} from "./definitions";
+import { developmentPublicationCatalogue, publishShippedDefinitions } from "./definitions";
 import {
   developmentBuilderAuthority,
   inSystemTransaction,
@@ -69,7 +62,7 @@ const definitionReader = (
     ),
 });
 
-const coordinatorDependencies = (
+export const coordinatorDependencies = (
   facts: Omit<InstallFacts, "releases">,
 ): ApplicationInstallationCoordinatorDependencies<never> => ({
   installerRequests: createHumanOrganizationRequestService({
@@ -199,24 +192,22 @@ export const readReleaseSet = (
 };
 
 /**
- * Whether one installed release no longer verifies and is replaced by a release of the current
- * draft: a platform definition it pins was superseded, or it was published under an earlier
- * definition contract. Both are the one replacement case.
+ * Whether one stored release still verifies: `catalogue` when a platform block, connection type or
+ * service operation it pins changed content, `contract` when it was published under an earlier
+ * definition contract. Any other failure is not an answer and stops the caller.
  */
-const releaseSuperseded = (
+export const releaseStaleness = (
   system: SystemContextFacts,
   applicationRootId: string,
   applicationReleaseRevision: number,
-): Promise<boolean> =>
+): Promise<"current" | "catalogue" | "contract"> =>
   readReleaseSet(system, applicationRootId, applicationReleaseRevision).then(
-    () => false,
+    () => "current" as const,
     (error: unknown) => {
-      if (
-        error instanceof DefinitionError &&
-        (error.code === "DEFINITION_DEPENDENCY_SUPERSEDED" ||
-          error.code === "RELEASE_CONTRACT_SUPERSEDED")
-      )
-        return true;
+      if (error instanceof DefinitionError && error.code === "DEFINITION_DEPENDENCY_SUPERSEDED")
+        return "catalogue" as const;
+      if (error instanceof DefinitionError && error.code === "RELEASE_CONTRACT_SUPERSEDED")
+        return "contract" as const;
       throw error;
     },
   );
@@ -226,7 +217,7 @@ const releaseSuperseded = (
  * upgrade prepares its storage inside the coordinator's atomic switch; the first-install
  * preparation would only refuse an already installed application.
  */
-const switchActiveRelease = async (
+export const switchActiveRelease = async (
   facts: Omit<InstallFacts, "releases">,
   applicationKey: string,
   target: Pick<PublishedRelease, "rootId" | "releaseRevision">,
@@ -271,7 +262,7 @@ export const upgradeOne = async (
     throw new Error(`Active release is newer than the publication for ${applicationKey}`);
   if (
     origin === "ordinary" &&
-    !(await releaseSuperseded(facts.system, published.rootId, activeRevision))
+    (await releaseStaleness(facts.system, published.rootId, activeRevision)) === "current"
   ) {
     log(`available ${applicationKey} ${published.releaseVersion}: awaiting in-page adoption`);
     return;
@@ -309,63 +300,4 @@ export const refreshShippedApplications = async (
   facts.state.setupCompleted = true;
   facts.state.save();
   return releases;
-};
-
-/**
- * The organisation's own applications (built in Studio, not shipped) that have a release, listed
- * as the steward sees them in Studio.
- */
-const listStudioApplicationRoots = async (
-  facts: Omit<InstallFacts, "releases">,
-): Promise<readonly OrganizationBuilderRoot[]> => {
-  const roots: OrganizationBuilderRoot[] = [];
-  let cursor: string | null = null;
-  do {
-    const after: string | null = cursor;
-    const page: HumanOrganizationRequestResult<
-      Awaited<ReturnType<typeof listOrganizationBuilderRoots>>
-    > = await createHumanOrganizationRequestService({
-      identityAuthorityId: facts.identityAuthorityId,
-    }).run(
-      nominatedOwnerSession(facts.stewardIdentityId),
-      organizationSelectionCandidateSchema.parse({ organizationId: facts.system.organizationId }),
-      (transaction) => listOrganizationBuilderRoots(transaction, after),
-    );
-    if (page.kind !== "available")
-      throw new Error(`Studio applications could not be listed (${page.kind})`, { cause: page });
-    roots.push(...page.value.roots);
-    cursor = page.value.nextCursor;
-  } while (cursor !== null);
-  return roots.filter(
-    (root) =>
-      !root.isSystemApplication &&
-      !(facts.manifest.applicationKeys as readonly string[]).includes(root.key) &&
-      root.currentReleaseRevision !== null,
-  );
-};
-
-/**
- * Moves every application built in Studio whose active release no longer verifies (a platform
- * definition it pins was superseded, or it was published under an earlier definition contract) to
- * a release of its current draft, published against the current catalogue, through the same
- * upgrade the shipped applications use. An application not installed, or whose active release
- * still verifies, is left alone.
- */
-export const refreshStudioApplications = async (
-  facts: Omit<InstallFacts, "releases">,
-  log: (message: string) => void,
-): Promise<void> => {
-  for (const root of await listStudioApplicationRoots(facts)) {
-    const activeRevision = await readActiveReleaseRevision(facts, root.key, root.rootId);
-    if (activeRevision === null) continue;
-    if (!(await releaseSuperseded(facts.system, root.rootId, activeRevision))) continue;
-    // A later release that verifies (published by the builder, or by a run interrupted before its
-    // switch) is the replacement; otherwise the current draft is published.
-    const current = root.currentReleaseRevision ?? activeRevision;
-    const target =
-      current > activeRevision && !(await releaseSuperseded(facts.system, root.rootId, current))
-        ? { rootId: root.rootId, releaseRevision: current }
-        : await publishStudioApplicationDraft(facts.system, root, log);
-    await switchActiveRelease(facts, root.key, target, activeRevision, log);
-  }
 };
