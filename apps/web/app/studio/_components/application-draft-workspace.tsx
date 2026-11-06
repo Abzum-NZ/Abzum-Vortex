@@ -400,13 +400,6 @@ function ExistingApplicationWorkspace(props: ExistingProps) {
           className="flex h-full min-h-0 flex-col"
           aria-busy={draft.isHeld("publication") || draft.isHeld("reopening")}
         >
-          <ApplicationDraftAgentTools
-            draft={draft}
-            command={canvas.commandComposition}
-            rename={canvas.renameItem}
-            readQueries={canvas.readQueries}
-            {...releases.agent}
-          />
           <StudioPuckProvider input={canvas.puck} dragGate={dragGate}>
             <StudioFrame
               applicationName={source.body.name}
@@ -510,6 +503,14 @@ function ExistingApplicationWorkspace(props: ExistingProps) {
               )}
             />
           </StudioPuckProvider>
+          {/* After the frame, so the header's skip link is the first stop on the page. */}
+          <ApplicationDraftAgentTools
+            draft={draft}
+            command={canvas.commandComposition}
+            rename={canvas.renameItem}
+            readQueries={canvas.readQueries}
+            {...releases.agent}
+          />
           {canvas.dialog}
           {data.dialog}
           {releases.flowHost.element}

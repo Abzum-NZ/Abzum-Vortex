@@ -490,7 +490,7 @@ export function StudioFrame<Key extends string>({
   // vertical Tabs root is not a DOM ancestor of anything a panel, the canvas or the inspector draws
   // (a nested horizontal Tabs would otherwise pick up the vertical rules) while the tab and its
   // panel still register through React context.
-  const [dockHost, setDockHost] = useState<HTMLDivElement | null>(null);
+  const [dockHost, setDockHost] = useState<HTMLElement | null>(null);
   const [overlayHost, setOverlayHost] = useState<HTMLDivElement | null>(null);
   // Which handle the pointer is on: a drag stores only that panel's width.
   const movedHandle = useRef<"panel" | "inspector">("panel");
@@ -802,8 +802,7 @@ export function StudioFrame<Key extends string>({
           className="min-h-0 min-w-0 flex-1"
         >
           {showPanel && (
-            // One landmark for the panel and the handle that resizes it; it adds no box of its own.
-            <aside aria-label={`${active?.label ?? ""} panel`} className="contents">
+            <>
               <SidePanel
                 id="studio-panel"
                 panelRef={panelRef}
@@ -811,7 +810,11 @@ export function StudioFrame<Key extends string>({
                 size={width}
                 limits={panelLimits}
               >
-                <div ref={setDockHost} className="h-full min-h-0" />
+                <aside
+                  ref={setDockHost}
+                  aria-label={`${active?.label ?? ""} panel`}
+                  className="h-full min-h-0"
+                />
               </SidePanel>
               <ResizableHandle
                 aria-label={`Resize the ${active?.label ?? ""} panel`}
@@ -820,7 +823,7 @@ export function StudioFrame<Key extends string>({
                 }}
                 onKeyDownCapture={resizeByKey("panel")}
               />
-            </aside>
+            </>
           )}
           <ResizablePanel id="studio-canvas" minSize="20rem">
             {/* The page's one main landmark and its one level-1 heading: the skip link lands here. */}
@@ -842,7 +845,7 @@ export function StudioFrame<Key extends string>({
             </main>
           </ResizablePanel>
           {showInspector && (
-            <aside aria-label={inspectorLabel} className="contents">
+            <>
               <ResizableHandle
                 aria-label="Resize the inspector"
                 onPointerDownCapture={() => {
@@ -857,11 +860,14 @@ export function StudioFrame<Key extends string>({
                 size={inspectorWidth}
                 limits={inspectorLimits}
               >
-                <div className="flex h-full min-h-0 flex-col bg-sidebar">
+                <aside
+                  aria-label={inspectorLabel}
+                  className="flex h-full min-h-0 flex-col bg-sidebar"
+                >
                   <PaneSlot host={hosts?.inspector ?? null} />
-                </div>
+                </aside>
               </SidePanel>
-            </aside>
+            </>
           )}
         </ResizablePanelGroup>
       </div>
