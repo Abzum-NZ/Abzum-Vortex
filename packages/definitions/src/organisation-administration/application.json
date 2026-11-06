@@ -158,6 +158,34 @@
           ],
           "changeable_fields": []
         }
+      },
+      {
+        "id": "app_permission_organization_security_settings_read",
+        "key": "vortex.organisation_administration.organization_security_settings.read",
+        "label": "Read security settings",
+        "description": "Allows reading the organisation's two-step verification setting.",
+        "record_type": "vortex.system_directory:organization_security_settings",
+        "action_kind": "read",
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        },
+        "field_policy": {
+          "readable_fields": [
+            "organization_id",
+            "revision",
+            "require_step_up",
+            "instance_profile",
+            "can_turn_off",
+            "changed_at",
+            "changed_by_display_name"
+          ],
+          "changeable_fields": []
+        }
       }
     ],
     "roles": [
@@ -195,7 +223,8 @@
           "vortex.organisation_administration.role.read",
           "vortex.organisation_administration.organization_settings.read",
           "vortex.organisation_administration.activity_entry.read",
-          "vortex.organisation_administration.connection_instance.read"
+          "vortex.organisation_administration.connection_instance.read",
+          "vortex.organisation_administration.organization_security_settings.read"
         ]
       }
     ],
@@ -245,6 +274,14 @@
             "icon": "key-round",
             "page": "connections",
             "permission": "platform.organization.connections.manage"
+          },
+          {
+            "id": "nav_security",
+            "type": "page",
+            "label": "Security",
+            "icon": "shield-check",
+            "page": "security",
+            "permission": "platform.organization.assignments.manage"
           }
         ]
       },
@@ -2294,6 +2331,90 @@
                             "kind": "content"
                           }
                         }
+                      }
+                    }
+                  }
+                }
+              ],
+              "vortex": {
+                "shell": "shell_organisation_administration",
+                "slot_orders": {}
+              }
+            }
+          },
+          "content": []
+        }
+      },
+      {
+        "id": "page_security",
+        "key": "security",
+        "name": "Security",
+        "type": "dashboard",
+        "permission": "platform.organization.assignments.manage",
+        "composition": {
+          "root": {
+            "props": {
+              "slot_primary": [
+                {
+                  "type": "platform.renderer.table",
+                  "props": {
+                    "presentation": "grid",
+                    "id": "security_region",
+                    "title": "Security",
+                    "empty_message": "Security settings are unavailable",
+                    "columns": [
+                      {
+                        "field": "vortex.system_directory:organization_security_settings.require_step_up",
+                        "label": "Two-step code required",
+                        "visible": true,
+                        "pin": "start"
+                      },
+                      {
+                        "field": "vortex.system_directory:organization_security_settings.instance_profile",
+                        "label": "Instance",
+                        "visible": true,
+                        "pin": "unpinned"
+                      },
+                      {
+                        "field": "vortex.system_directory:organization_security_settings.changed_by_display_name",
+                        "label": "Last changed by",
+                        "visible": true,
+                        "pin": "unpinned"
+                      },
+                      {
+                        "field": "vortex.system_directory:organization_security_settings.changed_at",
+                        "label": "Last changed",
+                        "visible": true,
+                        "pin": "unpinned"
+                      }
+                    ],
+                    "vortex": {
+                      "block": {
+                        "block_id": "39ab6f28-c166-47cf-91a7-f0b864ded4ff",
+                        "release_version": "2.0.0"
+                      },
+                      "query": "vortex.system_directory:organization_security_settings",
+                      "responsive": {
+                        "desktop": {
+                          "visible": true,
+                          "width": {
+                            "kind": "fill"
+                          },
+                          "height": {
+                            "kind": "content"
+                          }
+                        }
+                      }
+                    },
+                    "features": {
+                      "pinning": {
+                        "enabled": true
+                      },
+                      "pivot": {
+                        "enabled": false
+                      },
+                      "spreadsheet": {
+                        "enabled": false
                       }
                     }
                   }

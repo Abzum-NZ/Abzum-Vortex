@@ -1848,8 +1848,8 @@
         "protected_view": "organization_security_settings",
         "organization_field": "organization_id",
         "revision_field": "revision",
-        "filterable_fields": [],
-        "sortable_fields": []
+        "filterable_fields": ["organization_id"],
+        "sortable_fields": ["require_step_up"]
       },
       "fields": [
         {
@@ -1858,7 +1858,7 @@
           "label": "Organisation",
           "required": true,
           "unique": false,
-          "filterable": false,
+          "filterable": true,
           "sortable": false,
           "personal_data": "none",
           "public_display": "refused",
@@ -1887,7 +1887,7 @@
           "required": true,
           "unique": false,
           "filterable": false,
-          "sortable": false,
+          "sortable": true,
           "personal_data": "none",
           "public_display": "refused",
           "type": "yes_no",
@@ -2298,8 +2298,13 @@
       "filter": null,
       "group_by": [],
       "aggregates": [],
-      "sort": [],
-      "page_size": 1,
+      "sort": [
+        {
+          "field": "require_step_up",
+          "direction": "ascending"
+        }
+      ],
+      "page_size": 50,
       "relationship_hops": 0
     }
   ]

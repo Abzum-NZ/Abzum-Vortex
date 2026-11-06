@@ -55,5 +55,5 @@ export const boundedProtectedReadModelSortKeys: Partial<
     "listing_order",
   ],
   connection_instances: ["record_id", "destination_key", "state"],
-  organization_security_settings: ["record_id"],
+  organization_security_settings: ["record_id", "require_step_up"],
 };

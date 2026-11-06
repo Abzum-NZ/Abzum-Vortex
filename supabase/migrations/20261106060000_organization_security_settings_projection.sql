@@ -27,9 +27,11 @@ declare
   setting_row record;
   instance_kind text;
   predicate_plan jsonb;
+  predicate_matches boolean;
 begin
-  -- One row per organisation, so ordering is irrelevant: record_id is the only sort key.
-  if p_sort_key is null or p_sort_key <> 'record_id'
+  -- One row per organisation, so ordering is irrelevant: record_id and the projection's declared
+  -- sortable field (require_step_up) are both accepted.
+  if p_sort_key is null or p_sort_key not in ('record_id', 'require_step_up')
     or p_direction is null or p_direction not in ('ascending', 'descending')
     or (p_limit is not null and p_limit < 1) then
     raise exception using errcode = '22023', message = 'Security settings projection bounds are invalid';
@@ -40,8 +42,6 @@ begin
   ) then
     raise exception using errcode = '22023', message = 'Security settings projection cursor is invalid';
   end if;
-  -- No key is filterable or searchable; a predicate naming one is refused by cause.
-  predicate_plan := vortex_record.compile_projection_predicate_internal(p_predicate, '{}'::jsonb, 1);
   context_value := vortex_access.validated_human_request_context();
   organization_value := (context_value ->> 'organizationId')::uuid;
 
@@ -52,6 +52,27 @@ begin
   from vortex_access.read_current_organization_step_up_setting() as setting;
   if not found or setting_row.can_change is not true then
     return;
+  end if;
+  -- The organisation is the record title and the one filterable key; it is the single row's own
+  -- value, so the predicate is evaluated against that value as a literal. There is no searchable key.
+  predicate_plan := vortex_record.compile_projection_predicate_internal(
+    p_predicate,
+    pg_catalog.jsonb_build_object(
+      'organization_id',
+      pg_catalog.jsonb_build_object(
+        'sql', pg_catalog.format('%L::text', organization_value::text),
+        'database', 'text',
+        'filter', true
+      )
+    ),
+    1
+  );
+  if predicate_plan ->> 'predicate' is not null then
+    execute 'select (' || (predicate_plan ->> 'predicate') || ') is true'
+      into predicate_matches using predicate_plan -> 'parameters';
+    if not predicate_matches then
+      return;
+    end if;
   end if;
   if p_record_ids is not null and not (organization_value = any(p_record_ids)) then
     return;
@@ -120,7 +141,7 @@ insert into vortex_record.protected_read_model_views (
 ) values (
   'organization_security_settings', 'vortex_access',
   'list_organization_security_settings_projection',
-  pg_catalog.statement_timestamp(), array['record_id']::text[]
+  pg_catalog.statement_timestamp(), array['record_id', 'require_step_up']::text[]
 );
 
 reset role;
