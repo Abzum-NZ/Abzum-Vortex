@@ -179,6 +179,15 @@ The delivered theme engine provides a platform theme release, application overri
 focus checks, and CSS variables. It is the only source of design values. No second theme engine is
 built.
 
+**Theme tokens resolve at run time from one source.** A release stores the application's theme as the
+pinned platform theme (identity and version) and the catalogue selection, never tokens. One function
+resolves the theme every surface draws (application pages, Studio's chrome, the canvas and portals):
+per dimension the application's own choice, else the organisation's, else the platform's, resolved
+over the current catalogue release the theme pins. A theme catalogue change therefore reaches every
+installed application on its next page load, and a theme content change never supersedes a release
+or refuses a publication (blocks and connection types still do): the theme pin carries no content
+fingerprint. A selection that no longer resolves fails loudly.
+
 ## Decision 7 — Applications are delivered as packages, and custom logic follows a ladder
 
 ### The package is derived from a published application
@@ -263,8 +272,8 @@ Uninstall has these rules for data and access:
 ## Decision 9 — An immutable runtime bundle per installation revision
 
 **What the bundle is:** prepare builds one runtime bundle per installation revision. It holds
-compiled pages and navigation, compiled flows, theme tokens, component registry entries and the access
-plan, in the sections `pages`, `navigation`, `flows`, `theme`, `component_registry` and `access_plan`.
+compiled pages and navigation, compiled flows, the theme selection, component registry entries and the
+access plan, in the sections `pages`, `navigation`, `flows`, `theme`, `component_registry` and `access_plan`.
 The compiled flow plans are built from the release and cached with it, never stored. The access plan
 holds the declared permission requirements only; it holds no decisions. The bundle format has one version constant, and the bundle is an index plus parts of under 1 MB each, stored in Postgres.
 

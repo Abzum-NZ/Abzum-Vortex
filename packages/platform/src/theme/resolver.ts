@@ -1,7 +1,7 @@
 import "server-only";
 
 import type { DefinitionRuleFailure } from "../catalogue/validation-errors";
-import { applicationThemeSchema } from "../definition/application-composition/theme";
+import { resolvedApplicationThemeSchema } from "../definition/application-composition/theme";
 import { validatePublicPlatformAssets } from "./assets";
 import { validateThemeContrast } from "./contrast";
 import { createLocatedFailure } from "./errors";
@@ -26,7 +26,7 @@ export function validateApplicationTheme(
   const ruleFailures: DefinitionRuleFailure[] = [];
 
   // 1. Schema check
-  const parsedTheme = applicationThemeSchema.safeParse(theme);
+  const parsedTheme = resolvedApplicationThemeSchema.safeParse(theme);
   if (!parsedTheme.success) {
     const located = createLocatedFailure({
       code: "INVALID_THEME_SCHEMA",

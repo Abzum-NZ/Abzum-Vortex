@@ -4,14 +4,14 @@ import {
   findShadcnFontByFamilyKey,
   resolveShadcnFontSelection,
   shadcnFontStack,
-  type ApplicationContent,
   type PlatformThemeTokenRoleKey,
   type PlatformThemeRelease,
+  type ResolvedApplicationTheme,
   type ShadcnFontOption,
 } from "@vortex/platform/schema";
 
-/** Resolved application theme, as materialised in application content. */
-export type ApplicationTheme = ApplicationContent["theme"];
+/** The theme an interface is drawn with: the stored theme plus its tokens resolved at run time. */
+export type ApplicationTheme = ResolvedApplicationTheme;
 type ThemeTokenValue = ApplicationTheme["tokens"][string];
 
 /** Resolved, validated theme tokens keyed by builder key. */

@@ -43,6 +43,7 @@ import { prepareRuntimePreviewPage } from "../runtime-preview-demand";
 import { beginStudioPreviewRead } from "../studio-preview-work";
 import { getQueryContinuationKey } from "../query-continuation-key";
 import { loadPermittedApplicationsAtAddress } from "../organization-context";
+import { loadApplicationTheme } from "../organization-theme";
 import type {
   ApplicationPageLoaderAddress,
   SearchParameters,
@@ -337,6 +338,13 @@ const loadApplicationPageJoined = async (
 
   const continuationKey = initialContinuationKey ?? getQueryContinuationKey();
   const application = context.releaseSet.application;
+  // The organisation read is the address resolution's own, so this adds no read.
+  const themeLoad = await loadApplicationTheme(
+    session,
+    selection.organizationId,
+    application.content.theme,
+  );
+  if (themeLoad.kind !== "available") return themeLoad;
 
   const pageDefinition = application.content.pages.find((page) => page.key === address.pageKey);
   if (pageDefinition === undefined) {
@@ -1054,7 +1062,7 @@ const loadApplicationPageJoined = async (
     page,
     pageId: pageDefinition.pageId,
     pageName: pageDefinition.name,
-    theme: application.content.theme,
+    theme: themeLoad.theme,
     ...(bodyContentAvailable === undefined ? {} : { bodyContentAvailable }),
     ...(firstRecordTypeHref === undefined ? {} : { firstRecordTypeHref }),
     accessVersion: page.accessVersion,
