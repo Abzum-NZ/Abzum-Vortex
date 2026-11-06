@@ -723,7 +723,7 @@ const help: Readonly<Record<string, string>> = {
   "interface.navigate application_root":
     "Opens the home page of an application by its identity, for the application a step just installed. Use it instead of the application and page above.",
   "interface.verify requires":
-    "recent_sign_in asks for the password (a sign-in within the last 15 minutes); two_step asks for a recent sign-in and the code from the authenticator app, which the person can set up in the step. The step that follows still checks again.",
+    "recent_sign_in asks for the password (a sign-in within the last 15 minutes); two_step asks for a recent sign-in and the code from the authenticator app, which the person can set up in the step, unless the organisation has turned two-step verification off on a development instance; platform_two_step always asks for the code (tenant administration). The step that follows still checks again.",
   "interface.wizard steps":
     "The names of the steps, in order, as a list of two to eight different texts. Every step of the flow that uses guided steps lists the same names.",
   "interface.wizard step": "The step the flow is at now: one of the names in the list.",

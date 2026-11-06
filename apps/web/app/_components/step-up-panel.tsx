@@ -6,16 +6,32 @@ import type { FlowVerification, FlowVerificationOptions } from "@vortex/ui";
 import { Alert, AlertDescription } from "@vortex/ui/components/alert";
 import { Button } from "@vortex/ui/components/button";
 import { Spinner } from "@vortex/ui/components/spinner";
-import { readStepUpState, reauthenticateInPlace, type StepUpState } from "../auth/step-up-actions";
+import {
+  readStepUpState,
+  reauthenticateInPlace,
+  type StepUpAddress,
+  type StepUpState,
+} from "../auth/step-up-actions";
 import { AuthenticatorCode, EnrolAuthenticator, ProofForm } from "./authenticator-proof";
 
 type Ready = Extract<StepUpState, { kind: "ready" }>;
 
 /**
- * Which proof still has to be given, from what the session already shows. A person who signed in
- * again here and has an authenticator gives its code too, so the session this step leaves is as
- * strong as the one signing in produces.
+ * Whether this step needs the authenticator's code. `platform_two_step` always does. `two_step`
+ * does unless the organisation turned the requirement off. A person who signed in again here and
+ * has an authenticator gives its code too, so the session this step leaves is as strong as the one
+ * signing in produces. The database decides again where the protected step runs.
  */
+const needsAuthenticator = (
+  requires: FlowVerification,
+  state: Ready,
+  signedInAgainHere: boolean,
+): boolean =>
+  requires === "platform_two_step" ||
+  (requires === "two_step" && state.organizationRequiresTwoStep) ||
+  (signedInAgainHere && state.authenticator.kind === "challenge");
+
+/** Which proof still has to be given, from what the session already shows. */
 const missingProof = (
   requires: FlowVerification,
   state: Ready,
@@ -23,9 +39,7 @@ const missingProof = (
 ): "password" | "authenticator" | undefined =>
   !state.signedInRecently
     ? "password"
-    : (requires === "two_step" ||
-          (signedInAgainHere && state.authenticator.kind === "challenge")) &&
-        !state.twoStepRecently
+    : needsAuthenticator(requires, state, signedInAgainHere) && !state.twoStepRecently
       ? "authenticator"
       : undefined;
 
@@ -36,15 +50,21 @@ const missingProof = (
  * protected step runs; this only collects the proof and moves the flow on.
  */
 function StepUpPanel({
+  address,
   requires,
   verified,
-}: Readonly<{ requires: FlowVerification; verified: () => void }>): ReactElement {
+}: Readonly<{
+  address: StepUpAddress | undefined;
+  requires: FlowVerification;
+  verified: () => void;
+}>): ReactElement {
   const [state, setState] = useState<StepUpState>();
   const [attempt, setAttempt] = useState(0);
+  const addressRef = useRef(address);
   const finished = useRef(false);
   const signedInAgainHere = useRef(false);
   const read = useCallback((): void => {
-    readStepUpState()
+    readStepUpState(addressRef.current)
       .then(setState)
       .catch((error: unknown) => {
         console.error(`[verification] the session could not be read: ${describeFailure(error)}`);
@@ -115,13 +135,22 @@ function StepUpPanel({
   );
 }
 
-/** What a flow shell passes to the flow host so a Verify step asks inside the dialog. */
-export const stepUpVerification: FlowVerificationOptions = {
+/**
+ * What a flow shell passes to the flow host so a Verify step asks inside the dialog. The address
+ * is the application the flow runs in, read when a step starts (Studio runs flows of the page it
+ * shows now); with none, the code is asked for. Its organisation's two-step setting decides whether
+ * `two_step` asks for the authenticator's code.
+ */
+export const stepUpVerification = (
+  addressOfFlow: () => StepUpAddress | undefined,
+): FlowVerificationOptions => ({
   status: async (requires) => {
-    const state = await readStepUpState();
+    const state = await readStepUpState(addressOfFlow());
     return state.kind === "ready" && missingProof(requires, state, false) === undefined
       ? "satisfied"
       : "needed";
   },
-  render: (requires, controls) => <StepUpPanel requires={requires} verified={controls.verified} />,
-};
+  render: (requires, controls) => (
+    <StepUpPanel address={addressOfFlow()} requires={requires} verified={controls.verified} />
+  ),
+});
