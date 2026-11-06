@@ -18,6 +18,7 @@ export * from "./studio-segmented-control";
 export * from "./studio-field";
 export * from "./studio-inspector-group";
 export * from "./use-studio-draft-held";
+export * from "./use-settled-value";
 export * from "./studio-dialog";
 export * from "./studio-icon-buttons";
 export * from "./studio-limit";

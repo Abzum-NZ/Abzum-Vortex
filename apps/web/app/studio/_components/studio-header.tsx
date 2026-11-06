@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, type ComponentProps, type ReactNode } from "react";
+import { memo, useMemo, type ComponentProps, type ReactNode } from "react";
 import {
   ApplicationAccountActionsProvider,
   ApplicationFrameHeader,
@@ -110,35 +110,8 @@ function StudioFrameBar({
   );
 }
 
-/**
- * Studio's editor top bar is the shared application frame bar, the one every Vortex application
- * has. The draft's commands sit in its action area as icon buttons with tooltips.
- */
-export function StudioHeader({
-  frame,
-  applicationName,
-  onApplication,
-  saveState,
-  canUndo,
-  canRedo,
-  undoDisabled,
-  onUndo,
-  onRedo,
-  applicationHref,
-  install,
-  onInstall,
-  installPending,
-  onPreview,
-  previewDisabled,
-  previewPending,
-  onPublish,
-  publishDisabled,
-  publishPending,
-}: Readonly<{
-  frame: StudioFrameDefinition;
-  applicationName: string;
+type StudioHeaderCommandProps = Readonly<{
   onApplication: () => void;
-  saveState: ReactNode;
   canUndo: boolean;
   canRedo: boolean;
   undoDisabled: boolean;
@@ -159,10 +132,32 @@ export function StudioHeader({
   publishDisabled: boolean;
   /** The flow's page is being read before its first dialog opens. */
   publishPending: boolean;
-}>) {
-  const actions = (
+}>;
+
+/**
+ * The draft's commands as icon buttons. They take values and callbacks that keep their identity
+ * between keystrokes, so typing in the draft does not draw them again.
+ */
+const StudioHeaderCommands = memo(function StudioHeaderCommands({
+  onApplication,
+  canUndo,
+  canRedo,
+  undoDisabled,
+  onUndo,
+  onRedo,
+  applicationHref,
+  install,
+  onInstall,
+  installPending,
+  onPreview,
+  previewDisabled,
+  previewPending,
+  onPublish,
+  publishDisabled,
+  publishPending,
+}: StudioHeaderCommandProps) {
+  return (
     <>
-      {saveState}
       <IconAction
         tip="Application settings"
         type="button"
@@ -273,6 +268,29 @@ export function StudioHeader({
         {publishPending ? <Spinner /> : <Icon name="upload" />}
       </IconAction>
       <Separator orientation="vertical" className="mx-1 h-6" />
+    </>
+  );
+});
+
+/**
+ * Studio's editor top bar is the shared application frame bar, the one every Vortex application
+ * has. The draft's commands sit in its action area as icon buttons with tooltips.
+ */
+export function StudioHeader({
+  frame,
+  applicationName,
+  saveState,
+  ...commands
+}: Readonly<{
+  frame: StudioFrameDefinition;
+  applicationName: string;
+  saveState: ReactNode;
+}> &
+  StudioHeaderCommandProps) {
+  const actions = (
+    <>
+      {saveState}
+      <StudioHeaderCommands {...commands} />
     </>
   );
   return <StudioFrameBar frame={frame} pageName={applicationName} actions={actions} />;

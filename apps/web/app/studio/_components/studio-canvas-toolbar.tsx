@@ -1,4 +1,5 @@
 "use client";
+import { memo } from "react";
 import { StudioOptionControl } from "@vortex/ui/studio";
 import { Icon } from "@vortex/ui";
 import { Button } from "@vortex/ui/components/button";
@@ -25,7 +26,7 @@ export type StudioCanvasZoom = (typeof studioCanvasZooms)[number] | "fit";
  * Above the canvas: what it is showing, whose view it shows, the screen size and zoom it is drawn
  * at, and the inspector toggle.
  */
-export function StudioCanvasToolbar({
+export const StudioCanvasToolbar = memo(function StudioCanvasToolbar({
   title,
   zoom,
   fitZoom,
@@ -376,4 +377,4 @@ export function StudioCanvasToolbar({
       </div>
     </div>
   );
-}
+});

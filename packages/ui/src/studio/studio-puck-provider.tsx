@@ -35,7 +35,6 @@ import {
   createContext,
   useCallback,
   useContext,
-  useDeferredValue,
   useEffect,
   useMemo,
   useLayoutEffect,
@@ -86,6 +85,7 @@ import { studioPuckStyle } from "./studio-puck-style";
 import { studioPuckWords } from "./studio-puck-words";
 import type { StudioCanvasRecordsReader } from "./use-studio-canvas-records";
 import { useStudioCanvasChannelValue } from "./use-studio-canvas-channel";
+import { useSettledValue } from "./use-settled-value";
 import { createSlotLockStore, SlotLockProvider, type SlotLockStore } from "../slot-lock";
 
 export { studioScreens, useStudioScreen } from "./studio-canvas-screen";
@@ -352,11 +352,11 @@ export function StudioPuckProvider({
   const stylesheetApplied = useStylesheetApplied();
   const [breakpoint, setBreakpoint] = useState<Breakpoint>(studioInitialBreakpoint);
   const model = useStudioCanvasModel(input, breakpoint);
-  // Why a block's delete, drag or duplicate is unavailable is read from the live draft, so a block
-  // added a moment ago already says what it cannot do, and a reason clears as soon as what caused
-  // it is gone. The read is cheap (it does not grow faster than the page) and is made at lower
-  // priority than typing: the deferred draft is the one a keystroke has not just replaced.
-  const referenceSource = useDeferredValue(input.source);
+  // Why a block's delete, drag or duplicate is unavailable, as the action bar shows it: read from
+  // the draft as it stood once typing paused, not between the keystrokes. A reason may so lag an
+  // edit by a moment; it only ever disables a button then. A removal itself is decided on the live
+  // draft (the guard in `onAction`, then the command).
+  const referenceSource = useSettledValue(input.source);
   const readReferences = useMemo(
     () => studioCanvasReferences(referenceSource, model.catalogue),
     [referenceSource, model.catalogue],
@@ -369,11 +369,9 @@ export function StudioPuckProvider({
   const references = heldReferences.current;
   // The reasons are Studio's, not Puck's per-block permissions: Puck would resolve every block's
   // permissions through its store (a copy of two maps of every block per block, so work that grows
-  // with the square of the page). The bar and the removal guard read the reasons from the canvas
-  // channel instead.
+  // with the square of the page). The bar reads the reasons from the canvas channel instead, and
+  // the removal guard makes them again from the live draft.
   const config = model.config;
-  const referencesRef = useRef(references);
-  referencesRef.current = references;
   const [frameDocument, setFrameDocument] = useState<Document | null>(null);
   const [refused, setRefused] = useState<Readonly<{ area: string; message: string }> | null>(null);
   const [resync, setResync] = useState(0);
@@ -561,8 +559,12 @@ export function StudioPuckProvider({
         zone: action.zone,
       });
       // Puck's Delete key and the Outline's Trash act on any block; the reason a block cannot be
-      // removed is Studio's and is said first, whichever block Puck was pointed at.
-      const unremovable = removed === null ? undefined : referencesRef.current[removed]?.delete;
+      // removed is Studio's and is said first, whichever block Puck was pointed at. It is read from
+      // the live draft: the bar's reasons may still be those of the draft before the last edit.
+      const unremovable =
+        removed === null
+          ? undefined
+          : studioCanvasReferences(now.source, shown.catalogue)[removed]?.delete;
       const notSelected = removed !== null && removed !== now.selectedPlacementAlias;
       if (removed !== null && (unremovable !== undefined || notSelected)) {
         console.info(

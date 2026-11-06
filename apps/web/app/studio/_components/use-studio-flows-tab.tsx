@@ -2,7 +2,7 @@
 import { Alert, AlertDescription } from "@vortex/ui/components/alert";
 import { useIntentPreload } from "../_lib/use-intent-preload";
 import dynamic from "next/dynamic";
-import { useCallback, useDeferredValue, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useMemo, useState, type ReactNode } from "react";
 import {
   describeFailure,
   checkFlowFormula,
@@ -58,6 +58,7 @@ import {
   applyStudioRowActionChange,
   type StudioFlowStepPickerContext,
   type StudioInspectorAction,
+  useSettledValue,
 } from "@vortex/ui/studio";
 import type { StudioDraft, StudioDraftStep } from "./use-studio-draft";
 import { deferredStudioPart } from "./studio-deferred-part";
@@ -162,15 +163,19 @@ export function useStudioFlowsTab({
       catalogue,
     ],
   );
+  // A page is the control of its own events (load, record loaded). The names are read by content,
+  // so a keystroke in a block does not give the label function, and with it the create choices, a
+  // new identity.
+  const pageNameKey = JSON.stringify(source.body.pages.map((entry) => [entry.id, entry.name]));
+  const pageNames = useMemo(
+    () => new Map(source.body.pages.map((entry) => [entry.id, entry.name])),
+    [pageNameKey],
+  );
   const controlLabel = useCallback(
     (alias: string) =>
       labels.get(studioSemanticSelectionKey({ kind: "placement", placementAlias: alias })) ??
-      // The page is the control of its own events (load, record loaded).
-      (() => {
-        const page = source.body.pages.find((entry) => entry.id === alias);
-        return page === undefined ? "a control" : `the page ${page.name}`;
-      })(),
-    [labels, source],
+      (pageNames.has(alias) ? `the page ${pageNames.get(alias)}` : "a control"),
+    [labels, pageNames],
   );
   const outline = useMemo(() => {
     if (flowSelection === null) return null;
@@ -237,8 +242,9 @@ export function useStudioFlowsTab({
     [source, flowSelection, controlLabel],
   );
   // The choices are read only by the Flows tab and the Behaviour section: a flow being edited reads
-  // them at once, everything else after the keystroke has been drawn.
-  const choicesSource = useDeferredValue(source);
+  // them at once; the create choices are drawn from the draft as it stood once typing paused (a
+  // choice whose control has left the draft is refused by the create command).
+  const choicesSource = useSettledValue(source);
   const draftChoices = useMemo(
     () =>
       flowSelection === null
