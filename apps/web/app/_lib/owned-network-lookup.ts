@@ -1,8 +1,7 @@
 import "server-only";
 
-import { logRefusal } from "@vortex/platform/schema";
-
 import type { LookupFunction } from "node:net";
+import { logRefusal } from "@vortex/platform/server";
 
 export type NativeLookupState =
   "not_started" | "not_dispatched" | "pending" | "dispatch_unconfirmed" | "completed";

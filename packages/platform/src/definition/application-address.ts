@@ -23,7 +23,7 @@ import {
   roleIdSchema,
   type IdentityAuthorityId,
 } from "../catalogue/identifiers";
-import { sameId, logRefusal } from "../catalogue/runtime-primitives";
+import { sameId } from "../catalogue/runtime-primitives";
 import { DefinitionError } from "./definition-error";
 import { applicationShellSchema } from "./application-composition/page-composition";
 import { compiledPageShellId } from "./application-composition/compiled-item-tree";
@@ -46,7 +46,7 @@ import {
   createHumanOrganizationRequestService,
   type BoundHumanOrganizationRequest,
 } from "../access/human-organization-request";
-import { logClassifiedFailure } from "../access/request-failure";
+import { logClassifiedFailure, logRefusal } from "../access/request-failure";
 import { decideOrganizationAccessBatch } from "../access/organization-access-decision-access";
 import { readCurrentOrganizationDefaultApplicationAfterAuthorization } from "../access/organization-runtime-settings-administration";
 import {

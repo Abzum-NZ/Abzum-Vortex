@@ -8,6 +8,11 @@ import {
   sourcePageZones,
 } from "../application-composition/source-composition";
 import type { ApplicationSourceDocument } from "../definition-source";
+import { IMMUTABLE_PLATFORM_BLOCK_CATALOGUE } from "../application-composition-catalogue";
+import {
+  createStudioPlacementDescriber,
+  studioBlockName,
+} from "../application-authoring/studio-placement-describer";
 import { duplicateFlowBindings } from "../application-contracts";
 import { pageDispatchedEvents, recordLoadedPageTypes } from "../component-semantic-events";
 import {
@@ -19,7 +24,11 @@ import {
 } from "./context";
 import { object, array } from "./helpers";
 
-type PlacedApplicationBlock = Readonly<{ item: SourceItem; pageType: string | undefined }>;
+type PlacedApplicationBlock = Readonly<{
+  item: SourceItem;
+  pageType: string | undefined;
+  pageName: string | undefined;
+}>;
 
 const boundedBindingName = (name: string): string =>
   name.length <= 100 ? name : `${name.slice(0, 99)}…`;
@@ -35,10 +44,10 @@ const placedApplicationBlocks = (
   const placed = new Map<string, PlacedApplicationBlock>();
   for (const shell of body.shells)
     for (const item of sourceItemTree(shell.layout.content))
-      placed.set(item.props.id, { item, pageType: undefined });
+      placed.set(item.props.id, { item, pageType: undefined, pageName: undefined });
   for (const page of body.pages)
     for (const item of sourcePageItems(page.composition))
-      placed.set(item.props.id, { item, pageType: page.type });
+      placed.set(item.props.id, { item, pageType: page.type, pageName: page.name });
   return placed;
 };
 
@@ -267,7 +276,13 @@ export function applicationControlBindingRule(
       events.add(event);
       boundEvents.set(control, events);
     }
-    for (const [alias, { item: placement, pageType }] of placedApplicationBlocks(source.body)) {
+    const describePlacement = createStudioPlacementDescriber(
+      IMMUTABLE_PLATFORM_BLOCK_CATALOGUE,
+      source,
+    );
+    for (const [alias, { item: placement, pageType, pageName }] of placedApplicationBlocks(
+      source.body,
+    )) {
       const blockKey = sourceBlockKey(placement);
       const bound = boundEvents.get(alias) ?? new Set<string>();
       const unbound =
@@ -284,18 +299,22 @@ export function applicationControlBindingRule(
             !bound.has("action");
       if (!unbound) continue;
       const placementKey = builderKeySchema.safeParse(alias);
-      const name = boundedBindingName(alias);
+      const name = boundedBindingName(
+        `${studioBlockName(describePlacement, [placement], alias) ?? alias} ${
+          pageName === undefined ? "in the shell" : `on the ${pageName} page`
+        }`,
+      );
       failures.push({
         ruleCode: "vortex.definition.application_control_binding",
         family: "required_value",
         sentence:
           blockKey !== formContainerBlockKey
-            ? `Button ${name} does nothing: bind it to a flow, give it a link, or disable it.`
+            ? `${name} does nothing: bind it to a flow, give it a link, or disable it.`
             : pageType !== "guided_form"
-              ? `Form ${name} submits nothing: bind its submit to a flow.`
+              ? `${name} submits nothing: bind its submit to a flow.`
               : summaryForms.has(alias)
-                ? `Form ${name} on the summary step submits nothing: bind it to a flow.`
-                : `Form ${name} does not change step: bind its step change to a flow.`,
+                ? `${name} (summary step) submits nothing: bind it to a flow.`
+                : `${name} does not change step: bind its step change to a flow.`,
         location: {
           documentKind: "application",
           documentKey: source.key,

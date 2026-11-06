@@ -22,7 +22,6 @@ import {
   type RecordId,
   type RecordTypeId,
 } from "../catalogue/identifiers";
-import { logRefusal } from "../catalogue/runtime-primitives";
 import {
   MAXIMUM_FILE_STORAGE_OPERATION_SECONDS,
   downloadGrantSchema,
@@ -41,6 +40,7 @@ import type {
   StorageCredentialRequest,
   StorageOperationCredential,
 } from "./storage-credentials";
+import { logRefusal } from "../access/request-failure";
 
 /** Closed refusal reasons for private file download, range and preview requests. */
 export type FileReadRefusalReason =
