@@ -48,8 +48,13 @@ type NavProps = Omit<ComponentProps<"button">, "children"> &
     description?: string | undefined;
     selected?: boolean | undefined;
     hint?: string | undefined;
+    /** A branch of `StudioNavTree`: whether its children are shown, and the toggle for them. */
     expanded?: boolean | undefined;
     onToggle?: (() => void) | undefined;
+    /** The id of the list of children the toggle shows, while it is shown. */
+    toggleControls?: string | undefined;
+    /** Marks a row of `StudioNavTree`: its key for the roving focus, and room for a chevron. */
+    treeKey?: string | undefined;
   }>;
 
 export function StudioNavEmpty({
@@ -89,6 +94,8 @@ export function StudioNavItem({
   selected,
   expanded,
   onToggle,
+  toggleControls,
+  treeKey,
   hint,
   className,
   ...props
@@ -108,29 +115,11 @@ export function StudioNavItem({
         <button
           type="button"
           aria-current={selected ? "true" : undefined}
-          aria-expanded={expanded}
+          data-tree-key={treeKey}
           {...props}
         />
       }
     >
-      {(onToggle !== undefined || (props.role === "treeitem" && dragHandle === undefined)) && (
-        <span
-          className="flex size-6 shrink-0 items-center justify-center"
-          aria-hidden="true"
-          onClick={
-            onToggle === undefined
-              ? undefined
-              : (event) => {
-                  event.stopPropagation();
-                  onToggle();
-                }
-          }
-        >
-          {onToggle !== undefined && (
-            <Icon name={expanded ? "chevron-down" : "chevron-right"} className="size-4" />
-          )}
-        </span>
-      )}
       {icon !== undefined && (
         <Icon
           name={icon}
@@ -188,6 +177,35 @@ export function StudioNavItem({
         selected && "bg-accent",
       )}
     >
+      {onToggle !== undefined ? (
+        // The row's own arrow keys expand and collapse it; this toggle serves the pointer and
+        // screen readers, so it is not a second Tab stop.
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-xs"
+                tabIndex={-1}
+                className="shrink-0"
+                aria-label={`${expanded ? "Collapse" : "Expand"} ${label}`}
+                aria-expanded={expanded}
+                aria-controls={toggleControls}
+                onClick={onToggle}
+              />
+            }
+          >
+            <Icon name={expanded ? "chevron-down" : "chevron-right"} className="size-4" />
+          </TooltipTrigger>
+          <TooltipContent>
+            {expanded ? "Collapse" : "Expand"} {label}
+          </TooltipContent>
+        </Tooltip>
+      ) : (
+        treeKey !== undefined &&
+        dragHandle === undefined && <span className="size-6 shrink-0" aria-hidden="true" />
+      )}
       {dragHandle !== undefined && (
         <Tooltip>
           <TooltipTrigger
@@ -317,7 +335,12 @@ export type StudioNavNode = Readonly<{
   props?: Omit<NavProps, "label">;
 }>;
 
-/** Roving focus follows visible rows; left/right collapse, expand, or visit the parent/first child. */
+/**
+ * Nested lists of rows with roving focus: the arrow keys follow the visible rows, left and right
+ * collapse, expand, or visit the parent or first child. A row holds more than its button (a drag
+ * handle, actions, a settings popover), which an ARIA tree does not allow, so the list carries no
+ * tree roles; the selected row is `aria-current` and a branch's toggle button says `aria-expanded`.
+ */
 export function StudioNavTree({
   nodes,
   label,
@@ -354,7 +377,7 @@ export function StudioNavTree({
   const focus = (key: string | undefined) => {
     if (key === undefined) return;
     setFocused(key);
-    const rows = host.current?.querySelectorAll<HTMLButtonElement>('[role="treeitem"]');
+    const rows = host.current?.querySelectorAll<HTMLButtonElement>("[data-tree-key]");
     rows?.forEach((row) => {
       if (row.dataset.treeKey === key) row.focus();
     });
@@ -365,21 +388,17 @@ export function StudioNavTree({
       const open = branch && isOpen(node);
       const groupId = `${id}-${encodeURIComponent(node.key)}`;
       return (
-        // shadcn-only: the navigation tree has no shadcn equivalent (ARIA tree with roving focus)
-        <li role="none" key={node.key}>
+        <li key={node.key}>
           <StudioNavItem
             {...node.props}
             label={node.label}
             icon={node.icon}
             meta={node.meta}
             selected={node.selected}
-            role="treeitem"
-            aria-level={depth + 1}
-            aria-selected={node.selected === true}
-            aria-owns={open ? groupId : undefined}
-            data-tree-key={node.key}
+            treeKey={node.key}
             expanded={branch ? open : undefined}
             onToggle={branch ? () => toggle(node) : undefined}
+            toggleControls={open ? groupId : undefined}
             tabIndex={node.props?.disabled || disabled ? -1 : node.key === current ? 0 : -1}
             disabled={disabled || node.props?.disabled}
             onFocus={() => setFocused(node.key)}
@@ -417,12 +436,8 @@ export function StudioNavTree({
             }}
           />
           {open && (
-            // shadcn-only: the navigation tree has no shadcn equivalent (ARIA tree with roving focus)
-            <ul
-              id={groupId}
-              role="group"
-              className={cn("m-0 list-none space-y-1", depth < 8 ? "pl-3" : "pl-0")}
-            >
+            // shadcn-only: the navigation list has no shadcn equivalent (nested lists with roving focus)
+            <ul id={groupId} className={cn("m-0 list-none space-y-1", depth < 8 ? "pl-3" : "pl-0")}>
               {rows(node.children ?? [], depth + 1)}
             </ul>
           )}
@@ -430,8 +445,8 @@ export function StudioNavTree({
       );
     });
   return (
-    // shadcn-only: the navigation tree has no shadcn equivalent (ARIA tree with roving focus)
-    <ul ref={host} role="tree" aria-label={label} className="m-0 list-none space-y-1 p-0">
+    // shadcn-only: the navigation list has no shadcn equivalent (nested lists with roving focus)
+    <ul ref={host} aria-label={label} className="m-0 list-none space-y-1 p-0">
       {rows(nodes, 0)}
     </ul>
   );

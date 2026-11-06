@@ -1,4 +1,5 @@
 "use client";
+import { useState } from "react";
 import { useIntentPreload } from "../_lib/use-intent-preload";
 import dynamic from "next/dynamic";
 import { Spinner } from "@vortex/ui/components/spinner";
@@ -55,6 +56,9 @@ export function useStudioMenuThemeTabs({
 }>) {
   useIntentPreload(preloadThemePanel, "#studio-rail-theme");
   const { source, selected } = draft;
+  // The Menu entry whose settings are open. Held here, outside Puck: choosing an entry of a page
+  // with other outlets opens Puck again, which draws the Menu panel again.
+  const [menuEditing, setMenuEditing] = useState<string | null>(null);
   const themeVisited = useStudioTabVisited(!themeHidden);
   const commandMenu = (command: StudioMenuCommand, merge?: string): StudioMenuResult => {
     const after: { select?: string | null | undefined } = {};
@@ -146,6 +150,8 @@ export function useStudioMenuThemeTabs({
       source={source}
       hidden={menuHidden}
       selectedAlias={selected?.kind === "navigation" ? selected.navigationItemAlias : null}
+      editing={menuEditing}
+      onEditingChange={setMenuEditing}
       onSelect={(alias) => {
         draft.select(alias === null ? null : { kind: "navigation", navigationItemAlias: alias });
       }}
