@@ -164,7 +164,6 @@ export const exactDefinitionDependencySchema = z.discriminatedUnion("kind", [
         .uuid()
         .refine((value) => value !== "00000000-0000-0000-0000-000000000000"),
       releaseVersion: stableDefinitionReleaseVersionSchema,
-      contentFingerprint: fingerprintSchema,
     })
     .strict(),
   z

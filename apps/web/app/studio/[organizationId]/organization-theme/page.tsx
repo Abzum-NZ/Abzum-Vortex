@@ -4,15 +4,14 @@ import {
   organizationSelectionCandidateSchema,
   organizationThemeFullSelection,
 } from "@vortex/platform/schema";
-import {
-  readCurrentOrganizationThemeAfterAuthorization,
-  readOrganizationThemeChangePermittedAfterAuthorization,
-} from "@vortex/platform/server";
+import { readOrganizationThemeChangePermittedAfterAuthorization } from "@vortex/platform/server";
 import { continueStudioSession } from "../../_lib/studio-session";
 import { studioThemeOptions } from "../../_lib/studio-theme-catalogue";
 import { StudioUnavailable } from "../../_components/studio-unavailable";
 import { StudioOrganizationTheme } from "../../_components/studio-organization-theme";
+import { loadStudioChromeTheme } from "../../../_lib/document-theme";
 import { loadOrganizationLauncher } from "../../../_lib/organization-context";
+import { loadOrganizationTheme } from "../../../_lib/organization-theme";
 import { humanOrganizationRequests } from "../../../_lib/server-composition";
 
 export const dynamic = "force-dynamic";
@@ -41,27 +40,26 @@ export default async function StudioOrganizationThemePage({
   }
   const entry = launcher.entries.find((candidate) => candidate.organizationId === organizationId);
   if (entry === undefined) notFound();
-  const read = await humanOrganizationRequests().run(
+  // The theme is the request's one organisation-theme read, shared with the document root; a read
+  // that fails was logged once by the request runner, so nothing is logged again here.
+  const themeRead = await loadOrganizationTheme(resolved.session, entry.organizationId);
+  const unavailable = (kind: "unavailable" | "refused" | "temporarily_unavailable") => (
+    <StudioUnavailable
+      subject="The organisation theme"
+      result={{ kind: kind === "unavailable" ? "refused" : kind }}
+      reloadHref={`/studio/${organizationId}/organization-theme`}
+    />
+  );
+  if (themeRead.kind !== "available") return unavailable(themeRead.kind);
+  const permitted = await humanOrganizationRequests().run(
     resolved.session,
     organizationSelectionCandidateSchema.parse({ organizationId: entry.organizationId }),
-    async (transaction) => ({
-      theme: await readCurrentOrganizationThemeAfterAuthorization(transaction),
-      canChange: await readOrganizationThemeChangePermittedAfterAuthorization(transaction),
-    }),
+    (transaction) => readOrganizationThemeChangePermittedAfterAuthorization(transaction),
   );
-  if (read.kind !== "available") {
-    console.error(
-      `[studio] organization theme read ${read.kind}: ${read.kind === "unavailable" ? (read.code ?? read.cause ?? "no cause") : (read.databaseCode ?? read.cause ?? "unknown")}`,
-    );
-    return (
-      <StudioUnavailable
-        subject="The organisation theme"
-        result={{ kind: read.kind === "unavailable" ? "refused" : read.kind }}
-        reloadHref={`/studio/${organizationId}/organization-theme`}
-      />
-    );
-  }
-  const { theme, canChange } = read.value;
+  if (permitted.kind !== "available") return unavailable(permitted.kind);
+  const theme = themeRead.theme;
+  const canChange = permitted.value;
+  const { unresolvable } = await loadStudioChromeTheme(organizationId);
   return (
     <StudioOrganizationTheme
       key={theme.revision}
@@ -72,6 +70,7 @@ export default async function StudioOrganizationThemePage({
       selection={authoredApplicationThemeSelection(organizationThemeFullSelection(theme.selection))}
       revision={theme.revision}
       canChange={canChange}
+      unresolvable={unresolvable}
     />
   );
 }

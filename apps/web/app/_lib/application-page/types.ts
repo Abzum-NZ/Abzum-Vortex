@@ -1,4 +1,5 @@
 import type {
+  ApplicationTheme,
   InstalledRuntimeContext,
   PrivateFormDraftFieldValidation,
   PermittedApplicationsRead,
@@ -22,7 +23,7 @@ export type PlacementReadModel = Readonly<{
   page: Readonly<Record<string, unknown>>;
   pageId: string;
   pageName: string;
-  theme: InstalledRuntimeContext["releaseSet"]["application"]["content"]["theme"];
+  theme: ApplicationTheme;
   /** Structural body visibility only; absence on guided pages preserves their active-step UI. */
   bodyContentAvailable?: boolean;
   /**
