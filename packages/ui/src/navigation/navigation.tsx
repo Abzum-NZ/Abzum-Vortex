@@ -9,7 +9,7 @@ import {
   useState,
   type ReactElement,
 } from "react";
-import { motion, useReducedMotion } from "motion/react";
+import { motion } from "motion/react";
 import { Icon } from "../icons/icon";
 import { readMotionTiming, type MotionTiming } from "./motion-tokens";
 import type { ProjectedNavigation } from "@vortex/platform/schema";
@@ -278,10 +278,9 @@ function ApplicationNavigation({
     const timer = setTimeout(() => setPending(undefined), 10_000);
     return () => clearTimeout(timer);
   }, [pending]);
-  // The selected item's indicator slides with the enter-exit motion token; with reduced motion it
-  // moves at once.
+  // The selected item's indicator slides with the enter-exit motion token; the stylesheet sets that
+  // token to 0ms under reduced motion, so it then moves at once.
   const navRef = useRef<HTMLElement>(null);
-  const reducedMotion = useReducedMotion();
   const [indicatorTiming, setIndicatorTiming] = useState<MotionTiming>();
   useEffect(() => {
     // The selected fill is already painted by CSS. Enable its shared-layout measurement only
@@ -296,7 +295,7 @@ function ApplicationNavigation({
   }, []);
   const indicator = {
     layoutId: `${baseId}-selected`,
-    timing: reducedMotion === true ? undefined : indicatorTiming,
+    timing: indicatorTiming,
   };
   const pendingPageId =
     pending !== undefined && pending.from === currentPageId ? pending.pageId : undefined;

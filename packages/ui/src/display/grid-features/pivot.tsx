@@ -86,11 +86,7 @@ function PivotToggle({ context }: GridFeaturePointProps): ReactElement | null {
 function Value({ cell }: Readonly<{ cell: Cell | null }>): ReactElement {
   if (cell === null) return <span className="text-muted-foreground">–</span>;
   if (cell.kind === "unavailable")
-    return (
-      <span className="text-muted-foreground" title="This total mixes currencies">
-        Mixed currencies
-      </span>
-    );
+    return <span className="text-muted-foreground">Mixed currencies</span>;
   return <DisplayCellView value={cell} />;
 }
 
