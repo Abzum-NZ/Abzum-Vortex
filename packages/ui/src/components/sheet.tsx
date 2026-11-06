@@ -7,6 +7,7 @@ import { useVortexStylePortalRoot } from "../theme/vortex-style-root";
 
 import { Button } from "./button";
 import { Icon } from "../icons/icon";
+import { Tooltip, TooltipContent, TooltipTrigger } from "./tooltip";
 
 function Sheet({ ...props }: SheetPrimitive.Root.Props) {
   return <SheetPrimitive.Root data-slot="sheet" {...props} />;
@@ -69,13 +70,18 @@ function SheetContent({
       >
         {children}
         {showCloseButton && (
-          <SheetPrimitive.Close
-            data-slot="sheet-close"
-            render={<Button variant="ghost" className="cn-sheet-close" size="icon-sm" />}
-          >
-            <Icon name="close" />
-            <span className="sr-only">Close</span>
-          </SheetPrimitive.Close>
+          <Tooltip>
+            <TooltipTrigger render={<span className="inline-flex" />}>
+              <SheetPrimitive.Close
+                data-slot="sheet-close"
+                render={<Button variant="ghost" className="cn-sheet-close" size="icon-sm" />}
+              >
+                <Icon name="close" />
+                <span className="sr-only">Close</span>
+              </SheetPrimitive.Close>
+            </TooltipTrigger>
+            <TooltipContent>Close</TooltipContent>
+          </Tooltip>
         )}
       </SheetPrimitive.Popup>
     </SheetPortal>

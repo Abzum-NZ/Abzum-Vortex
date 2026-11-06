@@ -50,27 +50,37 @@ function ComboboxInput({ onKeyDown, ...props }: ComboboxPrimitive.Input.Props) {
 
 function ComboboxTrigger({ className, ...props }: ComboboxPrimitive.Trigger.Props) {
   return (
-    <ComboboxPrimitive.Trigger
-      data-slot="combobox-trigger"
-      render={<InputGroupButton size="icon-xs" variant="ghost" />}
-      className={cn("cn-combobox-trigger", className)}
-      {...props}
-    >
-      <Icon name="chevron-down" className="cn-combobox-trigger-icon pointer-events-none" />
-    </ComboboxPrimitive.Trigger>
+    <Tooltip>
+      <TooltipTrigger render={<span className="inline-flex" />}>
+        <ComboboxPrimitive.Trigger
+          data-slot="combobox-trigger"
+          render={<InputGroupButton size="icon-xs" variant="ghost" />}
+          className={cn("cn-combobox-trigger", className)}
+          {...props}
+        >
+          <Icon name="chevron-down" className="cn-combobox-trigger-icon pointer-events-none" />
+        </ComboboxPrimitive.Trigger>
+      </TooltipTrigger>
+      <TooltipContent>{props["aria-label"]}</TooltipContent>
+    </Tooltip>
   );
 }
 
 function ComboboxClear({ className, ...props }: ComboboxPrimitive.Clear.Props) {
   return (
-    <ComboboxPrimitive.Clear
-      data-slot="combobox-clear"
-      render={<InputGroupButton variant="ghost" size="icon-xs" />}
-      className={cn("cn-combobox-clear", className)}
-      {...props}
-    >
-      <Icon name="close" className="cn-combobox-clear-icon pointer-events-none" />
-    </ComboboxPrimitive.Clear>
+    <Tooltip>
+      <TooltipTrigger render={<span className="inline-flex" />}>
+        <ComboboxPrimitive.Clear
+          data-slot="combobox-clear"
+          render={<InputGroupButton variant="ghost" size="icon-xs" />}
+          className={cn("cn-combobox-clear", className)}
+          {...props}
+        >
+          <Icon name="close" className="cn-combobox-clear-icon pointer-events-none" />
+        </ComboboxPrimitive.Clear>
+      </TooltipTrigger>
+      <TooltipContent>{props["aria-label"]}</TooltipContent>
+    </Tooltip>
   );
 }
 

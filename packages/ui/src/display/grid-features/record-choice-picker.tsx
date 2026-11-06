@@ -19,6 +19,7 @@ import {
 import type { DisplayEventHandlers, DisplayRow } from "../projected-data";
 import type { LinkDraft } from "./edit-values";
 import { waitingForParent } from "../../controls/dependent-field";
+import { Tooltip, TooltipContent, TooltipTrigger } from "../../components/tooltip";
 
 /**
  * The one picker of a Records table's link field, for a column filter and for a cell editor. It
@@ -233,19 +234,24 @@ export function LinkDraftPicker({
   const chosen = draft === null ? "None" : (draft.title ?? current ?? "Chosen record");
   const clear =
     draft === null || required ? null : (
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon-xs"
-        aria-label={`Clear ${label}`}
-        disabled={disabled}
-        onClick={(event) => {
-          event.stopPropagation();
-          onChange(null);
-        }}
-      >
-        <Icon name="close" aria-hidden="true" />
-      </Button>
+      <Tooltip>
+        <TooltipTrigger render={<span className="inline-flex" />}>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-xs"
+            aria-label={`Clear ${label}`}
+            disabled={disabled}
+            onClick={(event) => {
+              event.stopPropagation();
+              onChange(null);
+            }}
+          >
+            <Icon name="close" aria-hidden="true" />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>{`Clear ${label}`}</TooltipContent>
+      </Tooltip>
     );
   const picker = (
     <RecordChoicePicker

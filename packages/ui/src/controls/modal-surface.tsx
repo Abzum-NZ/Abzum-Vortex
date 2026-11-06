@@ -35,6 +35,7 @@ import {
 } from "./control-context";
 import { useSeededState } from "./field-parts";
 import { EditingCanvasContext } from "./revealed-slot";
+import { Tooltip, TooltipContent, TooltipTrigger } from "../components/tooltip";
 
 type ModalSurfaceKind = "dialog" | "drawer";
 export type DrawerPlacement = "left" | "right" | "top" | "bottom";
@@ -154,19 +155,24 @@ export function ModalSurface<Values extends ModalSurfacePayload>({
           <SheetHeader>
             <SheetTitle>{title}</SheetTitle>
           </SheetHeader>
-          <SheetClose
-            render={
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon-sm"
-                className={closeClassName}
-                aria-label={`Close ${title}`}
-              />
-            }
-          >
-            <Icon name="close" />
-          </SheetClose>
+          <Tooltip>
+            <TooltipTrigger render={<span className="inline-flex" />}>
+              <SheetClose
+                render={
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    className={closeClassName}
+                    aria-label={`Close ${title}`}
+                  />
+                }
+              >
+                <Icon name="close" />
+              </SheetClose>
+            </TooltipTrigger>
+            <TooltipContent>{`Close ${title}`}</TooltipContent>
+          </Tooltip>
           <div className="min-h-0 flex-1 overflow-y-auto px-4">{props.slots.content ?? null}</div>
           {props.slots.actions === undefined || props.slots.actions === null ? null : (
             <SheetFooter>{props.slots.actions}</SheetFooter>
@@ -186,19 +192,24 @@ export function ModalSurface<Values extends ModalSurfacePayload>({
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
         </DialogHeader>
-        <DialogClose
-          render={
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-sm"
-              className={closeClassName}
-              aria-label={`Close ${title}`}
-            />
-          }
-        >
-          <Icon name="close" />
-        </DialogClose>
+        <Tooltip>
+          <TooltipTrigger render={<span className="inline-flex" />}>
+            <DialogClose
+              render={
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  className={closeClassName}
+                  aria-label={`Close ${title}`}
+                />
+              }
+            >
+              <Icon name="close" />
+            </DialogClose>
+          </TooltipTrigger>
+          <TooltipContent>{`Close ${title}`}</TooltipContent>
+        </Tooltip>
         <div>{props.slots.content ?? null}</div>
         {props.slots.actions === undefined || props.slots.actions === null ? null : (
           <DialogFooter>{props.slots.actions}</DialogFooter>

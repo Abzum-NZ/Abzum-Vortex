@@ -26,6 +26,7 @@ import {
 } from "./field-parts";
 import { useFormFieldPublisher, useRequiredFormField } from "./form-context";
 import { isIsoCalendarDate, type DateInputPayload } from "./projected-data";
+import { Tooltip, TooltipContent, TooltipTrigger } from "../components/tooltip";
 
 export type DateInputProps = ControlRenderProps<DateInputPayload>;
 
@@ -147,21 +148,26 @@ export function DateInput(props: DateInputProps): ReactElement {
           className="[&::-webkit-calendar-picker-indicator]:hidden"
         />
         <Popover open={!pickerUnavailable && open} onOpenChange={(next) => setOpen(next)}>
-          <PopoverTrigger
-            render={<Button variant="outline" size="icon" />}
-            disabled={pickerUnavailable}
-          >
-            <Icon name="calendar" aria-hidden="true" />
-            <span className="sr-only">
-              {"Choose date"}
-              {chosenDay === undefined ? null : (
-                <>
-                  {", "}
-                  <FormattedDate iso={raw} />
-                </>
-              )}
-            </span>
-          </PopoverTrigger>
+          <Tooltip>
+            <TooltipTrigger render={<span className="inline-flex" />}>
+              <PopoverTrigger
+                render={<Button variant="outline" size="icon" />}
+                disabled={pickerUnavailable}
+              >
+                <Icon name="calendar" aria-hidden="true" />
+                <span className="sr-only">
+                  {"Choose date"}
+                  {chosenDay === undefined ? null : (
+                    <>
+                      {", "}
+                      <FormattedDate iso={raw} />
+                    </>
+                  )}
+                </span>
+              </PopoverTrigger>
+            </TooltipTrigger>
+            <TooltipContent>Choose date</TooltipContent>
+          </Tooltip>
           <PopoverContent className="w-auto p-0">
             <Calendar
               mode="single"

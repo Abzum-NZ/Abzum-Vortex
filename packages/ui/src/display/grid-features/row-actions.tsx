@@ -153,22 +153,27 @@ function RowCommands({ context, row }: GridFeatureCommandProps): ReactElement | 
           setOpen(nextOpen);
         }}
       >
-        <DropdownMenuTrigger
-          render={
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-sm"
-              ref={triggerRef}
-              data-row-action-menu=""
-              aria-label={`Actions for ${name}`}
-              disabled={gesture.pending}
-              aria-busy={gesture.pending}
-            />
-          }
-        >
-          {gesture.pending ? <Spinner aria-hidden="true" /> : <Icon name="more-horizontal" />}
-        </DropdownMenuTrigger>
+        <Tooltip>
+          <TooltipTrigger render={<span className="inline-flex" />}>
+            <DropdownMenuTrigger
+              render={
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  ref={triggerRef}
+                  data-row-action-menu=""
+                  aria-label={`Actions for ${name}`}
+                  disabled={gesture.pending}
+                  aria-busy={gesture.pending}
+                />
+              }
+            >
+              {gesture.pending ? <Spinner aria-hidden="true" /> : <Icon name="more-horizontal" />}
+            </DropdownMenuTrigger>
+          </TooltipTrigger>
+          <TooltipContent>{`Actions for ${name}`}</TooltipContent>
+        </Tooltip>
         <DropdownMenuContent
           className="w-auto min-w-64 max-w-[calc(100vw-2rem)]"
           onClick={(event) => event.stopPropagation()}

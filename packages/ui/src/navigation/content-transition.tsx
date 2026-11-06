@@ -10,7 +10,7 @@ import {
   type ReactElement,
   type ReactNode,
 } from "react";
-import { motion, useReducedMotion } from "motion/react";
+import { MotionConfig, motion } from "motion/react";
 import { readMotionTiming, type MotionTiming } from "./motion-tokens";
 import { markDocumentHydrated } from "./page-hold";
 
@@ -90,17 +90,17 @@ export function ContentTransition({
   busy?: boolean;
   children: ReactNode;
 }>): ReactElement {
-  const reducedMotion = useReducedMotion();
   const outletRef = useRef<HTMLDivElement>(null);
   const [timings, setTimings] = useState<OutletTimings>();
   useLayoutEffect(() => {
     if (outletRef.current !== null) setTimings(readOutletTimings(outletRef.current));
   }, []);
   useEffect(() => markDocumentHydrated(), []);
-  const motionAllowed = reducedMotion !== true;
-  const swapIn = motionAllowed ? timings?.swapIn : undefined;
-  const swapOut = motionAllowed ? timings?.swapOut : undefined;
-  const dim = motionAllowed ? timings?.dim : undefined;
+  // The platform stylesheet zeroes every motion duration under reduced motion, so the tokens read
+  // as no motion without asking the browser a second time.
+  const swapIn = timings?.swapIn;
+  const swapOut = timings?.swapOut;
+  const dim = timings?.dim;
   const animated = swapIn !== undefined;
 
   // What the current page last rendered, as committed: the leaving copy keeps showing it.
@@ -151,45 +151,49 @@ export function ContentTransition({
   }, [generation]);
 
   return (
-    <div
-      ref={outletRef}
-      data-vortex-shell-outlet=""
-      className="vortex-puck-slot relative min-w-0"
-      style={{ gap: "inherit" }}
-      {...(busy ? { "aria-busy": true, "data-vortex-page-transition": "" } : {})}
-    >
-      {current.leaving === undefined ? null : (
-        // The same key the page had while current, so the leaving page keeps its mounted tree.
-        <motion.div
-          key={current.leaving.id}
-          data-vortex-page-content=""
-          data-vortex-page-leaving=""
-          aria-hidden
-          inert
-          className="vortex-puck-slot pointer-events-none absolute inset-x-0 top-0 min-w-0"
-          style={{ gap: "inherit" }}
-          animate={{ opacity: 0, y: 0 }}
-          transition={swapOut ?? NO_MOTION}
-        >
-          <PagePresenceContext.Provider value={false}>
-            {current.leaving.node}
-          </PagePresenceContext.Provider>
-        </motion.div>
-      )}
-      <motion.div
-        ref={currentPageRef}
-        key={pageMountId(current.transitionKey, current.generation)}
-        data-vortex-page-content=""
-        className="vortex-puck-slot min-w-0"
+    // The tokens already carry the person's reduced-motion choice; the library's own detection
+    // stays off so it does not log its dev warning for a setting this outlet honours.
+    <MotionConfig reducedMotion="never">
+      <div
+        ref={outletRef}
+        data-vortex-shell-outlet=""
+        className="vortex-puck-slot relative min-w-0"
         style={{ gap: "inherit" }}
-        initial={animated && current.generation > 0 ? { opacity: 0, y: 4 } : false}
-        animate={{ opacity: busy ? (timings?.dimOpacity ?? 1) : 1, y: 0 }}
-        // Dimming follows the dim token; entering, and coming back from a wait that ended without
-        // a page change, follow the swap-in token.
-        transition={(busy ? dim : swapIn) ?? NO_MOTION}
+        {...(busy ? { "aria-busy": true, "data-vortex-page-transition": "" } : {})}
       >
-        <PagePresenceContext.Provider value>{children}</PagePresenceContext.Provider>
-      </motion.div>
-    </div>
+        {current.leaving === undefined ? null : (
+          // The same key the page had while current, so the leaving page keeps its mounted tree.
+          <motion.div
+            key={current.leaving.id}
+            data-vortex-page-content=""
+            data-vortex-page-leaving=""
+            aria-hidden
+            inert
+            className="vortex-puck-slot pointer-events-none absolute inset-x-0 top-0 min-w-0"
+            style={{ gap: "inherit" }}
+            animate={{ opacity: 0, y: 0 }}
+            transition={swapOut ?? NO_MOTION}
+          >
+            <PagePresenceContext.Provider value={false}>
+              {current.leaving.node}
+            </PagePresenceContext.Provider>
+          </motion.div>
+        )}
+        <motion.div
+          ref={currentPageRef}
+          key={pageMountId(current.transitionKey, current.generation)}
+          data-vortex-page-content=""
+          className="vortex-puck-slot min-w-0"
+          style={{ gap: "inherit" }}
+          initial={animated && current.generation > 0 ? { opacity: 0, y: 4 } : false}
+          animate={{ opacity: busy ? (timings?.dimOpacity ?? 1) : 1, y: 0 }}
+          // Dimming follows the dim token; entering, and coming back from a wait that ended without
+          // a page change, follow the swap-in token.
+          transition={(busy ? dim : swapIn) ?? NO_MOTION}
+        >
+          <PagePresenceContext.Provider value>{children}</PagePresenceContext.Provider>
+        </motion.div>
+      </div>
+    </MotionConfig>
   );
 }

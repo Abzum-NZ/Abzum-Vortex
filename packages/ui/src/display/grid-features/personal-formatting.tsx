@@ -36,6 +36,7 @@ import {
   conditionalFormatConditionContext,
   type ConditionalFormatRuleChange,
 } from "../../studio/conditional-format-rule-controls";
+import { Tooltip, TooltipContent, TooltipTrigger } from "../../components/tooltip";
 
 /**
  * A person's formatting rules for the view they have open: the same rule parts, condition controls
@@ -187,39 +188,54 @@ export function PersonalFormattingDialog({
                       }
                     />
                     <div className="flex shrink-0 items-center">
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon-sm"
-                        aria-label={`Move rule ${index + 1} up`}
-                        disabled={busy || index === 0}
-                        onClick={() => move(index, index - 1)}
-                      >
-                        <Icon name="arrow-up" aria-hidden="true" />
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon-sm"
-                        aria-label={`Move rule ${index + 1} down`}
-                        disabled={busy || index === rules.length - 1}
-                        onClick={() => move(index, index + 1)}
-                      >
-                        <Icon name="arrow-down" aria-hidden="true" />
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon-sm"
-                        aria-label={`Delete rule ${index + 1}`}
-                        disabled={busy}
-                        onClick={() => {
-                          setRules(rules.filter((held) => held.id !== rule.id));
-                          if (activeId === rule.id) setActiveId(undefined);
-                        }}
-                      >
-                        <Icon name="close" aria-hidden="true" />
-                      </Button>
+                      <Tooltip>
+                        <TooltipTrigger render={<span className="inline-flex" />}>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon-sm"
+                            aria-label={`Move rule ${index + 1} up`}
+                            disabled={busy || index === 0}
+                            onClick={() => move(index, index - 1)}
+                          >
+                            <Icon name="arrow-up" aria-hidden="true" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>{`Move rule ${index + 1} up`}</TooltipContent>
+                      </Tooltip>
+                      <Tooltip>
+                        <TooltipTrigger render={<span className="inline-flex" />}>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon-sm"
+                            aria-label={`Move rule ${index + 1} down`}
+                            disabled={busy || index === rules.length - 1}
+                            onClick={() => move(index, index + 1)}
+                          >
+                            <Icon name="arrow-down" aria-hidden="true" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>{`Move rule ${index + 1} down`}</TooltipContent>
+                      </Tooltip>
+                      <Tooltip>
+                        <TooltipTrigger render={<span className="inline-flex" />}>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon-sm"
+                            aria-label={`Delete rule ${index + 1}`}
+                            disabled={busy}
+                            onClick={() => {
+                              setRules(rules.filter((held) => held.id !== rule.id));
+                              if (activeId === rule.id) setActiveId(undefined);
+                            }}
+                          >
+                            <Icon name="close" aria-hidden="true" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>{`Delete rule ${index + 1}`}</TooltipContent>
+                      </Tooltip>
                     </div>
                   </li>
                 );

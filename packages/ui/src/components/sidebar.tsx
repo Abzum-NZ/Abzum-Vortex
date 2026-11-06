@@ -8,6 +8,7 @@ import { cn } from "../lib/utils";
 import { Button } from "./button";
 import { Separator } from "./separator";
 import { Icon } from "../icons/icon";
+import { Tooltip, TooltipContent, TooltipTrigger } from "./tooltip";
 
 /*
  * The shadcn Sidebar parts of the pinned shadcn 4.21.0 Base UI registry, carrying the same cn-*
@@ -61,21 +62,27 @@ function SidebarProvider({
 
 function SidebarTrigger({ className, ...props }: React.ComponentProps<typeof Button>) {
   const context = React.useContext(SidebarContext);
+  const label = context?.open === false ? "Expand sidebar" : "Collapse sidebar";
   return (
-    <Button
-      data-sidebar="trigger"
-      data-slot="sidebar-trigger"
-      variant="ghost"
-      size="icon-sm"
-      aria-label={context?.open === false ? "Expand sidebar" : "Collapse sidebar"}
-      aria-pressed={context?.open === false}
-      disabled={context === null || context.collapsible === "none"}
-      onClick={context?.toggle}
-      className={cn(className)}
-      {...props}
-    >
-      <Icon name="panel-left" aria-hidden="true" />
-    </Button>
+    <Tooltip>
+      <TooltipTrigger render={<span className="inline-flex" />}>
+        <Button
+          data-sidebar="trigger"
+          data-slot="sidebar-trigger"
+          variant="ghost"
+          size="icon-sm"
+          aria-label={label}
+          aria-pressed={context?.open === false}
+          disabled={context === null || context.collapsible === "none"}
+          onClick={context?.toggle}
+          className={cn(className)}
+          {...props}
+        >
+          <Icon name="panel-left" aria-hidden="true" />
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent>{label}</TooltipContent>
+    </Tooltip>
   );
 }
 

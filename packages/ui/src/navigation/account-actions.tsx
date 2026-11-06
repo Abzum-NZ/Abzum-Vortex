@@ -14,6 +14,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "../components/dropdown-menu";
+import { Tooltip, TooltipContent, TooltipTrigger } from "../components/tooltip";
 /** The signed-in person as shown to them; an organisation account may have no display name. */
 export type ApplicationAccount = Readonly<{ email: string; displayName?: string }>;
 
@@ -60,15 +61,20 @@ export function ApplicationAccountMenu({
 
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger
-        disabled={actions === null}
-        aria-label="Account menu"
-        render={<Button variant="ghost" size="icon" className="max-sm:size-11" />}
-      >
-        <Avatar>
-          <AvatarFallback>{avatarInitial}</AvatarFallback>
-        </Avatar>
-      </DropdownMenuTrigger>
+      <Tooltip>
+        <TooltipTrigger render={<span className="inline-flex" />}>
+          <DropdownMenuTrigger
+            disabled={actions === null}
+            aria-label="Account menu"
+            render={<Button variant="ghost" size="icon" className="max-sm:size-11" />}
+          >
+            <Avatar>
+              <AvatarFallback>{avatarInitial}</AvatarFallback>
+            </Avatar>
+          </DropdownMenuTrigger>
+        </TooltipTrigger>
+        <TooltipContent>Account menu</TooltipContent>
+      </Tooltip>
       <DropdownMenuContent align="end" className="min-w-48">
         <DropdownMenuGroup>
           <DropdownMenuLabel className="flex flex-col gap-[var(--vortex-space-xs)]">

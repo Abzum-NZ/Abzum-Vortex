@@ -25,6 +25,7 @@ import {
 import { useFormFieldPublisher, useRequiredFormField } from "./form-context";
 import { assertTimeZone } from "@vortex/platform/schema";
 import { toLocalInputValue, toStoredInstant } from "./date-time-zone";
+import { Tooltip, TooltipContent, TooltipTrigger } from "../components/tooltip";
 
 type DateTimeInputProps = ControlRenderProps<DateTimeInputPayload>;
 
@@ -163,16 +164,21 @@ export function DateTimeInput(props: DateTimeInputProps): ReactElement {
           className="[&::-webkit-calendar-picker-indicator]:hidden"
           {...describedBy(ids, help, error, note, draftFeedback)}
         />
-        <Button
-          type="button"
-          variant="outline"
-          size="icon"
-          disabled={disabled || readOnly}
-          onClick={() => inputRef.current?.showPicker?.()}
-        >
-          <Icon name="calendar" aria-hidden="true" />
-          <span className="sr-only">Choose date and time</span>
-        </Button>
+        <Tooltip>
+          <TooltipTrigger render={<span className="inline-flex" />}>
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              disabled={disabled || readOnly}
+              onClick={() => inputRef.current?.showPicker?.()}
+            >
+              <Icon name="calendar" aria-hidden="true" />
+              <span className="sr-only">Choose date and time</span>
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>Choose date and time</TooltipContent>
+        </Tooltip>
       </div>
       <FieldMessages
         ids={ids}

@@ -11,6 +11,7 @@ import { useDateFormatOptions } from "../date-format-context";
 import { GRID_ROOT } from "../table-interaction";
 import type { GridFeatureInteractionProps } from "./registry";
 import { useGridToolbarFind } from "./toolbar";
+import { Tooltip, TooltipContent, TooltipTrigger } from "../../components/tooltip";
 
 type Match = Readonly<{ row: number; field: string }>;
 const matchClasses = [
@@ -178,26 +179,34 @@ export default function Find({ context, surface }: GridFeatureInteractionProps):
                   ? "No matches on this page"
                   : `${(index % matches.length) + 1} of ${matches.length} matching cells`}
             </span>
-            <Button
-              size="icon-sm"
-              variant="ghost"
-              title="Previous match"
-              aria-label="Previous match"
-              disabled={matches.length === 0}
-              onClick={() => step(-1)}
-            >
-              <Icon name="chevron-up" aria-hidden="true" />
-            </Button>
-            <Button
-              size="icon-sm"
-              variant="ghost"
-              title="Next match"
-              aria-label="Next match"
-              disabled={matches.length === 0}
-              onClick={() => step(1)}
-            >
-              <Icon name="chevron-down" aria-hidden="true" />
-            </Button>
+            <Tooltip>
+              <TooltipTrigger render={<span className="inline-flex" />}>
+                <Button
+                  size="icon-sm"
+                  variant="ghost"
+                  aria-label="Previous match"
+                  disabled={matches.length === 0}
+                  onClick={() => step(-1)}
+                >
+                  <Icon name="chevron-up" aria-hidden="true" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Previous match</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger render={<span className="inline-flex" />}>
+                <Button
+                  size="icon-sm"
+                  variant="ghost"
+                  aria-label="Next match"
+                  disabled={matches.length === 0}
+                  onClick={() => step(1)}
+                >
+                  <Icon name="chevron-down" aria-hidden="true" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Next match</TooltipContent>
+            </Tooltip>
             {context.features.search !== true ||
             context.events?.search_changed === undefined ? null : (
               <Button
@@ -211,15 +220,14 @@ export default function Find({ context, surface }: GridFeatureInteractionProps):
                 Search all records
               </Button>
             )}
-            <Button
-              size="icon-sm"
-              variant="ghost"
-              title="Close find"
-              aria-label="Close find"
-              onClick={close}
-            >
-              <Icon name="close" aria-hidden="true" />
-            </Button>
+            <Tooltip>
+              <TooltipTrigger render={<span className="inline-flex" />}>
+                <Button size="icon-sm" variant="ghost" aria-label="Close find" onClick={close}>
+                  <Icon name="close" aria-hidden="true" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Close find</TooltipContent>
+            </Tooltip>
           </div>
         </DialogContent>
       </Dialog>
