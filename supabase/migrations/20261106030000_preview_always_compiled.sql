@@ -6,6 +6,8 @@
 -- DEFINITION_DEPENDENCY_SUPERSEDED. The planner now compiles the draft for every preview (the
 -- preview shadows the immutable row), so the reuse branch is deleted: a plan without a compiled
 -- Application row is refused as before. No stored release is rewritten.
+set role vortex_owner;
+
 create or replace function vortex_definition.assert_preview_releases_internal(
   p_organization_id uuid,
   p_application_root_id uuid,
@@ -172,3 +174,5 @@ begin
   return application_release_revision_value;
 end
 $function$;
+
+reset role;
