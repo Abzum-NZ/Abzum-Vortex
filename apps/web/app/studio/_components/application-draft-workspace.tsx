@@ -1,5 +1,6 @@
 "use client";
-import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useStable } from "./use-stable";
 import {
   describeFailure,
   type SourceIdentityReservation,
@@ -15,7 +16,7 @@ import {
   type StudioNavigationApplication,
   type StudioNavigationApplicationsStatus,
 } from "@vortex/platform/schema";
-import { StudioFieldProblemsProvider } from "@vortex/ui/studio";
+import { StudioFieldProblemsProvider, useSettledValue } from "@vortex/ui/studio";
 import { studioOutlineLabels } from "../_lib/studio-labels";
 import { studioPlaceSelection, studioTabOfSelection } from "../_lib/studio-places";
 import { describeStudioCompileFailure } from "../_lib/studio-compile-failure";
@@ -168,19 +169,20 @@ function ExistingApplicationWorkspace(props: ExistingProps) {
   }, []);
   const { source, state } = draft;
   const accessReservations = useRef<SourceIdentityReservation[]>([]);
+  // A place that has left the draft (a "Used in" entry drawn a moment before the edit that removed
+  // it) is refused by the selection, and the tab stays as it is.
   const openIn = (nextTab: StudioRailKey, next: StudioSemanticSelection) => {
-    setTab(nextTab);
-    draft.select(next);
+    if (draft.select(next)) setTab(nextTab);
   };
 
   // The one outline of the draft: Structure, Outline and every label Studio shows are views of it.
-  // Drawn after the keystroke that changed the draft: the canvas and the field answer first. The
-  // commands and the canvas name blocks from the current draft.
+  // Drawn from the draft as it stood once typing paused: the canvas and the field answer each key.
+  // The commands and the canvas name blocks from the current draft.
   const describePlacement = useMemo(
     () => createStudioPlacementDescriber(catalogue, source),
     [catalogue, source],
   );
-  const outlineSource = useDeferredValue(source);
+  const outlineSource = useSettledValue(source);
   const outline = useMemo(
     () =>
       projectStudioSemanticOutline(
@@ -378,6 +380,16 @@ function ExistingApplicationWorkspace(props: ExistingProps) {
     return () => window.removeEventListener("keydown", shortcut, true);
   }, [draft]);
 
+  // The header's commands keep their identity between keystrokes, so its buttons are not drawn
+  // again.
+  const onApplication = useStable(() => {
+    draft.select({ kind: "application", applicationRootId: state.rootId });
+  });
+  const onUndo = useStable(() => draft.undo());
+  const onRedo = useStable(() => draft.redo());
+  const onInstall = useStable(() => releases.openInstall());
+  const onPreview = useStable(() => releases.openPreview());
+  const onPublish = useStable(() => releases.openPublish());
   return (
     <StudioFieldProblemsProvider>
       <StudioPlaceOpenerProvider opener={placeOpener}>
@@ -404,23 +416,21 @@ function ExistingApplicationWorkspace(props: ExistingProps) {
                 <StudioHeader
                   frame={place.frame}
                   applicationName={source.body.name}
-                  onApplication={() => {
-                    draft.select({ kind: "application", applicationRootId: state.rootId });
-                  }}
+                  onApplication={onApplication}
                   saveState={<StudioSaveState draft={draft} />}
                   canUndo={state.canUndo}
                   canRedo={state.canRedo}
                   undoDisabled={draft.historyBlocked}
-                  onUndo={draft.undo}
-                  onRedo={draft.redo}
+                  onUndo={onUndo}
+                  onRedo={onRedo}
                   applicationHref={releases.openHref}
                   install={releases.install}
-                  onInstall={releases.openInstall}
+                  onInstall={onInstall}
                   installPending={releases.actionPending === "install"}
-                  onPreview={releases.openPreview}
+                  onPreview={onPreview}
                   previewPending={releases.previewPending}
                   previewDisabled={draft.locked}
-                  onPublish={releases.openPublish}
+                  onPublish={onPublish}
                   publishDisabled={draft.locked}
                   publishPending={releases.actionPending === "publish"}
                 />
