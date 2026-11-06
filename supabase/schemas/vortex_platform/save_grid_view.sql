@@ -56,7 +56,12 @@ begin
       and release.release_revision = (binding.value ->> 'moduleReleaseRevision')::bigint
     cross join lateral pg_catalog.jsonb_array_elements(
       release.compilation_output #> '{canonical,content,queries}') as query(value)
-    where (query.value ->> 'queryId')::uuid = p_query_id;
+    where (query.value ->> 'queryId')::uuid = p_query_id
+      -- A private query of another Application's Module resolves to nothing, like a missing one.
+      and vortex_record.module_query_is_readable_internal(
+        (binding.value ->> 'moduleRootId')::uuid, query.value,
+        (installation ->> 'applicationRootId')::uuid
+      );
     -- Record-type listings use their record type as the query identity.
     if record_type_id is null and access_plan -> 'recordTypes' ? p_query_id::text then
       record_type_id := p_query_id;

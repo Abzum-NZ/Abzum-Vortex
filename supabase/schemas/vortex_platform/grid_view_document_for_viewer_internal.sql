@@ -28,7 +28,9 @@ begin
       'document', document, 'hiddenFilters', 0, 'hiddenSorts', 0, 'hiddenFormatting', 0);
   end if;
   context_value := vortex_access.validated_human_request_context();
-  -- Resolve only releases pinned by this validated installation, including record-type listings.
+  -- Resolve only releases pinned by this validated installation, including record-type listings,
+  -- and only a query the Application may read (a private query of another Application's Module
+  -- resolves to nothing, like a missing one).
   select target.record_type_id into record_type_id
   from (
     select distinct (query.value #>> '{recordType,recordTypeId}')::uuid as record_type_id
@@ -40,6 +42,10 @@ begin
       release.compilation_output #> '{canonical,content,queries}'
     ) as query(value)
     where (query.value ->> 'queryId')::uuid = p_query_id
+      and vortex_record.module_query_is_readable_internal(
+        (binding.value ->> 'moduleRootId')::uuid, query.value,
+        (p_installation ->> 'applicationRootId')::uuid
+      )
     union
     select p_query_id
     where p_plan -> 'recordTypes' ? pg_catalog.lower(p_query_id::text)
