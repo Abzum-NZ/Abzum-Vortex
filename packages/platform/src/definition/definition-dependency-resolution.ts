@@ -540,11 +540,9 @@ const resolveApplicationComposition = async (
   )
     refuse("DEFINITION_DEPENDENCY_SUBSTITUTED");
   if (pinned !== undefined) {
+    // The theme is pinned by identity and version: its content resolves at run time.
     const exact = findPinned(pinned, "platform_theme", String(base.catalogue_theme_id));
-    if (
-      exact.releaseVersion !== snapshot.platformTheme.releaseVersion ||
-      exact.contentFingerprint !== snapshot.platformTheme.contentFingerprint
-    )
+    if (exact.releaseVersion !== snapshot.platformTheme.releaseVersion)
       refuse("DEFINITION_CONFIRMATION_MISMATCH");
   }
   return snapshot;
@@ -969,7 +967,6 @@ export const manifestFor = (
             kind: "platform_theme" as const,
             catalogueThemeId: dependencies.composition.platformTheme.catalogueThemeId,
             releaseVersion: dependencies.composition.platformTheme.releaseVersion,
-            contentFingerprint: dependencies.composition.platformTheme.contentFingerprint,
           },
         ]),
     ...flowTargetManifestFor(dependencies, output, resolution),

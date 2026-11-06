@@ -2,7 +2,11 @@ import "server-only";
 
 import { cache, type CSSProperties } from "react";
 import { headers } from "next/headers";
-import { DEFAULT_APPLICATION_THEME_SELECTION, organizationIdSchema } from "@vortex/platform/schema";
+import {
+  canonicalJson,
+  DEFAULT_APPLICATION_THEME_SELECTION,
+  organizationIdSchema,
+} from "@vortex/platform/schema";
 import {
   DEFAULT_PLATFORM_THEME_RELEASE,
   resolveApplicationTheme,
@@ -45,6 +49,7 @@ const studioDocumentThemeOf = (theme: ApplicationTheme) => {
 
 /** The same Studio root props serve the document's first paint and client-side route transitions. */
 const studioTheme = resolveApplicationTheme(STUDIO_THEME, undefined);
+const studioSelection = canonicalJson(studioTheme.selection);
 export const STUDIO_DOCUMENT_THEME = studioDocumentThemeOf(studioTheme);
 
 /**
@@ -89,7 +94,8 @@ const loadStudioOrganizationTheme = cache(
     const load = await loadOrganizationTheme(resolution.session, organizationId);
     if (load.kind !== "available") return undefined;
     const theme = resolveApplicationTheme(STUDIO_THEME, load.theme.selection);
-    return theme === studioTheme ? undefined : theme;
+    // An organisation theme that changes nothing Studio draws leaves Studio its own stylesheet.
+    return canonicalJson(theme.selection) === studioSelection ? undefined : theme;
   },
 );
 
