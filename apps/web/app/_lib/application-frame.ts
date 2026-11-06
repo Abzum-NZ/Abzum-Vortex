@@ -97,23 +97,27 @@ export type ApplicationFrameModel = Readonly<{
 const readViewerPresentation = async (
   session: IdentitySession,
   context: InstalledRuntimeContext,
-): Promise<Readonly<{ locale: string; timeZone: string }>> => {
+): Promise<Readonly<{ locale: string; timeZone: string }> | "temporarily_unavailable"> => {
   const result = await humanOrganizationRequests().run(
     session,
     runtimeContextSelection(context),
     readViewerPresentationAfterAuthorization,
   );
+  if (result.kind === "temporarily_unavailable") return "temporarily_unavailable";
   if (result.kind !== "available")
     throw new Error(`FRAME_PRESENTATION_READ_${result.kind.toUpperCase()}`);
   return result.value;
 };
 
-/** The page key and query the request addresses inside this application, when it names one page. */
+/**
+ * The page key and query the request addresses inside this application, when it names one page,
+ * with the whole address (path and query).
+ */
 const addressedPage = async (
   tenantShortName: string,
   organizationShortName: string,
   applicationKey: string,
-): Promise<Readonly<{ pageKey: string; query: URLSearchParams }> | undefined> => {
+): Promise<Readonly<{ pageKey: string; query: URLSearchParams; address: string }> | undefined> => {
   const address = (await headers()).get(requestAddressHeader);
   if (address === null) return undefined;
   const url = new URL(address, "http://address.invalid");
@@ -130,7 +134,7 @@ const addressedPage = async (
     organization === encodeURIComponent(organizationShortName) &&
     application === encodeURIComponent(applicationKey) &&
     pageKey !== undefined
-    ? { pageKey, query: url.searchParams }
+    ? { pageKey, query: url.searchParams, address }
     : undefined;
 };
 
@@ -167,14 +171,20 @@ export const loadApplicationStartTheme = cache(
  * The viewer's application frame for one application address. It is the shell part of the same
  * projection the addressed page renders from (one read per request, shared with the page), so the
  * frame shows exactly the shell placements the page would. Without a page address, or when the page
- * is not shown to this viewer, there is no frame and the page renders its own state.
+ * is not shown to this viewer, there is no frame and the page renders its own state. When the
+ * frame's organisations or the viewer's presentation cannot be read just now, the address shows
+ * its temporarily-unavailable state instead of the frame and page.
  */
 export const loadApplicationFrame = cache(
   async (
     tenantShortName: string,
     organizationShortName: string,
     applicationKey: string,
-  ): Promise<ApplicationFrameModel | undefined> => {
+  ): Promise<
+    | ApplicationFrameModel
+    | Readonly<{ kind: "temporarily_unavailable"; retryHref: string }>
+    | undefined
+  > => {
     const addressed = await addressedPage(tenantShortName, organizationShortName, applicationKey);
     if (addressed === undefined) return undefined;
     const { resolution, email } = await resolveIdentitySessionWithEmail();
@@ -230,6 +240,9 @@ export const loadApplicationFrame = cache(
           })
         : undefined,
     ]);
+    // A read refused just now (each read has logged why) shows the address's temporary state.
+    if (launcher.kind === "temporarily_unavailable" || presentation === "temporarily_unavailable")
+      return { kind: "temporarily_unavailable", retryHref: addressed.address };
     if (launcher.kind !== "available")
       throw new Error(`FRAME_ORGANIZATION_LAUNCHER_${launcher.kind.toUpperCase()}`);
     const organization = launcher.entries.find((entry) =>

@@ -17,9 +17,9 @@ import {
 } from "@vortex/platform/server";
 import { OrganizationLauncherPage } from "./_components/organization-launcher-page";
 import {
+  AddressTemporarilyUnavailable,
   OrganizationAddressState,
   readAccountMenuLauncher,
-  SignInTemporarilyUnavailable,
 } from "./_components/address-states";
 import { openPermittedApplication } from "./_components/open-application";
 import { continueSessionOrEnd } from "../../auth/_lib/session-redirect";
@@ -56,9 +56,15 @@ export default async function OrganizationPage({ params }: OrganizationPageProps
   }
 
   if (identity.kind === "temporarily_unavailable")
-    return <SignInTemporarilyUnavailable retryHref={retryHref} />;
+    return <AddressTemporarilyUnavailable cause="sign_in" retryHref={retryHref} />;
   if (email === undefined) throw new Error("Active identity session resolved without an email");
-  const context = { session: identity.session, email, tenantShortName, organizationShortName };
+  const context = {
+    session: identity.session,
+    email,
+    tenantShortName,
+    organizationShortName,
+    retryHref,
+  };
 
   const resolved = await resolveApplicationAddress(
     identity.session,
@@ -67,10 +73,7 @@ export default async function OrganizationPage({ params }: OrganizationPageProps
   );
   if (resolved.kind === "temporarily_unavailable")
     return (
-      <OrganizationAddressState
-        context={context}
-        state={{ kind: "temporarily_unavailable", retryHref }}
-      />
+      <OrganizationAddressState context={context} state={{ kind: "temporarily_unavailable" }} />
     );
   if (resolved.kind === "suspended_super_administrator_account")
     return <OrganizationAddressState context={context} state={{ kind: "suspended" }} />;

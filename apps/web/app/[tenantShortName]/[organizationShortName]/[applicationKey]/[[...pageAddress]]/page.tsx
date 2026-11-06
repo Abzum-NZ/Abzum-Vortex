@@ -10,10 +10,10 @@ import { ApplicationExperiencePage } from "./_components/application-experience-
 import { ApplicationPageView } from "./_components/application-page-view";
 import { BarePage } from "../_components/bare-page";
 import {
+  AddressTemporarilyUnavailable,
   OrganizationAddressState,
   readAccountMenuLauncher,
   PageSubjectNotFound,
-  SignInTemporarilyUnavailable,
 } from "../../_components/address-states";
 import {
   applicationLauncherEventIds,
@@ -87,18 +87,21 @@ async function readApplicationAddressPage({ params, searchParams }: ApplicationA
   if (identity.kind === "temporarily_unavailable")
     return (
       <BarePage>
-        <SignInTemporarilyUnavailable retryHref={retryHref} />
+        <AddressTemporarilyUnavailable cause="sign_in" retryHref={retryHref} />
       </BarePage>
     );
 
   if (email === undefined) throw new Error("Active identity session resolved without an email");
-  const context = { session: identity.session, email, tenantShortName, organizationShortName };
+  const context = {
+    session: identity.session,
+    email,
+    tenantShortName,
+    organizationShortName,
+    retryHref,
+  };
   const temporarilyUnavailable = (
     <BarePage>
-      <OrganizationAddressState
-        context={context}
-        state={{ kind: "temporarily_unavailable", retryHref }}
-      />
+      <OrganizationAddressState context={context} state={{ kind: "temporarily_unavailable" }} />
     </BarePage>
   );
   if (pageSegments.length > 1)

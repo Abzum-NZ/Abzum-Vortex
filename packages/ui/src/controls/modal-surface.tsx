@@ -125,11 +125,7 @@ export function ModalSurface<Values extends ModalSurfacePayload>({
   // surface of its own to place blocks in.
   if (editing)
     return (
-      <Card
-        className="border border-dashed"
-        {...sharedDataAttributes}
-        data-vortex-canvas-surface={kind}
-      >
+      <Card className="border border-dashed" {...sharedDataAttributes}>
         <CardHeader>
           <CardTitle>{title}</CardTitle>
           <CardDescription>

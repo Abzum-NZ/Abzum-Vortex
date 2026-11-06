@@ -222,7 +222,7 @@ function StudioActionBar({ id, type }: Readonly<{ id: string; type: string }>) {
   const buttons = () => [...(anchor.current?.querySelectorAll("button") ?? [])];
   // Alt+F10 moves focus to the selected block's bar, as the toolbar convention has it. A key
   // pressed while focus is inside the canvas frame reaches only its document, so both are heard.
-  // The Delete key on a block that cannot be removed (Puck takes it silently) says why, once.
+  // Delete or Backspace on a block that cannot be removed (Puck takes it silently) says why, once.
   useEffect(() => {
     const own = anchor.current?.ownerDocument;
     const documents = own === undefined || own === document ? [document] : [document, own];
@@ -234,7 +234,12 @@ function StudioActionBar({ id, type }: Readonly<{ id: string; type: string }>) {
       }
       // The frame passes its keys on to the host as copies that are not trusted: the key is
       // heard once, where it was pressed.
-      if (event.key !== "Delete" || event.repeat || !event.isTrusted || deleteReason === undefined)
+      if (
+        (event.key !== "Delete" && event.key !== "Backspace") ||
+        event.repeat ||
+        !event.isTrusted ||
+        deleteReason === undefined
+      )
         return;
       const target = event.target;
       if (

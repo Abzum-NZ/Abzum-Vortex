@@ -21,7 +21,6 @@ import {
   EmptyTitle,
 } from "@vortex/ui/components/empty";
 import { AuthShell } from "../../../auth/_components/auth-shell";
-import { organizationAddressPath } from "../../../_lib/address-paths";
 import { loadOrganizationLauncher } from "../../../_lib/organization-context";
 import { resolveOrganizationLandingPath } from "../../../_lib/organization-landing";
 import { platformBlockReleasesFor } from "../../../_lib/platform-block-releases";
@@ -40,7 +39,7 @@ type AddressState =
       applicationName: string;
       homeHref: string;
     }>
-  | Readonly<{ kind: "temporarily_unavailable"; retryHref: string }>
+  | Readonly<{ kind: "temporarily_unavailable" }>
   | Readonly<{ kind: "suspended" }>
   | Readonly<{ kind: "preview_not_runnable"; sentence: string; studioHref: string }>;
 
@@ -49,12 +48,15 @@ type AddressContext = Readonly<{
   email: string;
   tenantShortName: string;
   organizationShortName: string;
+  /** The address shown, loaded again by Try again. */
+  retryHref: string;
 }>;
 
 const stateContent = (
   state: AddressState,
   organizationName: string,
   organizationHref: string,
+  retryHref: string,
 ): Readonly<{ page: OrganizationAddressState; href: string }> => {
   switch (state.kind) {
     case "unavailable":
@@ -107,7 +109,7 @@ const stateContent = (
           detail: "Your sign-in is still active. Try loading it again.",
           actionLabel: "Try again",
         },
-        href: state.retryHref,
+        href: retryHref,
       };
     case "suspended":
       return {
@@ -134,9 +136,9 @@ const stateContent = (
 };
 
 /**
- * The organisations the account menu lists. A launcher that cannot be read just now is a temporary
- * refusal, logged once at info, and answers the page's own temporarily-unavailable state; any other
- * answer is a fault and throws.
+ * The organisations the account menu lists. A launcher that cannot be read just now (the launcher
+ * read has logged why) answers the address's temporarily-unavailable state; any other answer is a
+ * fault and throws.
  */
 export async function readAccountMenuLauncher(
   session: IdentitySession,
@@ -147,10 +149,11 @@ export async function readAccountMenuLauncher(
 > {
   const launcher = await loadOrganizationLauncher(session);
   if (launcher.kind === "available") return launcher;
-  if (launcher.kind === "temporarily_unavailable") {
-    console.info("[web] the account menu's organisations could not be read just now; try again");
-    return { kind: "unavailable", page: <SignInTemporarilyUnavailable retryHref={retryHref} /> };
-  }
+  if (launcher.kind === "temporarily_unavailable")
+    return {
+      kind: "unavailable",
+      page: <AddressTemporarilyUnavailable cause="read" retryHref={retryHref} />,
+    };
   throw new Error(`Organisation launcher unavailable for the account menu: ${launcher.kind}`);
 }
 
@@ -162,11 +165,8 @@ export async function OrganizationAddressState({
   context,
   state,
 }: Readonly<{ context: AddressContext; state: AddressState }>): Promise<ReactElement> {
-  const { session, email, tenantShortName, organizationShortName } = context;
-  const launcher = await readAccountMenuLauncher(
-    session,
-    organizationAddressPath(tenantShortName, organizationShortName),
-  );
+  const { session, email, tenantShortName, organizationShortName, retryHref } = context;
+  const launcher = await readAccountMenuLauncher(session, retryHref);
   if (launcher.kind === "unavailable") return launcher.page;
   const entry = launcher.entries.find(
     (candidate) =>
@@ -185,7 +185,7 @@ export async function OrganizationAddressState({
     tenantShortName,
     organizationShortName,
   );
-  const content = stateContent(state, organizationName, organizationHref);
+  const content = stateContent(state, organizationName, organizationHref, retryHref);
   const page = organizationAddressStatePage(content.page);
   return (
     <OrganizationAddressStatePage
@@ -205,16 +205,25 @@ export async function OrganizationAddressState({
   );
 }
 
-/** The sign-in itself could not be checked right now, so no account or organisation is known. */
-export function SignInTemporarilyUnavailable({
+/**
+ * An address that cannot be shown just now, outside the organisation shell: the sign-in could not
+ * be checked, so no account or organisation is known, or the organisations the shell lists could
+ * not be read.
+ */
+export function AddressTemporarilyUnavailable({
+  cause,
   retryHref,
-}: Readonly<{ retryHref: string }>): ReactElement {
+}: Readonly<{ cause: "sign_in" | "read"; retryHref: string }>): ReactElement {
   return (
     <AuthShell
       addressState="temporarily_unavailable"
       eyebrow="Application access"
       title="This address is temporarily unavailable"
-      description="Your sign-in could not be checked just now. Try loading this address again."
+      description={
+        cause === "sign_in"
+          ? "Your sign-in could not be checked just now. Try loading this address again."
+          : "Your sign-in is active, but this address could not be loaded just now. Try again."
+      }
     >
       <Button variant="outline" nativeButton={false} render={<NavigationLink href={retryHref} />}>
         Try again
