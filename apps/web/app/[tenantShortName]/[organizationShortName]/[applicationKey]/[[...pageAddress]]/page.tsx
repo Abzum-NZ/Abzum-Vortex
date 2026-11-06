@@ -87,21 +87,18 @@ async function readApplicationAddressPage({ params, searchParams }: ApplicationA
   if (identity.kind === "temporarily_unavailable")
     return (
       <BarePage>
-        <AddressTemporarilyUnavailable cause="sign_in" retryHref={retryHref} />
+        <AddressTemporarilyUnavailable cause="sign_in" />
       </BarePage>
     );
 
   if (email === undefined) throw new Error("Active identity session resolved without an email");
-  const context = {
-    session: identity.session,
-    email,
-    tenantShortName,
-    organizationShortName,
-    retryHref,
-  };
+  const context = { session: identity.session, email, tenantShortName, organizationShortName };
   const temporarilyUnavailable = (
     <BarePage>
-      <OrganizationAddressState context={context} state={{ kind: "temporarily_unavailable" }} />
+      <OrganizationAddressState
+        context={context}
+        state={{ kind: "temporarily_unavailable", retryHref }}
+      />
     </BarePage>
   );
   if (pageSegments.length > 1)
@@ -158,7 +155,7 @@ async function readApplicationAddressPage({ params, searchParams }: ApplicationA
           />
         </BarePage>
       );
-    const launcher = await readAccountMenuLauncher(identity.session, retryHref);
+    const launcher = await readAccountMenuLauncher(identity.session);
     if (launcher.kind === "unavailable") return <BarePage>{launcher.page}</BarePage>;
     const organization = launcher.entries.find(
       (entry) =>

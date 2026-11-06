@@ -27,10 +27,10 @@ async function readCurrentApplicationFrame({
     route.applicationKey,
   );
   if (frame === undefined) return children;
-  if ("kind" in frame)
+  if (frame === "temporarily_unavailable")
     return (
       <BarePage>
-        <AddressTemporarilyUnavailable cause="read" retryHref={frame.retryHref} />
+        <AddressTemporarilyUnavailable cause="read" />
       </BarePage>
     );
   return (

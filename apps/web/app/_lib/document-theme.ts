@@ -75,36 +75,28 @@ export const STUDIO_ROOT_CSS = variablesRule(
 /**
  * Studio's theme for the organisation its address names (`/studio/<organisation>/...`): Studio's
  * platform theme with that organisation's theme applied, or undefined where Studio keeps its own
- * theme (no organisation named, not signed in, or an organisation the person is not a member of).
- * An organisation theme that cannot be read now is `temporarily_unavailable` (the read has logged
- * why): Studio then shows that it is temporarily unavailable and is never drawn in a theme nobody
- * chose.
+ * theme (no organisation named, not signed in, an organisation the person is not a member of, or
+ * an organisation theme that cannot be read just now: the read has logged why, and the document
+ * root and Studio's layout agree on Studio's own theme, so nothing is thrown above every boundary).
  */
 const loadStudioOrganizationTheme = cache(
-  async (
-    organizationId: string | undefined,
-  ): Promise<ApplicationTheme | undefined | "temporarily_unavailable"> => {
+  async (organizationId: string | undefined): Promise<ApplicationTheme | undefined> => {
     if (organizationId === undefined || !organizationIdSchema.safeParse(organizationId).success)
       return undefined;
     const resolution = await resolveIdentitySession();
     if (resolution.kind !== "active") return undefined;
     const load = await loadOrganizationTheme(resolution.session, organizationId);
-    if (load.kind === "unavailable") return undefined;
-    if (load.kind === "temporarily_unavailable") return "temporarily_unavailable";
+    if (load.kind !== "available") return undefined;
     const theme = applyOrganizationTheme(STUDIO_THEME_ROOT, load.theme.selection);
     return theme === STUDIO_THEME_ROOT ? undefined : theme;
   },
 );
 
-/**
- * The root props Studio draws with for one organisation: Studio's own, or the organisation's; or
- * `temporarily_unavailable` when the organisation's theme cannot be read now.
- */
+/** The root props Studio draws with for one organisation: Studio's own, or the organisation's. */
 export async function loadStudioDocumentTheme(
   organizationId: string,
-): Promise<typeof STUDIO_DOCUMENT_THEME | "temporarily_unavailable"> {
+): Promise<typeof STUDIO_DOCUMENT_THEME> {
   const theme = await loadStudioOrganizationTheme(organizationId);
-  if (theme === "temporarily_unavailable") return theme;
   return theme === undefined ? STUDIO_DOCUMENT_THEME : studioDocumentThemeOf(theme);
 }
 
@@ -138,9 +130,7 @@ export async function loadDocumentTheme(): Promise<DocumentTheme> {
   const [tenant, organization, application] = segments;
   if (tenant === "studio") {
     const studio = await loadStudioOrganizationTheme(organization);
-    // The document root cannot show a state: it keeps Studio's own theme while Studio's layout
-    // shows that Studio is temporarily unavailable.
-    if (studio === undefined || studio === "temporarily_unavailable")
+    if (studio === undefined)
       return { attributes: studioDocumentAttributes, style: {}, stylesheet: "studio" };
     return {
       attributes: Object.fromEntries(

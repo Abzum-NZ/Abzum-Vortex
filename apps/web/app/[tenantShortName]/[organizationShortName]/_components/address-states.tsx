@@ -25,6 +25,7 @@ import { loadOrganizationLauncher } from "../../../_lib/organization-context";
 import { resolveOrganizationLandingPath } from "../../../_lib/organization-landing";
 import { platformBlockReleasesFor } from "../../../_lib/platform-block-releases";
 import { OrganizationAddressStatePage } from "./organization-launcher-page";
+import { TryAgainButton } from "./try-again-button";
 
 /**
  * What an address shows when it shows no application page. Outside an application the viewer may
@@ -39,7 +40,7 @@ type AddressState =
       applicationName: string;
       homeHref: string;
     }>
-  | Readonly<{ kind: "temporarily_unavailable" }>
+  | Readonly<{ kind: "temporarily_unavailable"; retryHref: string }>
   | Readonly<{ kind: "suspended" }>
   | Readonly<{ kind: "preview_not_runnable"; sentence: string; studioHref: string }>;
 
@@ -48,15 +49,12 @@ type AddressContext = Readonly<{
   email: string;
   tenantShortName: string;
   organizationShortName: string;
-  /** The address shown, loaded again by Try again. */
-  retryHref: string;
 }>;
 
 const stateContent = (
   state: AddressState,
   organizationName: string,
   organizationHref: string,
-  retryHref: string,
 ): Readonly<{ page: OrganizationAddressState; href: string }> => {
   switch (state.kind) {
     case "unavailable":
@@ -109,7 +107,7 @@ const stateContent = (
           detail: "Your sign-in is still active. Try loading it again.",
           actionLabel: "Try again",
         },
-        href: retryHref,
+        href: state.retryHref,
       };
     case "suspended":
       return {
@@ -142,7 +140,6 @@ const stateContent = (
  */
 export async function readAccountMenuLauncher(
   session: IdentitySession,
-  retryHref: string,
 ): Promise<
   | Extract<Awaited<ReturnType<typeof loadOrganizationLauncher>>, { kind: "available" }>
   | Readonly<{ kind: "unavailable"; page: ReactElement }>
@@ -152,7 +149,7 @@ export async function readAccountMenuLauncher(
   if (launcher.kind === "temporarily_unavailable")
     return {
       kind: "unavailable",
-      page: <AddressTemporarilyUnavailable cause="read" retryHref={retryHref} />,
+      page: <AddressTemporarilyUnavailable cause="read" />,
     };
   throw new Error(`Organisation launcher unavailable for the account menu: ${launcher.kind}`);
 }
@@ -165,8 +162,8 @@ export async function OrganizationAddressState({
   context,
   state,
 }: Readonly<{ context: AddressContext; state: AddressState }>): Promise<ReactElement> {
-  const { session, email, tenantShortName, organizationShortName, retryHref } = context;
-  const launcher = await readAccountMenuLauncher(session, retryHref);
+  const { session, email, tenantShortName, organizationShortName } = context;
+  const launcher = await readAccountMenuLauncher(session);
   if (launcher.kind === "unavailable") return launcher.page;
   const entry = launcher.entries.find(
     (candidate) =>
@@ -185,7 +182,7 @@ export async function OrganizationAddressState({
     tenantShortName,
     organizationShortName,
   );
-  const content = stateContent(state, organizationName, organizationHref, retryHref);
+  const content = stateContent(state, organizationName, organizationHref);
   const page = organizationAddressStatePage(content.page);
   return (
     <OrganizationAddressStatePage
@@ -212,8 +209,7 @@ export async function OrganizationAddressState({
  */
 export function AddressTemporarilyUnavailable({
   cause,
-  retryHref,
-}: Readonly<{ cause: "sign_in" | "read"; retryHref: string }>): ReactElement {
+}: Readonly<{ cause: "sign_in" | "read" }>): ReactElement {
   return (
     <AuthShell
       addressState="temporarily_unavailable"
@@ -225,9 +221,7 @@ export function AddressTemporarilyUnavailable({
           : "Your sign-in is active, but this address could not be loaded just now. Try again."
       }
     >
-      <Button variant="outline" nativeButton={false} render={<NavigationLink href={retryHref} />}>
-        Try again
-      </Button>
+      <TryAgainButton />
     </AuthShell>
   );
 }
