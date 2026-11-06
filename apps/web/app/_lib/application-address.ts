@@ -2,13 +2,13 @@ import "server-only";
 
 import { cache } from "react";
 import {
-  applyOrganizationTheme,
   isReservedTenantSegment,
+  resolveApplicationTheme,
   readAddressedApplicationFromInstalledBundleAtAddress,
   resolvePermittedApplicationAddress,
-  withOrganizationTheme,
   type AddressedApplicationBundleRead,
   type ApplicationExperience,
+  type ApplicationTheme,
   type ApplicationLauncherRead,
   type InstalledRuntimeContext,
   type PermittedApplication,
@@ -38,7 +38,7 @@ type ApplicationAddressResult =
       kind: "unavailable";
       application: PermittedApplication;
       page: "refused" | "missing";
-      experience?: ApplicationExperience;
+      experience?: Omit<ApplicationExperience, "theme"> & { theme?: ApplicationTheme };
     }>
   | Readonly<{ kind: "temporarily_unavailable" }>
   | Readonly<{ kind: "suspended_super_administrator_account" }>
@@ -152,7 +152,7 @@ export const resolveApplicationAddress = cache(
           ? found
           : {
               ...found,
-              theme: applyOrganizationTheme(found.theme, organization.theme.selection),
+              theme: resolveApplicationTheme(found.theme, organization.theme.selection),
             };
       return {
         kind: "unavailable",
@@ -174,14 +174,7 @@ export const resolveApplicationAddress = cache(
       read,
       application: resolved.application,
       pageKey: resolved.pageKey,
-      ...(addressed.context === undefined || organization === undefined
-        ? {}
-        : {
-            installedContext: withOrganizationTheme(
-              addressed.context,
-              organization.theme.selection,
-            ),
-          }),
+      ...(addressed.context === undefined ? {} : { installedContext: addressed.context }),
       ...(addressed.navigation === undefined ? {} : { navigation: addressed.navigation }),
     };
   },

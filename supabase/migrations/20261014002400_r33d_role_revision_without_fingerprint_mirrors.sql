@@ -3,11 +3,8 @@ set local role vortex_owner;
 -- The baseline table and two invoker functions were retained with postgres
 -- ownership. Transfer them before changing their definitions.
 reset role;
--- guard-allow: migration-owner-role The baseline table is postgres owned, so its owner must transfer it first.
 alter table vortex_access.organization_role_revisions owner to vortex_owner;
--- guard-allow: migration-owner-role The baseline function is postgres owned, so its owner must transfer it first.
 alter function vortex_access.coordinate_role_change_without_stewardship_v1_internal(jsonb, uuid, uuid) owner to vortex_owner;
--- guard-allow: migration-owner-role The baseline function is postgres owned, so its owner must transfer it first.
 alter function vortex_access.coordinate_organization_stewardship_adoption(uuid, uuid, uuid, text, text, text, uuid, uuid, uuid, uuid) owner to vortex_owner;
 set local role vortex_owner;
 
@@ -639,7 +636,6 @@ begin
       end
       and registration.registration_owner_id = case
         when item.value ->> 'ownerKind' = 'platform'
-          -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
           then 'cabe121e-0baf-4084-9471-cce915d460a8'::uuid
         else (item.value ->> 'applicationRootId')::uuid
       end
@@ -1477,7 +1473,6 @@ comment on function vortex_access.coordinate_role_change_without_stewardship_v1_
 grant execute on function vortex_access.coordinate_role_change_without_stewardship_v1_internal(jsonb, uuid, uuid) to postgres;
 
 set local role postgres;
--- guard-allow: migration-owner-role This existing security definer must retain postgres ownership until its table privileges migrate.
 CREATE OR REPLACE FUNCTION vortex_access.coordinate_application_access_without_stewardship_v1_internal(p_operation text, p_expected_revision bigint, p_prepared_templates jsonb, p_organization_id uuid, p_application_root_id uuid, p_changed_by uuid, p_correlation_id uuid) RETURNS TABLE(outcome text, operation text, organization_id uuid, application_root_id uuid, registration_state text, registration_revision bigint, access_version bigint, correlation_id uuid)
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO ''
@@ -2197,7 +2192,6 @@ security invoker
 set search_path = ''
 as $function$
 declare
-  -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
   platform_owner_id constant uuid := 'cabe121e-0baf-4084-9471-cce915d460a8';
   stewardship vortex_access.organization_stewardship_requirements%rowtype;
   platform_registration vortex_access.permission_registrations%rowtype;
@@ -2714,7 +2708,6 @@ revoke execute on function
 grant execute on function vortex_access.coordinate_organization_stewardship_adoption(uuid, uuid, uuid, text, text, text, uuid, uuid, uuid, uuid) to postgres;
 
 set local role postgres;
--- guard-allow: migration-owner-role This existing security definer must retain postgres ownership until its table privileges migrate.
 create or replace function vortex_access.revise_organization_role_metadata_for_administration(
   p_role_id uuid,
   p_expected_role_revision bigint,
@@ -2850,9 +2843,7 @@ begin
       'target', pg_catalog.jsonb_build_object('kind', 'organization'),
       'requiredPermission', pg_catalog.jsonb_build_object(
         'ownerKind', 'platform',
-        -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
         'ownerId', 'cabe121e-0baf-4084-9471-cce915d460a8',
-        -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
         'permissionId', '87c96495-c806-4692-9bc2-250ddb10613c'
       ),
       'recentAuthentication', pg_catalog.jsonb_build_object('kind', 'none'),
@@ -3269,19 +3260,14 @@ alter function vortex_access.validate_organization_role_revision_evidence()
   owner to vortex_owner;
 
 set local role postgres;
--- guard-allow: migration-owner-role This existing security definer must retain postgres ownership until its table privileges migrate.
 CREATE OR REPLACE FUNCTION vortex_access.adopt_connection_administration_permission_catalogue(p_organization_id uuid, p_changed_by uuid, p_correlation_id uuid) RETURNS bigint
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO ''
     AS $$
 declare
-  -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
   platform_owner_id constant uuid := 'cabe121e-0baf-4084-9471-cce915d460a8';
-  -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
   connection_permission_id constant uuid := 'ec2908a1-f3cd-4c4a-8bf7-91bffbf4cb3d';
-  -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
   settings_permission_id constant uuid := 'c658c254-2884-414a-9012-512c0cfe4b34';
-  -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
   assignments_permission_id constant uuid := '156d01f3-8f80-45fb-8fc8-b31c47dbb1df';
   catalogue_fingerprint constant text :=
     'sha256:2fe313d69f53d7ce9247aa0ae05b5cc837872f49285e577f9dc9e1f21f3c842e';

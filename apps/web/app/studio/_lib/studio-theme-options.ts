@@ -1,12 +1,12 @@
 import type {
-  ApplicationContent,
+  ResolvedApplicationTheme,
   OrganizationThemeSelection,
   SourceApplicationThemeSelection,
 } from "@vortex/platform/schema";
 
 /** A candidate theme resolved as publication resolves it: the complete theme, or why it is refused. */
 export type StudioThemeResolution =
-  | Readonly<{ kind: "available"; valid: true; theme: ApplicationContent["theme"] }>
+  | Readonly<{ kind: "available"; valid: true; theme: ResolvedApplicationTheme }>
   | Readonly<{ kind: "available"; valid: false; problems: readonly string[] }>
   | Readonly<{ kind: "refused" | "temporarily_unavailable" }>;
 

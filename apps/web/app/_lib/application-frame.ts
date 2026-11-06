@@ -3,6 +3,7 @@ import "server-only";
 import { cache } from "react";
 import { headers } from "next/headers";
 import {
+  ApplicationThemeResolutionError,
   DEFAULT_PLATFORM_THEME_RELEASE,
   PREVIEW_SEED_RECORD_BOUND,
   readViewerPresentationAfterAuthorization,
@@ -32,6 +33,7 @@ import { fieldInputControlReleasesFor, platformBlockReleasesFor } from "./platfo
 import { requestAddressHeader } from "./request-address";
 import { readPageProjection } from "./application-page/load";
 import { loadOrganizationLauncher } from "./organization-context";
+import { loadApplicationTheme } from "./organization-theme";
 import { humanOrganizationRequests } from "./server-composition";
 import { loadStudioCreateAccess } from "./studio-application-draft";
 import { pageSubjectParameter } from "./application-page/placement-helpers";
@@ -158,9 +160,23 @@ export const loadApplicationStartTheme = cache(
       applicationKey,
       addressed.pageKey,
     );
-    return resolved.kind === "application_page"
-      ? resolved.installedContext?.releaseSet.application.content.theme
-      : undefined;
+    if (resolved.kind !== "application_page" || resolved.installedContext === undefined)
+      return undefined;
+    try {
+      const themed = await loadApplicationTheme(
+        resolution.session,
+        resolved.read.organizationId,
+        resolved.installedContext.releaseSet.application.content.theme,
+      );
+      return themed.kind === "available" ? themed.theme : undefined;
+    } catch (error) {
+      // The start theme is a first-paint hint for the document root. A theme that no longer
+      // resolves fails the application itself (its frame and page throw, and the application's
+      // error boundary shows it), so the document keeps the platform loader rather than failing
+      // the whole document a second time.
+      if (error instanceof ApplicationThemeResolutionError) return undefined;
+      throw error;
+    }
   },
 );
 
@@ -194,6 +210,8 @@ export const loadApplicationFrame = cache(
       return undefined;
     const context = resolved.installedContext;
     const content = context.releaseSet.application.content;
+    const themed = await loadApplicationTheme(session, resolved.read.organizationId, content.theme);
+    if (themed.kind !== "available") return undefined;
     const pageDefinition = content.pages.find((page) => page.key === resolved.pageKey);
     if (pageDefinition === undefined) return undefined;
     const subject = addressed.query.get(pageSubjectParameter) ?? undefined;
@@ -292,7 +310,7 @@ export const loadApplicationFrame = cache(
         name,
         presentation,
       })),
-      theme: content.theme,
+      theme: themed.theme,
       navigation,
       application: {
         tenantShortName,

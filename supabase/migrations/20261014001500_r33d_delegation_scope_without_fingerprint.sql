@@ -571,9 +571,7 @@ begin
       'target', pg_catalog.jsonb_build_object('kind', 'organization'),
       'requiredPermission', pg_catalog.jsonb_build_object(
         'ownerKind', 'platform',
-        -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
         'ownerId', 'cabe121e-0baf-4084-9471-cce915d460a8',
-        -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
         'permissionId', '156d01f3-8f80-45fb-8fc8-b31c47dbb1df'
       ),
       'recentAuthentication', pg_catalog.jsonb_build_object('kind', 'none'),
@@ -680,7 +678,6 @@ begin
     where registration.organization_id = context_organization_id
       and registration.registration_kind = 'platform'
       and registration.registration_owner_id =
-        -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
         'cabe121e-0baf-4084-9471-cce915d460a8'::uuid
       and registration.state = 'active'
       and vortex_access.platform_permission_catalogue_revision_is_exact(
@@ -688,7 +685,6 @@ begin
       )
       and entry.application_root_id is null
       and entry.owner_kind = 'platform'
-      -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
       and entry.owner_id = 'cabe121e-0baf-4084-9471-cce915d460a8'::uuid
   ), qualifying_role as (
     select role.role_id
@@ -835,9 +831,7 @@ begin
       'target', pg_catalog.jsonb_build_object('kind', 'organization'),
       'requiredPermission', pg_catalog.jsonb_build_object(
         'ownerKind', 'platform',
-        -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
         'ownerId', 'cabe121e-0baf-4084-9471-cce915d460a8',
-        -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
         'permissionId', '156d01f3-8f80-45fb-8fc8-b31c47dbb1df'
       ),
       'recentAuthentication', pg_catalog.jsonb_build_object('kind', 'none'),
@@ -1055,7 +1049,6 @@ begin
               on registration.organization_id = permission.organization_id
               and registration.registration_kind = 'platform'
               and registration.registration_owner_id =
-                -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
                 'cabe121e-0baf-4084-9471-cce915d460a8'::uuid
               and registration.state = 'active'
               and continuity.last_processed_registration_revision = registration.revision
@@ -1066,7 +1059,6 @@ begin
               and entry.registration_revision = registration.revision
               and entry.application_root_id is null
               and entry.owner_kind = 'platform'
-              -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
               and entry.owner_id = 'cabe121e-0baf-4084-9471-cce915d460a8'::uuid
               and entry.permission_id = permission.permission_id
               and entry.meaning_fingerprint = permission.meaning_fingerprint
@@ -1075,7 +1067,6 @@ begin
               and permission.role_revision = role.live_revision
               and permission.application_root_id is null
               and permission.owner_kind = 'platform'
-              -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
               and permission.owner_id = 'cabe121e-0baf-4084-9471-cce915d460a8'::uuid
               and permission.permission_id = (required.value ->> 'permissionId')::uuid
               and permission.meaning_fingerprint = required.value ->> 'meaningFingerprint'
@@ -1159,7 +1150,6 @@ security invoker
 set search_path = ''
 as $function$
 declare
-  -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
   platform_owner_id constant uuid := 'cabe121e-0baf-4084-9471-cce915d460a8';
   stewardship vortex_access.organization_stewardship_requirements%rowtype;
   platform_registration vortex_access.permission_registrations%rowtype;
@@ -1730,9 +1720,7 @@ begin
       'action', pg_catalog.jsonb_build_object('actionKind', 'manage'),
       'target', pg_catalog.jsonb_build_object('kind', 'organization'),
       'requiredPermission', pg_catalog.jsonb_build_object('ownerKind', 'platform',
-        -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
         'ownerId', 'cabe121e-0baf-4084-9471-cce915d460a8',
-        -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
         'permissionId', '156d01f3-8f80-45fb-8fc8-b31c47dbb1df'),
       'recentAuthentication', pg_catalog.jsonb_build_object('kind', 'none'),
       'authority', pg_catalog.jsonb_build_object('kind', 'delegated_management',

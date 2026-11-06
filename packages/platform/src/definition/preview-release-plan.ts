@@ -135,7 +135,8 @@ const previewRows = (append: DefinitionReleaseAppend, context: SessionContext) =
       dependency_kind: dependency.kind,
       dependency_reference: dependencyReference(dependency),
       dependency_version: dependency.releaseVersion,
-      dependency_content_fingerprint: dependency.contentFingerprint,
+      dependency_content_fingerprint:
+        dependency.kind === "platform_theme" ? null : dependency.contentFingerprint,
       target_root_id: dependency.kind === "module" ? dependency.rootId : null,
       target_release_revision: dependency.kind === "module" ? dependency.releaseRevision : null,
       catalogue_item_id:
