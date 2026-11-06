@@ -20,6 +20,7 @@ import { createOrganizationLocalAdministrationService } from "./organization-loc
 import type { AccessAdministrationContext } from "./organization-access-administration-shared";
 import { createAccessAdministrationGroupOperations } from "./organization-access-administration-groups";
 import { createAccessAdministrationRoleOperations } from "./organization-access-administration-roles";
+import { createAccessAdministrationStepUpSettingOperations } from "./organization-step-up-setting-administration";
 import { createAccessAdministrationAssignmentOperations } from "./organization-access-administration-assignments";
 
 type OrganizationAccessAdministrationDependencies = HumanOrganizationRequestDependencies &
@@ -52,6 +53,7 @@ export const createOrganizationAccessAdministrationService = (
     ...createAccessAdministrationGroupOperations(context),
     ...createAccessAdministrationRoleOperations(context),
     ...createAccessAdministrationAssignmentOperations(context),
+    ...createAccessAdministrationStepUpSettingOperations(context),
 
     suspendOrganizationAccount: async (
       session: IdentitySession,

@@ -1832,6 +1832,144 @@
       "pipelines": [],
       "relationships": [],
       "before_save_rules": []
+    },
+    {
+      "id": "rt_system_directory_organization_security_settings",
+      "key": "organization_security_settings",
+      "name": "Security setting",
+      "plural_name": "Security settings",
+      "title_field": "organization_name",
+      "storage_contract_id": "srt_system_directory_security_settings",
+      "storage_scope": "organization_shared",
+      "ownership_mode": "none",
+      "standard_actions": ["read"],
+      "custom_actions": [],
+      "system_projection": {
+        "protected_view": "organization_security_settings",
+        "organization_field": "organization_id",
+        "revision_field": "revision",
+        "filterable_fields": ["organization_id", "organization_name"],
+        "sortable_fields": ["require_step_up"]
+      },
+      "fields": [
+        {
+          "id": "fld_security_organization_id",
+          "key": "organization_id",
+          "label": "Organisation",
+          "required": true,
+          "unique": false,
+          "filterable": true,
+          "sortable": false,
+          "personal_data": "none",
+          "public_display": "refused",
+          "type": "text",
+          "settings": {
+            "max_length": 36
+          }
+        },
+        {
+          "id": "fld_security_organization_name",
+          "key": "organization_name",
+          "label": "Organisation name",
+          "required": true,
+          "unique": false,
+          "filterable": true,
+          "sortable": false,
+          "personal_data": "none",
+          "public_display": "refused",
+          "type": "text",
+          "settings": {
+            "max_length": 200
+          }
+        },
+        {
+          "id": "fld_security_revision",
+          "key": "revision",
+          "label": "Revision",
+          "required": true,
+          "unique": false,
+          "filterable": false,
+          "sortable": false,
+          "personal_data": "none",
+          "public_display": "refused",
+          "type": "whole_number",
+          "settings": {}
+        },
+        {
+          "id": "fld_security_require_step_up",
+          "key": "require_step_up",
+          "label": "Ask for a two-step verification code on sensitive actions",
+          "required": true,
+          "unique": false,
+          "filterable": false,
+          "sortable": true,
+          "personal_data": "none",
+          "public_display": "refused",
+          "type": "yes_no",
+          "settings": {}
+        },
+        {
+          "id": "fld_security_instance_profile",
+          "key": "instance_profile",
+          "label": "Instance",
+          "required": true,
+          "unique": false,
+          "filterable": false,
+          "sortable": false,
+          "personal_data": "none",
+          "public_display": "refused",
+          "type": "text",
+          "settings": {
+            "max_length": 20
+          }
+        },
+        {
+          "id": "fld_security_can_turn_off",
+          "key": "can_turn_off",
+          "label": "Can be turned off",
+          "required": true,
+          "unique": false,
+          "filterable": false,
+          "sortable": false,
+          "personal_data": "none",
+          "public_display": "refused",
+          "type": "yes_no",
+          "settings": {}
+        },
+        {
+          "id": "fld_security_changed_at",
+          "key": "changed_at",
+          "label": "Last changed",
+          "required": false,
+          "unique": false,
+          "filterable": false,
+          "sortable": false,
+          "personal_data": "none",
+          "public_display": "refused",
+          "type": "date_time",
+          "settings": {
+            "display_time_zone": "organization"
+          }
+        },
+        {
+          "id": "fld_security_changed_by",
+          "key": "changed_by_display_name",
+          "label": "Last changed by",
+          "required": false,
+          "unique": false,
+          "filterable": false,
+          "sortable": false,
+          "personal_data": "none",
+          "public_display": "refused",
+          "type": "text",
+          "settings": {
+            "max_length": 200
+          }
+        }
+      ],
+      "relationships": [],
+      "pipelines": [],
+      "before_save_rules": []
     }
   ],
   "permissions": [
@@ -2152,6 +2290,34 @@
       "sort": [
         {
           "field": "destination_key",
+          "direction": "ascending"
+        }
+      ],
+      "page_size": 50,
+      "relationship_hops": 0
+    },
+    {
+      "id": "qry_organization_security_settings",
+      "key": "organization_security_settings",
+      "exposure": "private",
+      "label": "Security settings",
+      "record_type": "organization_security_settings",
+      "inputs": [],
+      "select": [
+        "organization_id",
+        "organization_name",
+        "require_step_up",
+        "instance_profile",
+        "can_turn_off",
+        "changed_at",
+        "changed_by_display_name"
+      ],
+      "filter": null,
+      "group_by": [],
+      "aggregates": [],
+      "sort": [
+        {
+          "field": "require_step_up",
           "direction": "ascending"
         }
       ],

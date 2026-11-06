@@ -57,6 +57,15 @@ export const organisationAdministrationApplication: ApplicationSourceDocument =
       },
       {
         ...defaultOpenFlowSource({
+          id: "flow_open_security",
+          key: "open_security",
+          page: "edit_organisation_security",
+          recordType: "vortex.system_directory:organization_security_settings",
+        }),
+        labels: { name: "Open security setting" },
+      },
+      {
+        ...defaultOpenFlowSource({
           id: "navigate_new_notice",
           key: "navigate_new_notice",
           description: "Opens the organisation notice form.",

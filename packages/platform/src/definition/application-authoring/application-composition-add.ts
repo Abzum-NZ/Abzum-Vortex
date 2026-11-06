@@ -358,9 +358,13 @@ export const describeStudioCompositionAddTargets = (
   try {
     plainSource(context.source);
     if (!validContext(context)) return { kind: "invalid" };
+    // A history snapshot is the validated source, so the places are read from it as it is; only a
+    // copy someone made is parsed. The add command parses at every write.
     const places = addPlaces(
       context.catalogue,
-      applicationSourceDocumentSchema.parse(context.source),
+      isStudioDraftSnapshot(context.source)
+        ? (context.source as ApplicationSourceDocument)
+        : applicationSourceDocumentSchema.parse(context.source),
       owner,
       describePlacement,
     );

@@ -231,6 +231,7 @@ begin
     new_organization_id, p_runtime_language, p_runtime_time_zone,
     p_runtime_currency, p_runtime_date_format, p_runtime_number_format
   );
+  perform vortex_identity.initialize_organization_security_settings(new_organization_id);
   perform 1 from vortex_access.initialize_organization_access_version(
     new_organization_id, actor_identity_id, new_correlation_id
   );

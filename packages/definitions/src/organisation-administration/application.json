@@ -158,6 +158,35 @@
           ],
           "changeable_fields": []
         }
+      },
+      {
+        "id": "app_permission_organization_security_settings_read",
+        "key": "vortex.organisation_administration.organization_security_settings.read",
+        "label": "Read security settings",
+        "description": "Allows reading the organisation's two-step verification setting.",
+        "record_type": "vortex.system_directory:organization_security_settings",
+        "action_kind": "read",
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        },
+        "field_policy": {
+          "readable_fields": [
+            "organization_id",
+            "organization_name",
+            "revision",
+            "require_step_up",
+            "instance_profile",
+            "can_turn_off",
+            "changed_at",
+            "changed_by_display_name"
+          ],
+          "changeable_fields": []
+        }
       }
     ],
     "roles": [
@@ -195,7 +224,8 @@
           "vortex.organisation_administration.role.read",
           "vortex.organisation_administration.organization_settings.read",
           "vortex.organisation_administration.activity_entry.read",
-          "vortex.organisation_administration.connection_instance.read"
+          "vortex.organisation_administration.connection_instance.read",
+          "vortex.organisation_administration.organization_security_settings.read"
         ]
       }
     ],
@@ -245,6 +275,14 @@
             "icon": "key-round",
             "page": "connections",
             "permission": "platform.organization.connections.manage"
+          },
+          {
+            "id": "nav_security",
+            "type": "page",
+            "label": "Security",
+            "icon": "shield-check",
+            "page": "security",
+            "permission": "platform.organization.assignments.manage"
           }
         ]
       },
@@ -289,6 +327,22 @@
         "key": "vortex.app.organisation_administration.submit_organization_settings_record",
         "label": "Submit organization settings record",
         "record_type": "vortex.organisation_administration:organization_settings",
+        "carries": [],
+        "personal_or_sensitive_values_allowed": false
+      },
+      {
+        "id": "event_open_security",
+        "key": "vortex.app.organisation_administration.open_security",
+        "label": "Open security setting",
+        "record_type": "vortex.system_directory:organization_security_settings",
+        "carries": [],
+        "personal_or_sensitive_values_allowed": false
+      },
+      {
+        "id": "event_submit_security",
+        "key": "vortex.app.organisation_administration.submit_security",
+        "label": "Submit security setting",
+        "record_type": "vortex.system_directory:organization_security_settings",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
       },
@@ -2309,6 +2363,193 @@
         }
       },
       {
+        "id": "page_security",
+        "key": "security",
+        "name": "Security",
+        "type": "dashboard",
+        "permission": "platform.organization.assignments.manage",
+        "composition": {
+          "root": {
+            "props": {
+              "slot_primary": [
+                {
+                  "type": "platform.renderer.table",
+                  "props": {
+                    "presentation": "grid",
+                    "id": "security_region",
+                    "row_click": {
+                      "event_id": "event_open_security",
+                      "mode": "flow"
+                    },
+                    "title": "Security",
+                    "empty_message": "Security settings are unavailable",
+                    "columns": [
+                      {
+                        "field": "vortex.system_directory:organization_security_settings.require_step_up",
+                        "label": "Two-step code required",
+                        "visible": true,
+                        "pin": "start"
+                      },
+                      {
+                        "field": "vortex.system_directory:organization_security_settings.instance_profile",
+                        "label": "Instance",
+                        "visible": true,
+                        "pin": "unpinned"
+                      },
+                      {
+                        "field": "vortex.system_directory:organization_security_settings.changed_by_display_name",
+                        "label": "Last changed by",
+                        "visible": true,
+                        "pin": "unpinned"
+                      },
+                      {
+                        "field": "vortex.system_directory:organization_security_settings.changed_at",
+                        "label": "Last changed",
+                        "visible": true,
+                        "pin": "unpinned"
+                      }
+                    ],
+                    "vortex": {
+                      "block": {
+                        "block_id": "39ab6f28-c166-47cf-91a7-f0b864ded4ff",
+                        "release_version": "2.0.0"
+                      },
+                      "query": "vortex.system_directory:organization_security_settings",
+                      "responsive": {
+                        "desktop": {
+                          "visible": true,
+                          "width": {
+                            "kind": "fill"
+                          },
+                          "height": {
+                            "kind": "content"
+                          }
+                        }
+                      }
+                    },
+                    "features": {
+                      "pinning": {
+                        "enabled": true
+                      },
+                      "pivot": {
+                        "enabled": false
+                      },
+                      "spreadsheet": {
+                        "enabled": false
+                      }
+                    }
+                  }
+                }
+              ],
+              "vortex": {
+                "shell": "shell_organisation_administration",
+                "slot_orders": {}
+              }
+            }
+          },
+          "content": []
+        }
+      },
+      {
+        "id": "page_edit_organisation_security",
+        "key": "edit_organisation_security",
+        "name": "Security",
+        "type": "detail",
+        "record_type": "vortex.system_directory:organization_security_settings",
+        "permission": "platform.organization.assignments.manage",
+        "composition": {
+          "root": {
+            "props": {
+              "slot_primary": [
+                {
+                  "type": "platform.renderer.form_container",
+                  "props": {
+                    "id": "form_security",
+                    "title": "Security",
+                    "content": [
+                      {
+                        "type": "platform.renderer.field_input",
+                        "props": {
+                          "id": "input_security_require_step_up",
+                          "field": "vortex.system_directory:organization_security_settings.require_step_up",
+                          "variant": "switch",
+                          "help_text": "Turn this off only on a development instance. Sensitive organisation changes (roles, groups, access, installing apps with roles, platform apps) will then ask only for a recent sign-in, not a two-step code. This weakens protection. Signing in still asks for your code if you have set one up.",
+                          "vortex": {
+                            "block": {
+                              "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
+                              "release_version": "1.0.0"
+                            },
+                            "responsive": {
+                              "desktop": {
+                                "visible": true,
+                                "width": {
+                                  "kind": "fill"
+                                },
+                                "height": {
+                                  "kind": "content"
+                                }
+                              }
+                            }
+                          }
+                        }
+                      },
+                      {
+                        "type": "platform.renderer.button",
+                        "props": {
+                          "id": "submit_security",
+                          "label": "Save",
+                          "action_kind": "submit",
+                          "variant": "primary",
+                          "vortex": {
+                            "block": {
+                              "block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b",
+                              "release_version": "1.0.0"
+                            },
+                            "responsive": {
+                              "desktop": {
+                                "visible": true,
+                                "width": {
+                                  "kind": "fill"
+                                },
+                                "height": {
+                                  "kind": "content"
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    ],
+                    "vortex": {
+                      "block": {
+                        "block_id": "476e2c35-07d6-40cc-bf01-6ddb22ccca44",
+                        "release_version": "1.0.0"
+                      },
+                      "responsive": {
+                        "desktop": {
+                          "visible": true,
+                          "width": {
+                            "kind": "fill"
+                          },
+                          "height": {
+                            "kind": "content"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              ],
+              "vortex": {
+                "shell": "shell_organisation_administration",
+                "slot_orders": {}
+              }
+            }
+          },
+          "content": []
+        }
+      },
+      {
         "id": "page_connection_detail",
         "key": "connection_detail",
         "name": "Connection details",
@@ -2610,6 +2851,186 @@
                 }
               }
             }
+          }
+        ],
+        "outputs": {},
+        "errors": [],
+        "finally": []
+      },
+      {
+        "id": "flow_change_organization_step_up_setting",
+        "key": "change_organization_step_up_setting",
+        "labels": {
+          "name": "Change two-step verification setting"
+        },
+        "execution": "interactive",
+        "runAs": {
+          "kind": "initiator"
+        },
+        "inputs": {
+          "record": {
+            "type": "record_reference",
+            "required": true,
+            "recordTypeIds": ["vortex.system_directory:organization_security_settings"]
+          },
+          "require_step_up": {
+            "type": "yes_no",
+            "required": true
+          },
+          "expected_revision": {
+            "type": "whole_number",
+            "required": true
+          }
+        },
+        "variables": {},
+        "triggers": [],
+        "tasks": [
+          {
+            "id": "which_direction",
+            "type": "if",
+            "condition": {
+              "op": "reference",
+              "reference": {
+                "source": "input",
+                "name": "require_step_up"
+              }
+            },
+            "then": [
+              {
+                "id": "verify_turn_on",
+                "type": "interface.verify",
+                "version": "1.0.0",
+                "properties": {
+                  "requires": {
+                    "kind": "literal",
+                    "literal": { "type": "text", "value": "recent_sign_in" }
+                  },
+                  "message": {
+                    "kind": "literal",
+                    "literal": {
+                      "type": "text",
+                      "value": "Turning two-step verification back on needs a recent sign-in."
+                    }
+                  }
+                }
+              },
+              {
+                "id": "verify_turn_on_unverified",
+                "type": "if",
+                "condition": {
+                  "op": "not",
+                  "arg": {
+                    "op": "reference",
+                    "reference": {
+                      "source": "task_output",
+                      "task": "verify_turn_on",
+                      "key": "confirmed"
+                    }
+                  }
+                },
+                "then": [
+                  {
+                    "id": "stop_verify_turn_on_unverified",
+                    "type": "stop",
+                    "outcome": "cancelled"
+                  }
+                ]
+              }
+            ],
+            "else": [
+              {
+                "id": "verify_turn_off",
+                "type": "interface.verify",
+                "version": "1.0.0",
+                "properties": {
+                  "requires": {
+                    "kind": "literal",
+                    "literal": { "type": "text", "value": "two_step_if_enrolled" }
+                  },
+                  "message": {
+                    "kind": "literal",
+                    "literal": {
+                      "type": "text",
+                      "value": "Turning two-step verification off weakens protection, so it needs your two-step code."
+                    }
+                  }
+                }
+              },
+              {
+                "id": "verify_turn_off_unverified",
+                "type": "if",
+                "condition": {
+                  "op": "not",
+                  "arg": {
+                    "op": "reference",
+                    "reference": {
+                      "source": "task_output",
+                      "task": "verify_turn_off",
+                      "key": "confirmed"
+                    }
+                  }
+                },
+                "then": [
+                  {
+                    "id": "stop_verify_turn_off_unverified",
+                    "type": "stop",
+                    "outcome": "cancelled"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "call",
+            "type": "operation.call",
+            "version": "1.0.0",
+            "properties": {
+              "operation": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "platform.change_organization_step_up_setting"
+                }
+              },
+              "inputs": {
+                "kind": "map",
+                "entries": {
+                  "expected_revision": {
+                    "kind": "reference",
+                    "reference": {
+                      "source": "input",
+                      "name": "expected_revision"
+                    }
+                  },
+                  "require_step_up": {
+                    "kind": "reference",
+                    "reference": {
+                      "source": "input",
+                      "name": "require_step_up"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "id": "saved",
+            "type": "interface.show_message",
+            "version": "1.1.0",
+            "properties": {
+              "message": {
+                "kind": "literal",
+                "literal": { "type": "text", "value": "Security setting saved." }
+              },
+              "target": { "kind": "literal", "literal": { "type": "text", "value": "toast" } },
+              "severity": { "kind": "literal", "literal": { "type": "text", "value": "success" } }
+            }
+          },
+          {
+            "id": "refresh",
+            "type": "interface.refresh",
+            "version": "1.0.0",
+            "properties": {}
           }
         ],
         "outputs": {},
@@ -3668,6 +4089,54 @@
           "record": {
             "kind": "caller",
             "name": "record"
+          }
+        },
+        "settings": {
+          "condition": null,
+          "debounceMs": 0,
+          "concurrency": "ignore_while_running",
+          "exclusive": "form",
+          "timeoutMs": 10000
+        }
+      },
+      {
+        "id": "binding_open_security",
+        "control": "security_region",
+        "event_id": "event_open_security",
+        "event": "row_clicked",
+        "flow": "flow_open_security",
+        "inputs": {
+          "record_id": {
+            "kind": "caller",
+            "name": "record_id"
+          }
+        },
+        "settings": {
+          "condition": null,
+          "debounceMs": 0,
+          "concurrency": "ignore_while_running",
+          "exclusive": "none",
+          "timeoutMs": null
+        }
+      },
+      {
+        "id": "binding_change_security",
+        "control": "form_security",
+        "event_id": "event_submit_security",
+        "event": "form_submit",
+        "flow": "flow_change_organization_step_up_setting",
+        "inputs": {
+          "record": {
+            "kind": "caller",
+            "name": "record"
+          },
+          "require_step_up": {
+            "kind": "caller",
+            "name": "require_step_up"
+          },
+          "expected_revision": {
+            "kind": "caller",
+            "name": "record_revision"
           }
         },
         "settings": {

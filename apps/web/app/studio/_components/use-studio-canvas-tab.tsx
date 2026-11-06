@@ -448,6 +448,32 @@ export function useStudioCanvasTab({
     return outcome;
   };
 
+  // A click on the canvas's empty ground selects what the canvas shows: the layout, or the page.
+  const onSelectPlacement = useStable((alias: string | null) =>
+    Promise.resolve(
+      alias !== null
+        ? draft.select({ kind: "placement", placementAlias: alias })
+        : layoutAliasRef.current !== undefined
+          ? draft.select({ kind: "shell", shellAlias: layoutAliasRef.current })
+          : canvasPageRef.current !== undefined &&
+            draft.select({ kind: "page", pageAlias: canvasPageRef.current }),
+    ),
+  );
+  const onAddBlock = useStable(addBlock);
+  const palette = useMemo(
+    () =>
+      addTargets === null
+        ? undefined
+        : {
+            targets: addTargets,
+            placed: placedBlocks,
+            owner: addOwner?.kind ?? ("page" as const),
+            message: paletteMessage,
+            onAdd: onAddBlock,
+          },
+    [addTargets, placedBlocks, addOwner?.kind, paletteMessage, onAddBlock],
+  );
+
   // The application's and a page's name and description, typed straight into the draft.
   const selectedPage =
     selected?.kind === "page"
@@ -535,8 +561,9 @@ export function useStudioCanvasTab({
         choose={(node) => {
           if (node.selection !== null) draft.select(node.selection);
         }}
+        // Counted over the whole application, so only while the Outline tab is shown.
         levels={
-          canvasPage === undefined
+          canvasPage === undefined || tab !== "outline"
             ? undefined
             : studioPageNestingLevels(catalogue, state.source, canvasPage.id)
         }
@@ -551,7 +578,7 @@ export function useStudioCanvasTab({
         hidden={tab !== "blocks"}
       >
         {/* Drawn inside the workspace's Puck editor, so its blocks drag with the canvas's own drag and drop. */}
-        <StudioBlocksPanel />
+        <StudioBlocksPanel visible={tab === "blocks"} palette={palette} />
         {canvasPage === undefined && (
           <Empty>
             <EmptyHeader>
@@ -812,6 +839,12 @@ export function useStudioCanvasTab({
               <StudioCanvasView
                 zoom={canvasZoom}
                 onFitZoom={setFitZoom}
+                compileFailure={view.failure}
+                platformThemeTokens={platformThemeTokens}
+                fieldInputControlReleases={fieldInputControlReleases}
+                arrangeGrid={arrangeGrid}
+                onArrangeGrid={setArrangeGrid}
+                onSelectPlacement={onSelectPlacement}
                 note={
                   <>
                     {viewAsNote}
@@ -907,8 +940,9 @@ export function useStudioCanvasTab({
   );
 
   // The one Puck editor around the workspace: the page on the canvas, its draft and its selection.
-  // Everything is kept as the same value until it really changes, so the canvas does not draw again
-  // for an edit that is not its own (typing in the inspector).
+  // The parts of this input that the canvas's readers take from a context of their own
+  // (`StudioCanvasStatus`, `StudioCanvasBar`) or as props (the palette, the canvas view) are kept
+  // as the same value until they really change; the input itself is read by the editor only.
   const canvasFrame = useMemo(
     () =>
       canvasPage === undefined
@@ -923,20 +957,8 @@ export function useStudioCanvasTab({
         : { roleName: viewAsRole.name, decisions: viewDecisions },
     [viewAsRole, viewDecisions],
   );
-  // A click on the canvas's empty ground selects what the canvas shows: the layout, or the page.
-  const onSelectPlacement = useStable((alias: string | null) =>
-    Promise.resolve(
-      alias !== null
-        ? draft.select({ kind: "placement", placementAlias: alias })
-        : layoutAliasRef.current !== undefined
-          ? draft.select({ kind: "shell", shellAlias: layoutAliasRef.current })
-          : canvasPageRef.current !== undefined &&
-            draft.select({ kind: "page", pageAlias: canvasPageRef.current }),
-    ),
-  );
   const onCanvasChange = useStable(commands.onCanvasChange);
   const onSettingsEdit = useStable(commands.onSettingsEdit);
-  const onAddBlock = useStable(addBlock);
   const blockActions = useMemo<StudioBlockActions>(
     () => ({
       // Why Move to and Wrap are unavailable for a block, read when the menu opens.
@@ -972,19 +994,6 @@ export function useStudioCanvasTab({
       },
     }),
     [draft, compositionContext, selected],
-  );
-  const palette = useMemo(
-    () =>
-      addTargets === null
-        ? undefined
-        : {
-            targets: addTargets,
-            placed: placedBlocks,
-            owner: addOwner?.kind ?? ("page" as const),
-            message: paletteMessage,
-            onAdd: onAddBlock,
-          },
-    [addTargets, placedBlocks, addOwner?.kind, paletteMessage, onAddBlock],
   );
   const compiledSlots = canvasPage === undefined ? undefined : view.slots?.[canvasPage.id];
   const selectedPlacementAlias = selected?.kind === "placement" ? selected.placementAlias : null;
