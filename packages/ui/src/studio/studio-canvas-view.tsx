@@ -13,7 +13,8 @@ import { Tabs, TabsList, TabsTrigger } from "../components/tabs";
 import { Icon } from "../icons";
 import { StudioCanvasViewProvider } from "./studio-canvas-scale";
 import { useStudioScreen } from "./studio-canvas-screen";
-import { useStudioCanvas } from "./studio-puck-provider";
+import { useStudioCanvasStatus } from "./studio-canvas-status";
+import type { StudioPuckInput } from "./studio-puck-provider";
 import type { StudioCompileFailure } from "@vortex/platform/schema";
 
 const READ_ONLY_HINT =
@@ -78,25 +79,34 @@ export function StudioCanvasView({
   zoom,
   onFitZoom,
   note,
-}: Readonly<{
-  /** Something the strip above the canvas says beside the canvas's own controls. */
-  note?: ReactNode;
-  /** Device width is preserved while the page frame scales inside the well. */
-  zoom: number | "fit";
-  /** Reports the measured Fit percentage to the workspace zoom controls. */
-  onFitZoom: (percent: number) => void;
-}>) {
-  const { input, model, refusal } = useStudioCanvas();
+  compileFailure,
+  platformThemeTokens,
+  fieldInputControlReleases,
+  arrangeGrid,
+  onArrangeGrid,
+  onSelectPlacement,
+}: Readonly<
+  Pick<
+    StudioPuckInput,
+    | "compileFailure"
+    | "platformThemeTokens"
+    | "fieldInputControlReleases"
+    | "arrangeGrid"
+    | "onArrangeGrid"
+    | "onSelectPlacement"
+  >
+> &
+  Readonly<{
+    /** Something the strip above the canvas says beside the canvas's own controls. */
+    note?: ReactNode;
+    /** Device width is preserved while the page frame scales inside the well. */
+    zoom: number | "fit";
+    /** Reports the measured Fit percentage to the workspace zoom controls. */
+    onFitZoom: (percent: number) => void;
+  }>) {
+  const status = useStudioCanvasStatus();
+  const { disabled, refusal, open, ready } = status;
   const { breakpoint, label, width } = useStudioScreen();
-  const {
-    disabled,
-    compileFailure,
-    platformThemeTokens,
-    fieldInputControlReleases,
-    arrangeGrid,
-    onArrangeGrid,
-  } = input;
-  const { open, shown } = model;
   const [well, setWell] = useState<HTMLDivElement | null>(null);
   // The canvas is a device screen: the iframe is as wide as the chosen screen and as tall as the
   // well, in the iframe's own pixels. The zoom only scales the iframe as a whole.
@@ -126,9 +136,9 @@ export function StudioCanvasView({
   if (!open)
     return (
       <CanvasEmpty
-        title={model.owner === "layout" ? "Layout unavailable" : "Page unavailable"}
+        title={status.owner === "layout" ? "Layout unavailable" : "Page unavailable"}
         description={
-          model.owner === "layout"
+          status.owner === "layout"
             ? "Choose another layout or page to keep working."
             : "Choose another page to keep working."
         }
@@ -136,17 +146,17 @@ export function StudioCanvasView({
     );
   // A guided page has one canvas per step: the tabs choose the step, nothing else picks a zone.
   const steps =
-    model.steps.length < 2 ? null : (
+    status.steps.length < 2 ? null : (
       <Tabs
-        value={model.step ?? ""}
+        value={status.step ?? ""}
         onValueChange={(step) => {
           // The selected block belongs to the step that leaves the canvas.
-          void input.onSelectPlacement(null);
-          model.chooseStep(String(step));
+          void onSelectPlacement(null);
+          status.chooseStep(String(step));
         }}
       >
         <TabsList aria-label="Steps">
-          {model.steps.map((entry) => (
+          {status.steps.map((entry) => (
             <TabsTrigger key={entry.id} value={entry.id}>
               {entry.name}
             </TabsTrigger>
@@ -154,7 +164,7 @@ export function StudioCanvasView({
         </TabsList>
       </Tabs>
     );
-  if (shown === undefined || platformThemeTokens === null || fieldInputControlReleases === null)
+  if (!ready || platformThemeTokens === null || fieldInputControlReleases === null)
     return (
       <div className="flex min-h-0 flex-1 flex-col gap-3 px-4">
         {steps}
@@ -176,13 +186,13 @@ export function StudioCanvasView({
             step tabs and what the canvas does. */}
         <div className="flex h-9 shrink-0 items-center gap-3 px-4">
           {steps}
-          {model.readOnlyCause !== undefined || breakpoint !== "desktop" ? (
+          {status.readOnlyCause !== undefined || breakpoint !== "desktop" ? (
             <Tooltip>
               <TooltipTrigger render={<Badge variant="secondary" className="shrink-0" />}>
-                {model.readOnlyCause !== undefined ? "Read-only" : `${label} view`}
+                {status.readOnlyCause !== undefined ? "Read-only" : `${label} view`}
               </TooltipTrigger>
               <TooltipContent>
-                {model.readOnlyCause !== undefined ? READ_ONLY_HINT : smallerScreenHint(label)}
+                {status.readOnlyCause !== undefined ? READ_ONLY_HINT : smallerScreenHint(label)}
               </TooltipContent>
             </Tooltip>
           ) : (
@@ -207,7 +217,7 @@ export function StudioCanvasView({
           <div className="flex min-w-0 flex-1 items-center gap-1">{note}</div>
           {arrangeGrid === true ? (
             <StudioArrangeBar
-              arrangeable={model.arrangeable}
+              arrangeable={status.arrangeable}
               onDone={() => onArrangeGrid?.(false)}
             />
           ) : null}

@@ -48,6 +48,13 @@ export const virtualizesRows = (rowCount: number): boolean =>
  */
 export const BOUNDED_VIEWPORT_CLASS = "max-h-[var(--grid-available-height,100svh)]";
 
+/**
+ * The least height a bounded viewport keeps. A grid that starts below the first screen (a second
+ * grid on a page) has no room left on that screen, and the page scrolls to it later, so it keeps
+ * this height instead of collapsing to nothing.
+ */
+const MINIMUM_BOUNDED_HEIGHT = 320;
+
 type GridMeasurement = () => () => void;
 const gridMeasurements = new Set<GridMeasurement>();
 let gridMeasurementFrame = 0;
@@ -110,7 +117,10 @@ export const useBoundedGridViewport = <Element extends HTMLElement>(
           parseFloat(style.marginTop) +
           parseFloat(style.marginBottom);
       }
-      const available = Math.max(0, bottom - element.getBoundingClientRect().top - followingHeight);
+      const available = Math.max(
+        Math.min(bottom, MINIMUM_BOUNDED_HEIGHT),
+        bottom - element.getBoundingClientRect().top - followingHeight,
+      );
       overflow = element.scrollHeight - element.clientHeight;
       const next = element.scrollTop < overflow - 1;
       return () => {

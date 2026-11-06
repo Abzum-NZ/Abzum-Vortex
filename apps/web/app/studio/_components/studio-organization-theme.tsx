@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import type { SourceApplicationThemeSelection } from "@vortex/platform/schema";
 import { Icon } from "@vortex/ui/icons";
 import { NavigationLink } from "@vortex/ui/routing";
+import { Alert, AlertDescription, AlertTitle } from "@vortex/ui/components/alert";
 import { Badge } from "@vortex/ui/components/badge";
 import { Button } from "@vortex/ui/components/button";
 import {
@@ -61,6 +62,7 @@ export function StudioOrganizationTheme({
   selection,
   revision,
   canChange,
+  unresolvable,
 }: Readonly<{
   organizationId: string;
   organizationName: string;
@@ -69,6 +71,8 @@ export function StudioOrganizationTheme({
   selection: SourceApplicationThemeSelection;
   revision: number;
   canChange: boolean;
+  /** The stored theme no longer passes the readability checks, so Studio draws in its own theme. */
+  unresolvable: boolean;
 }>) {
   const router = useRouter();
   const [current, setCurrent] = useState(selection);
@@ -136,6 +140,15 @@ export function StudioOrganizationTheme({
         </Tooltip>
         <span className="min-w-0 truncate text-sm font-medium">{organizationName}</span>
       </header>
+      {unresolvable && (
+        <Alert variant="destructive" className="m-4 w-auto shrink-0">
+          <AlertTitle>The saved organisation theme fails the readability checks</AlertTitle>
+          <AlertDescription>
+            Studio is drawn in its own theme, and applications that follow this theme cannot open.
+            Choose values the checks accept.
+          </AlertDescription>
+        </Alert>
+      )}
       <div className="grid min-h-0 flex-1 grid-cols-1 md:grid-cols-[minmax(20rem,28rem)_1fr]">
         <div className="flex min-h-0 flex-col border-b md:border-r md:border-b-0">
           <StudioThemePanel

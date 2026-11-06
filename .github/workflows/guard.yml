@@ -10,10 +10,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           ref: ${{ github.event.pull_request.head.sha }}
-          fetch-depth: 0
-      # The migration-version-order guard rule compares against origin/main, which a default
-      # pull_request checkout does not fetch. Full history lets the guard verify that a migration
-      # branch contains this fetched main commit.
+      # The migration rules compare with origin/main, which a pull_request checkout does not fetch.
       - run: git fetch --no-tags --depth=1 origin main:refs/remotes/origin/main
       - uses: pnpm/action-setup@v6
         with:

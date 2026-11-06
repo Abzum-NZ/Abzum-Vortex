@@ -2,14 +2,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   canonicalJson,
-  type ApplicationContent,
+  type ResolvedApplicationTheme,
   type ApplicationSourceDocument,
 } from "@vortex/platform/schema";
 import { resolveStudioApplicationTheme } from "../actions";
 import type { StudioThemeResolution } from "../_lib/studio-theme-options";
 
 type SourceTheme = ApplicationSourceDocument["body"]["theme"];
-type Theme = ApplicationContent["theme"];
+type Theme = ResolvedApplicationTheme;
 
 /**
  * The theme the canvas draws: the draft's own theme as it is edited (including Undo and Redo), not

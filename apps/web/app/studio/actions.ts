@@ -19,7 +19,7 @@ import {
 } from "@vortex/platform/schema";
 import { findPinnedPlatformThemeRelease } from "./_lib/pinned-platform-theme-release";
 import {
-  applyOrganizationTheme,
+  resolveApplicationTheme,
   changeCurrentOrganizationThemeAfterAuthorization,
   createHumanApplicationDraftWriter,
   DEFAULT_PLATFORM_THEME_RELEASE,
@@ -302,6 +302,15 @@ const describeThemeFailure = (
   return `${subject} ${words} with these settings.`;
 };
 
+/** The failure codes of a refused theme for its one log line. */
+const themeFailureCodes = (
+  failures: readonly Readonly<{ code: string; tokenKey?: string | undefined }>[],
+): string =>
+  failures
+    .map((failure) => `${failure.code}:${failure.tokenKey ?? ""}`)
+    .slice(0, 8)
+    .join(",");
+
 const themeRequestSchema = z
   .object({
     rootId: z.string().min(1).max(200),
@@ -352,15 +361,11 @@ export async function resolveStudioApplicationTheme(
       return {
         kind: "available",
         valid: true,
-        theme: applyOrganizationTheme(result.theme, organization.theme.selection),
+        theme: resolveApplicationTheme(result.theme, organization.theme.selection),
       };
     }
-    console.error(
-      `[studio] theme resolution refused: ${result.failures
-        .map((failure) => `${failure.code}:${failure.tokenKey ?? ""}`)
-        .slice(0, 8)
-        .join(",")}`,
-    );
+    // The person chose a combination the readability checks refuse: an expected refusal.
+    console.info(`[studio] theme resolution refused: ${themeFailureCodes(result.failures)}`);
     return {
       kind: "available",
       valid: false,
@@ -409,11 +414,13 @@ export async function saveStudioOrganizationTheme(
     baseTokens: DEFAULT_PLATFORM_THEME_RELEASE.tokens,
     selection,
   });
-  if (!resolution.valid)
+  if (!resolution.valid) {
+    console.info(`[studio] organisation theme refused: ${themeFailureCodes(resolution.failures)}`);
     return {
       kind: "invalid",
       problems: [...new Set(resolution.failures.map(describeThemeFailure))].slice(0, 6),
     };
+  }
   try {
     const identity = await resolveIdentitySession();
     if (identity.kind !== "active") return { kind: "refused" };

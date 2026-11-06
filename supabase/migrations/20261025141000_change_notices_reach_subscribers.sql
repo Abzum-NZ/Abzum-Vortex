@@ -11,7 +11,6 @@ drop function vortex_platform.publish_change_notice(
 );
 reset role;
 
--- guard-allow: migration-owner-role realtime.messages privileges cannot be granted onward, so the publisher is created by their postgres holder.
 create or replace function vortex_platform.publish_change_notice(
   p_organization_id uuid,
   p_application_root_id uuid,

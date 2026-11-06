@@ -13,7 +13,6 @@ $migration$;
 set local role vortex_owner;
 drop trigger if exists event_outbox_dispatch_wakeup on vortex_platform.event_outbox;
 reset role;
--- guard-allow: migration-owner-role The integration function is owned by postgres and must be dropped by its owner.
 drop function if exists vortex_platform.request_event_dispatch_wakeup();
 drop extension if exists pg_net;
 

@@ -1,6 +1,6 @@
 import "server-only";
 
-import { applyOrganizationTheme } from "@vortex/platform/server";
+import { resolveApplicationTheme, type ApplicationTheme } from "@vortex/platform/server";
 import {
   compiledPageShellId,
   sameId,
@@ -29,7 +29,7 @@ type SourcePages = readonly Readonly<{ id: string; key: string; type: string }>[
 export type StudioApplicationCanvasFrames = Readonly<{
   applicationName: string;
   shells: readonly ApplicationShell[];
-  theme: ApplicationContent["theme"];
+  theme: ApplicationTheme;
   /**
    * Each role's permission keys as the compiled draft grants them (a role holding every permission
    * expanded), keyed by role key: the decisions Studio's "who can see this" preview projects with.
@@ -123,7 +123,7 @@ export const studioCanvasFramesFor = (
               sameId(String(page.frame.shellId), String(shell.shellId)),
             ),
           ),
-    theme: applyOrganizationTheme(content.theme, organizationTheme),
+    theme: resolveApplicationTheme(content.theme, organizationTheme),
     roles: Object.fromEntries(
       content.roles.map((role) => [role.key, role.permissionKeys.map(String)]),
     ),

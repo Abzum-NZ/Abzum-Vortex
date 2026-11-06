@@ -120,9 +120,7 @@ begin
     ] loop
       permission_id := case permission_key
         when 'platform.organization.definition_drafts.manage'
-          -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
           then '0548c061-b1a9-48e5-a04a-eb1d0dae0644'::uuid
-        -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
         else 'dfdd5aba-2b85-4169-b570-92be284e7b5c'::uuid
       end;
       select evaluated.* into strict permission_decision
@@ -132,7 +130,6 @@ begin
           'action', pg_catalog.jsonb_build_object('actionKind', 'manage'),
           'target', pg_catalog.jsonb_build_object('kind', 'organization'),
           'requiredPermission', pg_catalog.jsonb_build_object(
-            -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
             'ownerKind', 'platform', 'ownerId', 'cabe121e-0baf-4084-9471-cce915d460a8',
             'permissionId', permission_id
           ),
@@ -1011,9 +1008,7 @@ begin
     ] loop
       permission_id := case permission_key
         when 'platform.organization.definition_drafts.manage'
-          -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
           then '0548c061-b1a9-48e5-a04a-eb1d0dae0644'::uuid
-        -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
         else 'dfdd5aba-2b85-4169-b570-92be284e7b5c'::uuid
       end;
       select evaluated.* into strict permission_decision
@@ -1023,7 +1018,6 @@ begin
           'action', pg_catalog.jsonb_build_object('actionKind', 'manage'),
           'target', pg_catalog.jsonb_build_object('kind', 'organization'),
           'requiredPermission', pg_catalog.jsonb_build_object(
-            -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
             'ownerKind', 'platform', 'ownerId', 'cabe121e-0baf-4084-9471-cce915d460a8',
             'permissionId', permission_id
           ),
@@ -1605,9 +1599,7 @@ begin
         'target', pg_catalog.jsonb_build_object('kind', 'organization'),
         'requiredPermission', pg_catalog.jsonb_build_object(
           'ownerKind', 'platform',
-          -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
           'ownerId', 'cabe121e-0baf-4084-9471-cce915d460a8',
-          -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
           'permissionId', '0548c061-b1a9-48e5-a04a-eb1d0dae0644'
         ),
         'recentAuthentication', pg_catalog.jsonb_build_object('kind', 'none'),
