@@ -145,6 +145,12 @@ const loadWorkspacePlace = async (
   // Both reads run on past a refusal or a throw below; marking them handled keeps a rejection of
   // either from being unhandled (what the editor receives is unchanged).
   void Promise.allSettled([standingRead, navigationTargets]);
+  // A read that failed for now is not an uninstalled Studio: the person is told to try again.
+  const unavailableNow = {
+    kind: "temporarily_unavailable",
+    reason: "The App Store address could not be resolved. Try again shortly.",
+  } as const;
+  if (applications.kind === "temporarily_unavailable") return unavailableNow;
   const studioResolved =
     studioApplicationEntry === undefined
       ? undefined
@@ -155,6 +161,7 @@ const loadWorkspacePlace = async (
           studioApplicationEntry.key,
           studioApplicationEntry.homePageKey,
         );
+  if (studioResolved?.kind === "temporarily_unavailable") return unavailableNow;
   if (
     studioApplicationEntry === undefined ||
     studioResolved?.kind !== "application_page" ||
@@ -220,6 +227,7 @@ export default async function StudioApplicationPage({
       <StudioUnavailable
         subject="App Store address"
         result={{ kind: place.kind, reason: place.reason }}
+        reloadHref={`/studio/${organizationId}/${applicationRootId}`}
       />
     );
   // The owner of a used Module is named and linked from this list; without it the key is shown.

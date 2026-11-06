@@ -1,5 +1,6 @@
 import "server-only";
 
+import { requestFailureLogged } from "../access/human-organization-request";
 import { describeFailure } from "../catalogue/runtime-primitives";
 import { InstallationProblem, type InstallationProblemShape } from "./installation-authority";
 import { DefinitionError, classifyDatabaseError } from "./definition-error";
@@ -47,6 +48,8 @@ export const classifyInstallationFailure = (error: unknown): InstallationProblem
       error instanceof DefinitionError ||
       problem.kind === "refused" ||
       problem.kind === "conflict");
+  // The request runner already logged a failure it caught, once: that line is the failure's own.
+  if (requestFailureLogged(error)) return problem;
   const message = `[studio] application installation ${handled ? "refused" : "failed"}: ${describeFailure(error)}`;
   if (handled) console.info(message);
   else console.error(message);

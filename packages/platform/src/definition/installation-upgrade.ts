@@ -20,6 +20,10 @@ import type { ActiveApplicationInstallation } from "../files/storage";
 import { canonicalJson } from "./canonical-json";
 import type { SystemApplicationBoundReleaseSetResult } from "./definition-consumer-read";
 import { createDatabaseApplicationReleaseAdoptionReleaseSetService } from "./application-bound-release-set";
+import {
+  markRequestFailureLogged,
+  requestFailureLogged,
+} from "../access/human-organization-request";
 import { DefinitionError } from "./definition-error";
 import { resolveModuleContributions } from "./extension-contributions";
 import { createApplicationInstallationCoordinator } from "./installation-coordinator";
@@ -40,7 +44,6 @@ import {
   readInstallationUpgradeRoot,
   requireInstallationAuthority,
   type InstallationHumanContext,
-  type InstallationProblemShape,
   type ReceiptStep,
 } from "./installation-authority";
 import {
@@ -408,7 +411,7 @@ export const readUpgradeAuthorizedState = async (
   session: IdentitySession,
   allowEqual: boolean,
 ): Promise<UpgradeAuthorizedState> => {
-  let captured: InstallationProblemShape | undefined;
+  let captured: { error: unknown } | undefined;
   const scopeCandidate = {
     organizationId: selector.organizationId,
     applicationRootId: selector.rootId,
@@ -474,14 +477,21 @@ export const readUpgradeAuthorizedState = async (
           checkedAt: completedAt,
         };
       } catch (error) {
-        captured = classifyInstallationFailure(error);
+        captured = { error };
         throw error;
       }
     },
   );
   if (result.kind === "available") return result.value;
-  if (captured !== undefined)
-    throw new InstallationProblem(captured, "transaction_failure_captured");
+  if (captured !== undefined) {
+    const problem = new InstallationProblem(
+      classifyInstallationFailure(captured.error),
+      "transaction_failure_captured",
+    );
+    // The request runner logged the failure this wraps: the wrapper adds no second line.
+    if (requestFailureLogged(captured.error)) markRequestFailureLogged(problem);
+    throw problem;
+  }
   if (result.kind === "unavailable")
     return installationProblem("upgrade_request_unavailable", "refused");
   return installationProblem("upgrade_request_temporarily_unavailable", "temporarily_unavailable");

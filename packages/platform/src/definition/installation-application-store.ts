@@ -1,7 +1,10 @@
 import "server-only";
 
 import { z } from "zod";
-import type { HumanOrganizationRequestResult } from "../access/human-organization-request";
+import {
+  requestFailureLogged,
+  type HumanOrganizationRequestResult,
+} from "../access/human-organization-request";
 import type { IdentitySession, OrganizationSelectionCandidate } from "../access/identity-access";
 import type { JsonValue } from "../catalogue/common";
 import {
@@ -215,7 +218,8 @@ const unavailable = (reason: UnavailableReason): ApplicationStoreResult => ({
 /** The review's answer to a failure: a named unavailability the flow explains, or the failure itself. */
 const reviewFailure = (error: unknown): ApplicationStoreResult => {
   if (error instanceof FirstInstallUnavailable) {
-    console.info(`[installation] application review unavailable: ${describeFailure(error)}`);
+    if (!requestFailureLogged(error))
+      console.info(`[installation] application review unavailable: ${describeFailure(error)}`);
     switch (error.reason) {
       case "release_not_published":
         return unavailable("not_published");
@@ -300,11 +304,13 @@ const commandFailure = (problem: InstallationProblemShape): ApplicationStoreResu
 
 const commandFailureOf = (error: unknown): ApplicationStoreResult => {
   if (error instanceof FirstInstallUnavailable) {
-    console.error(`[installation] application command unavailable: ${describeFailure(error)}`);
+    if (!requestFailureLogged(error))
+      console.error(`[installation] application command unavailable: ${describeFailure(error)}`);
     return error.reason === "already_installed" ? "conflict" : { kind: "unavailable" };
   }
   if (error instanceof InstallationProblem && error.code === "first_install_latest_release_moved") {
-    console.error(`[installation] application release changed: ${describeFailure(error)}`);
+    if (!requestFailureLogged(error))
+      console.error(`[installation] application release changed: ${describeFailure(error)}`);
     return releaseChanged();
   }
   return commandFailure(classifyInstallationFailure(error));

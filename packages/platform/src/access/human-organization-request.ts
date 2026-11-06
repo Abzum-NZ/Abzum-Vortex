@@ -62,6 +62,16 @@ export class HumanOrganizationRequestRestart extends Error {
   }
 }
 
+const loggedRequestFailures = new WeakSet<object>();
+
+/** The request runner logs every failure it catches, once; a caller that catches the same error object adds no second line. */
+export const requestFailureLogged = (error: unknown): boolean =>
+  typeof error === "object" && error !== null && loggedRequestFailures.has(error);
+
+export const markRequestFailureLogged = (error: unknown): void => {
+  if (typeof error === "object" && error !== null) loggedRequestFailures.add(error);
+};
+
 /** A scope already resolved and locked by the enclosing admitted segment. */
 export type BoundHumanOrganizationRequest = Readonly<{
   transaction: RequestDatabaseTransaction;
@@ -480,6 +490,7 @@ export const createHumanOrganizationRequestService = (
       )
         console.info(`[access] human organisation request refused: ${cause}`);
       else console.error(`[access] human organisation request failed: ${cause}`);
+      markRequestFailureLogged(error);
       appendTelemetry(correlationId, refused ? "refused" : "temporarily_unavailable", startedAtMs);
       return multiFactorRequired
         ? { kind: "unavailable", code: "multi_factor_required", cause }
