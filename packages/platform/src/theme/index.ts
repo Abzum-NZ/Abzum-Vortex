@@ -28,4 +28,4 @@ export type {
   ThemeValidationResult,
 } from "./types";
 
-export { resolveApplicationTheme } from "./application-theme";
+export { ApplicationThemeResolutionError, resolveApplicationTheme } from "./application-theme";

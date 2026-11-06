@@ -16,6 +16,14 @@ const ACCENT_TOKEN_KEY = "primary";
 const MUTED_TEXT_TOKEN_KEY = "muted_text";
 /** Fills without the background role that the renderer also draws muted text on. */
 const MUTED_TEXT_FILL_KEYS: readonly string[] = ["secondary", "sidebar_accent"];
+/**
+ * Fills the styles paint translucent, each at half its colour over whatever surface it sits on
+ * (`color-mix(in oklab, var(--input) 50%, transparent)` and the same for border and muted in
+ * `style-variants.css`), with muted text on top. The checks composite them over every
+ * background-role surface, as a browser does, instead of judging the fill alone.
+ */
+const MUTED_TEXT_TRANSLUCENT_FILL_KEYS: readonly string[] = ["input", "border_color", "muted"];
+const TRANSLUCENT_FILL_ALPHA = 0.5;
 
 export const DEFAULT_LIGHT_SURFACE = "#FFFFFF";
 export const DEFAULT_DARK_SURFACE = "#000000";
@@ -196,13 +204,37 @@ export function contrastRatio(
   canvas = DEFAULT_LIGHT_SURFACE,
 ): number {
   const opaqueCanvas = requireOpaque(parseColor(canvas), "Contrast canvas");
-  const effectiveBackground = composite(parseColor(background), opaqueCanvas);
-  const effectiveForeground = composite(parseColor(foreground), effectiveBackground);
-  const lumA = colorLuminance(effectiveForeground);
+  return ratioOver(parseColor(foreground), composite(parseColor(background), opaqueCanvas));
+}
+
+/** The ratio of a foreground composited over an opaque effective background. */
+function ratioOver(foreground: RgbaColor, effectiveBackground: RgbaColor): number {
+  const lumA = colorLuminance(composite(foreground, effectiveBackground));
   const lumB = colorLuminance(effectiveBackground);
   const lighter = Math.max(lumA, lumB);
   const darker = Math.min(lumA, lumB);
   return (lighter + 0.05) / (darker + 0.05);
+}
+
+/**
+ * The ratio of text on a fill painted at `fillAlpha` of its colour over `surface`, which is itself
+ * composited onto the opaque canvas first: the colour a browser shows where a translucent fill
+ * covers a surface.
+ */
+function contrastOnTranslucentFill(
+  foreground: string,
+  fill: string,
+  fillAlpha: number,
+  surface: string,
+  canvas: string,
+): number {
+  const opaqueSurface = composite(
+    parseColor(surface),
+    requireOpaque(parseColor(canvas), "Contrast canvas"),
+  );
+  const parsedFill = parseColor(fill);
+  const painted = composite({ ...parsedFill, a: parsedFill.a * fillAlpha }, opaqueSurface);
+  return ratioOver(parseColor(foreground), painted);
 }
 
 /**
@@ -370,6 +402,38 @@ export function validateThemeContrast(
               message: `Text color token "${key}" has insufficient ${mode} mode contrast ratio (${ratio.toFixed(2)}:1 < ${WCAG_AA_NORMAL_TEXT_MIN_CONTRAST}:1) against "${surfaceKey}"`,
               tokenKey: key,
             });
+        }
+      }
+    }
+
+    // The styles also paint input, border and muted at half strength over each background-role
+    // surface, the page surface included; muted text on those composites must read as well.
+    if (key === MUTED_TEXT_TOKEN_KEY) {
+      for (const fillKey of MUTED_TEXT_TRANSLUCENT_FILL_KEYS) {
+        const fill = tokens[fillKey];
+        if (fill?.kind !== "color_pair") continue;
+        for (const surfaceKey of Object.keys(tokens).sort()) {
+          const base = tokens[surfaceKey];
+          if (base?.kind !== "color_pair" || base.role !== "background") continue;
+          for (const [mode, foreground, fillColour, baseColour, canvas] of [
+            ["light", token.light, fill.light, base.light, lightSurface],
+            ["dark", token.dark, fill.dark, base.dark, darkSurface],
+          ] as const) {
+            const ratio = contrastOnTranslucentFill(
+              foreground,
+              fillColour,
+              TRANSLUCENT_FILL_ALPHA,
+              baseColour,
+              canvas,
+            );
+            if (ratio < WCAG_AA_NORMAL_TEXT_MIN_CONTRAST)
+              addFailure({
+                code: "INSUFFICIENT_CONTRAST",
+                family: "invalid_value",
+                message: `Text color token "${key}" has insufficient ${mode} mode contrast ratio (${ratio.toFixed(2)}:1 < ${WCAG_AA_NORMAL_TEXT_MIN_CONTRAST}:1) against "${fillKey}" at half strength over "${surfaceKey}"`,
+                tokenKey: key,
+              });
+          }
         }
       }
     }
