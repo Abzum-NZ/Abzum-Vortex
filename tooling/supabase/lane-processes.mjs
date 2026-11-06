@@ -76,7 +76,7 @@ export const recordState = (record, snapshot) => {
 };
 
 /** The process and its descendants, root first. A child counts only if it is not older than its parent. */
-export const processTree = (rootPid, snapshot) => {
+const processTree = (rootPid, snapshot) => {
   const tree = [rootPid];
   for (let index = 0; index < tree.length; index += 1) {
     const parent = snapshot.get(tree[index]);
@@ -91,7 +91,7 @@ export const processTree = (rootPid, snapshot) => {
   return tree;
 };
 
-/** A process and its ancestors, so the supervisor above a protected listener is protected too. */
+/** A process and its ancestors, so a protected listener's parents are protected too. */
 export const withAncestors = (pid, snapshot) => {
   const chain = new Set();
   for (let current = pid; current !== undefined && !chain.has(current);) {
@@ -154,7 +154,7 @@ const refuseProtected = (pids, protectedPids, port) => {
 /**
  * Ends a verified recorded server and its descendants, leaves first, by process ID only. The tree is
  * read fresh, so children created since the caller's snapshot are included. Refuses when the tree,
- * root included, holds a protected process (another recorded server or the supervised demo server).
+ * root included, holds a protected process (another recorded server).
  */
 export const killRecord = (record, snapshot, protectedPids) => {
   if (recordState(record, snapshot) !== "alive")
