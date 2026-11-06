@@ -340,9 +340,15 @@ function RailTab<Key extends string>({
               className={cn(
                 "h-16 w-full flex-none flex-col justify-center gap-1 text-xs",
                 "group-data-vertical/tabs:justify-center",
-                "text-sidebar-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground",
+                // The sidebar's own tokens in both schemes (the trigger's dark classes would
+                // otherwise keep muted text); the chosen tab stands on the sidebar accent.
+                "text-sidebar-foreground dark:text-sidebar-foreground",
+                "hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground",
+                "dark:hover:text-sidebar-accent-foreground",
                 "data-active:text-sidebar-accent-foreground",
                 "dark:data-active:text-sidebar-accent-foreground",
+                "group-data-[variant=line]/tabs-list:data-active:bg-sidebar-accent",
+                "dark:group-data-[variant=line]/tabs-list:data-active:bg-sidebar-accent",
               )}
             />
           }
