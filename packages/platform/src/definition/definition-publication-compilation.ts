@@ -90,6 +90,17 @@ const parsedCompilationRequest = <Schema extends z.ZodType>(
   return parsed.data;
 };
 
+/**
+ * The rule that compares a candidate with the release it follows. A revision already released is
+ * that release itself, so it is not compared with it; every other publish rule still applies.
+ */
+const priorReleaseComparisonRules: ReadonlySet<string> = new Set([
+  "vortex.definition.prior_published_version_required",
+  "vortex.definition.prior_published_version_invalid",
+  "vortex.definition.publication_change_required",
+  "vortex.definition.candidate_version_binding",
+]);
+
 const assertFinalPublicationValidation = (
   request:
     | z.output<typeof applicationCompilationRequestSchema>
@@ -98,6 +109,7 @@ const assertFinalPublicationValidation = (
   dependencyOutputs: readonly DefinitionCompilationOutput[],
   releaseHistory: DefinitionPublicationHistory,
   permissions: PlatformPermissionSource,
+  alreadyReleased: boolean,
 ): void => {
   const validation = validateDefinitionSet({
     permissions,
@@ -106,8 +118,11 @@ const assertFinalPublicationValidation = (
     dependencyOutputs,
     publishedHistoryEvidence: [releaseHistory],
   });
-  if (!validation.valid) {
-    const first = validation.failures[0]!;
+  const failures = alreadyReleased
+    ? validation.failures.filter((failure) => !priorReleaseComparisonRules.has(failure.ruleCode))
+    : validation.failures;
+  if (failures.length > 0) {
+    const first = failures[0]!;
     throw new DefinitionCompilationError(
       first.ruleCode,
       first.family,
@@ -277,6 +292,8 @@ export const assertReleasable = (
   }>,
   releaseHistory: DefinitionPublicationHistory,
   permissions: PlatformPermissionSource,
+  /** A preview of the revision already released: not compared with its own release. */
+  alreadyReleased = false,
 ): void => {
   const output = compiled.output;
   if (
@@ -290,6 +307,7 @@ export const assertReleasable = (
     compiled.dependencyOutputs,
     releaseHistory,
     permissions,
+    alreadyReleased,
   );
 };
 
