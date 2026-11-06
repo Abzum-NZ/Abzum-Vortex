@@ -8,6 +8,7 @@ import { useVortexStylePortalRoot } from "../theme/vortex-style-root";
 
 import { Button } from "./button";
 import { Icon } from "../icons/icon";
+import { Tooltip, TooltipContent, TooltipTrigger } from "./tooltip";
 
 function Dialog({ ...props }: DialogPrimitive.Root.Props) {
   return <DialogPrimitive.Root data-slot="dialog" {...props} />;
@@ -103,13 +104,20 @@ function DialogContent({
       >
         {children}
         {showCloseButton && (
-          <DialogPrimitive.Close
-            data-slot="dialog-close"
-            render={<Button variant="ghost" className="cn-dialog-close" size="icon-sm" />}
-          >
-            <Icon name="close" />
-            <span className="sr-only">Close</span>
-          </DialogPrimitive.Close>
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <DialogPrimitive.Close
+                  data-slot="dialog-close"
+                  render={<Button variant="ghost" className="cn-dialog-close" size="icon-sm" />}
+                />
+              }
+            >
+              <Icon name="close" />
+              <span className="sr-only">Close</span>
+            </TooltipTrigger>
+            <TooltipContent>Close</TooltipContent>
+          </Tooltip>
         )}
       </DialogPrimitive.Popup>
     </DialogPortal>

@@ -56,22 +56,11 @@ const failureKind = (error: unknown): FailureKind => {
     if (
       [
         "DEFINITION_CONTEXT_REFUSED",
+        "DEFINITION_ROOT_MISSING",
         "DEFINITION_RELEASE_NOT_FOUND",
         "DEFINITION_RELEASE_INTEGRITY_FAILED",
-        "DEFINITION_DEPENDENCY_SUPERSEDED",
-        "INVALID_DEFINITION_RESTORE_COMMAND",
-      ].includes(error.code)
-    )
-      return "refused";
-  }
-  if (error instanceof DefinitionError) {
-    if (error.code === "DEFINITION_DRAFT_STALE_OR_MISSING" || kind === "conflict")
-      return "conflict";
-    if (
-      [
-        "DEFINITION_CONTEXT_REFUSED",
-        "DEFINITION_ROOT_MISSING",
         "INVALID_DEFINITION_COMMAND",
+        "INVALID_DEFINITION_RESTORE_COMMAND",
       ].includes(error.code)
     )
       return "refused";
@@ -124,12 +113,19 @@ const assertRestoredDraft = (
 
 const failedCommand = (
   kind: FailureKind,
-  invocationStarted: boolean,
+  outcomeUnknown: boolean,
 ): StudioApplicationRestoreCommandResult => ({
   kind,
-  // A version of an earlier contract is refused before any write.
-  stateMayHaveChanged: invocationStarted && kind !== "superseded" ? "unknown" : false,
+  stateMayHaveChanged: outcomeUnknown ? "unknown" : false,
 });
+
+/**
+ * Whether the restore may have committed. A failure thrown inside the restore rolls its transaction
+ * back, so nothing was restored; only a failure after the restore returned (the commit) leaves the
+ * outcome unknown.
+ */
+const outcomeUnknown = (invocationStarted: boolean, callbackFailure: FailureKind | undefined) =>
+  invocationStarted && callbackFailure === undefined;
 
 /** Runs one explicitly confirmed HUMAN restore and reports success only after the request commits. */
 export async function restoreStudioApplicationDraft(
@@ -218,8 +214,11 @@ export async function restoreStudioApplicationDraft(
     if (result.kind === "available") return result.value;
     const kind =
       callbackFailure ?? (result.kind === "unavailable" ? "refused" : "temporarily_unavailable");
-    return failedCommand(kind, invocationStarted);
+    return failedCommand(kind, outcomeUnknown(invocationStarted, callbackFailure));
   } catch (error) {
-    return failedCommand(callbackFailure ?? failureKind(error), invocationStarted);
+    return failedCommand(
+      callbackFailure ?? failureKind(error),
+      outcomeUnknown(invocationStarted, callbackFailure),
+    );
   }
 }
