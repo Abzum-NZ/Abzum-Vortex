@@ -39,6 +39,27 @@ type SlotOrder = Readonly<{
 }>;
 
 /**
+ * The page's root slots in the order of the layout's content slots, so the Outline lists them as
+ * the layout does, never in the order they happen to be stored.
+ */
+export const puckDataInSlotOrder = (data: Data, slotKeys: readonly string[]): Data => {
+  const root = data.root as { props: Record<string, unknown> };
+  const rank = (key: string) => {
+    const index = slotKeys.indexOf(key);
+    return index === -1 ? slotKeys.length : index;
+  };
+  return {
+    ...data,
+    root: {
+      ...root,
+      props: Object.fromEntries(
+        Object.entries(root.props).sort(([left], [right]) => rank(left) - rank(right)),
+      ),
+    } as Data["root"],
+  };
+};
+
+/**
  * The canvas shows a smaller screen in that screen's own order: each page zone's stored order and
  * each block's stored slot orders. The arrays are reordered for display only: the data a smaller
  * screen reports is never stored whole. A drag inside one slot there is read as that screen's

@@ -53,7 +53,6 @@ import type {
   StudioCanvasFrame,
   StudioPuckInput,
 } from "@vortex/ui/studio/puck-provider";
-import { FirstRecordTypeEmptyState } from "../../_components/first-record-type-empty-state";
 import { studioDraftNavigation } from "../_lib/studio-draft-navigation";
 import { studioUseTargetOf } from "../_lib/studio-places";
 import { pageUsingLayout } from "../_lib/studio-view-request";
@@ -247,6 +246,10 @@ export function useStudioCanvasTab({
         ? selectedOwner.shellAlias
         : undefined;
   const previewPageAlias = pageUsingLayout(source, layoutAlias);
+  // The address names a page before the first render (the server draws it too).
+  const requestedPageKey = useSearchParams().get("page");
+  // One rule for every tab: the selection's page, otherwise the page the address names, otherwise
+  // the home page.
   const canvasPageAlias =
     selected?.kind === "page"
       ? selected.pageAlias
@@ -256,17 +259,15 @@ export function useStudioCanvasTab({
           ? previewPageAlias
           : selectedEntry?.type === "page"
             ? (pageAliasOfKey(selectedEntry.page) ?? pageAliasOfKey(source.body.home_page))
-            : tab === "menu" || tab === "theme"
-              ? pageAliasOfKey(source.body.home_page)
-              : undefined;
+            : (pageAliasOfKey(requestedPageKey ?? undefined) ??
+              pageAliasOfKey(source.body.home_page));
   const canvasPage =
     canvasPageAlias === undefined
       ? undefined
       : source.body.pages.find((page) => page.id === canvasPageAlias);
   const addressRestored = useRef(false);
-  // The address names a page before the first render (the server draws it too): until the effect
-  // below has selected it, the centre is loading that page, not empty.
-  const requestedPageKey = useSearchParams().get("page");
+  // Until the effect below has selected the page the address names, the centre is loading that
+  // page, not empty.
   const [addressSettled, setAddressSettled] = useState(false);
   const pageLoading =
     !addressSettled &&
@@ -712,8 +713,8 @@ export function useStudioCanvasTab({
     </StudioInspector>
   );
 
-  // An application with no record type yet says so: in the canvas strip when a page is open (the
-  // canvas keeps its height), as the empty state when the application itself is selected.
+  // An application with no record type yet says so in the canvas strip of its home page (the
+  // canvas keeps its height).
   const needsFirstRecordType =
     source.body.uses.length === 0 &&
     source.body.modules.every((module) => module.record_types.length === 0);
@@ -804,16 +805,6 @@ export function useStudioCanvasTab({
             </EmptyHeader>
           </Empty>
         )}
-      {canvasPage === undefined && selected?.kind === "application" && needsFirstRecordType && (
-        <FirstRecordTypeEmptyState
-          action={
-            <Button type="button" onClick={() => openTab("data")}>
-              <Icon name="database" />
-              Open the Data tab
-            </Button>
-          }
-        />
-      )}
       {canvasPage !== undefined && theme.problem.length > 0 && (
         <Alert variant="destructive">
           <AlertDescription>{theme.problem}</AlertDescription>
