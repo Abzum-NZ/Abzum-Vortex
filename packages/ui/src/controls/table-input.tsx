@@ -386,17 +386,19 @@ export function TableInput(props: ControlRenderProps<TableInputPayload>): ReactE
               })}
             </div>
             <Tooltip>
-              <TooltipTrigger render={<span className="inline-flex" />}>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  aria-label={`Remove row ${index + 1}`}
-                  disabled={locked}
-                  onClick={() => change(rows.filter((_, rowIndex) => rowIndex !== index))}
-                >
-                  <Icon name="close" aria-hidden="true" />
-                </Button>
+              <TooltipTrigger
+                render={
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    aria-label={`Remove row ${index + 1}`}
+                    disabled={locked}
+                    onClick={() => change(rows.filter((_, rowIndex) => rowIndex !== index))}
+                  />
+                }
+              >
+                <Icon name="close" aria-hidden="true" />
               </TooltipTrigger>
               <TooltipContent>{`Remove row ${index + 1}`}</TooltipContent>
             </Tooltip>

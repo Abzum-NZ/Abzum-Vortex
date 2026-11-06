@@ -62,16 +62,18 @@ export function ApplicationAccountMenu({
   return (
     <DropdownMenu>
       <Tooltip>
-        <TooltipTrigger render={<span className="inline-flex" />}>
-          <DropdownMenuTrigger
-            disabled={actions === null}
-            aria-label="Account menu"
-            render={<Button variant="ghost" size="icon" className="max-sm:size-11" />}
-          >
-            <Avatar>
-              <AvatarFallback>{avatarInitial}</AvatarFallback>
-            </Avatar>
-          </DropdownMenuTrigger>
+        <TooltipTrigger
+          render={
+            <DropdownMenuTrigger
+              disabled={actions === null}
+              aria-label="Account menu"
+              render={<Button variant="ghost" size="icon" className="max-sm:size-11" />}
+            />
+          }
+        >
+          <Avatar>
+            <AvatarFallback>{avatarInitial}</AvatarFallback>
+          </Avatar>
         </TooltipTrigger>
         <TooltipContent>Account menu</TooltipContent>
       </Tooltip>

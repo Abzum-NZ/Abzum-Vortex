@@ -235,20 +235,22 @@ export function LinkDraftPicker({
   const clear =
     draft === null || required ? null : (
       <Tooltip>
-        <TooltipTrigger render={<span className="inline-flex" />}>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-xs"
-            aria-label={`Clear ${label}`}
-            disabled={disabled}
-            onClick={(event) => {
-              event.stopPropagation();
-              onChange(null);
-            }}
-          >
-            <Icon name="close" aria-hidden="true" />
-          </Button>
+        <TooltipTrigger
+          render={
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-xs"
+              aria-label={`Clear ${label}`}
+              disabled={disabled}
+              onClick={(event) => {
+                event.stopPropagation();
+                onChange(null);
+              }}
+            />
+          }
+        >
+          <Icon name="close" aria-hidden="true" />
         </TooltipTrigger>
         <TooltipContent>{`Clear ${label}`}</TooltipContent>
       </Tooltip>

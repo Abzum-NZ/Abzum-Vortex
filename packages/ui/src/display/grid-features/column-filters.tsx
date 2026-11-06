@@ -478,15 +478,17 @@ function LinkEditor({
               <Badge variant="secondary">
                 {narrowing?.recordTitles?.[recordId] ?? "Restricted record"}
                 <Tooltip>
-                  <TooltipTrigger render={<span className="inline-flex" />}>
-                    <Button
-                      variant="ghost"
-                      size="icon-xs"
-                      aria-label={`Remove ${narrowing?.recordTitles?.[recordId] ?? "record"}`}
-                      onClick={() => remove(recordId)}
-                    >
-                      <Icon name="close" aria-hidden="true" />
-                    </Button>
+                  <TooltipTrigger
+                    render={
+                      <Button
+                        variant="ghost"
+                        size="icon-xs"
+                        aria-label={`Remove ${narrowing?.recordTitles?.[recordId] ?? "record"}`}
+                        onClick={() => remove(recordId)}
+                      />
+                    }
+                  >
+                    <Icon name="close" aria-hidden="true" />
                   </TooltipTrigger>
                   <TooltipContent>{`Remove ${narrowing?.recordTitles?.[recordId] ?? "record"}`}</TooltipContent>
                 </Tooltip>
@@ -718,15 +720,17 @@ export function FiltersToolbar({
           <span className="font-medium">{field.label}:</span>
           <FilterSummary field={field} filter={filter} narrowing={context.narrowing} />
           <Tooltip>
-            <TooltipTrigger render={<span className="inline-flex" />}>
-              <Button
-                variant="ghost"
-                size="icon-xs"
-                aria-label={`Remove the ${field.label} filter`}
-                onClick={() => commitFilter(context.events, field.fieldId, undefined)}
-              >
-                <Icon name="close" aria-hidden="true" />
-              </Button>
+            <TooltipTrigger
+              render={
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  aria-label={`Remove the ${field.label} filter`}
+                  onClick={() => commitFilter(context.events, field.fieldId, undefined)}
+                />
+              }
+            >
+              <Icon name="close" aria-hidden="true" />
             </TooltipTrigger>
             <TooltipContent>{`Remove the ${field.label} filter`}</TooltipContent>
           </Tooltip>

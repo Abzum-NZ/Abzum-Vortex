@@ -255,18 +255,20 @@ function BoardColumn({
           {bucket.label}
           {onAdd === undefined || bucket.stage?.addable !== true ? null : (
             <Tooltip>
-              <TooltipTrigger render={<span className="inline-flex" />}>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-sm"
-                  className="ml-auto"
-                  aria-label={`Add a card to ${bucket.label}`}
-                  data-vortex-board-add={bucket.key}
-                  onClick={() => onAdd(bucket)}
-                >
-                  <Icon name="plus" />
-                </Button>
+              <TooltipTrigger
+                render={
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    className="ml-auto"
+                    aria-label={`Add a card to ${bucket.label}`}
+                    data-vortex-board-add={bucket.key}
+                    onClick={() => onAdd(bucket)}
+                  />
+                }
+              >
+                <Icon name="plus" />
               </TooltipTrigger>
               <TooltipContent>{`Add a card to ${bucket.label}`}</TooltipContent>
             </Tooltip>
@@ -493,20 +495,22 @@ function CardActionsMenu({
   return (
     <DropdownMenu>
       <Tooltip>
-        <TooltipTrigger render={<span className="inline-flex" />}>
-          <DropdownMenuTrigger
-            render={
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                aria-label={`Actions for ${name}`}
-                disabled={disabled}
-                data-vortex-board-move={card.recordId}
-              />
-            }
-          >
-            <Icon name="more-horizontal" />
-          </DropdownMenuTrigger>
+        <TooltipTrigger
+          render={
+            <DropdownMenuTrigger
+              render={
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label={`Actions for ${name}`}
+                  disabled={disabled}
+                  data-vortex-board-move={card.recordId}
+                />
+              }
+            />
+          }
+        >
+          <Icon name="more-horizontal" />
         </TooltipTrigger>
         <TooltipContent>{`Actions for ${name}`}</TooltipContent>
       </Tooltip>
@@ -897,23 +901,25 @@ export function BoardView(props: DisplayRenderProps<BoardPayload>): ReactElement
             {overflow.start ? (
               <div className="pointer-events-none absolute inset-y-0 left-0 z-10 flex w-12 items-center bg-linear-to-r from-background to-transparent max-md:hidden">
                 <Tooltip>
-                  <TooltipTrigger render={<span className="inline-flex" />}>
-                    <Button
-                      variant="secondary"
-                      size="icon-sm"
-                      className="pointer-events-auto"
-                      aria-label="Scroll to previous columns"
-                      onClick={() =>
-                        columnsRef.current?.scrollBy({
-                          left: -320,
-                          behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches
-                            ? "instant"
-                            : "smooth",
-                        })
-                      }
-                    >
-                      <Icon name="chevron-left" aria-hidden="true" />
-                    </Button>
+                  <TooltipTrigger
+                    render={
+                      <Button
+                        variant="secondary"
+                        size="icon-sm"
+                        className="pointer-events-auto"
+                        aria-label="Scroll to previous columns"
+                        onClick={() =>
+                          columnsRef.current?.scrollBy({
+                            left: -320,
+                            behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches
+                              ? "instant"
+                              : "smooth",
+                          })
+                        }
+                      />
+                    }
+                  >
+                    <Icon name="chevron-left" aria-hidden="true" />
                   </TooltipTrigger>
                   <TooltipContent>Scroll to previous columns</TooltipContent>
                 </Tooltip>
@@ -922,23 +928,25 @@ export function BoardView(props: DisplayRenderProps<BoardPayload>): ReactElement
             {overflow.end ? (
               <div className="pointer-events-none absolute inset-y-0 right-0 z-10 flex w-12 items-center justify-end bg-linear-to-l from-background to-transparent max-md:hidden">
                 <Tooltip>
-                  <TooltipTrigger render={<span className="inline-flex" />}>
-                    <Button
-                      variant="secondary"
-                      size="icon-sm"
-                      className="pointer-events-auto"
-                      aria-label="Scroll to next columns"
-                      onClick={() =>
-                        columnsRef.current?.scrollBy({
-                          left: 320,
-                          behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches
-                            ? "instant"
-                            : "smooth",
-                        })
-                      }
-                    >
-                      <Icon name="chevron-right" aria-hidden="true" />
-                    </Button>
+                  <TooltipTrigger
+                    render={
+                      <Button
+                        variant="secondary"
+                        size="icon-sm"
+                        className="pointer-events-auto"
+                        aria-label="Scroll to next columns"
+                        onClick={() =>
+                          columnsRef.current?.scrollBy({
+                            left: 320,
+                            behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches
+                              ? "instant"
+                              : "smooth",
+                          })
+                        }
+                      />
+                    }
+                  >
+                    <Icon name="chevron-right" aria-hidden="true" />
                   </TooltipTrigger>
                   <TooltipContent>Scroll to next columns</TooltipContent>
                 </Tooltip>

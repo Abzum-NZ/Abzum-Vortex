@@ -165,17 +165,19 @@ export function DateTimeInput(props: DateTimeInputProps): ReactElement {
           {...describedBy(ids, help, error, note, draftFeedback)}
         />
         <Tooltip>
-          <TooltipTrigger render={<span className="inline-flex" />}>
-            <Button
-              type="button"
-              variant="outline"
-              size="icon"
-              disabled={disabled || readOnly}
-              onClick={() => inputRef.current?.showPicker?.()}
-            >
-              <Icon name="calendar" aria-hidden="true" />
-              <span className="sr-only">Choose date and time</span>
-            </Button>
+          <TooltipTrigger
+            render={
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                disabled={disabled || readOnly}
+                onClick={() => inputRef.current?.showPicker?.()}
+              />
+            }
+          >
+            <Icon name="calendar" aria-hidden="true" />
+            <span className="sr-only">Choose date and time</span>
           </TooltipTrigger>
           <TooltipContent>Choose date and time</TooltipContent>
         </Tooltip>

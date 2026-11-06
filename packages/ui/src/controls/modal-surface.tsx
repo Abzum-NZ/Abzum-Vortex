@@ -156,20 +156,22 @@ export function ModalSurface<Values extends ModalSurfacePayload>({
             <SheetTitle>{title}</SheetTitle>
           </SheetHeader>
           <Tooltip>
-            <TooltipTrigger render={<span className="inline-flex" />}>
-              <SheetClose
-                render={
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon-sm"
-                    className={closeClassName}
-                    aria-label={`Close ${title}`}
-                  />
-                }
-              >
-                <Icon name="close" />
-              </SheetClose>
+            <TooltipTrigger
+              render={
+                <SheetClose
+                  render={
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-sm"
+                      className={closeClassName}
+                      aria-label={`Close ${title}`}
+                    />
+                  }
+                />
+              }
+            >
+              <Icon name="close" />
             </TooltipTrigger>
             <TooltipContent>{`Close ${title}`}</TooltipContent>
           </Tooltip>
@@ -193,20 +195,22 @@ export function ModalSurface<Values extends ModalSurfacePayload>({
           <DialogTitle>{title}</DialogTitle>
         </DialogHeader>
         <Tooltip>
-          <TooltipTrigger render={<span className="inline-flex" />}>
-            <DialogClose
-              render={
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-sm"
-                  className={closeClassName}
-                  aria-label={`Close ${title}`}
-                />
-              }
-            >
-              <Icon name="close" />
-            </DialogClose>
+          <TooltipTrigger
+            render={
+              <DialogClose
+                render={
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    className={closeClassName}
+                    aria-label={`Close ${title}`}
+                  />
+                }
+              />
+            }
+          >
+            <Icon name="close" />
           </TooltipTrigger>
           <TooltipContent>{`Close ${title}`}</TooltipContent>
         </Tooltip>

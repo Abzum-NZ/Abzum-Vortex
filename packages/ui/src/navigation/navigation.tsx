@@ -9,7 +9,7 @@ import {
   useState,
   type ReactElement,
 } from "react";
-import { MotionConfig, motion } from "motion/react";
+import { motion } from "motion/react";
 import { Icon } from "../icons/icon";
 import { readMotionTiming, type MotionTiming } from "./motion-tokens";
 import type { ProjectedNavigation } from "@vortex/platform/schema";
@@ -278,8 +278,8 @@ function ApplicationNavigation({
     const timer = setTimeout(() => setPending(undefined), 10_000);
     return () => clearTimeout(timer);
   }, [pending]);
-  // The selected item's indicator slides with the enter-exit motion token; the stylesheet zeroes
-  // that token under reduced motion, so it moves at once.
+  // The selected item's indicator slides with the enter-exit motion token; the stylesheet sets that
+  // token to 0ms under reduced motion, so it then moves at once.
   const navRef = useRef<HTMLElement>(null);
   const [indicatorTiming, setIndicatorTiming] = useState<MotionTiming>();
   useEffect(() => {
@@ -306,55 +306,51 @@ function ApplicationNavigation({
   const listVisibility = open ? "flex" : compact ? "hidden" : "flex max-sm:hidden";
 
   return (
-    // The motion tokens already carry the person's reduced-motion choice; the library's own
-    // detection stays off so it does not log its dev warning for a setting this menu honours.
-    <MotionConfig reducedMotion="never">
-      <nav
-        ref={navRef}
-        aria-label={label}
-        data-vortex-shell-navigation=""
-        data-vortex-navigation-open={open ? "true" : "false"}
-        {...(compact ? { "data-vortex-navigation-compact": "true" as const } : {})}
-        className={cn("w-full min-w-0", className)}
-      >
-        <Sidebar>
-          <SidebarContent>
-            <SidebarGroup>
-              <Button
-                type="button"
-                variant="ghost"
-                className={cn("w-full justify-between", toggleVisibility)}
-                aria-expanded={open}
-                aria-controls={listId}
-                onClick={() => setOpen((value) => !value)}
-              >
-                <span>{label}</span>
-                {open ? (
-                  <Icon name="close" aria-hidden="true" />
-                ) : (
-                  <Icon name="menu" aria-hidden="true" />
-                )}
-              </Button>
-              <SidebarGroupContent>
-                <NavigationList
-                  items={navigation}
-                  depth={0}
-                  listId={listId}
-                  className={listVisibility}
-                  headingId={headingId}
-                  resolvePageHref={resolvePageHref}
-                  currentPageId={currentPageId}
-                  pendingPageId={pendingPageId}
-                  onNavigate={activatePage}
-                  onCancelled={() => setPending(undefined)}
-                  indicator={indicator}
-                />
-              </SidebarGroupContent>
-            </SidebarGroup>
-          </SidebarContent>
-        </Sidebar>
-      </nav>
-    </MotionConfig>
+    <nav
+      ref={navRef}
+      aria-label={label}
+      data-vortex-shell-navigation=""
+      data-vortex-navigation-open={open ? "true" : "false"}
+      {...(compact ? { "data-vortex-navigation-compact": "true" as const } : {})}
+      className={cn("w-full min-w-0", className)}
+    >
+      <Sidebar>
+        <SidebarContent>
+          <SidebarGroup>
+            <Button
+              type="button"
+              variant="ghost"
+              className={cn("w-full justify-between", toggleVisibility)}
+              aria-expanded={open}
+              aria-controls={listId}
+              onClick={() => setOpen((value) => !value)}
+            >
+              <span>{label}</span>
+              {open ? (
+                <Icon name="close" aria-hidden="true" />
+              ) : (
+                <Icon name="menu" aria-hidden="true" />
+              )}
+            </Button>
+            <SidebarGroupContent>
+              <NavigationList
+                items={navigation}
+                depth={0}
+                listId={listId}
+                className={listVisibility}
+                headingId={headingId}
+                resolvePageHref={resolvePageHref}
+                currentPageId={currentPageId}
+                pendingPageId={pendingPageId}
+                onNavigate={activatePage}
+                onCancelled={() => setPending(undefined)}
+                indicator={indicator}
+              />
+            </SidebarGroupContent>
+          </SidebarGroup>
+        </SidebarContent>
+      </Sidebar>
+    </nav>
   );
 }
 

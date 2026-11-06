@@ -65,21 +65,23 @@ function SidebarTrigger({ className, ...props }: React.ComponentProps<typeof But
   const label = context?.open === false ? "Expand sidebar" : "Collapse sidebar";
   return (
     <Tooltip>
-      <TooltipTrigger render={<span className="inline-flex" />}>
-        <Button
-          data-sidebar="trigger"
-          data-slot="sidebar-trigger"
-          variant="ghost"
-          size="icon-sm"
-          aria-label={label}
-          aria-pressed={context?.open === false}
-          disabled={context === null || context.collapsible === "none"}
-          onClick={context?.toggle}
-          className={cn(className)}
-          {...props}
-        >
-          <Icon name="panel-left" aria-hidden="true" />
-        </Button>
+      <TooltipTrigger
+        render={
+          <Button
+            data-sidebar="trigger"
+            data-slot="sidebar-trigger"
+            variant="ghost"
+            size="icon-sm"
+            aria-label={label}
+            aria-pressed={context?.open === false}
+            disabled={context === null || context.collapsible === "none"}
+            onClick={context?.toggle}
+            className={cn(className)}
+            {...props}
+          />
+        }
+      >
+        <Icon name="panel-left" aria-hidden="true" />
       </TooltipTrigger>
       <TooltipContent>{label}</TooltipContent>
     </Tooltip>

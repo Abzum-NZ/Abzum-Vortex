@@ -71,14 +71,16 @@ function SheetContent({
         {children}
         {showCloseButton && (
           <Tooltip>
-            <TooltipTrigger render={<span className="inline-flex" />}>
-              <SheetPrimitive.Close
-                data-slot="sheet-close"
-                render={<Button variant="ghost" className="cn-sheet-close" size="icon-sm" />}
-              >
-                <Icon name="close" />
-                <span className="sr-only">Close</span>
-              </SheetPrimitive.Close>
+            <TooltipTrigger
+              render={
+                <SheetPrimitive.Close
+                  data-slot="sheet-close"
+                  render={<Button variant="ghost" className="cn-sheet-close" size="icon-sm" />}
+                />
+              }
+            >
+              <Icon name="close" />
+              <span className="sr-only">Close</span>
             </TooltipTrigger>
             <TooltipContent>Close</TooltipContent>
           </Tooltip>

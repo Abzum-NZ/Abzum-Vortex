@@ -8,6 +8,7 @@ import { formatIsoDate } from "@vortex/platform/schema";
 import { useDateFormatOptions } from "../display/date-format-context";
 
 import { Button, buttonVariants } from "./button";
+import { Tooltip, TooltipContent, TooltipTrigger } from "./tooltip";
 
 export const calendarDay = (date: Date): string =>
   `${String(date.getFullYear()).padStart(4, "0")}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
@@ -159,6 +160,8 @@ function Calendar({
 
           return <Icon name="chevron-down" className={cn("size-4", className)} style={style} />;
         },
+        PreviousMonthButton: CalendarMonthButton,
+        NextMonthButton: CalendarMonthButton,
         DayButton: ({ ...props }) => <CalendarDayButton locale={formatLocale} {...props} />,
         WeekNumber: ({ children, ...props }) => {
           return (
@@ -173,6 +176,19 @@ function Calendar({
       }}
       {...props}
     />
+  );
+}
+
+/** A month step: an icon-only button, so its name (the picker's own label) is also its tooltip. */
+function CalendarMonthButton({
+  children,
+  ...props
+}: React.ButtonHTMLAttributes<HTMLButtonElement>): React.ReactElement {
+  return (
+    <Tooltip>
+      <TooltipTrigger render={<button {...props} />}>{children}</TooltipTrigger>
+      <TooltipContent>{props["aria-label"]}</TooltipContent>
+    </Tooltip>
   );
 }
 

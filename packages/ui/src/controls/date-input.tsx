@@ -149,22 +149,24 @@ export function DateInput(props: DateInputProps): ReactElement {
         />
         <Popover open={!pickerUnavailable && open} onOpenChange={(next) => setOpen(next)}>
           <Tooltip>
-            <TooltipTrigger render={<span className="inline-flex" />}>
-              <PopoverTrigger
-                render={<Button variant="outline" size="icon" />}
-                disabled={pickerUnavailable}
-              >
-                <Icon name="calendar" aria-hidden="true" />
-                <span className="sr-only">
-                  {"Choose date"}
-                  {chosenDay === undefined ? null : (
-                    <>
-                      {", "}
-                      <FormattedDate iso={raw} />
-                    </>
-                  )}
-                </span>
-              </PopoverTrigger>
+            <TooltipTrigger
+              render={
+                <PopoverTrigger
+                  render={<Button variant="outline" size="icon" />}
+                  disabled={pickerUnavailable}
+                />
+              }
+            >
+              <Icon name="calendar" aria-hidden="true" />
+              <span className="sr-only">
+                {"Choose date"}
+                {chosenDay === undefined ? null : (
+                  <>
+                    {", "}
+                    <FormattedDate iso={raw} />
+                  </>
+                )}
+              </span>
             </TooltipTrigger>
             <TooltipContent>Choose date</TooltipContent>
           </Tooltip>

@@ -105,14 +105,16 @@ function DialogContent({
         {children}
         {showCloseButton && (
           <Tooltip>
-            <TooltipTrigger render={<span className="inline-flex" />}>
-              <DialogPrimitive.Close
-                data-slot="dialog-close"
-                render={<Button variant="ghost" className="cn-dialog-close" size="icon-sm" />}
-              >
-                <Icon name="close" />
-                <span className="sr-only">Close</span>
-              </DialogPrimitive.Close>
+            <TooltipTrigger
+              render={
+                <DialogPrimitive.Close
+                  data-slot="dialog-close"
+                  render={<Button variant="ghost" className="cn-dialog-close" size="icon-sm" />}
+                />
+              }
+            >
+              <Icon name="close" />
+              <span className="sr-only">Close</span>
             </TooltipTrigger>
             <TooltipContent>Close</TooltipContent>
           </Tooltip>
