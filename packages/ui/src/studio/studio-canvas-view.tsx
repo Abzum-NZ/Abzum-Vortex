@@ -102,6 +102,9 @@ export function StudioCanvasView({
   // well, in the iframe's own pixels. The zoom only scales the iframe as a whole.
   const [available, setAvailable] = useState({ width: 0, height: 0 });
   const scale = zoom === "fit" ? Math.min(1, available.width / width) : zoom / 100;
+  // The screen takes the well's height, so the well scrolls only sideways, when the zoomed screen
+  // is wider than the well; Fit never does.
+  const scrolls = zoom !== "fit" && width * scale > available.width;
   useEffect(() => {
     if (well === null) return;
     // The well's own content box, fractional and without its padding or scrollbar gutter: Fit
@@ -219,6 +222,8 @@ export function StudioCanvasView({
         <div
           ref={setWell}
           data-vortex-studio-canvas-well=""
+          // While it scrolls the well is a keyboard stop with a name, so Left and Right scroll it.
+          {...(scrolls ? { role: "region", "aria-label": "Canvas scroll area", tabIndex: 0 } : {})}
           // Fit shows the whole screen, so it never has anything to scroll to.
           className={`${WELL_CLASS} ${zoom === "fit" ? "overflow-hidden" : "overflow-auto"}`}
         >
