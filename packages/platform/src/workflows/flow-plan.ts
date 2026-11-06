@@ -89,6 +89,8 @@ export type FlowServerSegment = Readonly<{
   changes: boolean;
   /** Whether this segment needs an exclusive Access version lock. */
   accessChange: boolean;
+  /** Whether a step of the segment relies on the person's verified second factor being stated. */
+  readsSecondFactor: boolean;
   /** Whether an effect in this segment runs a multi-transaction workflow. */
   multiTransaction: boolean;
   /** A target that must be locked before the Access version and scope. */
@@ -807,6 +809,9 @@ const compileFlowPlan = (
     const accessChange = steps.some(
       (step) => operations.get(step.id)?.transaction === "access_change",
     );
+    const readsSecondFactor = steps.some(
+      (step) => operations.get(step.id)?.readsSecondFactor === true,
+    );
     const multiTransaction = multi !== undefined;
     const preScope = steps.find((step) => operations.get(step.id)?.preScopeLock !== undefined);
     if (preScope !== undefined && effects.length > 1) {
@@ -834,6 +839,7 @@ const compileFlowPlan = (
       finalOutputTypes,
       changes: effects.length > 0,
       accessChange,
+      readsSecondFactor,
       multiTransaction,
       preScopeLock: preScope === undefined ? null : operations.get(preScope.id)!.preScopeLock!,
       setBasedChanges: setBasedChanges(steps),
@@ -1080,6 +1086,7 @@ const linkFlowPlans = (plans: ReadonlyMap<string, FlowPlan>, applicationKey?: st
       );
       if (children.length === 0) return segment;
       let childAccessChange = false;
+      let childReadsSecondFactor = false;
       let childMultiTransaction = false;
       const fingerprints = children.map((step) => {
         const childId = String(step.flowId);
@@ -1154,6 +1161,9 @@ const linkFlowPlans = (plans: ReadonlyMap<string, FlowPlan>, applicationKey?: st
         childAccessChange ||= child.segments.some(
           (part) => part.kind === "server" && part.accessChange,
         );
+        childReadsSecondFactor ||= child.segments.some(
+          (part) => part.kind === "server" && part.readsSecondFactor,
+        );
         childMultiTransaction ||= child.segments.some(
           (part) => part.kind === "server" && part.multiTransaction,
         );
@@ -1167,6 +1177,7 @@ const linkFlowPlans = (plans: ReadonlyMap<string, FlowPlan>, applicationKey?: st
       return {
         ...segment,
         accessChange: segment.accessChange || childAccessChange,
+        readsSecondFactor: segment.readsSecondFactor || childReadsSecondFactor,
         multiTransaction: segment.multiTransaction || childMultiTransaction,
         fingerprint: fingerprintCanonicalValue({
           segment: segment.fingerprint,
