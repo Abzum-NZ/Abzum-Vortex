@@ -91,9 +91,7 @@ function TraceStep({ step, flowKey }: Readonly<{ step: Step; flowKey: string }>)
         ) : null}
         {step.refusal !== undefined ? (
           <Alert variant="destructive">
-            <AlertDescription>
-              {step.refusal.sentence}
-            </AlertDescription>
+            <AlertDescription>{step.refusal.sentence}</AlertDescription>
           </Alert>
         ) : null}
         {Object.keys(step.outputs).length > 0 ? (
