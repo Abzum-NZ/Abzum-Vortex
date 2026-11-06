@@ -3,7 +3,8 @@
 -- reader (a whole definition identical to supabase/schemas) returns one row per organisation, only
 -- to a person who may change the setting, built from the same read the checks and the Verify panel
 -- use. The protected read model key joins the two closed key lists and the reader is registered
--- with its one sort key.
+-- with its one sort key. The views key list also drops role_activations, whose model, rows and
+-- reader were removed in 20261101010750.
 set role vortex_owner;
 
 create or replace function vortex_access.list_organization_security_settings_projection(
@@ -26,6 +27,7 @@ declare
   organization_value uuid;
   setting_row record;
   instance_kind text;
+  organization_name text;
   predicate_plan jsonb;
   predicate_matches boolean;
 begin
@@ -53,14 +55,26 @@ begin
   if not found or setting_row.can_change is not true then
     return;
   end if;
-  -- The organisation is the record title and the one filterable key; it is the single row's own
-  -- value, so the predicate is evaluated against that value as a literal. There is no searchable key.
+  -- The card is headed by the organisation's name, never its id.
+  select organization.display_name into organization_name
+  from vortex_identity.organizations as organization
+  where organization.organization_id = organization_value;
+  organization_name := coalesce(organization_name, organization_value::text);
+  -- The organisation's id and its name (the record title) are the filterable keys; both are the
+  -- single row's own values, so the predicate is evaluated against them as literals. There is no
+  -- searchable key.
   predicate_plan := vortex_record.compile_projection_predicate_internal(
     p_predicate,
     pg_catalog.jsonb_build_object(
       'organization_id',
       pg_catalog.jsonb_build_object(
         'sql', pg_catalog.format('%L::text', organization_value::text),
+        'database', 'text',
+        'filter', true
+      ),
+      'organization_name',
+      pg_catalog.jsonb_build_object(
+        'sql', pg_catalog.format('%L::text', organization_name),
         'database', 'text',
         'filter', true
       )
@@ -93,6 +107,7 @@ begin
     organization_value,
     setting_row.revision,
     pg_catalog.jsonb_build_object(
+      'organization_name', organization_name,
       'require_step_up', setting_row.require_step_up,
       'instance_profile', coalesce(instance_kind, 'production'),
       'can_turn_off', setting_row.can_turn_off,
@@ -116,7 +131,7 @@ alter table vortex_record.protected_read_model_views
   check (protected_read_model_key = any (array[
     'people', 'organization_accounts', 'roles', 'groups', 'effective_assignments',
     'tenant_structure', 'organization_invitations', 'organization_runtime_settings',
-    'permissions', 'role_activations', 'delegations', 'tenants',
+    'permissions', 'delegations', 'tenants',
     'tenant_administrators', 'application_role_templates', 'activity_entry',
     'application_store_entries', 'connection_instances', 'organization_security_settings'
   ]));

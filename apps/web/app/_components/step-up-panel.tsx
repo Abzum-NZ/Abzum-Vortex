@@ -29,7 +29,7 @@ const needsAuthenticator = (
 ): boolean =>
   requires === "platform_two_step" ||
   (requires === "two_step" && state.organizationRequiresTwoStep) ||
-  (requires === "two_step_if_enrolled" && state.authenticator.kind === "challenge") ||
+  (requires === "two_step_if_enrolled" && state.hasSecondFactor) ||
   (signedInAgainHere && state.authenticator.kind === "challenge");
 
 /** Which proof still has to be given, from what the session already shows. */

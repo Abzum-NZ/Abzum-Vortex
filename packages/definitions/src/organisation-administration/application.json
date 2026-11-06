@@ -177,6 +177,7 @@
         "field_policy": {
           "readable_fields": [
             "organization_id",
+            "organization_name",
             "revision",
             "require_step_up",
             "instance_profile",

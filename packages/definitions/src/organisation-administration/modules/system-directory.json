@@ -1838,7 +1838,7 @@
       "key": "organization_security_settings",
       "name": "Security setting",
       "plural_name": "Security settings",
-      "title_field": "organization_id",
+      "title_field": "organization_name",
       "storage_contract_id": "srt_system_directory_security_settings",
       "storage_scope": "organization_shared",
       "ownership_mode": "none",
@@ -1848,7 +1848,7 @@
         "protected_view": "organization_security_settings",
         "organization_field": "organization_id",
         "revision_field": "revision",
-        "filterable_fields": ["organization_id"],
+        "filterable_fields": ["organization_id", "organization_name"],
         "sortable_fields": ["require_step_up"]
       },
       "fields": [
@@ -1865,6 +1865,21 @@
           "type": "text",
           "settings": {
             "max_length": 36
+          }
+        },
+        {
+          "id": "fld_security_organization_name",
+          "key": "organization_name",
+          "label": "Organisation name",
+          "required": true,
+          "unique": false,
+          "filterable": true,
+          "sortable": false,
+          "personal_data": "none",
+          "public_display": "refused",
+          "type": "text",
+          "settings": {
+            "max_length": 200
           }
         },
         {
@@ -2290,6 +2305,7 @@
       "inputs": [],
       "select": [
         "organization_id",
+        "organization_name",
         "require_step_up",
         "instance_profile",
         "can_turn_off",

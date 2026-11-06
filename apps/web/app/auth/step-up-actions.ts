@@ -12,6 +12,7 @@ import { getIdentityJourneyConfiguration } from "./_lib/authority-configuration"
 import {
   bootstrapIdentitySession,
   enrollMfaFactor,
+  readHasVerifiedSecondFactor,
   readMfaFactor,
   resolveIdentitySession,
   resolveVerifiedIdentity,
@@ -48,6 +49,8 @@ export type StepUpState =
        * database says so; a setting that cannot be read leaves it true, so the code is asked for.
        */
       organizationRequiresTwoStep: boolean;
+      /** Whether the person has any verified second factor (unknown counts as yes). */
+      hasSecondFactor: boolean;
       /** The authenticator they have, or that they have none yet. */
       authenticator:
         Readonly<{ kind: "challenge"; factorId: string }> | Readonly<{ kind: "setup" }>;
@@ -101,9 +104,14 @@ export async function readStepUpState(address: StepUpAddress | undefined): Promi
   const factor = await readMfaFactor();
   if (factor.kind === "unavailable") return { kind: "unavailable" };
   const organizationRequiresTwoStep = await readOrganizationRequiresTwoStep(address);
+  // Any verified factor counts, as the database's fact does; an answer that cannot be read counts
+  // as enrolled, so the code is asked for.
+  const hasSecondFactor =
+    factor.kind === "challenge" || ((await readHasVerifiedSecondFactor()) ?? true);
   return {
     kind: "ready",
     organizationRequiresTwoStep,
+    hasSecondFactor,
     signedInRecently: recentWithin(
       identity.primaryAuthenticatedAt,
       builderRecentAuthentication.maximumAgeSeconds,

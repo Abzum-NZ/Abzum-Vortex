@@ -42,9 +42,6 @@ export const createOrganizationAccessAdministrationService = (
     newRoleAssignmentId: dependencies.roleAssignmentId ?? randomUUID,
     newDelegationAuthorityId: dependencies.delegationAuthorityId ?? randomUUID,
     newActivityId: dependencies.activityId ?? randomUUID,
-    ...(dependencies.readSecondFactor === undefined
-      ? {}
-      : { readSecondFactor: dependencies.readSecondFactor }),
   };
   // Organisation-account lifecycle and invitation operations are complete in the local
   // administration service; this service exposes them beside the group, role and assignment

@@ -101,14 +101,13 @@ export const readCurrentOrganizationStepUpSettingAfterAuthorization = async (
 };
 
 /**
- * The change. The trusted entry point reads, for this one request, whether the person has a
- * verified second factor and states it in the request context; when it cannot tell, it leaves the
- * fact out and the database treats the person as enrolled (the code is required).
+ * The change. It runs inside the flow segment that was admitted with the person's verified
+ * second-factor fact (read fresh by the flow handler, `readsSecondFactor`); on any other path the
+ * fact is absent and the database treats the person as enrolled (the code is required).
  */
 export const createAccessAdministrationStepUpSettingOperations = ({
   requests,
   newActivityId,
-  readSecondFactor,
 }: AccessAdministrationContext) => ({
   changeStepUpSetting: async (
     session: IdentitySession,
@@ -134,23 +133,17 @@ export const createAccessAdministrationStepUpSettingOperations = ({
         error,
       );
     }
-    const hasSecondFactor = await readSecondFactor?.();
-    return requests.runAccessChangeWithSecondFactor(
-      session,
-      candidate,
-      async (transaction) => {
-        const rows = await transaction.query<ChangeRow>`
+    return requests.runAccessChange(session, candidate, async (transaction) => {
+      const rows = await transaction.query<ChangeRow>`
         select vortex_access.change_current_organization_step_up_setting(
           ${command.data.expectedRevision}::bigint,
           ${command.data.requireStepUp}::boolean,
           ${activityId}::uuid
         ) as result
       `;
-        const parsed = changeResultSchema.safeParse(rows[0]?.result);
-        if (rows.length !== 1 || !parsed.success) throw unavailableError(unavailableCode);
-        return parsed.data;
-      },
-      hasSecondFactor === undefined ? undefined : { hasSecondFactor },
-    );
+      const parsed = changeResultSchema.safeParse(rows[0]?.result);
+      if (rows.length !== 1 || !parsed.success) throw unavailableError(unavailableCode);
+      return parsed.data;
+    });
   },
 });
