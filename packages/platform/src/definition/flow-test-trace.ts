@@ -62,7 +62,8 @@ export const createFlowTraceCollector = (
   const steps: FlowTraceStep[] = [];
   const skipped = new Map<string, FlowTraceNotRun>();
   let backEndDepth = 0;
-  let last = clock();
+  const began = clock();
+  let last = began;
   const lap = (): number => {
     const now = clock();
     const ms = Math.round((now - last) * 100) / 100;
@@ -110,6 +111,8 @@ export const createFlowTraceCollector = (
   return {
     observer,
     steps: (): readonly FlowTraceStep[] => steps,
+    /** The run's total, on the clock every step's time is read from, so it is never less than a step. */
+    elapsed: (): number => Math.round((clock() - began) * 100) / 100,
     /** A protected step the test run will not run; its runner report then says why. */
     skip: (taskPath: string, iteration: string, reason: FlowTraceNotRun): void => {
       skipped.set(JSON.stringify([taskPath, iteration]), reason);

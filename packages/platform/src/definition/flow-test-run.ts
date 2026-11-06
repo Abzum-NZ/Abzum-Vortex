@@ -336,7 +336,6 @@ export const runFlowTest = async (
     typeof recordId === "string" && recordTypeId !== undefined
       ? await ports.subjects?.read(bound.session, bound.selection, { recordTypeId, recordId })
       : undefined;
-  const started = performance.now();
   const response: FlowOrchestratorResponse = await createFlowOrchestrator(ports).invokeBinding({
     session: bound.session,
     selection: bound.selection,
@@ -399,7 +398,7 @@ export const runFlowTest = async (
       );
     }
   }
-  const totalMs = Math.round((performance.now() - started) * 100) / 100;
+  const totalMs = trace.elapsed();
   const steps = trace.steps();
   const paused = steps.at(-1)?.outcome === "paused";
   const skipped = steps.find((step) => step.notRun !== undefined && step.outcome === "not_run");
