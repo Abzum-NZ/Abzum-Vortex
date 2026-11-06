@@ -241,10 +241,12 @@ const SHARED_COMPONENT_STYLES_CSS = `
 [data-vortex-theme] :is(${WRAPPED_FOCUS_CONTROLS}):focus-visible {
   outline: none !important;
 }
-/* Keep row, cell and disclosure-trigger outlines inside collapsible and scroll boundaries. */
+/* Keep row, cell and disclosure-trigger outlines inside collapsible and scroll boundaries, and the
+   Studio canvas well's inside the well (the panels beside it cover anything drawn outside). */
 [data-vortex-theme] [data-vortex-focus-group]:has(:focus-visible),
 [data-vortex-theme] [data-grid-cell]:focus-visible,
-[data-vortex-theme] [data-slot="collapsible-trigger"]:focus-visible {
+[data-vortex-theme] [data-slot="collapsible-trigger"]:focus-visible,
+[data-vortex-theme] [data-vortex-studio-canvas-well]:focus-visible {
   outline-offset: calc(-1 * var(--vortex-focus-width)) !important;
 }
 `.trim();
