@@ -79,6 +79,7 @@ import { identityRetiredFailure } from "../identity-retired";
 import {
   DefinitionError,
   classifyDatabaseError,
+  databaseErrorCode,
   unexpectedDefinitionFailure,
 } from "../definition-error";
 
@@ -1301,6 +1302,8 @@ const safeRepositoryOperation = async <Result>(
     return await operation();
   } catch (error) {
     if (error instanceof DefinitionError) throw error;
+    // A stale sign-in is the access model answering, not a storage fault.
+    if (databaseErrorCode(error) === "V3150") throw error;
     const retired = identityRetiredFailure(error, source);
     if (retired !== undefined) throw retired;
     switch (classifyDatabaseError(error)) {

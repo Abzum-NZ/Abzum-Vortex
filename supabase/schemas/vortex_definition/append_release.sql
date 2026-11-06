@@ -27,6 +27,7 @@ declare
   permission_key text;
   permission_keys text[];
   system_publication boolean := false;
+  stale_sign_in boolean := false;
   surface_violation text;
   baseline_content jsonb;
   baseline_contract text;
@@ -138,11 +139,25 @@ begin
             'ownerKind', 'platform', 'ownerId', vortex_access.platform_permission_owner_id(),
             'permissionId', permission_id
           ),
-          'recentAuthentication', pg_catalog.jsonb_build_object('kind', 'none'),
+          -- An ordinary publication asks for the recent primary sign-in the TypeScript builder
+          -- authority asks (builderRecentAuthentication); a system Application asks for its
+          -- two-step verification below.
+          'recentAuthentication', case
+            when permission_key = 'platform.organization.definition_releases.manage'
+              and not system_publication
+            then pg_catalog.jsonb_build_object('kind', 'primary', 'maximumAgeSeconds', 900)
+            else pg_catalog.jsonb_build_object('kind', 'none') end,
           'authority', pg_catalog.jsonb_build_object('kind', 'permission')
         )
       ) as evaluated;
       checked_at := pg_catalog.clock_timestamp();
+      -- A missing permission is named before a stale sign-in: signing in again cannot help
+      -- without it, so a stale sign-in waits until every permission has been checked.
+      if permission_decision.outcome = 'refused'
+        and permission_decision.reason_code = 'authentication_unsatisfied' then
+        stale_sign_in := true;
+        continue;
+      end if;
       if permission_decision.outcome is distinct from 'eligible'
         or permission_decision.operation_key is distinct from permission_key
         or permission_decision.target_kind is distinct from 'organization'
@@ -164,6 +179,10 @@ begin
       end if;
       permission_deadline := least(permission_deadline, permission_decision.valid_until);
     end loop;
+    if stale_sign_in then
+      raise exception using errcode = 'V3150',
+        message = 'Publishing a version needs a recent sign-in';
+    end if;
     if permission_deadline <= pg_catalog.clock_timestamp() then
       raise exception using errcode = '42501',
         message = 'Definition publication authority is unavailable';
@@ -1265,7 +1284,7 @@ revoke execute on function vortex_definition.append_release(uuid, bigint, text, 
 grant execute on function vortex_definition.append_release(uuid, bigint, text, jsonb)
   to vortex_request;
 comment on function vortex_definition.append_release(uuid, bigint, text, jsonb) is
-  'Atomically validates and records one compiled Definition release with exact field-policy ownership, pinned dependencies and canonical flow operations; retains System publication and permits human publication of an ordinary or platform system Application, and of the Modules it owns, only under locked current draft/release permissions (a system Application also under system_applications.manage and the protected-surface rule) and original account attribution, then advances only its root pointer.';
+  'Atomically validates and records one compiled Definition release with exact field-policy ownership, pinned dependencies and canonical flow operations; retains System publication and permits human publication of an ordinary or platform system Application, and of the Modules it owns, only under locked current draft/release permissions (an ordinary publication also under a recent primary sign-in; a system Application also under system_applications.manage and the protected-surface rule) and original account attribution, then advances only its root pointer.';
 
 alter function vortex_definition.append_release(p_root_id uuid, p_expected_draft_revision bigint, p_expected_source_fingerprint text, p_release jsonb) owner to vortex_owner;
 
