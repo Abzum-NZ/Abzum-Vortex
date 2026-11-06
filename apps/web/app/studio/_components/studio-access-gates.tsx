@@ -335,6 +335,7 @@ export function StudioAccessPermissionList({
                               render={
                                 <span
                                   tabIndex={0}
+                                  role="img"
                                   aria-label={`${permission.label} comes with its record type`}
                                   className="flex size-6 items-center justify-center rounded-md text-muted-foreground"
                                 />
