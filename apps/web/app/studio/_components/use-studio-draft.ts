@@ -543,6 +543,13 @@ export function useStudioDraft({
             continue;
           }
           if (!active.current) return;
+          // The saved draft is behind the revision asked for (a quick Undo or Redo moved on): not a
+          // problem and nothing to log. Compile again when the head moved, else wait for the next pass.
+          if (result.kind === "stale") {
+            if (savedRef.current.draftRevision !== target.draftRevision)
+              compileAgain.current = true;
+            continue;
+          }
           if (
             result.kind !== "available" ||
             result.organizationId !== organizationId ||

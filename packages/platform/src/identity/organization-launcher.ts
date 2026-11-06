@@ -14,6 +14,7 @@ import {
   type RuntimeTransactionRunner,
 } from "../db/request-transaction";
 import { describeFailure } from "../catalogue/runtime-primitives";
+import { logClassifiedFailure } from "../access/request-failure";
 
 type LauncherRow = DatabaseRow & {
   organization_id: unknown;
@@ -48,8 +49,10 @@ export const createOrganizationLauncherService = (
   return Object.freeze({
     async list(session: IdentitySession): Promise<OrganizationLauncherResolution> {
       const parsed = identitySessionSchema.safeParse(session);
-      if (!parsed.success)
+      if (!parsed.success) {
+        console.info("[identity] ORGANIZATION_LAUNCHER_READ_REFUSED: invalid session state");
         return organizationLauncherResolutionSchema.parse({ kind: "invalid_session_state" });
+      }
 
       try {
         const entries = await runtimeTransaction(async (transaction) => {
@@ -61,7 +64,10 @@ export const createOrganizationLauncherService = (
         });
         return organizationLauncherResolutionSchema.parse({ kind: "available", entries });
       } catch (error) {
-        console.error(`[identity] ORGANIZATION_LAUNCHER_READ_FAILED: ${describeFailure(error)}`);
+        logClassifiedFailure(
+          `[identity] ORGANIZATION_LAUNCHER_READ_FAILED: ${describeFailure(error)}`,
+          error,
+        );
         return organizationLauncherResolutionSchema.parse({ kind: "temporarily_unavailable" });
       }
     },
