@@ -24,6 +24,7 @@ declare
   declaration_target jsonb;
   declaration_permission jsonb;
   declaration_authentication jsonb;
+  effective_authentication jsonb;
   declaration_authority jsonb;
   scope_candidate jsonb;
   permission_candidate jsonb;
@@ -391,8 +392,14 @@ begin
   target_context_satisfied := target_kind_value = 'organization'
     or coalesce(context_application_value = target_application_value, false);
 
+  -- The organisation comes only from the validated context. The effective requirement is
+  -- the declared one unless the organisation turned two-step verification off on a
+  -- development instance; the deadline and the refusal reason both follow it.
+  effective_authentication := vortex_access.effective_authentication_requirement_internal(
+    context_organization_value, declaration_authentication
+  );
   authentication_deadline := vortex_access.recent_authentication_deadline_internal(
-    context_value, decision_checked_at, declaration_authentication
+    context_value, decision_checked_at, effective_authentication
   );
   authentication_satisfied := authentication_deadline is not null;
 
@@ -462,7 +469,7 @@ begin
         then 'target_policy_unavailable'
       when not decision.permission_available then 'permission_unavailable'
       when decision.path_valid_until is null then 'permission_not_effective'
-      when not authentication_satisfied and declaration_authentication ->> 'kind' = 'multi_factor'
+      when not authentication_satisfied and effective_authentication ->> 'kind' = 'multi_factor'
         then 'multi_factor_unsatisfied'
       when not authentication_satisfied then 'authentication_unsatisfied'
       when not decision.delegation_satisfied then 'delegation_insufficient'

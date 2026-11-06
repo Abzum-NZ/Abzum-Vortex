@@ -227,6 +227,9 @@ export const identitySessionSchema = z
     accessTokenExpiresAt: timestampSchema,
     primaryAuthenticatedAt: timestampSchema.optional(),
     multiFactorAuthenticatedAt: timestampSchema.optional(),
+    // Set by the trusted entry point only for a request that needs it, from a verified factor
+    // read; absent means the person is treated as enrolled (the code is required).
+    hasSecondFactor: z.boolean().optional(),
   })
   .strict()
   .superRefine((value, context) => {
@@ -519,6 +522,7 @@ const humanSessionContextSchema = z
     accessTokenIssuedAt: timestampSchema.optional(),
     primaryAuthenticatedAt: timestampSchema.optional(),
     multiFactorAuthenticatedAt: timestampSchema.optional(),
+    hasSecondFactor: z.boolean().optional(),
     delegatedContext: delegatedContextSchema.optional(),
     supportContext: supportContextSchema.optional(),
   })

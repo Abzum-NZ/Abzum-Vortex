@@ -423,6 +423,9 @@ export const createHumanOrganizationRequestService = (
                       }),
                 }
               : {}),
+            ...(verifiedSession.data.hasSecondFactor === undefined
+              ? {}
+              : { hasSecondFactor: verifiedSession.data.hasSecondFactor }),
             issuedAt,
             expiresAt: verifiedSession.data.accessTokenExpiresAt,
             accessVersion: scope.accessVersion,
