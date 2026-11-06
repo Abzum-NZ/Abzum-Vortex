@@ -68,7 +68,9 @@ const validAddressPart = (value: unknown): value is string =>
  * database answers that it does not: a refused or failed read (logged once by the request runner)
  * keeps the code asked for. The database decides again where the protected step runs.
  */
-const readOrganizationRequiresTwoStep = async (address: StepUpAddress | undefined): Promise<boolean> => {
+const readOrganizationRequiresTwoStep = async (
+  address: StepUpAddress | undefined,
+): Promise<boolean> => {
   if (
     address === undefined ||
     typeof address !== "object" ||
