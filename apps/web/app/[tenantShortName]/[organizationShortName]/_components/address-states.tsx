@@ -20,12 +20,11 @@ import {
   EmptyHeader,
   EmptyTitle,
 } from "@vortex/ui/components/empty";
-import { AuthShell } from "../../../auth/_components/auth-shell";
+import { UnavailableState } from "../../../_components/unavailable-state";
 import { loadOrganizationLauncher } from "../../../_lib/organization-context";
 import { resolveOrganizationLandingPath } from "../../../_lib/organization-landing";
 import { platformBlockReleasesFor } from "../../../_lib/platform-block-releases";
 import { OrganizationAddressStatePage } from "./organization-launcher-page";
-import { TryAgainButton } from "./try-again-button";
 
 /**
  * What an address shows when it shows no application page. Outside an application the viewer may
@@ -40,7 +39,6 @@ type AddressState =
       applicationName: string;
       homeHref: string;
     }>
-  | Readonly<{ kind: "temporarily_unavailable"; retryHref: string }>
   | Readonly<{ kind: "suspended" }>
   | Readonly<{ kind: "preview_not_runnable"; sentence: string; studioHref: string }>;
 
@@ -98,16 +96,6 @@ const stateContent = (
           actionLabel: `Back to ${state.applicationName}`,
         },
         href: state.homeHref,
-      };
-    case "temporarily_unavailable":
-      return {
-        page: {
-          key: "temporarily_unavailable",
-          title: "This page couldn't be loaded",
-          detail: "Your sign-in is still active. Try loading it again.",
-          actionLabel: "Try again",
-        },
-        href: state.retryHref,
       };
     case "suspended":
       return {
@@ -211,18 +199,16 @@ export function AddressTemporarilyUnavailable({
   cause,
 }: Readonly<{ cause: "sign_in" | "read" }>): ReactElement {
   return (
-    <AuthShell
+    <UnavailableState
       addressState="temporarily_unavailable"
-      eyebrow="Application access"
       title="This address is temporarily unavailable"
-      description={
+      sentence={
         cause === "sign_in"
           ? "Your sign-in could not be checked just now. Try loading this address again."
           : "Your sign-in is active, but this address could not be loaded just now. Try again."
       }
-    >
-      <TryAgainButton />
-    </AuthShell>
+      way={{ kind: "retry" }}
+    />
   );
 }
 

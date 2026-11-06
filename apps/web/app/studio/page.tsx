@@ -1,5 +1,5 @@
 import { notFound, redirect } from "next/navigation";
-import { Alert, AlertDescription } from "@vortex/ui/components/alert";
+import { UnavailableState } from "../_components/unavailable-state";
 import { continueStudioSession } from "./_lib/studio-session";
 import { StudioUnavailable } from "./_components/studio-unavailable";
 import { loadOrganizationLauncher } from "../_lib/organization-context";
@@ -14,19 +14,16 @@ export const dynamic = "force-dynamic";
 export default async function StudioLandingPage() {
   const resolved = await continueStudioSession();
   if (resolved.kind === "temporarily_unavailable")
-    return <StudioUnavailable subject="Studio" result={resolved} reloadHref="/studio" />;
+    return <StudioUnavailable subject="Studio" result={resolved} />;
   const launcher = await loadOrganizationLauncher(resolved.session);
   if (launcher.kind !== "available") {
     // The launcher read logged this answer once, where it arose.
     return (
-      <main className="mx-auto max-w-4xl space-y-4 p-6">
-        <h1 className="text-2xl font-semibold">Studio</h1>
-        <Alert variant="destructive">
-          <AlertDescription>
-            Studio could not load your organisations. Try again shortly.
-          </AlertDescription>
-        </Alert>
-      </main>
+      <UnavailableState
+        title="Studio could not load your organisations"
+        sentence="Your sign-in is active, but your organisations could not be read just now. Try again."
+        way={{ kind: "retry" }}
+      />
     );
   }
   const href = await loadFirstApplicationsPageHref(

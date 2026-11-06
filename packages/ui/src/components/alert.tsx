@@ -10,7 +10,6 @@ import { cn } from "../lib/utils";
 const infoVariant = "cn-alert-variant-default text-info after:bg-info";
 const successVariant = "cn-alert-variant-default text-success after:bg-success";
 const warningVariant = "cn-alert-variant-default text-warning after:bg-warning";
-const dangerVariant = "cn-alert-variant-destructive text-destructive after:bg-destructive";
 
 const alertVariants = cva("cn-alert group/alert relative w-full", {
   variants: {
@@ -20,7 +19,6 @@ const alertVariants = cva("cn-alert group/alert relative w-full", {
       info: infoVariant,
       success: successVariant,
       warning: warningVariant,
-      critical: `cn-alert-variant-destructive ${dangerVariant}`,
     },
   },
   defaultVariants: {

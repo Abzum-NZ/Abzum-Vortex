@@ -66,12 +66,7 @@ export default async function OrganizationPage({ params }: OrganizationPageProps
     organizationShortName,
   );
   if (resolved.kind === "temporarily_unavailable")
-    return (
-      <OrganizationAddressState
-        context={context}
-        state={{ kind: "temporarily_unavailable", retryHref }}
-      />
-    );
+    return <AddressTemporarilyUnavailable cause="read" />;
   if (resolved.kind === "suspended_super_administrator_account")
     return <OrganizationAddressState context={context} state={{ kind: "suspended" }} />;
   if (resolved.kind !== "organization_launcher")
