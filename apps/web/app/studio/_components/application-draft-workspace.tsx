@@ -409,6 +409,7 @@ function ExistingApplicationWorkspace(props: ExistingProps) {
           />
           <StudioPuckProvider input={canvas.puck} dragGate={dragGate}>
             <StudioFrame
+              applicationName={source.body.name}
               tabs={studioRailTabs}
               activeTab={tab}
               onTabChange={setTab}

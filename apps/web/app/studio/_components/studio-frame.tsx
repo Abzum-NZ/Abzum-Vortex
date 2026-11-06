@@ -26,7 +26,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@vortex/ui/components/sheet";
-import { Icon, type VortexIconName } from "@vortex/ui";
+import { APPLICATION_MAIN_CONTENT_ID, Icon, type VortexIconName } from "@vortex/ui";
 import { Badge } from "@vortex/ui/components/badge";
 import { Button } from "@vortex/ui/components/button";
 import {
@@ -257,7 +257,8 @@ function StudioRailView<Key extends string>({
 }>) {
   return (
     // The rail is as wide as its longest label in the active style's trigger padding, at least 72 px.
-    <div
+    <nav
+      aria-label="Studio"
       className={cn(
         "flex w-fit min-w-18 shrink-0 flex-col items-center gap-1 overflow-y-auto",
         "border-r border-sidebar-border bg-sidebar px-1 py-2 text-sidebar-foreground",
@@ -299,7 +300,7 @@ function StudioRailView<Key extends string>({
           />
         ))}
       </TabsList>
-    </div>
+    </nav>
   );
 }
 
@@ -439,6 +440,7 @@ function SidePanel({
 }
 
 export function StudioFrame<Key extends string>({
+  applicationName,
   topBar,
   tabs,
   activeTab,
@@ -450,6 +452,8 @@ export function StudioFrame<Key extends string>({
   inspectorEditsSelection,
   inspectorLabel = "Inspector",
 }: Readonly<{
+  /** Names the page's one level-1 heading with the open tab. */
+  applicationName: string;
   topBar: ReactNode;
   tabs: readonly StudioRailTab<Key>[];
   activeTab: Key;
@@ -778,6 +782,8 @@ export function StudioFrame<Key extends string>({
             <div
               ref={setOverlayHost}
               id="studio-panel-overlay"
+              role="complementary"
+              aria-label={`${active?.label ?? ""} panel`}
               aria-hidden={!overlayPanel}
               data-studio-panel-overlay=""
               className={cn(
@@ -796,7 +802,8 @@ export function StudioFrame<Key extends string>({
           className="min-h-0 min-w-0 flex-1"
         >
           {showPanel && (
-            <>
+            // One landmark for the panel and the handle that resizes it; it adds no box of its own.
+            <aside aria-label={`${active?.label ?? ""} panel`} className="contents">
               <SidePanel
                 id="studio-panel"
                 panelRef={panelRef}
@@ -813,13 +820,18 @@ export function StudioFrame<Key extends string>({
                 }}
                 onKeyDownCapture={resizeByKey("panel")}
               />
-            </>
+            </aside>
           )}
           <ResizablePanel id="studio-canvas" minSize="20rem">
-            <section
-              aria-label="Canvas"
-              className="flex h-full min-h-0 min-w-0 flex-col bg-background"
+            {/* The page's one main landmark and its one level-1 heading: the skip link lands here. */}
+            <main
+              id={APPLICATION_MAIN_CONTENT_ID}
+              tabIndex={-1}
+              className="flex h-full min-h-0 min-w-0 flex-col bg-background outline-none"
             >
+              <h1 className="sr-only">
+                {applicationName}: {active?.label}
+              </h1>
               {canvas({
                 inspectorOpen:
                   hasInspector && (dockInspector ? inspectorOpen : narrowInspectorOpen),
@@ -827,10 +839,10 @@ export function StudioFrame<Key extends string>({
                 focused,
                 focusCanvas,
               })}
-            </section>
+            </main>
           </ResizablePanel>
           {showInspector && (
-            <>
+            <aside aria-label={inspectorLabel} className="contents">
               <ResizableHandle
                 aria-label="Resize the inspector"
                 onPointerDownCapture={() => {
@@ -845,14 +857,11 @@ export function StudioFrame<Key extends string>({
                 size={inspectorWidth}
                 limits={inspectorLimits}
               >
-                <aside
-                  aria-label={inspectorLabel}
-                  className="flex h-full min-h-0 flex-col bg-sidebar"
-                >
+                <div className="flex h-full min-h-0 flex-col bg-sidebar">
                   <PaneSlot host={hosts?.inspector ?? null} />
-                </aside>
+                </div>
               </SidePanel>
-            </>
+            </aside>
           )}
         </ResizablePanelGroup>
       </div>
