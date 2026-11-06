@@ -32,7 +32,7 @@ type LauncherEntry = Readonly<{
  * chooses for its home page's shell, so the editor shows the same bar as the pages of its App
  * Store section, and where the person is. Nothing here reads the shipped source.
  */
-export const studioFrameOf = (
+const studioFrameOf = (
   entry: LauncherEntry,
   email: string,
   installed: Readonly<{
