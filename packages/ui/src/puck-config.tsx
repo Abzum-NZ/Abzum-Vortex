@@ -111,7 +111,7 @@ import { LinkInput } from "./controls/link-input";
 import { NumberInput } from "./controls/number-input";
 import { RichTextInput } from "./controls/rich-text-input";
 import { Tabs } from "./controls/tabs";
-import { RevealedSlotContext } from "./controls/revealed-slot";
+import { EditingCanvasContext, RevealedSlotContext } from "./controls/revealed-slot";
 import { AttachmentInput } from "./controls/attachment-input";
 import { ConnectionSecretInput } from "./controls/connection-secret-input";
 import { TableInput } from "./controls/table-input";
@@ -759,36 +759,38 @@ function PlacementBlockContent(props: PlacementBlockProps): ReactElement {
         <FlowRuntimeStateContext.Provider value={metadataIn.runtimeState}>
           <PlacementReactionsContext.Provider value={reactions}>
             <RevealedSlotContext.Provider value={puck.isEditing ? revealedSlot : undefined}>
-              <Implementation
-                {...parsedInputs}
-                placementId={placementId}
-                settings={settings}
-                slots={slots}
-                breakpoint={activeBreakpoint}
-                responsiveLayout={responsive}
-                metadata={release}
-                fieldInputControlReleases={fieldInputControlReleases}
-                themeTokens={themeTokens}
-                {...availability}
-                {...(metadataIn.projectedNavigation === undefined
-                  ? {}
-                  : { projectedNavigation: metadataIn.projectedNavigation })}
-                {...(metadataIn.resolvePageHref === undefined
-                  ? {}
-                  : { resolvePageHref: metadataIn.resolvePageHref })}
-                {...(metadataIn.currentPageId === undefined
-                  ? {}
-                  : { currentPageId: metadataIn.currentPageId })}
-                {...(metadataIn.componentBundleOrigin === undefined
-                  ? {}
-                  : { componentBundleOrigin: metadataIn.componentBundleOrigin })}
-                {...(metadataIn.applicationSearch === undefined
-                  ? {}
-                  : { applicationSearch: metadataIn.applicationSearch })}
-                {...(metadataIn.applicationSearchPageSubject === undefined
-                  ? {}
-                  : { applicationSearchPageSubject: metadataIn.applicationSearchPageSubject })}
-              />
+              <EditingCanvasContext.Provider value={puck.isEditing}>
+                <Implementation
+                  {...parsedInputs}
+                  placementId={placementId}
+                  settings={settings}
+                  slots={slots}
+                  breakpoint={activeBreakpoint}
+                  responsiveLayout={responsive}
+                  metadata={release}
+                  fieldInputControlReleases={fieldInputControlReleases}
+                  themeTokens={themeTokens}
+                  {...availability}
+                  {...(metadataIn.projectedNavigation === undefined
+                    ? {}
+                    : { projectedNavigation: metadataIn.projectedNavigation })}
+                  {...(metadataIn.resolvePageHref === undefined
+                    ? {}
+                    : { resolvePageHref: metadataIn.resolvePageHref })}
+                  {...(metadataIn.currentPageId === undefined
+                    ? {}
+                    : { currentPageId: metadataIn.currentPageId })}
+                  {...(metadataIn.componentBundleOrigin === undefined
+                    ? {}
+                    : { componentBundleOrigin: metadataIn.componentBundleOrigin })}
+                  {...(metadataIn.applicationSearch === undefined
+                    ? {}
+                    : { applicationSearch: metadataIn.applicationSearch })}
+                  {...(metadataIn.applicationSearchPageSubject === undefined
+                    ? {}
+                    : { applicationSearchPageSubject: metadataIn.applicationSearchPageSubject })}
+                />
+              </EditingCanvasContext.Provider>
             </RevealedSlotContext.Provider>
             <InlineMessage placementId={`retry:${placementId}`} />
           </PlacementReactionsContext.Provider>

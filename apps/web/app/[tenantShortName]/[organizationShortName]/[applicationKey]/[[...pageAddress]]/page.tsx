@@ -10,9 +10,10 @@ import { ApplicationExperiencePage } from "./_components/application-experience-
 import { ApplicationPageView } from "./_components/application-page-view";
 import { BarePage } from "../_components/bare-page";
 import {
+  AddressTemporarilyUnavailable,
   OrganizationAddressState,
+  readAccountMenuLauncher,
   PageSubjectNotFound,
-  SignInTemporarilyUnavailable,
 } from "../../_components/address-states";
 import {
   applicationLauncherEventIds,
@@ -22,7 +23,6 @@ import { applicationPageContinuationFromAddress } from "../../../../auth/_lib/si
 import { pageSubjectParameter } from "../../../../_lib/application-page/placement-helpers";
 import { continueSessionOrEnd } from "../../../../auth/_lib/session-redirect";
 import { resolveIdentitySessionWithEmail } from "../../../../auth/_lib/session-server";
-import { loadOrganizationLauncher } from "../../../../_lib/organization-context";
 import {
   applicationPageAddressPath as addressPath,
   organizationAddressPath as launcherPath,
@@ -87,7 +87,7 @@ async function readApplicationAddressPage({ params, searchParams }: ApplicationA
   if (identity.kind === "temporarily_unavailable")
     return (
       <BarePage>
-        <SignInTemporarilyUnavailable retryHref={retryHref} />
+        <AddressTemporarilyUnavailable cause="sign_in" />
       </BarePage>
     );
 
@@ -155,9 +155,8 @@ async function readApplicationAddressPage({ params, searchParams }: ApplicationA
           />
         </BarePage>
       );
-    const launcher = await loadOrganizationLauncher(identity.session);
-    if (launcher.kind !== "available")
-      throw new Error(`Organisation launcher unavailable for the account menu: ${launcher.kind}`);
+    const launcher = await readAccountMenuLauncher(identity.session);
+    if (launcher.kind === "unavailable") return <BarePage>{launcher.page}</BarePage>;
     const organization = launcher.entries.find(
       (entry) =>
         entry.tenantShortName === tenantShortName &&

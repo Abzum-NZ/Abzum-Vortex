@@ -431,6 +431,7 @@ export function StudioFrame<Key extends string>({
   canvas,
   inspector,
   selectionKey,
+  inspectorEditsSelection,
   inspectorLabel = "Inspector",
 }: Readonly<{
   topBar: ReactNode;
@@ -450,6 +451,11 @@ export function StudioFrame<Key extends string>({
   ) => ReactNode;
   inspector: ReactNode;
   selectionKey: string;
+  /**
+   * Whether the inspector holds settings of the selection. A window too narrow to dock the
+   * inspector opens its sheet for a new selection only then, never for one it only points away from.
+   */
+  inspectorEditsSelection: boolean;
   inspectorLabel?: string;
 }>) {
   // A block is being dragged, from the palette or on the canvas: a collapsed panel's overlay gets
@@ -571,18 +577,21 @@ export function StudioFrame<Key extends string>({
   useEffect(() => {
     if (
       hasInspector &&
+      inspectorEditsSelection &&
       previousSelection.current !== selectionKey &&
-      wide &&
       !dockInspector &&
       !focused
-    )
+    ) {
+      // The sheets do not stack: the inspector takes the place of an open panel.
+      setNarrowPanelOpen(false);
       setNarrowInspectorOpen(true);
+    }
     // A new selection keeps the window and canvas where they are but starts its inspector at the
     // top: the body may have been scrolled past the shorter content the new selection draws.
     const inspectorBody = hosts?.inspector.querySelector<HTMLElement>("[data-studio-rail-body]");
     if (inspectorBody !== null && inspectorBody !== undefined) inspectorBody.scrollTop = 0;
     previousSelection.current = selectionKey;
-  }, [selectionKey, wide, dockInspector, focused, hasInspector, hosts]);
+  }, [selectionKey, inspectorEditsSelection, dockInspector, focused, hasInspector, hosts]);
   const active = tabs.find((tab) => tab.key === activeTab);
   // One panel width for every rail tab, so the canvas does not move or resize when the tab changes.
   const width = widthOf("panel", viewport < 1440 ? 16 : viewport >= 1920 ? 18 : 17);
