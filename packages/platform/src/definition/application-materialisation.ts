@@ -43,7 +43,9 @@ import {
 import {
   applicationThemeSchema,
   canonicalApplicationThemeSelection,
+  resolvedApplicationThemeSchema,
   type PlatformThemeRelease,
+  type ResolvedApplicationTheme,
 } from "./application-composition/theme";
 import type { ApplicationContent } from "./application-contracts";
 import type { ApplicationSourceDocument } from "./definition-source";
@@ -105,7 +107,7 @@ const canonicalThemeDependency = (base: ApplicationSourceDocument["body"]["theme
   releaseVersion: base.release_version,
 });
 
-const validateThemeTokenReferences = (tokens: CanonicalTheme["tokens"]): void => {
+const validateThemeTokenReferences = (tokens: ResolvedApplicationTheme["tokens"]): void => {
   for (const token of Object.values(tokens)) {
     if (token.kind !== "focus") continue;
     const colour = tokens[token.colorToken];
@@ -122,7 +124,11 @@ type ApplicationThemeMaterialisation =
       refusal: DefinitionRuleFailure;
     }>;
 
-/** The same pure theme producer serves publication and authorized draft feedback. */
+/**
+ * Checks that the authored theme resolves over its base release and returns the canonical theme to
+ * store: the pin and the selection, never tokens. The same pure producer serves publication and
+ * authorized draft feedback.
+ */
 export const materialiseApplicationTheme = (
   authored: ApplicationSourceDocument["body"]["theme"],
   documentKey: string,
@@ -158,11 +164,12 @@ export const materialiseApplicationTheme = (
       },
     };
   }
-  const theme = applicationThemeSchema.parse({
-    base: {
-      ...canonicalThemeDependency(authored.base),
-      contentFingerprint: release.contentFingerprint,
-    },
+  const base = {
+    ...canonicalThemeDependency(authored.base),
+    contentFingerprint: release.contentFingerprint,
+  };
+  const resolved = resolvedApplicationThemeSchema.parse({
+    base,
     selection: selection.resolved.selection,
     tokens: selection.resolved.tokens,
   });
@@ -173,12 +180,12 @@ export const materialiseApplicationTheme = (
   // Keep the original reference-first publication refusal, while locating every bad reference
   // for the feedback consumer. No engine error message crosses the browser boundary.
   try {
-    validateThemeTokenReferences(theme.tokens);
+    validateThemeTokenReferences(resolved.tokens);
   } catch (error) {
     if (!(error instanceof DefinitionCompilationError)) throw error;
     const failures: ThemeValidationFailure[] = [];
-    for (const [key, token] of Object.entries(theme.tokens))
-      if (token.kind === "focus" && theme.tokens[token.colorToken]?.kind !== "color_pair")
+    for (const [key, token] of Object.entries(resolved.tokens))
+      if (token.kind === "focus" && resolved.tokens[token.colorToken]?.kind !== "color_pair")
         failures.push({
           code: "BROKEN_TOKEN_REFERENCE",
           ruleCode: error.ruleCode,
@@ -197,7 +204,7 @@ export const materialiseApplicationTheme = (
       },
     };
   }
-  const validation = validateApplicationTheme(theme, { ...options, documentKey });
+  const validation = validateApplicationTheme(resolved, { ...options, documentKey });
   const first = validation.failures[0];
   if (!validation.valid && first !== undefined)
     return {
@@ -211,7 +218,11 @@ export const materialiseApplicationTheme = (
         location: createThemeLocation(documentKey, first.tokenKey),
       },
     };
-  return { valid: true, theme, options };
+  return {
+    valid: true,
+    theme: applicationThemeSchema.parse({ base, selection: resolved.selection }),
+    options,
+  };
 };
 
 const rejectSettingFailures = (failures: readonly ComponentSettingFailure[]): void => {

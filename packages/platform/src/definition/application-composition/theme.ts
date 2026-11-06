@@ -233,22 +233,36 @@ export const authoredApplicationThemeSelection = (
 });
 
 /**
- * Canonical  themes contain the complete resolved application token set plus the catalogue
- * selection they were materialised from. Every theme records its selection, including the icon
- * library.
+ * The canonical theme stored in a release: the pinned platform theme and the catalogue selection,
+ * icon library included. It holds no tokens. Tokens are resolved at run time from the platform
+ * catalogue, so a catalogue change reaches every installed application on its next page load
+ * without a republish.
  */
 export const applicationThemeSchema = z
+  .object({
+    base: sourceProvenanceUnchanged(exactPlatformThemeDependencySchema),
+    selection: sourceProvenanceUnchanged(applicationThemeSelectionSchema),
+  })
+  .strict();
+
+/**
+ * The theme an interface is drawn with: the stored theme plus the complete token set resolved for
+ * it at run time. It is never stored; `resolveApplicationTheme` is its one producer.
+ */
+export const resolvedApplicationThemeSchema = z
   .object({
     base: sourceProvenanceUnchanged(exactPlatformThemeDependencySchema),
     selection: sourceProvenanceUnchanged(applicationThemeSelectionSchema),
     tokens: sourceProvenanceUnchanged(z.record(builderKeySchema, themeTokenValueSchema)),
   })
   .strict();
+export type ResolvedApplicationTheme = z.infer<typeof resolvedApplicationThemeSchema>;
 
 /**
- * Authored  themes carry the catalogue selection (its icon library included) and may omit overrides;
- * compilation resolves the selection into the full token set. A theme without a selection is
- * refused at publication, and a selection is only accepted on the catalogue's base release.
+ * Authored themes carry the catalogue selection (its icon library included). Publication checks
+ * that the selection resolves over the base release and stores the selection only. A theme without
+ * a selection is refused at publication, and a selection is only accepted on the catalogue's base
+ * release.
  */
 export const sourceApplicationThemeSchema = z
   .object({

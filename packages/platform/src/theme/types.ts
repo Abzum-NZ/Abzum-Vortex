@@ -6,10 +6,16 @@ import type {
   DefinitionRuleFailure,
   DefinitionRuleFailureFamily,
 } from "../catalogue/validation-errors";
-import type { PlatformThemeRelease as ContractPlatformThemeRelease } from "../definition/application-composition/theme";
+import type {
+  PlatformThemeRelease as ContractPlatformThemeRelease,
+  ResolvedApplicationTheme,
+} from "../definition/application-composition/theme";
 import type { ApplicationContent } from "../definition/application-contracts";
 
-export type ApplicationTheme = ApplicationContent["theme"];
+/** The theme a release stores: the pinned platform theme and the selection, no tokens. */
+export type StoredApplicationTheme = ApplicationContent["theme"];
+/** The theme an interface is drawn with: the stored theme plus its tokens resolved at run time. */
+export type ApplicationTheme = ResolvedApplicationTheme;
 export type ExactPlatformThemeDependency = ApplicationTheme["base"];
 export type ThemeTokenValue = ApplicationTheme["tokens"][string];
 export type PlatformThemeRelease = ContractPlatformThemeRelease;

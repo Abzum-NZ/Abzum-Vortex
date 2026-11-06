@@ -8,8 +8,6 @@ import {
   type ActiveApplicationInstallation,
 } from "../files/storage";
 import type { SystemApplicationBoundReleaseSetResult } from "./definition-consumer-read";
-import type { OrganizationThemeSelection } from "../theme/organization-theme-selection";
-import { applyOrganizationTheme } from "../theme/organization-theme";
 import { prepareApplicationPermissionRegistrationForHumanRequest } from "../access/permission-registry-definition-adapter";
 import {
   DefinitionError,
@@ -248,48 +246,6 @@ const assembleContext = (
   });
   assembledContexts.add(context);
   return context;
-};
-
-/** The application contents drawn through an organisation theme, kept per original contents so caches keyed by contents survive. */
-const themedContents = new WeakMap<object, Map<string, object>>();
-
-/**
- * The same trusted context with the application's theme resolved through the organisation theme
- * layer (the application's own choice, else the organisation's, else the platform's). It is the one
- * place the layer reaches an installed application: every consumer (document root, frame, page,
- * canvas of the running application) reads the theme from the context. The result is itself a
- * context this loader assembled; a theme the organisation leaves unchanged returns the context as
- * it is, and the themed contents are remembered so a context per request does not recompute them.
- */
-export const withOrganizationTheme = (
-  context: InstalledRuntimeContext,
-  organization: OrganizationThemeSelection,
-): InstalledRuntimeContext => {
-  requireInstalledRuntimeContext(context);
-  const application = context.releaseSet.application;
-  const key = JSON.stringify(Object.entries(organization).sort(([a], [b]) => a.localeCompare(b)));
-  const byKey = themedContents.get(application.content) ?? new Map<string, object>();
-  themedContents.set(application.content, byKey);
-  let content = byKey.get(key) as typeof application.content | undefined;
-  if (content === undefined) {
-    const theme = applyOrganizationTheme(application.content.theme, organization);
-    content =
-      theme === application.content.theme
-        ? application.content
-        : Object.freeze({ ...application.content, theme });
-    if (byKey.size >= 20) byKey.delete(byKey.keys().next().value!);
-    byKey.set(key, content);
-  }
-  if (content === application.content) return context;
-  const themed: InstalledRuntimeContext = Object.freeze({
-    ...context,
-    releaseSet: Object.freeze({
-      ...context.releaseSet,
-      application: Object.freeze({ ...application, content }),
-    }),
-  });
-  assembledContexts.add(themed);
-  return themed;
 };
 
 export type InstalledRuntimeContextLoader = Readonly<{ load(): Promise<InstalledRuntimeContext> }>;

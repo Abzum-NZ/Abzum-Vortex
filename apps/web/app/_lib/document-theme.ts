@@ -4,9 +4,9 @@ import { cache, type CSSProperties } from "react";
 import { headers } from "next/headers";
 import { DEFAULT_APPLICATION_THEME_SELECTION, organizationIdSchema } from "@vortex/platform/schema";
 import {
-  applyOrganizationTheme,
   DEFAULT_PLATFORM_THEME_RELEASE,
-  STUDIO_THEME_ROOT,
+  resolveApplicationTheme,
+  STUDIO_THEME,
 } from "@vortex/platform/server";
 import {
   createDocumentThemeVariables,
@@ -44,7 +44,8 @@ const studioDocumentThemeOf = (theme: ApplicationTheme) => {
 };
 
 /** The same Studio root props serve the document's first paint and client-side route transitions. */
-export const STUDIO_DOCUMENT_THEME = studioDocumentThemeOf(STUDIO_THEME_ROOT);
+const studioTheme = resolveApplicationTheme(STUDIO_THEME, undefined);
+export const STUDIO_DOCUMENT_THEME = studioDocumentThemeOf(studioTheme);
 
 /**
  * The platform default theme as one `:root` rule. It is the document's theme wherever no
@@ -87,8 +88,8 @@ const loadStudioOrganizationTheme = cache(
     if (resolution.kind !== "active") return undefined;
     const load = await loadOrganizationTheme(resolution.session, organizationId);
     if (load.kind !== "available") return undefined;
-    const theme = applyOrganizationTheme(STUDIO_THEME_ROOT, load.theme.selection);
-    return theme === STUDIO_THEME_ROOT ? undefined : theme;
+    const theme = resolveApplicationTheme(STUDIO_THEME, load.theme.selection);
+    return theme === studioTheme ? undefined : theme;
   },
 );
 

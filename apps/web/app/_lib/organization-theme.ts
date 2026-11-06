@@ -7,7 +7,10 @@ import {
 } from "@vortex/platform/schema";
 import {
   readCurrentOrganizationThemeAfterAuthorization,
+  resolveApplicationTheme,
+  type ApplicationTheme,
   type OrganizationThemeRead,
+  type StoredApplicationTheme,
 } from "@vortex/platform/server";
 import { humanOrganizationRequests } from "./server-composition";
 
@@ -34,3 +37,24 @@ export const loadOrganizationTheme = cache(
     return { kind: result.kind };
   },
 );
+
+export type ApplicationThemeLoad =
+  | Readonly<{ kind: "available"; theme: ApplicationTheme }>
+  | Readonly<{ kind: "unavailable" }>
+  | Readonly<{ kind: "temporarily_unavailable" }>;
+
+/**
+ * The theme one installed application is drawn with in an organisation: its stored theme resolved
+ * through the organisation's by the one resolution function. The organisation read is the request's
+ * shared one, so the frame, the page and the document root add no read.
+ */
+export const loadApplicationTheme = async (
+  session: IdentitySession,
+  organizationId: string,
+  stored: StoredApplicationTheme,
+): Promise<ApplicationThemeLoad> => {
+  const organization = await loadOrganizationTheme(session, organizationId);
+  return organization.kind === "available"
+    ? { kind: "available", theme: resolveApplicationTheme(stored, organization.theme.selection) }
+    : organization;
+};

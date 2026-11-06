@@ -19,7 +19,7 @@ import {
 } from "@vortex/platform/schema";
 import { findPinnedPlatformThemeRelease } from "./_lib/pinned-platform-theme-release";
 import {
-  applyOrganizationTheme,
+  resolveApplicationTheme,
   changeCurrentOrganizationThemeAfterAuthorization,
   createHumanApplicationDraftWriter,
   DEFAULT_PLATFORM_THEME_RELEASE,
@@ -352,7 +352,7 @@ export async function resolveStudioApplicationTheme(
       return {
         kind: "available",
         valid: true,
-        theme: applyOrganizationTheme(result.theme, organization.theme.selection),
+        theme: resolveApplicationTheme(result.theme, organization.theme.selection),
       };
     }
     console.error(

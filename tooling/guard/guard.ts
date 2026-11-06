@@ -577,7 +577,6 @@ function gitOutput(args: string[]): string | undefined {
 // importing a catalogue, so an invalid pin cannot prevent the warning from explaining its impact.
 for (const file of [
   "packages/platform/src/definition/application-composition-release-identities.ts",
-  "packages/platform/src/theme/platform-theme-catalogue.ts",
 ]) {
   const previous = gitOutput(["show", `origin/main:${file}`]);
   if (previous === undefined) {
@@ -605,17 +604,6 @@ for (const file of [
         if (key !== undefined && fingerprint !== undefined)
           result.set(key, { fingerprint, line: lineAt(content, node.getStart(source)) });
       }
-      if (
-        ts.isVariableDeclaration(node) &&
-        ts.isIdentifier(node.name) &&
-        node.name.text === "DEFAULT_PLATFORM_THEME_CONTENT_FINGERPRINT" &&
-        node.initializer !== undefined &&
-        ts.isStringLiteral(node.initializer)
-      )
-        result.set("DEFAULT_PLATFORM_THEME_RELEASE", {
-          fingerprint: node.initializer.text,
-          line: lineAt(content, node.getStart(source)),
-        });
       ts.forEachChild(node, visit);
     };
     visit(source);

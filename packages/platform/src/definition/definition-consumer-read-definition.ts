@@ -202,7 +202,8 @@ export const verifyDefinitionCatalogueDependencies = async (
       release.releaseVersion !== dependency.releaseVersion
     )
       return "invalid";
-    if (release.contentFingerprint !== dependency.contentFingerprint) return "superseded";
+    // A theme's content never supersedes a release: tokens resolve at run time from the current
+    // catalogue, so the pin is the theme's identity and version only.
   }
   return "valid";
 };
