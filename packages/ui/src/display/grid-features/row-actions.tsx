@@ -11,6 +11,7 @@ import {
   DropdownMenuTrigger,
 } from "../../components/dropdown-menu";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../../components/tooltip";
+import { Reasoned } from "../../components/reasoned";
 import { Spinner } from "../../components/spinner";
 import { toast } from "../../components/sonner";
 import { Icon } from "../../icons/icon";
@@ -111,38 +112,52 @@ function RowCommands({ context, row }: GridFeatureCommandProps): ReactElement | 
       className="flex items-center gap-[var(--vortex-space-xs)]"
       onClick={(event) => event.stopPropagation()}
     >
-      {inline.map(({ action, identity, reason, href }) => (
-        <Tooltip key={identity}>
-          <TooltipTrigger render={<span className="inline-flex" />}>
-            {href === undefined ? (
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon-sm"
-                aria-label={`${action.label}: ${name}`}
-                disabled={gesture.pending || reason !== undefined}
-                aria-busy={gesture.pending}
-                onClick={() => run(action)}
-              >
-                {gesture.pending ? <Spinner aria-hidden="true" /> : <Icon name={action.icon} />}
-              </Button>
-            ) : (
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                aria-label={`${action.label}: ${name}`}
-                nativeButton={false}
-                render={<NavigationLink href={href} />}
+      {inline.map(({ action, identity, reason, href }) => {
+        const label = `${action.label}: ${name}`;
+        if (href !== undefined)
+          return (
+            <Tooltip key={identity}>
+              <TooltipTrigger
+                render={
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label={label}
+                    nativeButton={false}
+                    render={<NavigationLink href={href} />}
+                  />
+                }
               >
                 <Icon name={action.icon} />
-              </Button>
-            )}
-          </TooltipTrigger>
-          <TooltipContent>
-            {reason === undefined ? action.label : `${action.label}: ${reason}`}
-          </TooltipContent>
-        </Tooltip>
-      ))}
+              </TooltipTrigger>
+              <TooltipContent>{action.label}</TooltipContent>
+            </Tooltip>
+          );
+        const button = (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            aria-label={label}
+            disabled={gesture.pending}
+            aria-busy={gesture.pending}
+            onClick={() => run(action)}
+          >
+            {gesture.pending ? <Spinner aria-hidden="true" /> : <Icon name={action.icon} />}
+          </Button>
+        );
+        // An unavailable action stays focusable and says why on hover and focus.
+        return reason === undefined ? (
+          <Tooltip key={identity}>
+            <TooltipTrigger render={button} />
+            <TooltipContent>{action.label}</TooltipContent>
+          </Tooltip>
+        ) : (
+          <Reasoned key={identity} reason={`${action.label}: ${reason}`}>
+            {button}
+          </Reasoned>
+        );
+      })}
       <DropdownMenu
         open={open}
         onOpenChange={(nextOpen) => {
@@ -153,22 +168,29 @@ function RowCommands({ context, row }: GridFeatureCommandProps): ReactElement | 
           setOpen(nextOpen);
         }}
       >
-        <DropdownMenuTrigger
-          render={
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-sm"
-              ref={triggerRef}
-              data-row-action-menu=""
-              aria-label={`Actions for ${name}`}
-              disabled={gesture.pending}
-              aria-busy={gesture.pending}
-            />
-          }
-        >
-          {gesture.pending ? <Spinner aria-hidden="true" /> : <Icon name="more-horizontal" />}
-        </DropdownMenuTrigger>
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <DropdownMenuTrigger
+                render={
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    ref={triggerRef}
+                    data-row-action-menu=""
+                    aria-label={`Actions for ${name}`}
+                    disabled={gesture.pending}
+                    aria-busy={gesture.pending}
+                  />
+                }
+              />
+            }
+          >
+            {gesture.pending ? <Spinner aria-hidden="true" /> : <Icon name="more-horizontal" />}
+          </TooltipTrigger>
+          <TooltipContent>{`Actions for ${name}`}</TooltipContent>
+        </Tooltip>
         <DropdownMenuContent
           className="w-auto min-w-64 max-w-[calc(100vw-2rem)]"
           onClick={(event) => event.stopPropagation()}
