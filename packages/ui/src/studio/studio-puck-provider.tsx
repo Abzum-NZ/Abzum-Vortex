@@ -84,7 +84,7 @@ import {
 import { studioPuckStyle } from "./studio-puck-style";
 import { studioPuckWords } from "./studio-puck-words";
 import type { StudioCanvasRecordsReader } from "./use-studio-canvas-records";
-import { useStudioCanvasChannelValue } from "./use-studio-canvas-channel";
+import { useStableValue, useStudioCanvasChannelValue } from "./use-studio-canvas-channel";
 import {
   StudioCanvasBarContext,
   StudioCanvasStatusContext,
@@ -350,10 +350,7 @@ export function StudioPuckProvider({
   );
   // A new revision usually leaves every reason as it was (a label changed, say); the object held
   // stays while the reasons are the same, so the canvas channel changes only for a real change.
-  const heldReferences = useRef(readReferences);
-  if (!sameCompositionValue(heldReferences.current, readReferences))
-    heldReferences.current = readReferences;
-  const references = heldReferences.current;
+  const references = useStableValue(readReferences);
   // The reasons are Studio's, not Puck's per-block permissions: Puck would resolve every block's
   // permissions through its store (a copy of two maps of every block per block, so work that grows
   // with the square of the page). The bar reads the reasons from the canvas channel instead, and
@@ -699,7 +696,8 @@ export function StudioPuckProvider({
     () => ({ describePlacement, items: modelItems, placed, blockActions }),
     [describePlacement, modelItems, placed, blockActions],
   );
-  // The iframe override asks which slots hold a grid when a slot comes near; a new set needs no redraw.
+  // The iframe override asks which slots hold a grid when a slot comes near; a new set needs no
+  // redraw.
   const readGridHolders = useCallback(() => latest.current.model.gridHolders, []);
   if (!stylesheetApplied) return null;
   return (
@@ -708,9 +706,9 @@ export function StudioPuckProvider({
         <StudioCanvasBarContext.Provider value={bar}>
           <StudioGridHoldersContext.Provider value={readGridHolders}>
             <StudioCanvasChannelContext.Provider value={channel}>
-              {/* Puck's own wrapper reads its font and spacing from the tokens too, so the map sits above it.
-          The Outline and Blocks regions repeat it on their own roots: below the wide breakpoint they
-          are drawn in a Sheet outside this element. */}
+              {/* Puck's own wrapper reads its font and spacing from the tokens too, so the map sits
+              above it. The Outline and Blocks regions repeat it on their own roots: below the wide
+              breakpoint they are drawn in a Sheet outside this element. */}
               <div className="contents" style={studioPuckStyle}>
                 <SlotLockProvider store={slotLock}>
                   <IndexedSlotsProvider keys={indexedSlots}>

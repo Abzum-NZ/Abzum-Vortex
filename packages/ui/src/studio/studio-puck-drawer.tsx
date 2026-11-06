@@ -47,6 +47,7 @@ import { studioScreens, useStudioScreen } from "./studio-canvas-screen";
 import { useStudioCanvasStatus, type StudioCanvasStatus } from "./studio-canvas-status";
 import type { StudioCanvasAddRequest, StudioCanvasPalette } from "./studio-puck-provider";
 import { studioPuckStyle } from "./studio-puck-style";
+import { useSettledValue } from "./use-settled-value";
 
 const usePuckSelector = createUsePuck();
 
@@ -304,13 +305,30 @@ export function StudioBlocksPanel({
   palette: StudioCanvasPalette | undefined;
 }>) {
   const status = useStudioCanvasStatus();
-  const screen = useStudioScreen();
+  const { breakpoint } = useStudioScreen();
+  // The palette is new after every edit of the draft, so while the panel is shown it takes the
+  // places once typing pauses, and the current ones the moment the tab is shown. An add still
+  // decides on the live draft (the workspace's add, then the add command).
+  const settled = useSettledValue(palette);
   // The panel stays mounted to keep its search and place while another tab is shown, and then it
-  // works nothing out: it holds what it was given when it was last shown, and the body below
-  // (which only a change of that redraws) is worked out again once the tab is shown again.
-  const held = useRef({ palette, status, screen });
-  if (visible) held.current = { palette, status, screen };
-  return <StudioBlocksBody visible={visible} given={held.current} />;
+  // works nothing out: it holds what it was last given, and the body below (which only a change of
+  // that redraws) is worked out again once the tab is shown again.
+  const held = useRef<Readonly<{ given: BlocksGiven; shown: boolean }>>({
+    given: { palette, status, screen: { breakpoint } },
+    shown: false,
+  });
+  const was = held.current;
+  if (visible) {
+    const next = !was.shown || settled === palette ? palette : was.given.palette;
+    if (
+      !was.shown ||
+      next !== was.given.palette ||
+      status !== was.given.status ||
+      breakpoint !== was.given.screen.breakpoint
+    )
+      held.current = { given: { palette: next, status, screen: { breakpoint } }, shown: true };
+  } else if (was.shown) held.current = { given: was.given, shown: false };
+  return <StudioBlocksBody visible={visible} given={held.current.given} />;
 }
 
 type BlocksGiven = Readonly<{
