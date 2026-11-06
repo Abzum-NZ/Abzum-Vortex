@@ -160,6 +160,7 @@ const rememberDraft = (
   root: OrganizationBuilderRoot,
   releaseFingerprint: string,
   draft: StudioDraftState,
+  log: Log,
 ): void => {
   const pending = readPending(root.rootId);
   if (
@@ -167,6 +168,8 @@ const rememberDraft = (
     draft.sourceFingerprint === pending?.sourceFingerprint
   )
     return;
+  if (pending !== undefined)
+    log(`${root.key}: a newer save replaces the unpublished draft remembered earlier`);
   writeRefreshRecord(pendingName(root.rootId), {
     rootId: root.rootId,
     key: root.key,
@@ -196,6 +199,7 @@ const restoreRememberedDraft = async (
     log(`${root.key}: the unpublished draft is the draft again`);
   } else if (draft.sourceFingerprint !== pending.sourceFingerprint)
     log(`${root.key}: kept the draft a person saved while the refresh ran`);
+  else log(`${root.key}: the draft already holds the remembered unpublished work; record dropped`);
   removeRefreshRecord(pendingName(root.rootId));
 };
 
@@ -275,6 +279,7 @@ const refreshRoot = async (
       root,
       await readReleaseSourceFingerprint(facts.system, root.rootId, latest),
       draft,
+      log,
     );
     const restored = await restoreStudioRelease(
       facts.system,
