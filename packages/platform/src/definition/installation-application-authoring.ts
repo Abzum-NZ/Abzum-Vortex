@@ -28,6 +28,7 @@ import {
   type FlowRefusalFeedback,
 } from "../workflows/flow-refusal-feedback";
 import { minimumApplicationSource } from "./application-authoring/new-application-source";
+import { sourceFieldLabels } from "./application-authoring/studio-placement-describer";
 import { readApplicationDefinitionDraft } from "./definition-draft-read";
 import { definitionPublicationConfirmationSchema } from "./definition-store-contracts";
 import type { ImmutableDefinitionPublicationCatalogueDefinition } from "./publication/read";
@@ -233,7 +234,7 @@ export const createApplicationAuthoringService = (environment: ApplicationAuthor
         // counts it (undefined for a first release or when nothing changed).
         let changeSentence: string | undefined;
         // The draft's field names by qualified reference, so the review names fields, not keys.
-        const fieldNames = new Map<string, string>();
+        let fieldNames: ReadonlyMap<string, string> = new Map();
         const read = await environment.requests.runChange(
           session,
           { organizationId },
@@ -243,11 +244,7 @@ export const createApplicationAuthoringService = (environment: ApplicationAuthor
             });
             draftRevision = draft.draftRevision;
             applicationName = draft.source.kind === "application" ? draft.source.body.name : "";
-            if (draft.source.kind === "application")
-              for (const module of draft.source.body.modules)
-                for (const record of module.record_types)
-                  for (const field of record.fields)
-                    fieldNames.set(`${module.key}:${record.key}.${field.key}`, field.label);
+            if (draft.source.kind === "application") fieldNames = sourceFieldLabels(draft.source);
             const published = draft.publishedRevision;
             if (published !== undefined && draft.source.kind === "application") {
               // The published version is the page of one that ends at the anchor.
@@ -303,10 +300,12 @@ export const createApplicationAuthoringService = (environment: ApplicationAuthor
           ...(addedFields.length === 0
             ? []
             : [
-                `${addedFields.length} new fields: ${addedFields
-                  .slice(0, 5)
-                  .map((reference) => fieldNames.get(reference) ?? reference)
-                  .join(", ")}`,
+                `${addedFields.length} new ${addedFields.length === 1 ? "field" : "fields"}: ${[
+                  ...addedFields
+                    .slice(0, 5)
+                    .map((reference) => fieldNames.get(reference) ?? reference),
+                  ...(addedFields.length > 5 ? [`${addedFields.length - 5} more`] : []),
+                ].join(", ")}`,
               ]),
         ];
         return {

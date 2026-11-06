@@ -139,7 +139,7 @@ export const resolveRecordType = (source: Source, reference: string) => {
       label: `${verb} ${record.plural_name.toLowerCase()}`.slice(0, 60),
       description:
         action === "soft_delete"
-          ? `Shows the Delete action on the pages of ${record.plural_name.toLowerCase()} in ${module.name}.`
+          ? `Allows deleting ${record.plural_name.toLowerCase()} in ${module.name} from their pages.`
           : `Allows opening the ${action === "read" ? "" : `${action === "create" ? "creation" : "editing"} `}pages of ${record.plural_name.toLowerCase()} in ${module.name}.`,
       action_kind: "named",
       named_action: uniqueKey(
