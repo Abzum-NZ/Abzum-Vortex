@@ -39,12 +39,13 @@ import {
 } from "../db/request-transaction";
 
 import { databaseClockOf } from "./live-context";
+import { markRequestFailureLogged, requestFailureLogged } from "./request-failure-mark";
 import {
-  classifyDatabaseError,
-  DefinitionError,
-  isValidationRefusal,
-} from "../definition/definition-error";
-import type { InstallationProblem } from "../definition/installation-authority";
+  classifyRequestFailure,
+  faultRequestFailure,
+  refusedRequestFailure,
+  type RequestFailureClass,
+} from "./request-failure";
 
 type ResolvedRequestTransactionRunner = <Scope, Result>(
   resolve: (transaction: RequestDatabaseTransaction) => Promise<ResolvedRequestContext<Scope>>,
@@ -63,19 +64,11 @@ export class HumanOrganizationRequestRestart extends Error {
   }
 }
 
-const loggedRequestFailures = new WeakSet<object>();
-
-/**
- * The request runner logs every answer that is not available, once, and marks the error it caught.
- * A caller that catches that same error, or throws a new one restating the answer (marked here),
- * adds no second line. A mark is no property of the error: its identity and output are unchanged.
- */
-export const requestFailureLogged = (error: unknown): boolean =>
-  typeof error === "object" && error !== null && loggedRequestFailures.has(error);
-
-export const markRequestFailureLogged = <Failure>(error: Failure): Failure => {
-  if (typeof error === "object" && error !== null) loggedRequestFailures.add(error);
-  return error;
+/** The one log line of a failed request. */
+const logRequestFailure = (failure: RequestFailureClass, cause: string): void => {
+  const line = `[access] human organisation request ${failure.verb}: ${cause}`;
+  if (failure.level === "info") console.info(line);
+  else console.error(line);
 };
 
 /** A scope already resolved and locked by the enclosing admitted segment. */
@@ -232,7 +225,7 @@ export const createHumanOrganizationRequestService = (
           !namespacedKeySchema.safeParse(address.applicationKey).success))
     ) {
       // Every answer that is not available is logged here once, these early ones too.
-      console.info("[access] human organisation request refused: invalid session or scope input");
+      logRequestFailure(refusedRequestFailure, "invalid session or scope input");
       return { kind: "unavailable" };
     }
     let selected = verifiedCandidate?.success ? verifiedCandidate.data : undefined;
@@ -249,12 +242,12 @@ export const createHumanOrganizationRequestService = (
       correlationId = correlationIdSchema.parse(newCorrelationId());
     } catch (error) {
       const cause = describeFailure(error);
-      console.error(`[access] human organisation request failed: ${cause}`);
+      logRequestFailure(faultRequestFailure, cause);
       return { kind: "temporarily_unavailable", cause };
     }
     if (Date.parse(verifiedSession.data.accessTokenExpiresAt) <= Date.parse(issuedAt)) {
-      console.info("[access] human organisation request refused: access token expired");
-      appendTelemetry(correlationId, "refused", startedAtMs);
+      logRequestFailure(refusedRequestFailure, "access token expired");
+      appendTelemetry(correlationId, refusedRequestFailure.outcome, startedAtMs);
       return { kind: "unavailable" };
     }
     const hasAuthenticationEvidence =
@@ -266,10 +259,8 @@ export const createHumanOrganizationRequestService = (
       (verifiedSession.data.multiFactorAuthenticatedAt !== undefined &&
         Date.parse(verifiedSession.data.multiFactorAuthenticatedAt) > Date.parse(issuedAt))
     ) {
-      console.info(
-        "[access] human organisation request refused: authentication time in the future",
-      );
-      appendTelemetry(correlationId, "refused", startedAtMs);
+      logRequestFailure(refusedRequestFailure, "authentication time in the future");
+      appendTelemetry(correlationId, refusedRequestFailure.outcome, startedAtMs);
       return { kind: "unavailable" };
     }
 
@@ -451,6 +442,7 @@ export const createHumanOrganizationRequestService = (
     } catch (error) {
       if (error instanceof HumanOrganizationRequestRestart) throw error;
       const code = databaseCode(error);
+      // The caller turns its own expected refusal into its typed outcome and answers with it.
       if (code !== undefined && mapDatabaseRefusal !== undefined) {
         const refusal = mapDatabaseRefusal(code, error);
         if (refusal !== undefined) {
@@ -458,86 +450,29 @@ export const createHumanOrganizationRequestService = (
           return { kind: "available", value: refusal };
         }
       }
-      if (code === "V3140" && suspendedAccountResult !== undefined) {
-        appendTelemetry(correlationId, "refused", startedAtMs);
-        return suspendedAccountResult();
-      }
-      const recentAuthenticationRequired = code === "V3150";
-      const multiFactorRequired = code === "V3152";
-      const roleSettingsChangeRequired = code === "V3151";
-      const roleKeyInUse = code === "V3153";
-      // Postgres reports a missing privilege (a lost GRANT, a role misconfiguration) with the same
-      // code as the access model's refusals, but always as "permission denied for ...".
-      const missingPrivilege =
-        code === "42501" &&
-        error instanceof Error &&
-        error.message.startsWith("permission denied for ");
-      // A compiler refusal of the draft (a rule naming what to fix): the definition source already
-      // logged it once, and the answer to the person is a refusal.
-      const compilationRefusal =
-        error instanceof DefinitionError &&
-        error.code === "DEFINITION_PUBLICATION_FAILED" &&
-        isValidationRefusal(error.cause);
-      const refused =
-        compilationRefusal ||
-        (address !== undefined && code === "P0002") ||
-        (code === "42501" && !missingPrivilege) ||
-        recentAuthenticationRequired ||
-        multiFactorRequired ||
-        roleSettingsChangeRequired ||
-        roleKeyInUse ||
-        (error instanceof Error && error.name === "FirstInstallUnavailable") ||
-        // "Republish required": the release pins platform definitions since superseded. A state,
-        // not a fault.
-        (error instanceof Error &&
-          error.name === "InstallationProblem" &&
-          (error as InstallationProblem).problem.unavailableReason === "republish_required") ||
-        // Nothing to publish, or a person the builder authority does not allow: the answers the
-        // platform is there to give, so the log, the telemetry and the answer all say refused.
-        (error instanceof DefinitionError &&
-          (error.code === "DEFINITION_NO_CHANGE" || error.code === "DEFINITION_CONTEXT_REFUSED"));
+      const failure = classifyRequestFailure(error, { addressed: address !== undefined });
       const cause = describeFailure(error);
-      // A request its caller abandoned (the browser left the page) is stopped on purpose, and a
-      // refusal the access model raises is it answering: neither is a failure of the platform, so
-      // neither is logged as an error. Every other cause, a missing privilege too, is logged in full.
-      const abandoned =
-        error instanceof Error &&
-        ((error.name === "VortexDatabaseError" && error.message === "DATABASE_REQUEST_STOPPED") ||
-          error.name === "AbortError");
-      const alreadyLogged =
-        error instanceof DefinitionError &&
-        error.code === "DEFINITION_PUBLICATION_FAILED" &&
-        (error.cause instanceof z.ZodError || compilationRefusal);
-      if (alreadyLogged) {
-        // The definition source already logged it once: a stored-schema failure at error, a compiler refusal at info.
-      } else if (abandoned) console.info(`[access] human organisation request stopped: ${cause}`);
-      else if (classifyDatabaseError(error) === "conflict")
-        console.info(`[access] human organisation request temporarily unavailable: ${cause}`);
-      else if (
-        refused ||
-        code === "installation_authority_refused" ||
-        code === "DEFINITION_DRAFT_STALE_OR_MISSING" ||
-        code === "RECORD_STORAGE_INCOMPATIBLE"
-      )
-        console.info(`[access] human organisation request refused: ${cause}`);
-      else console.error(`[access] human organisation request failed: ${cause}`);
+      // The place that raised it may have logged it already (a definition source does, with its
+      // cause): then this is not logged a second time.
+      if (!requestFailureLogged(error)) logRequestFailure(failure, cause);
       markRequestFailureLogged(error);
-      appendTelemetry(correlationId, refused ? "refused" : "temporarily_unavailable", startedAtMs);
-      return multiFactorRequired
-        ? { kind: "unavailable", code: "multi_factor_required", cause }
-        : recentAuthenticationRequired
-          ? { kind: "unavailable", code: "recent_authentication_required", cause }
-          : roleSettingsChangeRequired
-            ? { kind: "unavailable", code: "role_settings_change_required", cause }
-            : roleKeyInUse
-              ? { kind: "unavailable", code: "role_key_in_use", cause }
-              : refused
-                ? { kind: "unavailable" }
-                : {
-                    kind: "temporarily_unavailable",
-                    cause,
-                    ...(code === undefined ? {} : { databaseCode: code }),
-                  };
+      appendTelemetry(correlationId, failure.outcome, startedAtMs);
+      switch (failure.answer) {
+        case "suspended_account":
+          return suspendedAccountResult === undefined
+            ? { kind: "unavailable" }
+            : suspendedAccountResult();
+        case "refused":
+          return { kind: "unavailable" };
+        case "temporarily_unavailable":
+          return {
+            kind: "temporarily_unavailable",
+            cause,
+            ...(code === undefined ? {} : { databaseCode: code }),
+          };
+        default:
+          return { kind: "unavailable", code: failure.answer, cause };
+      }
     }
   };
 

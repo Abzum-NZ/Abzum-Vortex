@@ -1,7 +1,5 @@
 "use server";
 
-import { logRefusal } from "@vortex/platform/schema";
-
 const reportableRoutes: ReadonlySet<string> = new Set(["app", "studio", "application-address"]);
 const digestPattern = /^[0-9A-Za-z_-]{1,32}$/;
 
@@ -14,5 +12,6 @@ const digestPattern = /^[0-9A-Za-z_-]{1,32}$/;
 export async function reportRouteFailure(route: string, digest: string | undefined): Promise<void> {
   if (!reportableRoutes.has(route)) return;
   const safeDigest = digest !== undefined && digestPattern.test(digest) ? digest : "none";
-  logRefusal(route, `render digest=${safeDigest}`, "ROUTE_RENDER_FAILED");
+  // A route that failed to render is a platform fault, not a refusal: one line at error.
+  console.error(`[${route}] render failed: code=ROUTE_RENDER_FAILED digest=${safeDigest}`);
 }

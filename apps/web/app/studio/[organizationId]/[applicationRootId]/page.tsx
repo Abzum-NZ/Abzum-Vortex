@@ -77,13 +77,6 @@ const loadWorkspacePlace = async (
   // organisation settings.
   if (settings.value === null || settings.value === "invalid") return { kind: "refused" };
   const applications = await applicationsRead;
-  // Some of this read's refusals are answered before any request runs, so it is said here.
-  if (applications.kind === "unavailable")
-    console.info("[studio] installed applications could not be read: unavailable");
-  else if (applications.kind === "temporarily_unavailable")
-    console.error(
-      `[studio] installed applications could not be read: ${applications.cause ?? "no cause"}`,
-    );
   // The installed Studio release shapes the frame the editor shows.
   const studioApplicationEntry =
     applications.kind === "available"
@@ -93,7 +86,7 @@ const loadWorkspacePlace = async (
   // address reads start now, run beside the reads below, and reach the editor when they finish.
   const navigationTargets: StudioNavigationTargets =
     applications.kind !== "available"
-      ? // Said once above, where the read failed; the editor is told it failed.
+      ? // Logged once where the read failed; the editor is told it failed.
         Promise.resolve({ kind: "failed" } as const)
       : Promise.all(
           applications.applications
@@ -193,6 +186,14 @@ export default async function StudioApplicationPage({
           [request],
           initial.draft.draftRevision,
         );
+  // The draft moved between the two reads (an expected race): said once, and the editor is reloaded
+  // as for any temporary failure.
+  if (result.kind === "stale") {
+    console.info("[studio] application draft moved while the editor opened: STUDIO_DRAFT_STALE");
+    return (
+      <StudioUnavailable subject="Application draft" result={{ kind: "temporarily_unavailable" }} />
+    );
+  }
   if (result.kind !== "available")
     return <StudioUnavailable subject="Application draft" result={result} />;
   const view = result.views[0]!;
@@ -219,8 +220,7 @@ export default async function StudioApplicationPage({
     );
   }
   // The owner of a used Module is named and linked from this list; without it the key is shown.
-  if (home.kind !== "available")
-    console.error(`[studio] application list for module owners unavailable: ${home.kind}`);
+  // The home read logged an answer that is not available, once.
   const applications =
     home.kind === "available"
       ? home.roots.map((root) => ({ key: root.key, rootId: root.rootId, name: root.name }))
