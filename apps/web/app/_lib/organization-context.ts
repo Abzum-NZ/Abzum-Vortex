@@ -38,7 +38,9 @@ export const loadPermittedApplicationsAtAddress = cache(
     try {
       authorityId = getIdentityAuthorityConfiguration().authorityId;
     } catch (error) {
-      return { kind: "temporarily_unavailable", cause: describeFailure(error) };
+      const cause = describeFailure(error);
+      console.error(`[identity] identity authority configuration unavailable: ${cause}`);
+      return { kind: "temporarily_unavailable", cause };
     }
     return readPermittedApplicationsAtAddress(
       platformPermissionSource,

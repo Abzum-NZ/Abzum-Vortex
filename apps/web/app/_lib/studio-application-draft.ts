@@ -238,7 +238,9 @@ type StudioApplicationLoadResult =
       views: readonly StudioLoadedView[];
     }>
   | StudioApplicationFailure
-  | Readonly<{ kind: "validation_failed"; reason: string }>;
+  | Readonly<{ kind: "validation_failed"; reason: string }>
+  /** The saved draft is behind the revision the caller asked for: a superseded read, not a failure. */
+  | Readonly<{ kind: "stale" }>;
 
 type SourcePage = StoredApplicationDefinitionDraft["source"]["body"]["pages"][number];
 /** One compiled content area: its items in desktop order, exactly as the release holds them. */
@@ -484,14 +486,26 @@ export const studioCompileFailure = (error: unknown): StudioCompileFailure => {
 
 /**
  * Classification, permission and detached draft read share one verified request transaction. The
- * visible editor asks for its own view, projected from the saved revision's single compile.
+ * visible editor asks for its own view, projected from the saved revision's single compile. Only a
+ * read that names the revision it expects can answer `stale`: the saved draft is not at it.
  */
-export const loadStudioApplicationDraft = async (
+export async function loadStudioApplicationDraft(
+  candidateOrganizationId: string,
+  candidateRootId: string,
+  requests?: readonly StudioViewRequest[],
+): Promise<Exclude<StudioApplicationLoadResult, Readonly<{ kind: "stale" }>>>;
+export async function loadStudioApplicationDraft(
+  candidateOrganizationId: string,
+  candidateRootId: string,
+  requests: readonly StudioViewRequest[],
+  expectedDraftRevision: number | undefined,
+): Promise<StudioApplicationLoadResult>;
+export async function loadStudioApplicationDraft(
   candidateOrganizationId: string,
   candidateRootId: string,
   requests: readonly StudioViewRequest[] = [{ kind: "source" }],
   expectedDraftRevision?: number,
-): Promise<StudioApplicationLoadResult> => {
+): Promise<StudioApplicationLoadResult> {
   const organization = organizationIdSchema.safeParse(candidateOrganizationId);
   const root = applicationRootIdSchema.safeParse(candidateRootId);
   if (
@@ -511,7 +525,7 @@ export const loadStudioApplicationDraft = async (
           ? { kind: "temporarily_unavailable", reason: "session_unavailable" }
           : { kind: "refused", reason: "session_ended" },
       );
-    const result = await humanOrganizationRequests().run(
+    const result = await humanOrganizationRequests().runChangeWithRefusal(
       resolved.session,
       { organizationId: organization.data },
       async (
@@ -519,15 +533,16 @@ export const loadStudioApplicationDraft = async (
         scope,
         issuedAt,
       ): Promise<
-        StudioAuthorityResult<
-          Readonly<{
-            organizationId: OrganizationId;
-            draft: StoredApplicationDefinitionDraft;
-            previewShape: string;
-            catalogue: typeof IMMUTABLE_PLATFORM_BLOCK_CATALOGUE;
-            views: readonly StudioLoadedView[];
-          }>
-        >
+        | StudioAuthorityResult<
+            Readonly<{
+              organizationId: OrganizationId;
+              draft: StoredApplicationDefinitionDraft;
+              previewShape: string;
+              catalogue: typeof IMMUTABLE_PLATFORM_BLOCK_CATALOGUE;
+              views: readonly StudioLoadedView[];
+            }>
+          >
+        | Readonly<{ kind: "stale" }>
       > => {
         const authority = createBuilderAuthority({
           transaction,
@@ -601,7 +616,7 @@ export const loadStudioApplicationDraft = async (
             : snapshot.draft;
         if (draft.kind !== "application") throw new Error("STUDIO_DRAFT_UNAVAILABLE");
         if (expectedDraftRevision !== undefined && draft.draftRevision < expectedDraftRevision)
-          throw new Error("STUDIO_DRAFT_REVISION_BEHIND");
+          return { kind: "stale" };
         const identityReservations = requests.some((request) => request.kind === "access")
           ? await readSourceIdentityReservations(transaction, draft.rootId)
           : null;
@@ -1177,6 +1192,12 @@ export const loadStudioApplicationDraft = async (
           },
         };
       },
+      // A draft that moved on while a compile for a superseded revision ran is stale, not a failure:
+      // the caller compiles again, and nothing is logged.
+      (code) =>
+        code === "DEFINITION_DRAFT_STALE_OR_MISSING" && expectedDraftRevision !== undefined
+          ? ({ kind: "stale" } as const)
+          : undefined,
     );
     if (sourceInvalid) return { kind: "validation_failed", reason: "source_invalid_platform" };
     if (publicationInvalid)
@@ -1184,17 +1205,17 @@ export const loadStudioApplicationDraft = async (
     if (result.kind === "available")
       return result.value.kind === "available"
         ? { kind: "available", ...result.value.value }
-        : declined("application-draft", result.value);
-    return declined(
-      "application-draft",
-      result.kind === "temporarily_unavailable"
-        ? { kind: "temporarily_unavailable", reason: "request_failed" }
-        : { kind: "refused", reason: "organization_unavailable" },
-    );
+        : result.value.kind === "stale"
+          ? result.value
+          : declined("application-draft", result.value);
+    // The request runner logged this answer once, with its class; the loader adds no second line.
+    return result.kind === "temporarily_unavailable"
+      ? { kind: "temporarily_unavailable", reason: "request_failed" }
+      : { kind: "refused", reason: "organization_unavailable" };
   } catch (error) {
     return loadFailure("application-draft", error);
   }
-};
+}
 
 export type StudioApplicationSourceCompile =
   | Readonly<{ kind: "compiles" }>

@@ -1,4 +1,6 @@
 import { ZodError } from "zod";
+import { markRequestFailureLogged, requestFailureLogged } from "../access/request-failure-mark";
+import { DefinitionCompilationError } from "./compilation-error";
 
 /**
  * The one definition failure type. `code` is the short, safe code a route boundary may show;
@@ -75,7 +77,7 @@ const describeCause = (cause: unknown): string => {
 export const isValidationRefusal = (cause: unknown): boolean => {
   let current: unknown = cause;
   for (let depth = 0; depth < 8 && current instanceof Error; depth += 1) {
-    if (current.name === "DefinitionCompilationError") return true;
+    if (current instanceof DefinitionCompilationError) return true;
     current = current.cause;
   }
   return false;
@@ -91,11 +93,14 @@ export const unexpectedDefinitionFailure = <Code extends string>(
   context: string,
 ): DefinitionError<Code> => {
   const error = new DefinitionError(code, { cause });
+  // A failure an inner source already logged is not logged again by the failure that wraps it.
+  if (requestFailureLogged(cause)) return markRequestFailureLogged(error);
   // A rule refusing the draft is an answer the author sees, not a fault: one line, no stack.
   if (isValidationRefusal(cause))
     console.info(`[definition] ${context} refused (${code}): ${describeCause(cause)}`);
   else console.error(`[definition] ${context} failed (${code}): ${describeCause(cause)}`, error);
-  return error;
+  // The request runner that catches this failure adds no second line.
+  return markRequestFailureLogged(error);
 };
 
 /** Logs a failure that the caller turns into a typed safe outcome, so the cause stays visible. */
