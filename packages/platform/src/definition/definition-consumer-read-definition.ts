@@ -119,7 +119,7 @@ export const definitionReleaseModuleTargetsMatch = (
 
 type DefinitionCatalogueVerification = "valid" | "unavailable" | "invalid" | "superseded";
 
-export const verifyDefinitionCatalogueDependencies = async (
+const verifyDefinitionCatalogueDependencies = async (
   manifest: readonly ExactDefinitionDependency[],
   catalogue: DefinitionPublicationCatalogue,
   validationContractVersion: string,
