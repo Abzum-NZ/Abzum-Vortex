@@ -30,7 +30,7 @@ import {
   type StudioCanvasCompiledSettings,
   type StudioCanvasCompiledSlot,
 } from "./studio-canvas-data";
-import { puckDataForBreakpoint, puckDataInSlotOrder } from "./studio-canvas-projection";
+import { puckDataForBreakpoint } from "./studio-canvas-projection";
 import { studioCanvasGridSetup } from "./studio-canvas-grid";
 import { studioCanvasConfig } from "./studio-canvas-render";
 
@@ -318,18 +318,12 @@ export const useStudioCanvasModel = (
   const rootSlotsJson = JSON.stringify(
     pageData === undefined
       ? []
-      : (() => {
-          const layoutSlots =
-            source.body.shells.find((entry) => entry.id === frameAlias(pageData))?.content_slots ??
-            [];
-          const rank = (key: string) => {
-            const index = layoutSlots.findIndex((slot) => slot.id === key);
-            return index === -1 ? layoutSlots.length : index;
-          };
-          return sourcePageRootSlots(pageData)
-            .map(([key]) => [key, layoutSlots.find((slot) => slot.id === key)?.label ?? key])
-            .sort(([left], [right]) => rank(String(left)) - rank(String(right)));
-        })(),
+      : sourcePageRootSlots(pageData).map(([key]) => [
+          key,
+          source.body.shells
+            .find((entry) => entry.id === frameAlias(pageData))
+            ?.content_slots.find((slot) => slot.id === key)?.label ?? key,
+        ]),
   );
   const rootSlots = useMemo(
     () => JSON.parse(rootSlotsJson) as readonly (readonly [string, string])[],
@@ -411,14 +405,8 @@ export const useStudioCanvasModel = (
     else console.error(`[studio] canvas ${area} is read-only`, readOnlyCause);
   }, [readOnlyCause]);
   const shown = useMemo(
-    () =>
-      data === undefined
-        ? undefined
-        : puckDataInSlotOrder(
-            puckDataForBreakpoint(data, breakpoint),
-            rootSlots.map(([key]) => key),
-          ),
-    [data, breakpoint, rootSlots],
+    () => (data === undefined ? undefined : puckDataForBreakpoint(data, breakpoint)),
+    [data, breakpoint],
   );
   // The blocks that are a data grid or hold one at any depth: while grids are arranged only the
   // slots of these are drawn at once.

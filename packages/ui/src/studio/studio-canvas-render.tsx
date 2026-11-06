@@ -615,7 +615,12 @@ export const studioCanvasConfig = (
     // (no defaults, no settings) beside one slot per content slot of the page's shell.
     root: {
       fields: {
-        ...Object.fromEntries(slots.map(([key, label]) => [key, { type: "slot", label }])),
+        // Puck lists a root's slots in the reverse of the order its fields are declared in (its
+        // Outline follows its own defaults for them), so they are declared last to first and the
+        // Outline reads in the layout's order.
+        ...Object.fromEntries(
+          [...slots].reverse().map(([key, label]) => [key, { type: "slot", label }]),
+        ),
         vortex: studioVortexField,
       },
       render: (props: Parameters<typeof StudioCanvasRoot>[0]) => (
