@@ -378,18 +378,20 @@ export function GridToolbar({
           {layoutControls === undefined ? null : (
             <DropdownMenu>
               <Tooltip>
-                <TooltipTrigger render={<span className="inline-flex" />}>
-                  <DropdownMenuTrigger
-                    render={
-                      <Button
-                        variant="outline"
-                        size="icon-sm"
-                        aria-label={`Columns of ${accessibleName}`}
-                      />
-                    }
-                  >
-                    <Icon name="sliders-horizontal" aria-hidden="true" />
-                  </DropdownMenuTrigger>
+                <TooltipTrigger
+                  render={
+                    <DropdownMenuTrigger
+                      render={
+                        <Button
+                          variant="outline"
+                          size="icon-sm"
+                          aria-label={`Columns of ${accessibleName}`}
+                        />
+                      }
+                    />
+                  }
+                >
+                  <Icon name="sliders-horizontal" aria-hidden="true" />
                 </TooltipTrigger>
                 <TooltipContent>Columns</TooltipContent>
               </Tooltip>
@@ -420,18 +422,25 @@ export function GridToolbar({
             </DropdownMenu>
           )}
           <DropdownMenu>
-            <DropdownMenuTrigger
-              render={
-                <Button
-                  ref={fullScreen?.buttonRef}
-                  variant="ghost"
-                  size="icon-sm"
-                  aria-label={`More tools for ${accessibleName}`}
-                />
-              }
-            >
-              <Icon name="more-horizontal" aria-hidden="true" />
-            </DropdownMenuTrigger>
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <DropdownMenuTrigger
+                    render={
+                      <Button
+                        ref={fullScreen?.buttonRef}
+                        variant="ghost"
+                        size="icon-sm"
+                        aria-label={`More tools for ${accessibleName}`}
+                      />
+                    }
+                  />
+                }
+              >
+                <Icon name="more-horizontal" aria-hidden="true" />
+              </TooltipTrigger>
+              <TooltipContent>{`More tools for ${accessibleName}`}</TooltipContent>
+            </Tooltip>
             <DropdownMenuContent align="end" className="min-w-48">
               {overflowItems}
               {toolbar?.find === undefined ? null : (
