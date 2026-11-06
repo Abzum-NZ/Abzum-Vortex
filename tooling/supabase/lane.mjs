@@ -14,7 +14,6 @@ import {
   killRecord,
   launchHidden,
   processSnapshot,
-  processTree,
   recordListeners,
   readRecords,
   recordState,
@@ -56,12 +55,8 @@ const appPorts = new Map([
   [11, 3657],
 ]);
 const laneNumbers = new Set(appPorts.keys());
-// Lane 3 is the shared demo lane: its own server runs under the owner's supervisor, so this tool
-// never starts, stops or kills it, and its database is never reset.
-const sharedLane = 3;
-// Guest dev servers use a window per kind of lane, clear of every lane's own ports.
-const guestWindows = { shared: [3631, 3649], batch: [3670, 3699] };
-const guestWindow = (lane) => (lane === sharedLane ? guestWindows.shared : guestWindows.batch);
+// Guest dev servers use one window, clear of every lane's own ports.
+const guestWindow = [3670, 3699];
 // Application port 3659 is blocked on this host.
 const blockedAppPort = 3659;
 // RAM (owner ruling): one rule for every start (lane stack, dev server, build, walk, agent): at least
@@ -167,12 +162,6 @@ const databaseRunning = (lane) => {
 const claimWindowMs = 30 * 60_000;
 /** The lane's lease. A stale lease is deleted only when the caller holds the lane's lock (`prune`). */
 const readLease = async (lane, prune = false) => {
-  if (lane === sharedLane && databaseRunning(lane))
-    return {
-      worktree: primaryWorktree(),
-      startedAt: "shared",
-      port: laneDatabasePort(lane),
-    };
   let lease;
   try {
     lease = JSON.parse(await readFile(leasePath(lane), "utf8"));
@@ -212,12 +201,6 @@ const requireLeaseHolder = async (lane, worktree, required = false, prune = fals
     fail(`Lane ${lane} has no active lease; start it from ${worktree} first.`);
   return lease;
 };
-/** The shared lane's own commands belong to the primary checkout. */
-const requirePrimaryForSharedLane = (lane, worktree) => {
-  if (lane === sharedLane && !sameWorktree(primaryWorktree(), worktree))
-    fail(`Lane ${sharedLane} belongs to the primary worktree.`);
-};
-
 const requireInitialized = (lane) => {
   if (!existsSync(path.join(laneSupabaseDirectory(lane), "config.toml")))
     fail(`Lane ${lane} is not initialized. Run: node tooling/supabase/lane.mjs init ${lane}`);
@@ -288,10 +271,8 @@ const laneConfig = (source, lane) => {
     .join("\n");
 };
 
-/** Generates a new lane's config once. An existing lane keeps its config; the shared lane is never initialised here. */
+/** Generates a new lane's config once. An existing lane keeps its config. */
 const init = async (lane) => {
-  if (lane === sharedLane)
-    fail(`Lane ${sharedLane} is the shared demo lane and is not initialised here.`);
   const configPath = path.join(laneSupabaseDirectory(lane), "config.toml");
   if (existsSync(configPath))
     fail(
@@ -522,7 +503,6 @@ const withLock = async (lane, worktree, work) => {
 
 const describeServer = (entry) =>
   `port ${entry.port} (${entry.role}, process ${entry.pid}, ${entry.worktree})`;
-const demoPort = laneAppPort(sharedLane);
 
 /**
  * Reads the lane's records, and drops those whose process is gone and whose port is free. A record
@@ -547,7 +527,7 @@ const pruneServers = async (lane, snapshot) => {
   return { records: kept, orphans };
 };
 
-/** Process IDs that no kill may reach: every recorded server's root and the demo server with its ancestors. */
+/** Process IDs that no kill may reach: every other recorded server's root. */
 const protectedProcesses = async (snapshot, record) => {
   const protectedPids = new Set();
   for (const number of laneNumbers) {
@@ -558,19 +538,11 @@ const protectedProcesses = async (snapshot, record) => {
       // A corrupt record of another lane blocks only that lane's own commands.
     }
   }
-  for (const listener of tcpListeners())
-    if (listener.port === demoPort)
-      for (const pid of [
-        ...withAncestors(listener.pid, snapshot),
-        ...processTree(listener.pid, snapshot),
-      ])
-        protectedPids.add(pid);
   return protectedPids;
 };
 
 /** Ends one recorded server by its process IDs, checks it is gone, and removes its log. */
 const endRecord = async (record, snapshot) => {
-  if (record.port === demoPort) fail("Lane tooling never touches the supervised demo server.");
   const protectedPids = await protectedProcesses(snapshot, record);
   if (recordState(record, snapshot) !== "gone") killRecord(record, snapshot, protectedPids);
   for (let attempt = 0; ; attempt += 1) {
@@ -688,7 +660,7 @@ const laneMigrationDifferences = (lane, worktreePath) => {
 
 const parseGuestPort = async (lane, value, snapshot) => {
   const port = Number(value);
-  const [from, to] = guestWindow(lane);
+  const [from, to] = guestWindow;
   if (!Number.isInteger(port) || port < from || port > to)
     fail(`Guests of lane ${lane} use ports ${from} to ${to}.`);
   if (portExcluded(port, excludedPortRanges()))
@@ -724,9 +696,7 @@ const startServer = async (lane, worktreePath, requestedPort) => {
   const lease = await readLease(lane, true);
   if (!lease) fail(`Lane ${lane} has no active lease.`);
   if (sameWorktree(primaryWorktree(), worktreePath))
-    fail(
-      `The primary checkout serves only lane ${sharedLane}'s supervised server; serve from another worktree.`,
-    );
+    fail("The primary checkout does not serve lanes; serve from another worktree.");
   const role = sameWorktree(lease.worktree, worktreePath) ? "holder" : "guest";
   if (role === "holder" && requestedPort !== undefined)
     fail("The holder serves the lane's own port; --port is for guests.");
@@ -880,9 +850,7 @@ if (command === "which") {
   const number = [...laneNumbers].find((candidate) =>
     sameWorktree(laneDirectory(candidate), laneArgument ?? ""),
   );
-  process.stdout.write(
-    `${JSON.stringify(number === undefined ? null : { lane: number, shared: number === sharedLane })}\n`,
-  );
+  process.stdout.write(`${JSON.stringify(number === undefined ? null : { lane: number })}\n`);
   process.exit(0);
 }
 if (command === "status" || command === "free") {
@@ -906,7 +874,6 @@ if (command === "status" || command === "free") {
     const roomForAnother = freeRamGb() >= ramFloorGb;
     const free = entries.find(
       (entry) =>
-        entry.number !== sharedLane &&
         entry.initialized &&
         !entry.running &&
         !entry.lease &&
@@ -937,7 +904,7 @@ if (command === "status" || command === "free") {
             ? `database ${running ? "running" : "stopped"}`
             : "not initialized";
       const unleased =
-        running && !lease && number !== sharedLane
+        running && !lease
           ? " (running without a lease: started by an older lane.mjs; its worktree merges origin/main and runs start)"
           : "";
       process.stdout.write(
@@ -963,11 +930,8 @@ if (command === "status" || command === "free") {
     const recordedPorts = new Set(
       entries.flatMap((entry) => entry.records.map((record) => record.port)),
     );
-    const dev = [...laneNumbers]
-      .filter((number) => number !== sharedLane)
-      .map((number) => [laneAppPort(number), number]);
-    const inWindow = (port) =>
-      Object.values(guestWindows).some(([from, to]) => port >= from && port <= to);
+    const dev = [...laneNumbers].map((number) => [laneAppPort(number), number]);
+    const inWindow = (port) => port >= guestWindow[0] && port <= guestWindow[1];
     const unrecorded = tcpListeners().filter(
       (listener) =>
         !recordedPorts.has(listener.port) &&
@@ -987,11 +951,6 @@ const worktree = path.resolve(worktreeArgument ?? process.cwd());
 
 try {
   const locked = (work) => withLock(lane, worktree, work);
-  // Start, stop and sync of the shared lane belong to the primary checkout; its guests touch only the
-  // lane lock, servers.json and their own server logs.
-  if (["sync", "start", "stop"].includes(command)) requirePrimaryForSharedLane(lane, worktree);
-  if (command === "init" && lane === sharedLane)
-    fail(`Lane ${sharedLane} is the shared demo lane and is not initialised here.`);
   switch (command) {
     case "init":
       await mkdir(laneDirectory(lane), { recursive: true });
@@ -1013,7 +972,7 @@ try {
       });
       break;
     case "claim":
-      if (worktreeArgument === undefined || lane === sharedLane) fail(usage);
+      if (worktreeArgument === undefined) fail(usage);
       requireInitialized(lane);
       await locked(async () => {
         await requireNotBlocked(lane);
@@ -1068,8 +1027,6 @@ try {
       break;
     case "reset":
       if (worktreeArgument === undefined) fail(usage);
-      if (lane === sharedLane)
-        fail(`Lane ${sharedLane} is the shared demo lane and cannot be reset.`);
       requireInitialized(lane);
       await locked(async () => {
         await requireLeaseHolder(lane, worktree, true);
