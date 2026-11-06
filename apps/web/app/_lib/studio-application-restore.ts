@@ -126,8 +126,10 @@ const failedCommand = (
   invocationStarted: boolean,
 ): StudioApplicationRestoreCommandResult => ({
   kind,
-  // A version of an earlier contract is refused before any write.
-  stateMayHaveChanged: invocationStarted && kind !== "superseded" ? "unknown" : false,
+  // A version of an earlier contract and a stale draft are refused before any write, so the
+  // person is told exactly that instead of being asked to check the draft.
+  stateMayHaveChanged:
+    invocationStarted && kind !== "superseded" && kind !== "conflict" ? "unknown" : false,
 });
 
 /** Runs one explicitly confirmed HUMAN restore and reports success only after the request commits. */
