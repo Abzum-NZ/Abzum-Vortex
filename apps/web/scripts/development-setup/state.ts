@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { z } from "zod";
 
@@ -276,4 +276,29 @@ export const loadSetupState = (
     },
   };
   return state;
+};
+
+/**
+ * Files the platform refresh keeps beside the setup state: the draft it must put back after it
+ * re-released a release (so an interrupted run is finished by the next one without losing a
+ * person's work) and the sources of an application it deleted.
+ */
+const refreshRecordFile = (name: string): string => join(dirname(stateFile()), name);
+
+export const writeRefreshRecord = (name: string, value: unknown): void => {
+  mkdirSync(dirname(stateFile()), { recursive: true });
+  writeFileSync(refreshRecordFile(name), `${JSON.stringify(value, null, 2)}\n`);
+};
+
+export const readRefreshRecord = (name: string): unknown | undefined => {
+  try {
+    return JSON.parse(readFileSync(refreshRecordFile(name), "utf8")) as unknown;
+  } catch (error) {
+    if (storedStateCode(error) === "ENOENT") return undefined;
+    throw stateFailure(`Unable to read the platform refresh record ${name}.`, error);
+  }
+};
+
+export const removeRefreshRecord = (name: string): void => {
+  rmSync(refreshRecordFile(name), { force: true });
 };
