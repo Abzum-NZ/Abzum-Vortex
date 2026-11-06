@@ -63,6 +63,11 @@ begin
     or not coalesce(pg_catalog.pg_input_is_valid(query_item #>> '{recordType,recordTypeId}', 'uuid'), false) then
     return null;
   end if;
+  if not vortex_record.module_query_is_readable_internal(
+    p_module_root_id, query_item, (installation ->> 'applicationRootId')::uuid
+  ) then
+    return null;
+  end if;
   type_module_root_id := (query_item #>> '{recordType,moduleRootId}')::uuid;
   type_record_type_id := (query_item #>> '{recordType,recordTypeId}')::uuid;
 
@@ -112,6 +117,6 @@ $$;
 alter function vortex_record.resolve_installed_module_query_internal(uuid,uuid) owner to vortex_record_adapter;
 
 
-COMMENT ON FUNCTION vortex_record.resolve_installed_module_query_internal(p_module_root_id uuid, p_query_id uuid) IS 'Private: the exact installed Module query and its record type, or null when either is unavailable to the current installation.';
+COMMENT ON FUNCTION vortex_record.resolve_installed_module_query_internal(p_module_root_id uuid, p_query_id uuid) IS 'Private: the exact installed Module query and its record type, or null when either is unavailable to the current installation or the Application may not read the query (a private query of another Application''s Module).';
 
 REVOKE ALL ON FUNCTION vortex_record.resolve_installed_module_query_internal(p_module_root_id uuid, p_query_id uuid) FROM PUBLIC;

@@ -156,6 +156,11 @@ begin
     or query_item #>> '{recordType,state}' is distinct from 'resolved' then
     return null;
   end if;
+  if not vortex_record.module_query_is_readable_internal(
+    p_module_root_id, query_item, (installation ->> 'applicationRootId')::uuid
+  ) then
+    return null;
+  end if;
 
   record_type_module_root_id_text := query_item #>> '{recordType,moduleRootId}';
   record_type_id_text := query_item #>> '{recordType,recordTypeId}';
@@ -364,4 +369,4 @@ revoke all on function vortex_record.resolve_preview_module_query_internal(uuid,
 grant execute on function vortex_record.resolve_preview_module_query_internal(uuid, uuid)
   to vortex_record_adapter;
 comment on function vortex_record.resolve_preview_module_query_internal(uuid, uuid) is
-  'Private preview-only resolver for one query and its exact pinned record type and active preview storage identity (a system projection resolves the draft''s query over the installed record type with no preview storage, and returns the refusal installation_required when there is no installed projection to read: no active installation binding the Module, or a draft whose record type or permissions differ from it); it validates the current human-owned unexpired preview and never falls back to an active installation.';
+  'Private preview-only resolver for one query and its exact pinned record type and active preview storage identity (a system projection resolves the draft''s query over the installed record type with no preview storage, and returns the refusal installation_required when there is no installed projection to read: no active installation binding the Module, or a draft whose record type or permissions differ from it); it returns null, before anything else is decided, for a query the Application may not read (a private query of another Application''s Module), so no refusal tells a private query from a missing one; it validates the current human-owned unexpired preview and never falls back to an active installation.';
