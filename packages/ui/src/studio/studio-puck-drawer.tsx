@@ -135,7 +135,7 @@ function StudioDrawerItem({ children, name }: Readonly<{ children: ReactNode; na
       size="sm"
       variant="outline"
       className={cn(
-        "flex-nowrap select-none pr-12",
+        "flex-nowrap pr-12",
         reason !== undefined && "opacity-70",
         draggable && "cursor-grab active:cursor-grabbing",
       )}
