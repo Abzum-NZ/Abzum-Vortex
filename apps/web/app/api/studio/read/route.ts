@@ -1,6 +1,6 @@
 import type { NextRequest } from "next/server";
 import { z } from "zod";
-import { applicationRootIdSchema, organizationIdSchema, logRefusal } from "@vortex/platform/schema";
+import { applicationRootIdSchema, organizationIdSchema } from "@vortex/platform/schema";
 import { readStudioCanvasRecords } from "../../../_lib/studio-canvas-records";
 import { readStudioDataRecords } from "../../../_lib/studio-data-records";
 import { loadStudioApplicationDraft } from "../../../_lib/studio-application-draft";
@@ -9,6 +9,7 @@ import { studioViewRequestSchema } from "../../../studio/_lib/studio-view-reques
 import { privateJsonResponse } from "../../../_lib/private-response";
 import { resolveIdentitySession } from "../../../auth/_lib/session-server";
 import { isOwnSiteJsonRequest, readJsonBody } from "../../_lib/own-site-request";
+import { logRefusal } from "@vortex/platform/server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

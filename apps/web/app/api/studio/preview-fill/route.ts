@@ -5,7 +5,6 @@ import {
   organizationIdSchema,
   previewInstallationIdSchema,
   revisionSchema,
-  logRefusal,
   sameId,
 } from "@vortex/platform/schema";
 import { resolveIdentitySession } from "../../../auth/_lib/session-server";
@@ -16,6 +15,7 @@ import {
 import { fillStudioPreviewWhenIdle } from "../../../_lib/studio-preview-work";
 import { privateJsonResponse } from "../../../_lib/private-response";
 import { isOwnSiteJsonRequest, readJsonBody } from "../../_lib/own-site-request";
+import { logRefusal } from "@vortex/platform/server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

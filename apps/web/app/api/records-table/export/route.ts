@@ -1,6 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
 import {
-  logRefusal,
   recordsTableExportRequestSchema,
   type RecordsTableExportRefusal,
 } from "@vortex/platform/schema";
@@ -9,6 +8,7 @@ import { createPlacementReadServices } from "../../../_lib/application-page/plac
 import { humanOrganizationRequestDependencies } from "../../../_lib/server-composition";
 import { getQueryContinuationKey } from "../../../_lib/query-continuation-key";
 import { recordsTableExportService, resolveBulkRequest } from "../_lib/bulk-request";
+import { logRefusal } from "@vortex/platform/server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

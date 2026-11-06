@@ -1,6 +1,6 @@
 import "server-only";
 
-import { logRefusal } from "@vortex/platform/schema";
+import { logRefusal } from "@vortex/platform/server";
 
 type BoundedRequestText =
   | Readonly<{ kind: "read"; text: string }>

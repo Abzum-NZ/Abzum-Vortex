@@ -1,7 +1,8 @@
 import type { NextRequest, NextResponse } from "next/server";
-import { logRefusal, recordsSelectionCountRequestSchema } from "@vortex/platform/schema";
+import { recordsSelectionCountRequestSchema } from "@vortex/platform/schema";
 import { privateJsonResponse as privateResponse } from "../../../_lib/private-response";
 import { recordsTableBulkService, resolveBulkRequest } from "../_lib/bulk-request";
+import { logRefusal } from "@vortex/platform/server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

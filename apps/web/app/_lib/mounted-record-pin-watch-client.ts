@@ -1,6 +1,6 @@
 import {
   containedComponentIdSchema,
-  logRefusal,
+  describeFailure,
   mountedRecordPinAssociationSchema,
   mountedRecordPinElementProperty,
   mountedRecordPinFrameSchema,
@@ -20,6 +20,12 @@ import {
   openWebPrivateInvalidationSource,
   type WebPrivateInvalidationSourceResult,
 } from "./private-invalidation-client";
+
+/** The browser has no request runner: a failed step is one error line in the console. */
+const logFailure = (op: string, code: string, error: unknown): void =>
+  console.error(
+    `[mounted-record-pin-watch] ${op} failed: code=${code} cause=${describeFailure(error)}`,
+  );
 
 const membershipSchema = mountedRecordPinAssociationSchema
   .extend({
@@ -227,8 +233,7 @@ export const createMountedRecordPinWatchClient = (
     try {
       if (current()) await options.refreshPlacements(ids);
     } catch (error) {
-      if (current())
-        logRefusal("mounted-record-pin-watch", "refresh placements", "refresh_failed", error);
+      if (current()) logFailure("refresh placements", "refresh_failed", error);
     } finally {
       flushing = false;
       for (const group of terminalGroups) close(group);
@@ -295,18 +300,13 @@ export const createMountedRecordPinWatchClient = (
           group.subscriber.start();
         } catch (error) {
           if (current() && !group.closed && !group.terminal)
-            logRefusal(
-              "mounted-record-pin-watch",
-              "start subscriber",
-              "subscriber_start_failed",
-              error,
-            );
+            logFailure("start subscriber", "subscriber_start_failed", error);
           terminal(group);
         }
       })
       .catch((error: unknown) => {
         if (current() && !group.closed && !group.terminal && !group.abort.signal.aborted)
-          logRefusal("mounted-record-pin-watch", "open source", "source_open_failed", error);
+          logFailure("open source", "source_open_failed", error);
         terminal(group);
       });
   };
@@ -328,8 +328,7 @@ export const createMountedRecordPinWatchClient = (
     try {
       members = options.readMemberships();
     } catch (error) {
-      if (current())
-        logRefusal("mounted-record-pin-watch", "read memberships", "membership_read_failed", error);
+      if (current()) logFailure("read memberships", "membership_read_failed", error);
       members = [];
     }
     const desired = new Map<string, Map<string, MountedRecordPinMembership>>();

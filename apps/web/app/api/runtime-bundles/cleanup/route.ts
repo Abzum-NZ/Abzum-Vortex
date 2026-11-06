@@ -1,4 +1,4 @@
-import { describeFailure, logRefusal } from "@vortex/platform/schema";
+import { describeFailure } from "@vortex/platform/schema";
 import type { NextRequest, NextResponse } from "next/server";
 import {
   authenticateRuntimeBundleCleanup,
@@ -6,6 +6,7 @@ import {
   dropRetiredPreviewStorage,
   runScheduledPreviewInstallationExpiry,
   runScheduledRuntimeBundleCleanup,
+  logRefusal,
 } from "@vortex/platform/server";
 import { privateJsonResponse } from "../../../_lib/private-response";
 import { fileStorageSigningConfiguration } from "../../../_lib/server-configuration";

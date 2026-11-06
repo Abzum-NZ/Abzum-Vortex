@@ -39,7 +39,6 @@ import {
   findPlatformServiceOperation,
   type PlatformServiceOperationKey,
 } from "../catalogue/platform-service-operation-catalogue";
-import { logRefusal } from "../catalogue/runtime-primitives";
 import {
   createTenantOrganizationCommandSchema,
   reactivateTenantOrganizationCommandSchema,
@@ -82,6 +81,7 @@ import {
   type changeConnectionInstance,
 } from "../connections/connection-administration";
 import type { checkConnectionHealth } from "../connections/connection-health";
+import { logRefusal } from "../access/request-failure";
 
 /**
  * One server executor for the registered platform-service protected operations. The caller (the

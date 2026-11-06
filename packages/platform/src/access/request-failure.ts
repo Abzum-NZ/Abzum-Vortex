@@ -1,6 +1,6 @@
 import "server-only";
 
-import { databaseCode } from "../catalogue/runtime-primitives";
+import { databaseCode, describeFailure } from "../catalogue/runtime-primitives";
 import { BuilderAuthorityError } from "../definition/builder-authority";
 import { DefinitionError, isValidationRefusal } from "../definition/definition-error";
 import { FirstInstallUnavailable } from "../definition/installation-first-install";
@@ -100,13 +100,20 @@ const installationProblemClass = (problem: InstallationProblem["problem"]): Requ
 };
 
 /**
- * A request its caller abandoned (the browser left the page) is stopped on purpose. The database
- * layer raises it as a plain error named for its layer, and the platform as an abort.
+ * A request its caller abandoned is stopped on purpose: the browser left the page (the database
+ * layer raises a plain error named for its layer, the platform an abort) or the connection was
+ * reset while the body was being read (an `aborted` read carries `ECONNRESET`).
  */
+const stoppedConnectionCodes: ReadonlySet<string> = new Set([
+  "ECONNRESET",
+  "ERR_STREAM_PREMATURE_CLOSE",
+]);
+
 const requestStopped = (error: unknown): boolean =>
   error instanceof Error &&
   ((error.name === "VortexDatabaseError" && error.message === "DATABASE_REQUEST_STOPPED") ||
-    error.name === "AbortError");
+    error.name === "AbortError" ||
+    stoppedConnectionCodes.has(databaseCode(error) ?? ""));
 
 /** The class of one error by its own class or code, or undefined when the table does not name it. */
 const knownClass = (
@@ -161,4 +168,16 @@ export const classifyRequestFailure = (
 export const logClassifiedFailure = (line: string, error: unknown): void => {
   if (classifyRequestFailure(error, { addressed: false }).level === "info") console.info(line);
   else console.error(line);
+};
+
+/**
+ * The one server-side line for a refusal or a caught failure: the route or service, the operation,
+ * a stable reason code and, when there is one, the safe description of its cause (class names and
+ * codes only). Ids may be part of `op`; personal data, values and secrets never are. Without a
+ * cause it is an expected refusal and information; with one the cause's class decides the level.
+ */
+export const logRefusal = (route: string, op: string, code: string, cause?: unknown): void => {
+  const message = `[${route}] ${op} refused: code=${code}`;
+  if (cause === undefined) console.info(message);
+  else logClassifiedFailure(`${message} cause=${describeFailure(cause)}`, cause);
 };
