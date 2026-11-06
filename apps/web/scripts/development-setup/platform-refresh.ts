@@ -40,20 +40,25 @@ import { readRefreshRecord, removeRefreshRecord, writeRefreshRecord } from "./st
  * installation pins content the platform no longer holds is re-released from that release's own
  * source and its installation moves to the re-release. A person's unpublished draft is never
  * published by a catalogue step: it is remembered in a record beside the setup state, put back on
- * top of the re-release and, if a run is interrupted, put back by the next one. An application
- * whose release source no longer compiles is deleted after both its sources are exported.
+ * top of the re-release and, if a run is interrupted, put back by the next one. When a person saves
+ * a newer draft meanwhile, theirs stays the draft and the remembered one is kept in a file beside
+ * the record, so nothing is lost. An application whose release source no longer compiles is deleted
+ * after both its sources are exported.
  */
 
 const releaseNote =
   "Re-released by the platform: a platform block, connection type or service operation it uses changed. Your draft is unchanged.";
 
-/** The closed list of publication refusals that mean the source no longer compiles. */
+/**
+ * The closed list of publication refusals that mean the source no longer compiles against the
+ * current catalogue. `DEFINITION_DEPENDENCY_SUBSTITUTED` is not one: it names stored evidence that
+ * does not authenticate or a lender's history that moved during the read, so it stops the setup.
+ */
 const compileRefusals: ReadonlySet<string> = new Set([
   "DEFINITION_DEPENDENCY_MISSING",
   "DEFINITION_DEPENDENCY_PRERELEASE_ONLY",
   "DEFINITION_DEPENDENCY_INCOMPATIBLE",
   "DEFINITION_DEPENDENCY_AMBIGUOUS",
-  "DEFINITION_DEPENDENCY_SUBSTITUTED",
   "DEFINITION_DEPENDENCY_CYCLE",
   "DEFINITION_COMPILATION_REFUSED",
 ]);
@@ -70,6 +75,8 @@ const pendingSchema = z
     key: z.string().min(1),
     source: z.unknown(),
     sourceFingerprint: z.string().min(1),
+    /** The release source the refresh restores over the draft: only that draft is replaced back. */
+    restoredFingerprint: z.string().min(1),
   })
   .strict();
 type Pending = z.infer<typeof pendingSchema>;
@@ -153,8 +160,19 @@ const inLenderFirstOrder = async (
 };
 
 /**
- * Remembers the person's draft before the release's own source replaces it. A draft that already
- * is the release's source (a run restored it) or the remembered draft is left as recorded.
+ * Writes a remembered draft that a person's newer save displaces to its own file, before the
+ * record changes, so no unpublished work is lost; returns the file name for the log line.
+ */
+const keepAside = (root: OrganizationBuilderRoot, pending: Pending): string => {
+  const name = `kept-${root.key}-${root.rootId}-${pending.sourceFingerprint.slice(-12)}.draft.json`;
+  writeRefreshRecord(name, pending.source);
+  return name;
+};
+
+/**
+ * Remembers the person's draft before the release's own source replaces it. A draft that is the
+ * release's source (unchanged, or restored by an interrupted run) or the remembered draft keeps the
+ * record; a newer save replaces it and the earlier remembered draft is kept aside.
  */
 const rememberDraft = (
   root: OrganizationBuilderRoot,
@@ -163,43 +181,47 @@ const rememberDraft = (
   log: Log,
 ): void => {
   const pending = readPending(root.rootId);
-  if (
-    draft.sourceFingerprint === releaseFingerprint ||
-    draft.sourceFingerprint === pending?.sourceFingerprint
-  )
-    return;
-  if (pending !== undefined)
-    log(`${root.key}: a newer save replaces the unpublished draft remembered earlier`);
+  if (pending === undefined && draft.sourceFingerprint === releaseFingerprint) return;
+  const keeps =
+    pending !== undefined &&
+    (draft.sourceFingerprint === releaseFingerprint ||
+      draft.sourceFingerprint === pending.sourceFingerprint);
+  if (pending !== undefined && !keeps)
+    log(
+      `${root.key}: a newer save replaces the unpublished draft remembered earlier; that draft is kept in ${keepAside(root, pending)}`,
+    );
+  const remembered = keeps ? pending : draft;
   writeRefreshRecord(pendingName(root.rootId), {
     rootId: root.rootId,
     key: root.key,
-    source: draft.source,
-    sourceFingerprint: draft.sourceFingerprint,
+    source: remembered.source,
+    sourceFingerprint: remembered.sourceFingerprint,
+    restoredFingerprint: releaseFingerprint,
   } satisfies Pending);
 };
 
-/** Puts the remembered draft back on top of the release, unless a person has saved another since. */
+/**
+ * Puts the remembered draft back while the draft is still the release source the refresh restored;
+ * a draft a person saved since stays, and the remembered one is kept aside.
+ */
 const restoreRememberedDraft = async (
   facts: Facts,
   root: OrganizationBuilderRoot,
-  releaseRevision: number,
   log: Log,
 ): Promise<void> => {
   const pending = readPending(root.rootId);
   if (pending === undefined) return;
   const draft = await readStudioDraft(facts.system, root.rootId);
   if (draft === undefined) throw new Error(`Studio draft is missing for ${root.key}`);
-  const releaseFingerprint = await readReleaseSourceFingerprint(
-    facts.system,
-    root.rootId,
-    releaseRevision,
-  );
-  if (draft.sourceFingerprint === releaseFingerprint) {
+  if (draft.sourceFingerprint === pending.sourceFingerprint)
+    log(`${root.key}: the draft already holds the remembered unpublished work; record dropped`);
+  else if (draft.sourceFingerprint === pending.restoredFingerprint) {
     await saveStudioDraft(facts.system, root.rootId, draft.draftRevision, pending.source);
     log(`${root.key}: the unpublished draft is the draft again`);
-  } else if (draft.sourceFingerprint !== pending.sourceFingerprint)
-    log(`${root.key}: kept the draft a person saved while the refresh ran`);
-  else log(`${root.key}: the draft already holds the remembered unpublished work; record dropped`);
+  } else
+    log(
+      `${root.key}: kept the draft a person saved while the refresh ran; the remembered unpublished draft is kept in ${keepAside(root, pending)}`,
+    );
   removeRefreshRecord(pendingName(root.rootId));
 };
 
@@ -311,7 +333,7 @@ const refreshRoot = async (
       throw error;
     }
   }
-  await restoreRememberedDraft(facts, root, target, log);
+  await restoreRememberedDraft(facts, root, log);
   if (active !== null && activeStale && active !== target)
     await switchActiveRelease(
       facts,
@@ -346,7 +368,12 @@ const organisationRowsSchema = z.array(
   }),
 );
 
-/** Every organisation on the instance, with what a system context for it needs. */
+/**
+ * Every organisation on the instance that holds an application built in Studio with a release, with
+ * what a system context for it needs. An organisation without one has nothing to refresh, so the
+ * nominated owner is never asked to act where it has no part. Shipped keys are the manifest's
+ * fixed enumeration of `vortex.app.*` keys, safe to quote inline.
+ */
 const listOrganisations = (facts: Facts): readonly SystemContextFacts[] =>
   organisationRowsSchema
     .parse(
@@ -354,6 +381,14 @@ const listOrganisations = (facts: Facts): readonly SystemContextFacts[] =>
         `select o.organization_id::text as organization_id, o.tenant_id::text as tenant_id, v.current_version::text as access_version
          from vortex_identity.organizations as o
          join vortex_access.organization_access_versions as v on v.organization_id = o.organization_id
+         where exists (
+           select 1 from vortex_definition.roots as r
+           where r.organization_id = o.organization_id
+             and r.kind = 'application'
+             and r.application_origin_kind is distinct from 'platform_system_application'
+             and r.current_release_revision is not null
+             and r.key not in (${facts.manifest.applicationKeys.map((key) => `'${key}'`).join(", ")})
+         )
          order by o.organization_id`,
         "Unable to list the organisations of this instance",
       ),

@@ -499,8 +499,8 @@ export const publishStudioDraft = async (
 /**
  * The contract step of the platform refresh: a release published under an earlier definition
  * contract has no reader, so the draft, converted by the step's migration, is the only source left.
- * It is published as it stands and the log says when it held unpublished work: a contract
- * migration moves every draft revision, so unpublished work cannot be told apart afterwards.
+ * It is published as it stands, with any unpublished work in it: the contract migration rewrites
+ * every draft's source, so a draft without unpublished work cannot be told apart afterwards.
  */
 export const publishConvertedStudioDraft = async (
   facts: SystemContextFacts,
@@ -509,13 +509,6 @@ export const publishConvertedStudioDraft = async (
 ): Promise<PublishedRelease> => {
   const live = await readStudioDraft(facts, root.rootId);
   if (live === undefined) throw new Error(`Studio draft is missing for ${root.key}`);
-  if (root.currentReleaseRevision === null)
-    throw new Error(`Studio application ${root.key} has no release`);
-  const releasedFingerprint = await readReleaseSourceFingerprint(
-    facts,
-    root.rootId,
-    root.currentReleaseRevision,
-  );
   // Save the draft as it stands, so its identity requirements are its own.
   const saved = await saveStudioDraft(facts, root.rootId, live.draftRevision, live.source);
   const published = await publishStudioDraft(
@@ -525,11 +518,7 @@ export const publishConvertedStudioDraft = async (
     "Republished on the current definition contract by the platform refresh",
   );
   log(
-    `published ${root.key} ${published.releaseVersion} (revision ${published.releaseRevision}) from its converted draft${
-      releasedFingerprint === live.sourceFingerprint
-        ? ""
-        : ", including unpublished work, because its release predates the current definition contract"
-    }`,
+    `published ${root.key} ${published.releaseVersion} (revision ${published.releaseRevision}) from its converted draft as it stands, with any unpublished work in it, because its release predates the current definition contract`,
   );
   return published;
 };

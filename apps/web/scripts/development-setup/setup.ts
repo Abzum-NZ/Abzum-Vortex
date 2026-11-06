@@ -442,7 +442,8 @@ export const runDevelopmentSetup = async (
     { identityAuthorityId, system, manifest, stewardIdentityId, state },
     log,
   );
-  // 3. Applications built in Studio follow a definition contract or platform definition change the same way.
+  // 3. The platform refresh: applications built in Studio, in every organisation, whose release no
+  //    longer verifies are re-released from their own release source.
   await refreshStudioApplications(
     { identityAuthorityId, system, manifest, stewardIdentityId, state },
     log,

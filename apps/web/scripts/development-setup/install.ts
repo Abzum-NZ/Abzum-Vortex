@@ -193,8 +193,9 @@ export const readReleaseSet = (
 
 /**
  * Whether one stored release still verifies: `catalogue` when a platform block, connection type or
- * service operation it pins changed content, `contract` when it was published under an earlier
- * definition contract. Any other failure is not an answer and stops the caller.
+ * service operation it pins changed content or is no longer in the catalogue, `contract` when it
+ * was published under an earlier definition contract. Any other failure is not an answer and stops
+ * the caller.
  */
 export const releaseStaleness = (
   system: SystemContextFacts,
@@ -204,7 +205,11 @@ export const releaseStaleness = (
   readReleaseSet(system, applicationRootId, applicationReleaseRevision).then(
     () => "current" as const,
     (error: unknown) => {
-      if (error instanceof DefinitionError && error.code === "DEFINITION_DEPENDENCY_SUPERSEDED")
+      if (
+        error instanceof DefinitionError &&
+        (error.code === "DEFINITION_DEPENDENCY_SUPERSEDED" ||
+          error.code === "DEFINITION_DEPENDENCY_UNAVAILABLE")
+      )
         return "catalogue" as const;
       if (error instanceof DefinitionError && error.code === "RELEASE_CONTRACT_SUPERSEDED")
         return "contract" as const;
