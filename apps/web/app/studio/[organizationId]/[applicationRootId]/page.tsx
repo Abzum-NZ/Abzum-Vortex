@@ -186,6 +186,11 @@ export default async function StudioApplicationPage({
           [request],
           initial.draft.draftRevision,
         );
+  // A draft saved behind the one just read cannot be drawn now: reload, as for any temporary failure.
+  if (result.kind === "stale")
+    return (
+      <StudioUnavailable subject="Application draft" result={{ kind: "temporarily_unavailable" }} />
+    );
   if (result.kind !== "available")
     return <StudioUnavailable subject="Application draft" result={result} />;
   const view = result.views[0]!;
