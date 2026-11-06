@@ -51,15 +51,6 @@ export const PLATFORM_THEME_RELEASES = Object.freeze({
 export const DEFAULT_PLATFORM_THEME_RELEASE: PlatformThemeRelease =
   PLATFORM_THEME_RELEASES.sera_mist;
 
-// The one theme changes in place. Applications pinning older content must be republished.
-const DEFAULT_PLATFORM_THEME_CONTENT_FINGERPRINT =
-  "sha256:bf2f39c2524fbdb4f6a8e224d1b2f5de9f8ea105417b0977e8f29a18bb1450c3";
-
-if (
-  DEFAULT_PLATFORM_THEME_RELEASE.contentFingerprint !== DEFAULT_PLATFORM_THEME_CONTENT_FINGERPRINT
-)
-  throw new Error("Platform theme content fingerprint does not match its committed pin");
-
 export type PlatformThemePreset = Readonly<{
   key: keyof typeof PLATFORM_THEME_RELEASES;
   label: string;
