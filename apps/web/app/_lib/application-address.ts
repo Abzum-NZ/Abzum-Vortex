@@ -22,6 +22,10 @@ import { platformPermissionSource } from "./platform-permission-source";
 import { mapWebError } from "./web-error-mapper";
 import { attributePageReadScope } from "./page-read-attribution";
 
+/** A theme read that gave no theme answers as it was answered: a refusal is no "try again". */
+const themeNotRead = (kind: "unavailable" | "temporarily_unavailable"): ApplicationAddressResult =>
+  kind === "unavailable" ? { kind: "unavailable" } : { kind: "temporarily_unavailable" };
+
 type ApplicationAddressResult =
   /** No application the viewer may open: nothing about the address is disclosed. */
   | Readonly<{ kind: "unavailable" }>
@@ -142,7 +146,7 @@ export const resolveApplicationAddress = cache(
           ? undefined
           : await loadOrganizationTheme(session, read.organizationId);
       if (organization !== undefined && organization.kind !== "available")
-        return { kind: organization.kind };
+        return themeNotRead(organization.kind);
       const experience =
         found?.theme === undefined || organization === undefined
           ? found
@@ -164,7 +168,7 @@ export const resolveApplicationAddress = cache(
         : await loadOrganizationTheme(session, read.organizationId);
     // A refused theme read is a refusal, never "try again"; the runner logged either, once.
     if (organization !== undefined && organization.kind !== "available")
-      return { kind: organization.kind };
+      return themeNotRead(organization.kind);
     return {
       kind: "application_page",
       read,

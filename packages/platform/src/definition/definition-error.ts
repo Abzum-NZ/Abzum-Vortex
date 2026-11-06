@@ -1,4 +1,5 @@
 import { ZodError } from "zod";
+import { markRequestFailureLogged } from "../access/request-failure-mark";
 import { DefinitionCompilationError } from "./compilation-error";
 
 /**
@@ -96,7 +97,8 @@ export const unexpectedDefinitionFailure = <Code extends string>(
   if (isValidationRefusal(cause))
     console.info(`[definition] ${context} refused (${code}): ${describeCause(cause)}`);
   else console.error(`[definition] ${context} failed (${code}): ${describeCause(cause)}`, error);
-  return error;
+  // The request runner that catches this failure adds no second line.
+  return markRequestFailureLogged(error);
 };
 
 /** Logs a failure that the caller turns into a typed safe outcome, so the cause stays visible. */

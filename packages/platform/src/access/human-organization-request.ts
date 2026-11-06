@@ -39,7 +39,7 @@ import {
 } from "../db/request-transaction";
 
 import { databaseClockOf } from "./live-context";
-import { markRequestFailureLogged } from "./request-failure-mark";
+import { markRequestFailureLogged, requestFailureLogged } from "./request-failure-mark";
 import {
   classifyRequestFailure,
   faultRequestFailure,
@@ -64,9 +64,8 @@ export class HumanOrganizationRequestRestart extends Error {
   }
 }
 
-/** The one log line of a failed request, unless the place that raised it already wrote it. */
+/** The one log line of a failed request. */
 const logRequestFailure = (failure: RequestFailureClass, cause: string): void => {
-  if (failure.sourceLogged) return;
   const line = `[access] human organisation request ${failure.verb}: ${cause}`;
   if (failure.level === "info") console.info(line);
   else console.error(line);
@@ -442,7 +441,9 @@ export const createHumanOrganizationRequestService = (
       }
       const failure = classifyRequestFailure(error, { addressed: address !== undefined });
       const cause = describeFailure(error);
-      logRequestFailure(failure, cause);
+      // The place that raised it may have logged it already (a definition source does, with its
+      // cause): then this is not logged a second time.
+      if (!requestFailureLogged(error)) logRequestFailure(failure, cause);
       markRequestFailureLogged(error);
       appendTelemetry(correlationId, failure.outcome, startedAtMs);
       switch (failure.answer) {

@@ -1,6 +1,5 @@
 import "server-only";
 
-import { ZodError } from "zod";
 import { databaseCode } from "../catalogue/runtime-primitives";
 import { BuilderAuthorityError } from "../definition/builder-authority";
 import { DefinitionError, isValidationRefusal } from "../definition/definition-error";
@@ -29,19 +28,13 @@ export type RequestFailureClass = Readonly<{
   outcome: TelemetryOutcome;
   /** The verb the one log line uses. */
   verb: "refused" | "stopped" | "temporarily unavailable" | "failed";
-  /** The place that raised it already logged it once, so the runner adds no line. */
-  sourceLogged: boolean;
 }>;
 
-const refusal = (
-  answer: RequestFailureAnswer = "refused",
-  sourceLogged = false,
-): RequestFailureClass => ({
+const refusal = (answer: RequestFailureAnswer = "refused"): RequestFailureClass => ({
   answer,
   level: "info",
   outcome: "refused",
   verb: "refused",
-  sourceLogged,
 });
 
 /** A state that moved or a request that was stopped: logged as information, tried again. */
@@ -50,15 +43,13 @@ const retryable = (verb: "stopped" | "temporarily unavailable"): RequestFailureC
   level: "info",
   outcome: "temporarily_unavailable",
   verb,
-  sourceLogged: false,
 });
 
-const fault = (sourceLogged = false): RequestFailureClass => ({
+const fault = (): RequestFailureClass => ({
   answer: "temporarily_unavailable",
   level: "error",
   outcome: "temporarily_unavailable",
   verb: "failed",
-  sourceLogged,
 });
 
 export const refusedRequestFailure: RequestFailureClass = refusal();
@@ -117,37 +108,50 @@ const requestStopped = (error: unknown): boolean =>
   ((error.name === "VortexDatabaseError" && error.message === "DATABASE_REQUEST_STOPPED") ||
     error.name === "AbortError");
 
-/**
- * The one classification of a failed request, by the error's class and code. Postgres reports a
- * missing privilege (a lost GRANT, a role misconfiguration) with the same code as the access
- * model's refusals, but always as "permission denied for ...": that is a fault.
- */
-export const classifyRequestFailure = (
+/** The class of one error by its own class or code, or undefined when the table does not name it. */
+const knownClass = (
   error: unknown,
   scope: Readonly<{ addressed: boolean }>,
-): RequestFailureClass => {
+): RequestFailureClass | undefined => {
   if (requestStopped(error)) return retryable("stopped");
   if (error instanceof DefinitionError) {
-    // The publication source logged a failed publication once: a stored-schema failure at error,
-    // a compiler refusal (a rule naming what to fix) at info.
-    if (error.code === "DEFINITION_PUBLICATION_FAILED") {
-      if (isValidationRefusal(error.cause)) return refusal("refused", true);
-      return fault(error.cause instanceof ZodError);
-    }
-    return definitionErrorClasses.get(error.code) ?? fault();
+    // A failed publication is a compiler refusal (a rule naming what to fix) or a fault.
+    if (error.code === "DEFINITION_PUBLICATION_FAILED")
+      return isValidationRefusal(error.cause) ? refusal() : fault();
+    return definitionErrorClasses.get(error.code);
   }
   if (error instanceof BuilderAuthorityError) return builderAuthorityClasses[error.code];
   if (error instanceof FirstInstallUnavailable) return refusal();
   if (error instanceof InstallationProblem) return installationProblemClass(error.problem);
   const code = databaseCode(error);
-  if (code === undefined) return fault();
+  if (code === undefined) return undefined;
   const known = databaseCodeClasses.get(code);
   if (known !== undefined) return known;
+  // Postgres reports a missing privilege (a lost GRANT, a role misconfiguration) with the same
+  // code as the access model's refusals, but always as "permission denied for ...": a fault.
   if (code === "42501")
     return error instanceof Error && error.message.startsWith("permission denied for ")
       ? fault()
       : refusal();
-  return code === "P0002" && scope.addressed ? refusal() : fault();
+  return code === "P0002" && scope.addressed ? refusal() : undefined;
+};
+
+/**
+ * The one classification of a failed request, by the error's class and code. An error the table
+ * does not name (a wrapper such as a definition failure around a database error) is classified by
+ * the first of its causes the table names; none means a platform fault.
+ */
+export const classifyRequestFailure = (
+  error: unknown,
+  scope: Readonly<{ addressed: boolean }>,
+): RequestFailureClass => {
+  let current: unknown = error;
+  for (let depth = 0; depth < 5 && current !== undefined && current !== null; depth += 1) {
+    const known = knownClass(current, scope);
+    if (known !== undefined) return known;
+    current = current instanceof Error ? current.cause : undefined;
+  }
+  return fault();
 };
 
 /**
