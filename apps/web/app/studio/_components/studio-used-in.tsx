@@ -9,7 +9,7 @@ import {
   type ApplicationUsePlace,
   type ApplicationUseTarget,
 } from "@vortex/platform/schema";
-import { StudioInspectorGroup } from "@vortex/ui/studio";
+import { StudioInspectorGroup, useSettledValue } from "@vortex/ui/studio";
 import { Alert, AlertDescription, AlertTitle } from "@vortex/ui/components/alert";
 import { Button } from "@vortex/ui/components/button";
 import { Fragment } from "react";
@@ -131,7 +131,10 @@ export function StudioUsedIn({
   name: string;
   onBeforeOpen?: () => void;
 }>) {
-  const places = useMemo(() => applicationUses(source, target), [source, target]);
+  // A read of the whole draft: drawn once typing pauses, like the Outline. Opening an entry selects
+  // its place in the current draft, which refuses a place that has left it.
+  const shown = useSettledValue(source);
+  const places = useMemo(() => applicationUses(shown, target), [shown, target]);
   return (
     <StudioInspectorGroup
       title="Used in"

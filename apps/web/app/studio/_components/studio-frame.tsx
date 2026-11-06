@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  memo,
   useCallback,
   useEffect,
   useRef,
@@ -11,6 +12,7 @@ import {
   type ReactNode,
 } from "react";
 import { createPortal } from "react-dom";
+import { useStable } from "./use-stable";
 import {
   InputGroup,
   InputGroupAddon,
@@ -228,7 +230,7 @@ function PaneSlot({ host }: Readonly<{ host: HTMLDivElement | null }>) {
 type PaneHosts = Readonly<{ panel: HTMLDivElement; inspector: HTMLDivElement }>;
 
 /** The vertical icon rail: one tab per Studio area; the arrow keys, Home and End move between them. */
-function StudioRail<Key extends string>({
+function StudioRailView<Key extends string>({
   tabs,
   active,
   panelShown,
@@ -300,6 +302,9 @@ function StudioRail<Key extends string>({
     </div>
   );
 }
+
+/** The rail draws again only when its own props change, not with every keystroke in the draft. */
+const StudioRail = memo(StudioRailView) as typeof StudioRailView;
 
 /**
  * One rail tab. Choosing the tab that is already active still reveals its panel (a collapsed or
@@ -630,7 +635,7 @@ export function StudioFrame<Key extends string>({
       ref.current?.resize(`${clamped}rem`);
       setWidth(inspectorHandle ? "inspector" : "panel", clamped);
     };
-  const choose = (key: Key) => {
+  const choose = useStable((key: Key) => {
     setFocused(false);
     // Selecting a tab always reveals its pane, including the tab restored from the URL on reload.
     onTabChange(key);
@@ -640,7 +645,7 @@ export function StudioFrame<Key extends string>({
       setPanelOpen(true);
       if (collapsed && panelled) peek(true, true);
     } else setNarrowPanelOpen(panelled);
-  };
+  });
   return (
     <div
       className="flex min-h-0 min-w-0 flex-1 flex-col bg-background text-foreground"
