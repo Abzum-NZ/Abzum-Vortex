@@ -2,6 +2,7 @@
 import { useSearchParams } from "next/navigation";
 import { Alert, AlertDescription } from "@vortex/ui/components/alert";
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useStable } from "./use-stable";
 import {
   describeFailure,
   holdsPermission,
@@ -100,15 +101,6 @@ const canvasFrameFor = (
         navigation: studioDraftNavigation(source, frames.pages, decisions),
         ...page,
       };
-};
-
-/** A function that keeps its identity while always calling the latest one. */
-const useStable = <Args extends unknown[], Result>(
-  latest: (...args: Args) => Result,
-): ((...args: Args) => Result) => {
-  const held = useRef(latest);
-  held.current = latest;
-  return useCallback((...args: Args) => held.current(...args), []);
 };
 
 const sameDestination = (
@@ -825,6 +817,19 @@ export function useStudioCanvasTab({
     </section>
   );
 
+  // The roles the canvas can be previewed as, and the toolbar's arrange toggle: the same objects
+  // between keystrokes, so the toolbar is not drawn again with each one.
+  const compiledRoles = view.frames?.roles;
+  const viewAsRoles = useMemo(
+    () => source.body.roles.filter((role) => compiledRoles?.[role.key] !== undefined),
+    [source.body.roles, compiledRoles],
+  );
+  const viewing = viewAsRole !== undefined;
+  const viewAsChoice = useMemo(
+    () => ({ value: viewing ? viewAs : null, onChange: setViewAs, roles: viewAsRoles }),
+    [viewing, viewAs, viewAsRoles],
+  );
+  const toggleArrangeGrid = useCallback(() => setArrangeGrid((held) => !held), []);
   const toolbar = (
     inspectorOpen: boolean,
     toggleInspector: (() => void) | undefined,
@@ -843,14 +848,10 @@ export function useStudioCanvasTab({
       arrangeGrid={arrangeGrid}
       arrangeableGrids={arrangeableGrids}
       locked={draft.locked}
-      onArrangeGrid={() => setArrangeGrid((held) => !held)}
+      onArrangeGrid={toggleArrangeGrid}
       appearance={appearance}
       onAppearance={setAppearance}
-      viewAs={{
-        value: viewAsRole === undefined ? null : viewAs,
-        onChange: setViewAs,
-        roles: source.body.roles.filter((role) => view.frames?.roles[role.key] !== undefined),
-      }}
+      viewAs={viewAsChoice}
       inspectorOpen={inspectorOpen}
       onToggleInspector={toggleInspector}
       focused={focused}
