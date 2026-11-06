@@ -3,7 +3,7 @@ import "server-only";
 export * from "./platform-theme-catalogue";
 export * from "./shadcn-theme-catalogue";
 export * from "./shadcn-theme-releases";
-export { STUDIO_THEME_ROOT } from "./studio-theme";
+export { STUDIO_THEME } from "./studio-theme";
 
 export { contrastRatio, validateThemeContrast, WCAG_AA_NON_TEXT_MIN_CONTRAST } from "./contrast";
 
@@ -19,6 +19,7 @@ export { createLocatedFailure, createThemeLocation } from "./errors";
 
 export type {
   ApplicationTheme,
+  StoredApplicationTheme,
   ExactPlatformThemeDependency,
   PlatformThemeRelease,
   ThemeResolutionOptions,
@@ -27,4 +28,4 @@ export type {
   ThemeValidationResult,
 } from "./types";
 
-export { applyOrganizationTheme } from "./organization-theme";
+export { resolveApplicationTheme } from "./application-theme";

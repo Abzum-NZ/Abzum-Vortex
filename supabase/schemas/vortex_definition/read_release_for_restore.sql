@@ -135,8 +135,7 @@ begin
           when 'platform_theme' then pg_catalog.jsonb_build_object(
             'kind', 'platform_theme',
             'catalogueThemeId', dependency.dependency_reference,
-            'releaseVersion', dependency.dependency_version,
-            'contentFingerprint', dependency.dependency_content_fingerprint
+            'releaseVersion', dependency.dependency_version
           )
           else dependency.dependency_entry
         end

@@ -25,7 +25,7 @@ export const packageAreas: Record<string, string> = {
 export const guardRules = {
   "catalogue-release-superseded": {
     tier: "warning",
-    description: "Changed block and theme content pins supersede compiled releases using them",
+    description: "Changed block content pins supersede compiled releases using them",
   },
   "query-input-name-matching": {
     tier: "blocking",
