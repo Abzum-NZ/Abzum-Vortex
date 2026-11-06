@@ -146,14 +146,26 @@ type ApplicationStoreRoleSummary = Readonly<{
   lines: string[];
 }>;
 
-/** A standard record permission's operation and the record types it covers. */
+// A record page's permission (`application-record-page-shared.ts`) lets people reach the operation of
+// the same name, so the role lists it in that record type's one line instead of repeating it.
+const pageOpenPermission = /^Allows opening the (?:(creation|editing) )?pages of (.+?) in .+\.$/u;
+const pageDeletePermission = /^Allows deleting (.+?) in .+ from their pages\.$/u;
+
+/** A standard or record page permission's operation and the record types it covers. */
 const standardOperationOf = (
   label: string,
 ): Readonly<{ operation: string; records: string }> | undefined => {
-  const match = standardPermission.exec(label);
-  return match === null
-    ? undefined
-    : { operation: (match[1] ?? "").replaceAll("_", " "), records: match[2] ?? "" };
+  const standard = standardPermission.exec(label);
+  if (standard !== null)
+    return { operation: (standard[1] ?? "").replaceAll("_", " "), records: standard[2] ?? "" };
+  const opened = pageOpenPermission.exec(label);
+  if (opened !== null)
+    return {
+      operation: opened[1] === "creation" ? "create" : opened[1] === "editing" ? "update" : "read",
+      records: opened[2] ?? "",
+    };
+  const deleted = pageDeletePermission.exec(label);
+  return deleted === null ? undefined : { operation: "soft delete", records: deleted[1] ?? "" };
 };
 
 /** The words a person uses for a set of standard operations, in the order they are listed. */

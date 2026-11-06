@@ -24,7 +24,7 @@ export type {
 export type { ControlSemanticEvent } from "./controls/projected-data";
 
 // Display components and values.
-export { FormattedTime } from "./display/date-format-context";
+export { DateFormatProvider, FormattedTime } from "./display/date-format-context";
 export { getAccessibleName } from "./display/display-state-container";
 
 // Display, control and page behaviour used by the running application.

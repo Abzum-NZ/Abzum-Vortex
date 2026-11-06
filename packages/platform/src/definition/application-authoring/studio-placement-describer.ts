@@ -42,12 +42,9 @@ const itemLabel = (
   return undefined;
 };
 
-/** "Button · New company": the block's display name from its release, then the item's label. */
-export const createStudioPlacementDescriber = (
-  catalogue: ImmutablePlatformBlockCatalogue,
-  source: ApplicationSourceDocument,
-): StudioPlacementDescriber => {
-  const fieldLabels = new Map(
+/** The source's own field labels by qualified reference (`module:record.field`). */
+export const sourceFieldLabels = (source: ApplicationSourceDocument): ReadonlyMap<string, string> =>
+  new Map(
     source.body.modules.flatMap((module) =>
       module.record_types.flatMap((record) =>
         record.fields.map(
@@ -56,6 +53,13 @@ export const createStudioPlacementDescriber = (
       ),
     ),
   );
+
+/** "Button · New company": the block's display name from its release, then the item's label. */
+export const createStudioPlacementDescriber = (
+  catalogue: ImmutablePlatformBlockCatalogue,
+  source: ApplicationSourceDocument,
+): StudioPlacementDescriber => {
+  const fieldLabels = sourceFieldLabels(source);
   return (placement) => {
     const release = studioBlockRelease(catalogue, placement.block);
     const name = release?.name === undefined ? "Item" : String(release.name);
