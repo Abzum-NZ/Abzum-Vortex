@@ -10,7 +10,7 @@ import {
   type BuilderConferredPermission,
   type BuilderOperation,
 } from "./builder-authority";
-import { markRequestFailureLogged } from "../access/human-organization-request";
+import { markRequestFailureLogged } from "../access/request-failure-mark";
 import {
   LiveContextRefused,
   readLiveHumanContext,

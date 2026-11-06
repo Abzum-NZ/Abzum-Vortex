@@ -1,10 +1,8 @@
 import "server-only";
 
 import { z } from "zod";
-import {
-  requestFailureLogged,
-  type HumanOrganizationRequestResult,
-} from "../access/human-organization-request";
+import type { HumanOrganizationRequestResult } from "../access/human-organization-request";
+import { requestFailureLogged } from "../access/request-failure-mark";
 import type { IdentitySession, OrganizationSelectionCandidate } from "../access/identity-access";
 import type { JsonValue } from "../catalogue/common";
 import {

@@ -52,7 +52,7 @@ type Address = Readonly<{ tenantShortName: string; organizationShortName: string
  * undefined. Only a person who may manage this organisation's installations is told: their
  * `applications.manage` decision is made first in the same request, so nobody else reaches the
  * admin-only release read, and a refusal looks the same as "nothing waiting". A read that cannot be
- * made now is logged and offers nothing, so the application still opens.
+ * made now offers nothing (the request runner logged it), so the application still opens.
  */
 export const readApplicationReleaseOffer = async (
   session: IdentitySession,
@@ -105,12 +105,8 @@ export const readApplicationReleaseOffer = async (
         };
       },
     );
-    if (result.kind === "available") return result.value;
-    if (result.kind === "temporarily_unavailable")
-      console.error(
-        `[release-offer] read unavailable: ${result.databaseCode ?? result.cause ?? "unknown"}`,
-      );
-    return undefined;
+    // The request runner logged an answer that is not available, once.
+    return result.kind === "available" ? result.value : undefined;
   } catch (error) {
     console.error(`[release-offer] read failed: ${describeFailure(error)}`);
     return undefined;
@@ -185,19 +181,17 @@ export const readApplicationReleaseStanding = async (
           scope.applicationRootId,
         )
       : undefined;
-  if (appStoreHref === undefined)
-    console.error(
-      `[release-standing] App Store address ${appStore.kind === "available" ? (appStore.value ?? "not set") : appStore.kind === "temporarily_unavailable" ? (appStore.databaseCode ?? appStore.cause ?? appStore.kind) : appStore.kind}`,
-    );
+  // An answer that is not available was logged by the request runner; a missing address is ours.
+  if (appStoreHref === undefined && appStore.kind === "available")
+    console.error(`[release-standing] App Store address ${appStore.value ?? "not set"}`);
   const origin = await humanOrganizationRequests().run(
     session,
     { organizationId: scope.organizationId },
     (transaction) => readBuilderApplicationOrigin(transaction, scope.applicationRootId),
   );
-  if (origin.kind !== "available" || origin.value === undefined) {
-    console.error(
-      `[release-standing] application classification unavailable: ${origin.kind === "temporarily_unavailable" ? (origin.databaseCode ?? origin.cause ?? origin.kind) : origin.kind}`,
-    );
+  if (origin.kind !== "available") return { kind: "unknown" };
+  if (origin.value === undefined) {
+    console.error("[release-standing] application classification unavailable");
     return { kind: "unknown" };
   }
   if (origin.value === "platform_system_application") {
@@ -213,11 +207,9 @@ export const readApplicationReleaseStanding = async (
         ? applications.applications.find((application) => application.key === appStore.value)
         : undefined;
     if (store === undefined) {
-      if (applications.kind === "temporarily_unavailable")
-        console.error(
-          `[release-standing] App Store read unavailable: ${applications.cause ?? applications.kind}`,
-        );
-      else console.info("[release-standing] App Store read unavailable");
+      // A read that could not be made was logged where it failed; a listing without the store is ours.
+      if (applications.kind === "available")
+        console.info("[release-standing] App Store read unavailable");
       return { kind: "unknown" };
     }
     const selection = {
@@ -226,14 +218,8 @@ export const readApplicationReleaseStanding = async (
     };
     const dependencies = requestDependencies();
     const context = await loadInstalledContext(session, dependencies, selection);
-    if (context.kind !== "available") {
-      if (context.kind === "temporarily_unavailable")
-        console.error(
-          `[release-standing] App Store context ${context.databaseCode ?? context.cause ?? context.kind}`,
-        );
-      else console.info(`[release-standing] App Store context ${context.kind}`);
-      return { kind: "unknown" };
-    }
+    // The request runner logged an answer that is not available, once.
+    if (context.kind !== "available") return { kind: "unknown" };
     const types = context.value.releaseSet.modules
       .flatMap((module) => module.content.recordTypes)
       .filter((type) => type.systemProjection?.protectedView === "application_store_entries");

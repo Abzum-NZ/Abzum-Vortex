@@ -2,10 +2,7 @@ import "server-only";
 
 import type { RequestDatabaseTransaction } from "../db/request-transaction";
 import { randomUUID } from "node:crypto";
-import {
-  markRequestFailureLogged,
-  requestFailureLogged,
-} from "../access/human-organization-request";
+import { markRequestFailureLogged, requestFailureLogged } from "../access/request-failure-mark";
 import {
   identitySessionSchema,
   sessionContextSchema,

@@ -1,4 +1,5 @@
 import { ZodError } from "zod";
+import { DefinitionCompilationError } from "./compilation-error";
 
 /**
  * The one definition failure type. `code` is the short, safe code a route boundary may show;
@@ -75,7 +76,7 @@ const describeCause = (cause: unknown): string => {
 export const isValidationRefusal = (cause: unknown): boolean => {
   let current: unknown = cause;
   for (let depth = 0; depth < 8 && current instanceof Error; depth += 1) {
-    if (current.name === "DefinitionCompilationError") return true;
+    if (current instanceof DefinitionCompilationError) return true;
     current = current.cause;
   }
   return false;
