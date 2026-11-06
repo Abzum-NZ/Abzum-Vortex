@@ -55,14 +55,6 @@ const standingWords = (
             headline: "Installation",
             text: "Someone who manages applications installs or upgrades it in the App Store.",
           };
-    case "republish_required":
-      return {
-        icon: "triangle-alert",
-        headline: "Republish required",
-        text:
-          "The published version uses platform definitions that have since changed. Publish the " +
-          "application again so people can install or upgrade to a current version.",
-      };
     case "not_published":
       return null;
   }

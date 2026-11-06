@@ -243,11 +243,7 @@ export const readFirstInstallReleaseSet = async (
       applicationReleaseRevision: selector.releaseRevision,
     });
   } catch (error) {
-    if (error instanceof DefinitionError && error.code === "DEFINITION_DEPENDENCY_SUPERSEDED")
-      installationProblem("DEFINITION_DEPENDENCY_SUPERSEDED", "refused", "republish_required", {
-        cause: error,
-      });
-    if (!(error instanceof DefinitionError))
+    if (!(error instanceof DefinitionError) || error.code === "DEFINITION_DEPENDENCY_SUPERSEDED")
       installationProblem(
         "first_install_release_set_read_failed",
         "temporarily_unavailable",
