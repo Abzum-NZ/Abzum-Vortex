@@ -2,7 +2,7 @@ import "server-only";
 
 import { cache } from "react";
 import {
-  isReservedTenantSegment,
+  logRefusal,
   resolveApplicationTheme,
   readAddressedApplicationFromInstalledBundleAtAddress,
   resolvePermittedApplicationAddress,
@@ -106,8 +106,6 @@ export const resolveApplicationAddress = cache(
     // Placement refreshes return no navigation or experience, so decide only their page/home.
     pageProjection: "application" | "addressed" = "application",
   ): Promise<ApplicationAddressResult> => {
-    if (isReservedTenantSegment(tenantShortName)) return { kind: "unavailable" };
-
     if (applicationKey === undefined) {
       const read = await loadPermittedApplicationsAtAddress(
         session,
@@ -138,8 +136,13 @@ export const resolveApplicationAddress = cache(
       if (application === undefined) return { kind: "unavailable" };
       if (addressed.releasePageKeys === undefined)
         throw new Error("Addressed application read carries no release page keys");
-      if (pageKey !== undefined && addressed.releasePageKeys.includes(pageKey))
+      // The address read logged every other answer; this one is decided here, so it is said here,
+      // once, and no caller of this function says the address again.
+      if (pageKey !== undefined && addressed.releasePageKeys.includes(pageKey)) {
+        logRefusal("application-address", `application ${application.key} page`, "PAGE_REFUSED");
         return { kind: "unavailable", application, page: "refused" };
+      }
+      logRefusal("application-address", `application ${application.key} page`, "PAGE_MISSING");
       const found = addressed.experiences.find((entry) => entry.state === "not_found");
       const organization =
         found?.theme === undefined
