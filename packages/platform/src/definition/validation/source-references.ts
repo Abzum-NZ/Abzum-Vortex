@@ -100,10 +100,6 @@ export function sourceLocalReferenceRule(
         if ((record.custom_actions as string[]).some((id) => !actionIds.has(id))) valid = false;
         for (const relationship of array(record.relationships)) {
           if (!fields.has(String(relationship.from_field))) valid = false;
-          const targets = relationship.to_record_type
-            ? [relationship.to_record_type]
-            : ((relationship.to_record_types as unknown[] | undefined) ?? []);
-          if (targets.some((target) => !qualifiedRecordValid(target))) valid = false;
         }
         for (const field of array(record.fields)) {
           const settings = object(field.settings);
