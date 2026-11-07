@@ -37,6 +37,7 @@ import {
 } from "./builder-authority";
 import type { PlatformPermissionSource } from "./platform-permissions";
 import type { createHumanOrganizationRequestService } from "./human-organization-request";
+import { classifyRequestFailure } from "./request-failure";
 import { markRequestFailureLogged } from "./request-failure-mark";
 import { DefinitionCompilationError } from "../definition/compilation-error";
 import { DefinitionError } from "../definition/definition-error";
@@ -250,7 +251,13 @@ const causeSummary = (error: unknown): string => {
 const safeFailure = (error: unknown, operation: string): Failure => {
   const failure = classifyFailure(error);
   const line = `[publication] ${operation} ${failure.kind} reason=${failure.reason ?? "none"} cause=${causeSummary(error)}`;
-  if (failure.kind === "temporarily_unavailable") console.error(line);
+  // Only an unexpected failure is classified by its cause: a database refusal or a race is still
+  // information, any other cause is a platform fault.
+  if (
+    failure.kind === "temporarily_unavailable" &&
+    classifyRequestFailure(error, { addressed: false }).level === "error"
+  )
+    console.error(line);
   else console.info(line);
   // The request runner that catches this error next adds no second line.
   markRequestFailureLogged(error);
