@@ -226,6 +226,25 @@ const unavailable = (reason: UnavailableReason): ApplicationStoreResult => ({
   value: reviewOutputs({ change: "unavailable", reason }),
 });
 
+/**
+ * A temporary failure is logged once at its cause: the request runner logged (and marked) what it
+ * caught; anything else is logged here, so the protected-operation executor and the flow add no line.
+ */
+const loggedOnce = (
+  operation: string,
+  error: unknown,
+  result: ApplicationStoreResult,
+): ApplicationStoreResult => {
+  if (
+    result !== "conflict" &&
+    result !== "uncertain" &&
+    result.kind === "temporarily_unavailable" &&
+    !requestFailureLogged(error)
+  )
+    logClassifiedFailure(`[installation] ${operation}: ${describeFailure(error)}`, error);
+  return result;
+};
+
 /** The review's answer to a failure: a named unavailability the flow explains, or the failure itself. */
 const reviewFailure = (error: unknown): ApplicationStoreResult => {
   if (error instanceof FirstInstallUnavailable) {
@@ -253,9 +272,11 @@ const reviewFailure = (error: unknown): ApplicationStoreResult => {
       break;
   }
   // A review changes nothing, so a state that moved while it read is a failure to read, not a conflict.
-  return problem.kind === "conflict"
-    ? { kind: "temporarily_unavailable" }
-    : commandFailure(problem);
+  return loggedOnce(
+    "application review failed",
+    error,
+    problem.kind === "conflict" ? { kind: "temporarily_unavailable" } : commandFailure(problem),
+  );
 };
 
 /**
@@ -272,12 +293,6 @@ const namedRefusalCodes: Readonly<
 
 /** A command's failure: a conflict, a refusal (permission or eligibility) or a temporary failure. */
 const commandFailure = (problem: InstallationProblemShape): ApplicationStoreResult => {
-  if (problem.unavailableReason === "republish_required")
-    return {
-      kind: "confirmed_failure",
-      outcome: "refused",
-      diagnostic: { code: "application_republish_required" },
-    };
   if (problem.unavailableReason === "storage_incompatible")
     return {
       kind: "confirmed_failure",
@@ -330,7 +345,11 @@ const commandFailureOf = (error: unknown): ApplicationStoreResult => {
       );
     return releaseChanged();
   }
-  return commandFailure(classifyInstallationFailure(error));
+  return loggedOnce(
+    "application command failed",
+    error,
+    commandFailure(classifyInstallationFailure(error)),
+  );
 };
 
 /**

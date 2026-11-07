@@ -5,7 +5,6 @@ import type { FlowRefusalFeedbackCode } from "./flow-refusal-feedback";
  * replace: the run ends with the diagnostic so the person is told exactly what is missing.
  */
 const platformGuidanceCodes: ReadonlySet<string> = new Set<FlowRefusalFeedbackCode>([
-  "application_republish_required",
   "application_release_changed",
   "recent_authentication_required",
   "multi_factor_required",

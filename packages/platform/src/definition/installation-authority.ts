@@ -45,7 +45,6 @@ type InstallationProblemKind =
   | "failed";
 
 type InstallationUnavailableReason =
-  | "republish_required"
   | "not_installed"
   | "not_newer"
   | "storage_incompatible"

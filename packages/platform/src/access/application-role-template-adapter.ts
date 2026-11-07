@@ -229,13 +229,15 @@ export const createApplicationRoleTemplateAdapter = (
     context: SessionContext,
     applicationRootId: ApplicationRootId,
     releaseRevision: number,
+    purpose: "consume" | "replace_or_remove",
   ) => {
     let releaseSet;
     try {
-      releaseSet = await dependencies.definitionReader.read(context, {
-        applicationRootId,
-        applicationReleaseRevision: releaseRevision,
-      });
+      releaseSet = await dependencies.definitionReader.read(
+        context,
+        { applicationRootId, applicationReleaseRevision: releaseRevision },
+        purpose,
+      );
     } catch (error) {
       throw new ApplicationRoleTemplatePreparationError(
         "APPLICATION_ROLE_TEMPLATE_DEFINITION_UNAVAILABLE",
@@ -261,6 +263,7 @@ export const createApplicationRoleTemplateAdapter = (
     async prepareRegistrationCandidate(
       contextCandidate: SessionContext,
       commandCandidate: PrepareApplicationRoleRegistrationCandidateCommand,
+      purpose: "consume" | "replace_or_remove",
     ): Promise<PreparedApplicationRoleTemplates> {
       const context = parseContext(contextCandidate);
       const applicationRootId = parseApplicationRootId(commandCandidate?.applicationRootId);
@@ -275,6 +278,7 @@ export const createApplicationRoleTemplateAdapter = (
         context,
         applicationRootId,
         releaseRevision.data,
+        purpose,
       );
       return buildCandidate(
         { kind: "registration_candidate" },

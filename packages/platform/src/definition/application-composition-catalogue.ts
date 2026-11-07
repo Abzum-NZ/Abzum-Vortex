@@ -109,7 +109,7 @@ if (
  * parsed through the release contract at module load and deep-frozen. Its content hash is computed
  * once from that source when the catalogue loads and checked against its committed pin. Each block
  * has one release, changed in place; changed content supersedes compiled applications using it,
- * which must be republished and upgraded. Platform block versions do not change for catalogue edits.
+ * and the platform refresh re-releases them. Platform block versions do not change for catalogue edits.
  */
 const release = (definition: { blockId: string; releaseVersion: string }): PlatformBlockRelease =>
   deepFreeze(
