@@ -16,8 +16,7 @@ import {
   type RuntimeTransactionRunner,
 } from "../db/request-transaction";
 
-/** @knipignore */
-export const organizationAccountErrorCodes = [
+const organizationAccountErrorCodes = [
   "INVALID_ORGANIZATION_ACCOUNT_COMMAND",
   "INVALID_ORGANIZATION_ACCOUNT_STORAGE_RESULT",
   "ORGANIZATION_ACCOUNT_CONTEXT_REFUSED",

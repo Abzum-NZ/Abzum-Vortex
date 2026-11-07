@@ -25,8 +25,7 @@ import { canonicalJson, compareCanonicalStrings } from "../definition/canonical-
 import { fingerprintCanonicalValue } from "../definition/canonical-json-definition";
 import { isLiveSystemContext } from "./private-system-context";
 
-/** @knipignore */
-export const permissionRegistryPreparationErrorCodes = [
+const permissionRegistryPreparationErrorCodes = [
   "INVALID_PERMISSION_REGISTRY_PREPARATION_COMMAND",
   "PERMISSION_REGISTRY_CONTEXT_REFUSED",
   "PERMISSION_REGISTRY_DEFINITION_UNAVAILABLE",

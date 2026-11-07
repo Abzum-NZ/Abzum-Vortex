@@ -5,6 +5,7 @@ const safeDisplayNameSchema = z
   .string()
   .min(1)
   .max(255)
+  // eslint-disable-next-line no-control-regex -- Deliberately rejects ASCII control characters in user supplied text.
   .refine((value) => value.trim().length > 0 && !/[\u0000-\u001f\u007f]/.test(value));
 
 const verifiedMediaTypeSchema = z.string().min(1).max(200);

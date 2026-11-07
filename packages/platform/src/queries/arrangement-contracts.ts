@@ -410,8 +410,7 @@ const arrangementRefusalSchema = z
   .strict();
 export type ArrangementRefusal = z.infer<typeof arrangementRefusalSchema>;
 
-/** @knipignore */
-export const arrangementResultSchema = z.union([
+const arrangementResultSchema = z.union([
   z.discriminatedUnion("arrangement", [
     tableArrangementResultSchema,
     boardArrangementResultSchema,
