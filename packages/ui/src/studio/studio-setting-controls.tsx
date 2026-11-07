@@ -303,6 +303,8 @@ const entryHeading = (
   item: SourceBlockPropertyValueContract,
   declaration: BlockPropertySchemaContract,
   choices: StudioSettingChoices,
+  /** The setting that is the entry's derived identity: never a name for it. */
+  hidden?: string,
 ): Readonly<{ title: string | undefined; summary: string | undefined }> => {
   const fieldLabel = (reference: string) =>
     choices.fields.find((field) => field.reference === reference)?.label ??
@@ -311,7 +313,9 @@ const entryHeading = (
   if (item.kind === "field_reference") return { title: fieldLabel(item.field), summary: undefined };
   if (item.kind !== "group" || declaration.kind !== "group")
     return { title: undefined, summary: undefined };
-  const values = Object.values(item.properties);
+  const values = Object.entries(item.properties)
+    .filter(([key]) => key !== hidden)
+    .map(([, entry]) => entry);
   const stored = item.properties[declaration.namedEntry?.label ?? "label"];
   const label = stored?.kind === "text" && stored.value !== "" ? stored.value : undefined;
   const field = values.find((entry) => entry.kind === "field_reference");
@@ -437,7 +441,7 @@ function ListControl({
         empty="No entries yet."
         items={items.map((item, index) => {
           const entryKey = keys.current[index]!;
-          const heading = entryHeading(item, property.item, choices);
+          const heading = entryHeading(item, property.item, choices, identity?.key);
           // A required setting of the entry that has no value says so on its own control.
           const problems =
             item.kind !== "group"
@@ -490,7 +494,7 @@ function ListControl({
         onRemove={(index) => {
           void (async () => {
             const name =
-              entryHeading(items[index]!, property.item, choices).title ??
+              entryHeading(items[index]!, property.item, choices, identity?.key).title ??
               `${itemName} ${index + 1}`;
             if (
               await confirm({
