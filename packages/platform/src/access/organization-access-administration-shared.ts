@@ -1,6 +1,7 @@
 import "server-only";
 
-import { databaseRevision, describeFailure, sameId } from "../catalogue/runtime-primitives";
+import { databaseRevision, sameId } from "../catalogue/runtime-primitives";
+import { logRefusal } from "./request-failure";
 import type { AffectedRoleAssignment } from "./organization-access-catalogue";
 import type {
   OrganizationRoleChangeCandidate,
@@ -172,16 +173,17 @@ export const isRecordedRefusal = (
   return true;
 };
 
-/** Logs one refused or failed administration operation with a stable reason code and the cause. */
+/**
+ * Logs one refused or failed administration operation with a stable reason code and the cause,
+ * once: a refusal at information, a platform fault at error.
+ */
 export const refuseAdministration = <Outcome>(
   operation: string,
   code: string,
   outcome: Outcome,
   cause?: unknown,
 ): Outcome => {
-  console.error(
-    `[access] administration ${operation} ${code}${cause === undefined ? "" : `: ${describeFailure(cause)}`}`,
-  );
+  logRefusal("access", `administration ${operation}`, code, cause);
   return outcome;
 };
 

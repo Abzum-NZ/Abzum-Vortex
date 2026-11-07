@@ -79,6 +79,19 @@ const databaseCodeClasses: ReadonlyMap<string, RequestFailureClass> = new Map([
   ["V3151", refusal("role_settings_change_required")],
   ["V3152", refusal("multi_factor_required")],
   ["V3153", refusal("role_key_in_use")],
+  // The identity and command-receipt answers: a duplicate or a command id reused under another
+  // scope or kind (V3001, every scoped command receipt), an unavailable steward or scope, a missing
+  // tenant capability, a stale revision, the last manager, an unavailable identity, a reserved
+  // short name. Retrying the same command cannot succeed, so none is "try again".
+  ["V3001", refusal()],
+  ["V3002", refusal()],
+  ["V3003", refusal()],
+  ["V3101", refusal()],
+  ["V3102", refusal()],
+  ["V3103", refusal()],
+  ["V3141", refusal()],
+  ["V3143", refusal()],
+  ["V3190", refusal()],
   ["40001", retryable("temporarily unavailable")],
 ]);
 
@@ -116,9 +129,10 @@ const knownClass = (
 ): RequestFailureClass | undefined => {
   if (requestStopped(error)) return retryable("stopped");
   if (error instanceof DefinitionError) {
-    // A failed publication is a compiler refusal (a rule naming what to fix) or a fault.
+    // A failed publication is a compiler refusal (a rule naming what to fix); otherwise its cause
+    // decides (a database refusal or race is an answer, anything else a fault).
     if (error.code === "DEFINITION_PUBLICATION_FAILED")
-      return isValidationRefusal(error.cause) ? refusal() : fault();
+      return isValidationRefusal(error.cause) ? refusal() : undefined;
     return definitionErrorClasses.get(error.code);
   }
   if (error instanceof BuilderAuthorityError) return builderAuthorityClasses[error.code];

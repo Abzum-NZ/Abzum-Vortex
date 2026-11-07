@@ -24,6 +24,7 @@ import {
   createHumanApplicationDraftWriter,
   DEFAULT_PLATFORM_THEME_RELEASE,
   fingerprintCanonicalValue,
+  logRefusal,
   materialiseApplicationTheme,
   readOrganizationThemeChangePermittedAfterAuthorization,
   resolveThemeSelection,
@@ -240,9 +241,16 @@ export async function saveStudioApplication(
     after(async () => {
       const resolved = await resolveIdentitySession();
       if (resolved.kind !== "active") {
-        console.error(
-          `[studio] preview move skipped: STUDIO_PREVIEW_MOVE_SESSION_NOT_ACTIVE ${resolved.kind} revision=${draft.draftRevision}`,
-        );
+        if (resolved.kind === "temporarily_unavailable")
+          console.error(
+            `[studio] preview move revision=${draft.draftRevision} failed: session temporarily_unavailable`,
+          );
+        else
+          logRefusal(
+            "studio",
+            `preview move revision=${draft.draftRevision}`,
+            `session_${resolved.kind}`,
+          );
         return;
       }
       await scheduleStudioPreviewMove(
