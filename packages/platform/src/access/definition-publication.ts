@@ -5,7 +5,12 @@ import {
   organizationIdSchema,
   timestampSchema,
 } from "../catalogue/identifiers";
-import { databaseCode, databaseTimestamp, sameId } from "../catalogue/runtime-primitives";
+import {
+  databaseCode,
+  databaseTimestamp,
+  describeFailure,
+  sameId,
+} from "../catalogue/runtime-primitives";
 import { canonicalJson } from "../definition/canonical-json";
 import {
   prepareDefinitionPublicationCommandSchema,
@@ -225,25 +230,6 @@ const classifyFailure = (error: unknown): Failure => {
   return { kind: "temporarily_unavailable", reason: "unexpected_failure" };
 };
 
-const causeSummary = (error: unknown): string => {
-  const parts: string[] = [];
-  let current: unknown = error;
-  for (let depth = 0; depth < 4 && current instanceof Error; depth += 1) {
-    const code = (current as { readonly code?: unknown }).code;
-    const message =
-      current.name === "DefinitionError" ||
-      current.name === "PublicationContextRefused" ||
-      current.name === "LiveContextRefused"
-        ? ""
-        : `:${current.message.slice(0, 160)}`;
-    parts.push(
-      `${current.name}/${typeof code === "string" ? code.slice(0, 64) : "none"}${message}`,
-    );
-    current = current.cause;
-  }
-  return parts.join(" <- ") || typeof error;
-};
-
 /**
  * Classifies a failure and logs one line with its stable reason code and cause chain: an expected
  * refusal, conflict or no-change answer at information, only a platform fault at error.
@@ -253,7 +239,7 @@ const safeFailure = (error: unknown, operation: string): Failure => {
   // The place that raised it logged it once already (the publication repository, a compiler
   // refusal): no second line.
   if (requestFailureLogged(error)) return failure;
-  const line = `[publication] ${operation} ${failure.kind} reason=${failure.reason ?? "none"} cause=${causeSummary(error)}`;
+  const line = `[publication] ${operation} ${failure.kind} reason=${failure.reason ?? "none"} cause=${describeFailure(error)}`;
   // Only an unexpected failure is classified by its cause: a database refusal or a race is still
   // information, any other cause is a platform fault.
   if (
