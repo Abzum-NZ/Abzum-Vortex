@@ -30,8 +30,15 @@ type QueryTaskResult = Readonly<{
 export const runQueryTask = async (
   queryRecords: NonNullable<FlowOrchestratorDependencies["queryRecords"]>,
   run: Run,
+  taskId: string,
   properties: Readonly<Record<string, { value?: unknown } | undefined>>,
 ): Promise<QueryTaskResult> => {
+  // The reader, its query or the request runner logged an answer that is not a page, once: the
+  // run-ended line does not repeat it.
+  const logged = (outcome: FlowTaskOutcome): QueryTaskResult => {
+    run.refusalLoggedTaskIds.push(taskId);
+    return { outcome };
+  };
   const queryId = queryIdSchema.safeParse(properties.query?.value);
   const parameters = z
     .record(builderKeySchema, jsonValueSchema)
@@ -64,8 +71,8 @@ export const runQueryTask = async (
       continuation: continuation.data,
       ...(matching === undefined ? {} : { matching: matching.data }),
     });
-    if (result.kind !== "available") return { outcome: requestOutcome(result.kind) };
-    if (result.value.outcome !== "read") return { outcome: "refused" };
+    if (result.kind !== "available") return logged(requestOutcome(result.kind));
+    if (result.value.outcome !== "read") return logged("refused");
     return {
       outcome: "completed",
       outputs: {
@@ -76,6 +83,6 @@ export const runQueryTask = async (
     };
   } catch (error) {
     reportUnexpectedFailure("record query task", error);
-    return { outcome: "failed" };
+    return logged("failed");
   }
 };
