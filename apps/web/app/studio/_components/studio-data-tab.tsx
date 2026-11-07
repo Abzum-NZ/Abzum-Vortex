@@ -334,6 +334,8 @@ export function useStudioDataTab({
     centre: visited ? <StudioDataCentreView model={model} /> : null,
     inspector: visited ? <StudioDataInspectorView model={model} /> : null,
     dialog: visited ? <StudioDataDialogs model={model} /> : null,
+    // What the inspector shows beyond the selection: a new field opens it like a new selection.
+    inspectorKey: adding === null ? "" : `new-field:${adding.scope}:${adding.type}`,
     title:
       showingQueries && current === null
         ? "Queries"

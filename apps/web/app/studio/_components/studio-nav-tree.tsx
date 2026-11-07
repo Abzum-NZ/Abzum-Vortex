@@ -17,13 +17,6 @@ import {
   DropdownMenuTrigger,
 } from "@vortex/ui/components/dropdown-menu";
 import { Item } from "@vortex/ui/components/item";
-import {
-  Empty,
-  EmptyDescription,
-  EmptyHeader,
-  EmptyMedia,
-  EmptyTitle,
-} from "@vortex/ui/components/empty";
 import { cn } from "@vortex/ui/lib/utils";
 
 type NavAction = Readonly<{
@@ -56,28 +49,6 @@ type NavProps = Omit<ComponentProps<"button">, "children"> &
     /** Marks a row of `StudioNavTree`: its key for the roving focus, and room for a chevron. */
     treeKey?: string | undefined;
   }>;
-
-export function StudioNavEmpty({
-  title,
-  description,
-  icon,
-}: Readonly<{
-  title: string;
-  description: string;
-  icon: VortexIconName;
-}>) {
-  return (
-    <Empty>
-      <EmptyHeader>
-        <EmptyMedia variant="icon">
-          <Icon name={icon} />
-        </EmptyMedia>
-        <EmptyTitle className="text-base">{title}</EmptyTitle>
-        <EmptyDescription className="text-sm">{description}</EmptyDescription>
-      </EmptyHeader>
-    </Empty>
-  );
-}
 
 /** A single selectable row, shared by every Studio navigator. */
 export function StudioNavItem({

@@ -2,11 +2,12 @@
 import { Field, FieldLabel, FieldLegend, FieldSet } from "@vortex/ui/components/field";
 import { Alert, AlertDescription } from "@vortex/ui/components/alert";
 import { useState, type FormEvent } from "react";
+import { Icon } from "@vortex/ui";
 import { Button } from "@vortex/ui/components/button";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@vortex/ui/components/tooltip";
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -15,7 +16,7 @@ import { Input } from "@vortex/ui/components/input";
 import { RadioGroup, RadioGroupItem } from "@vortex/ui/components/radio-group";
 import { Textarea } from "@vortex/ui/components/textarea";
 import type { ApplicationSourceDocument } from "@vortex/platform/schema";
-import { StudioOptionControl } from "@vortex/ui/studio";
+import { Reasoned, StudioOptionControl } from "@vortex/ui/studio";
 import {
   studioFlowCreateSavesChange,
   studioFlowEventTitle,
@@ -75,24 +76,30 @@ export function StudioNewFlowDialog({
     existingFlow === undefined &&
     chosen !== undefined &&
     !studioFlowCreateSavesChange(chosen.event, chosen.recordType);
+  // Why Create flow cannot be used yet: what is still to give, in the order the form asks for it.
+  const missingName = existingFlow === undefined && name.trim() === "";
+  const missingMessage = asksStep && what === "message" && messageText.trim() === "";
+  const stepReason = !asksStep
+    ? undefined
+    : what === ""
+      ? "Choose what the flow does."
+      : what === "operation" && operation === ""
+        ? "Choose the operation the flow runs."
+        : undefined;
+  const createReason =
+    chosen === undefined
+      ? "Choose the control that starts the flow."
+      : missingName
+        ? missingMessage
+          ? "Give the flow a name and a message."
+          : "Give the flow a name."
+        : missingMessage
+          ? "Write the message the flow shows."
+          : stepReason;
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (chosen === undefined) {
-      setProblem("Choose the control that starts the flow.");
-      return;
-    }
-    if (asksStep && what === "") {
-      setProblem("Choose what the flow does: run an operation or show a message.");
-      return;
-    }
-    if (asksStep && what === "operation" && operation === "") {
-      setProblem("Choose the operation the flow runs.");
-      return;
-    }
-    if (asksStep && what === "message" && messageText.trim() === "") {
-      setProblem("Write the message the flow shows.");
-      return;
-    }
+    // Create flow is reasoned until the control, the name and the step are given.
+    if (chosen === undefined || createReason !== undefined) return;
     let command: StudioFlowCreateCommand;
     if (existingFlow !== undefined) {
       const inputs = Object.entries(existingFlow.inputs);
@@ -151,12 +158,28 @@ export function StudioNewFlowDialog({
       <DialogContent>
         <form onSubmit={submit} className="space-y-4">
           <DialogHeader>
-            <DialogTitle>New flow</DialogTitle>
-            <DialogDescription>
-              The flow starts when a person uses a button or control, with the one step you choose
-              here, which you then change on the canvas. Rules that check a record before it is
-              saved are added on the record type in the Data tab.
-            </DialogDescription>
+            <div className="flex items-center gap-1">
+              <DialogTitle>New flow</DialogTitle>
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <Button
+                      type="button"
+                      size="icon-sm"
+                      variant="ghost"
+                      aria-label="About new flows"
+                    />
+                  }
+                >
+                  <Icon name="info" />
+                </TooltipTrigger>
+                <TooltipContent>
+                  The flow starts when a person uses a button or control, with the one step you
+                  choose here, which you then change on the canvas. Rules that check a record before
+                  it is saved are added on the record type in the Data tab.
+                </TooltipContent>
+              </Tooltip>
+            </div>
           </DialogHeader>
           <Field>
             <FieldLabel htmlFor="new-flow-existing">Workflow</FieldLabel>
@@ -281,12 +304,14 @@ export function StudioNewFlowDialog({
                   />
                 ))}
               {what === "message" && (
-                <Textarea
-                  id="new-flow-message"
-                  aria-label="Message"
-                  value={messageText}
-                  onChange={(event) => setMessageText(event.target.value)}
-                />
+                <Field>
+                  <FieldLabel htmlFor="new-flow-message">Message</FieldLabel>
+                  <Textarea
+                    id="new-flow-message"
+                    value={messageText}
+                    onChange={(event) => setMessageText(event.target.value)}
+                  />
+                </Field>
               )}
             </FieldSet>
           )}
@@ -319,17 +344,11 @@ export function StudioNewFlowDialog({
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               Cancel
             </Button>
-            <Button
-              type="submit"
-              disabled={
-                asksStep &&
-                (what === "" ||
-                  (what === "operation" && operation === "") ||
-                  (what === "message" && messageText.trim() === ""))
-              }
-            >
-              {existingFlow === undefined ? "Create flow" : "Bind flow"}
-            </Button>
+            <Reasoned reason={createReason}>
+              <Button type="submit">
+                {existingFlow === undefined ? "Create flow" : "Bind flow"}
+              </Button>
+            </Reasoned>
           </DialogFooter>
         </form>
       </DialogContent>

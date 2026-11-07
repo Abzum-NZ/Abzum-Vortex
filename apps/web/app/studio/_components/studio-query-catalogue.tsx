@@ -244,7 +244,6 @@ export function StudioQueryCatalogue({
     <div className="mx-auto w-full max-w-5xl space-y-6 px-8 py-6">
       <header className="flex items-start justify-between gap-4">
         <div className="space-y-1">
-          <h2 className="text-xl font-semibold tracking-tight">Queries</h2>
           <p className="max-w-prose text-sm text-muted-foreground">
             The data pages and blocks read. Expose a query to let the applications that use its
             module read it too.

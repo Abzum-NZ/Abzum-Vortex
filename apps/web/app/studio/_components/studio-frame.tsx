@@ -532,8 +532,11 @@ export function StudioFrame<Key extends string>({
     wasDragging.current = dragging;
   }, [dragging]);
   const [inspectorOpen, setInspectorOpen] = useHeldWorkspace("inspectorOpen", true);
-  const [narrowPanelOpen, setNarrowPanelOpen] = useState(false);
-  const [narrowInspectorOpen, setNarrowInspectorOpen] = useState(false);
+  const [narrowPanelOpen, setNarrowPanelOpen] = useHeldWorkspace("narrowPanelOpen", false);
+  const [narrowInspectorOpen, setNarrowInspectorOpen] = useHeldWorkspace(
+    "narrowInspectorOpen",
+    false,
+  );
   const [focused, setFocused] = useHeldWorkspace("focused", false);
   const hasInspector = inspector !== null;
   const [beforeFocus, setBeforeFocus] = useHeldWorkspace("beforeFocus", panelsBeforeFocus);
@@ -576,7 +579,6 @@ export function StudioFrame<Key extends string>({
     window.addEventListener("keydown", shortcut);
     return () => window.removeEventListener("keydown", shortcut);
   }, [focusCanvas, toggleInspector, toggleCollapsed, wide, hasPanel]);
-  const previousSelection = useRef(selectionKey);
   const [hosts, setHosts] = useState<PaneHosts | null>(null);
   // The hosts are made once per frame: effects run again when a suspended part of Studio shows again,
   // and a new host would remount every panel and lose what is typed in it.
@@ -591,10 +593,15 @@ export function StudioFrame<Key extends string>({
     setHosts(madeHosts.current);
   }, []);
   useEffect(() => {
+    // Held with the workspace, per application: choosing a page or layout can open the canvas editor
+    // again, and the reopened frame still knows the selection it drew before, so a new one opens its
+    // inspector; another application starts without one.
+    const held = `selection:${applicationName}`;
+    const previousSelection = heldWorkspace.has(held) ? heldWorkspace.get(held) : selectionKey;
     if (
       hasInspector &&
       inspectorEditsSelection &&
-      previousSelection.current !== selectionKey &&
+      previousSelection !== selectionKey &&
       !dockInspector &&
       !focused
     ) {
@@ -606,8 +613,16 @@ export function StudioFrame<Key extends string>({
     // top: the body may have been scrolled past the shorter content the new selection draws.
     const inspectorBody = hosts?.inspector.querySelector<HTMLElement>("[data-studio-rail-body]");
     if (inspectorBody !== null && inspectorBody !== undefined) inspectorBody.scrollTop = 0;
-    previousSelection.current = selectionKey;
-  }, [selectionKey, inspectorEditsSelection, dockInspector, focused, hasInspector, hosts]);
+    heldWorkspace.set(held, selectionKey);
+  }, [
+    applicationName,
+    selectionKey,
+    inspectorEditsSelection,
+    dockInspector,
+    focused,
+    hasInspector,
+    hosts,
+  ]);
   const active = tabs.find((tab) => tab.key === activeTab);
   // The open tab names the panel region (docked or peeking) and the page's one level-1 heading.
   const panelName = active === undefined ? "Panel" : `${active.label} panel`;

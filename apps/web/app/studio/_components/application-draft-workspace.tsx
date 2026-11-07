@@ -11,6 +11,7 @@ import {
   type StudioSemanticSelection,
   type StudioStoredApplicationDraft,
   applyStudioAccessCommand,
+  studioPageLayoutPlan,
   studioAccessIdentityReservations,
   type StudioAccessCommand,
   type StudioAccessResult,
@@ -44,6 +45,7 @@ import {
   whenNotDragging,
 } from "@vortex/ui/studio/puck-provider";
 import { useStudioCanvasTab } from "./use-studio-canvas-tab";
+import { useStudioStructureSettings } from "./studio-structure-settings";
 import { useStudioDraft } from "./use-studio-draft";
 import { useStudioDraftTheme } from "./use-studio-draft-theme";
 import { useStudioFlowsTab } from "./use-studio-flows-tab";
@@ -233,12 +235,34 @@ function ExistingApplicationWorkspace(props: ExistingProps) {
     openFlowsTab: () => setTab("flows"),
   });
   const structureCommand = useStudioStructureCommand({ draft, catalogue, describePlacement });
+  const openAccessFromStructure = useStable(() => openAccessPages());
+  const structureSettings = useStudioStructureSettings({
+    source,
+    selected: draft.selected,
+    disabled: draft.locked,
+    onCommand: structureCommand.command,
+    onPreview: structureCommand.preview,
+    onLayoutPlan: (pageAlias, shellAlias) =>
+      studioPageLayoutPlan(
+        {
+          source,
+          catalogue,
+          describePlacement,
+          publishedFields: structureCommand.publishedFields,
+          rootId: draft.state.rootId,
+        },
+        pageAlias,
+        shellAlias,
+      ),
+    onOpenAccess: openAccessFromStructure,
+  });
   const canvas = useStudioCanvasTab({
     draft,
     tab,
     catalogue,
     describePlacement,
     structure: structureCommand,
+    structureSettings,
     fieldInputControlReleases: draft.view.fieldInputControlReleases,
     platformThemeTokens: draft.view.platformThemeTokens,
     outline,
@@ -300,12 +324,9 @@ function ExistingApplicationWorkspace(props: ExistingProps) {
   };
   const structure = useStudioStructureTab({
     draft,
-    catalogue,
-    describePlacement,
     structure: structureCommand,
     outline,
     hidden: tab !== "structure",
-    openAccessPages,
     form: structureForm,
     onFormChange: setStructureForm,
   });
@@ -350,11 +371,13 @@ function ExistingApplicationWorkspace(props: ExistingProps) {
   const centreTitle =
     tab === "data"
       ? data.title
-      : tab === "access"
-        ? access.title
-        : tab === "releases"
-          ? releases.title
-          : canvas.title;
+      : tab === "flows"
+        ? flows.title
+        : tab === "access"
+          ? access.title
+          : tab === "releases"
+            ? releases.title
+            : canvas.title;
   const canvasShown = railShowsCanvas(tab);
   useEffect(() => {
     const shortcut = (event: KeyboardEvent) => {
@@ -417,9 +440,7 @@ function ExistingApplicationWorkspace(props: ExistingProps) {
               tabs={studioRailTabs}
               activeTab={tab}
               onTabChange={setTab}
-              selectionKey={
-                draft.selected === null ? "" : studioSemanticSelectionKey(draft.selected)
-              }
+              selectionKey={`${draft.selected === null ? "" : studioSemanticSelectionKey(draft.selected)}${tab === "data" ? data.inspectorKey : ""}`}
               topBar={
                 <StudioHeader
                   frame={place.frame}
