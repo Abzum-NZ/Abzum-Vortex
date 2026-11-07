@@ -1,8 +1,8 @@
 import "server-only";
 
-import { describeFailure } from "../catalogue/runtime-primitives";
+import { databaseCode, describeFailure } from "../catalogue/runtime-primitives";
 import { withRuntimeTransaction, type DatabaseRow } from "../db/request-transaction";
-import { DefinitionError, databaseErrorCode } from "./definition-error";
+import { DefinitionError } from "./definition-error";
 
 const previewExpiryLimits = Object.freeze({ batchSize: 100, maximumBatches: 100 });
 
@@ -82,7 +82,7 @@ export const dropRetiredPreviewStorage = async (): Promise<number> => {
       if (rows[0].dropped) dropped += 1;
     } catch (error) {
       // 55P03: the retired table is still read; the next run drops it.
-      if (databaseErrorCode(error) !== "55P03") throw error;
+      if (databaseCode(error) !== "55P03") throw error;
       console.info(
         `[preview] retired preview storage is still in use; a later run drops it: ${describeFailure(error)}`,
       );

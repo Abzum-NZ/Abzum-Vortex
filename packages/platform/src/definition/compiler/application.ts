@@ -940,24 +940,21 @@ export function compileParsedApplicationRequest(
       resolvedDependencies: resolvedDependencies(sourceObject, resolution),
       resolutionFingerprint: request.resolution.fingerprint,
     });
-    if (!output.success) {
-      console.error("[definition] application compilation output invalid", output.error);
-      fail("vortex.definition.invalid_compilation_output", "invalid_value");
-    }
+    // Output that fails its own schema is a compiler defect (a fault), not a rule the author fixes.
+    if (!output.success) throw output.error;
     return output.data;
   } catch (error) {
-    if (error instanceof DefinitionCompilationError)
-      throw error.location
-        ? error
-        : new DefinitionCompilationError(
-            error.ruleCode,
-            error.family,
-            compilerRootLocation(sourceObject),
-            error.code,
-            error.sentence,
-          );
-    console.error("[definition] application compilation failed", error);
-    return fail("vortex.definition.invalid_compilation_output", "invalid_value");
+    // Only a compiler refusal is located; any other failure is a defect its catcher logs once.
+    if (!(error instanceof DefinitionCompilationError)) throw error;
+    throw error.location
+      ? error
+      : new DefinitionCompilationError(
+          error.ruleCode,
+          error.family,
+          compilerRootLocation(sourceObject),
+          error.code,
+          error.sentence,
+        );
   }
 }
 export type ParsedApplicationRequest = ReturnType<typeof applicationCompilationRequestSchema.parse>;

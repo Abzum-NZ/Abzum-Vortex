@@ -5,7 +5,7 @@ import type { IdentitySession } from "../access/identity-access";
 import type { applicationRootIdSchema, organizationIdSchema } from "../catalogue/identifiers";
 import type { DatabaseRow, RequestDatabaseTransaction } from "../db/request-transaction";
 import type { FlowRefusalFeedback } from "../workflows/flow-refusal-feedback";
-import { databaseErrorCode } from "./definition-error";
+import { databaseCode } from "../catalogue/runtime-primitives";
 import {
   installationProblem,
   requestAnswerProblem,
@@ -75,7 +75,7 @@ const callPurge = async (
   } catch (error) {
     // The purge's own refusals have their own states; any other database error, a history
     // protection included, is a failure whose cause stays in the log.
-    switch (databaseErrorCode(error)) {
+    switch (databaseCode(error)) {
       case "VX001":
         throw new ApplicationPurgeRefused("application_is_default", { cause: error });
       case "VX002":
