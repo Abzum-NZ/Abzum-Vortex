@@ -18,7 +18,10 @@ export async function readStudioPersonLabel(
   try {
     const resolved = await resolveIdentitySession();
     if (resolved.kind !== "active") {
-      logRefusal("studio", "person label", `session_${resolved.kind}`);
+      // A missing or ended session is an expected refusal; an unavailable one is a platform fault.
+      if (resolved.kind === "temporarily_unavailable")
+        console.error("[studio] person label failed: session temporarily_unavailable");
+      else logRefusal("studio", "person label", `session_${resolved.kind}`);
       return { kind: "unavailable" };
     }
     const result = await humanOrganizationRequests().run(

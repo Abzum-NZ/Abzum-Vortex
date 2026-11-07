@@ -101,9 +101,15 @@ export const readStudioBackendRunHistory = async (
   if (!organization.success || !root.success) return { kind: "refused", reason: "request_invalid" };
   try {
     const resolved = await resolveIdentitySession();
-    if (resolved.kind === "temporarily_unavailable")
+    // A missing or ended session is an expected refusal; an unavailable one is a platform fault.
+    if (resolved.kind === "temporarily_unavailable") {
+      console.error("[studio] back-end run history failed: session temporarily_unavailable");
       return { kind: "temporarily_unavailable", reason: "session_unavailable" };
-    if (resolved.kind !== "active") return { kind: "refused", reason: "session_ended" };
+    }
+    if (resolved.kind !== "active") {
+      logRefusal("studio", "back-end run history", `session_${resolved.kind}`);
+      return { kind: "refused", reason: "session_ended" };
+    }
     const result = await createBackendRunHistoryReader({
       requests: humanOrganizationRequests(),
     }).read(resolved.session, organization.data, root.data, request);

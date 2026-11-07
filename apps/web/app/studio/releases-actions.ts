@@ -96,7 +96,13 @@ export async function readApplicationReleaseStanding(
     const root = applicationRootIdSchema.safeParse(rootId);
     if (!organization.success || !root.success) return { kind: "unknown" };
     const resolved = await resolveIdentitySession();
-    if (resolved.kind !== "active") return { kind: "unknown" };
+    if (resolved.kind !== "active") {
+      // A missing or ended session is an expected refusal; an unavailable one is a platform fault.
+      if (resolved.kind === "temporarily_unavailable")
+        console.error("[studio] release standing failed: session temporarily_unavailable");
+      else logRefusal("studio", "release standing", `session_${resolved.kind}`);
+      return { kind: "unknown" };
+    }
     const launcher = await loadOrganizationLauncher(resolved.session);
     const entry =
       launcher.kind === "available"
