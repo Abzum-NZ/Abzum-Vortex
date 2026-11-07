@@ -361,7 +361,7 @@ export const describeStudioCompositionAddTargets = (
     plainSource(context.source);
     if (!validContext(context)) return { kind: "invalid" };
     // A history snapshot is the validated source, so the places are read from it as it is; only a
-    // copy someone made is parsed. The add command parses at every write.
+    // copy someone made is parsed. The add command reads its source the same way.
     const places = addPlaces(
       context.catalogue,
       isStudioDraftSnapshot(context.source)
@@ -505,11 +505,13 @@ export const applyAdd = (
   )
     return { kind: "invalid" };
   plainSource(current.source);
-  // The history hands its snapshot, which is the validated source; a copy someone made is not
-  // trusted here.
-  if (!validContext(current) || !isStudioDraftSnapshot(current.source)) return { kind: "invalid" };
+  if (!validContext(current)) return { kind: "invalid" };
   const catalogue = current.catalogue;
-  const source = current.source as ApplicationSourceDocument;
+  // The history hands its snapshot, which is the validated source and is read as it is; a copy
+  // someone made (a command run on another command's output) is parsed first.
+  const source = isStudioDraftSnapshot(current.source)
+    ? (current.source as ApplicationSourceDocument)
+    : applicationSourceDocumentSchema.parse(current.source);
   const destination = parseDestination(input.destination);
   const places = addPlaces(catalogue, source, parseOwner(input.owner));
   if (places === "published") return { kind: "refused", reason: PUBLISHED_PAGE_ADD_REASON };
