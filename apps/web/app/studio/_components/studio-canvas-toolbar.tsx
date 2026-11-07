@@ -9,11 +9,15 @@ import { Kbd } from "@vortex/ui/components/kbd";
 import { Spinner } from "@vortex/ui/components/spinner";
 import {
   DropdownMenu,
+  DropdownMenuCheckboxItem,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
+  DropdownMenuLabel,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
   DropdownMenuSeparator,
+  DropdownMenuShortcut,
   DropdownMenuTrigger,
 } from "@vortex/ui/components/dropdown-menu";
 import { studioScreens, useStudioScreen } from "@vortex/ui/studio/puck-provider";
@@ -21,6 +25,11 @@ import { studioScreens, useStudioScreen } from "@vortex/ui/studio/puck-provider"
 /** The canvas zoom steps, in percent. */
 const studioCanvasZooms = [50, 75, 100, 125] as const;
 export type StudioCanvasZoom = (typeof studioCanvasZooms)[number] | "fit";
+/** The zoom choices, in the list beside the canvas and in the narrow toolbar's menu. */
+const zoomChoices = [
+  { value: "fit", label: "Fit" },
+  ...studioCanvasZooms.map((value) => ({ value: String(value), label: `${value}%` })),
+];
 
 /**
  * Above the canvas: what it is showing, whose view it shows, the screen size and zoom it is drawn
@@ -84,7 +93,7 @@ export const StudioCanvasToolbar = memo(function StudioCanvasToolbar({
       : "Arrange grid columns: this page has no data grid with columns yet";
   return (
     // One row that never wraps. What does not fit a narrow centre moves into the More menu (the
-    // appearance and the grid arrangement) or is dropped (the zoom steps, the title).
+    // appearance, the grid arrangement, the zoom, Focus canvas and the inspector) or is dropped (the title).
     <div className="@container/toolbar shrink-0 border-b border-border bg-background">
       <div className="flex h-12 min-w-0 flex-nowrap items-center gap-2 px-4">
         <h2
@@ -224,28 +233,129 @@ export const StudioCanvasToolbar = memo(function StudioCanvasToolbar({
                   <TooltipContent>{arrangeTip}</TooltipContent>
                 </Tooltip>
               </div>
-              <div className="@min-[46rem]/toolbar:hidden">
-                <DropdownMenu>
-                  <Tooltip>
-                    <TooltipTrigger
+              <div
+                role="group"
+                aria-label="Canvas zoom"
+                className="flex items-center @max-[46rem]/toolbar:hidden"
+              >
+                <Tooltip>
+                  <TooltipTrigger
+                    render={
+                      <Button
+                        type="button"
+                        size="icon-sm"
+                        variant="ghost"
+                        aria-label="Zoom out"
+                        disabled={zoomOut === undefined}
+                        onClick={() => {
+                          if (zoomOut !== undefined) onZoom(zoomOut);
+                        }}
+                      />
+                    }
+                  >
+                    <Icon name="minus" />
+                  </TooltipTrigger>
+                  <TooltipContent>Zoom out</TooltipContent>
+                </Tooltip>
+                <div className="w-20 shrink-0">
+                  <StudioOptionControl
+                    aria-label="Canvas zoom"
+                    value={String(zoom)}
+                    disabled={false}
+                    options={zoomChoices}
+                    onChange={(value) =>
+                      onZoom(value === "fit" ? "fit" : (Number(value) as StudioCanvasZoom))
+                    }
+                  />
+                </div>
+                <Tooltip>
+                  <TooltipTrigger
+                    render={
+                      <Button
+                        type="button"
+                        size="icon-sm"
+                        variant="ghost"
+                        aria-label="Zoom in"
+                        disabled={zoomIn === undefined}
+                        onClick={() => {
+                          if (zoomIn !== undefined) onZoom(zoomIn);
+                        }}
+                      />
+                    }
+                  >
+                    <Icon name="plus" />
+                  </TooltipTrigger>
+                  <TooltipContent>Zoom in</TooltipContent>
+                </Tooltip>
+              </div>
+            </>
+          )}
+          <div className="flex items-center gap-1 @max-[46rem]/toolbar:hidden">
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <Button
+                    type="button"
+                    size="icon-sm"
+                    variant={focused ? "secondary" : "ghost"}
+                    aria-label="Focus canvas"
+                    aria-pressed={focused}
+                    onClick={onFocusCanvas}
+                  />
+                }
+              >
+                <Icon name="maximize" />
+              </TooltipTrigger>
+              <TooltipContent>
+                Focus canvas <Kbd>{"Ctrl \\"}</Kbd>
+              </TooltipContent>
+            </Tooltip>
+            {onToggleInspector !== undefined && (
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <Button
+                      type="button"
+                      size="icon-sm"
+                      variant={inspectorOpen ? "secondary" : "ghost"}
+                      aria-label="Inspector"
+                      aria-pressed={inspectorOpen}
+                      onClick={onToggleInspector}
+                    />
+                  }
+                >
+                  <Icon name="panel-left" className="rotate-180" />
+                </TooltipTrigger>
+                <TooltipContent>
+                  Inspector <Kbd>Ctrl .</Kbd>
+                </TooltipContent>
+              </Tooltip>
+            )}
+          </div>
+          <div className="@min-[46rem]/toolbar:hidden">
+            <DropdownMenu>
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <DropdownMenuTrigger
                       render={
-                        <DropdownMenuTrigger
-                          render={
-                            <Button
-                              type="button"
-                              size="icon-sm"
-                              variant="ghost"
-                              aria-label="More canvas controls"
-                            />
-                          }
+                        <Button
+                          type="button"
+                          size="icon-sm"
+                          variant="ghost"
+                          aria-label="More canvas controls"
                         />
                       }
-                    >
-                      <Icon name="more-horizontal" />
-                    </TooltipTrigger>
-                    <TooltipContent>Appearance and grid arrangement</TooltipContent>
-                  </Tooltip>
-                  <DropdownMenuContent align="end">
+                    />
+                  }
+                >
+                  <Icon name="more-horizontal" />
+                </TooltipTrigger>
+                <TooltipContent>More canvas controls</TooltipContent>
+              </Tooltip>
+              <DropdownMenuContent align="end">
+                {showsCanvas && (
+                  <>
                     <DropdownMenuRadioGroup
                       value={appearance}
                       onValueChange={(mode) => {
@@ -269,110 +379,43 @@ export const StudioCanvasToolbar = memo(function StudioCanvasToolbar({
                       <Icon name="table-columns" />
                       {arrangeGrid ? "Stop arranging grid columns" : "Arrange grid columns"}
                     </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </div>
-              <div role="group" aria-label="Canvas zoom" className="flex items-center">
-                <Tooltip>
-                  <TooltipTrigger
-                    render={
-                      <Button
-                        type="button"
-                        size="icon-sm"
-                        variant="ghost"
-                        aria-label="Zoom out"
-                        className="@max-[40rem]/toolbar:hidden"
-                        disabled={zoomOut === undefined}
-                        onClick={() => {
-                          if (zoomOut !== undefined) onZoom(zoomOut);
-                        }}
-                      />
-                    }
+                    <DropdownMenuSeparator />
+                    <DropdownMenuGroup>
+                      <DropdownMenuLabel>Canvas zoom</DropdownMenuLabel>
+                      <DropdownMenuRadioGroup
+                        value={String(zoom)}
+                        onValueChange={(value) =>
+                          onZoom(value === "fit" ? "fit" : (Number(value) as StudioCanvasZoom))
+                        }
+                      >
+                        {zoomChoices.map((choice) => (
+                          <DropdownMenuRadioItem key={choice.value} value={choice.value}>
+                            {choice.label}
+                          </DropdownMenuRadioItem>
+                        ))}
+                      </DropdownMenuRadioGroup>
+                    </DropdownMenuGroup>
+                    <DropdownMenuSeparator />
+                  </>
+                )}
+                <DropdownMenuCheckboxItem checked={focused} onCheckedChange={onFocusCanvas}>
+                  <Icon name="maximize" />
+                  Focus canvas
+                  <DropdownMenuShortcut>{"Ctrl \\"}</DropdownMenuShortcut>
+                </DropdownMenuCheckboxItem>
+                {onToggleInspector !== undefined && (
+                  <DropdownMenuCheckboxItem
+                    checked={inspectorOpen}
+                    onCheckedChange={onToggleInspector}
                   >
-                    <Icon name="minus" />
-                  </TooltipTrigger>
-                  <TooltipContent>Zoom out</TooltipContent>
-                </Tooltip>
-                <div className="w-20 shrink-0">
-                  <StudioOptionControl
-                    aria-label="Canvas zoom"
-                    value={String(zoom)}
-                    disabled={false}
-                    options={[
-                      { value: "fit", label: "Fit" },
-                      ...studioCanvasZooms.map((value) => ({
-                        value: String(value),
-                        label: `${value}%`,
-                      })),
-                    ]}
-                    onChange={(value) =>
-                      onZoom(value === "fit" ? "fit" : (Number(value) as StudioCanvasZoom))
-                    }
-                  />
-                </div>
-                <Tooltip>
-                  <TooltipTrigger
-                    render={
-                      <Button
-                        type="button"
-                        size="icon-sm"
-                        variant="ghost"
-                        aria-label="Zoom in"
-                        className="@max-[40rem]/toolbar:hidden"
-                        disabled={zoomIn === undefined}
-                        onClick={() => {
-                          if (zoomIn !== undefined) onZoom(zoomIn);
-                        }}
-                      />
-                    }
-                  >
-                    <Icon name="plus" />
-                  </TooltipTrigger>
-                  <TooltipContent>Zoom in</TooltipContent>
-                </Tooltip>
-              </div>
-            </>
-          )}
-          <Tooltip>
-            <TooltipTrigger
-              render={
-                <Button
-                  type="button"
-                  size="icon-sm"
-                  variant={focused ? "secondary" : "ghost"}
-                  aria-label="Focus canvas"
-                  aria-pressed={focused}
-                  onClick={onFocusCanvas}
-                />
-              }
-            >
-              <Icon name="maximize" />
-            </TooltipTrigger>
-            <TooltipContent>
-              Focus canvas <Kbd>{"Ctrl \\"}</Kbd>
-            </TooltipContent>
-          </Tooltip>
-          {onToggleInspector !== undefined && (
-            <Tooltip>
-              <TooltipTrigger
-                render={
-                  <Button
-                    type="button"
-                    size="icon-sm"
-                    variant={inspectorOpen ? "secondary" : "ghost"}
-                    aria-label="Inspector"
-                    aria-pressed={inspectorOpen}
-                    onClick={onToggleInspector}
-                  />
-                }
-              >
-                <Icon name="panel-left" className="rotate-180" />
-              </TooltipTrigger>
-              <TooltipContent>
-                Inspector <Kbd>Ctrl .</Kbd>
-              </TooltipContent>
-            </Tooltip>
-          )}
+                    <Icon name="panel-left" className="rotate-180" />
+                    Inspector
+                    <DropdownMenuShortcut>Ctrl .</DropdownMenuShortcut>
+                  </DropdownMenuCheckboxItem>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
         </div>
       </div>
     </div>
