@@ -4,6 +4,11 @@ import { createHash } from "node:crypto";
 import { z } from "zod";
 import type { DatabaseRow, RequestDatabaseTransaction } from "../db/request-transaction";
 import type { ApplicationRootId, OrganizationId } from "../catalogue/identifiers";
+import {
+  ownFailureClass,
+  refusal,
+  type RequestFailureClass,
+} from "../access/request-failure-table";
 import { sameId } from "../catalogue/runtime-primitives";
 import { canonicalJson } from "./canonical-json";
 import {
@@ -34,6 +39,11 @@ export class FirstInstallUnavailable extends Error {
     super(reason);
     this.name = "FirstInstallUnavailable";
     this.code = reason;
+  }
+
+  /** A first install that cannot proceed names a state the person is told: an answer. */
+  [ownFailureClass](): RequestFailureClass {
+    return refusal();
   }
 }
 
