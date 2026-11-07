@@ -8,7 +8,8 @@ import {
 /**
  * The Menu tab's edits of the application's one navigation definition (`body.navigation`): add a
  * page entry, group entries under a heading, rename, choose the icon and the page of an entry, move
- * it (by drag or keyboard) and remove it. Who can see an entry is set in the Access tab. Each edit is applied to a copy of the draft
+ * it (by drag or keyboard) and remove it. Who can see an entry is set in the Access tab. A page has at
+ * most one menu entry. Each edit is applied to a copy of the draft
  * and judged by the source schema before it reaches the draft history; a refusal says where the
  * problem is and changes nothing. A page's removal already takes its entries with it (Structure).
  */
@@ -120,11 +121,37 @@ const judged = (candidate: Source): Source => {
   const parsed = applicationSourceDocumentSchema.safeParse(candidate);
   if (parsed.success) return parsed.data;
   const issue = parsed.error.issues[0]!;
-  console.error(
+  console.info(
     `[studio] menu edit refused by the source schema: ${issue.path.join(".")}=${issue.code}`,
   );
   return refuse(
     `This change would leave ${issue.path[1] === "navigation" ? "the menu" : "the application"} invalid (${issue.message}). Nothing was changed.`,
+  );
+};
+
+/** Where a page's one menu entry is: its id, and the label of the heading that holds it (null at the top level). */
+export const studioMenuPageEntries = (
+  source: Source,
+): ReadonlyMap<string, Readonly<{ alias: string; heading: string | null }>> => {
+  const found = new Map<string, { alias: string; heading: string | null }>();
+  const visit = (items: readonly StudioMenuItem[], heading: string | null) => {
+    for (const item of items) {
+      if (item.type === "heading") visit(item.children, item.label);
+      else if (item.type === "page" && !found.has(item.page))
+        found.set(item.page, { alias: item.id, heading });
+    }
+  };
+  visit(source.body.navigation, null);
+  return found;
+};
+
+/** Refuses a page that already has a menu entry, saying where it is and what to do instead. */
+const requireUnlisted = (candidate: Source, pageKey: string, instead: string) => {
+  const listed = studioMenuPageEntries(candidate).get(pageKey);
+  if (listed === undefined) return;
+  const name = candidate.body.pages.find((page) => page.key === pageKey)?.name ?? pageKey;
+  refuse(
+    `${quoted(name)} is already in the menu${listed.heading === null ? "" : ` under the heading ${quoted(listed.heading)}`}. ${instead}`,
   );
 };
 
@@ -156,6 +183,7 @@ const addEntry = (
 ): StudioMenuResult => {
   if (allItems(candidate.body.navigation).length >= menuLimit)
     refuse(`The menu is full: it can have at most ${menuLimit} entries.`);
+  requireUnlisted(candidate, command.pageKey, "Change that entry instead of adding another.");
   const entry = pageEntry(candidate, command.pageKey);
   if (command.headingAlias === null) candidate.body.navigation.push(entry);
   else {
@@ -175,14 +203,27 @@ const addHeading = (
   candidate: Source,
   command: Extract<StudioMenuCommand, { kind: "add_heading" }>,
 ): StudioMenuResult => {
-  const added = command.first.kind === "page" ? 2 : 1;
+  const listed =
+    command.first.kind === "page"
+      ? studioMenuPageEntries(candidate).get(command.first.pageKey)
+      : undefined;
+  // A page already in the menu has its one entry moved under the heading; one under another heading is refused.
+  if (command.first.kind === "page" && listed !== undefined && listed.heading !== null)
+    requireUnlisted(
+      candidate,
+      command.first.pageKey,
+      "Move that entry out of the heading first, or choose another page.",
+    );
+  const added = command.first.kind === "page" && listed === undefined ? 2 : 1;
   if (allItems(candidate.body.navigation).length + added > menuLimit)
     refuse(`The menu is full: it can have at most ${menuLimit} entries, including headings.`);
   const label = cleanLabel(command.label);
-  if (command.first.kind === "page")
+  if (command.first.kind === "page" && listed === undefined)
     candidate.body.navigation.push(pageEntry(candidate, command.first.pageKey));
   const alias =
-    command.first.kind === "item" ? command.first.alias : candidate.body.navigation.at(-1)!.id;
+    command.first.kind === "item"
+      ? command.first.alias
+      : (listed?.alias ?? candidate.body.navigation.at(-1)!.id);
   const place = requirePlace(candidate.body.navigation, alias);
   if (place.heading !== null || place.item.type === "heading")
     refuse(
@@ -200,7 +241,10 @@ const addHeading = (
     kind: "applied",
     source: judged(candidate),
     select: heading.id,
-    message: `Heading ${quoted(label)} added with ${quoted(place.item.label)} under it.`,
+    message:
+      listed === undefined
+        ? `Heading ${quoted(label)} added with ${quoted(place.item.label)} under it.`
+        : `Heading ${quoted(label)} added; the entry ${quoted(place.item.label)} moved under it.`,
   };
 };
 
@@ -220,7 +264,10 @@ const change = (
   }
   if (page !== undefined) {
     if (item.type !== "page") refuse("Only a page entry opens a page.");
-    next.page = requirePage(candidate, page).key;
+    const key = requirePage(candidate, page).key;
+    if (item.type === "page" && key !== item.page)
+      requireUnlisted(candidate, key, "Choose a page that is not in the menu yet.");
+    next.page = key;
   }
   if (address !== undefined) {
     if (item.type !== "external") refuse("Only a link entry opens an address.");

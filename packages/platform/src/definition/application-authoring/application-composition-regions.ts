@@ -406,24 +406,6 @@ type ReadingResolution = Readonly<{
 }>;
 const readingResolutions = new WeakMap<object, Map<string, ReadingResolution>>();
 
-/**
- * The block's place for a command that edits a copy of a history snapshot: the region that
- * receives the committed slot is the copy's, found by its place in the snapshot, and the block and
- * its slot are the snapshot's own objects. The command copies on write from them (`workingCopy`),
- * so the blocks it did not touch keep their identity and are not read or judged again.
- */
-const targetInCopy = (
-  snapshot: ApplicationSourceDocument,
-  copy: ApplicationSourceDocument,
-  target: Target,
-): Target | undefined => {
-  const index = regions(snapshot).findIndex((each) => each.zone.items === target.region.zone.items);
-  const region = index < 0 ? undefined : regions(copy)[index];
-  return region === undefined
-    ? undefined
-    : { ...target, region: { ...region, zone: target.region.zone } };
-};
-
 /** Zoned data (a page's, a guided step's or a layout's) whose slots and slot orders may be set. */
 const ownZonedData = <Data extends SourceZonedData | SourceShell["layout"]>(data: Data): Data => {
   const props = data.root.props;
@@ -478,11 +460,25 @@ const editableCopy = (
   return { ...snapshot, body };
 };
 
+/**
+ * The copy of a history snapshot a command edits, and the copy's own region for `region` of the
+ * snapshot (found by its place in the snapshot). The region keeps the snapshot's own zone.
+ */
+export const copyOfRegion = (
+  snapshot: ApplicationSourceDocument,
+  region: Region,
+): { source: ApplicationSourceDocument; region: Region } | undefined => {
+  const source = editableCopy(snapshot, region);
+  const index = regions(snapshot).findIndex((each) => each.zone.items === region.zone.items);
+  const own = index < 0 ? undefined : regions(source)[index];
+  return own === undefined ? undefined : { source, region: { ...own, zone: region.zone } };
+};
+
 const resolveBlock = (
   context: StudioCompositionContext,
   selection: Extract<StudioSemanticSelection, { kind: "placement" }>,
   reading: boolean,
-) => {
+): { source: ApplicationSourceDocument; target: Target; alias: string } | undefined => {
   const catalogue = context.catalogue;
   const alias = selection.placementAlias;
   if (!reading && isStudioDraftSnapshot(context.source)) {
@@ -491,9 +487,13 @@ const resolveBlock = (
     const snapshot = context.source as ApplicationSourceDocument;
     const found = resolve(context, selection, true);
     if (found === undefined) return undefined;
-    const source = editableCopy(snapshot, found.target.region);
-    const target = targetInCopy(snapshot, source, found.target);
-    return target === undefined ? undefined : { source, target, alias };
+    // The region that receives the committed slot is the copy's; the block and its slot are the
+    // snapshot's own objects. The command copies on write from them (`workingCopy`), so the
+    // blocks it did not touch keep their identity and are not read or judged again.
+    const copy = copyOfRegion(snapshot, found.target.region);
+    return copy === undefined
+      ? undefined
+      : { source: copy.source, target: { ...found.target, region: copy.region }, alias };
   }
   const source = reading
     ? (context.source as ApplicationSourceDocument)

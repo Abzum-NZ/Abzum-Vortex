@@ -2,10 +2,7 @@ import {
   applicationAudienceSchema,
   type ApplicationAudience,
 } from "../../catalogue/application-link";
-import {
-  applicationSourceDocumentSchema,
-  type ApplicationSourceDocument,
-} from "../application-source-contracts";
+import type { ApplicationSourceDocument } from "../application-source-contracts";
 import { resolveStudioAccessGate } from "./application-access-commands";
 import type {
   StudioCompositionContext,
@@ -240,5 +237,5 @@ export const applyStudioCompositionGate = (
   }
   commitWorking(current.catalogue, target.region, working);
   validateStoredApplicationOutlets(current.catalogue, source);
-  return { kind: "applied", source: applicationSourceDocumentSchema.parse(source) };
+  return { kind: "applied", source };
 };

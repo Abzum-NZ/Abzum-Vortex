@@ -1,4 +1,3 @@
-import { applicationSourceDocumentSchema } from "../application-source-contracts";
 import type { PlatformBlockRelease } from "../application-composition/platform-block-release";
 import { PALETTE_GROUP_TITLES } from "./palette-groups";
 import {
@@ -225,9 +224,5 @@ export const applyWrap = (
     throw error;
   }
   syncStoredBlockDependencies(source);
-  return {
-    kind: "applied",
-    source: applicationSourceDocumentSchema.parse(source),
-    placementAlias: wrapperAlias,
-  };
+  return { kind: "applied", source, placementAlias: wrapperAlias };
 };
