@@ -25,12 +25,12 @@ type Refusal = Readonly<{
  * inspect references (`dialog`, drawn once by the control), and nothing changes.
  */
 export function useStudioStructureRun(
-  onCommand: (command: StudioStructureCommand, merge?: string) => StudioStructureResult,
+  onCommand: (command: StudioStructureCommand) => StudioStructureResult,
 ) {
   const [refusal, setRefusal] = useState<Refusal | null>(null);
   const [showReferences, setShowReferences] = useState(false);
-  const run = (command: StudioStructureCommand, merge?: string): boolean => {
-    const result = onCommand(command, merge);
+  const run = (command: StudioStructureCommand): boolean => {
+    const result = onCommand(command);
     if (result.kind === "refused") {
       const hasReferences = result.where !== undefined && result.where.length > 0;
       studioNotice("Nothing was changed", "error", undefined, {

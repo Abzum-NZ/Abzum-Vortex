@@ -44,8 +44,7 @@ export function StudioStructureEditor({
   onFormChange: (form: StudioStructureForm) => void;
   source: ApplicationSourceDocument;
   disabled: boolean;
-  /** One Structure edit; `merge` joins a run of edits to one value (typing a name) into one Undo step. */
-  onCommand: (command: StudioStructureCommand, merge?: string) => StudioStructureResult;
+  onCommand: (command: StudioStructureCommand) => StudioStructureResult;
   /** Runs a command on the current draft without keeping it, for a preview of what it adds. */
   onPreview: (command: StudioStructureCommand) => StudioStructureResult;
 }>) {

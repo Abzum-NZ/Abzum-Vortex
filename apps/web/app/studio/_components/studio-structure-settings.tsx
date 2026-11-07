@@ -39,7 +39,7 @@ export function useStudioStructureSettings({
   source: ApplicationSourceDocument;
   selected: StudioSemanticSelection | null;
   disabled: boolean;
-  onCommand: (command: StudioStructureCommand, merge?: string) => StudioStructureResult;
+  onCommand: (command: StudioStructureCommand) => StudioStructureResult;
   onPreview: (command: StudioStructureCommand) => StudioStructureResult;
   onLayoutPlan: (pageAlias: string, shellAlias: string | null) => StudioPageLayoutPlan;
   /** Opens the Access tab, where who can open a page is set. */

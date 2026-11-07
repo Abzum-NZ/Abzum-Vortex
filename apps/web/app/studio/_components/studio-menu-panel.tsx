@@ -42,12 +42,8 @@ import { StudioPanelShell, StudioSection } from "./studio-frame";
 import { StudioField } from "./studio-field";
 import { useStudioDraftText } from "./use-studio-draft-text";
 
-/** What the last edit said; an applied one holds the menu it made, so Undo or Redo takes its line away. */
-type Feedback = Readonly<{
-  kind: "applied" | "refused";
-  message: string;
-  menu?: string | undefined;
-}>;
+/** What the last edit said, and the menu it was said on: any later change of the menu takes it away. */
+type Feedback = Readonly<{ kind: "applied" | "refused"; message: string; menu: string }>;
 
 const kindWords = (item: StudioMenuItem) =>
   item.type === "heading" ? "Heading" : item.type === "page" ? "Page" : "Link";
@@ -94,18 +90,20 @@ export function StudioMenuPanel({
   const pages = useMemo(() => studioMenuPageChoices(source), [source]);
   const library = source.body.theme.selection.icon_library;
   const menuNow = useMemo(() => JSON.stringify(source.body.navigation), [source.body.navigation]);
-  const shownFeedback =
-    feedback !== null && (feedback.menu === undefined || feedback.menu === menuNow)
-      ? feedback
-      : null;
+  // Undo, Redo or any other change of the menu after a line was said takes the line away.
+  const [seenMenu, setSeenMenu] = useState(menuNow);
+  if (seenMenu !== menuNow) {
+    setSeenMenu(menuNow);
+    if (feedback !== null && feedback.menu !== menuNow) setFeedback(null);
+  }
+  const say = (kind: Feedback["kind"], message: string, menu = menuNow) =>
+    setFeedback({ kind, message, menu });
 
   const run = (command: StudioMenuCommand, merge?: string): boolean => {
     const result = onCommand(command, merge);
-    setFeedback({
-      kind: result.kind,
-      message: result.message,
-      menu: result.kind === "applied" ? JSON.stringify(result.source.body.navigation) : undefined,
-    });
+    if (result.kind === "applied")
+      say(result.kind, result.message, JSON.stringify(result.source.body.navigation));
+    else say(result.kind, result.message);
     return result.kind === "applied";
   };
   const selected = selectedAlias === null ? undefined : studioMenuPosition(source, selectedAlias);
@@ -135,17 +133,16 @@ export function StudioMenuPanel({
           index: previous.children.length,
         });
     }
-    setFeedback({
-      kind: "refused",
-      message:
-        key === "ArrowRight" && item.type === "heading"
-          ? `The heading “${item.label}” cannot go under another heading: the menu has one level of headings.`
-          : key === "ArrowRight"
-            ? "Alt and Right arrow puts an entry under the heading just above it; there is none."
-            : key === "ArrowLeft"
-              ? "The entry is not under a heading."
-              : "The entry is already at that end.",
-    });
+    say(
+      "refused",
+      key === "ArrowRight" && item.type === "heading"
+        ? `The heading “${item.label}” cannot go under another heading: the menu has one level of headings.`
+        : key === "ArrowRight"
+          ? "Alt and Right arrow puts an entry under the heading just above it; there is none."
+          : key === "ArrowLeft"
+            ? "The entry is not under a heading."
+            : "The entry is already at that end.",
+    );
     return false;
   };
   const keyMove = (event: KeyboardEvent<HTMLButtonElement>, alias: string) => {
@@ -376,7 +373,7 @@ export function StudioMenuPanel({
   const addEntry = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (newPage.length === 0) {
-      setFeedback({ kind: "refused", message: "Choose the page the new entry opens." });
+      say("refused", "Choose the page the new entry opens.");
       return;
     }
     if (run({ kind: "add_entry", pageKey: newPage, headingAlias: selectedHeading })) setNewPage("");
@@ -538,12 +535,12 @@ export function StudioMenuPanel({
               Drop here to move it to the end of the menu
             </Item>
           )}
-          {shownFeedback !== null && (
+          {feedback !== null && (
             <Alert
-              variant={shownFeedback.kind === "refused" ? "destructive" : "default"}
-              role={shownFeedback.kind === "refused" ? "alert" : "status"}
+              variant={feedback.kind === "refused" ? "destructive" : "default"}
+              role={feedback.kind === "refused" ? "alert" : "status"}
             >
-              <AlertDescription>{shownFeedback.message}</AlertDescription>
+              <AlertDescription>{feedback.message}</AlertDescription>
             </Alert>
           )}
           {confirmDialog}

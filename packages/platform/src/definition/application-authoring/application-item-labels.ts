@@ -72,10 +72,10 @@ const invalid = (
 });
 
 /**
- * The one label edit: the inspector's name fields, the Structure tab's rename and the agent rename
- * tool all call it. A page's menu entries that still carry its name follow the new name. It copies
- * only the path it changes over the frozen draft and checks only the texts it sets with the
- * schema's own field rules, so a keystroke costs no whole-application clone or parse.
+ * The one label edit, behind the inspector's Name and Description fields. A page's menu entries
+ * that still carry its name follow the new name. It copies only the path it changes over the
+ * frozen draft and checks only the texts it sets with the schema's own field rules, so a keystroke
+ * costs no whole-application clone or parse.
  */
 export const applyStudioItemLabels = (
   source: ApplicationSourceDocument,

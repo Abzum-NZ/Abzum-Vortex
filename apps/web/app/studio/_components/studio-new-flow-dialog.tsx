@@ -4,7 +4,6 @@ import { Alert, AlertDescription } from "@vortex/ui/components/alert";
 import { useState, type FormEvent } from "react";
 import { Icon } from "@vortex/ui";
 import { Button } from "@vortex/ui/components/button";
-import { Reasoned } from "@vortex/ui/components/reasoned";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@vortex/ui/components/tooltip";
 import {
   Dialog,
@@ -17,7 +16,7 @@ import { Input } from "@vortex/ui/components/input";
 import { RadioGroup, RadioGroupItem } from "@vortex/ui/components/radio-group";
 import { Textarea } from "@vortex/ui/components/textarea";
 import type { ApplicationSourceDocument } from "@vortex/platform/schema";
-import { StudioOptionControl } from "@vortex/ui/studio";
+import { Reasoned, StudioOptionControl } from "@vortex/ui/studio";
 import {
   studioFlowCreateSavesChange,
   studioFlowEventTitle,
@@ -87,31 +86,20 @@ export function StudioNewFlowDialog({
       : what === "operation" && operation === ""
         ? "Choose the operation the flow runs."
         : undefined;
-  const createReason = missingName
-    ? missingMessage
-      ? "Give the flow a name and a message."
-      : "Give the flow a name."
-    : missingMessage
-      ? "Write the message the flow shows."
-      : stepReason;
+  const createReason =
+    chosen === undefined
+      ? "Choose the control that starts the flow."
+      : missingName
+        ? missingMessage
+          ? "Give the flow a name and a message."
+          : "Give the flow a name."
+        : missingMessage
+          ? "Write the message the flow shows."
+          : stepReason;
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (chosen === undefined) {
-      setProblem("Choose the control that starts the flow.");
-      return;
-    }
-    if (asksStep && what === "") {
-      setProblem("Choose what the flow does: run an operation or show a message.");
-      return;
-    }
-    if (asksStep && what === "operation" && operation === "") {
-      setProblem("Choose the operation the flow runs.");
-      return;
-    }
-    if (asksStep && what === "message" && messageText.trim() === "") {
-      setProblem("Write the message the flow shows.");
-      return;
-    }
+    // Create flow is reasoned until the control, the name and the step are given.
+    if (chosen === undefined || createReason !== undefined) return;
     let command: StudioFlowCreateCommand;
     if (existingFlow !== undefined) {
       const inputs = Object.entries(existingFlow.inputs);
