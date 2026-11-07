@@ -102,7 +102,7 @@ function initialFocusTarget(popup: HTMLElement | null, openType: string): HTMLEl
       control.tabIndex >= 0 &&
       !control.matches(":disabled") &&
       control.closest("[inert]") === null &&
-      control.checkVisibility();
+      control.checkVisibility({ visibilityProperty: true });
     if (!tabbable) continue;
     if (control.closest('[data-slot="dialog-close"]') !== null) afterClose = true;
     else return afterClose ? control : true;
@@ -146,8 +146,7 @@ function DialogContent({
           <Tooltip>
             <TooltipTrigger
               render={
-                <DialogPrimitive.Close
-                  data-slot="dialog-close"
+                <DialogClose
                   render={<Button variant="ghost" className="cn-dialog-close" size="icon-sm" />}
                 />
               }
@@ -192,7 +191,7 @@ function DialogFooter({
     >
       {children}
       {showCloseButton && (
-        <DialogPrimitive.Close render={<Button variant="outline" />}>Close</DialogPrimitive.Close>
+        <DialogClose render={<Button variant="outline" />}>Close</DialogClose>
       )}
     </div>
   );
