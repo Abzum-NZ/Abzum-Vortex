@@ -3,11 +3,11 @@ import "server-only";
 import type { z, ZodError } from "zod";
 import type { DatabaseRow, RequestDatabaseTransaction } from "../db/request-transaction";
 import { markRequestFailureLogged, requestFailureLogged } from "../access/request-failure-mark";
-import {
-  type ProtectedQueryRefusalReasonCode,
-  type ProtectedQueryResult,
-  type ProtectedQueryCommand,
-  type ProtectedQuerySummaryCommand,
+import type {
+  ProtectedQueryRefusalReasonCode,
+  ProtectedQueryResult,
+  ProtectedQueryCommand,
+  ProtectedQuerySummaryCommand,
 } from "./protected-query-contracts";
 import { inputsReadSchema } from "./protected-query-read-schemas";
 import {

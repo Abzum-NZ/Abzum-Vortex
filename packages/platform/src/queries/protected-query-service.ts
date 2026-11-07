@@ -42,7 +42,8 @@ export type { ProtectedQueryServiceDependencies } from "./protected-query-types"
 /**
  * A read that names no application is answered unavailable before any request runs, so the
  * request runner logged nothing: this is its one line. Every other answer that is not available
- * was logged once by the runner, so a caller of the service never logs one again.
+ * was logged once by the runner, and every refused answer of a read is logged once by the query
+ * itself (`answeredOnce`), so a caller of the service never logs an answer again.
  */
 const noApplicationSelected = (): Readonly<{ kind: "unavailable" }> => {
   logRefusal("protected-query", "request", "application_not_selected");
