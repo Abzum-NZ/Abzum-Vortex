@@ -40,10 +40,10 @@ export const loadStudioOrganizationHome = async (
   const resolved = await resolveIdentitySession();
   if (resolved.kind !== "active") {
     if (resolved.kind === "temporarily_unavailable") {
-      console.error("[studio] organization home failed: identity session temporarily_unavailable");
+      console.error("[studio] organization home failed: session temporarily_unavailable");
       return { kind: "temporarily_unavailable" };
     }
-    logRefusal("studio", "organization home", `identity_session_${resolved.kind}`);
+    logRefusal("studio", "organization home", `session_${resolved.kind}`);
     return { kind: "refused", reason: "Sign in to open this Studio workspace." };
   }
 
