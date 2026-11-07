@@ -2,7 +2,8 @@ import "server-only";
 
 import { databaseCode, describeFailure } from "../catalogue/runtime-primitives";
 import { BuilderAuthorityError } from "../definition/builder-authority";
-import { DefinitionError, isValidationRefusal } from "../definition/definition-error";
+import { DefinitionCompilationError } from "../definition/compilation-error";
+import { DefinitionError } from "../definition/definition-error";
 import { FirstInstallUnavailable } from "../definition/installation-first-install";
 import { InstallationProblem } from "../definition/installation-authority";
 import type { TelemetryOutcome } from "../events/telemetry";
@@ -128,13 +129,10 @@ const knownClass = (
   scope: Readonly<{ addressed: boolean }>,
 ): RequestFailureClass | undefined => {
   if (requestStopped(error)) return retryable("stopped");
-  if (error instanceof DefinitionError) {
-    // A failed publication is a compiler refusal (a rule naming what to fix); otherwise its cause
-    // decides (a database refusal or race is an answer, anything else a fault).
-    if (error.code === "DEFINITION_PUBLICATION_FAILED")
-      return isValidationRefusal(error.cause) ? refusal() : undefined;
-    return definitionErrorClasses.get(error.code);
-  }
+  // A compiler refusal names a rule the author fixes: an answer, wherever it is caught. A failure
+  // that wraps it (a failed publication) is classified by it as one of its causes.
+  if (error instanceof DefinitionCompilationError) return refusal();
+  if (error instanceof DefinitionError) return definitionErrorClasses.get(error.code);
   if (error instanceof BuilderAuthorityError) return builderAuthorityClasses[error.code];
   if (error instanceof FirstInstallUnavailable) return refusal();
   if (error instanceof InstallationProblem) return installationProblemClass(error.problem);
