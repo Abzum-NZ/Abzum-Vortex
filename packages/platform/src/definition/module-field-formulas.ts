@@ -9,6 +9,7 @@ import {
   calculationReadTimeSupported,
 } from "./module-calculation-formula";
 import type { ApplicationSourceDocument } from "./application-source-contracts";
+import { linkRelationshipTargets } from "./module-links";
 import { queryTotalAccepts, queryTotalOperationLabels } from "./module-query-totals";
 import { typedFieldValueType } from "./validation/field-types";
 
@@ -284,15 +285,12 @@ export const totalRelationships = (
   moduleKey: string,
   recordKey: string,
 ): readonly TotalRelationship[] => {
-  const reaches = (reference: string | undefined) =>
-    reference === recordKey || reference === `${moduleKey}:${recordKey}`;
+  const reaches = (reference: string) => reference === `${moduleKey}:${recordKey}`;
   const module = source.body.modules.find((item) => item.key === moduleKey);
   return (module?.record_types ?? []).flatMap((record) =>
     record.relationships
-      .filter(
-        (relationship) =>
-          reaches(relationship.to_record_type) ||
-          (relationship.to_record_types ?? []).some(reaches),
+      .filter((relationship) =>
+        (linkRelationshipTargets(record, relationship)?.targets ?? []).some(reaches),
       )
       .map((relationship) => {
         const from = record.fields.find((field) => field.key === relationship.from_field);

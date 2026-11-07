@@ -9,6 +9,7 @@ import type {
 import type { ModuleQueryExposure } from "../module-query-exposure";
 import { queryTotalLabel } from "../module-query-totals";
 import type { RecordsTableBoardFacts } from "../application-composition/records-table-features/shared";
+import { linkRelationshipTargets } from "../module-links";
 import { PALETTE_GROUP_TITLES } from "./palette-groups";
 import { isProjectionAddressField } from "./application-record-page-kinds";
 import { studioHasSlotStarter } from "./composition-starters";
@@ -417,21 +418,16 @@ export const studioBoardFacts = (
   };
 };
 
-/** The queries of the application's own Modules: they are in its source. */
 /**
  * Whether a draft field is a one-record link from its record type to itself: a many-to-one
  * relationship from the field whose target is the same qualified record type, as publication judges.
  */
 const isParentLink = (
-  moduleKey: string,
   recordType: string,
   record:
     | Readonly<{
-        relationships: readonly Readonly<{
-          from_field: string;
-          cardinality: string;
-          to_record_type?: string | undefined;
-        }>[];
+        fields: readonly Readonly<{ key: string; type: string; settings: unknown }>[];
+        relationships: readonly Readonly<{ from_field: string; cardinality: string }>[];
       }>
     | undefined,
   field: Readonly<{ key: string; type: string }>,
@@ -442,10 +438,7 @@ const isParentLink = (
     (relationship) =>
       relationship.from_field === field.key &&
       relationship.cardinality === "many_to_one" &&
-      relationship.to_record_type !== undefined &&
-      (relationship.to_record_type.includes(":")
-        ? relationship.to_record_type
-        : `${moduleKey}:${relationship.to_record_type}`) === recordType,
+      linkRelationshipTargets(record, relationship)?.targets[0] === recordType,
   );
 
 type SourceModule = ApplicationSourceDocument["body"]["modules"][number];
@@ -488,7 +481,7 @@ const ownQuery = (
       ...(record !== undefined && isProjectionAddressField(record, field.key)
         ? { projectionAddress: true as const }
         : {}),
-      ...(isParentLink(module.key, recordType, record, field) ? { parentLink: true } : {}),
+      ...(isParentLink(recordType, record, field) ? { parentLink: true } : {}),
       ...((field.type === "link" || field.type === "choice") &&
       (field.settings as { options_source?: { parent_field?: string } }).options_source
         ?.parent_field !== undefined
@@ -647,16 +640,11 @@ export function studioRelationshipChoices(
     module.record_types.flatMap((record) =>
       record.relationships.map((relationship) => {
         const from = record.fields.find((field) => field.key === relationship.from_field);
-        const qualified = (target: string) =>
-          target.includes(":") ? target : `${module.key}:${target}`;
         return Object.freeze({
           reference: `${module.key}:${record.key}.${relationship.key}`,
           label: `${record.name}: ${from?.label ?? relationship.key}`,
           recordType: `${module.key}:${record.key}`,
-          targets: (relationship.to_record_type === undefined
-            ? (relationship.to_record_types ?? [])
-            : [relationship.to_record_type]
-          ).map(qualified),
+          targets: linkRelationshipTargets(record, relationship)?.targets ?? [],
         });
       }),
     ),

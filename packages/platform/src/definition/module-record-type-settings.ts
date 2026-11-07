@@ -10,6 +10,7 @@ import {
   standardRecordActions,
   type StandardRecordAction,
 } from "./module-field-shape";
+import { linkRelationshipTargets } from "./module-links";
 import { standardRecordPermission } from "./module-permission-shape";
 
 type InlineModule = ApplicationSourceDocument["body"]["modules"][number];
@@ -160,9 +161,6 @@ type RecordOwnershipSource = Readonly<{
   problem?: string;
 }>;
 
-const qualify = (moduleKey: string, reference: string): string =>
-  reference.includes(":") ? reference : `${moduleKey}:${reference}`;
-
 const findRecord = (
   source: ApplicationSourceDocument,
   qualified: string,
@@ -172,14 +170,6 @@ const findRecord = (
   const record = module?.record_types.find((item) => item.key === qualified.slice(separator + 1));
   return module === undefined || record === undefined ? undefined : { module, record };
 };
-
-const relationshipTargets = (
-  moduleKey: string,
-  relationship: RecordType["relationships"][number],
-): string[] =>
-  relationship.to_record_type !== undefined
-    ? [qualify(moduleKey, relationship.to_record_type)]
-    : (relationship.to_record_types ?? []).map((target) => qualify(moduleKey, target));
 
 /**
  * Why records of the target cannot hand an owner down, or undefined when they can. An owner is
@@ -204,7 +194,7 @@ const ownerProblem = (
       return `${name(target)} is not in a module this application owns or uses.`;
     return mode === "none" ? `${name(target)} records have no owner to hand down.` : undefined;
   }
-  const { module, record } = owned;
+  const { record } = owned;
   if (record.ownership_mode === "organization_account" || record.ownership_mode === "group")
     return undefined;
   if (record.ownership_mode !== "inherited")
@@ -224,7 +214,7 @@ const ownerProblem = (
   )
     return `${name(target)} needs a required link to one record to take its owner from.`;
   const next = new Set([...visiting, target]);
-  for (const further of relationshipTargets(module.key, relationship)) {
+  for (const further of linkRelationshipTargets(record, relationship)?.targets ?? []) {
     const problem = ownerProblem(source, further, context, next, name, target);
     if (problem !== undefined) return problem;
   }
@@ -249,7 +239,7 @@ export const recordOwnershipSources = (
   const { record } = found;
   return record.relationships.map((relationship) => {
     const field = record.fields.find((item) => item.key === relationship.from_field);
-    const targets = relationshipTargets(moduleKey, relationship);
+    const targets = linkRelationshipTargets(record, relationship)?.targets ?? [];
     const label = field?.label ?? relationship.key;
     const problem =
       field === undefined ||
