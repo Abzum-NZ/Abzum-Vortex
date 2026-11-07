@@ -3,7 +3,7 @@ export const refusalMessage = (reason: string | undefined, subject: string): str
   reason === "session_ended"
     ? `Your session has ended. Sign in again, then retry. ${subject}`
     : reason === "permission_missing"
-      ? `You do not have permission to manage definition drafts in this organization. ${subject}`
+      ? `You do not have permission to manage definition drafts in this organisation. ${subject}`
       : reason === "source_invalid"
         ? `The draft source is not valid, so it was not accepted. ${subject}`
         : reason === "context_changed"
@@ -43,17 +43,17 @@ export const unavailableMessage = (
       return "This needs a recent sign-in. Sign in again, then reload this page.";
     case "permission_missing":
     case "release_permission_missing":
-      return "Your account does not have permission to manage this in the organization. Ask an administrator for access.";
+      return "Your account does not have permission to manage this in the organisation. Ask an administrator for access.";
     case "release_permission_not_eligible":
-      return "Your account is not currently eligible to release in this organization. Ask an administrator.";
+      return "Your account is not currently eligible to release in this organisation. Ask an administrator.";
     case "organization_unavailable":
     case "organization_mismatch":
-      return "This organization is not available to your account. Check the address or switch organization.";
+      return "This organisation is not available to your account. Check the address or switch organisation.";
     case "request_invalid":
     case "command_invalid":
       return "The address of this page is not valid, so nothing was read.";
     case "draft_missing":
-      return "This draft does not exist in this organization.";
+      return "This draft does not exist in this organisation.";
     case "draft_kind_mismatch":
       return "This address names a different kind of draft than this page edits.";
     case "draft_changed":

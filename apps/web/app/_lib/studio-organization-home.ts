@@ -26,7 +26,7 @@ type StudioOrganizationHomeResult =
   | Readonly<{ kind: "refused"; reason: string }>
   | Readonly<{ kind: "temporarily_unavailable" }>;
 
-const permissionRefusal = "You need permission to manage definition drafts in this organization.";
+const permissionRefusal = "You need permission to manage definition drafts in this organisation.";
 
 export const loadStudioOrganizationHome = async (
   candidateOrganizationId: string,
@@ -35,7 +35,7 @@ export const loadStudioOrganizationHome = async (
   const organization = organizationIdSchema.safeParse(candidateOrganizationId);
   if (!organization.success) {
     logRefusal("studio", "organization home", "invalid_organization_identifier");
-    return { kind: "refused", reason: "The organization address is invalid." };
+    return { kind: "refused", reason: "The organisation address is invalid." };
   }
   const resolved = await resolveIdentitySession();
   if (resolved.kind !== "active") {
