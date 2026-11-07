@@ -13,7 +13,9 @@ import {
 import type { RecordsTableBatchEditResult } from "../pages/records-table-batch-edit-request";
 import type { JsonValue } from "../catalogue/common";
 import { recordIdSchema, recordTypeIdSchema } from "../catalogue/identifiers";
-import { describeFailure, isRecord, sameId } from "../catalogue/runtime-primitives";
+import { logRefusal } from "../access/request-failure";
+import { requestFailureLogged } from "../access/request-failure-mark";
+import { isRecord, sameId } from "../catalogue/runtime-primitives";
 import { walkPageComposition, type PlacementVisitor } from "../pages/placement-walk";
 import {
   flowTaskChildLists,
@@ -205,11 +207,25 @@ export type FlowBindingEndpointResult = (
 
 const refused: FlowBindingEndpointResult = Object.freeze({ kind: "refused", committedNow: false });
 
-/** Logs one flow-binding refusal with its stable reason code and cause, then returns the neutral refusal. */
+/**
+ * Platform faults that carry no cause (a seam not supplied, a bound flow not planned). Each is one
+ * error line in the refusal's shape; `logRefusal` has no fault level for a failure without a cause.
+ */
+const faultCodes: ReadonlySet<string> = new Set([
+  "FLOW_INVOKE_RUN_START_UNAVAILABLE",
+  "FLOW_INVOKE_FORM_SUBMIT_NOT_ADAPTED",
+  "FLOW_INVOKE_BATCH_EDIT_NOT_ADAPTED",
+  "FLOW_INVOKE_FLOW_NOT_PLANNED",
+]);
+
+/**
+ * Logs one flow-binding refusal once, then returns the neutral refusal. An expected refusal is
+ * named by its code alone and logged as information; a fault code is an error; a caught failure's
+ * cause decides its level, and a cause the place that raised it already logged adds no line.
+ */
 const refuse = (code: string, cause?: unknown): FlowBindingEndpointResult => {
-  console.error(
-    `[flows] binding invoke refused ${code}${cause === undefined ? "" : `: ${describeFailure(cause)}`}`,
-  );
+  if (faultCodes.has(code)) console.error(`[flows] binding invoke refused: code=${code}`);
+  else if (!requestFailureLogged(cause)) logRefusal("flows", "binding invoke", code, cause);
   return refused;
 };
 
@@ -452,12 +468,15 @@ const selectedRecordInputSchema = z
   .object({ recordTypeId: recordTypeIdSchema, recordId: recordIdSchema })
   .strict();
 
-const withinSupplied = (candidate: unknown): boolean => {
+/** The refusal for browser-supplied inputs that are too large or cannot be serialised, if any. */
+const suppliedInputsRefusal = (candidate: unknown): FlowBindingEndpointResult | undefined => {
   try {
-    return (JSON.stringify(candidate) ?? "").length <= maximumSuppliedCharacters;
-  } catch (error) {
-    console.error(`[flows] binding invoke input not serialisable: ${describeFailure(error)}`);
-    return false;
+    return (JSON.stringify(candidate) ?? "").length <= maximumSuppliedCharacters
+      ? undefined
+      : refuse("FLOW_INVOKE_INPUT_TOO_LARGE");
+  } catch {
+    logRefusal("flows", "binding invoke", "FLOW_INVOKE_INPUT_NOT_SERIALISABLE");
+    return refused;
   }
 };
 
@@ -537,13 +556,9 @@ const bindingInputs = (
  * declares for that input and reduced to its record ID. `undefined` refuses the click.
  */
 const referenceInputsAsRecordIds = (
-  flow: FlowDefinition | undefined,
+  flow: FlowDefinition,
   inputs: Readonly<Record<string, unknown>>,
 ): Record<string, unknown> | undefined => {
-  if (flow === undefined) {
-    console.error("[flows] installed flow is not planned");
-    return undefined;
-  }
   const result: Record<string, unknown> = { ...inputs };
   for (const [name, declaration] of Object.entries(flow.inputs)) {
     const value = result[name];
@@ -652,12 +667,16 @@ export const createFlowBindingEndpoint = (dependencies: FlowBindingEndpointDepen
         const session = identitySessionSchema.safeParse(sessionCandidate);
         const selection = organizationSelectionCandidateSchema.safeParse(selectionCandidate);
         const invocation = flowBindingInvocationSchema.safeParse(invocationCandidate);
-        if (!session.success) return refuse("FLOW_INVOKE_SESSION_INVALID", session.error);
-        if (!selection.success) return refuse("FLOW_INVOKE_SELECTION_INVALID", selection.error);
-        if (!invocation.success) return refuse("FLOW_INVOKE_REQUEST_INVALID", invocation.error);
+        // A malformed session, selection or request is the browser's input, not a platform fault:
+        // the code names the refusal, so the parse error is not logged as its cause.
+        if (!session.success) return refuse("FLOW_INVOKE_SESSION_INVALID");
+        if (!selection.success) return refuse("FLOW_INVOKE_SELECTION_INVALID");
+        if (!invocation.success) return refuse("FLOW_INVOKE_REQUEST_INVALID");
         const request = invocation.data;
-        if (request.kind === "binding" && !withinSupplied(request.callerInputs))
-          return refuse("FLOW_INVOKE_INPUT_TOO_LARGE");
+        if (request.kind === "binding") {
+          const inputsRefusal = suppliedInputsRefusal(request.callerInputs);
+          if (inputsRefusal !== undefined) return inputsRefusal;
+        }
 
         const installation = await dependencies.readInstallation(session.data, selection.data);
         if (
@@ -722,19 +741,23 @@ export const createFlowBindingEndpoint = (dependencies: FlowBindingEndpointDepen
 
         let callerInputs: Readonly<Record<string, unknown>> = request.callerInputs;
         if (binding.event === "form_submit") {
-          const adapted = await dependencies.adaptFormSubmit?.(
+          if (dependencies.adaptFormSubmit === undefined)
+            return refuse("FLOW_INVOKE_FORM_SUBMIT_NOT_ADAPTED");
+          const adapted = await dependencies.adaptFormSubmit(
             binding,
             callerInputs,
             request.subject,
             installation,
           );
           if (adapted === undefined || !isRecord(adapted))
-            return refuse("FLOW_INVOKE_FORM_SUBMIT_NOT_ADAPTED");
+            return refuse("FLOW_INVOKE_FORM_SUBMIT_REFUSED");
           callerInputs = adapted;
         }
         if (binding.event === "batch_edit") {
-          const adapted = await dependencies.adaptBatchEdit?.(binding, callerInputs, installation);
-          if (adapted === undefined) return refuse("FLOW_INVOKE_BATCH_EDIT_NOT_ADAPTED");
+          if (dependencies.adaptBatchEdit === undefined)
+            return refuse("FLOW_INVOKE_BATCH_EDIT_NOT_ADAPTED");
+          const adapted = await dependencies.adaptBatchEdit(binding, callerInputs, installation);
+          if (adapted === undefined) return refuse("FLOW_INVOKE_BATCH_EDIT_REFUSED");
           if (adapted.kind === "cells_refused")
             return { kind: "cells_refused", problems: adapted.problems, committedNow: false };
           callerInputs = adapted.inputs;
@@ -744,10 +767,9 @@ export const createFlowBindingEndpoint = (dependencies: FlowBindingEndpointDepen
           new Map<string, string>();
         const boundInputs = bindingInputs(binding, callerInputs, selectedRecordReadInputs);
         if (boundInputs === undefined) return refuse("FLOW_INVOKE_CALLER_INPUTS_NOT_BOUND");
-        const inputs = referenceInputsAsRecordIds(
-          installation.flows.get(String(binding.flow.flowId)),
-          boundInputs,
-        );
+        const flow = installation.flows.get(String(binding.flow.flowId));
+        if (flow === undefined) return refuse("FLOW_INVOKE_FLOW_NOT_PLANNED");
+        const inputs = referenceInputsAsRecordIds(flow, boundInputs);
         if (inputs === undefined) return refuse("FLOW_INVOKE_REFERENCE_INPUTS_REJECTED");
 
         const runId = runIdForClick(

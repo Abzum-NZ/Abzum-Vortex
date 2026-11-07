@@ -3,9 +3,10 @@ import "server-only";
 
 import { uuidFromText } from "./derived-definition-id";
 import type { IdentitySession, OrganizationSelectionCandidate } from "../access/identity-access";
+import { logRefusal } from "../access/request-failure";
 import type { JsonValue } from "../catalogue/common";
 import { recordIdSchema, type IdentityAuthorityId } from "../catalogue/identifiers";
-import { describeFailure, sameId, isRecord } from "../catalogue/runtime-primitives";
+import { sameId, isRecord } from "../catalogue/runtime-primitives";
 import type { FlowBindingInvocation } from "../workflows/flow-invocation-contracts";
 import type { ApplicationContent } from "./application-contracts";
 import type { ProtectedOperationChannel } from "./application-flow-bindings";
@@ -201,11 +202,6 @@ export type FlowInvocationRequest = Readonly<{
   }>;
   invocation: FlowBindingInvocation;
 }>;
-
-/** One log line per binding refusal; the page keeps its neutral outcome. */
-const logFlowRefusal = (code: string): void => {
-  console.error(`[flows] invocation refused ${code}`);
-};
 
 /** A guided control shared by two pages, or a form submit anywhere but the summary form, never starts a flow. */
 const refusesGuidedBinding = (guided: GuidedControl | null, event: string): boolean =>
@@ -483,7 +479,7 @@ export async function invokeInstalledFlow(
       (candidate) => candidate.key === body.pageKey,
     );
     if (page === undefined) {
-      logFlowRefusal("BINDING_CONTROL_NOT_ON_PAGE page_not_installed");
+      logRefusal("flows", "invocation", "BINDING_CONTROL_NOT_ON_PAGE page_not_installed");
       return false;
     }
     const capability = createStoredPageCapabilityService({
@@ -502,14 +498,14 @@ export async function invokeInstalledFlow(
       (admittedProjection.accessVersion !== bound.scope.accessVersion ||
         admittedProjection.installationRevision !== context.applicationReleaseRevision)
     ) {
-      logFlowRefusal("BINDING_PROJECTION_CONTEXT_CHANGED");
+      logRefusal("flows", "invocation", "BINDING_PROJECTION_CONTEXT_CHANGED");
       return false;
     }
     const projected =
       admittedProjection?.page ??
       (await capability.projectInTransaction(bound.transaction, bound.scope));
     if (projected === undefined) {
-      logFlowRefusal("BINDING_CONTROL_NOT_ON_PAGE page_projection_unavailable");
+      logRefusal("flows", "invocation", "BINDING_CONTROL_NOT_ON_PAGE page_projection_unavailable");
       return false;
     }
     if (admittedProjection === undefined)
@@ -522,7 +518,7 @@ export async function invokeInstalledFlow(
     if (controlId === undefined || sameId(controlId, String(page.pageId))) return true;
     const gate = requireProjectedPlacement(projected, controlId);
     if (gate.kind === "refused") {
-      logFlowRefusal(`BINDING_CONTROL_NOT_ON_PAGE ${gate.reason}`);
+      logRefusal("flows", "invocation", `BINDING_CONTROL_NOT_ON_PAGE ${gate.reason}`);
       return false;
     }
     return true;
@@ -541,7 +537,7 @@ export async function invokeInstalledFlow(
     bindingContext === undefined ? undefined : installedFlowBindings(bindingContext);
   if (invocation.kind === "binding") {
     if (bindingContext === undefined || bindingInstallation === undefined) {
-      logFlowRefusal("BINDING_INSTALLATION_NOT_CURRENT");
+      logRefusal("flows", "invocation", "BINDING_INSTALLATION_NOT_CURRENT");
       return { kind: "refused", committedNow: false };
     }
     const plan = bindingInstallation.plans.get(String(invocation.flowId));
@@ -563,8 +559,9 @@ export async function invokeInstalledFlow(
         },
         segment,
       );
-    } catch (error) {
-      logFlowRefusal(`BINDING_CARRIED_VALUES_INVALID ${describeFailure(error)}`);
+    } catch {
+      // A token that does not open is the browser's input: the code names the refusal.
+      logRefusal("flows", "invocation", "BINDING_CARRIED_VALUES_INVALID");
       return { kind: "refused", committedNow: false };
     }
     const binding = bindingsWithMessageActions(bindingInstallation.bindings, [
@@ -579,7 +576,7 @@ export async function invokeInstalledFlow(
       binding !== undefined &&
       refusesGuidedBinding(guided, binding.event)
     ) {
-      logFlowRefusal("BINDING_GUIDED_CONTROL_NOT_CONFIRMED");
+      logRefusal("flows", "invocation", "BINDING_GUIDED_CONTROL_NOT_CONFIRMED");
       return { kind: "refused", committedNow: false };
     }
     // A Records table row, bulk or inline-edit command runs only for a command the installed
@@ -596,6 +593,7 @@ export async function invokeInstalledFlow(
             (operation) => requests.run(identity.session, selection, operation),
           );
     if (featureRefusal !== undefined) {
+      // The feature refusal's one line, with its reason; this request adds none.
       logRecordsTableRequestRefusal(featureRefusal, "flow_dispatch");
       // A row shown at another revision than the stored one: the person reloads and sees the
       // fresh row, rather than a neutral refusal.
@@ -608,7 +606,6 @@ export async function invokeInstalledFlow(
           installationRevision: bindingContext.applicationReleaseRevision,
           committedNow: false,
         };
-      logFlowRefusal("BINDING_GRID_FEATURE_NOT_PROJECTED");
       return { kind: "refused", committedNow: false };
     }
   }
@@ -684,10 +681,7 @@ export async function invokeInstalledFlow(
         operation: callerInputs.operation,
         rows: callerInputs.rows,
       });
-      if (!request.success) {
-        logFlowRefusal("BINDING_BATCH_EDIT_ROWS_INVALID");
-        return undefined;
-      }
+      if (!request.success) return undefined;
       const prepared = await createRecordsTableBatchEditService({
         ...requestDependencies,
         continuationKey: dependencies.continuationKey,
@@ -698,10 +692,7 @@ export async function invokeInstalledFlow(
         request.data,
       );
       if (prepared.kind === "cells_refused") return prepared;
-      if (prepared.kind !== "ready") {
-        logFlowRefusal(`BINDING_BATCH_EDIT_${prepared.kind.toUpperCase()}`);
-        return undefined;
-      }
+      if (prepared.kind !== "ready") return undefined;
       void installation;
       return {
         kind: "adapted",
