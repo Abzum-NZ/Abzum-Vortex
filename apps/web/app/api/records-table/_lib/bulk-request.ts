@@ -163,8 +163,11 @@ export const resolveBulkRequest = async <Body extends { pageKey: string; placeme
   }).project(identity.session, runtimeContextSelection(context));
   if (projected.kind === "temporarily_unavailable")
     return { kind: "response", response: privateResponse({ kind: "unavailable" }, 503) };
-  if (projected.kind !== "available" || projected.value === undefined)
-    return refused(`page_projection_${projected.kind}`, "not_available", 403);
+  // The runner or the service already logged every other answer; a page refused for the viewer has
+  // no line yet.
+  if (projected.kind !== "available") return rejected("not_available", 403);
+  if (projected.value === undefined)
+    return refused("page_refused_for_viewer", "not_available", 403);
   // The table must be on this page as projected for the person now, once, and usable by them.
   const resolved = resolveProjectedTablePlacement(projected.value, body.data.placementId, {
     context,

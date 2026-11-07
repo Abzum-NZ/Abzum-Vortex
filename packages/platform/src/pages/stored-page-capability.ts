@@ -13,7 +13,7 @@ import {
 } from "../access/organization-access-decision";
 import type { PermissionRegistryEntryCandidate } from "../access/permission-registry";
 import type { PermissionDeclaration } from "../access/permissions";
-import { safeHttpsUrlSchema, type JsonValue } from "../catalogue/common";
+import type { JsonValue } from "../catalogue/common";
 import {
   applicationRootIdSchema,
   pageIdSchema,
@@ -56,6 +56,7 @@ import {
   requireInstalledRuntimeContext,
   type InstalledRuntimeContext,
 } from "../definition/installed-runtime-context";
+import { logFault } from "../access/request-failure";
 import { resolveInstalledPageIdentity } from "../definition/standard-page-resolution";
 import {
   projectAuthenticatedPageCapability,
@@ -63,11 +64,7 @@ import {
   type PageCapabilityEvaluators,
   type FixedAuthenticatedPageCapability,
 } from "./authenticated-page-capability";
-import {
-  projectUnavailableLinkDestination,
-  type ProjectedLinkDestination,
-  type ProjectedPageCapability,
-} from "./page-capability-projection";
+import type { ProjectedPageCapability } from "./page-capability-projection";
 import { resolvePageComposition } from "./page-composition-resolution";
 import { pageSubjectFromRead, type PageSubjectReadResult } from "./page-subject-read";
 import { activeInstallationBundleStateSchema } from "../definition/active-installation-bundle-repository";
@@ -110,16 +107,6 @@ class StoredPageCapabilityFailure extends Error {
     this.name = "StoredPageCapabilityFailure";
   }
 }
-
-/**
- * One declared link target the browser asks the server to re-check when a link is activated. It
- * names a target kind and that target's permanent identity (or an external address); it carries no
- * authority, so resolving it can never grant access to what it names.
- */
-type StoredLinkTargetDeclaration =
-  | Readonly<{ kind: "page"; pageId: string }>
-  | Readonly<{ kind: "application"; applicationRootId: string }>
-  | Readonly<{ kind: "external"; address: string }>;
 
 /**
  * One resolved page requirement: an application or bound-Module permission from the release's
@@ -462,9 +449,10 @@ export const createStoredPageCapabilityService = (
   };
   const requests = createHumanOrganizationRequestService(requestDependencies);
   const boundActions = placementNamedActions(context);
-  // Application and Module flows, one per identity: an ambiguous release is refused, not run.
 
-  // Undefined means the selected page is not in the release: a lasting answer, not a fault.
+  // Undefined means the release does not hold the page. Every caller names a page of this release,
+  // so `project` logs it once as a fault when the person's access is proved; the in-transaction
+  // projections answer undefined and their callers decide the line.
   const load = async (pageId: string): Promise<FixedAuthenticatedPageCapability | undefined> => {
     const identity = resolveInstalledPageIdentity(context, { pageId });
     if (identity === undefined) return undefined;
@@ -928,8 +916,11 @@ export const createStoredPageCapabilityService = (
       !sameId(candidate.organizationId, context.organizationId) ||
       candidate.applicationRootId === undefined ||
       !sameId(candidate.applicationRootId, applicationRootId)
-    )
+    ) {
+      // Every caller selects the scope from the context it passes in, so this is the platform wrong.
+      logFault("page", "stored capability", "STORED_PAGE_SCOPE_MISMATCH");
       return { kind: "unavailable" };
+    }
     // A caller without access gets the same answer whether or not the page exists. The load below
     // only reads the already-loaded context, and the projection runs the same HUMAN request over
     // this exact scope, so a found page proves the person's current authority there. Only a page
@@ -952,37 +943,15 @@ export const createStoredPageCapabilityService = (
       console.error(`[page] stored capability load failed: ${cause}`);
       return { kind: "temporarily_unavailable", cause };
     }
-    if (fixed === undefined) return (await verifiedRefusal()) ?? { kind: "unavailable" };
-    return projectStored(session, candidate, fixed);
-  };
-
-  /**
-   * True only when the viewer can currently open this page of the exact installed release, proved
-   * through the same page/access projection as `project`. Missing, refused, withdrawn and
-   * unprovable pages are all simply false, so no caller can tell them apart.
-   */
-  const pageOpens = async (
-    session: IdentitySession,
-    candidate: OrganizationSelectionCandidate,
-    pageId: string,
-  ): Promise<boolean> => {
-    let fixed: FixedAuthenticatedPageCapability | undefined;
-    try {
-      fixed = await load(pageId);
-    } catch (error) {
-      const failure = new StoredPageCapabilityFailure("STORED_PAGE_TARGET_CAPABILITY_LOAD_FAILED", {
-        cause: error,
-      });
-      console.error(`[page] stored page target capability failed: ${describeFailure(failure)}`);
-      throw failure;
+    if (fixed === undefined) {
+      const refusal = await verifiedRefusal();
+      if (refusal !== undefined) return refusal;
+      // The person's access is proved and every caller names a page of this very release, so a
+      // release that cannot resolve it is the platform wrong, not the person.
+      logFault("page", "stored capability", "STORED_PAGE_NOT_IN_RELEASE");
+      return { kind: "unavailable" };
     }
-    if (fixed === undefined) return false;
-    const projected = await projectStored(session, candidate, fixed);
-    if (projected.kind === "temporarily_unavailable")
-      throw new StoredPageCapabilityFailure("STORED_PAGE_TARGET_AUTHORIZATION_FAILED", {
-        cause: new Error(projected.cause ?? "STORED_PAGE_TARGET_AUTHORIZATION_UNAVAILABLE"),
-      });
-    return projected.kind === "available" && projected.value !== undefined;
+    return projectStored(session, candidate, fixed);
   };
 
   return Object.freeze({
@@ -1030,68 +999,6 @@ export const createStoredPageCapabilityService = (
             formId,
             evaluatorsFor(fixed, subject.recordId, subject),
           );
-    },
-    /**
-     * Re-checks one declared link target against the viewer's current access at navigation time.
-     * The target is definition or record data and grants nothing. An external address is available
-     * once it satisfies the bounded HTTPS contract and is never fetched. An application is
-     * available only when the viewer can currently open its release home page or a role home page
-     * of this installed release (the homes the application launcher opens at; the destination still
-     * chooses its own home when opened); a page only when the viewer can currently open that page.
-     * A target in another application is resolved by that application's own installed service.
-     * Missing, refused, withdrawn and out-of-release targets, and a viewer whose current authority
-     * fails, all collapse to the same opaque unavailable state with no name, icon, address or
-     * reason. A selection outside this installed scope gets the same neutral refusal as the page.
-     */
-    async resolveLinkTarget(
-      session: IdentitySession,
-      candidate: OrganizationSelectionCandidate,
-      target: StoredLinkTargetDeclaration,
-    ): Promise<HumanOrganizationRequestResult<ProjectedLinkDestination>> {
-      if (
-        !sameId(candidate.organizationId, context.organizationId) ||
-        candidate.applicationRootId === undefined ||
-        !sameId(candidate.applicationRootId, applicationRootId)
-      )
-        return { kind: "unavailable" };
-      const unavailable = {
-        kind: "available",
-        value: projectUnavailableLinkDestination(),
-      } as const;
-
-      if (target.kind === "external") {
-        const address = safeHttpsUrlSchema.safeParse(target.address);
-        return address.success
-          ? {
-              kind: "available",
-              value: { availability: "available", kind: "external", address: address.data },
-            }
-          : unavailable;
-      }
-
-      if (target.kind === "application") {
-        const parsed = applicationRootIdSchema.safeParse(target.applicationRootId);
-        if (!parsed.success || !sameId(parsed.data, applicationRootId)) return unavailable;
-        const homes = [
-          applicationRelease.content.homePageId,
-          ...applicationRelease.content.roles.map((role) => role.homePageId),
-        ].filter((pageId, index, all) => all.findIndex((other) => sameId(other, pageId)) === index);
-        for (const pageId of homes)
-          if (await pageOpens(session, candidate, pageId))
-            return {
-              kind: "available",
-              value: { availability: "available", kind: "application", applicationRootId },
-            };
-        return unavailable;
-      }
-
-      const parsed = pageIdSchema.safeParse(target.pageId);
-      return parsed.success && (await pageOpens(session, candidate, parsed.data))
-        ? {
-            kind: "available",
-            value: { availability: "available", kind: "page", pageId: parsed.data },
-          }
-        : unavailable;
     },
   });
 };
