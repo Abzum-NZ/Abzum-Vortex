@@ -29,7 +29,7 @@ import {
 } from "../application-composition/source-composition";
 import type { ConditionNode } from "../module-foundation-contracts";
 import { applicationModuleKeys } from "../application-module-sources";
-import { isRecord } from "../../catalogue/runtime-primitives";
+import { describeFailure, isRecord } from "../../catalogue/runtime-primitives";
 import type { StudioCompositionContext } from "./application-composition-model";
 import { projectStudioFlowDraftChoices } from "./application-flow-step-form";
 import { studioDraftRecordType } from "./application-flow-values";
@@ -539,6 +539,8 @@ type SourceOperand =
   | { source: "page"; name: string }
   | { source: "form"; form: string; field: string }
   | { source: "value"; value: Extract<Operand, { source: "value" }>["value"] };
+/** The refusal for a condition Studio cannot represent: the one error these projections throw. */
+class UnsupportedReactionCondition extends Error {}
 const projectOperand = (
   operand: { source: string; field?: string; value?: unknown; name?: string; form?: string },
   metadata: StudioApplicationConditionContext,
@@ -551,11 +553,12 @@ const projectOperand = (
       source: "value",
       value: operand.value as Extract<Operand, { source: "value" }>["value"],
     };
-  if (operand.source !== "field") throw new TypeError("Unsupported visibility operand");
+  if (operand.source !== "field")
+    throw new UnsupportedReactionCondition("Unsupported visibility operand");
   const matches = metadata.fields.filter((item) =>
     item.aliases.some((alias) => `${metadata.fieldRecordReference}.${alias}` === operand.field),
   );
-  if (matches.length !== 1) throw new TypeError("Unsupported visibility field");
+  if (matches.length !== 1) throw new UnsupportedReactionCondition("Unsupported visibility field");
   return { source: "field", fieldId: matches[0]!.field.fieldId };
 };
 export function projectStudioReactionCondition(
@@ -564,7 +567,7 @@ export function projectStudioReactionCondition(
 ): ConditionNode | undefined {
   if (source === undefined) return undefined;
   if (!sourceQualifiedConditionSchema.safeParse(source).success)
-    throw new TypeError("Invalid visibility condition");
+    throw new UnsupportedReactionCondition("Invalid visibility condition");
   if ("all" in source)
     return {
       kind: "all",
@@ -657,9 +660,11 @@ const inverseCondition = (
     if (value.source === "value") return { source: "value", value: structuredClone(value.value) };
     if (value.source === "page") return { source: "page", name: value.name };
     if (value.source === "form") return { source: "form", form: value.form, field: value.field };
-    if (value.source !== "field") throw new TypeError("Unsupported visibility operand");
+    if (value.source !== "field")
+      throw new UnsupportedReactionCondition("Unsupported visibility operand");
     const matches = metadata.fields.filter(({ field }) => field.fieldId === value.fieldId);
-    if (matches.length !== 1) throw new TypeError("Unsupported visibility field");
+    if (matches.length !== 1)
+      throw new UnsupportedReactionCondition("Unsupported visibility field");
     return {
       source: "field",
       field: `${metadata.fieldRecordReference}.${matches[0]!.preferredAlias}`,
@@ -740,7 +745,8 @@ const inverseCondition = (
           `${path}/not`,
         ),
       };
-    if (node.kind !== "comparison") throw new TypeError("Invalid visibility condition");
+    if (node.kind !== "comparison")
+      throw new UnsupportedReactionCondition("Invalid visibility condition");
     return {
       operator: node.operator,
       left: operand(node.left),
@@ -749,23 +755,6 @@ const inverseCondition = (
   };
   return convert(condition, original, "");
 };
-
-/** Locate a local draft against the authored shape it would produce, without changing source. */
-export function locateStudioReactionDraftIssue(
-  path: readonly (string | number)[],
-  condition: ConditionNode | undefined,
-  original: SourceQualifiedCondition | undefined,
-  metadata: StudioApplicationConditionContext,
-): readonly (string | number)[] {
-  try {
-    return locateStudioReactionIssue(
-      path,
-      condition === undefined ? undefined : inverseCondition(condition, original, metadata),
-    );
-  } catch {
-    return locateStudioReactionIssue(path, original);
-  }
-}
 
 export type StudioReactionEditorModel =
   | Readonly<{
@@ -843,7 +832,10 @@ export function projectStudioReactionEditor(
     if (!validateStudioReactionCondition(condition, metadata, extra).isValid)
       return { kind: "unsupported" };
     return { kind: "available", target, controls, condition, metadata, extra };
-  } catch {
+  } catch (error) {
+    if (!(error instanceof UnsupportedReactionCondition)) {
+      console.error(`[studio] the reaction condition could not be read: ${describeFailure(error)}`);
+    }
     return { kind: "unsupported" };
   }
 }
@@ -885,7 +877,8 @@ export function applyStudioReactionCondition(
       condition === undefined
         ? undefined
         : inverseCondition(condition, model.target.placement[slot], metadata);
-  } catch {
+  } catch (error) {
+    if (!(error instanceof UnsupportedReactionCondition)) throw error;
     return { kind: "unsupported" };
   }
   const base = [...model.target.path, slot];
