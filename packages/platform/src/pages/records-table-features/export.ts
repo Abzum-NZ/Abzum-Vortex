@@ -741,7 +741,7 @@ export const createRecordsTableExportService = (dependencies: RecordsTableExport
       } catch (cause) {
         const reason = failureReason(cause);
         if (signal.aborted) {
-          logRefusal("records-export", "start", "cancelled");
+          if (!requestFailureLogged(cause)) logRefusal("records-export", "start", "cancelled");
           await audit(session, address, recordTypeId, columnIds, "cancelled");
           return unavailable;
         }
