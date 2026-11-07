@@ -8,6 +8,7 @@ import {
 } from "../display-payload-table";
 
 import type { IdentitySession, OrganizationSelectionCandidate } from "../../access/identity-access";
+import { logRefusal } from "../../access/request-failure";
 import { sameId } from "../../catalogue/runtime-primitives";
 import type { BlockPropertyValueContract } from "../../definition/application-composition/block-property-values";
 import { readQueryBindings } from "../../definition/application-composition/query-bindings";
@@ -86,7 +87,7 @@ export const readRecordsTableRowDetail = async (
   const checked = rowDetailResultSchema.safeParse(reply);
   if (checked.success) return checked.data;
   const issue = checked.error.issues[0];
-  return fail(`reply_invalid ${(issue?.path ?? []).map(String).join(".")}: ${issue?.message}`);
+  return fail(`reply_invalid ${(issue?.path ?? []).map(String).join(".")}: ${issue?.code}`);
 };
 
 const projectRowDetail = async (request: RowDetailRequest): Promise<RowDetailResult> => {
@@ -158,8 +159,7 @@ const projectRowDetail = async (request: RowDetailRequest): Promise<RowDetailRes
       },
     },
     {},
-    (cause) =>
-      console.error(`[records-table] row detail input withheld where=row_detail cause=${cause}`),
+    (cause) => logRefusal("records-table", "row detail input withheld where=row_detail", cause),
   );
   // A required input with no value (the row's linking field is empty) has no related records.
   if (resolution.kind === "awaiting") return { status: "empty" };
@@ -187,11 +187,12 @@ const projectRowDetail = async (request: RowDetailRequest): Promise<RowDetailRes
   // The query service logged every answer that is not available, once.
   if (result.kind === "temporarily_unavailable") return failed;
   if (result.kind !== "available") return refused;
-  if (result.value.outcome === "refused") {
-    if (["page_size_invalid", "descriptor_invalid"].includes(result.value.reasonCode))
-      return fail(`query_refused code=${result.value.reasonCode}`);
-    return refuse(`query_refused code=${result.value.reasonCode}`);
-  }
+  // A refusal is logged by the query, once; the panel offers a retry only for the two reasons that
+  // name a query it cannot run.
+  if (result.value.outcome === "refused")
+    return ["page_size_invalid", "descriptor_invalid"].includes(result.value.reasonCode)
+      ? failed
+      : refused;
   const rows = result.value.rows;
   if (rows.length === 0 && request.continuationToken === undefined) return { status: "empty" };
 

@@ -19,6 +19,7 @@ import {
   evaluateTypedCondition,
   type TypedConditionParameterDeclaration,
 } from "../../rules/typed-condition";
+import { logRefusal } from "../../access/request-failure";
 import { TypedConditionEvaluationError } from "../../rules/typed-condition-error";
 import type { ProtectedQueryRow } from "../../queries/protected-query-contracts";
 import { relativeAnchorDate } from "../query-binding-resolver";
@@ -264,8 +265,10 @@ export const evaluateConditionalFormatting = (
         // not match; the cause is logged once per rule and read.
         if (!refusedRules.has(entry.rule.id)) {
           refusedRules.add(entry.rule.id);
-          console.error(
-            `[records-table] formatting rule refused code=RULE_EVALUATION_REFUSED rule=${entry.rule.id} reason=${error.reason}`,
+          logRefusal(
+            "records-table",
+            `formatting rule=${entry.rule.id} reason=${error.reason}`,
+            "RULE_EVALUATION_REFUSED",
           );
         }
         matched = false;

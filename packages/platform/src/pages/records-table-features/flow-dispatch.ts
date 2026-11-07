@@ -54,6 +54,12 @@ import {
   type PlacementReadEntry,
 } from "../placement-read/shared";
 
+/**
+ * Why supplied rows were not proven; `logged`: the query already logged the refusal, once; `fault`:
+ * the installed definition cannot answer, a platform fault.
+ */
+type TableMembershipRefusal = Readonly<{ reason: string; logged?: true; fault?: true }>;
+
 /** Proves supplied rows against the projected table's installed query under this request's scope. */
 const recordsTableMembershipRefusal = async (
   transaction: RequestDatabaseTransaction,
@@ -62,15 +68,15 @@ const recordsTableMembershipRefusal = async (
   placement: PlacementReadEntry,
   bindings: QueryBindingContext,
   recordIds: readonly string[],
-): Promise<string | undefined> => {
+): Promise<TableMembershipRefusal | undefined> => {
   const queryId =
     typeof placement.vortex.queryId === "string" ? placement.vortex.queryId : undefined;
   const bound = queryId === undefined ? undefined : findModuleQuery(context, queryId);
-  if (bound === undefined) return "query_not_installed";
+  if (bound === undefined) return { reason: "query_not_installed", fault: true };
   const declared = readQueryBindings(placementSettingsOf(placement));
-  if (declared.kind !== "read") return "query_bindings_malformed";
+  if (declared.kind !== "read") return { reason: "query_bindings_malformed", fault: true };
   const resolved = await resolveQueryBindings(declared.bindings, bound.query.inputs, bindings, {});
-  if (resolved.kind !== "resolved") return `query_inputs_${resolved.kind}`;
+  if (resolved.kind !== "resolved") return { reason: `query_inputs_${resolved.kind}` };
   const command = protectedQueryCommandSchema.safeParse({
     moduleRootId: bound.module.rootId,
     queryId: bound.query.queryId,
@@ -79,12 +85,14 @@ const recordsTableMembershipRefusal = async (
     pageSize: recordIds.length,
     exactRecordIds: recordIds,
   });
-  if (!command.success) return "query_membership_command_invalid";
+  if (!command.success) return { reason: "query_membership_command_invalid", fault: true };
   const result = await readQueryMembership(transaction, scope, command.data);
-  if (result.outcome !== "completed") return `query_membership_${result.reasonCode}`;
+  // The query logged its own refusal, once.
+  if (result.outcome !== "completed")
+    return { reason: `query_membership_${result.reasonCode}`, logged: true };
   return recordIds.every((id) => result.recordIds.some((member) => sameId(id, member)))
     ? undefined
-    : "record_not_in_query";
+    : { reason: "record_not_in_query" };
 };
 
 /** Resolves a projected table and its current bound inputs before proving exact row membership. */
@@ -101,20 +109,25 @@ export const projectedTableMembershipRefusal = async (
     recordIds: readonly string[];
   }>,
   validateOption: (placementId: string, raw: string, parsed: JsonValue) => Promise<boolean>,
-): Promise<string | undefined> => {
+): Promise<TableMembershipRefusal | undefined> => {
   if (
     request.recordIds.length === 0 ||
     request.recordIds.some((id) => !recordIdSchema.safeParse(id).success) ||
     new Set(request.recordIds.map((id) => id.toLowerCase())).size !== request.recordIds.length
   )
-    return "record_selection_invalid";
+    return { reason: "record_selection_invalid" };
   const table = resolveProjectedTablePlacement(page, request.placementId, {
     context,
     pageDefinition,
     parameters: request.parameters,
     subjectId: request.subjectId,
   });
-  if (table.kind === "refused") return table.reason;
+  // An unreadable contract was logged by its reader, once.
+  if (table.kind === "refused")
+    return {
+      reason: table.reason,
+      ...(table.reason === "table_contract_invalid" ? { logged: true as const } : {}),
+    };
   const bindings = table.bindings({
     readSubject: (recordTypeId, recordId) =>
       readPageSubjectInTransaction(bound.transaction, { recordTypeId, recordId }),
@@ -126,7 +139,7 @@ export const projectedTableMembershipRefusal = async (
       ),
   });
   const validated = await bindInvocationControls(bindings, request.controls, validateOption);
-  if (validated === undefined) return "control_values_invalid";
+  if (validated === undefined) return { reason: "control_values_invalid" };
   return recordsTableMembershipRefusal(
     bound.transaction,
     bound.scope,

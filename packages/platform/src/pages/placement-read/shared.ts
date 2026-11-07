@@ -121,30 +121,36 @@ type PlacementFailureReason =
   | "table_formatting_time_zone_unavailable"
   | "table_columns_withheld";
 
-/** The reasons that are a refusal the viewer is answered, not a placement that failed. */
+/**
+ * The reasons the placement itself raises that are a refusal the viewer is answered, not a
+ * placement that failed. A refused query is the query's to log (below).
+ */
 const placementRefusalReasons: ReadonlySet<PlacementFailureReason> = new Set([
   "query_binding_refused",
   "query_binding_withheld",
-  "detail_query_refused",
-  "related_list_refused",
-  "launcher_query_refused",
   "board_filter_refused",
   "board_context_refused",
-  "board_query_refused",
   "table_grouping_refused",
-  "calendar_query_refused",
   "calendar_arrangement_refused",
-  "summary_query_refused",
   "table_columns_withheld",
 ]);
 
 /**
  * The reasons whose answer a request had already logged, once, where it was raised (the request
- * runner or the query service for a query answered unavailable): the placement adds no line.
+ * runner or the query service, for a query answered unavailable or refused): the placement adds no
+ * line. Each one is raised only after the query's own answer, nowhere else.
  */
 const placementAnswersLoggedElsewhere: ReadonlySet<PlacementFailureReason> = new Set([
   "board_query_unavailable",
   "calendar_query_unavailable",
+  "detail_query_refused",
+  "related_list_refused",
+  "launcher_query_refused",
+  "board_query_refused",
+  "calendar_query_refused",
+  "summary_query_refused",
+  "summary_dataset_limit_exceeded",
+  "summary_value_out_of_range",
 ]);
 
 /**
