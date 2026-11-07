@@ -7,7 +7,6 @@ import { useEffect, useRef, useState, type ReactElement } from "react";
 import {
   canonicalJson,
   componentSettingApplies,
-  isRepeatableSlotIdentity,
   type BlockPropertySchemaContract,
   type SourceBlockPropertyValueContract,
   type SettingValue,
@@ -325,36 +324,6 @@ const entryHeading = (
       : { title: text?.kind === "text" ? text.value : undefined, summary: undefined };
 };
 
-/**
- * Why an entry's identity cannot name a slot, or nothing when it can (an empty identity is the
- * required setting's to report). The two rules the stored page applies: a builder key, and not the
- * identity of another entry.
- */
-const identityProblem = (
-  identity: Readonly<{ family: string; property: string }>,
-  entry: SourceBlockPropertyValueContract,
-  others: readonly SourceBlockPropertyValueContract[],
-  itemName: string,
-): string | undefined => {
-  const text = (item: SourceBlockPropertyValueContract) => {
-    const stored = item.kind === "group" ? item.properties[identity.property] : undefined;
-    return stored?.kind === "text" ? stored.value : "";
-  };
-  const own = text(entry);
-  if (own === "") return undefined;
-  if (!isRepeatableSlotIdentity(identity.family, own))
-    return "Use lowercase letters, digits and underscores, starting with a letter.";
-  return others.some((other) => text(other) === own)
-    ? `Another ${itemName} already uses this key.`
-    : undefined;
-};
-
-type HeldEntry = Readonly<{
-  entry: SourceBlockPropertyValueContract;
-  problem: string;
-  against: string;
-}>;
-
 function ListControl({
   id,
   property,
@@ -362,22 +331,43 @@ function ListControl({
   onChange,
   choices,
   disabled,
-  identity,
 }: ControlProps): ReactElement {
   const [newLabel, setNewLabel] = useState("");
-  // An entry whose identity cannot name a slot: its text stays in the entry, with its message, and
-  // never reaches the draft. It is dropped when the stored entry changes under it (Undo, a reload)
-  // and when focus leaves the entry, which then shows the identity the draft keeps.
-  const [held, setHeld] = useState<Readonly<Record<string, HeldEntry>>>({});
-  const dropHeld = (entryKey: string) =>
-    setHeld((previous) =>
-      Object.fromEntries(Object.entries(previous).filter(([key]) => key !== entryKey)),
-    );
   const [confirm, confirmDialog] = useConfirm();
   if (property.kind !== "list") throw new TypeError("A list control needs a list setting.");
   const items = value?.kind === "list" ? value.items : [];
   const { keys, newKey } = useStudioEntryKeys(items.length);
-  const named = property.item.kind === "group" ? property.item.namedEntry : undefined;
+  // A list that declares an identity setting (a tab's key) is named like a choice list: the person
+  // types the label and the identity is derived from it, never typed or shown.
+  const itemName = property.item.label.toLowerCase();
+  const identity =
+    property.item.kind === "group" && property.presentationIdentity !== undefined
+      ? property.item.properties.find(
+          (child) => child.kind === "text" && child.key === property.presentationIdentity,
+        )
+      : undefined;
+  const named =
+    property.item.kind !== "group"
+      ? undefined
+      : (property.item.namedEntry ??
+        (identity === undefined
+          ? undefined
+          : {
+              label:
+                property.item.properties.find(
+                  (child) => child.kind === "text" && child.key !== identity.key,
+                )?.key ?? "label",
+              value: identity.key,
+            }));
+  // Every entry is part of the list: a group entry is never optional, and its identity is not asked.
+  const entryProperty: BlockPropertySchemaContract =
+    property.item.kind === "group"
+      ? {
+          ...property.item,
+          required: true,
+          properties: property.item.properties.filter((child) => child.key !== identity?.key),
+        }
+      : property.item;
   const labelProperty =
     property.item.kind === "group" && named !== undefined
       ? property.item.properties.find((child) => child.key === named.label)
@@ -394,15 +384,22 @@ function ListControl({
       return stored?.kind === "text" ? [stored.value] : [];
     }),
   );
-  const base =
+  const slug =
     newLabel
       .trim()
       .normalize("NFKD")
       .replace(/[̀-ͯ]/g, "")
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, "_")
-      .replace(/^_+|_+$/g, "")
-      .slice(0, maximum) || "option";
+      .replace(/^_+|_+$/g, "") || "option";
+  // An identity starts with a letter and does not end on a separator, wherever it is cut.
+  const base = (
+    identity !== undefined && !/^[a-z]/.test(slug)
+      ? `${itemName.replace(/[^a-z0-9]+/g, "_")}_${slug}`
+      : slug
+  )
+    .slice(0, maximum)
+    .replace(/_+$/, "");
   let generated = base;
   for (let suffix = 2; taken.has(generated); suffix += 1) {
     const ending = `_${suffix}`;
@@ -422,7 +419,6 @@ function ListControl({
             [named.value]: { kind: "text" as const, value: generated },
           },
         };
-  const itemName = property.item.label.toLowerCase();
   // The choice options are the list that states its limit; the other lists only stop at theirs.
   const optionsLimited = property.key === "options";
   const full = items.length >= property.maximumItems;
@@ -441,55 +437,36 @@ function ListControl({
         empty="No entries yet."
         items={items.map((item, index) => {
           const entryKey = keys.current[index]!;
-          const heldEntry = held[entryKey];
-          const holding = heldEntry?.against === canonicalJson(item) ? heldEntry : undefined;
-          const heading = entryHeading(holding?.entry ?? item, property.item, choices);
+          const heading = entryHeading(item, property.item, choices);
+          // A required setting of the entry that has no value says so on its own control.
+          const problems =
+            item.kind !== "group"
+              ? undefined
+              : Object.fromEntries(
+                  entryProperty.kind !== "group"
+                    ? []
+                    : entryProperty.properties
+                        .filter(
+                          (child) => child.required && !Object.hasOwn(item.properties, child.key),
+                        )
+                        .map((child) => [child.key, `${child.label} needs a value.`]),
+                );
           return {
             key: entryKey,
             title: heading.title ?? `${property.item.label} ${index + 1}`,
             summary: heading.summary,
             content: (
-              <div
-                className="contents"
-                onBlur={(event) => {
-                  if (
-                    holding !== undefined &&
-                    !event.currentTarget.contains(event.relatedTarget as Node | null)
-                  )
-                    dropHeld(entryKey);
-                }}
-              >
+              <div className="contents">
                 <StudioSettingControl
                   id={`${id}-${entryKey}`}
-                  property={property.item}
-                  value={holding?.entry ?? item}
+                  property={entryProperty}
+                  value={item}
                   choices={choices}
                   disabled={disabled}
-                  problems={
-                    holding === undefined || identity === undefined
-                      ? undefined
-                      : { [identity.property]: holding.problem }
-                  }
+                  problems={problems}
                   onChange={(next) => {
                     const replacement = next ?? initialValue(property.item, choices);
                     if (replacement === undefined) return;
-                    const problem =
-                      identity === undefined
-                        ? undefined
-                        : identityProblem(
-                            identity,
-                            replacement,
-                            items.filter((_, position) => position !== index),
-                            itemName,
-                          );
-                    if (problem !== undefined) {
-                      setHeld((previous) => ({
-                        ...previous,
-                        [entryKey]: { entry: replacement, problem, against: canonicalJson(item) },
-                      }));
-                      return;
-                    }
-                    dropHeld(entryKey);
                     write(
                       items.map((entry, position) => (position === index ? replacement : entry)),
                       keys.current,

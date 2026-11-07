@@ -346,17 +346,22 @@ function StudioBlockHeader({
     (candidate) =>
       candidate.blockId === block?.block_id && candidate.releaseVersion === block?.release_version,
   );
+  const unnamed = (release?.name ?? "Block") === name;
   return (
     <header className="flex items-start justify-between gap-2 pb-3">
       <div className="min-w-0">
         <h2 id={titleId} className="flex min-w-0 items-center gap-2 text-base font-semibold">
           <Icon name={studioReleaseIcon(release?.icon ?? "")} className="size-4 shrink-0" />
           <span className="truncate">{name}</span>
+          {/* A block with no name of its own is named by its kind: the kind is said once. */}
+          {unnamed && release !== undefined && <StudioHelp hint={release.description} />}
         </h2>
-        <p className="flex items-center gap-1 text-xs text-muted-foreground">
-          {release?.name ?? "Block"}
-          {release !== undefined && <StudioHelp hint={release.description} />}
-        </p>
+        {!unnamed && (
+          <p className="flex items-center gap-1 text-xs text-muted-foreground">
+            {release?.name ?? "Block"}
+            {release !== undefined && <StudioHelp hint={release.description} />}
+          </p>
+        )}
       </div>
       <StudioInspectorActions actions={actions} />
     </header>
