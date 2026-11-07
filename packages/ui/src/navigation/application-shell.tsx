@@ -6,6 +6,7 @@ import {
   useEffect,
   useRef,
   useState,
+  useSyncExternalStore,
   type CSSProperties,
   type KeyboardEvent,
   type MouseEvent,
@@ -31,10 +32,13 @@ import {
   DropdownMenuTrigger,
 } from "../components/dropdown-menu";
 import { Button } from "../components/button";
+import { Spinner } from "../components/spinner";
+import { Tooltip, TooltipContent, TooltipTrigger } from "../components/tooltip";
 import { Popover, PopoverContent, PopoverTrigger } from "../components/popover";
 import { SidebarProvider, SidebarTrigger } from "../components/sidebar";
 import { FlowSurfaceContext } from "../flow-runtime/flow-surface-context";
 import { Icon } from "../icons/icon";
+import { cn } from "../lib/utils";
 import { NavigationLink } from "../routing/navigation-link";
 import { SIGNED_IN_LANDING_PATH } from "../routing/destination";
 import { useNavigator } from "../routing/navigator";
@@ -135,21 +139,22 @@ function SwitcherButton({
   return (
     <>
       <Icon name={icon} aria-hidden="true" data-icon="inline-start" />
-      <span className="truncate max-sm:sr-only">{label}</span>
+      <span className="truncate max-lg:sr-only">{label}</span>
       <Icon
         name="chevron-down"
         aria-hidden="true"
         data-icon="inline-end"
-        className="text-muted-foreground max-sm:hidden"
+        className="text-muted-foreground max-lg:hidden"
       />
     </>
   );
 }
 
-/** The visible indicator and per-session switch for browser agent tools, shared by every surface that registers them. */
-export function WebMcpStatus({
-  runtime,
-}: Readonly<{ runtime: ApplicationWebMcpRuntime }>): ReactElement {
+/** What the browser agent tools say about themselves, and the one command that changes it. */
+const describeWebMcp = (
+  runtime: ApplicationWebMcpRuntime,
+): Readonly<{ state: string; label: string; action: string; run: () => void }> => {
+  const state = runtime.working === undefined ? runtime.status : "working";
   const label =
     runtime.working !== undefined
       ? `An agent is making a change (${runtime.working})...`
@@ -160,28 +165,62 @@ export function WebMcpStatus({
           : runtime.status === "registering"
             ? "Enabling browser agent tools..."
             : "Browser agent tools could not be enabled.";
+  return runtime.status === "off"
+    ? { state, label, action: "Turn on", run: runtime.turnOn }
+    : runtime.status === "error"
+      ? { state, label, action: "Retry", run: runtime.retry }
+      : { state, label, action: "Turn off for this session", run: runtime.turnOff };
+};
+
+/** The agent tools' state as one icon button: its tooltip says the state, and pressing it switches the tools for the session. */
+export function WebMcpStatus({
+  runtime,
+}: Readonly<{ runtime: ApplicationWebMcpRuntime }>): ReactElement {
+  const { state, label, action, run } = describeWebMcp(runtime);
+  const busy = runtime.status === "registering" || runtime.working !== undefined;
   return (
-    <div
-      className="flex max-w-full min-w-0 flex-wrap items-center gap-[var(--vortex-space-sm)] text-xs"
-      role="status"
-      aria-live="polite"
-      data-vortex-webmcp={runtime.working === undefined ? runtime.status : "working"}
-    >
-      <span>{label}</span>
-      {runtime.status === "off" ? (
-        <Button type="button" variant="outline" size="sm" onClick={runtime.turnOn}>
-          Turn on
-        </Button>
-      ) : runtime.status === "error" ? (
-        <Button type="button" variant="outline" size="sm" onClick={runtime.retry}>
-          Retry
-        </Button>
-      ) : (
-        <Button type="button" variant="outline" size="sm" onClick={runtime.turnOff}>
-          Turn off for this session
-        </Button>
-      )}
+    <div className="flex shrink-0 items-center" data-vortex-webmcp={state}>
+      <span role="status" aria-live="polite" className="sr-only">
+        {label}
+      </span>
+      <Tooltip>
+        <TooltipTrigger
+          render={
+            <Button
+              type="button"
+              variant={runtime.status === "active" ? "secondary" : "ghost"}
+              size="icon-sm"
+              aria-label={action}
+              className={cn("max-sm:size-11", runtime.status === "error" && "text-destructive")}
+              onClick={run}
+            />
+          }
+        >
+          {busy ? <Spinner /> : <Icon name="activity" />}
+        </TooltipTrigger>
+        <TooltipContent>
+          {label} {action}.
+        </TooltipContent>
+      </Tooltip>
     </div>
+  );
+}
+
+/** The agent tools in the header's More menu: the state as its label, the one command as its item. */
+function WebMcpMenuItems({
+  runtime,
+}: Readonly<{ runtime: ApplicationWebMcpRuntime }>): ReactElement {
+  const { label, action, run } = describeWebMcp(runtime);
+  return (
+    <DropdownMenuGroup>
+      <DropdownMenuLabel className="max-w-64 font-normal text-muted-foreground">
+        {label}
+      </DropdownMenuLabel>
+      <DropdownMenuItem onClick={run}>
+        <Icon name="activity" />
+        {action}
+      </DropdownMenuItem>
+    </DropdownMenuGroup>
   );
 }
 
@@ -192,9 +231,9 @@ function Breadcrumbs({
   const applicationName = runtime?.applicationName ?? shellName;
   const pageName = runtime?.pageName ?? shellName;
   return (
-    <Breadcrumb className="min-w-0 max-sm:flex-1">
+    <Breadcrumb className="min-w-0 max-md:flex-1">
       <BreadcrumbList className="flex-nowrap">
-        <BreadcrumbItem className="min-w-0 max-sm:hidden">
+        <BreadcrumbItem className="min-w-0 max-md:hidden">
           {runtime === undefined ? (
             <span className="truncate">{applicationName}</span>
           ) : (
@@ -206,7 +245,7 @@ function Breadcrumbs({
             </BreadcrumbLink>
           )}
         </BreadcrumbItem>
-        <BreadcrumbSeparator className="max-sm:hidden">
+        <BreadcrumbSeparator className="max-md:hidden">
           <Icon name="chevron-right" aria-hidden="true" />
         </BreadcrumbSeparator>
         <BreadcrumbItem className="min-w-0">
@@ -230,7 +269,7 @@ function OrganizationSwitcher({
         disabled={runtime === undefined && actions === null}
         aria-label={`Organisation: ${organizationName}`}
         render={
-          <Button variant="ghost" size="sm" className="max-w-56 max-sm:min-h-11 max-sm:min-w-11" />
+          <Button variant="ghost" size="sm" className="max-w-72 max-sm:min-h-11 max-sm:min-w-11" />
         }
       >
         <SwitcherButton icon="building-2" label={organizationName} />
@@ -554,26 +593,51 @@ export type ApplicationFrameTopBar = Exclude<
   { kind: "default" }
 >["presentation"]["topBar"];
 
+/** A surface's own header commands, from one list: as the bar's icon buttons and as the narrow bar's menu items. */
+export type ApplicationFrameCommands = Readonly<{ bar: ReactNode; menu: ReactNode }>;
+
+const compactHeaderQuery = "(max-width: 767px)";
+const subscribeCompactHeader = (notify: () => void) => {
+  const list = window.matchMedia(compactHeaderQuery);
+  list.addEventListener("change", notify);
+  return () => list.removeEventListener("change", notify);
+};
+/** Below a tablet the header's commands and the agent tools move into one More menu; the server and first render draw the wide header. */
+const useCompactHeader = (): boolean =>
+  useSyncExternalStore(
+    subscribeCompactHeader,
+    () => window.matchMedia(compactHeaderQuery).matches,
+    () => false,
+  );
+
 /**
  * The shared application frame top bar: breadcrumb, organisation and application switchers,
- * appearance control and account menu, in the one height and styling. A surface that has its own
- * commands (Studio's editor) puts them in `actions`, ahead of the switchers.
+ * appearance control and account menu, in the one height and styling, on one row at every width.
+ * A surface that has its own commands (Studio's editor) gives `status`, which stays on the bar,
+ * and `commands` drawn two ways from one list: `bar` (icon buttons) and `menu` (the same commands
+ * as menu items), which the narrow bar draws inside the More menu beside the agent tools.
  */
 export function ApplicationFrameHeader({
   shellName,
   topBar,
   collapsibleSidebar = false,
   runtime,
-  actions,
+  status,
+  commands,
 }: Readonly<{
   shellName: string;
   topBar: ApplicationFrameTopBar;
   collapsibleSidebar?: boolean;
   runtime: ApplicationShellRuntime | undefined;
-  actions?: ReactNode;
+  status?: ReactNode;
+  commands?: ApplicationFrameCommands | undefined;
 }>): ReactElement {
+  const compact = useCompactHeader();
+  const webMcp = runtime?.webMcp;
+  const webMcpWords = webMcp === undefined ? undefined : describeWebMcp(webMcp);
+  const more = compact && (commands !== undefined || webMcp !== undefined);
   return (
-    <header className="sticky top-0 z-20 flex min-h-16 w-full shrink-0 flex-wrap items-center gap-x-[var(--vortex-space-sm)] gap-y-[var(--vortex-space-xs)] bg-background/95 px-[var(--vortex-space-md)] backdrop-blur supports-[backdrop-filter]:bg-background/80 lg:h-16 lg:flex-nowrap">
+    <header className="sticky top-0 z-20 flex h-16 w-full shrink-0 flex-nowrap items-center gap-x-[var(--vortex-space-sm)] bg-background/95 px-[var(--vortex-space-md)] backdrop-blur supports-[backdrop-filter]:bg-background/80">
       {/* The first stop for keyboard users: past the header and the navigation to the page. */}
       <a
         href={`#${APPLICATION_MAIN_CONTENT_ID}`}
@@ -584,13 +648,54 @@ export function ApplicationFrameHeader({
       </a>
       {collapsibleSidebar ? <SidebarTrigger className="max-sm:hidden" /> : null}
       {topBar.breadcrumbs ? <Breadcrumbs shellName={shellName} runtime={runtime} /> : null}
-      <div className="ms-auto flex min-w-0 items-center justify-end gap-[var(--vortex-space-xs)] max-sm:flex-wrap">
-        {actions}
+      <div className="ms-auto flex min-w-0 items-center justify-end gap-[var(--vortex-space-xs)]">
+        {status}
+        {compact ? null : commands?.bar}
+        {webMcpWords !== undefined && compact ? (
+          <span
+            role="status"
+            aria-live="polite"
+            data-vortex-webmcp={webMcpWords.state}
+            className="sr-only"
+          >
+            {webMcpWords.label}
+          </span>
+        ) : null}
+        {more ? (
+          <DropdownMenu>
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <DropdownMenuTrigger
+                    id="vortex-header-more"
+                    aria-label="More actions"
+                    render={
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon-sm"
+                        className="max-sm:size-11"
+                      />
+                    }
+                  />
+                }
+              >
+                <Icon name="more-horizontal" aria-hidden="true" />
+              </TooltipTrigger>
+              <TooltipContent>More actions</TooltipContent>
+            </Tooltip>
+            <DropdownMenuContent align="end" className="min-w-56">
+              {commands?.menu}
+              {commands !== undefined && webMcp !== undefined ? <DropdownMenuSeparator /> : null}
+              {webMcp === undefined ? null : <WebMcpMenuItems runtime={webMcp} />}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        ) : null}
         {topBar.organizationSwitcher ? <OrganizationSwitcher runtime={runtime} /> : null}
         {topBar.applicationSwitcher ? (
           <ApplicationSwitcher shellName={shellName} runtime={runtime} />
         ) : null}
-        {runtime?.webMcp === undefined ? null : <WebMcpStatus runtime={runtime.webMcp} />}
+        {webMcp === undefined || compact ? null : <WebMcpStatus runtime={webMcp} />}
         {topBar.appearanceToggle ? <AppearanceToggle /> : null}
         {topBar.accountMenu ? (
           <ApplicationAccountMenu offerOrganizationSwitch={!topBar.organizationSwitcher} />

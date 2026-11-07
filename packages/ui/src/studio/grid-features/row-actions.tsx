@@ -343,6 +343,7 @@ function StudioRowActionsEditor({
       >
         <StudioReferencePicker
           id={`${id}-add`}
+          aria-label="Add a row action"
           value=""
           unset="Add a row action"
           options={choices}

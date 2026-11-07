@@ -220,6 +220,10 @@ export function StudioMenuPanel({
   };
   const row = (item: StudioMenuItem): StudioNavNode => {
     const position = studioMenuPosition(source, item.id)!;
+    const pageName =
+      item.type === "page"
+        ? source.body.pages.find((page) => page.key === item.page)?.name
+        : undefined;
     const move = (key: string) => {
       if (moveBy(item.id, key)) focusRow(item.id);
     };
@@ -258,10 +262,9 @@ export function StudioMenuPanel({
       children: item.type === "heading" ? item.children.map(row) : [],
       props: {
         disabled,
+        // The page an entry opens, when its label does not already say it.
         description:
-          item.type === "page"
-            ? source.body.pages.find((page) => page.key === item.page)?.name
-            : kindWords(item),
+          item.type === "page" ? (pageName === item.label ? undefined : pageName) : kindWords(item),
         "aria-description": "Alt and the arrow keys move this entry. Enter opens settings.",
         onKeyDown: (event) => {
           keyMove(event, item.id);

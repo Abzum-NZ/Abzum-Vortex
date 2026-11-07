@@ -260,7 +260,7 @@ function StudioRailView<Key extends string>({
     <nav
       aria-label="Studio"
       className={cn(
-        "flex w-fit min-w-18 shrink-0 flex-col items-center gap-1 overflow-y-auto",
+        "flex w-fit min-w-18 shrink-0 flex-col items-center gap-1 overflow-y-auto max-md:min-w-0",
         "border-r border-sidebar-border bg-sidebar px-1 py-2 text-sidebar-foreground",
       )}
     >
@@ -331,7 +331,10 @@ function RailTab<Key extends string>({
         <Separator
           aria-hidden
           role="none"
-          className={cn("my-2", tab.group === "releases" && "mt-auto")}
+          className={cn(
+            "my-2 [@media(max-height:560px)]:my-1",
+            tab.group === "releases" && "mt-auto",
+          )}
         />
       )}
       <Tooltip>
@@ -344,7 +347,7 @@ function RailTab<Key extends string>({
               aria-haspopup={modal ? "dialog" : undefined}
               onClick={() => onChoose(tab.key)}
               className={cn(
-                "h-16 w-full flex-none flex-col justify-center gap-1 text-xs",
+                "h-16 w-full flex-none flex-col justify-center gap-1 text-xs max-md:h-11 max-md:w-11 max-md:min-w-0 max-md:px-0 [@media(max-height:560px)]:h-8",
                 "group-data-vertical/tabs:justify-center",
                 // The sidebar's own tokens in both schemes (the trigger's dark classes would
                 // otherwise keep muted text); the chosen tab stands on the sidebar accent.
@@ -360,7 +363,7 @@ function RailTab<Key extends string>({
           }
         >
           <Icon name={tab.icon} className="size-5" />
-          <span className="max-w-full truncate">{tab.label}</span>
+          <span className="max-w-full truncate max-md:sr-only">{tab.label}</span>
         </TooltipTrigger>
         <TooltipContent side="inline-end">{tab.label}</TooltipContent>
       </Tooltip>
@@ -592,16 +595,41 @@ export function StudioFrame<Key extends string>({
     madeHosts.current ??= { panel: create(), inspector: create() };
     setHosts(madeHosts.current);
   }, []);
+  // The page the address names is selected as the editor loads and must not open the narrow
+  // inspector over it; once the person has pressed or typed anything, every selection does. Held
+  // like the selection, so a frame that is drawn again keeps knowing the person has begun.
+  const begun = `begun:${applicationName}`;
+  useEffect(() => {
+    // A frame for an application not held before is the editor opening, whatever was clicked to get here.
+    if (!heldWorkspace.has(`selection:${applicationName}`)) heldWorkspace.delete(begun);
+    const begin = () => {
+      heldWorkspace.set(begun, true);
+      window.removeEventListener("pointerdown", begin, true);
+      window.removeEventListener("keydown", begin, true);
+    };
+    window.addEventListener("pointerdown", begin, true);
+    window.addEventListener("keydown", begin, true);
+    return () => {
+      window.removeEventListener("pointerdown", begin, true);
+      window.removeEventListener("keydown", begin, true);
+    };
+  }, [begun, applicationName]);
   useEffect(() => {
     // Held with the workspace, per application: choosing a page or layout can open the canvas editor
     // again, and the reopened frame still knows the selection it drew before, so a new one opens its
     // inspector; another application starts without one.
     const held = `selection:${applicationName}`;
     const previousSelection = heldWorkspace.has(held) ? heldWorkspace.get(held) : selectionKey;
+    // The page the address names is selected as the editor loads: the page arriving where nothing or the
+    // application was selected, before the person has done anything.
+    const loadedPage =
+      selectionKey.startsWith("page:") &&
+      (previousSelection === "" || String(previousSelection).startsWith("application:"));
     if (
       hasInspector &&
       inspectorEditsSelection &&
       previousSelection !== selectionKey &&
+      (heldWorkspace.get(begun) === true || !loadedPage) &&
       !dockInspector &&
       !focused
     ) {
@@ -616,6 +644,7 @@ export function StudioFrame<Key extends string>({
     heldWorkspace.set(held, selectionKey);
   }, [
     applicationName,
+    begun,
     selectionKey,
     inspectorEditsSelection,
     dockInspector,

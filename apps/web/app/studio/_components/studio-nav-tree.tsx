@@ -144,7 +144,7 @@ export function StudioNavItem({
     <div
       data-vortex-focus-group=""
       className={cn(
-        "group/nav-row flex min-w-0 items-center rounded-md hover:bg-accent focus-within:bg-accent",
+        "group/nav-row relative flex min-w-0 items-center rounded-md hover:bg-accent focus-within:bg-accent",
         selected && "bg-accent",
       )}
     >
@@ -230,7 +230,8 @@ export function StudioNavItem({
         </Popover>
       )}
       {(actions !== undefined || moreActions !== undefined) && (
-        <div className="flex shrink-0 items-center opacity-0 group-hover/nav-row:opacity-100 group-focus-within/nav-row:opacity-100 has-data-popup-open:opacity-100">
+        // The actions lie over the end of the row, so they take no width from the name while hidden.
+        <div className="absolute inset-y-0 end-0 flex items-center rounded-md bg-accent opacity-0 group-hover/nav-row:opacity-100 group-focus-within/nav-row:opacity-100 has-data-popup-open:opacity-100">
           {actions?.map((action) => (
             <Tooltip key={action.label}>
               <TooltipTrigger
