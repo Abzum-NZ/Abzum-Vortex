@@ -137,7 +137,7 @@ type ProtectedOperationFailure =
   | Readonly<{ outcome: "refused" | "validation"; diagnostic?: FlowRefusalFeedback }>
   | Readonly<{ outcome: "conflict"; diagnostic?: FlowRefusalFeedback }>
   | Readonly<{ outcome: "uncertain" }>
-  /** `logged`: the operation's port already logged this failure once, at its cause. */
+  /** `logged`: this failure was already logged once, at its cause or by the executor. */
   | Readonly<{ outcome: "failed"; logged?: true }>;
 
 type ProtectedOperationExecution =
@@ -1408,8 +1408,11 @@ export const createProtectedOperationExecutor = (
       if (result.kind === "temporarily_unavailable") return { outcome: "failed", logged: true };
       const outputs = declaredOutputs(registered.descriptor, result.value);
       if (outputs === undefined) {
-        logRefusal("protected-operation", operationName(), "declared_outputs_missing");
-        return { outcome: "failed" };
+        // The operation broke its own declaration: a platform fault, logged once here.
+        console.error(
+          `[protected-operation] ${operationName()} failed: code=declared_outputs_missing`,
+        );
+        return { outcome: "failed", logged: true };
       }
       // A successful read supplies data to later tasks without counting as a saved effect.
       return {
@@ -1418,7 +1421,7 @@ export const createProtectedOperationExecutor = (
       };
     } catch (error) {
       logRefusal("protected-operation", operationName(), "execution_failed", error);
-      return { outcome: "failed" };
+      return { outcome: "failed", logged: true };
     }
   };
   const execute = (
