@@ -264,7 +264,7 @@ export const placeMenuShell = (
     validateStoredShell(catalogue, shell);
   } catch (error) {
     if (!(error instanceof StoredCompositionRefusal)) throw error;
-    console.error("[studio] new layout refused", error.message);
+    console.error(`[studio] new layout refused: ${error.message}`);
     refuse("The new layout could not be built from the block catalogue, so none was added.");
   }
   body.shells.push(shell);

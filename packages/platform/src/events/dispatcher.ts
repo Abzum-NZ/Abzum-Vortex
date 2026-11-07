@@ -552,6 +552,13 @@ const createEventDispatcher = (dependencies: EventDispatcherDependencies): Event
     return { errorName, ...(errorCode === undefined ? {} : { errorCode }), classification };
   };
 
+  /** One log line's fields: ids, keys, class names and codes only (never a message). */
+  const deliveryLine = (fields: Readonly<Record<string, string | undefined>>): string =>
+    Object.entries(fields)
+      .filter(([, value]) => value !== undefined)
+      .map(([key, value]) => `${key}=${value}`)
+      .join(" ");
+
   const logDeliveryError = (
     consumer: RegisteredConsumer,
     operation: string,
@@ -566,7 +573,7 @@ const createEventDispatcher = (dependencies: EventDispatcherDependencies): Event
         : { occurrenceId: occurrence.occurrenceId, eventType: eventType(occurrence) }),
       ...errorDetails(error),
     };
-    console.error("[events] event delivery interrupted", details);
+    console.error(`[events] event delivery interrupted: ${deliveryLine(details)}`);
     return details;
   };
 
@@ -682,7 +689,7 @@ const createEventDispatcher = (dependencies: EventDispatcherDependencies): Event
           classification: outcome.failureCode,
         };
         tally.failures.push(failure);
-        console.error("[events] event delivery failed", failure);
+        console.error(`[events] event delivery failed: ${deliveryLine(failure)}`);
       }
     } catch (error) {
       const details = logDeliveryError(consumer, "deliver", error, claimed.occurrence);

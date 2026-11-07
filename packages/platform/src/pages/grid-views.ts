@@ -2,6 +2,7 @@ import "server-only";
 
 import { z } from "zod";
 import type { DatabaseRow, RequestDatabaseTransaction } from "../db/request-transaction";
+import { describeFailure } from "../catalogue/runtime-primitives";
 import {
   gridLayoutSchema,
   gridViewDocumentSchema,
@@ -196,8 +197,7 @@ const stored = <Parsed>(
   const parsed = schema.safeParse(value);
   if (parsed.success) return parsed.data;
   console.error(
-    `[grid-views] stored ${kind} refused code=GRID_VIEW_MALFORMED subject=${subject.toLowerCase()}`,
-    parsed.error.issues.map(({ code, path, message }) => ({ code, path, message })),
+    `[grid-views] stored ${kind} refused code=GRID_VIEW_MALFORMED subject=${subject.toLowerCase()}: ${describeFailure(parsed.error)}`,
   );
   throw new Error("GRID_VIEW_MALFORMED", { cause: parsed.error });
 };

@@ -232,7 +232,9 @@ export const evaluateBeforeSaveFlows = (
     const { failure } = step.result;
     if (failure.code === "task_refused" && failure.ruleRefusal !== undefined) {
       const cause = { part: flow.id, reason: failure.taskId ?? failure.ruleRefusal.reason };
-      console.info("[before-save-flow] refused", { cause, code: failure.ruleRefusal.reason });
+      console.info(
+        `[before-save-flow] refused part=${cause.part} reason=${cause.reason} code=${failure.ruleRefusal.reason}`,
+      );
       return {
         success: false,
         refusal: {

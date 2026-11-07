@@ -703,9 +703,7 @@ const judged = (candidate: Source): Source => {
   if (parsed.success) return parsed.data;
   const issue = parsed.error.issues[0]!;
   console.error(
-    "[studio] access edit refused by the source schema",
-    issue.path.join("."),
-    issue.code,
+    `[studio] access edit refused by the source schema: ${issue.path.join(".")}=${issue.code}`,
   );
   return refuse(
     `This change would leave ${typeof issue.path[1] === "string" ? tokenName(issue.path[1]).toLowerCase() : "the application"} invalid (${issue.message}). Nothing was changed.`,

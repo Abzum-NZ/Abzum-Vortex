@@ -840,7 +840,7 @@ export const applyDraftChange = (
 
 /** An expected refusal, logged once at info by whatever route refused it. */
 export const logCompositionRefusal = (command: string, reason: string): void =>
-  console.info("[studio] composition command refused", { command, reason });
+  console.info(`[studio] composition command refused command=${command}: ${reason}`);
 
 const composeCommand = (
   current: StudioCompositionContext,

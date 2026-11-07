@@ -2,6 +2,7 @@ import "server-only";
 
 import { z } from "zod";
 import type { DatabaseRow, RequestDatabaseTransaction } from "../db/request-transaction";
+import { describeFailure } from "../catalogue/runtime-primitives";
 
 /**
  * The fields the viewer may read now on one record type, decided by access route in the database
@@ -23,7 +24,9 @@ export const readRecordTypeVisibleFieldIds = async (
   }
   const parsed = z.array(z.uuid()).safeParse(rows[0]?.field_ids);
   if (!parsed.success) {
-    console.error("[record-fields] code=RECORD_FIELD_VISIBILITY_RESULT_INVALID", parsed.error);
+    console.error(
+      `[record-fields] code=RECORD_FIELD_VISIBILITY_RESULT_INVALID recordTypeId=${recordTypeId}: ${describeFailure(parsed.error)}`,
+    );
     throw new Error("RECORD_FIELD_VISIBILITY_RESULT_INVALID", { cause: parsed.error });
   }
   return new Set(parsed.data.map((id) => id.toLowerCase()));
