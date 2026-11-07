@@ -12,45 +12,42 @@ import type {
   flowTaskOutputDeclarationSchema,
 } from "./flow-task-registry";
 
-/** @knipignore */
-export const flowRegisteredTaskTypeKeys = [
-  "record.save",
-  "record.create",
-  "record.set_fields",
-  "record.link",
-  "record.delete",
-  "record.restore",
-  "record.changes",
-  "record.query",
-  "record.read_fields",
-  "record.pin_identity",
-  "form.save_draft",
-  "form.discard_draft",
-  "operation.call",
-  "backend.run",
-  "event.announce",
-  "data.calculate",
-  "data.record_link",
-  "data.set_variable",
-  "data.format",
-  "data.build_list",
-  "rule.require",
-  "rule.warn",
-  "rule.refuse",
-  "interface.show_message",
-  "interface.clear_message",
-  "interface.set_value",
-  "interface.validate_form",
-  "interface.show_form",
-  "interface.confirm",
-  "interface.verify",
-  "interface.wizard",
-  "interface.navigate",
-  "interface.refresh",
-  "interface.set_panel",
-  "interface.set_filter",
-] as const;
-type FlowRegisteredTaskTypeKey = (typeof flowRegisteredTaskTypeKeys)[number];
+type FlowRegisteredTaskTypeKey =
+  | "record.save"
+  | "record.create"
+  | "record.set_fields"
+  | "record.link"
+  | "record.delete"
+  | "record.restore"
+  | "record.changes"
+  | "record.query"
+  | "record.read_fields"
+  | "record.pin_identity"
+  | "form.save_draft"
+  | "form.discard_draft"
+  | "operation.call"
+  | "backend.run"
+  | "event.announce"
+  | "data.calculate"
+  | "data.record_link"
+  | "data.set_variable"
+  | "data.format"
+  | "data.build_list"
+  | "rule.require"
+  | "rule.warn"
+  | "rule.refuse"
+  | "interface.show_message"
+  | "interface.clear_message"
+  | "interface.set_value"
+  | "interface.validate_form"
+  | "interface.show_form"
+  | "interface.confirm"
+  | "interface.verify"
+  | "interface.wizard"
+  | "interface.navigate"
+  | "interface.refresh"
+  | "interface.set_panel"
+  | "interface.set_filter";
 type FlowControlTaskTypeKey = (typeof flowControlTaskTypeKeys)[number];
 export type FlowTaskTypeKey = FlowControlTaskTypeKey | FlowRegisteredTaskTypeKey;
 

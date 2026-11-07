@@ -35,6 +35,7 @@ export interface NoticeProps {
 }
 
 const NOTICE_BASE_ORIGIN = "https://vortex.invalid";
+// eslint-disable-next-line no-control-regex -- A link holding a control character is refused.
 const CONTROL_CHARACTER = /[\u0000-\u001f\u007f]/;
 
 const SEVERITY_LABELS: Readonly<Record<NoticeSeverity, string>> = {
