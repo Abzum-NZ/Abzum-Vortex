@@ -40,8 +40,9 @@ export function StudioSegmentedControl<T extends string>({
           key={option.value}
           value={option.value}
           disabled={option.disabled}
-          // Equal segments on one line: the labels are short, and the longer explanation is the field's hint.
-          className="min-w-0 flex-1 truncate"
+          // Segments share the line by their labels' width and never clip one: the toggle's padding is
+          // narrowed so four labels fit a narrow inspector; the longer explanation is the field's hint.
+          className="min-w-fit flex-auto px-2"
         >
           {option.icon}
           {option.label}

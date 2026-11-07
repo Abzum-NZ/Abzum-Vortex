@@ -206,8 +206,6 @@ type SettingKind = Readonly<{
   kind: "setting";
   property: BlockPropertySchemaContract;
   properties: readonly BlockPropertySchemaContract[];
-  /** The slot family this list's entries are named for, when each entry owns a slot (a tab). */
-  identity?: Readonly<{ family: string; property: string }> | undefined;
 }>;
 
 /**
@@ -237,33 +235,16 @@ const settingFields = new WeakMap<BlockPropertySchemaContract, Field>();
 
 /** The field of a declared setting. */
 export const studioSettingField = (
-  release: Readonly<{
-    blockId: string;
-    releaseVersion: number | string;
-    slots: readonly Readonly<{
-      key: string;
-      repeats?: Readonly<{ items: string; identity: string }> | undefined;
-    }>[];
-  }>,
+  release: Readonly<{ blockId: string; releaseVersion: number | string }>,
   property: BlockPropertySchemaContract,
   properties: readonly BlockPropertySchemaContract[],
 ): Field => {
   const made = settingFields.get(property);
   if (made !== undefined) return made;
-  // A list whose entries each name a slot (a tab) carries that slot family; it depends only on the
-  // release's own slots, so the field made once per setting stays right.
-  const repeating = release.slots.find((slot) => slot.repeats?.items === property.key);
   const field = studioCustomField(
     property.label,
     `${release.blockId}@${release.releaseVersion}:${property.key}`,
-    {
-      kind: "setting",
-      property,
-      properties,
-      ...(repeating?.repeats === undefined
-        ? {}
-        : { identity: { family: repeating.key, property: repeating.repeats.identity } }),
-    },
+    { kind: "setting", property, properties },
   );
   settingFields.set(property, field);
   return field;
@@ -344,7 +325,7 @@ const StudioSettingField = memo(function StudioSettingField({
   setting,
   field,
 }: Readonly<{ setting: SettingKind; field: SettingFieldRenderProps }>) {
-  const { property, properties, identity } = setting;
+  const { property, properties } = setting;
   const context = useContext(StudioSettingFieldsContext);
   const getPuck = useGetPuck();
   // The sibling settings this field's notes and measure read, subscribed to as one string: a
@@ -425,7 +406,6 @@ const StudioSettingField = memo(function StudioSettingField({
             descriptionId={control["aria-describedby"]}
             invalid={control["aria-invalid"] === true}
             property={studioTotalMeasureProperty(property, properties, values, choices.fields)}
-            identity={identity}
             value={shown}
             onChange={change}
             choices={choices}
