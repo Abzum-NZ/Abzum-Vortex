@@ -95,16 +95,19 @@ const beforeSaveFlowSetSchema = z
 const beforeSaveFlowSetLimit = 1_000;
 const beforeSaveFlowSets = new Map<string, BeforeSaveFlowSet>();
 
+/** Where a candidate was refused and why, as paths and codes: never a value. */
+const issueCodes = (issues: readonly Readonly<{ code: unknown; path: unknown }>[]): string =>
+  issues.map(({ code, path }) => `${[path].flat().join(".")}=${String(code)}`).join(",");
+
 const compileBeforeSaveFlowSet = (
   candidate: unknown,
   recordTypeId: string,
 ): BeforeSaveFlowSet | undefined => {
   const parsed = beforeSaveFlowSetSchema.safeParse(candidate);
   if (!parsed.success) {
-    console.error("[before-save-flow] preparation contract failed", {
-      cause: { part: "beforeSaveFlows", reason: "invalid_preparation" },
-      issues: parsed.error.issues.map(({ path, code, message }) => ({ path, code, message })),
-    });
+    console.error(
+      `[before-save-flow] preparation contract failed part=beforeSaveFlows reason=invalid_preparation: ${describeFailure(parsed.error)}`,
+    );
     return undefined;
   }
   for (const flow of parsed.data.flows) {
@@ -117,9 +120,9 @@ const compileBeforeSaveFlowSet = (
           trigger.recordTypeId.toLowerCase() === recordTypeId.toLowerCase(),
       )
     ) {
-      console.error("[before-save-flow] preparation subject mismatch", {
-        cause: { part: flow.id, reason: "wrong_record_type_or_execution" },
-      });
+      console.error(
+        `[before-save-flow] preparation subject mismatch part=${flow.id} reason=wrong_record_type_or_execution`,
+      );
       return undefined;
     }
   }
@@ -131,9 +134,9 @@ const compileBeforeSaveFlowSet = (
     };
   } catch (error) {
     if (!(error instanceof FlowPlanError)) throw error;
-    console.error("[before-save-flow] flow cannot be planned", {
-      cause: { part: error.flowId, reason: error.reason },
-    });
+    console.error(
+      `[before-save-flow] flow cannot be planned part=${error.flowId} reason=${error.reason}`,
+    );
     return undefined;
   }
 };
@@ -200,10 +203,9 @@ export const applyBeforeSaveRules = (input: {
         : { organizationCurrency: input.organizationCurrency }),
     });
     if (!previous.success) {
-      console.error("[before-save-flow] previous record normalization failed", {
-        cause: { part: recordType.recordTypeId, reason: "invalid_previous_values" },
-        issues: previous.issues.map(({ code, path }) => ({ code, path })),
-      });
+      console.error(
+        `[before-save-flow] previous record normalization failed part=${recordType.recordTypeId} reason=invalid_previous_values: ${issueCodes(previous.issues)}`,
+      );
       return { success: false, reason: "unavailable" };
     }
     previousValues = previous.candidate.candidateValues;
@@ -236,10 +238,9 @@ export const applyBeforeSaveLifecycleRules = (input: {
       : { organizationCurrency: input.organizationCurrency }),
   });
   if (!prepared.success) {
-    console.error("[before-save-flow] lifecycle record normalization failed", {
-      cause: { part: input.recordType.recordTypeId, reason: "invalid_stored_values" },
-      issues: prepared.issues.map(({ code, path }) => ({ code, path })),
-    });
+    console.error(
+      `[before-save-flow] lifecycle record normalization failed part=${input.recordType.recordTypeId} reason=invalid_stored_values: ${issueCodes(prepared.issues)}`,
+    );
     return { success: false, reason: "unavailable" };
   }
   return evaluateRuleExecution({
