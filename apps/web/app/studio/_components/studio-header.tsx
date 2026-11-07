@@ -9,6 +9,7 @@ import {
   type ApplicationFrameTopBar,
   type ApplicationShellRuntime,
   type ApplicationSwitcherSource,
+  type ApplicationWebMcpRuntime,
 } from "@vortex/ui";
 import { NavigationLink } from "@vortex/ui/routing";
 import { Icon } from "@vortex/ui/icons";
@@ -63,7 +64,14 @@ function StudioFrameBar({
   frame,
   pageName,
   actions,
-}: Readonly<{ frame: StudioFrameDefinition; pageName: string; actions?: ReactNode }>) {
+  agentTools,
+}: Readonly<{
+  frame: StudioFrameDefinition;
+  pageName: string;
+  actions?: ReactNode;
+  /** The browser agent tools' state, shown where every application's header shows it. */
+  agentTools?: ApplicationWebMcpRuntime | undefined;
+}>) {
   const switcherSource = useMemo<ApplicationSwitcherSource>(
     () =>
       Object.assign(
@@ -87,6 +95,7 @@ function StudioFrameBar({
     organizationName: frame.organizationName,
     organizationShortName: frame.organizationShortName,
     pageName,
+    ...(agentTools === undefined ? {} : { webMcp: agentTools }),
   };
   return (
     <ApplicationAccountActionsProvider
@@ -279,11 +288,14 @@ const StudioHeaderCommands = memo(function StudioHeaderCommands({
 export function StudioHeader({
   frame,
   applicationName,
+  agentTools,
   saveState,
   ...commands
 }: Readonly<{
   frame: StudioFrameDefinition;
   applicationName: string;
+  /** The browser agent tools' state; undefined where the browser offers none. */
+  agentTools: ApplicationWebMcpRuntime | undefined;
   saveState: ReactNode;
 }> &
   StudioHeaderCommandProps) {
@@ -293,5 +305,12 @@ export function StudioHeader({
       <StudioHeaderCommands {...commands} />
     </>
   );
-  return <StudioFrameBar frame={frame} pageName={applicationName} actions={actions} />;
+  return (
+    <StudioFrameBar
+      frame={frame}
+      pageName={applicationName}
+      actions={actions}
+      agentTools={agentTools}
+    />
+  );
 }

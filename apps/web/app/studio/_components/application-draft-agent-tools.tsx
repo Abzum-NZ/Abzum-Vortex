@@ -1,5 +1,5 @@
 "use client";
-import { WebMcpStatus, type ApplicationWebMcpRuntime } from "@vortex/ui";
+import type { ApplicationWebMcpRuntime } from "@vortex/ui";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   applicationSourceDocumentSchema,
@@ -291,6 +291,7 @@ export function ApplicationDraftAgentTools({
   readQueries,
   readSavedDraft,
   startAction,
+  onStatusChange,
 }: {
   /** The workspace's one draft: the agent edits it through the same envelope as the person. */
   draft: StudioDraft;
@@ -314,8 +315,9 @@ export function ApplicationDraftAgentTools({
   readSavedDraft: () => SavedDraftContext | null;
   /** Saves the latest edits, then opens one App Store action flow over the editor. */
   startAction: (action: StudioActionToken, origin: "agent") => Promise<boolean>;
+  /** The tools' state, which the Studio header shows where every application's header shows it. */
+  onStatusChange: (runtime: ApplicationWebMcpRuntime | undefined) => void;
 }) {
-  const [runtime, setRuntime] = useState<ApplicationWebMcpRuntime>();
   const running = useRef(false);
   // The tools are announced a few seconds after the editor opened, when the browser is idle: an
   // agent does not need them to open the editor, and building them takes a quarter of a second.
@@ -858,14 +860,11 @@ export function ApplicationDraftAgentTools({
   );
 
   return (
-    <>
-      <WebMcpAdapter
-        contextKey={`${organizationId}:${history.getState().rootId}`}
-        tools={tools}
-        onInvoke={invoke}
-        onStatusChange={setRuntime}
-      />
-      {runtime === undefined ? null : <WebMcpStatus runtime={runtime} />}
-    </>
+    <WebMcpAdapter
+      contextKey={`${organizationId}:${history.getState().rootId}`}
+      tools={tools}
+      onInvoke={invoke}
+      onStatusChange={onStatusChange}
+    />
   );
 }

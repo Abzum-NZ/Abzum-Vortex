@@ -152,13 +152,14 @@ function StudioActionBar({ id, type }: Readonly<{ id: string; type: string }>) {
   const reasonFor = (reference: string | undefined, permitted: boolean) =>
     reference ?? (permitted ? undefined : unavailable);
   // A full application cannot take another block: Duplicate says so instead of failing on save.
-  const placed = bar.placed;
+  const { placed, refuse } = bar;
   const duplicateNamed =
     studioLimitReason("compositionPlacements", placed) ??
     studioCanvasPermissionReason(references, id, "duplicate");
   const deleteNamed = studioCanvasPermissionReason(references, id, "delete");
   const duplicateReason = reasonFor(duplicateNamed, permissions.duplicate);
-  const deleteReason = reasonFor(deleteNamed, permissions.delete);
+  const permitted = permissions.delete;
+  const deleteReason = reasonFor(deleteNamed, permitted);
   const moveNamed = studioCanvasPermissionReason(references, id, "drag");
   // Move to goes to another slot: a smaller screen keeps only the order within one.
   const moveReason =
@@ -224,7 +225,9 @@ function StudioActionBar({ id, type }: Readonly<{ id: string; type: string }>) {
   const buttons = () => [...(anchor.current?.querySelectorAll("button") ?? [])];
   // Alt+F10 moves focus to the selected block's bar, as the toolbar convention has it. A key
   // pressed while focus is inside the canvas frame reaches only its document, so both are heard.
-  // Delete or Backspace on a block that cannot be removed (Puck takes it silently) says why, once.
+  // Delete or Backspace where Puck's delete is off (a smaller screen, a locked page) is not heard
+  // by Puck's own removal guard, so the bar says why, once, on the canvas. Where Puck's delete is
+  // on, its guard says it.
   useEffect(() => {
     const own = anchor.current?.ownerDocument;
     const documents = own === undefined || own === document ? [document] : [document, own];
@@ -240,6 +243,7 @@ function StudioActionBar({ id, type }: Readonly<{ id: string; type: string }>) {
         (event.key !== "Delete" && event.key !== "Backspace") ||
         event.repeat ||
         !event.isTrusted ||
+        permitted ||
         deleteReason === undefined
       )
         return;
@@ -250,12 +254,13 @@ function StudioActionBar({ id, type }: Readonly<{ id: string; type: string }>) {
       )
         return;
       console.info(`[studio] ${name} was not removed: ${deleteReason}`);
+      refuse(deleteReason);
     };
     for (const target of documents) target.addEventListener("keydown", onKey);
     return () => {
       for (const target of documents) target.removeEventListener("keydown", onKey);
     };
-  }, [stopped, deleteReason, name]);
+  }, [stopped, deleteReason, name, permitted, refuse]);
   // The bar of the block an action chose takes the focus, so the keyboard does not start over.
   useEffect(() => {
     if (
