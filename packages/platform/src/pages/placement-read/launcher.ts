@@ -142,17 +142,18 @@ export const readLauncher = async (
     return;
   }
 
+  // The query service logged every answer that is not available, once: these add no line.
   const result = await read.services.queries.run(read.session, read.selection, command.data);
   if (result.kind === "temporarily_unavailable") {
-    logPlacementFailure(address, placementId, "launcher_query_unavailable");
     data[placementId] = { status: "error" };
     return;
   }
-  if (result.kind !== "available" || result.value.outcome !== "completed") {
-    const failureCause =
-      result.kind === "available" && result.value.outcome === "refused"
-        ? result.value.reasonCode
-        : result.kind;
+  if (result.kind === "unavailable") {
+    data[placementId] = { status: "refused", reason: "not_permitted" };
+    return;
+  }
+  if (result.value.outcome !== "completed") {
+    const failureCause = result.value.reasonCode;
     if (placeInstallationRequired(data, placementId, failureCause)) return;
     logPlacementFailure(address, placementId, "launcher_query_refused", failureCause);
     data[placementId] = { status: "refused", reason: "not_permitted" };

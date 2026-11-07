@@ -2,6 +2,8 @@ import "server-only";
 
 import { z } from "zod";
 import type { IdentitySession, OrganizationSelectionCandidate } from "../access/identity-access";
+import { logClassifiedFailure } from "../access/request-failure";
+import { requestFailureLogged } from "../access/request-failure-mark";
 import { jsonValueSchema } from "../catalogue/common";
 import { recordIdSchema, recordTypeIdSchema, revisionSchema } from "../catalogue/identifiers";
 import { describeFailure, isRecord } from "../catalogue/runtime-primitives";
@@ -160,7 +162,10 @@ export const readPageSubjectInTransaction = async (
       ? { ...read, actionAvailability: combined.availability }
       : read;
   } catch (error) {
-    console.error(`[page] subject read failed: ${describeFailure(error)}`);
+    // The one line of a read that failed inside its request, at the level its cause's class
+    // decides, unless the place that raised it already logged it.
+    if (!requestFailureLogged(error))
+      logClassifiedFailure(`[page] subject read failed: ${describeFailure(error)}`, error);
     return { kind: "temporarily_unavailable" };
   }
 };
@@ -185,7 +190,8 @@ export const createPageSubjectReader = (dependencies: HumanOrganizationRequestDe
         if (result.kind === "temporarily_unavailable") return { kind: "temporarily_unavailable" };
         return result.kind === "available" ? result.value : { kind: "refused" };
       } catch (error) {
-        console.error(`[page] subject reader failed: ${describeFailure(error)}`);
+        if (!requestFailureLogged(error))
+          logClassifiedFailure(`[page] subject reader failed: ${describeFailure(error)}`, error);
         return { kind: "temporarily_unavailable" };
       }
     },
