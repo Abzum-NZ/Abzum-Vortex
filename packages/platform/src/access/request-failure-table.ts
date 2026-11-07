@@ -1,5 +1,3 @@
-import "server-only";
-
 import { databaseCode } from "../catalogue/runtime-primitives";
 import { DefinitionCompilationError } from "../definition/compilation-error";
 import type { TelemetryOutcome } from "../events/telemetry";
