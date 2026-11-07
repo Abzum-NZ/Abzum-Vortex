@@ -1,3 +1,4 @@
+import { z } from "zod";
 import { sameCompositionValue as sameValue, sourceNames } from "./composition-references";
 import type {
   ImmutablePlatformBlockCatalogue,
@@ -142,13 +143,15 @@ type MoveDestination = {
 /**
  * Only actual slots (each tab of a Tabs block is one) in this original movable region are
  * destinations. A layout slot that holds a page's content outlet is never one: it holds page
- * content, not layout blocks.
+ * content, not layout blocks. With `only`, the one destination a command asked for is judged, not
+ * every destination of the region.
  */
 const moveDestinations = (
   catalogue: ImmutablePlatformBlockCatalogue,
   source: ApplicationSourceDocument,
   target: Target,
   alias: string,
+  only?: StudioCompositionDestination,
 ): MoveDestination[] => {
   if (!movableRegion(target.region)) return [];
   const shell = target.region.shell;
@@ -212,15 +215,17 @@ const moveDestinations = (
   }
   visit(target.region.zone, []);
   return selectedPathSupported
-    ? result.filter(
-        (candidate) =>
-          studioFormChangeRefusal(
-            catalogue,
-            source,
-            target.region.zone.items,
-            regionAfter(target, alias, candidate.steps),
-          ) === undefined,
-      )
+    ? result
+        .filter((candidate) => only === undefined || sameDestination(candidate.destination, only))
+        .filter(
+          (candidate) =>
+            studioFormChangeRefusal(
+              catalogue,
+              source,
+              target.region.zone.items,
+              regionAfter(target, alias, candidate.steps),
+            ) === undefined,
+        )
     : [];
 };
 
@@ -272,6 +277,18 @@ const syncRepeatableSlots = (
   }
   return undefined;
 };
+
+/**
+ * What a reading model expects a selection it cannot describe to throw: a stored-data or structure
+ * refusal, the plain `TypeError` of `refuse()`, or the source contract's refusal of a copy that is
+ * not a history snapshot (`resolve` parses such a copy). Any other error is a fault and is not
+ * hidden.
+ */
+const isReadingRefusal = (error: unknown): boolean =>
+  error instanceof StoredCompositionRefusal ||
+  error instanceof StructureRefusal ||
+  error instanceof z.ZodError ||
+  (error instanceof TypeError && error.message === "Composition edit refused");
 
 /**
  * Which placed blocks the settings edit reaches: any block of a layout, and any block on a page
@@ -330,7 +347,8 @@ export const studioFormFieldsInUseFor = (
       resolved.alias,
       resolved.target.region.page?.type === "guided_form",
     );
-  } catch {
+  } catch (error) {
+    if (!isReadingRefusal(error)) throw error;
     return noFieldsInUse;
   }
 };
@@ -353,7 +371,8 @@ export const describeStudioCompositionSettings = (
       readsQuery: readsQuery(resolved.release, item),
       query: item.props.vortex.query ?? null,
     };
-  } catch {
+  } catch (error) {
+    if (!isReadingRefusal(error)) throw error;
     return { kind: "invalid" };
   }
 };
@@ -710,10 +729,9 @@ const applyRemoval = (
   source.body.platform_block_dependencies = source.body.platform_block_dependencies.filter(
     (dependency) => !unusedReleases.includes(releaseKey(dependency)),
   );
-  const parsed = applicationSourceDocumentSchema.parse(source);
-  return sameValue(parsed, current.source)
-    ? { kind: "invalid" }
-    : { kind: "applied", source: parsed };
+  // The block left its slot (the length check above), so the draft changed; the history checks
+  // the whole source once.
+  return { kind: "applied", source };
 };
 
 /** The words for a command that did not apply, from its outcome. */
@@ -818,7 +836,8 @@ export const describeStudioCompositionEdit = (
         responsiveVisibility: release.capabilities.responsiveVisibility,
       },
     };
-  } catch {
+  } catch (error) {
+    if (!isReadingRefusal(error)) throw error;
     return { kind: "invalid" };
   }
 };
@@ -873,9 +892,13 @@ const composeCommand = (
       closedPlain(command, ["kind", "destination"]);
       if (!movableRegion(target.region)) return { kind: "unsupported" };
       const destination = parseDestination(command.destination);
-      const resolvedDestination = moveDestinations(catalogue, source, target, alias).find(
-        (candidate) => sameDestination(candidate.destination, destination),
-      );
+      const resolvedDestination = moveDestinations(
+        catalogue,
+        source,
+        target,
+        alias,
+        destination,
+      ).find((candidate) => sameDestination(candidate.destination, destination));
       if (resolvedDestination === undefined) return { kind: "invalid" };
       const working = workingCopy(target.region);
       const from = zoneHandle(working, target.steps);
@@ -903,10 +926,8 @@ const composeCommand = (
       );
       commitWorking(catalogue, target.region, working);
       validateStoredApplicationOutlets(catalogue, source);
-      const parsed = applicationSourceDocumentSchema.parse(source);
-      return sameValue(parsed, current.source)
-        ? { kind: "invalid" }
-        : { kind: "applied", source: parsed };
+      // The block joined another slot (`sameSteps` above), so the draft changed.
+      return { kind: "applied", source };
     }
     if (!breakpointValid(command.breakpoint)) return { kind: "invalid" };
     const published = publishedLayoutReason(source, target.region.page);
@@ -975,11 +996,16 @@ const composeCommand = (
       }
       item.props.vortex = { ...item.props.vortex, responsive };
     } else return { kind: "invalid" };
+    // Only the touched region can differ: its blocks keep their identity unless the command
+    // replaced them, so the compare is as deep as the edit.
+    if (
+      sameValue(working.items, target.region.zone.items) &&
+      sameValue(working.order, target.region.zone.order)
+    )
+      return { kind: "invalid" };
     commitWorking(catalogue, target.region, working);
     validateStoredApplicationOutlets(catalogue, source);
-    const parsed = applicationSourceDocumentSchema.parse(source);
-    if (sameValue(parsed, current.source)) return { kind: "invalid" };
-    return { kind: "applied", source: parsed };
+    return { kind: "applied", source };
   } catch (error) {
     if (error instanceof StoredCompositionRefusal || error instanceof StructureRefusal)
       return { kind: "refused", reason: error.message };
