@@ -812,15 +812,16 @@ const createRuntimePostgresClient = (configuration: RuntimeDatabaseConfiguration
 
 // One runtime pool per process: a development server evaluates this module again for every route
 // bundle it compiles, and a pool held in a module variable would then open a second pool of up to
-// ten connections that nothing closes. The pool lives on the process global instead, keyed by the
-// connection string and the pool size; a changed key ends the old pool before the new one is made.
+// ten connections that nothing closes. The pool lives on the process global instead, keyed by every
+// configuration value its options are built from. A changed configuration starts ending the old
+// pool and makes a new one: transactions open on the old pool get five seconds to finish.
 const runtimePoolKey = Symbol.for("vortex.runtimeDatabasePool");
 type RuntimePoolHolder = Readonly<{ identity: string; client: Sql }>;
 type RuntimePoolGlobal = typeof globalThis & { [runtimePoolKey]?: RuntimePoolHolder };
 
 const runtimeClient = (): Sql => {
   const configuration = parseRuntimeDatabaseConfiguration(process.env);
-  const identity = `${configuration.poolSize} ${configuration.connectionString}`;
+  const identity = JSON.stringify(configuration);
   const scope = globalThis as RuntimePoolGlobal;
   const held = scope[runtimePoolKey];
   if (held?.identity === identity) return held.client;
