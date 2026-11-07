@@ -105,7 +105,7 @@ export function StudioCanvasView({
     onFitZoom: (percent: number) => void;
   }>) {
   const status = useStudioCanvasStatus();
-  const { disabled, refusal, open, ready } = status;
+  const { disabled, refusal, refusalCount, open, ready } = status;
   const { breakpoint, label, width } = useStudioScreen();
   const [well, setWell] = useState<HTMLDivElement | null>(null);
   // The canvas is a device screen: the iframe is as wide as the chosen screen and as tall as the
@@ -224,7 +224,9 @@ export function StudioCanvasView({
         </div>
         {compileFailure == null ? null : <CompileFailureNotice failure={compileFailure} />}
         {refusal.length === 0 ? null : (
-          <Alert variant="destructive">
+          // Keyed by the count: a refusal repeated word for word still mounts a new alert, which
+          // the screen reader announces again.
+          <Alert key={refusalCount} variant="destructive">
             <AlertTitle>Page change refused</AlertTitle>
             <AlertDescription>{refusal}</AlertDescription>
           </Alert>

@@ -43,6 +43,8 @@ export type StudioCanvasStatus = Readonly<{
   chooseStep: (step: string) => void;
   /** Why the last canvas change was refused; empty while the draft shows as it was edited. */
   refusal: string;
+  /** Counts the refusals shown: the same refusal twice is a new one, and is announced again. */
+  refusalCount: number;
   /** The page slot address keys of the zones the canvas shows. */
   zoneKeys: ReadonlySet<string>;
   /** Puck's root slot of a page slot address key; `undefined` for the default zone. */
@@ -71,6 +73,8 @@ export type StudioCanvasBar = Readonly<{
   /** The blocks the application holds, which the composition limit counts. */
   placed: number;
   blockActions: StudioBlockActions;
+  /** Says a refusal in the canvas strip, where a refused change is said; the caller logs it. */
+  refuse: (message: string) => void;
 }>;
 
 export const StudioCanvasBarContext = createContext<StudioCanvasBar | null>(null);
@@ -104,6 +108,7 @@ export const useStudioCanvasStatusValue = (
   input: StudioPuckInput,
   model: StudioCanvasModel,
   refusal: string,
+  refusalCount: number,
 ): StudioCanvasStatus => {
   const steps = useStableValue(model.steps);
   const { disabled, disabledReason, canvasShown } = input;
@@ -125,6 +130,7 @@ export const useStudioCanvasStatusValue = (
       step,
       chooseStep,
       refusal,
+      refusalCount,
       zoneKeys,
       slotOfZoneKey,
       defaultZoneKey,
@@ -143,6 +149,7 @@ export const useStudioCanvasStatusValue = (
       step,
       chooseStep,
       refusal,
+      refusalCount,
       zoneKeys,
       slotOfZoneKey,
       defaultZoneKey,
