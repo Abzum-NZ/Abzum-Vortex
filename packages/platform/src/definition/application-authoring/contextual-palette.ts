@@ -418,7 +418,6 @@ export const studioBoardFacts = (
   };
 };
 
-/** The queries of the application's own Modules: they are in its source. */
 /**
  * Whether a draft field is a one-record link from its record type to itself: a many-to-one
  * relationship from the field whose target is the same qualified record type, as publication judges.
