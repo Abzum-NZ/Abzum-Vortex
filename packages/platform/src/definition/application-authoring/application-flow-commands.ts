@@ -40,6 +40,7 @@ import {
   studioFlowShownFormPublished,
 } from "./application-flow-shown-form";
 import { PUBLISHED_PAGE_ADD_REASON } from "./application-composition-regions";
+import { describeFailure } from "../../catalogue/runtime-primitives";
 
 /**
  * The flow commands: one checked edit of the stored flow definition each, taken by the draft
@@ -949,7 +950,7 @@ export const projectStudioFlowStepActions = (
       branch,
     };
   } catch (error) {
-    console.error("[studio-flow] step actions unavailable", error);
+    console.error(`[studio-flow] step actions unavailable: ${describeFailure(error)}`);
     return { stepTypes: [], canMoveUp: false, canMoveDown: false, branch: null };
   }
 };

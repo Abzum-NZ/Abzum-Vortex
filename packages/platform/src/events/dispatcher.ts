@@ -22,7 +22,7 @@ import {
   eventDeliveryRecoveryLimits,
   type EventDeliveryFailureClassification,
 } from "./delivery-recovery";
-import { asRecord } from "../catalogue/runtime-primitives";
+import { asRecord, describeFailure } from "../catalogue/runtime-primitives";
 import { consumerKeyMatches, exactRecord } from "./event-record-shapes";
 
 const eventDispatcherLimits = Object.freeze({
@@ -349,7 +349,7 @@ const createEventDispatcherGrantReader = (
           return { outcome: "refused", reason: "dispatcher_grant_unavailable" };
         return parseGrantAuthority(first.result);
       } catch (error) {
-        console.error("Event dispatcher grant could not be read", error);
+        console.error(`[events] dispatcher grant could not be read: ${describeFailure(error)}`);
         return { outcome: "refused", reason: "dispatcher_grant_unavailable" };
       }
     },
@@ -566,7 +566,7 @@ const createEventDispatcher = (dependencies: EventDispatcherDependencies): Event
         : { occurrenceId: occurrence.occurrenceId, eventType: eventType(occurrence) }),
       ...errorDetails(error),
     };
-    console.error("Event delivery interrupted", details);
+    console.error("[events] event delivery interrupted", details);
     return details;
   };
 
@@ -682,7 +682,7 @@ const createEventDispatcher = (dependencies: EventDispatcherDependencies): Event
           classification: outcome.failureCode,
         };
         tally.failures.push(failure);
-        console.error("Event delivery failed", failure);
+        console.error("[events] event delivery failed", failure);
       }
     } catch (error) {
       const details = logDeliveryError(consumer, "deliver", error, claimed.occurrence);

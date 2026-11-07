@@ -106,6 +106,7 @@ import { applyAdd, commandSettings, repeatingEntryName } from "./application-com
 import { applyWrap } from "./application-composition-wrap";
 import { applyPageData } from "./application-composition-page-data";
 import { applyStudioCompositionGate } from "./application-composition-gate";
+import { describeFailure } from "../../catalogue/runtime-primitives";
 
 const breakpointValid = (value: unknown): value is StudioCompositionBreakpoint =>
   value === "desktop" || value === "tablet" || value === "phone";
@@ -672,7 +673,7 @@ export const describeStudioCompositionRemoval = (
         }
       : resolved;
   } catch (error) {
-    console.error("[studio] removal model failed", error);
+    console.error(`[studio] removal model failed: ${describeFailure(error)}`);
     return { kind: "invalid" };
   }
 };
@@ -765,7 +766,7 @@ export const describeStudioCompositionDestinations = (
       ),
     };
   } catch (error) {
-    console.error("[studio] move model failed", error);
+    console.error(`[studio] move model failed: ${describeFailure(error)}`);
     return { kind: "invalid" };
   }
 };
@@ -982,7 +983,7 @@ const composeCommand = (
   } catch (error) {
     if (error instanceof StoredCompositionRefusal || error instanceof StructureRefusal)
       return { kind: "refused", reason: error.message };
-    console.error("[studio] composition command could not be applied", error);
+    console.error(`[studio] composition command could not be applied: ${describeFailure(error)}`);
     return { kind: "invalid" };
   }
 };

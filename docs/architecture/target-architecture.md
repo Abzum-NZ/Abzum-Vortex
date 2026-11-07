@@ -23,7 +23,7 @@ This document defines the shape the code keeps and the rules that keep it there.
 7. **Fail loudly on our own data.**
    - A parse failure of data the platform itself produced (request context, stored definitions, query rows) is a defect. Log it with its cause and surface it in development.
    - Never turn it into "unavailable" or `null`.
-   - A refusal shown to a user is fine, but the server log must hold the real cause, such as the database error code and message.
+   - A refusal shown to a user is fine, but the server log holds the cause as class names and codes (a database error's code and its stable message), never values, personal data or secrets (`describeFailure`).
 8. **No process artefacts in product code.** Receipts, fingerprints, continuity evidence and proofs that exist only to satisfy a review process are not allowed. Idempotency, revisions and a release content hash are product features; keep each in exactly one place.
 
 ## 2. Repository layout
@@ -145,7 +145,7 @@ Tables are private. The application calls `security definer` functions with `set
 ## 5. Errors and logging
 
 - **Platform result types.** Platform operations return either a typed result or a typed refusal. The refusal carries a stable code for the user and a `cause` for the log.
-- **Shared mapping.** `apps/web` logs every refusal and unexpected error once, with route, operation, code and cause (never secrets or personal data). The database error-code mapping lives in one shared function, not per service.
+- **Shared mapping.** Each failed request or answer is logged once, where it is answered: the request runner for its answers, a read for the answers it gives, a service for failures it turns into results; a caller never logs an answer again. Expected refusals and races log at info, platform faults at error, classified by the one table in `packages/platform/src/access/request-failure.ts`.
 - **Strict schemas stay strict, with no silent failure.**
   - When the database adds a field, update the schema in the same change.
   - Code must never handle a mismatch by quietly returning `null`.
