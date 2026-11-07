@@ -17,6 +17,7 @@ import { platformPermissionSource } from "./platform-permission-source";
 import { loadPermittedApplicationsAtAddress } from "./organization-context";
 import { applicationHomePathByRoot } from "./application-home";
 import { mayManageApplications } from "./application-management";
+import { loadOrganizationAppStoreAddress } from "./applications-page";
 import { loadInstalledContext, requestDependencies } from "./application-page/installed-context";
 
 /**
@@ -165,23 +166,19 @@ export const readApplicationReleaseStanding = async (
   scope: Address &
     Readonly<{ organizationId: OrganizationId; applicationRootId: ApplicationRootId }>,
 ): Promise<ApplicationReleaseStanding> => {
-  const appStore = await humanOrganizationRequests().run(
-    session,
-    { organizationId: scope.organizationId },
-    (transaction) => readCurrentOrganizationAppStoreAddressAfterAuthorization(transaction),
-  );
+  // The request's one App Store read: Studio's frame reads the same answer, so a read that failed
+  // was logged once, by the runner, and an address that is not set is the configuration state the
+  // Studio page shows (no fault, no line).
+  const appStore = await loadOrganizationAppStoreAddress(session, scope.organizationId);
   const appStoreHref =
-    appStore.kind === "available" && appStore.value !== null && appStore.value !== "invalid"
+    appStore.kind === "available"
       ? appStoreApplicationHref(
           scope.tenantShortName,
           scope.organizationShortName,
-          appStore.value,
+          appStore.key,
           scope.applicationRootId,
         )
       : undefined;
-  // An answer that is not available was logged by the request runner; a missing address is ours.
-  if (appStoreHref === undefined && appStore.kind === "available")
-    console.error(`[release-standing] App Store address ${appStore.value ?? "not set"}`);
   const origin = await humanOrganizationRequests().run(
     session,
     { organizationId: scope.organizationId },
@@ -193,8 +190,7 @@ export const readApplicationReleaseStanding = async (
     return { kind: "unknown" };
   }
   if (origin.value === "platform_system_application") {
-    if (appStore.kind !== "available" || appStore.value === null || appStore.value === "invalid")
-      return { kind: "unknown" };
+    if (appStore.kind !== "available") return { kind: "unknown" };
     const applications = await loadPermittedApplicationsAtAddress(
       session,
       scope.tenantShortName,
@@ -202,7 +198,7 @@ export const readApplicationReleaseStanding = async (
     );
     const store =
       applications.kind === "available"
-        ? applications.applications.find((application) => application.key === appStore.value)
+        ? applications.applications.find((application) => application.key === appStore.key)
         : undefined;
     if (store === undefined) {
       // A read that could not be made was logged where it failed; a listing without the store is ours.
@@ -263,7 +259,7 @@ export const readApplicationReleaseStanding = async (
     const systemStoreHref = appStoreApplicationHref(
       scope.tenantShortName,
       scope.organizationShortName,
-      appStore.value,
+      appStore.key,
       scope.applicationRootId,
     );
     if (installedVersion !== version)

@@ -23,10 +23,7 @@ import { applicationPageContinuationFromAddress } from "../../../../auth/_lib/si
 import { pageSubjectParameter } from "../../../../_lib/application-page/placement-helpers";
 import { continueSessionOrEnd } from "../../../../auth/_lib/session-redirect";
 import { resolveIdentitySessionWithEmail } from "../../../../auth/_lib/session-server";
-import {
-  applicationPageAddressPath as addressPath,
-  organizationAddressPath as launcherPath,
-} from "../../../../_lib/address-paths";
+import { applicationPageAddressPath as addressPath } from "../../../../_lib/address-paths";
 import { resolveApplicationAddress } from "../../../../_lib/application-address";
 import { loadApplicationPage } from "../../../../_lib/application-page";
 import { runtimePreviewOf } from "@vortex/platform/server";
@@ -69,21 +66,6 @@ async function readApplicationAddressPage({ params, searchParams }: ApplicationA
   );
   const { resolution, email } = await resolveIdentitySessionWithEmail();
   const identity = await continueSessionOrEnd(resolution, continuation);
-  // A read that cannot be made right now (an overloaded or stopped request) is retried at this same
-  // address, so a transient failure never sends the person to another application.
-  const query = new URLSearchParams(
-    Object.entries(parameters).flatMap(([key, value]) =>
-      (Array.isArray(value) ? value : value === undefined ? [] : [value]).map(
-        (entry) => [key, entry] as [string, string],
-      ),
-    ),
-  ).toString();
-  const retryHref = `${
-    pageSegments[0] === undefined
-      ? `${launcherPath(tenantShortName, organizationShortName)}/${encodeURIComponent(applicationKey)}`
-      : addressPath(tenantShortName, organizationShortName, applicationKey, pageSegments[0])
-  }${query === "" ? "" : `?${query}`}`;
-
   if (identity.kind === "temporarily_unavailable")
     return (
       <BarePage>
@@ -95,10 +77,7 @@ async function readApplicationAddressPage({ params, searchParams }: ApplicationA
   const context = { session: identity.session, email, tenantShortName, organizationShortName };
   const temporarilyUnavailable = (
     <BarePage>
-      <OrganizationAddressState
-        context={context}
-        state={{ kind: "temporarily_unavailable", retryHref }}
-      />
+      <AddressTemporarilyUnavailable cause="read" />
     </BarePage>
   );
   if (pageSegments.length > 1)

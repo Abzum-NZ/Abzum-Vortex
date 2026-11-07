@@ -74,7 +74,6 @@ import {
   createDatabaseDefinitionPublicationService,
   fingerprintCanonicalValue,
   DefinitionCompilationError,
-  readCurrentOrganizationThemeAfterAuthorization,
 } from "@vortex/platform/server";
 import { installedReleaseCatalogue } from "./definition-catalogue";
 import type {
@@ -84,6 +83,7 @@ import type {
 } from "../studio/_lib/studio-data-model";
 import { resolveIdentitySession } from "../auth/_lib/session-server";
 import { humanOrganizationRequests } from "./server-composition";
+import { loadOrganizationTheme } from "./organization-theme";
 import { platformPermissionSource } from "./platform-permission-source";
 import { studioCanvasFramesFor, type StudioApplicationCanvasFrames } from "./studio-canvas-frames";
 
@@ -525,6 +525,19 @@ export async function loadStudioApplicationDraft(
           ? { kind: "temporarily_unavailable", reason: "session_unavailable" }
           : { kind: "refused", reason: "session_ended" },
       );
+    // The canvas draws the application as it runs: the draft's theme through the organisation's.
+    // That is the request's one organisation theme read (the document root reads it too), so a read
+    // that fails is logged once, there, and answered here in the words the request runner's are.
+    const organizationTheme = requests.some(
+      (request) => request.kind === "canvas" || request.kind === "theme",
+    )
+      ? await loadOrganizationTheme(resolved.session, organization.data)
+      : undefined;
+    if (organizationTheme !== undefined && organizationTheme.kind !== "available")
+      return organizationTheme.kind === "temporarily_unavailable"
+        ? { kind: "temporarily_unavailable", reason: "request_failed" }
+        : { kind: "refused", reason: "organization_unavailable" };
+    const organizationThemeSelection = organizationTheme?.theme.selection;
     const result = await humanOrganizationRequests().runChangeWithRefusal(
       resolved.session,
       { organizationId: organization.data },
@@ -652,16 +665,12 @@ export async function loadStudioApplicationDraft(
               compositionPolicy: IMMUTABLE_PLATFORM_BLOCK_CATALOGUE.compositionPolicy,
               releases: [],
             };
-        // The canvas draws the application as it runs: the draft's theme through the organisation's.
-        const organizationTheme = canvas
-          ? await readCurrentOrganizationThemeAfterAuthorization(transaction)
-          : undefined;
         const resourcesOf = (request: StudioViewRequest): StudioViewResources => ({
           request,
           // The Theme tab marks the settings the organisation theme decides where the application chose none.
           themeOptions:
             request.kind === "theme"
-              ? { ...studioThemeOptions, organization: organizationTheme?.selection ?? {} }
+              ? { ...studioThemeOptions, organization: organizationThemeSelection ?? {} }
               : null,
           fieldInputControlReleases: canvasOf(request) ? FIELD_INPUT_CONTROL_RELEASES : null,
           platformThemeTokens: canvasOf(request) ? (themeRelease?.tokens ?? null) : null,
@@ -715,7 +724,7 @@ export async function loadStudioApplicationDraft(
                     draft.source.body.pages,
                     compiled.compilation.canonical.content,
                     request.pageAlias,
-                    organizationTheme?.selection,
+                    organizationThemeSelection,
                   )
                 : null,
             );
