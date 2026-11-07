@@ -96,7 +96,6 @@ export default async function StudioApplicationPage({
     return <StudioUnavailable subject="Application draft" result={session} />;
   const initial = await loadStudioApplicationDraft(organizationId, applicationRootId);
   if (initial.kind !== "available")
-<<<<<<< HEAD
     return (
       <StudioUnavailable
         subject="Application draft"
@@ -104,14 +103,7 @@ export default async function StudioApplicationPage({
         organizationId={organizationId}
       />
     );
-  const request = studioViewRequest(tab ?? "structure", null, initial.draft.source);
-||||||| 8634f1a72
-    return <StudioUnavailable subject="Application draft" result={initial} />;
-  const request = studioViewRequest(tab ?? "structure", null, initial.draft.source);
-=======
-    return <StudioUnavailable subject="Application draft" result={initial} />;
   const request = studioViewRequest(tab ?? "structure", null, initial.draft.source, page);
->>>>>>> origin/main
   const result =
     request.kind === "source"
       ? initial
