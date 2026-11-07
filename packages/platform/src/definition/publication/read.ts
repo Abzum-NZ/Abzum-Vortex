@@ -395,10 +395,10 @@ const immutableCatalogues = new WeakMap<
 >();
 
 /**
- * Creates the read-only publication catalogue used until durable platform-catalogue storage exists.
- * Connection releases are compiled from the governed source contract; platform block and theme
- * releases are the current Application composition catalogue, each represented by its exact
- * immutable content fingerprint.
+ * Creates the read-only publication catalogue. The catalogue is code: a change to its content is
+ * applied by the platform refresh, which re-releases what pins it. Connection releases are
+ * compiled from the governed source contract; platform block and theme releases are the current
+ * Application composition catalogue, each represented by its exact immutable content fingerprint.
  */
 export const createImmutableDefinitionPublicationCatalogue = (
   input: ImmutableDefinitionPublicationCatalogueDefinition,

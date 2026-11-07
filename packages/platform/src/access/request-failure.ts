@@ -60,7 +60,6 @@ const definitionErrorClasses: ReadonlyMap<string, RequestFailureClass> = new Map
   ["DEFINITION_NO_CHANGE", refusal()],
   ["DEFINITION_CONTEXT_REFUSED", refusal()],
   ["DEFINITION_DRAFT_STALE_OR_MISSING", refusal()],
-  ["DEFINITION_DEPENDENCY_SUPERSEDED", refusal()],
   ["RECORD_STORAGE_INCOMPATIBLE", refusal()],
   ["APPLICATION_INSTALLATION_STORAGE_INCOMPATIBLE", refusal()],
   ["APPLICATION_INSTALLATION_PERMISSION_REFUSED", refusal()],
@@ -94,7 +93,7 @@ const builderAuthorityClasses: Readonly<
 const installationProblemClass = (problem: InstallationProblem["problem"]): RequestFailureClass => {
   if (problem.kind === "authentication_required") return refusal("recent_authentication_required");
   if (problem.kind === "multi_factor_required") return refusal("multi_factor_required");
-  // A named state (republish required, not installed, storage incompatible, ...) is an answer.
+  // A named state (not installed, storage incompatible, ...) is an answer.
   if (problem.unavailableReason !== undefined || problem.kind === "refused") return refusal();
   return problem.kind === "conflict" ? retryable("temporarily unavailable") : fault();
 };
