@@ -85,7 +85,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     );
     if (address.kind === "temporarily_unavailable")
       return privateResponse({ kind: "temporarily_unavailable" }, 503);
-    if (address.kind !== "application_page") return refusedResponse(`address_${address.kind}`);
+    // The address read logged why it answered no page, once.
+    if (address.kind !== "application_page")
+      return privateResponse({ kind: "refused", code: `address_${address.kind}` }, 404);
 
     const result = await loadFieldOptionsPage(identity.session, address, {
       placementId: body.placementId,

@@ -79,12 +79,11 @@ import { identityRetiredFailure } from "../identity-retired";
 import {
   DefinitionError,
   classifyDatabaseError,
-  databaseErrorCode,
   unexpectedDefinitionFailure,
 } from "../definition-error";
 import { classifyRequestFailure, logClassifiedFailure } from "../../access/request-failure";
 import { markRequestFailureLogged, requestFailureLogged } from "../../access/request-failure-mark";
-import { describeFailure } from "../../catalogue/runtime-primitives";
+import { databaseCode, describeFailure } from "../../catalogue/runtime-primitives";
 
 const safeRevisionSchema = z.preprocess(
   (value) => (typeof value === "string" && /^\d+$/.test(value) ? Number(value) : value),
@@ -1322,7 +1321,7 @@ const safeRepositoryOperation = async <Result>(
   } catch (error) {
     if (error instanceof DefinitionError) throw error;
     // A stale sign-in is the access model answering, not a storage fault.
-    if (databaseErrorCode(error) === "V3150") throw error;
+    if (databaseCode(error) === "V3150") throw error;
     const retired = identityRetiredFailure(error, source);
     if (retired !== undefined) throw retired;
     switch (classifyDatabaseError(error)) {

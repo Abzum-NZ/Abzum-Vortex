@@ -8,8 +8,7 @@ import {
 } from "../access/identity-access";
 import type { CorrelationId } from "../catalogue/common";
 import type { RequestDatabaseTransaction } from "../db/request-transaction";
-import { describeFailure } from "../catalogue/runtime-primitives";
-import { databaseErrorCode } from "../definition/definition-error";
+import { databaseCode, describeFailure } from "../catalogue/runtime-primitives";
 import {
   IdentityVerificationError,
   type IdentityVerificationRefusalCode,
@@ -27,7 +26,7 @@ const isTransientVerification = (error: unknown): boolean =>
   error.refusalCode === "vortex.identity.authority_unavailable";
 
 const isTransientRead = (error: unknown): boolean => {
-  const code = databaseErrorCode(
+  const code = databaseCode(
     error instanceof Error && error.cause !== undefined ? error.cause : error,
   );
   return (

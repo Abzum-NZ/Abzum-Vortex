@@ -61,12 +61,8 @@ export async function resolveApplicationPagePathAction(
     applicationKey,
     pageKey,
   );
-  if (addressed.kind !== "application_page") {
-    // A fault of the address read was logged once where it happened.
-    if (addressed.kind !== "temporarily_unavailable")
-      logRefusal("application-frame", "navigate target", `address_${addressed.kind}`);
-    return undefined;
-  }
+  // Every answer that is not a page was logged once where it was given.
+  if (addressed.kind !== "application_page") return undefined;
   return applicationPageAddressPath(
     tenantShortName,
     organizationShortName,
