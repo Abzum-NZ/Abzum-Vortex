@@ -5,6 +5,7 @@ import {
   organizationThemeFullSelection,
 } from "@vortex/platform/schema";
 import { readOrganizationThemeChangePermittedAfterAuthorization } from "@vortex/platform/server";
+import { loadStudioFrameContext } from "../../_lib/studio-frame";
 import { continueStudioSession } from "../../_lib/studio-session";
 import { studioThemeOptions } from "../../_lib/studio-theme-catalogue";
 import { StudioUnavailable } from "../../_components/studio-unavailable";
@@ -39,6 +40,16 @@ export default async function StudioOrganizationThemePage({
   }
   const entry = launcher.entries.find((candidate) => candidate.organizationId === organizationId);
   if (entry === undefined) notFound();
+  // A person without Studio gets Studio's refusal here too, before any theme is read.
+  const studio = await loadStudioFrameContext(organizationId);
+  if (studio.kind !== "available")
+    return (
+      <StudioUnavailable
+        subject="The organisation theme"
+        result={studio}
+        organizationId={organizationId}
+      />
+    );
   // The theme is the request's one organisation-theme read, shared with the document root; a read
   // that fails was logged once by the request runner, so nothing is logged again here.
   const themeRead = await loadOrganizationTheme(resolved.session, entry.organizationId);
