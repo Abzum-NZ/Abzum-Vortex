@@ -252,7 +252,7 @@ export const editLayoutOutlet = (
       }
   } catch (error) {
     if (!(error instanceof StoredCompositionRefusal)) throw error;
-    console.error(
+    console.info(
       `[studio] layout outlet refused part=${error.location.join(".")}: ${error.reason}`,
     );
     return refuse(
