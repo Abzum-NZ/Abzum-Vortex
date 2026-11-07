@@ -36,6 +36,14 @@ export default async function StudioOrganizationPage({
     tenantShortName: entry.tenantShortName,
     organizationShortName: entry.organizationShortName,
   });
-  if (href === undefined) notFound();
+  // No App Store address (or one that could not be read; the read logged that): never a missing page.
+  if (href === undefined)
+    return (
+      <UnavailableState
+        title="Applications could not be opened"
+        sentence="This organisation has no App Store address set, or it could not be read just now. Try again, or ask an organisation administrator to set it in Organisation administration."
+        way={{ kind: "retry" }}
+      />
+    );
   redirect(href);
 }
