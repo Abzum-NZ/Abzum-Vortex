@@ -14,7 +14,8 @@ import type { RecordsTableBatchEditResult } from "../pages/records-table-batch-e
 import type { JsonValue } from "../catalogue/common";
 import { recordIdSchema, recordTypeIdSchema } from "../catalogue/identifiers";
 import { logRefusal } from "../access/request-failure";
-import { describeFailure, isRecord, sameId } from "../catalogue/runtime-primitives";
+import { requestFailureLogged } from "../access/request-failure-mark";
+import { isRecord, sameId } from "../catalogue/runtime-primitives";
 import { walkPageComposition, type PlacementVisitor } from "../pages/placement-walk";
 import {
   flowTaskChildLists,
@@ -207,8 +208,8 @@ export type FlowBindingEndpointResult = (
 const refused: FlowBindingEndpointResult = Object.freeze({ kind: "refused", committedNow: false });
 
 /**
- * Platform faults that carry no cause. Each is one error line in the refusal's shape;
- * `logRefusal` has no fault level for a failure without a cause.
+ * Platform faults that carry no cause (a seam not supplied, a bound flow not planned). Each is one
+ * error line in the refusal's shape; `logRefusal` has no fault level for a failure without a cause.
  */
 const faultCodes: ReadonlySet<string> = new Set([
   "FLOW_INVOKE_RUN_START_UNAVAILABLE",
@@ -220,14 +221,11 @@ const faultCodes: ReadonlySet<string> = new Set([
 /**
  * Logs one flow-binding refusal once, then returns the neutral refusal. An expected refusal is
  * named by its code alone and logged as information; a fault code is an error; a caught failure's
- * cause decides its level.
+ * cause decides its level, and a cause the place that raised it already logged adds no line.
  */
 const refuse = (code: string, cause?: unknown): FlowBindingEndpointResult => {
-  if (faultCodes.has(code))
-    console.error(
-      `[flows] binding invoke refused: code=${code}${cause === undefined ? "" : ` cause=${describeFailure(cause)}`}`,
-    );
-  else logRefusal("flows", "binding invoke", code, cause);
+  if (faultCodes.has(code)) console.error(`[flows] binding invoke refused: code=${code}`);
+  else if (!requestFailureLogged(cause)) logRefusal("flows", "binding invoke", code, cause);
   return refused;
 };
 
@@ -477,8 +475,7 @@ const suppliedInputsRefusal = (candidate: unknown): FlowBindingEndpointResult | 
       ? undefined
       : refuse("FLOW_INVOKE_INPUT_TOO_LARGE");
   } catch {
-    logRefusal("flows", "binding invoke", "FLOW_INVOKE_INPUT_NOT_SERIALISABLE");
-    return refused;
+    return refuse("FLOW_INVOKE_INPUT_NOT_SERIALISABLE");
   }
 };
 
@@ -743,19 +740,23 @@ export const createFlowBindingEndpoint = (dependencies: FlowBindingEndpointDepen
 
         let callerInputs: Readonly<Record<string, unknown>> = request.callerInputs;
         if (binding.event === "form_submit") {
-          const adapted = await dependencies.adaptFormSubmit?.(
+          if (dependencies.adaptFormSubmit === undefined)
+            return refuse("FLOW_INVOKE_FORM_SUBMIT_NOT_ADAPTED");
+          const adapted = await dependencies.adaptFormSubmit(
             binding,
             callerInputs,
             request.subject,
             installation,
           );
           if (adapted === undefined || !isRecord(adapted))
-            return refuse("FLOW_INVOKE_FORM_SUBMIT_NOT_ADAPTED");
+            return refuse("FLOW_INVOKE_FORM_SUBMIT_REFUSED");
           callerInputs = adapted;
         }
         if (binding.event === "batch_edit") {
-          const adapted = await dependencies.adaptBatchEdit?.(binding, callerInputs, installation);
-          if (adapted === undefined) return refuse("FLOW_INVOKE_BATCH_EDIT_NOT_ADAPTED");
+          if (dependencies.adaptBatchEdit === undefined)
+            return refuse("FLOW_INVOKE_BATCH_EDIT_NOT_ADAPTED");
+          const adapted = await dependencies.adaptBatchEdit(binding, callerInputs, installation);
+          if (adapted === undefined) return refuse("FLOW_INVOKE_BATCH_EDIT_REFUSED");
           if (adapted.kind === "cells_refused")
             return { kind: "cells_refused", problems: adapted.problems, committedNow: false };
           callerInputs = adapted.inputs;

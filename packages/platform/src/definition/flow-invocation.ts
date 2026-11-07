@@ -3,9 +3,10 @@ import "server-only";
 
 import { uuidFromText } from "./derived-definition-id";
 import type { IdentitySession, OrganizationSelectionCandidate } from "../access/identity-access";
+import { logRefusal } from "../access/request-failure";
 import type { JsonValue } from "../catalogue/common";
 import { recordIdSchema, type IdentityAuthorityId } from "../catalogue/identifiers";
-import { describeFailure, sameId, isRecord } from "../catalogue/runtime-primitives";
+import { sameId, isRecord } from "../catalogue/runtime-primitives";
 import type { FlowBindingInvocation } from "../workflows/flow-invocation-contracts";
 import type { ApplicationContent } from "./application-contracts";
 import type { ProtectedOperationChannel } from "./application-flow-bindings";
@@ -202,9 +203,9 @@ export type FlowInvocationRequest = Readonly<{
   invocation: FlowBindingInvocation;
 }>;
 
-/** One log line per binding refusal; the page keeps its neutral outcome. */
+/** One information line per expected binding refusal; the page keeps its neutral outcome. */
 const logFlowRefusal = (code: string): void => {
-  console.error(`[flows] invocation refused ${code}`);
+  logRefusal("flows", "invocation", code);
 };
 
 /** A guided control shared by two pages, or a form submit anywhere but the summary form, never starts a flow. */
@@ -563,8 +564,9 @@ export async function invokeInstalledFlow(
         },
         segment,
       );
-    } catch (error) {
-      logFlowRefusal(`BINDING_CARRIED_VALUES_INVALID ${describeFailure(error)}`);
+    } catch {
+      // A token that does not open is the browser's input: the code names the refusal.
+      logFlowRefusal("BINDING_CARRIED_VALUES_INVALID");
       return { kind: "refused", committedNow: false };
     }
     const binding = bindingsWithMessageActions(bindingInstallation.bindings, [
@@ -596,6 +598,7 @@ export async function invokeInstalledFlow(
             (operation) => requests.run(identity.session, selection, operation),
           );
     if (featureRefusal !== undefined) {
+      // The feature refusal's one line, with its reason; this request adds none.
       logRecordsTableRequestRefusal(featureRefusal, "flow_dispatch");
       // A row shown at another revision than the stored one: the person reloads and sees the
       // fresh row, rather than a neutral refusal.
@@ -608,7 +611,6 @@ export async function invokeInstalledFlow(
           installationRevision: bindingContext.applicationReleaseRevision,
           committedNow: false,
         };
-      logFlowRefusal("BINDING_GRID_FEATURE_NOT_PROJECTED");
       return { kind: "refused", committedNow: false };
     }
   }
@@ -684,10 +686,7 @@ export async function invokeInstalledFlow(
         operation: callerInputs.operation,
         rows: callerInputs.rows,
       });
-      if (!request.success) {
-        logFlowRefusal("BINDING_BATCH_EDIT_ROWS_INVALID");
-        return undefined;
-      }
+      if (!request.success) return undefined;
       const prepared = await createRecordsTableBatchEditService({
         ...requestDependencies,
         continuationKey: dependencies.continuationKey,
@@ -698,10 +697,7 @@ export async function invokeInstalledFlow(
         request.data,
       );
       if (prepared.kind === "cells_refused") return prepared;
-      if (prepared.kind !== "ready") {
-        logFlowRefusal(`BINDING_BATCH_EDIT_${prepared.kind.toUpperCase()}`);
-        return undefined;
-      }
+      if (prepared.kind !== "ready") return undefined;
       void installation;
       return {
         kind: "adapted",
