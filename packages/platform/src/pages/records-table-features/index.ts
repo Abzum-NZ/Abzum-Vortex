@@ -7,6 +7,7 @@ import type { RecordsTableFilterField } from "../../definition/application-compo
 import type { ConditionalFormattingProjection } from "../../definition/application-composition/records-table-features/projections/conditional-formatting";
 import type { RecordsTableInlineEditor } from "../../definition/application-composition/records-table-features/projections/inline-edit";
 import type { z } from "zod";
+import { logRefusal } from "../../access/request-failure";
 import type {
   RecordsTableFeatureProjection,
   recordsTableFeatureProjectionSchema,
@@ -70,14 +71,12 @@ export const recordsTableRequestRefusal = (
   reason: string,
 ): RecordsTableRequestRefusal => Object.freeze({ kind: "refused", part, reason });
 
-/** Logs a refused Records table request with its part and cause; the response stays neutral. */
+/** Logs a refused Records table request, an expected refusal, once; the response stays neutral. */
 export const logRecordsTableRequestRefusal = (
   refusal: RecordsTableRequestRefusal,
   where: string,
 ): void => {
-  console.error(
-    `[records-table] request refused where=${where} part=${refusal.part} reason=${refusal.reason}`,
-  );
+  logRefusal("records-table", `request where=${where} part=${refusal.part}`, refusal.reason);
 };
 
 const sameField = (left: string, right: string): boolean =>

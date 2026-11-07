@@ -79,6 +79,17 @@ const databaseCodeClasses: ReadonlyMap<string, RequestFailureClass> = new Map([
   ["V3151", refusal("role_settings_change_required")],
   ["V3152", refusal("multi_factor_required")],
   ["V3153", refusal("role_key_in_use")],
+  // The identity functions' answers: a duplicate, an unavailable steward or scope, a stale
+  // revision, the last manager, an unavailable identity, a reserved short name.
+  ["V3001", refusal()],
+  ["V3002", refusal()],
+  ["V3003", refusal()],
+  ["V3101", refusal()],
+  ["V3102", refusal()],
+  ["V3103", refusal()],
+  ["V3141", refusal()],
+  ["V3143", refusal()],
+  ["V3190", refusal()],
   ["40001", retryable("temporarily unavailable")],
 ]);
 

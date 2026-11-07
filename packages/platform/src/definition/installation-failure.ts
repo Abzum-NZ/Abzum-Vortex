@@ -2,6 +2,7 @@ import "server-only";
 
 import { requestFailureLogged } from "../access/request-failure-mark";
 import { describeFailure } from "../catalogue/runtime-primitives";
+import { classifyRequestFailure } from "../access/request-failure";
 import { InstallationProblem, type InstallationProblemShape } from "./installation-authority";
 import { DefinitionError, classifyDatabaseError } from "./definition-error";
 
@@ -40,16 +41,11 @@ const installationFailureOf = (error: unknown): InstallationProblemShape => {
 
 export const classifyInstallationFailure = (error: unknown): InstallationProblemShape => {
   const problem = installationFailureOf(error);
-  const handled =
-    problem.kind !== "failed" &&
-    (error instanceof InstallationProblem ||
-      error instanceof DefinitionError ||
-      problem.kind === "refused" ||
-      problem.kind === "conflict");
   // The request runner already logged a failure it caught, once: that line is the failure's own.
   if (requestFailureLogged(error)) return problem;
-  const message = `[studio] application installation ${handled ? "refused" : "failed"}: ${describeFailure(error)}`;
-  if (handled) console.info(message);
+  const failure = classifyRequestFailure(error, { addressed: false });
+  const message = `[studio] application installation ${failure.verb}: ${describeFailure(error)}`;
+  if (failure.level === "info") console.info(message);
   else console.error(message);
   return problem;
 };

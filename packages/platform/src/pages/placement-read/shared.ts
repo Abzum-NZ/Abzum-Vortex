@@ -128,6 +128,23 @@ type PlacementFailureReason =
   | "table_formatting_time_zone_unavailable"
   | "table_columns_withheld";
 
+/** The reasons that are a refusal the viewer is answered, not a placement that failed. */
+const placementRefusalReasons: ReadonlySet<PlacementFailureReason> = new Set([
+  "query_binding_refused",
+  "query_binding_withheld",
+  "detail_query_refused",
+  "related_list_refused",
+  "launcher_query_refused",
+  "board_filter_refused",
+  "board_context_refused",
+  "board_query_refused",
+  "table_grouping_refused",
+  "calendar_query_refused",
+  "calendar_arrangement_refused",
+  "summary_query_refused",
+  "table_columns_withheld",
+]);
+
 /**
  * Logs one data placement that could not be loaded, server side only: the application, page and
  * placement identities that are already in the address, and a fixed reason code. Never a message,
@@ -139,17 +156,14 @@ export const logPlacementFailure = (
   reason: PlacementFailureReason,
   detail?: string,
 ): void => {
-  if (reason === "table_columns_withheld") {
-    logRefusal(
-      "page",
-      `data placement application=${address.application.key} page=${address.pageKey} placement=${placementId}${detail === undefined ? "" : ` detail=${detail}`}`,
-      reason,
+  const where = `data placement application=${address.application.key} page=${address.pageKey} placement=${placementId}${detail === undefined ? "" : ` detail=${detail}`}`;
+  // A refusal the viewer is answered is information; any other reason is a placement that could
+  // not be read and is an error.
+  if (placementRefusalReasons.has(reason)) logRefusal("page", where, reason);
+  else
+    console.error(
+      `[page] data placement not loaded: application=${address.application.key} page=${address.pageKey} placement=${placementId} reason=${reason}${detail === undefined ? "" : ` cause=${detail}`}`,
     );
-    return;
-  }
-  console.error(
-    `[page] data placement not loaded: application=${address.application.key} page=${address.pageKey} placement=${placementId} reason=${reason}${detail === undefined ? "" : ` cause=${detail}`}`,
-  );
 };
 
 /**

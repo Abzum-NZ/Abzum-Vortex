@@ -1,12 +1,8 @@
 import "server-only";
 
 import { identitySessionSchema, type IdentitySession } from "../access/identity-access";
-import {
-  databaseCode,
-  databaseTimestamp,
-  databaseRevision,
-  describeFailure,
-} from "../catalogue/runtime-primitives";
+import { markRequestFailureLogged } from "../access/request-failure-mark";
+import { databaseCode, databaseTimestamp, databaseRevision } from "../catalogue/runtime-primitives";
 import {
   createTenantOrganizationCommandSchema,
   createTenantOrganizationResultSchema,
@@ -34,7 +30,7 @@ import {
   type DatabaseRow,
   type RequestDatabaseTransaction,
 } from "../db/request-transaction";
-import { logRefusedOperations } from "./log-refused-operations";
+import { logRefusedOperations, refusedBy } from "./log-refused-operations";
 
 type Runner = <Result>(
   operation: (transaction: RequestDatabaseTransaction) => Promise<Result>,
@@ -68,9 +64,9 @@ type OrganizationCreationRow = DatabaseRow & {
 // A poisoned request-bound transaction is logged once by the request boundary that aborts on it.
 export const transactionPoisonErrorName = "TenantGovernanceTransactionPoisoned";
 const mutationCode = (error: unknown) => {
-  // The database cause is logged where it is mapped to the safe code the caller receives.
-  if (!(error instanceof Error && error.name === transactionPoisonErrorName))
-    console.error(`[identity] tenant governance operation refused: ${describeFailure(error)}`);
+  // The wrapper logs the cause once; the request boundary logs a poisoned transaction itself.
+  if (error instanceof Error && error.name === transactionPoisonErrorName)
+    markRequestFailureLogged(error);
   switch (databaseCode(error)) {
     case "V3001":
       return "duplicate_conflict" as const;
@@ -149,11 +145,14 @@ export const createTenantGovernanceService = (
           organizationCreationResult(rows.length === 1 ? rows[0] : undefined),
         );
       } catch (error) {
-        return {
-          outcome: "refused",
-          operation: "create_tenant_organization",
-          code: organizationMutationCode(error),
-        };
+        return refusedBy(
+          {
+            outcome: "refused",
+            operation: "create_tenant_organization",
+            code: organizationMutationCode(error),
+          },
+          error,
+        );
       }
     },
     async renameOrganization(
@@ -178,11 +177,14 @@ export const createTenantGovernanceService = (
           organizationMutationResult(rows.length === 1 ? rows[0] : undefined),
         );
       } catch (error) {
-        return {
-          outcome: "refused",
-          operation: "rename_tenant_organization",
-          code: organizationMutationCode(error),
-        };
+        return refusedBy(
+          {
+            outcome: "refused",
+            operation: "rename_tenant_organization",
+            code: organizationMutationCode(error),
+          },
+          error,
+        );
       }
     },
     async reparentOrganization(
@@ -207,11 +209,14 @@ export const createTenantGovernanceService = (
           organizationMutationResult(rows.length === 1 ? rows[0] : undefined),
         );
       } catch (error) {
-        return {
-          outcome: "refused",
-          operation: "reparent_tenant_organization",
-          code: organizationMutationCode(error),
-        };
+        return refusedBy(
+          {
+            outcome: "refused",
+            operation: "reparent_tenant_organization",
+            code: organizationMutationCode(error),
+          },
+          error,
+        );
       }
     },
     async suspendOrganization(
@@ -236,11 +241,14 @@ export const createTenantGovernanceService = (
           organizationMutationResult(rows.length === 1 ? rows[0] : undefined),
         );
       } catch (error) {
-        return {
-          outcome: "refused",
-          operation: "suspend_tenant_organization",
-          code: organizationMutationCode(error),
-        };
+        return refusedBy(
+          {
+            outcome: "refused",
+            operation: "suspend_tenant_organization",
+            code: organizationMutationCode(error),
+          },
+          error,
+        );
       }
     },
     async reactivateOrganization(
@@ -265,11 +273,14 @@ export const createTenantGovernanceService = (
           organizationMutationResult(rows.length === 1 ? rows[0] : undefined),
         );
       } catch (error) {
-        return {
-          outcome: "refused",
-          operation: "reactivate_tenant_organization",
-          code: organizationMutationCode(error),
-        };
+        return refusedBy(
+          {
+            outcome: "refused",
+            operation: "reactivate_tenant_organization",
+            code: organizationMutationCode(error),
+          },
+          error,
+        );
       }
     },
   };

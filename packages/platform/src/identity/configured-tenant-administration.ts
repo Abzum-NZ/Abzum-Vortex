@@ -6,12 +6,7 @@ import {
   type BootstrapVortexSuperAdministratorCommand,
   type VortexSuperAdministratorAssignmentMutationResult,
 } from "../access/super-administrator-governance";
-import {
-  databaseCode,
-  databaseTimestamp,
-  databaseRevision,
-  describeFailure,
-} from "../catalogue/runtime-primitives";
+import { databaseCode, databaseTimestamp, databaseRevision } from "../catalogue/runtime-primitives";
 import {
   publishPrivacyNoticeCommandSchema,
   type PublishPrivacyNoticeCommand,
@@ -59,7 +54,7 @@ import {
   type RuntimeTransactionRunner,
 } from "../db/request-transaction";
 import { resolveFileStorageDestination } from "../files/storage-destination";
-import { logRefusedOperations } from "./log-refused-operations";
+import { logRefusedOperations, refusedBy } from "./log-refused-operations";
 
 interface ConfiguredTenantAdministrationDependencies {
   readonly environment?: Readonly<Record<string, string | undefined>>;
@@ -136,7 +131,6 @@ const configuredContext = (
 
 // A refusal code is the safe result; the database cause is logged here, where it is mapped.
 const refusalCode = (error: unknown) => {
-  console.error(`[identity] configured operation refused: ${describeFailure(error)}`);
   switch (databaseCode(error)) {
     case "V3001":
       return "duplicate_conflict" as const;
@@ -158,16 +152,13 @@ const refusalCode = (error: unknown) => {
 };
 const provisionRefusalCode = (error: unknown) => {
   if (databaseCode(error) !== "V3190") return refusalCode(error);
-  console.error(`[identity] configured operation refused: ${describeFailure(error)}`);
   return "reserved_tenant_short_name" as const;
 };
 const lifecycleRefusalCode = (error: unknown) => {
   if (databaseCode(error) !== "V3102") return refusalCode(error);
-  console.error(`[identity] configured operation refused: ${describeFailure(error)}`);
   return "stale_revision" as const;
 };
 const superAdministratorBootstrapCode = (error: unknown) => {
-  console.error(`[identity] configured operation refused: ${describeFailure(error)}`);
   switch (databaseCode(error)) {
     case "V3141":
       return "identity_unavailable" as const;
@@ -253,11 +244,14 @@ export const createConfiguredTenantAdministrationService = (
           acceptedAt: databaseTimestamp(row.accepted_at),
         });
       } catch (error) {
-        return {
-          outcome: "refused",
-          operation: "bootstrap_vortex_super_administrator",
-          code: superAdministratorBootstrapCode(error),
-        };
+        return refusedBy(
+          {
+            outcome: "refused",
+            operation: "bootstrap_vortex_super_administrator",
+            code: superAdministratorBootstrapCode(error),
+          },
+          error,
+        );
       }
     },
 
@@ -294,13 +288,15 @@ export const createConfiguredTenantAdministrationService = (
           };
         return { outcome: "published", noticeVersionId: row.notice_version_id };
       } catch (error) {
-        console.error(`[identity] privacy notice publication refused: ${describeFailure(error)}`);
-        return {
-          outcome: "refused",
-          operation: "publish_privacy_notice",
-          code:
-            databaseCode(error) === "42501" ? "publisher_not_permitted" : "operation_unavailable",
-        };
+        return refusedBy(
+          {
+            outcome: "refused",
+            operation: "publish_privacy_notice",
+            code:
+              databaseCode(error) === "42501" ? "publisher_not_permitted" : "operation_unavailable",
+          },
+          error,
+        );
       }
     },
 
@@ -375,11 +371,14 @@ export const createConfiguredTenantAdministrationService = (
           return parsed.data;
         });
       } catch (error) {
-        return {
-          outcome: "refused",
-          operation: "provision_tenant",
-          code: provisionRefusalCode(error),
-        };
+        return refusedBy(
+          {
+            outcome: "refused",
+            operation: "provision_tenant",
+            code: provisionRefusalCode(error),
+          },
+          error,
+        );
       }
     },
 
@@ -423,7 +422,10 @@ export const createConfiguredTenantAdministrationService = (
           return parsed.data;
         });
       } catch (error) {
-        return { outcome: "refused", operation: "adopt_tenant", code: refusalCode(error) };
+        return refusedBy(
+          { outcome: "refused", operation: "adopt_tenant", code: refusalCode(error) },
+          error,
+        );
       }
     },
 
@@ -468,7 +470,10 @@ export const createConfiguredTenantAdministrationService = (
           return parsed.data;
         });
       } catch (error) {
-        return { outcome: "refused", operation: "adopt_organization", code: refusalCode(error) };
+        return refusedBy(
+          { outcome: "refused", operation: "adopt_organization", code: refusalCode(error) },
+          error,
+        );
       }
     },
 
@@ -496,11 +501,14 @@ export const createConfiguredTenantAdministrationService = (
         );
         return suspendClusterIdentityResultSchema.parse(lifecycleResult(one(rows)));
       } catch (error) {
-        return {
-          outcome: "refused",
-          operation: "suspend_cluster_identity",
-          code: lifecycleRefusalCode(error),
-        };
+        return refusedBy(
+          {
+            outcome: "refused",
+            operation: "suspend_cluster_identity",
+            code: lifecycleRefusalCode(error),
+          },
+          error,
+        );
       }
     },
 
@@ -528,11 +536,14 @@ export const createConfiguredTenantAdministrationService = (
         );
         return reactivateClusterIdentityResultSchema.parse(lifecycleResult(one(rows)));
       } catch (error) {
-        return {
-          outcome: "refused",
-          operation: "reactivate_cluster_identity",
-          code: lifecycleRefusalCode(error),
-        };
+        return refusedBy(
+          {
+            outcome: "refused",
+            operation: "reactivate_cluster_identity",
+            code: lifecycleRefusalCode(error),
+          },
+          error,
+        );
       }
     },
 
@@ -556,11 +567,14 @@ export const createConfiguredTenantAdministrationService = (
         );
         return closeClusterIdentityResultSchema.parse(lifecycleResult(one(rows)));
       } catch (error) {
-        return {
-          outcome: "refused",
-          operation: "close_cluster_identity",
-          code: lifecycleRefusalCode(error),
-        };
+        return refusedBy(
+          {
+            outcome: "refused",
+            operation: "close_cluster_identity",
+            code: lifecycleRefusalCode(error),
+          },
+          error,
+        );
       }
     },
 
@@ -582,11 +596,14 @@ export const createConfiguredTenantAdministrationService = (
         );
         return suspendTenantResultSchema.parse(tenantLifecycleResult(one(rows)));
       } catch (error) {
-        return {
-          outcome: "refused",
-          operation: "suspend_tenant",
-          code: lifecycleRefusalCode(error),
-        };
+        return refusedBy(
+          {
+            outcome: "refused",
+            operation: "suspend_tenant",
+            code: lifecycleRefusalCode(error),
+          },
+          error,
+        );
       }
     },
 
@@ -608,11 +625,14 @@ export const createConfiguredTenantAdministrationService = (
         );
         return reactivateTenantResultSchema.parse(tenantLifecycleResult(one(rows)));
       } catch (error) {
-        return {
-          outcome: "refused",
-          operation: "reactivate_tenant",
-          code: lifecycleRefusalCode(error),
-        };
+        return refusedBy(
+          {
+            outcome: "refused",
+            operation: "reactivate_tenant",
+            code: lifecycleRefusalCode(error),
+          },
+          error,
+        );
       }
     },
   };
