@@ -3,7 +3,7 @@ import "server-only";
 import { randomUUID } from "node:crypto";
 import type { IdentitySession } from "../../access/identity-access";
 import type { JsonValue } from "../../catalogue/common";
-import { sameId } from "../../catalogue/runtime-primitives";
+import { describeFailure, sameId } from "../../catalogue/runtime-primitives";
 import { recordsTableColumnWidth } from "../../definition/application-composition/records-display";
 import {
   recordsTableExportableTypes,
@@ -21,6 +21,9 @@ import {
   createHumanOrganizationRequestService,
   type HumanOrganizationRequestDependencies,
 } from "../../access/human-organization-request";
+import { logClassifiedFailure, logRefusal } from "../../access/request-failure";
+import { markRequestFailureLogged, requestFailureLogged } from "../../access/request-failure-mark";
+import { ownFailureClass, refusal } from "../../access/request-failure-table";
 import { readViewerPresentationAfterAuthorization } from "../../access/organization-runtime-settings-administration";
 import type { QueryContinuationKey } from "../../queries/continuation-token";
 import {
@@ -59,7 +62,6 @@ import {
   type RecordsTablePlacement,
 } from "./placement";
 import {
-  logRecordsTableQueryRefusal,
   logRecordsTableRequestRefusal,
   recordsTableRequestRefusal,
   type RecordsTableRequestRefusal,
@@ -100,6 +102,13 @@ const exportFailure = (reason: string, cause?: unknown): Error =>
     part: recordsTableExportFeature.key,
     reason,
   });
+
+/** An export that stopped on an answer the page read or the query already logged: no second line. */
+const exportLogged = (reason: string): Error => markRequestFailureLogged(exportFailure(reason));
+
+/** An export that stopped on an expected refusal (revoked permission, changed fields): information. */
+const exportRefused = (reason: string): Error =>
+  Object.assign(exportFailure(reason), { [ownFailureClass]: () => refusal() });
 
 const failureReason = (cause: unknown): string =>
   cause instanceof Error &&
@@ -247,8 +256,7 @@ export const createRecordsTableExportService = (dependencies: RecordsTableExport
         )
       `,
     );
-    if (result.kind !== "available")
-      console.error(`[records-export] activity not recorded action=${action} kind=${result.kind}`);
+    // The request runner logged an answer that is not available, once.
     return result.kind === "available";
   };
 
@@ -506,17 +514,8 @@ export const createRecordsTableExportService = (dependencies: RecordsTableExport
             pageSize: batch.length,
             exactRecordIds: batch,
           });
-          // The query service logged an answer that is not available; its own refusal is logged here.
-          if (read.kind !== "available") return unavailable;
-          if (read.value.outcome === "refused") {
-            logRecordsTableQueryRefusal(
-              "export",
-              "exclusion_refused",
-              read.value.reasonCode,
-              "export",
-            );
-            return unavailable;
-          }
+          // The query service logged an answer that is not available and a refused read, once.
+          if (read.kind !== "available" || read.value.outcome === "refused") return unavailable;
           stillExcluded += read.value.rows.length;
         }
         expected = Math.max(0, counted.count - stillExcluded);
@@ -655,8 +654,12 @@ export const createRecordsTableExportService = (dependencies: RecordsTableExport
             return { kind: "read" as const, rows, next, scanLimited };
           }),
         );
-        if (page.kind !== "available") throw exportFailure(`access_${page.kind}`);
-        if (page.value.kind === "denied") throw exportFailure(page.value.reason);
+        // The runner logged an answer that is not available, and the query a refused read.
+        if (page.kind !== "available") throw exportLogged(`access_${page.kind}`);
+        if (page.value.kind === "denied")
+          throw page.value.reason.startsWith("read_")
+            ? exportLogged(page.value.reason)
+            : exportRefused(page.value.reason);
         return page.value;
       };
 
@@ -737,11 +740,17 @@ export const createRecordsTableExportService = (dependencies: RecordsTableExport
         });
       } catch (cause) {
         const reason = failureReason(cause);
-        console.error(`[records-export] not started reason=${reason}`, cause);
         if (signal.aborted) {
+          logRefusal("records-export", "start", "cancelled");
           await audit(session, address, recordTypeId, columnIds, "cancelled");
           return unavailable;
         }
+        // The one line of a start that failed, unless the page read or the query logged it.
+        if (!requestFailureLogged(cause))
+          logClassifiedFailure(
+            `[records-export] not started reason=${reason} cause=${describeFailure(cause)}`,
+            cause,
+          );
         await audit(session, address, recordTypeId, columnIds, "incomplete");
         return reason === "row_limit_exceeded"
           ? { kind: "refused", reason: "too_many", limit: maxRows }
@@ -769,7 +778,10 @@ export const createRecordsTableExportService = (dependencies: RecordsTableExport
           );
         })
         .catch((cause: unknown) => {
-          console.error("[records-export] outcome not recorded", cause);
+          logClassifiedFailure(
+            `[records-export] outcome not recorded cause=${describeFailure(cause)}`,
+            cause,
+          );
         });
       return {
         kind: "ready",

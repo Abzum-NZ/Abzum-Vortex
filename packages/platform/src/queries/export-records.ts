@@ -2,6 +2,10 @@ import "server-only";
 
 import { PassThrough, type Transform } from "node:stream";
 import { Temporal } from "@js-temporal/polyfill";
+import { logClassifiedFailure } from "../access/request-failure";
+import { requestFailureLogged } from "../access/request-failure-mark";
+import { ownFailureClass, refusal } from "../access/request-failure-table";
+import { describeFailure } from "../catalogue/runtime-primitives";
 import { compareExactDecimals, parseExactDecimal } from "../records/exact-decimal";
 import {
   csvCellText,
@@ -358,6 +362,19 @@ const exportError = (reason: string, cause?: unknown): Error =>
     reason,
   });
 
+/**
+ * The one line of a failure the transport does not hand to its caller (the stream, the encoder and
+ * the source after the response started), at the level its class decides, so an abort is
+ * information. A failure the page read or the query already logged adds none.
+ */
+const logExportFailure = (what: string, reason: string, cause: unknown): void => {
+  if (requestFailureLogged(cause)) return;
+  logClassifiedFailure(
+    `[records-export] ${what} reason=${reason} cause=${describeFailure(cause)}`,
+    cause,
+  );
+};
+
 const failureReason = (cause: unknown, otherwise: string): string =>
   cause instanceof Error &&
   "part" in cause &&
@@ -415,11 +432,7 @@ export const prepareRecordsExport = async (
     try {
       request.format.abort();
     } catch (cause) {
-      console.error("[records-export] encoder close failed", {
-        part: "export",
-        reason: "encoder_close_failed",
-        cause,
-      });
+      logExportFailure("encoder close failed", "encoder_close_failed", cause);
     }
   };
   let iterator: AsyncIterator<RecordsExportPage> | undefined;
@@ -427,18 +440,10 @@ export const prepareRecordsExport = async (
     // return() is best effort: cancellation never waits for an in-flight database request.
     try {
       void iterator?.return?.().catch((cause: unknown) => {
-        console.error("[records-export] source close failed", {
-          part: "export",
-          reason: "source_close_failed",
-          cause,
-        });
+        logExportFailure("source close failed", "source_close_failed", cause);
       });
     } catch (cause) {
-      console.error("[records-export] source close failed", {
-        part: "export",
-        reason: "source_close_failed",
-        cause,
-      });
+      logExportFailure("source close failed", "source_close_failed", cause);
     }
   };
   const onAbort = (): void => {
@@ -457,6 +462,8 @@ export const prepareRecordsExport = async (
     if (page.length > 200) throw exportError("page_limit_exceeded");
     if (exported + page.length > request.maxRows)
       throw Object.assign(exportError("row_limit_exceeded"), {
+        // The row limit is an answer the person fixes by narrowing the view: information.
+        [ownFailureClass]: () => refusal(),
         message: `Too many records to export. Narrow the view to at most ${request.maxRows.toLocaleString("en")} records.`,
       });
     for (const row of page) {
@@ -497,12 +504,8 @@ export const prepareRecordsExport = async (
     throwIfAborted();
   } catch (cause) {
     if (!abort.signal.aborted) {
+      // The caller logs the failure it receives, once.
       const reason = failureReason(cause, "preparation_failed");
-      console.error("[records-export] preparation failed", {
-        part: "export",
-        reason,
-        cause,
-      });
       abort.abort();
       settle({ kind: "incomplete", exported, reason });
       abortFormat();
@@ -548,11 +551,7 @@ export const prepareRecordsExport = async (
         } catch (cause) {
           if (abort.signal.aborted) return;
           const reason = failureReason(cause, "stream_failed");
-          console.error("[records-export] stream failed", {
-            part: "export",
-            reason,
-            cause,
-          });
+          logExportFailure("stream failed", reason, cause);
           abort.abort();
           settle({ kind: "incomplete", exported, reason });
           abortFormat();
