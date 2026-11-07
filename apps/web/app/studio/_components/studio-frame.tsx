@@ -595,6 +595,25 @@ export function StudioFrame<Key extends string>({
     madeHosts.current ??= { panel: create(), inspector: create() };
     setHosts(madeHosts.current);
   }, []);
+  // Only a selection the person makes opens the narrow inspector: the page the address names is
+  // selected as the editor loads, and that must not cover it. Held like the selection, so a frame
+  // that is drawn again keeps knowing the person has begun.
+  const begun = `begun:${applicationName}`;
+  useEffect(() => {
+    // A frame for an application not held before is the editor opening, whatever was clicked to get here.
+    if (!heldWorkspace.has(`selection:${applicationName}`)) heldWorkspace.delete(begun);
+    const begin = () => {
+      heldWorkspace.set(begun, true);
+      window.removeEventListener("pointerdown", begin, true);
+      window.removeEventListener("keydown", begin, true);
+    };
+    window.addEventListener("pointerdown", begin, true);
+    window.addEventListener("keydown", begin, true);
+    return () => {
+      window.removeEventListener("pointerdown", begin, true);
+      window.removeEventListener("keydown", begin, true);
+    };
+  }, [begun, applicationName]);
   useEffect(() => {
     // Held with the workspace, per application: choosing a page or layout can open the canvas editor
     // again, and the reopened frame still knows the selection it drew before, so a new one opens its
@@ -605,6 +624,7 @@ export function StudioFrame<Key extends string>({
       hasInspector &&
       inspectorEditsSelection &&
       previousSelection !== selectionKey &&
+      heldWorkspace.get(begun) === true &&
       !dockInspector &&
       !focused
     ) {
@@ -619,6 +639,7 @@ export function StudioFrame<Key extends string>({
     heldWorkspace.set(held, selectionKey);
   }, [
     applicationName,
+    begun,
     selectionKey,
     inspectorEditsSelection,
     dockInspector,

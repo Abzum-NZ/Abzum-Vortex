@@ -1,5 +1,5 @@
 "use client";
-import { useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   Combobox,
   ComboboxCollection,
@@ -66,13 +66,16 @@ export function StudioReferencePicker({
   "aria-describedby"?: string | undefined;
   "aria-invalid"?: boolean | undefined;
 }>) {
-  // The trigger is named for the field it opens, as the link input names its own.
-  const choicesName =
-    accessibility["aria-label"] === undefined
-      ? "Show choices"
-      : `Show choices for ${accessibility["aria-label"]}`;
+  // The trigger is named for the field it opens (its label or aria-label), as the link input names its own.
+  const [fieldName, setFieldName] = useState<string>();
   const [open, setOpen] = useState(false);
   const input = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    setFieldName(
+      accessibility["aria-label"] ?? input.current?.labels?.[0]?.textContent?.trim() ?? undefined,
+    );
+  }, [accessibility]);
+  const choicesName = fieldName === undefined ? "Show choices" : `Show choices for ${fieldName}`;
   const [query, setSearchText] = useState("");
   const setQuery = (text: string): void => {
     setSearchText(text);
