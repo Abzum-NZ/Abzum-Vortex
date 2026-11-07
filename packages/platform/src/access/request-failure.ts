@@ -79,8 +79,10 @@ const databaseCodeClasses: ReadonlyMap<string, RequestFailureClass> = new Map([
   ["V3151", refusal("role_settings_change_required")],
   ["V3152", refusal("multi_factor_required")],
   ["V3153", refusal("role_key_in_use")],
-  // The identity functions' answers: a duplicate, an unavailable steward or scope, a stale
-  // revision, the last manager, an unavailable identity, a reserved short name.
+  // The identity and command-receipt answers: a duplicate or a command id reused under another
+  // scope or kind (V3001, every scoped command receipt), an unavailable steward or scope, a missing
+  // tenant capability, a stale revision, the last manager, an unavailable identity, a reserved
+  // short name. Retrying the same command cannot succeed, so none is "try again".
   ["V3001", refusal()],
   ["V3002", refusal()],
   ["V3003", refusal()],

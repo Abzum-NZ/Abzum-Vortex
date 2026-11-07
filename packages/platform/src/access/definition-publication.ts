@@ -38,7 +38,7 @@ import {
 import type { PlatformPermissionSource } from "./platform-permissions";
 import type { createHumanOrganizationRequestService } from "./human-organization-request";
 import { classifyRequestFailure } from "./request-failure";
-import { markRequestFailureLogged } from "./request-failure-mark";
+import { markRequestFailureLogged, requestFailureLogged } from "./request-failure-mark";
 import { DefinitionCompilationError } from "../definition/compilation-error";
 import { DefinitionError } from "../definition/definition-error";
 import { isVersionImpactRefusal } from "../definition/version-impact-error";
@@ -250,6 +250,9 @@ const causeSummary = (error: unknown): string => {
  */
 const safeFailure = (error: unknown, operation: string): Failure => {
   const failure = classifyFailure(error);
+  // The place that raised it logged it once already (the publication repository, a compiler
+  // refusal): no second line.
+  if (requestFailureLogged(error)) return failure;
   const line = `[publication] ${operation} ${failure.kind} reason=${failure.reason ?? "none"} cause=${causeSummary(error)}`;
   // Only an unexpected failure is classified by its cause: a database refusal or a race is still
   // information, any other cause is a platform fault.

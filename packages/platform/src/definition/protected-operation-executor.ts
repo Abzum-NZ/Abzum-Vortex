@@ -557,10 +557,9 @@ const runTenantOrganizationCreation = async (
             outcome: result.code === "invalid_command" ? "validation" : "refused",
             diagnostic: flowRefusalFeedbackSchema.parse({ code: result.code }),
           } as const;
-        if (result.code === "operation_unavailable") {
-          console.error("[protected-operation] create organisation failed: operation_unavailable");
+        // The governance service logged this failure once, with its cause.
+        if (result.code === "operation_unavailable")
           return { kind: "temporarily_unavailable" } as const;
-        }
         return { kind: "unavailable" } as const;
       }
       return {
