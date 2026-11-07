@@ -21,6 +21,8 @@ type ReasonedProps = Readonly<{
  * control: it is `aria-disabled` (a disabled button gets no hover and no focus, so it could not show
  * its reason), it is described by the reason for assistive technology, the reason shows in a tooltip
  * on hover and focus, and the activation is swallowed. One component for every limit at a control.
+ * Given a `tip`, it is also the tooltip of the same control while it is available, so a control
+ * that can become unavailable has one composition and one place in the tree in both states.
  */
 export function Reasoned({
   reason,
