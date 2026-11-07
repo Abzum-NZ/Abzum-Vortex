@@ -176,7 +176,7 @@ export const minimumApplicationSource = (
   }
   const framed = newApplicationStarterFrame(catalogue, parsed.data);
   if (framed.kind === "refused") {
-    console.error("[studio] new application starter frame refused", framed.message);
+    console.error(`[studio] new application starter frame refused: ${framed.message}`);
     return {
       kind: "invalid",
       message: `The application could not be built: ${framed.message}`,

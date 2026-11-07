@@ -31,6 +31,7 @@ import { studioFormChangeRefusal, studioFormShapeRefusal } from "./application-c
 import { studioPlacementReferenceSentence } from "./composition-references";
 import type { StudioSemanticSelection } from "./semantic-selection";
 import { validateStoredApplicationOutlets } from "./stored-composition";
+import { describeFailure } from "../../catalogue/runtime-primitives";
 
 /**
  * Gate edits keep every placement, form context and flow reference intact, and never hide what a
@@ -123,7 +124,7 @@ export const describeStudioCompositionGate = (
       audience: vortex.application_audience ?? null,
     } as const;
   } catch (error) {
-    console.error("[studio] block access could not be read", error);
+    console.error(`[studio] block access could not be read: ${describeFailure(error)}`);
     return {
       kind: "refused",
       reason: "This block's stored definition needs fixing before its access can change.",
