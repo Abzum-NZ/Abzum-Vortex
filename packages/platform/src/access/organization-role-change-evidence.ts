@@ -10,13 +10,8 @@ import {
 } from "./organization-role-changes";
 import { canonicalJson } from "../definition/canonical-json";
 
-const organizationRoleChangeEvidenceErrorCodes = [
-  "INVALID_ORGANIZATION_ROLE_CHANGE_PREPARATION",
-  "ORGANIZATION_ROLE_CHANGE_EVIDENCE_INVALID",
-] as const;
-
 type OrganizationRoleChangeEvidenceErrorCode =
-  (typeof organizationRoleChangeEvidenceErrorCodes)[number];
+  "INVALID_ORGANIZATION_ROLE_CHANGE_PREPARATION" | "ORGANIZATION_ROLE_CHANGE_EVIDENCE_INVALID";
 
 class OrganizationRoleChangeEvidenceError extends Error {
   readonly code: OrganizationRoleChangeEvidenceErrorCode;

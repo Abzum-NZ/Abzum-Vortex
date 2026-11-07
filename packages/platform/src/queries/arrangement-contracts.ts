@@ -2,17 +2,22 @@ import "server-only";
 
 import { z } from "zod";
 import { fieldTypeKeys } from "../catalogue/catalogues";
-import { jsonValueSchema } from "../catalogue/common";
+import type { JsonValue } from "../catalogue/json-value";
 import {
   builderKeySchema,
   fieldIdSchema,
   moduleRootIdSchema,
   queryIdSchema,
-  recordIdSchema,
+  type FieldId,
+  type RecordId,
 } from "../catalogue/identifiers";
-import { boardColumnReadLimit, calendarMappingSchema } from "../definition/application-contracts";
+import {
+  boardColumnReadLimit,
+  calendarMappingSchema,
+  type CalendarMapping,
+} from "../definition/application-contracts";
 import { stableDefinitionReleaseVersionSchema } from "../definition/version-impact";
-import { exactDecimalTextSchema, moneyValueSchema } from "../records/module-field-values";
+import type { exactDecimalTextSchema, moneyValueSchema } from "../records/module-field-values";
 import {
   protectedQueryBoardMembersCommandSchema,
   protectedQueryBoardSelectorSchema,
@@ -21,6 +26,7 @@ import {
   protectedQueryPageRowSchema,
   protectedQueryRowSchema,
   protectedQuerySummaryAggregateResultSchema,
+  type ProtectedQueryRow,
 } from "./protected-query-contracts";
 import { supportedRecordSystemFieldKeySchema } from "./record-system-values";
 
@@ -111,35 +117,27 @@ const aggregatesSchema = z
  * and maximum return the field's own value. `null` means no value was present.
  * Declared field and operation validation decides which scalar type is permitted.
  */
-const aggregateValueSchema = z.union([
-  exactDecimalTextSchema,
-  moneyValueSchema,
-  z.number().int(),
-  z.iso.date(),
-  z.iso.datetime({ offset: true }),
-  z.string(),
-  z.boolean(),
-  z.null(),
-]);
+type AggregateValue =
+  | z.infer<typeof exactDecimalTextSchema>
+  | z.infer<typeof moneyValueSchema>
+  | number
+  | string
+  | boolean
+  | null;
 
-const aggregateResultSchema = z.discriminatedUnion("outcome", [
-  z
-    .object({
-      outcome: z.literal("completed"),
-      value: aggregateValueSchema,
+export type AggregateResult =
+  | {
+      outcome: "completed";
+      value: AggregateValue;
       /** Rows that held a value; missing and withheld values are not counted or totalled. */
-      valueCount: z.number().int().nonnegative(),
-    })
-    .strict(),
+      valueCount: number;
+    }
   /** A money total over more than one currency is refused, never converted or split. */
-  z.object({ outcome: z.literal("refused"), reasonCode: z.literal("mixed_currency") }).strict(),
-]);
-export type AggregateResult = z.infer<typeof aggregateResultSchema>;
+  | { outcome: "refused"; reasonCode: "mixed_currency" };
 
-const aggregateResultsSchema = z.record(builderKeySchema, aggregateResultSchema);
+type AggregateResults = Record<z.infer<typeof builderKeySchema>, AggregateResult>;
 
-const arrangementRowSchema = protectedQueryRowSchema;
-export type ArrangementRow = z.infer<typeof arrangementRowSchema>;
+export type ArrangementRow = ProtectedQueryRow;
 
 // Descriptors
 
@@ -285,137 +283,112 @@ export type ProtectedBoardArrangementResult = z.infer<typeof protectedBoardArran
 
 // Results
 
-const groupValuesSchema = z.record(fieldIdSchema, jsonValueSchema);
+type ArrangementSourcePlan = z.infer<typeof arrangementSourcePlanSchema>;
 
-const tableGroupSchema = z
-  .object({
-    /** Stable identity of the grouping values, unique within the arrangement. */
-    groupKey: z.string(),
-    groupValues: groupValuesSchema,
-    rowCount: z.number().int().nonnegative(),
-    rows: z.array(arrangementRowSchema),
-    aggregates: aggregateResultsSchema,
-  })
-  .strict();
+type TableGroup = {
+  /** Stable identity of the grouping values, unique within the arrangement. */
+  groupKey: string;
+  groupValues: Record<FieldId, JsonValue>;
+  rowCount: number;
+  rows: ArrangementRow[];
+  aggregates: AggregateResults;
+};
 
-const tableArrangementResultSchema = z
-  .object({
-    outcome: z.literal("completed"),
-    arrangement: z.literal("table"),
-    plan: arrangementSourcePlanSchema,
-    declaredFieldIds: z.array(fieldIdSchema),
-    groupByFieldIds: z.array(fieldIdSchema),
-    totalRowCount: z.number().int().nonnegative(),
-    /** Present exactly when the table is not grouped. */
-    rows: z.array(arrangementRowSchema).nullable(),
-    /** Present exactly when the table is grouped. */
-    groups: z.array(tableGroupSchema).nullable(),
-    aggregates: aggregateResultsSchema,
-  })
-  .strict();
-export type TableArrangementResult = z.infer<typeof tableArrangementResultSchema>;
+export type TableArrangementResult = {
+  outcome: "completed";
+  arrangement: "table";
+  plan: ArrangementSourcePlan;
+  declaredFieldIds: FieldId[];
+  groupByFieldIds: FieldId[];
+  totalRowCount: number;
+  /** Present exactly when the table is not grouped. */
+  rows: ArrangementRow[] | null;
+  /** Present exactly when the table is grouped. */
+  groups: TableGroup[] | null;
+  aggregates: AggregateResults;
+};
 
-const boardColumnSchema = z
-  .object({
-    rowCount: z.number().int().nonnegative(),
-    rows: z.array(arrangementRowSchema),
-    aggregates: aggregateResultsSchema,
-  })
-  .strict();
+type BoardColumn = {
+  rowCount: number;
+  rows: ArrangementRow[];
+  aggregates: AggregateResults;
+};
 
-const boardArrangementResultSchema = z
-  .object({
-    outcome: z.literal("completed"),
-    arrangement: z.literal("board"),
-    plan: arrangementSourcePlanSchema,
-    declaredFieldIds: z.array(fieldIdSchema),
-    choiceFieldId: fieldIdSchema,
-    totalRowCount: z.number().int().nonnegative(),
-    columns: z.array(boardColumnSchema.extend({ value: z.string(), label: z.string() }).strict()),
-    /** Rows whose choice is empty, withheld or not a declared option. */
-    unassigned: boardColumnSchema,
-    aggregates: aggregateResultsSchema,
-  })
-  .strict();
-export type BoardArrangementResult = z.infer<typeof boardArrangementResultSchema>;
+export type BoardArrangementResult = {
+  outcome: "completed";
+  arrangement: "board";
+  plan: ArrangementSourcePlan;
+  declaredFieldIds: FieldId[];
+  choiceFieldId: FieldId;
+  totalRowCount: number;
+  columns: {
+    rowCount: number;
+    rows: ArrangementRow[];
+    aggregates: AggregateResults;
+    value: string;
+    label: string;
+  }[];
+  /** Rows whose choice is empty, withheld or not a declared option. */
+  unassigned: BoardColumn;
+  aggregates: AggregateResults;
+};
 
-const calendarItemSchema = z
-  .object({
-    recordId: recordIdSchema,
-    start: z.union([z.iso.date(), z.iso.datetime({ offset: true })]),
-    end: z.union([z.iso.date(), z.iso.datetime({ offset: true })]).nullable(),
-    values: z.record(fieldIdSchema, jsonValueSchema),
-  })
-  .strict();
-export type CalendarItem = z.infer<typeof calendarItemSchema>;
+export type CalendarItem = {
+  recordId: RecordId;
+  start: string;
+  end: string | null;
+  values: Record<FieldId, JsonValue>;
+};
 
-const calendarArrangementResultSchema = z
-  .object({
-    outcome: z.literal("completed"),
-    arrangement: z.literal("calendar"),
-    plan: arrangementSourcePlanSchema,
-    declaredFieldIds: z.array(fieldIdSchema),
-    calendarMapping: calendarMappingSchema,
-    timeZone: z.string(),
-    totalRowCount: z.number().int().nonnegative(),
-    /** Ordered by start, then end, then record. */
-    items: z.array(calendarItemSchema),
-    /** Rows without a start, or whose end or duration cannot place them; plan order. */
-    unscheduledRows: z.array(arrangementRowSchema),
-  })
-  .strict();
-export type CalendarArrangementResult = z.infer<typeof calendarArrangementResultSchema>;
+export type CalendarArrangementResult = {
+  outcome: "completed";
+  arrangement: "calendar";
+  plan: ArrangementSourcePlan;
+  declaredFieldIds: FieldId[];
+  calendarMapping: CalendarMapping;
+  timeZone: string;
+  totalRowCount: number;
+  /** Ordered by start, then end, then record. */
+  items: CalendarItem[];
+  /** Rows without a start, or whose end or duration cannot place them; plan order. */
+  unscheduledRows: ArrangementRow[];
+};
 
-const arrangementRefusalReasonCodes = [
+export type ArrangementRefusalReasonCode =
   /** The command does not match the arrangement contract. */
-  "request_invalid",
+  | "request_invalid"
   /** A named field is not in the plan, or does not permit that use. */
-  "descriptor_invalid",
+  | "descriptor_invalid"
   /** The plan result repeats a record or holds a value unlike its declared type. */
-  "dataset_invalid",
+  | "dataset_invalid"
   /** The complete result is larger than one arrangement accepts. */
-  "dataset_limit_exceeded",
+  | "dataset_limit_exceeded"
   /** The installed Query could not be resolved for the current Application release. */
-  "query_unavailable",
+  | "query_unavailable"
   /** A preview of a query over a system projection with no installed projection to read. */
-  "installation_required",
-  "read_forbidden",
-  "input_invalid",
-  "field_unbounded",
-  "filter_invalid",
+  | "installation_required"
+  | "read_forbidden"
+  | "input_invalid"
+  | "field_unbounded"
+  | "filter_invalid"
   /** The data source declares no column for a filtered or searched field. */
-  "filter_field_not_declared",
+  | "filter_field_not_declared"
   /** The filter cannot be applied exactly inside the data source's own scan. */
-  "predicate_unsupported",
-  "sort_invalid",
-  "relationship_invalid",
-  "page_size_invalid",
-  "cursor_invalid",
-  "cursor_stale",
+  | "predicate_unsupported"
+  | "sort_invalid"
+  | "relationship_invalid"
+  | "page_size_invalid"
+  | "cursor_invalid"
+  | "cursor_stale"
   /** The calendar time zone is not a known IANA zone. */
-  "time_zone_invalid",
+  | "time_zone_invalid"
   /** A pivot's column dimension holds more values than one pivot shows. */
-  "pivot_columns_exceeded",
+  | "pivot_columns_exceeded"
   /** A date bucket (its start or its exclusive end) falls outside the supported UTC years 0001 to 9999. */
-  "value_out_of_range",
-] as const;
-export type ArrangementRefusalReasonCode = (typeof arrangementRefusalReasonCodes)[number];
+  | "value_out_of_range";
 
 /** One neutral refusal; it names no field value. */
-const arrangementRefusalSchema = z
-  .object({
-    outcome: z.literal("refused"),
-    reasonCode: z.enum(arrangementRefusalReasonCodes),
-  })
-  .strict();
-export type ArrangementRefusal = z.infer<typeof arrangementRefusalSchema>;
+export type ArrangementRefusal = { outcome: "refused"; reasonCode: ArrangementRefusalReasonCode };
 
-const arrangementResultSchema = z.union([
-  z.discriminatedUnion("arrangement", [
-    tableArrangementResultSchema,
-    boardArrangementResultSchema,
-    calendarArrangementResultSchema,
-  ]),
-  arrangementRefusalSchema,
-]);
-export type ArrangementResult = z.infer<typeof arrangementResultSchema>;
+export type ArrangementResult =
+  TableArrangementResult | BoardArrangementResult | CalendarArrangementResult | ArrangementRefusal;

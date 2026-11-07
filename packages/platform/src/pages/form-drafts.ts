@@ -194,14 +194,11 @@ type PrivateFormDraftAbandonResult =
   | Readonly<{ outcome: "stale_revision" }>
   | Readonly<{ outcome: "unavailable" }>;
 
-const privateFormDraftErrorCodes = [
-  "INVALID_PRIVATE_FORM_DRAFT_COMMAND",
-  "INVALID_PRIVATE_FORM_DRAFT_STORAGE_RESULT",
-  "PRIVATE_FORM_DRAFT_SCOPE_UNAVAILABLE",
-  "PRIVATE_FORM_DRAFT_OPERATION_FAILED",
-] as const;
-
-type PrivateFormDraftErrorCode = (typeof privateFormDraftErrorCodes)[number];
+type PrivateFormDraftErrorCode =
+  | "INVALID_PRIVATE_FORM_DRAFT_COMMAND"
+  | "INVALID_PRIVATE_FORM_DRAFT_STORAGE_RESULT"
+  | "PRIVATE_FORM_DRAFT_SCOPE_UNAVAILABLE"
+  | "PRIVATE_FORM_DRAFT_OPERATION_FAILED";
 
 class PrivateFormDraftError extends Error {
   readonly code: PrivateFormDraftErrorCode;
