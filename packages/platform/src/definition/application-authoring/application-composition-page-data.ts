@@ -1,7 +1,4 @@
-import {
-  applicationSourceDocumentSchema,
-  type ApplicationSourceDocument,
-} from "../application-source-contracts";
+import type { ApplicationSourceDocument } from "../application-source-contracts";
 import { definitionLimitMessage, definitionLimits } from "../definition-limits";
 import {
   removeFlowBindingsOf,
@@ -191,25 +188,41 @@ export const applyPageData = (
   const refusal = studioPageDataRefusal(context, owner, edited, change.copies);
   if (refusal !== undefined) return { kind: "refused", reason: refusal };
   const copies = new Map(change.copies);
-  const removed = removedAliases(canvasOwnerData(current, owner).data, edited);
-  const next = structuredClone(current) as ApplicationSourceDocument;
+  const before = canvasOwnerData(current, owner).data;
+  const removed = removedAliases(before, edited);
+  // Only the edited page, step or layout and the two lists the flow bindings touch are replaced;
+  // every other node is the current draft's own. The history checks the whole source once.
+  const body = { ...current.body };
   if (owner.kind === "layout") {
-    const nextShell = next.body.shells.find((item) => item.id === owner.shellAlias);
-    if (nextShell === undefined) throw unavailable(owner);
-    nextShell.layout = edited as typeof nextShell.layout;
+    if (!body.shells.some((item) => item.id === owner.shellAlias)) throw unavailable(owner);
+    body.shells = body.shells.map((item) =>
+      item.id === owner.shellAlias ? { ...item, layout: edited as typeof item.layout } : item,
+    );
   } else {
-    const nextPage = next.body.pages.find((item) => item.id === owner.pageAlias);
-    if (nextPage === undefined || !setSourcePageData(nextPage, owner.step, edited as never))
-      throw unavailable(owner);
+    const page = body.pages.find((item) => item.id === owner.pageAlias);
+    if (page === undefined) throw unavailable(owner);
+    const nextPage = {
+      ...page,
+      ...("step_content" in page.composition
+        ? {
+            composition: {
+              ...page.composition,
+              step_content: { ...page.composition.step_content },
+            },
+          }
+        : {}),
+    } as typeof page;
+    if (!setSourcePageData(nextPage, owner.step, edited as never)) throw unavailable(owner);
+    body.pages = body.pages.map((item) => (item === page ? nextPage : item));
   }
-  next.body.flow_bindings = withCopiedFlowBindings(next.body.flow_bindings, copies);
-  removeFlowBindingsOf(next.body, removed);
+  body.flow_bindings = withCopiedFlowBindings(body.flow_bindings, copies);
+  removeFlowBindingsOf(body, removed);
+  const next: ApplicationSourceDocument = { ...current, body };
   syncStoredBlockDependencies(next);
-  const parsed = applicationSourceDocumentSchema.parse(next);
-  validateStoredApplicationOutlets(catalogue, parsed);
-  const overLimit = compositionLimitRefusal(catalogue, parsed);
+  validateStoredApplicationOutlets(catalogue, next);
+  const overLimit = compositionLimitRefusal(catalogue, next);
   if (overLimit !== undefined) return { kind: "refused", reason: overLimit };
-  return sameCompositionValue(parsed, current)
+  return sameCompositionValue(edited, before, true)
     ? { kind: "invalid" }
-    : { kind: "applied", source: parsed };
+    : { kind: "applied", source: next };
 };

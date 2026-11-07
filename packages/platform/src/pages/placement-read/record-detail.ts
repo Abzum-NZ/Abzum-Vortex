@@ -5,7 +5,6 @@ import { recordIdSchema } from "../../catalogue/identifiers";
 import { sameId } from "../../catalogue/runtime-primitives";
 import { readRecordDetailContract } from "../../definition/application-composition/records-display";
 import {
-  isInstallationRequired,
   protectedQueryCommandSchema,
   type ProtectedQueryRow,
 } from "../../queries/protected-query-contracts";
@@ -243,9 +242,8 @@ const readRelatedLists = async (
     // The query service logged every answer that is not available, once.
     if (result.kind !== "available") continue;
     if (result.value.outcome !== "completed") {
-      // A list that needs the application installed is left out like any refused list.
-      if (!isInstallationRequired(result.value.reasonCode))
-        logPlacementFailure(read.address, placementId, "related_list_refused");
+      // A list the query refused is left out; the query logged the refusal, once.
+      logPlacementFailure(read.address, placementId, "related_list_refused");
       continue;
     }
     const rows: readonly ProtectedQueryRow[] = result.value.rows;

@@ -17,6 +17,7 @@ import { recordsTablePivotFeature } from "../../definition/application-compositi
 import { UnreadableSettingError } from "../../definition/application-composition/records-table-features/shared";
 import { moneyValueSchema, recordLinkValueSchema } from "../../records/module-field-values";
 import type { HumanOrganizationRequestResult } from "../../access/human-organization-request";
+import { logRefusal } from "../../access/request-failure";
 import type { QueryContinuationKey } from "../../queries/continuation-token";
 import type { InstalledRuntimeContext } from "../../definition/installed-runtime-context";
 import {
@@ -211,7 +212,7 @@ export const readRecordsTablePivot = async (request: PivotRequest): Promise<Pivo
   const checked = pivotResultSchema.safeParse(reply);
   if (checked.success) return checked.data;
   const issue = checked.error.issues[0];
-  return fail(`reply_invalid ${(issue?.path ?? []).map(String).join(".")}: ${issue?.message}`);
+  return fail(`reply_invalid ${(issue?.path ?? []).map(String).join(".")}: ${issue?.code}`);
 };
 
 const projectPivot = async (request: PivotRequest): Promise<PivotResult> => {
@@ -297,7 +298,7 @@ const projectPivot = async (request: PivotRequest): Promise<PivotResult> => {
     bound.query.inputs,
     request.bindings,
     {},
-    (cause) => console.error(`[records-table] pivot input withheld where=pivot cause=${cause}`),
+    (cause) => logRefusal("records-table", "pivot input withheld where=pivot", cause),
   );
   if (resolution.kind === "awaiting") return { status: "empty" };
   if (resolution.kind === "refused")
@@ -366,11 +367,8 @@ const projectPivot = async (request: PivotRequest): Promise<PivotResult> => {
   if (result.kind === "temporarily_unavailable") return failed;
   if (result.kind !== "available") return refused("This pivot is not available.");
   const summary = result.value;
+  // The query logged its own refusal, once.
   if (summary.outcome === "refused") {
-    logRecordsTableRequestRefusal(
-      recordsTableRequestRefusal("command", `summary_refused code=${summary.reasonCode}`),
-      recordsTablePivotFeature.key,
-    );
     switch (summary.reasonCode) {
       case "pivot_columns_exceeded":
         return refused(

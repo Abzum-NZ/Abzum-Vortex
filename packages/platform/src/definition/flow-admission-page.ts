@@ -2,11 +2,13 @@ import "server-only";
 
 import type { BoundHumanOrganizationRequest } from "../access/human-organization-request";
 import type { PlatformPermissionSource } from "../access/platform-permissions";
+import { logFault, logRefusal } from "../access/request-failure";
 import { recordIdSchema } from "../catalogue/identifiers";
 import { isRecord, sameId } from "../catalogue/runtime-primitives";
 import { readPageSubjectInTransaction } from "../pages/page-subject-read";
 import { requireProjectedPlacement } from "../pages/projected-placement-gate";
 import { pageSubjectType } from "../pages/projected-table-placement";
+import { logRecordsTableRequestRefusal } from "../pages/records-table-features";
 import {
   projectedTableMembershipRefusal,
   recordsTableBindingRefusal,
@@ -88,7 +90,8 @@ export const admitPageGesture = async (
       ![...source[1]].some((id) => sameId(id, binding.controlId)) ||
       state.subject === undefined
     ) {
-      console.error("[flows] row form source or subject unavailable");
+      // The browser names the source table and the record: an expected refusal.
+      logRefusal("flows", "row form admission", "row_form_source_or_subject_unavailable");
       return false;
     }
     tableId = source[0];
@@ -111,7 +114,7 @@ export const admitPageGesture = async (
       const candidate = inputs.record_id;
       const parsed = recordIdSchema.safeParse(isRecord(candidate) ? candidate.recordId : candidate);
       if (!parsed.success) {
-        console.error("[flows] table row selection invalid");
+        logRefusal("flows", "table row admission", "row_selection_invalid");
         return false;
       }
       recordId = parsed.data;
@@ -140,7 +143,7 @@ export const admitPageGesture = async (
     }),
   );
   if (refusal !== undefined) {
-    console.error(`[flows] table binding refused: ${refusal.reason}`);
+    logRecordsTableRequestRefusal(refusal, "flow_admission");
     return false;
   }
   const recordIds = bulkRecordIds ?? (recordId === undefined ? undefined : [recordId]);
@@ -157,7 +160,9 @@ export const admitPageGesture = async (
       ? undefined
       : await readPageSubjectInTransaction(bound.transaction, subject);
   if (subject !== undefined && held?.kind !== "read") {
-    console.error("[flows] page subject unavailable for control proof");
+    // A subject read that failed logged its own line, once; a subject the person may not read now
+    // is an expected refusal.
+    if (held?.kind === "refused") logRefusal("flows", "control proof", "page_subject_refused");
     return false;
   }
   const membership = await projectedTableMembershipRefusal(
@@ -186,7 +191,14 @@ export const admitPageGesture = async (
       }),
   );
   if (membership !== undefined) {
-    console.error(`[flows] table row membership refused: ${membership}`);
+    // A refusal the query logged adds no line; a definition that cannot answer is a fault; any
+    // other is the answer to what was supplied.
+    if (membership.logged !== true)
+      (membership.fault === true ? logFault : logRefusal)(
+        "flows",
+        "table row membership",
+        membership.reason,
+      );
     return false;
   }
   return (

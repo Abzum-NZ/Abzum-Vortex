@@ -398,7 +398,8 @@ type RecordChoicePageResult =
       nextContinuationToken?: string;
     }>
   | Readonly<{ kind: "reload" }>
-  | Readonly<{ kind: "refused"; cause: string }>
+  /** `logged`: the request runner or the query already logged this refusal, once. */
+  | Readonly<{ kind: "refused"; cause: string; logged?: true }>
   | Readonly<{ kind: "temporarily_unavailable" }>;
 
 type RecordChoicePageRequest = Readonly<{
@@ -956,9 +957,10 @@ export const loadFieldOptionsPage = async (
     admission,
   );
   if (read.kind === "temporarily_unavailable") return { kind: "temporarily_unavailable" };
-  if (read.kind !== "available") return { kind: "refused", cause: `request_${read.kind}` };
+  if (read.kind !== "available")
+    return { kind: "refused", cause: `request_${read.kind}`, logged: true };
   if (read.value.outcome !== "completed")
-    return { kind: "refused", cause: `query_${read.value.reasonCode}` };
+    return { kind: "refused", cause: `query_${read.value.reasonCode}`, logged: true };
   // The page is checked once against the record choice page contract here, where it is built.
   const page = recordChoicePageSchema.safeParse({
     choices: read.value.choices,

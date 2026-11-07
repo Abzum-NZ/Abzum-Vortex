@@ -13,6 +13,15 @@ export const logClassifiedFailure = (line: string, error: unknown): void => {
 };
 
 /**
+ * The one server-side line for a platform fault that has no cause to classify (a seam not
+ * supplied, a bound flow not planned, a definition the platform cannot read): always an error, in
+ * the refusal's shape, with a stable code and no value.
+ */
+export const logFault = (route: string, op: string, code: string): void => {
+  console.error(`[${route}] ${op} failed: code=${code}`);
+};
+
+/**
  * The one server-side line for a refusal or a caught failure: the route or service, the operation,
  * a stable reason code and, when there is one, the safe description of its cause (class names and
  * codes only). Ids may be part of `op`; personal data, values and secrets never are. Without a
