@@ -1,3 +1,4 @@
+import { z } from "zod";
 import { sameCompositionValue as sameValue, sourceNames } from "./composition-references";
 import type {
   ImmutablePlatformBlockCatalogue,
@@ -279,11 +280,14 @@ const syncRepeatableSlots = (
 
 /**
  * What a reading model expects a selection it cannot describe to throw: a stored-data or structure
- * refusal, or the plain `TypeError` of `refuse()`. Any other error is a fault and is not hidden.
+ * refusal, the plain `TypeError` of `refuse()`, or the source contract's refusal of a copy that is
+ * not a history snapshot (`resolve` parses such a copy). Any other error is a fault and is not
+ * hidden.
  */
 const isReadingRefusal = (error: unknown): boolean =>
   error instanceof StoredCompositionRefusal ||
   error instanceof StructureRefusal ||
+  error instanceof z.ZodError ||
   (error instanceof TypeError && error.message === "Composition edit refused");
 
 /**
