@@ -261,8 +261,9 @@ const pooledLifetimeStorage = new AsyncLocalStorage<PooledRequestLifetime>();
 /**
  * Runs `operation` so that every pooled-runner query it starts honours the request's signal and
  * deadline: a query is refused once either has ended, and a query in flight when the request is
- * aborted or the deadline passes is cancelled on the server. The cancelled statement fails, its
- * transaction rolls back and the pooled connection is released, so a hung read never holds it.
+ * aborted or the deadline passes is cancelled on the server. The cancelled statement fails (as a
+ * stopped request when the request was aborted), its transaction rolls back and the pooled
+ * connection is released, so a hung read never holds it.
  */
 export const withPooledRequestLifetime = <Result>(
   lifetime: PooledRequestLifetime,
@@ -288,6 +289,11 @@ const createTransactionDriver = (
     const timer = setTimeout(cancel, Math.max(0, lifetime.deadline - Date.now()));
     try {
       return await pending;
+    } catch (error) {
+      // A statement cancelled because its request was abandoned is that stop, not a database
+      // fault; one cancelled at the deadline keeps the database's own answer.
+      if (lifetime.signal.aborted) throw requestDatabaseError("DATABASE_REQUEST_STOPPED", error);
+      throw error;
     } finally {
       clearTimeout(timer);
       lifetime.signal.removeEventListener("abort", cancel);
