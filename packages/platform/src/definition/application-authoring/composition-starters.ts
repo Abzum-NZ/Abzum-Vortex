@@ -15,6 +15,32 @@ const formChildren = (catalogue: ImmutablePlatformBlockCatalogue) => {
   return input === undefined || button === undefined ? undefined : { input, button };
 };
 
+const starterItem = (
+  taken: Set<string>,
+  child: PlatformBlockRelease,
+  name: string,
+  settings: Record<string, unknown>,
+): SourceItem => {
+  const id = freshBlockName(name, taken);
+  taken.add(id);
+  return {
+    type: child.rendererKey,
+    props: {
+      id,
+      ...settings,
+      vortex: {
+        block: { block_id: child.blockId, release_version: child.releaseVersion },
+        responsive: {
+          desktop: { visible: true, width: { kind: "fill" }, height: { kind: "content" } },
+        },
+      },
+    },
+  } as SourceItem;
+};
+
+const textRelease = (catalogue: ImmutablePlatformBlockCatalogue) =>
+  catalogue.releases.find((release) => release.key === "platform.display.text");
+
 export const studioHasSlotStarter = (
   catalogue: ImmutablePlatformBlockCatalogue,
   release: PlatformBlockRelease,
@@ -23,7 +49,8 @@ export const studioHasSlotStarter = (
   slotKey === "content" &&
   ((release.key === "platform.form.container" && formChildren(catalogue) !== undefined) ||
     (release.key === "platform.layout.drawer" &&
-      catalogue.releases.some((entry) => entry.key === "platform.display.record_detail")));
+      catalogue.releases.some((entry) => entry.key === "platform.display.record_detail")) ||
+    (release.key === "platform.layout.dialog" && textRelease(catalogue) !== undefined));
 
 export const studioStarterSlots = (
   catalogue: ImmutablePlatformBlockCatalogue,
@@ -43,37 +70,21 @@ export const studioStarterSlots = (
       content: [studioRecordDetailItem(catalogue, source, `${module.key}:${record.key}`, alias)],
     };
   }
+  if (release.key === "platform.layout.dialog") {
+    const text = textRelease(catalogue);
+    if (text === undefined) throw new Error("STUDIO_DIALOG_STARTER_RELEASE_MISSING");
+    return { content: [starterItem(taken, text, "text", { text: "Dialog content" })] };
+  }
   if (release.key !== "platform.form.container") return {};
   const children = formChildren(catalogue);
   if (children === undefined) throw new Error("STUDIO_FORM_STARTER_RELEASE_MISSING");
-  const item = (
-    child: PlatformBlockRelease,
-    name: string,
-    settings: Record<string, unknown>,
-  ): SourceItem => {
-    const id = freshBlockName(name, taken);
-    taken.add(id);
-    return {
-      type: child.rendererKey,
-      props: {
-        id,
-        ...settings,
-        vortex: {
-          block: { block_id: child.blockId, release_version: child.releaseVersion },
-          responsive: {
-            desktop: { visible: true, width: { kind: "fill" }, height: { kind: "content" } },
-          },
-        },
-      },
-    } as SourceItem;
-  };
-  const answer = item(children.input, "answer", { name: "answer", label: "Answer" });
+  const answer = starterItem(taken, children.input, "answer", { name: "answer", label: "Answer" });
   // The surface a flow shows a form in supplies Submit and Cancel, so that form starts with its field only.
   if (shownByFlow) return { content: [answer] };
   return {
     content: [
       answer,
-      item(children.button, "submit", {
+      starterItem(taken, children.button, "submit", {
         label: "Submit",
         action_kind: "submit",
         variant: "primary",

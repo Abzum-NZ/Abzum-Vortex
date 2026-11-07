@@ -7,5 +7,6 @@ import type { Dictionary } from "@puckeditor/core";
 export const studioPuckWords: Dictionary = {
   "drawer-category-collapse": "",
   "drawer-category-expand": "",
+  "outline-header-title": "Blocks",
   "loader-loading": "Loading the canvas",
 };
