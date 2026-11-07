@@ -357,7 +357,17 @@ export function StudioPuckProvider({
   // the removal guard makes them again from the live draft.
   const config = model.config;
   const [frameDocument, setFrameDocument] = useState<Document | null>(null);
-  const [refused, setRefused] = useState<Readonly<{ area: string; message: string }> | null>(null);
+  const [refused, showRefused] = useState<Readonly<{
+    area: string;
+    message: string;
+    count: number;
+  }> | null>(null);
+  // Each refusal shown is numbered, so one repeated word for word is shown, and announced, again.
+  const refusals = useRef(0);
+  const setRefused = useCallback((next: Readonly<{ area: string; message: string }> | null) => {
+    refusals.current += 1;
+    showRefused(next === null ? null : { ...next, count: refusals.current });
+  }, []);
   const [resync, setResync] = useState(0);
   // Puck's callbacks run while Studio shows its own data or selection: they must not echo back.
   const synchronizing = useRef(false);
@@ -689,12 +699,23 @@ export function StudioPuckProvider({
     [indexedJson],
   );
   const refusal = refused?.area === model.area ? refused.message : "";
-  const status = useStudioCanvasStatusValue(input, model, refusal);
+  const status = useStudioCanvasStatusValue(
+    input,
+    model,
+    refusal,
+    refused?.area === model.area ? refused.count : 0,
+  );
   const { describePlacement, blockActions } = input;
   const modelItems = model.items;
+  // A refusal the action bar hears (a key the canvas cannot act on) is said where a refused canvas
+  // change is said.
+  const refuse = useCallback(
+    (message: string) => setRefused({ area: latest.current.model.area, message }),
+    [setRefused],
+  );
   const bar = useMemo(
-    () => ({ describePlacement, items: modelItems, placed, blockActions }),
-    [describePlacement, modelItems, placed, blockActions],
+    () => ({ describePlacement, items: modelItems, placed, blockActions, refuse }),
+    [describePlacement, modelItems, placed, blockActions, refuse],
   );
   // The iframe override asks which slots hold a grid when a slot comes near; a new set needs no
   // redraw.

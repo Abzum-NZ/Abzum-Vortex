@@ -1,5 +1,6 @@
 "use client";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { ApplicationWebMcpRuntime } from "@vortex/ui";
 import { useStable } from "./use-stable";
 import {
   describeFailure,
@@ -139,6 +140,8 @@ function ExistingApplicationWorkspace(props: ExistingProps) {
     [dragGate],
   );
   const [structureForm, setStructureForm] = useState<StudioStructureForm>("none");
+  // The browser agent tools' state, shown in the header as every application's header shows it.
+  const [agentTools, setAgentTools] = useState<ApplicationWebMcpRuntime>();
   const draft = useStudioDraft({
     organizationId,
     draft: props.draft,
@@ -406,9 +409,11 @@ function ExistingApplicationWorkspace(props: ExistingProps) {
             rename={canvas.renameItem}
             readQueries={canvas.readQueries}
             {...releases.agent}
+            onStatusChange={setAgentTools}
           />
           <StudioPuckProvider input={canvas.puck} dragGate={dragGate}>
             <StudioFrame
+              applicationName={source.body.name}
               tabs={studioRailTabs}
               activeTab={tab}
               onTabChange={setTab}
@@ -419,6 +424,7 @@ function ExistingApplicationWorkspace(props: ExistingProps) {
                 <StudioHeader
                   frame={place.frame}
                   applicationName={source.body.name}
+                  agentTools={agentTools}
                   onApplication={onApplication}
                   saveState={<StudioSaveState draft={draft} />}
                   canUndo={state.canUndo}
