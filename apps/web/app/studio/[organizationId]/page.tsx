@@ -3,7 +3,10 @@ import { UnavailableState } from "../../_components/unavailable-state";
 import { continueStudioSession } from "../_lib/studio-session";
 import { StudioUnavailable } from "../_components/studio-unavailable";
 import { loadOrganizationLauncher } from "../../_lib/organization-context";
-import { loadApplicationsPageHref } from "../../_lib/applications-page";
+import {
+  applicationsPageHref,
+  loadOrganizationAppStoreAddress,
+} from "../../_lib/applications-page";
 
 export const dynamic = "force-dynamic";
 
@@ -31,19 +34,9 @@ export default async function StudioOrganizationPage({
   }
   const entry = launcher.entries.find((candidate) => candidate.organizationId === organizationId);
   if (entry === undefined) notFound();
-  const href = await loadApplicationsPageHref(resolved.session, {
-    organizationId: entry.organizationId,
-    tenantShortName: entry.tenantShortName,
-    organizationShortName: entry.organizationShortName,
-  });
-  // No App Store address (or one that could not be read; the read logged that): never a missing page.
-  if (href === undefined)
-    return (
-      <UnavailableState
-        title="Applications could not be opened"
-        sentence="This organisation has no App Store address set, or it could not be read just now. Try again, or ask an organisation administrator to set it in Organisation administration."
-        way={{ kind: "retry" }}
-      />
-    );
-  redirect(href);
+  // The organisation's App Store names the Applications page; an address that is not set says who
+  // sets it, and a read that failed (logged once by the read) offers Try again.
+  const address = await loadOrganizationAppStoreAddress(resolved.session, entry.organizationId);
+  if (address.kind !== "available") return <StudioUnavailable subject="Studio" result={address} />;
+  redirect(applicationsPageHref(entry, address.key));
 }

@@ -1,22 +1,15 @@
 import "server-only";
 
-import {
-  compiledPageShellId,
-  organizationSelectionCandidateSchema,
-  sameId,
-  type IdentitySession,
-} from "@vortex/platform/schema";
-import {
-  readCurrentOrganizationAppStoreAddressAfterAuthorization,
-  type InstalledRuntimeContext,
-} from "@vortex/platform/server";
+import { cache } from "react";
+import { compiledPageShellId, sameId, type IdentitySession } from "@vortex/platform/schema";
+import type { InstalledRuntimeContext } from "@vortex/platform/server";
 import type { StudioFrameDefinition } from "../_components/studio-header";
 import { resolveApplicationAddress } from "../../_lib/application-address";
 import {
   loadOrganizationLauncher,
   loadPermittedApplicationsAtAddress,
 } from "../../_lib/organization-context";
-import { humanOrganizationRequests } from "../../_lib/server-composition";
+import { loadOrganizationAppStoreAddress } from "../../_lib/applications-page";
 import { resolveIdentitySessionWithEmail } from "../../auth/_lib/session-server";
 
 /** One organisation of the launcher, as the frame names it and the person's account in it. */
@@ -90,58 +83,75 @@ export type StudioFrameContext =
   /** The organisation names no App Store (or one that names no application): an administrator sets it. */
   | Readonly<{ kind: "not_configured"; invalid: boolean }>;
 
+/**
+ * The person's session and their place in the launcher for the organisation a Studio address names:
+ * the first reads of every Studio page, made once per request (the frame and the reads beside it
+ * share them, so a refusal is logged once).
+ */
+export const loadStudioPlace = cache(
+  async (
+    organizationId: string,
+  ): Promise<
+    | Readonly<{
+        kind: "available";
+        session: IdentitySession;
+        email: string;
+        entry: AvailableLauncherEntry;
+      }>
+    | Readonly<{ kind: "refused" | "temporarily_unavailable" }>
+  > => {
+    const { resolution: resolved, email } = await resolveIdentitySessionWithEmail();
+    // Not signed in.
+    if (resolved.kind !== "active" || email === undefined) return { kind: "refused" };
+    const launcher = await loadOrganizationLauncher(resolved.session);
+    // A launcher read that failed for now is not a refusal: the person is told to try again.
+    if (launcher.kind === "temporarily_unavailable") return { kind: "temporarily_unavailable" };
+    const entry =
+      launcher.kind === "available"
+        ? launcher.entries.find((candidate) => candidate.organizationId === organizationId)
+        : undefined;
+    // The organisation is not one of the person's: an expected refusal, and no read logged it.
+    if (entry === undefined) {
+      console.info(
+        `[studio] workspace place refused: organisation not in the launcher (${launcher.kind})`,
+      );
+      return { kind: "refused" };
+    }
+    return { kind: "available", session: resolved.session, email, entry };
+  },
+);
+
 export const loadStudioFrameContext = async (
   organizationId: string,
 ): Promise<StudioFrameContext> => {
-  const { resolution: resolved, email } = await resolveIdentitySessionWithEmail();
-  // Not signed in.
-  if (resolved.kind !== "active" || email === undefined) return { kind: "refused" };
-  const launcher = await loadOrganizationLauncher(resolved.session);
-  // A launcher read that failed for now is not a refusal: the person is told to try again.
-  if (launcher.kind === "temporarily_unavailable") return { kind: "temporarily_unavailable" };
-  const entry =
-    launcher.kind === "available"
-      ? launcher.entries.find((candidate) => candidate.organizationId === organizationId)
-      : undefined;
-  // The organisation is not one of the person's: an expected refusal, and no read logged it.
-  if (entry === undefined) {
-    console.info(
-      `[studio] workspace place refused: organisation not in the launcher (${launcher.kind})`,
-    );
-    return { kind: "refused" };
-  }
+  const place = await loadStudioPlace(organizationId);
+  if (place.kind !== "available") return place;
+  const { session, email, entry } = place;
   // The installed applications are read beside the settings: neither needs the other.
   const applicationsRead = loadPermittedApplicationsAtAddress(
-    resolved.session,
+    session,
     entry.tenantShortName,
     entry.organizationShortName,
   );
   // A refusal below returns before this read is used; it must not become an unhandled rejection.
   void applicationsRead.catch(() => undefined);
-  // The organisation's settings name the App Store; Studio never assumes one.
-  const settings = await humanOrganizationRequests().run(
-    resolved.session,
-    organizationSelectionCandidateSchema.parse({ organizationId }),
-    (transaction) => readCurrentOrganizationAppStoreAddressAfterAuthorization(transaction),
-  );
-  // The request runner logged a refused or failed read once.
-  if (settings.kind !== "available")
-    return { kind: settings.kind === "temporarily_unavailable" ? settings.kind : "refused" };
-  if (settings.value === null || settings.value === "invalid")
-    return { kind: "not_configured", invalid: settings.value === "invalid" };
+  // The organisation's settings name the App Store; Studio never assumes one. The read logged a
+  // refused or failed answer once.
+  const settings = await loadOrganizationAppStoreAddress(session, organizationId);
+  if (settings.kind !== "available") return settings;
   const applications = await applicationsRead;
   // A read that failed for now is not an uninstalled Studio: the person is told to try again.
   if (applications.kind === "temporarily_unavailable") return { kind: "temporarily_unavailable" };
   // The installed Studio release shapes the frame the editor shows.
   const studioApplicationEntry =
     applications.kind === "available"
-      ? applications.applications.find((candidate) => candidate.key === settings.value)
+      ? applications.applications.find((candidate) => candidate.key === settings.key)
       : undefined;
   const studioResolved =
     studioApplicationEntry === undefined
       ? undefined
       : await resolveApplicationAddress(
-          resolved.session,
+          session,
           entry.tenantShortName,
           entry.organizationShortName,
           studioApplicationEntry.key,
@@ -159,7 +169,7 @@ export const loadStudioFrameContext = async (
     return { kind: "refused" };
   return {
     kind: "available",
-    session: resolved.session,
+    session,
     entry,
     applications,
     frame: studioFrameOf(entry, email, {

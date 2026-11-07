@@ -3,7 +3,10 @@ import { UnavailableState } from "../_components/unavailable-state";
 import { continueStudioSession } from "./_lib/studio-session";
 import { StudioUnavailable } from "./_components/studio-unavailable";
 import { loadOrganizationLauncher } from "../_lib/organization-context";
-import { loadFirstApplicationsPageHref } from "../_lib/applications-page";
+import {
+  loadFirstApplicationsPageHref,
+  loadOrganizationAppStoreAddress,
+} from "../_lib/applications-page";
 
 export const dynamic = "force-dynamic";
 
@@ -34,6 +37,12 @@ export default async function StudioLandingPage() {
       organizationShortName: entry.organizationShortName,
     })),
   );
-  if (href === undefined) notFound();
-  redirect(href);
+  if (href !== undefined) redirect(href);
+  // No organisation names an App Store the person can open: the first one's answer says why (the
+  // reads above are the request's, so this reads nothing again).
+  const first = launcher.entries[0];
+  if (first === undefined) notFound();
+  const address = await loadOrganizationAppStoreAddress(resolved.session, first.organizationId);
+  if (address.kind === "available") notFound();
+  return <StudioUnavailable subject="Studio" result={address} />;
 }

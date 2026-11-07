@@ -1,3 +1,4 @@
+import { APPLICATION_MAIN_CONTENT_ID } from "@vortex/ui";
 import { UnavailableState, type UnavailableWay } from "../../_components/unavailable-state";
 import { loadStudioFrameContext } from "../_lib/studio-frame";
 import { StudioFrameBar } from "./studio-header";
@@ -78,7 +79,14 @@ export async function StudioUnavailable({
   return (
     <div className="flex min-h-svh flex-col">
       <StudioFrameBar frame={frame} pageName="Studio" />
-      <main className="flex flex-1 items-center justify-center p-6">{state}</main>
+      {/* The frame bar's skip link lands here, as it lands in the editor's main. */}
+      <main
+        id={APPLICATION_MAIN_CONTENT_ID}
+        tabIndex={-1}
+        className="flex flex-1 items-center justify-center p-6 outline-none"
+      >
+        {state}
+      </main>
     </div>
   );
 }

@@ -1,6 +1,10 @@
 import { loadStudioApplicationDraft } from "../../../_lib/studio-application-draft";
 import { resolveApplicationAddress } from "../../../_lib/application-address";
-import { loadStudioFrameContext, type StudioFrameContext } from "../../_lib/studio-frame";
+import {
+  loadStudioFrameContext,
+  loadStudioPlace,
+  type StudioFrameContext,
+} from "../../_lib/studio-frame";
 import { continueStudioSession } from "../../_lib/studio-session";
 import { StudioUnavailable } from "../../_components/studio-unavailable";
 import {
@@ -27,11 +31,26 @@ const loadWorkspacePlace = async (
   | { kind: "available"; place: StudioWorkspacePlace }
   | Exclude<StudioFrameContext, { kind: "available" }>
 > => {
+  const place = await loadStudioPlace(organizationId);
+  if (place.kind !== "available") return place;
+  const { session, entry } = place;
+  // Where the application stands in the organisation, with whether the builder may open and
+  // install it: the facts the toolbar needs to offer Open the application, Install, Upgrade or none.
+  // It needs only the launcher entry, so it runs beside the frame's reads; it shares their App Store
+  // read, so a settings fault is still logged once.
+  const standingRead = readApplicationReleaseStanding(session, {
+    tenantShortName: entry.tenantShortName,
+    organizationShortName: entry.organizationShortName,
+    organizationId: entry.organizationId,
+    applicationRootId,
+  });
+  // A frame answer below returns before the standing is used; it must not become unhandled.
+  void standingRead.catch(() => undefined);
   const context = await loadStudioFrameContext(organizationId);
   if (context.kind !== "available") return context;
-  const { session, entry, applications, frame } = context;
+  const { applications, frame } = context;
   // The Flows tab's Navigate targets are needed after the editor opens, not to open it: their
-  // address reads start now, run beside the read below, and reach the editor when they finish.
+  // address reads start now, run beside the standing, and reach the editor when they finish.
   const navigationTargets: StudioNavigationTargets = Promise.all(
     applications.applications
       .filter((candidate) => candidate.key !== applicationKey)
@@ -57,14 +76,7 @@ const loadWorkspacePlace = async (
   // A throw below leaves the targets unread; marking them handled keeps a rejection from being
   // unhandled (what the editor receives is unchanged).
   void Promise.allSettled([navigationTargets]);
-  // Where the application stands in the organisation, with whether the builder may open and
-  // install it: the facts the toolbar needs to offer Open the application, Install, Upgrade or none.
-  const standing = await readApplicationReleaseStanding(session, {
-    tenantShortName: entry.tenantShortName,
-    organizationShortName: entry.organizationShortName,
-    organizationId: entry.organizationId,
-    applicationRootId,
-  });
+  const standing = await standingRead;
   return {
     kind: "available",
     place: {

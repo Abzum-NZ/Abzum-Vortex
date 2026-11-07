@@ -46,7 +46,7 @@ export default async function OrganizationPage({ params }: OrganizationPageProps
   const { tenantShortName, organizationShortName } = await params;
   const { resolution, email } = await resolveIdentitySessionWithEmail();
   const identity = await continueSessionOrEnd(resolution);
-  const retryHref = launcherPath(tenantShortName, organizationShortName);
+  const launcherHref = launcherPath(tenantShortName, organizationShortName);
 
   async function openApplication(event: DisplaySemanticEvent): Promise<void> {
     "use server";
@@ -141,7 +141,7 @@ export default async function OrganizationPage({ params }: OrganizationPageProps
       organizationShortName={organization.organizationShortName}
       account={account}
       openApplication={openApplication}
-      launcherHref={retryHref}
+      launcherHref={launcherHref}
       platformBlockReleases={platformBlockReleasesFor(page, organizationLauncherShell)}
       fieldInputControlReleases={FIELD_INPUT_CONTROL_RELEASES}
       platformThemeTokens={DEFAULT_PLATFORM_THEME_RELEASE.tokens}
