@@ -28,17 +28,12 @@ import {
 } from "./permission-registry-definition-adapter";
 import { isLiveSystemContext } from "./private-system-context";
 
-/** @knipignore */
-export const applicationRoleTemplatePreparationErrorCodes = [
-  "INVALID_APPLICATION_ROLE_TEMPLATE_PREPARATION_COMMAND",
-  "APPLICATION_ROLE_TEMPLATE_CONTEXT_REFUSED",
-  "APPLICATION_ROLE_TEMPLATE_DEFINITION_UNAVAILABLE",
-  "APPLICATION_ROLE_TEMPLATE_DEFINITION_EVIDENCE_INVALID",
-  "APPLICATION_ROLE_TEMPLATE_PERMISSION_OWNERSHIP_AMBIGUOUS",
-] as const;
-
 type ApplicationRoleTemplatePreparationErrorCode =
-  (typeof applicationRoleTemplatePreparationErrorCodes)[number];
+  | "INVALID_APPLICATION_ROLE_TEMPLATE_PREPARATION_COMMAND"
+  | "APPLICATION_ROLE_TEMPLATE_CONTEXT_REFUSED"
+  | "APPLICATION_ROLE_TEMPLATE_DEFINITION_UNAVAILABLE"
+  | "APPLICATION_ROLE_TEMPLATE_DEFINITION_EVIDENCE_INVALID"
+  | "APPLICATION_ROLE_TEMPLATE_PERMISSION_OWNERSHIP_AMBIGUOUS";
 
 class ApplicationRoleTemplatePreparationError extends Error {
   readonly code: ApplicationRoleTemplatePreparationErrorCode;

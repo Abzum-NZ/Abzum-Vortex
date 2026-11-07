@@ -25,17 +25,12 @@ import { canonicalJson, compareCanonicalStrings } from "../definition/canonical-
 import { fingerprintCanonicalValue } from "../definition/canonical-json-definition";
 import { isLiveSystemContext } from "./private-system-context";
 
-/** @knipignore */
-export const permissionRegistryPreparationErrorCodes = [
-  "INVALID_PERMISSION_REGISTRY_PREPARATION_COMMAND",
-  "PERMISSION_REGISTRY_CONTEXT_REFUSED",
-  "PERMISSION_REGISTRY_DEFINITION_UNAVAILABLE",
-  "PERMISSION_REGISTRY_DEFINITION_EVIDENCE_INVALID",
-  "PERMISSION_REGISTRY_PERMISSION_OWNERSHIP_AMBIGUOUS",
-] as const;
-
 type PermissionRegistryPreparationErrorCode =
-  (typeof permissionRegistryPreparationErrorCodes)[number];
+  | "INVALID_PERMISSION_REGISTRY_PREPARATION_COMMAND"
+  | "PERMISSION_REGISTRY_CONTEXT_REFUSED"
+  | "PERMISSION_REGISTRY_DEFINITION_UNAVAILABLE"
+  | "PERMISSION_REGISTRY_DEFINITION_EVIDENCE_INVALID"
+  | "PERMISSION_REGISTRY_PERMISSION_OWNERSHIP_AMBIGUOUS";
 
 export class PermissionRegistryPreparationError extends Error {
   readonly code: PermissionRegistryPreparationErrorCode;
