@@ -12,7 +12,7 @@
     "auth:local:prepare": "node tooling/supabase/ensure-local-signing-key.mjs",
     "db:start": "pnpm auth:local:prepare && supabase start",
     "db:stop": "supabase stop",
-    "db:reset": "pnpm auth:local:prepare && supabase db reset",
+    "db:reset": "pnpm auth:local:prepare && supabase db reset && node tooling/supabase/clear-setup-state.mjs",
     "db:new": "pnpm auth:local:prepare && supabase migration new",
     "setup:local": "pnpm --filter @vortex/web setup:local",
     "demo:setup": "pnpm --filter @vortex/web demo:setup",

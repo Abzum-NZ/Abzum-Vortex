@@ -3,6 +3,7 @@ import "server-only";
 import { z } from "zod";
 import { withRuntimeTransaction } from "../db/request-transaction";
 import { correlationIdSchema } from "../catalogue/common";
+import { describeFailure } from "../catalogue/runtime-primitives";
 import { platformIdSchema, timestampSchema } from "../catalogue/identifiers";
 import { fileRecordSchema } from "./file-contracts";
 import { createStorageCredentialBridge, type StorageKeyDefinition } from "./storage-credentials";
@@ -86,7 +87,9 @@ export const cleanupAbandonedUploads = async (
       if (!finished) throw new Error("UPLOAD_CLEANUP_CLAIM_SUPERSEDED");
       removed += 1;
     } catch (cause) {
-      console.error("UPLOAD_CLEANUP_FAILED", { fileId: file.fileId, cause });
+      console.error(
+        `[files] upload cleanup failed code=UPLOAD_CLEANUP_FAILED file=${file.fileId}: ${describeFailure(cause)}`,
+      );
       failed += 1;
     }
   }

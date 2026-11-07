@@ -3,6 +3,7 @@ import "server-only";
 import { z } from "zod";
 import { installationActivatedOccurrenceSchema } from "../events/occurrence-contracts";
 import type { DatabaseRow } from "../db/request-transaction";
+import { describeFailure } from "../catalogue/runtime-primitives";
 import type { EventConsumerAdapter } from "../events/dispatcher";
 import { inEventConsumerScope } from "../events/system-scope";
 import { backfillDerivedFieldPage } from "./derived-field-backfill";
@@ -101,10 +102,7 @@ export const createDerivedFieldBackfillConsumer = (): EventConsumerAdapter => ({
         },
       );
     } catch (error) {
-      console.error("Derived values page failed", {
-        cause: error instanceof Error ? error.message : String(error),
-        code: (error as { code?: unknown } | null)?.code,
-      });
+      console.error(`[derived-fields] values page failed: ${describeFailure(error)}`);
       return { outcome: "retryable_failure", failureCode: "unclassified" };
     }
   },

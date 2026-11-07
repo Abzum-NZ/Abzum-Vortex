@@ -121,9 +121,7 @@ const judged = (candidate: Source): Source => {
   if (parsed.success) return parsed.data;
   const issue = parsed.error.issues[0]!;
   console.error(
-    "[studio] menu edit refused by the source schema",
-    issue.path.join("."),
-    issue.code,
+    `[studio] menu edit refused by the source schema: ${issue.path.join(".")}=${issue.code}`,
   );
   return refuse(
     `This change would leave ${issue.path[1] === "navigation" ? "the menu" : "the application"} invalid (${issue.message}). Nothing was changed.`,

@@ -32,6 +32,7 @@ import {
 import { FORM_CONTAINER_KEY, NESTED_FORM_REASON, holdsForm } from "./application-composition-forms";
 import { addPlaces, commandSettings, newBlockItem } from "./application-composition-add";
 import { studioOwnsSetting } from "./contextual-palette";
+import { describeFailure } from "../../catalogue/runtime-primitives";
 
 /** The page or layout that owns a region. */
 const regionOwner = (region: Region): StudioCompositionOwner | undefined =>
@@ -149,7 +150,9 @@ export const describeStudioCompositionWrap = (
       })),
     };
   } catch (error) {
-    console.error("[studio] the containers for a block could not be read", error);
+    console.error(
+      `[studio] the containers for a block could not be read: ${describeFailure(error)}`,
+    );
     return { kind: "invalid" };
   }
 };
