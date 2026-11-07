@@ -756,24 +756,6 @@ const inverseCondition = (
   return convert(condition, original, "");
 };
 
-/** Locate a local draft against the authored shape it would produce, without changing source. */
-export function locateStudioReactionDraftIssue(
-  path: readonly (string | number)[],
-  condition: ConditionNode | undefined,
-  original: SourceQualifiedCondition | undefined,
-  metadata: StudioApplicationConditionContext,
-): readonly (string | number)[] {
-  try {
-    return locateStudioReactionIssue(
-      path,
-      condition === undefined ? undefined : inverseCondition(condition, original, metadata),
-    );
-  } catch (error) {
-    if (!(error instanceof UnsupportedReactionCondition)) throw error;
-    return locateStudioReactionIssue(path, original);
-  }
-}
-
 export type StudioReactionEditorModel =
   | Readonly<{
       kind: "available";

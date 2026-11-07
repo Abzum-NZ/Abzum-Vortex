@@ -243,6 +243,7 @@ const relativeFormatterFor = (locale: string): Intl.RelativeTimeFormat => {
   try {
     formatter = new Intl.RelativeTimeFormat(locale, { numeric: "auto" });
   } catch (error) {
+    if (!(error instanceof RangeError)) throw error;
     console.info(
       `[display] relative time locale unsupported, using the default: ${describeFailure(error)}`,
     );
