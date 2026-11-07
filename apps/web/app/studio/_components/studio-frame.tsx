@@ -595,9 +595,9 @@ export function StudioFrame<Key extends string>({
     madeHosts.current ??= { panel: create(), inspector: create() };
     setHosts(madeHosts.current);
   }, []);
-  // Only a selection the person makes opens the narrow inspector: the page the address names is
-  // selected as the editor loads, and that must not cover it. Held like the selection, so a frame
-  // that is drawn again keeps knowing the person has begun.
+  // The page the address names is selected as the editor loads and must not open the narrow
+  // inspector over it; once the person has pressed or typed anything, every selection does. Held
+  // like the selection, so a frame that is drawn again keeps knowing the person has begun.
   const begun = `begun:${applicationName}`;
   useEffect(() => {
     // A frame for an application not held before is the editor opening, whatever was clicked to get here.
@@ -620,11 +620,16 @@ export function StudioFrame<Key extends string>({
     // inspector; another application starts without one.
     const held = `selection:${applicationName}`;
     const previousSelection = heldWorkspace.has(held) ? heldWorkspace.get(held) : selectionKey;
+    // The page the address names is selected as the editor loads: the page arriving where nothing or the
+    // application was selected, before the person has done anything.
+    const loadedPage =
+      selectionKey.startsWith("page:") &&
+      (previousSelection === "" || String(previousSelection).startsWith("application:"));
     if (
       hasInspector &&
       inspectorEditsSelection &&
       previousSelection !== selectionKey &&
-      heldWorkspace.get(begun) === true &&
+      (heldWorkspace.get(begun) === true || !loadedPage) &&
       !dockInspector &&
       !focused
     ) {
