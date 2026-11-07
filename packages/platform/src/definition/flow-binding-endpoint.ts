@@ -475,7 +475,8 @@ const suppliedInputsRefusal = (candidate: unknown): FlowBindingEndpointResult | 
       ? undefined
       : refuse("FLOW_INVOKE_INPUT_TOO_LARGE");
   } catch {
-    return refuse("FLOW_INVOKE_INPUT_NOT_SERIALISABLE");
+    logRefusal("flows", "binding invoke", "FLOW_INVOKE_INPUT_NOT_SERIALISABLE");
+    return refused;
   }
 };
 

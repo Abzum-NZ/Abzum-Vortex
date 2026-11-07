@@ -203,11 +203,6 @@ export type FlowInvocationRequest = Readonly<{
   invocation: FlowBindingInvocation;
 }>;
 
-/** One information line per expected binding refusal; the page keeps its neutral outcome. */
-const logFlowRefusal = (code: string): void => {
-  logRefusal("flows", "invocation", code);
-};
-
 /** A guided control shared by two pages, or a form submit anywhere but the summary form, never starts a flow. */
 const refusesGuidedBinding = (guided: GuidedControl | null, event: string): boolean =>
   guided === null || (event === "form_submit" && !guided.summary);
@@ -484,7 +479,7 @@ export async function invokeInstalledFlow(
       (candidate) => candidate.key === body.pageKey,
     );
     if (page === undefined) {
-      logFlowRefusal("BINDING_CONTROL_NOT_ON_PAGE page_not_installed");
+      logRefusal("flows", "invocation", "BINDING_CONTROL_NOT_ON_PAGE page_not_installed");
       return false;
     }
     const capability = createStoredPageCapabilityService({
@@ -503,14 +498,14 @@ export async function invokeInstalledFlow(
       (admittedProjection.accessVersion !== bound.scope.accessVersion ||
         admittedProjection.installationRevision !== context.applicationReleaseRevision)
     ) {
-      logFlowRefusal("BINDING_PROJECTION_CONTEXT_CHANGED");
+      logRefusal("flows", "invocation", "BINDING_PROJECTION_CONTEXT_CHANGED");
       return false;
     }
     const projected =
       admittedProjection?.page ??
       (await capability.projectInTransaction(bound.transaction, bound.scope));
     if (projected === undefined) {
-      logFlowRefusal("BINDING_CONTROL_NOT_ON_PAGE page_projection_unavailable");
+      logRefusal("flows", "invocation", "BINDING_CONTROL_NOT_ON_PAGE page_projection_unavailable");
       return false;
     }
     if (admittedProjection === undefined)
@@ -523,7 +518,7 @@ export async function invokeInstalledFlow(
     if (controlId === undefined || sameId(controlId, String(page.pageId))) return true;
     const gate = requireProjectedPlacement(projected, controlId);
     if (gate.kind === "refused") {
-      logFlowRefusal(`BINDING_CONTROL_NOT_ON_PAGE ${gate.reason}`);
+      logRefusal("flows", "invocation", `BINDING_CONTROL_NOT_ON_PAGE ${gate.reason}`);
       return false;
     }
     return true;
@@ -542,7 +537,7 @@ export async function invokeInstalledFlow(
     bindingContext === undefined ? undefined : installedFlowBindings(bindingContext);
   if (invocation.kind === "binding") {
     if (bindingContext === undefined || bindingInstallation === undefined) {
-      logFlowRefusal("BINDING_INSTALLATION_NOT_CURRENT");
+      logRefusal("flows", "invocation", "BINDING_INSTALLATION_NOT_CURRENT");
       return { kind: "refused", committedNow: false };
     }
     const plan = bindingInstallation.plans.get(String(invocation.flowId));
@@ -566,7 +561,7 @@ export async function invokeInstalledFlow(
       );
     } catch {
       // A token that does not open is the browser's input: the code names the refusal.
-      logFlowRefusal("BINDING_CARRIED_VALUES_INVALID");
+      logRefusal("flows", "invocation", "BINDING_CARRIED_VALUES_INVALID");
       return { kind: "refused", committedNow: false };
     }
     const binding = bindingsWithMessageActions(bindingInstallation.bindings, [
@@ -581,7 +576,7 @@ export async function invokeInstalledFlow(
       binding !== undefined &&
       refusesGuidedBinding(guided, binding.event)
     ) {
-      logFlowRefusal("BINDING_GUIDED_CONTROL_NOT_CONFIRMED");
+      logRefusal("flows", "invocation", "BINDING_GUIDED_CONTROL_NOT_CONFIRMED");
       return { kind: "refused", committedNow: false };
     }
     // A Records table row, bulk or inline-edit command runs only for a command the installed
