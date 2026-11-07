@@ -8,11 +8,9 @@ import {
   effectiveThemeSelection,
   type SourceApplicationThemeSelection,
 } from "@vortex/platform/schema";
-import { createVortexStyleRootProps, Icon, VORTEX_STYLES } from "@vortex/ui";
+import { Icon } from "@vortex/ui";
 import { Badge } from "@vortex/ui/components/badge";
 import { Button } from "@vortex/ui/components/button";
-import { FieldLabel } from "@vortex/ui/components/field";
-import { Input } from "@vortex/ui/components/input";
 import { InputGroup, InputGroupInput, InputGroupAddon } from "@vortex/ui/components/input-group";
 import { Notice } from "@vortex/ui/components/notice";
 import { RadioGroup, RadioGroupItem } from "@vortex/ui/components/radio-group";
@@ -38,6 +36,7 @@ import {
   type StudioThemeOptions,
   type StudioThemePreset,
 } from "../_lib/studio-theme-options";
+import { StudioThemeChoices } from "./studio-theme-choice";
 import { StudioPanelShell } from "./studio-frame";
 import { StudioField } from "./studio-field";
 
@@ -46,84 +45,6 @@ export type StudioThemeChangeOutcome = Readonly<{ kind: "applied" | "refused"; m
 type Feedback = StudioThemeChangeOutcome & Readonly<{ problems?: readonly string[] }>;
 
 const shuffleAttempts = 8;
-
-// Use the runtime's complete style variables and shared components, including nested-scope resets.
-const stylePreviews = new Map(
-  VORTEX_STYLES.map((style) => [
-    style as string,
-    createVortexStyleRootProps({ style, menu: "default", menuAccent: "subtle" }),
-  ]),
-);
-
-function StylePreview({ style }: Readonly<{ style: string }>) {
-  const props = stylePreviews.get(style);
-  if (props === undefined) throw new Error(`No preview for catalogue style ${style}`);
-  return (
-    <div {...props} data-vortex-theme="" aria-hidden="true" inert>
-      <div className="min-w-0 space-y-3 overflow-hidden bg-background p-3 text-foreground">
-        <p className="truncate text-sm font-semibold">Overview</p>
-
-        <div className="flex flex-col items-start gap-2">
-          <Input placeholder="Search" tabIndex={-1} />
-          <Button type="button" tabIndex={-1}>
-            Go
-          </Button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/** One theme's colours drawn as a header, a card, a badge and a button, in light and in dark. */
-function PresetPreview({
-  preset,
-  mode,
-}: Readonly<{ preset: StudioThemePreset; mode: "light" | "dark" }>) {
-  const colours = preset.preview[mode];
-  return (
-    <span
-      className="block space-y-2 rounded-md p-2"
-      style={{ background: colours.background, color: colours.text }}
-      aria-hidden="true"
-    >
-      <span className="flex flex-wrap items-center justify-between gap-1">
-        <span className="text-xs font-semibold">Overview</span>
-        <span
-          className="rounded-full px-1.5 py-0.5 text-xs font-medium"
-          style={{ background: colours.primary, color: colours.primaryForeground }}
-        >
-          {mode === "light" ? "Light" : "Dark"}
-        </span>
-      </span>
-      <span className="block space-y-1 rounded p-1.5" style={{ background: colours.card }}>
-        <span className="block text-xs font-medium">{preset.label}</span>
-        <span className="block text-xs opacity-70">A card in this theme.</span>
-        <span
-          className="inline-block rounded px-1.5 py-0.5 text-xs font-medium"
-          style={{ background: colours.primary, color: colours.primaryForeground }}
-        >
-          Continue
-        </span>
-      </span>
-    </span>
-  );
-}
-
-function ThemePresetItem({ preset }: Readonly<{ preset: StudioThemePreset }>) {
-  return (
-    <ToggleGroupItem
-      value={preset.key}
-      className="h-auto flex-col items-stretch justify-start gap-2 p-2 text-left whitespace-normal aria-pressed:inset-ring-2 aria-pressed:inset-ring-primary"
-    >
-      <span className="block text-sm font-medium">{preset.label}</span>
-      <span className="block text-xs font-normal text-muted-foreground">{preset.description}</span>
-      <span className="grid min-w-0 grid-cols-1 gap-2">
-        <PresetPreview preset={preset} mode="light" />
-        <PresetPreview preset={preset} mode="dark" />
-      </span>
-    </ToggleGroupItem>
-  );
-}
 
 /** Native radio semantics and arrow-key navigation, with colours supplied by the catalogue. */
 function Swatch({
@@ -179,12 +100,13 @@ function Swatch({
 }
 
 /**
- * The Theme tab: shadcn create's settings for the whole application, kept in the draft's one theme
- * selection. Each change, a swatch, a pasted preset code or Shuffle, is resolved with the checks
- * publication runs before it reaches the draft, and the canvas then draws it. Only options of the
- * pinned shadcn 4.21.0 catalogue are offered. The organisation theme editor is this same panel: it
- * passes no `base` and no `onPreset` (an organisation theme is a selection, never a platform
- * release pin), so the platform theme cards are not offered, and it names its own title and help.
+ * The Theme tab: the platform presets and shadcn create's settings for the whole application, kept
+ * in the draft's one theme selection. Each change, a preset, a swatch, a pasted preset code or
+ * Shuffle, is resolved with the checks publication runs before it reaches the draft, and the canvas
+ * then draws it. Only options of the pinned shadcn 4.21.0 catalogue are offered. The organisation
+ * theme editor is this same panel: it passes no `base` and no `onPreset` (an organisation theme is
+ * a selection, never a platform release pin), so a preset applies its settings, and it names its
+ * own title and help.
  */
 export function StudioThemePanel({
   title = "Theme",
@@ -215,7 +137,7 @@ export function StudioThemePanel({
     next: SourceApplicationThemeSelection,
     what: string,
   ) => Promise<StudioThemeChangeOutcome & Readonly<{ problems?: readonly string[] }>>;
-  /** Puts a complete theme (its release and selection) in the draft after it resolves. */
+  /** Puts a complete theme (its release and selection) in the draft after it resolves; without it a preset applies its settings. */
   onPreset?: (
     next: StudioThemePreset,
     what: string,
@@ -237,15 +159,17 @@ export function StudioThemePanel({
   const followMarker = (...keys: StudioThemeDimensionKey[]) => {
     const following = follows(...keys);
     if (following.length === 0) return undefined;
+    // A style is internal to a preset and never named.
     const names = following
+      .filter((key) => key !== "style")
       .map((key) => studioThemeOptionLabel(options, key, shown[key]))
       .join(", ");
     return (
       <Tooltip>
         <TooltipTrigger render={<Badge variant="outline" />}>Organisation</TooltipTrigger>
         <TooltipContent>
-          Follows the organisation theme ({names}): a setting at the platform default follows it.
-          Choose another value to override.
+          Follows the organisation theme{names.length === 0 ? "" : ` (${names})`}: a setting at the
+          platform default follows it. Choose another value to override.
         </TooltipContent>
       </Tooltip>
     );
@@ -285,16 +209,24 @@ export function StudioThemePanel({
       `${dimension(key).label} set to ${studioThemeOptionLabel(options, key, id)}`,
     );
   };
+  // An application's preset is the release it pins; the organisation pins none, so its preset is
+  // the one whose settings it holds.
   const selectedPreset =
     base === undefined
-      ? undefined
+      ? options.presets.find((preset) =>
+          options.dimensions.every((entry) => preset.selection[entry.key] === selection[entry.key]),
+        )
       : options.presets.find(
           (preset) =>
             base.catalogue_theme_id === preset.base.catalogueThemeId &&
             base.release_version === preset.base.releaseVersion,
         );
   const applyPreset = async (preset: StudioThemePreset) => {
-    if (locked || onPreset === undefined) return;
+    if (locked) return;
+    if (onPreset === undefined) {
+      await change(preset.selection, `Theme ${preset.label} applied`);
+      return;
+    }
     setPending(true);
     try {
       const outcome = await onPreset(preset, `Theme ${preset.label} applied`);
@@ -442,69 +374,13 @@ export function StudioThemePanel({
           Checking the theme…
         </div>
       )}
-      {onPreset !== undefined && (
-        <StudioInspectorGroup title="Themes">
-          <ToggleGroup
-            variant="outline"
-            spacing={3}
-            value={selectedPreset === undefined ? [] : [selectedPreset.key]}
-            disabled={locked}
-            onValueChange={(next) => {
-              const preset = options.presets.find((candidate) => candidate.key === next[0]);
-              if (preset !== undefined) void applyPreset(preset);
-            }}
-            className="grid w-full grid-cols-1 sm:grid-cols-2"
-          >
-            {options.presets.map((preset) => (
-              <ThemePresetItem key={preset.key} preset={preset} />
-            ))}
-          </ToggleGroup>
-        </StudioInspectorGroup>
-      )}
-      <StudioInspectorGroup title="Style" action={followMarker("style")}>
-        <RadioGroup
-          aria-label="Style"
-          value={shown.style}
+      <StudioInspectorGroup title="Presets" action={followMarker("style")}>
+        <StudioThemeChoices
+          presets={options.presets}
+          selectedKey={selectedPreset?.key}
           disabled={locked}
-          onValueChange={(next) => pick("style", String(next))}
-          className="grid grid-cols-2 gap-3"
-        >
-          {dimension("style").options.map((option) => (
-            <div
-              key={option.id}
-              data-vortex-focus-group=""
-              className={cn(
-                "relative space-y-2 rounded-lg p-2 hover:bg-accent",
-                shown.style === option.id && "ring-2 ring-primary",
-                locked && "opacity-50",
-              )}
-            >
-              <RadioGroupItem
-                id={`studio-theme-style-${option.id}`}
-                value={option.id}
-                aria-labelledby={`studio-theme-style-${option.id}-caption`}
-                data-vortex-focus-primary=""
-                className="sr-only"
-              />
-              <StylePreview style={option.id} />
-              <span
-                id={`studio-theme-style-${option.id}-caption`}
-                className="block text-sm font-medium"
-              >
-                {option.label}
-              </span>
-              {/* The whole tile selects the radio; sample controls remain inert and outside its label. */}
-              <FieldLabel
-                htmlFor={`studio-theme-style-${option.id}`}
-                aria-hidden="true"
-                className={cn(
-                  "absolute inset-0 w-auto",
-                  locked ? "cursor-not-allowed" : "cursor-pointer",
-                )}
-              />
-            </div>
-          ))}
-        </RadioGroup>
+          onPick={(preset) => void applyPreset(preset)}
+        />
       </StudioInspectorGroup>
       {(["base_color", "theme", "chart_color"] as const).map((key) => (
         <StudioInspectorGroup key={key} title={dimension(key).label} action={followMarker(key)}>

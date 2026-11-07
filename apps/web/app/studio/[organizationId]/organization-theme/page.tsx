@@ -5,6 +5,7 @@ import {
   organizationThemeFullSelection,
 } from "@vortex/platform/schema";
 import { readOrganizationThemeChangePermittedAfterAuthorization } from "@vortex/platform/server";
+import { loadStudioFrameContext } from "../../_lib/studio-frame";
 import { continueStudioSession } from "../../_lib/studio-session";
 import { studioThemeOptions } from "../../_lib/studio-theme-catalogue";
 import { StudioUnavailable } from "../../_components/studio-unavailable";
@@ -15,6 +16,9 @@ import { loadOrganizationTheme } from "../../../_lib/organization-theme";
 import { humanOrganizationRequests } from "../../../_lib/server-composition";
 
 export const dynamic = "force-dynamic";
+
+/** A refusal here says what the editor address says for the same person: their account lacks the permission. */
+const refused = { kind: "refused", reason: "permission_missing" } as const;
 
 /**
  * One organisation's theme: the editor for the selection every application of the organisation
@@ -39,13 +43,24 @@ export default async function StudioOrganizationThemePage({
   }
   const entry = launcher.entries.find((candidate) => candidate.organizationId === organizationId);
   if (entry === undefined) notFound();
+  // A person without Studio gets Studio's refusal here too, before this page reads the theme or the
+  // change permission (the document root's chrome colours are the only theme read before it).
+  const studio = await loadStudioFrameContext(organizationId);
+  if (studio.kind !== "available")
+    return (
+      <StudioUnavailable
+        subject="The organisation theme"
+        result={studio.kind === "refused" ? refused : studio}
+        organizationId={organizationId}
+      />
+    );
   // The theme is the request's one organisation-theme read, shared with the document root; a read
   // that fails was logged once by the request runner, so nothing is logged again here.
   const themeRead = await loadOrganizationTheme(resolved.session, entry.organizationId);
   const unavailable = (kind: "unavailable" | "refused" | "temporarily_unavailable") => (
     <StudioUnavailable
       subject="The organisation theme"
-      result={{ kind: kind === "unavailable" ? "refused" : kind }}
+      result={kind === "temporarily_unavailable" ? { kind } : refused}
       organizationId={organizationId}
     />
   );

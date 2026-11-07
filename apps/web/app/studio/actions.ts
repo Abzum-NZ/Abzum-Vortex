@@ -444,13 +444,8 @@ export async function saveStudioOrganizationTheme(
             )
           : undefined,
     );
-    if (result.kind === "temporarily_unavailable")
-      return refuse(
-        "save-organization-theme",
-        "STUDIO_ORGANIZATION_THEME_UNAVAILABLE",
-        { kind: "temporarily_unavailable" } as const,
-        new Error(result.databaseCode ?? result.cause ?? "unavailable"),
-      );
+    // The request runner logged the failed request once, with its cause.
+    if (result.kind === "temporarily_unavailable") return { kind: "temporarily_unavailable" };
     if (result.kind !== "available" || result.value === undefined) {
       console.info("[studio] the organisation theme change was refused for this person");
       return { kind: "refused" };
