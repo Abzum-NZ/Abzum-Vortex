@@ -1,13 +1,7 @@
 import { randomUUID } from "node:crypto";
-import { NavigationLink } from "@vortex/ui/routing";
 import { redirect } from "next/navigation";
 import type { OrganizationLauncherEntry } from "@vortex/platform/schema";
-import {
-  createThemeRootProps,
-  type DisplayRow,
-  type DisplaySemanticEvent,
-  type LauncherRowsPayload,
-} from "@vortex/ui";
+import type { DisplayRow, DisplaySemanticEvent, LauncherRowsPayload } from "@vortex/ui";
 import {
   acceptOrganizationInvitation,
   APPLICATION_LAUNCHER_BLOCK_RELEASE,
@@ -28,17 +22,6 @@ import {
   type PendingInvitation,
 } from "@vortex/platform/server";
 import { correlationIdSchema, describeFailure, invitationIdSchema } from "@vortex/platform/schema";
-import { Badge } from "@vortex/ui/components/badge";
-import { Button } from "@vortex/ui/components/button";
-import {
-  Card,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "@vortex/ui/components/card";
-import { signOut } from "../auth/actions";
-import { SubmitButton } from "../auth/_components/submit-button";
 import { continueSessionOrEnd, redirectToSessionEnd } from "../auth/_lib/session-redirect";
 import {
   resolveIdentitySession,
@@ -48,6 +31,7 @@ import {
 import { JoinOutcomeNotice } from "./_components/join-outcome-notice";
 import { OrganizationChooserPage } from "./_components/organization-chooser-page";
 import { loadOrganizationLauncher } from "../_lib/organization-context";
+import { UnavailableState } from "../_components/unavailable-state";
 import { resolveOrganizationLandingPath } from "../_lib/organization-landing";
 
 export const dynamic = "force-dynamic";
@@ -230,40 +214,11 @@ async function joinOrganization(event: DisplaySemanticEvent): Promise<void> {
 }
 
 const organizationsUnavailable = (
-  <main
-    className="flex min-h-svh items-center justify-center p-4 bg-background text-foreground"
-    {...createThemeRootProps(undefined, DEFAULT_PLATFORM_THEME_RELEASE.tokens)}
-  >
-    <Card className="w-full max-w-md border-border bg-card text-card-foreground shadow-sm">
-      <CardHeader className="gap-2">
-        <Badge variant="secondary" className="w-fit text-xs uppercase">
-          Organisation access
-        </Badge>
-        <CardTitle>
-          <h1 className="font-heading text-2xl font-bold tracking-tight text-foreground">
-            Organisations are temporarily unavailable
-          </h1>
-        </CardTitle>
-        <CardDescription className="text-sm text-muted-foreground">
-          Your sign-in is still active. Try loading your organisations again.
-        </CardDescription>
-      </CardHeader>
-      <CardFooter className="flex justify-between gap-3">
-        <Button
-          variant="outline"
-          nativeButton={false}
-          render={<NavigationLink href="/signed-in" />}
-        >
-          Try again
-        </Button>
-        <form action={signOut}>
-          <SubmitButton variant="ghost" pendingLabel="Signing out…">
-            Sign out
-          </SubmitButton>
-        </form>
-      </CardFooter>
-    </Card>
-  </main>
+  <UnavailableState
+    title="Organisations are temporarily unavailable"
+    sentence="Your organisations could not be read just now. Try again."
+    way={{ kind: "retry" }}
+  />
 );
 
 const CHOOSER_BLOCK_RELEASES = [

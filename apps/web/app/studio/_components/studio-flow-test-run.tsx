@@ -91,9 +91,7 @@ function TraceStep({ step, flowKey }: Readonly<{ step: Step; flowKey: string }>)
         ) : null}
         {step.refusal !== undefined ? (
           <Alert variant="destructive">
-            <AlertDescription>
-              {step.refusal.sentence} <code className="text-xs">{step.refusal.code}</code>
-            </AlertDescription>
+            <AlertDescription>{step.refusal.sentence}</AlertDescription>
           </Alert>
         ) : null}
         {Object.keys(step.outputs).length > 0 ? (
@@ -291,7 +289,7 @@ export function StudioFlowTestRun({
               {reply.end.kind === "finished"
                 ? reply.end.refusal === undefined
                   ? `Finished: ${reply.end.outcome}.`
-                  : `${reply.end.refusal.sentence} (${reply.end.refusal.code})`
+                  : reply.end.refusal.sentence
                 : reply.end.reason === "refused"
                   ? "The test run was refused."
                   : notRunSentences[reply.end.reason]}{" "}

@@ -26,7 +26,7 @@ export default async function StudioOrganizationThemePage({
   const { organizationId } = await params;
   const resolved = await continueStudioSession();
   if (resolved.kind === "temporarily_unavailable")
-    return <StudioUnavailable subject="Studio" result={resolved} reloadHref="/studio" />;
+    return <StudioUnavailable subject="Studio" result={resolved} />;
   const launcher = await loadOrganizationLauncher(resolved.session);
   if (launcher.kind !== "available") {
     console.error(`[studio] organization theme could not list organisations: ${launcher.kind}`);
@@ -34,7 +34,6 @@ export default async function StudioOrganizationThemePage({
       <StudioUnavailable
         subject="The organisation theme"
         result={{ kind: "temporarily_unavailable" }}
-        reloadHref={`/studio/${organizationId}/organization-theme`}
       />
     );
   }
@@ -47,7 +46,7 @@ export default async function StudioOrganizationThemePage({
     <StudioUnavailable
       subject="The organisation theme"
       result={{ kind: kind === "unavailable" ? "refused" : kind }}
-      reloadHref={`/studio/${organizationId}/organization-theme`}
+      organizationId={organizationId}
     />
   );
   if (themeRead.kind !== "available") return unavailable(themeRead.kind);

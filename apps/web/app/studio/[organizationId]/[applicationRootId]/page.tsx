@@ -1,11 +1,10 @@
 import { loadStudioApplicationDraft } from "../../../_lib/studio-application-draft";
-import {
-  loadOrganizationLauncher,
-  loadPermittedApplicationsAtAddress,
-} from "../../../_lib/organization-context";
-import { resolveIdentitySessionWithEmail } from "../../../auth/_lib/session-server";
-import { studioFrameOf } from "../../_lib/studio-frame";
 import { resolveApplicationAddress } from "../../../_lib/application-address";
+import {
+  loadStudioFrameContext,
+  loadStudioPlace,
+  type StudioFrameContext,
+} from "../../_lib/studio-frame";
 import { continueStudioSession } from "../../_lib/studio-session";
 import { StudioUnavailable } from "../../_components/studio-unavailable";
 import {
@@ -16,12 +15,7 @@ import {
 import { studioViewRequest } from "../../_lib/studio-view-request";
 import { loadStudioOrganizationHome } from "../../../_lib/studio-organization-home";
 import { readApplicationReleaseStanding } from "../../../_lib/application-release-adoption";
-import { readCurrentOrganizationAppStoreAddressAfterAuthorization } from "@vortex/platform/server";
-import {
-  organizationSelectionCandidateSchema,
-  type ApplicationRootId,
-} from "@vortex/platform/schema";
-import { humanOrganizationRequests } from "../../../_lib/server-composition";
+import type { ApplicationRootId } from "@vortex/platform/schema";
 
 export const dynamic = "force-dynamic";
 
@@ -35,126 +29,59 @@ const loadWorkspacePlace = async (
   applicationKey: string,
 ): Promise<
   | { kind: "available"; place: StudioWorkspacePlace }
-  | { kind: "refused" | "temporarily_unavailable" }
+  | Exclude<StudioFrameContext, { kind: "available" }>
 > => {
-  // Each answer that is not available is said by the page in the words of its kind; every read
-  // below logs its own failure once, so the page adds a line only where no read did.
-  const { resolution: resolved, email } = await resolveIdentitySessionWithEmail();
-  // Not signed in.
-  if (resolved.kind !== "active" || email === undefined) return { kind: "refused" };
-  const launcher = await loadOrganizationLauncher(resolved.session);
-  // A launcher read that failed for now is not a refusal: the person is told to try again.
-  if (launcher.kind === "temporarily_unavailable") return { kind: "temporarily_unavailable" };
-  const entry =
-    launcher.kind === "available"
-      ? launcher.entries.find((candidate) => candidate.organizationId === organizationId)
-      : undefined;
-  // The organisation is not one of the person's: an expected refusal, and no read logged it.
-  if (entry === undefined) {
-    console.info(
-      `[studio] workspace place refused: organisation not in the launcher (${launcher.kind})`,
-    );
-    return { kind: "refused" };
-  }
-  // The installed applications are read beside the settings: neither needs the other.
-  const applicationsRead = loadPermittedApplicationsAtAddress(
-    resolved.session,
-    entry.tenantShortName,
-    entry.organizationShortName,
-  );
-  // A refusal below returns before this read is used; it must not become an unhandled rejection.
-  void applicationsRead.catch(() => undefined);
-  // The organisation's settings name the App Store; Studio never assumes one.
-  const settings = await humanOrganizationRequests().run(
-    resolved.session,
-    organizationSelectionCandidateSchema.parse({ organizationId }),
-    (transaction) => readCurrentOrganizationAppStoreAddressAfterAuthorization(transaction),
-  );
-  // The request runner logged a refused or failed read once.
-  if (settings.kind !== "available")
-    return { kind: settings.kind === "temporarily_unavailable" ? settings.kind : "refused" };
-  // No App Store address, or one that names no application: an administrator sets it in the
-  // organisation settings.
-  if (settings.value === null || settings.value === "invalid") return { kind: "refused" };
-  const applications = await applicationsRead;
-  // The installed Studio release shapes the frame the editor shows.
-  const studioApplicationEntry =
-    applications.kind === "available"
-      ? applications.applications.find((candidate) => candidate.key === settings.value)
-      : undefined;
-  // The Flows tab's Navigate targets are needed after the editor opens, not to open it: their
-  // address reads start now, run beside the reads below, and reach the editor when they finish.
-  const navigationTargets: StudioNavigationTargets =
-    applications.kind !== "available"
-      ? // Logged once where the read failed; the editor is told it failed.
-        Promise.resolve({ kind: "failed" } as const)
-      : Promise.all(
-          applications.applications
-            .filter((candidate) => candidate.key !== applicationKey)
-            .map(async (candidate) => {
-              const addressed = await resolveApplicationAddress(
-                resolved.session,
-                entry.tenantShortName,
-                entry.organizationShortName,
-                candidate.key,
-              );
-              return addressed.kind === "application_page"
-                ? [
-                    {
-                      key: candidate.key,
-                      label: candidate.name,
-                      homePageKey: candidate.homePageKey,
-                      pageKeys: addressed.application.pageKeys,
-                    },
-                  ]
-                : [];
-            }),
-        ).then((targets) => ({ kind: "ready", targets: targets.flat() }) as const);
+  const place = await loadStudioPlace(organizationId);
+  if (place.kind !== "available") return place;
+  const { session, entry } = place;
   // Where the application stands in the organisation, with whether the builder may open and
   // install it: the facts the toolbar needs to offer Open the application, Install, Upgrade or none.
-  // It does not wait for the Studio address below.
-  const standingRead = readApplicationReleaseStanding(resolved.session, {
+  // It needs only the launcher entry, so it runs beside the frame's reads; it shares their App Store
+  // read, so a settings fault is still logged once.
+  const standingRead = readApplicationReleaseStanding(session, {
     tenantShortName: entry.tenantShortName,
     organizationShortName: entry.organizationShortName,
     organizationId: entry.organizationId,
     applicationRootId,
   });
-  // Both reads run on past a refusal or a throw below; marking them handled keeps a rejection of
-  // either from being unhandled (what the editor receives is unchanged).
-  void Promise.allSettled([standingRead, navigationTargets]);
-  // A read that failed for now is not an uninstalled Studio: the person is told to try again.
-  if (applications.kind === "temporarily_unavailable") return { kind: "temporarily_unavailable" };
-  const studioResolved =
-    studioApplicationEntry === undefined
-      ? undefined
-      : await resolveApplicationAddress(
-          resolved.session,
+  // A frame answer below returns before the standing is used; it must not become unhandled.
+  void standingRead.catch(() => undefined);
+  const context = await loadStudioFrameContext(organizationId);
+  if (context.kind !== "available") return context;
+  const { applications, frame } = context;
+  // The Flows tab's Navigate targets are needed after the editor opens, not to open it: their
+  // address reads start now, run beside the standing, and reach the editor when they finish.
+  const navigationTargets: StudioNavigationTargets = Promise.all(
+    applications.applications
+      .filter((candidate) => candidate.key !== applicationKey)
+      .map(async (candidate) => {
+        const addressed = await resolveApplicationAddress(
+          session,
           entry.tenantShortName,
           entry.organizationShortName,
-          studioApplicationEntry.key,
-          studioApplicationEntry.homePageKey,
+          candidate.key,
         );
-  if (studioResolved?.kind === "temporarily_unavailable")
-    return { kind: "temporarily_unavailable" };
-  // Studio is not installed for the person in this organisation.
-  if (
-    studioApplicationEntry === undefined ||
-    studioResolved?.kind !== "application_page" ||
-    studioResolved.installedContext === undefined
-  )
-    return { kind: "refused" };
-  const studioInstalled = {
-    name: studioApplicationEntry.name,
-    homePageKey: studioApplicationEntry.homePageKey,
-    context: studioResolved.installedContext,
-  };
-  // The same read the Releases tab shows, so Studio never calls an installed application installable.
+        return addressed.kind === "application_page"
+          ? [
+              {
+                key: candidate.key,
+                label: candidate.name,
+                homePageKey: candidate.homePageKey,
+                pageKeys: addressed.application.pageKeys,
+              },
+            ]
+          : [];
+      }),
+  ).then((targets) => ({ kind: "ready", targets: targets.flat() }) as const);
+  // A throw below leaves the targets unread; marking them handled keeps a rejection from being
+  // unhandled (what the editor receives is unchanged).
+  void Promise.allSettled([navigationTargets]);
   const standing = await standingRead;
   return {
     kind: "available",
     place: {
       organizationName: entry.organizationDisplayName,
-      frame: studioFrameOf(entry, email, studioInstalled),
+      frame,
       standing,
       navigationTargets,
     },
@@ -181,7 +108,13 @@ export default async function StudioApplicationPage({
     return <StudioUnavailable subject="Application draft" result={session} />;
   const initial = await loadStudioApplicationDraft(organizationId, applicationRootId);
   if (initial.kind !== "available")
-    return <StudioUnavailable subject="Application draft" result={initial} />;
+    return (
+      <StudioUnavailable
+        subject="Application draft"
+        result={initial}
+        organizationId={organizationId}
+      />
+    );
   const request = studioViewRequest(tab ?? "structure", null, initial.draft.source, page);
   const result =
     request.kind === "source"
@@ -197,34 +130,27 @@ export default async function StudioApplicationPage({
   if (result.kind === "stale") {
     console.info("[studio] application draft moved while the editor opened: STUDIO_DRAFT_STALE");
     return (
-      <StudioUnavailable subject="Application draft" result={{ kind: "temporarily_unavailable" }} />
+      <StudioUnavailable
+        subject="Application draft"
+        result={{ kind: "temporarily_unavailable" }}
+        organizationId={organizationId}
+      />
     );
   }
   if (result.kind !== "available")
-    return <StudioUnavailable subject="Application draft" result={result} />;
+    return (
+      <StudioUnavailable
+        subject="Application draft"
+        result={result}
+        organizationId={organizationId}
+      />
+    );
   const view = result.views[0]!;
   const [place, home] = await Promise.all([
     loadWorkspacePlace(result.organizationId, result.draft.rootId, result.draft.key),
     loadStudioOrganizationHome(result.organizationId),
   ]);
-  if (place.kind !== "available") {
-    // Reload opens the address shown, its view included; a refusal offers none.
-    const shown = new URLSearchParams(
-      Object.entries(query).filter(
-        (entry): entry is [string, string] => typeof entry[1] === "string",
-      ),
-    ).toString();
-    const address = `/studio/${organizationId}/${applicationRootId}`;
-    return (
-      <StudioUnavailable
-        subject="App Store address"
-        result={place}
-        {...(place.kind === "temporarily_unavailable"
-          ? { reloadHref: shown === "" ? address : `${address}?${shown}` }
-          : {})}
-      />
-    );
-  }
+  if (place.kind !== "available") return <StudioUnavailable subject="Studio" result={place} />;
   // The owner of a used Module is named and linked from this list; without it the key is shown.
   // The home read logged an answer that is not available, once.
   const applications =
