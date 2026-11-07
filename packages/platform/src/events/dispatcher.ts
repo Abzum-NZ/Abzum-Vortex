@@ -22,6 +22,7 @@ import {
   eventDeliveryRecoveryLimits,
   type EventDeliveryFailureClassification,
 } from "./delivery-recovery";
+import { logFault } from "../access/request-failure";
 import { asRecord, describeFailure } from "../catalogue/runtime-primitives";
 import { consumerKeyMatches, exactRecord } from "./event-record-shapes";
 
@@ -310,6 +311,11 @@ const grantRefusalReasons: readonly EventDispatcherRefusalReason[] = [
 const grantRefusalReasonMatches = (value: unknown): value is EventDispatcherRefusalReason =>
   typeof value === "string" && (grantRefusalReasons as readonly string[]).includes(value);
 
+const unusableGrant: EventDispatcherGrantAuthority = {
+  outcome: "refused",
+  reason: "dispatcher_grant_unavailable",
+};
+
 const parseGrantAuthority = (candidate: unknown): EventDispatcherGrantAuthority => {
   const authorised = exactRecord(candidate, ["outcome", "systemActorId"]);
   if (
@@ -320,7 +326,7 @@ const parseGrantAuthority = (candidate: unknown): EventDispatcherGrantAuthority 
   const refused = exactRecord(candidate, ["outcome", "reason"]);
   if (refused?.outcome === "refused" && grantRefusalReasonMatches(refused.reason))
     return { outcome: "refused", reason: refused.reason };
-  return { outcome: "refused", reason: "dispatcher_grant_unavailable" };
+  return unusableGrant;
 };
 
 /**
@@ -345,9 +351,13 @@ const createEventDispatcherGrantReader = (
           `,
         );
         const first = rows[0];
-        if (rows.length !== 1 || first === undefined)
-          return { outcome: "refused", reason: "dispatcher_grant_unavailable" };
-        return parseGrantAuthority(first.result);
+        const authority =
+          rows.length !== 1 || first === undefined
+            ? unusableGrant
+            : parseGrantAuthority(first.result);
+        if (authority.outcome === "refused" && authority.reason === "dispatcher_grant_unavailable")
+          logFault("events", "dispatcher grant", "dispatcher_grant_unavailable");
+        return authority;
       } catch (error) {
         console.error(`[events] dispatcher grant could not be read: ${describeFailure(error)}`);
         return { outcome: "refused", reason: "dispatcher_grant_unavailable" };
@@ -799,8 +809,10 @@ export const createEventDispatcherRoute = (
       if (authority.outcome === "refused") return authority;
       // The granted actor is revalidated here so an injected reader cannot mint
       // an identity from an unusable value.
-      if (!actorIdSchema.safeParse(authority.systemActorId).success)
+      if (!actorIdSchema.safeParse(authority.systemActorId).success) {
+        logFault("events", "dispatcher grant", "dispatcher_grant_unavailable");
         return { outcome: "refused", reason: "dispatcher_grant_unavailable" };
+      }
       const dispatcherIdentity = mintAuthenticatedDispatcher(authority.systemActorId);
       try {
         const result = await dispatcher.dispatch({

@@ -944,7 +944,7 @@ export const createFlowTaskRunner = (
           "This workflow can't read records here.",
           "the current initiator's protected query reader",
         );
-      return runQueryTask(dependencies.queryRecords, run, call.properties);
+      return runQueryTask(dependencies.queryRecords, run, call.taskId, call.properties);
     }
 
     // Identity acquisition is a fresh protected read, never an effect-ledger replay. The tuple

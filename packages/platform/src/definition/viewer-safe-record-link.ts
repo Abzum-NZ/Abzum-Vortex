@@ -722,11 +722,8 @@ export const createViewerSafeRecordLinkService = (
         const request = await requests.run(session, selection, (transaction, scope) =>
           readLabelsInRequest(transaction, scope, context, links),
         );
-        if (request.kind === "available") return request.value;
-        console.error(
-          `[page] record link labels unavailable: RECORD_LINK_LABELS_${request.kind.toUpperCase()}`,
-        );
-        return labelsUnavailable;
+        // The request runner logged an answer that is not available, once.
+        return request.kind === "available" ? request.value : labelsUnavailable;
       } catch (error) {
         console.error(
           `[page] record link labels unavailable: RECORD_LINK_LABELS_READ_FAILED ${describeFailure(error)}`,
@@ -837,12 +834,8 @@ export const createViewerSafeRecordLinkService = (
                 return read;
               },
             );
-            if (request.kind !== "available") {
-              console.error(
-                `[page] record link targets unavailable: RECORD_LINK_TARGETS_${request.kind.toUpperCase()}`,
-              );
-              return;
-            }
+            // The request runner logged an answer that is not available, once.
+            if (request.kind !== "available") return;
             for (const [position, { index }] of entries.entries())
               results[index] = viewerSafeRecordLinkResultSchema.parse(request.value[position]);
           } catch (error) {

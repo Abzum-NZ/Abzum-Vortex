@@ -1,6 +1,6 @@
 "use server";
 
-import { describeFailure } from "@vortex/platform/schema";
+import { logRefusal } from "@vortex/platform/server";
 import {
   readStudioActionFlows as readFlows,
   type StudioActionFlowsResult,
@@ -18,7 +18,7 @@ export async function readStudioActionFlows(
   try {
     return await readFlows(organizationId, rootId);
   } catch (error) {
-    console.error(`[studio] action flows could not be read: ${describeFailure(error)}`, error);
+    logRefusal("studio", "action flows", "read_failed", error);
     return { kind: "temporarily_unavailable" };
   }
 }

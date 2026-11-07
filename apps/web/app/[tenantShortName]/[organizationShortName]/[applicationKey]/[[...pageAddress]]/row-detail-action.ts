@@ -1,6 +1,11 @@
 "use server";
 
-import { containedComponentIdSchema, revisionSchema } from "@vortex/platform/schema";
+import {
+  containedComponentIdSchema,
+  describeFailure,
+  revisionSchema,
+} from "@vortex/platform/schema";
+import { logClassifiedFailure, requestFailureLogged } from "@vortex/platform/server";
 import { z } from "zod";
 import { continueSessionOrEnd } from "../../../../auth/_lib/session-redirect";
 import { resolveIdentitySession } from "../../../../auth/_lib/session-server";
@@ -75,7 +80,8 @@ export async function readRowDetail(input: unknown): Promise<RowDetailLoadResult
       },
     );
   } catch (error) {
-    console.error("[page] row detail read failed", error);
+    if (!requestFailureLogged(error))
+      logClassifiedFailure(`[page] row detail read failed: ${describeFailure(error)}`, error);
     return { kind: "temporarily_unavailable" };
   }
 }

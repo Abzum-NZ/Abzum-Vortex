@@ -83,7 +83,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   }
 
   if (response.outcome === "refused") {
-    logRefusal("events-dispatch", "wake-up", `dispatcher_${response.reason}`);
+    // A grant the dispatcher could not use was logged, once, where it was found.
+    if (response.reason !== "dispatcher_grant_unavailable")
+      logRefusal("events-dispatch", "wake-up", `dispatcher_${response.reason}`);
     return privateResponse(
       { outcome: "refused", reason: response.reason },
       credentialRefusals.has(response.reason) ? 401 : 503,

@@ -3,7 +3,7 @@ import { appendFileSync, existsSync, readFileSync } from "node:fs";
 import { resolve, relative, extname, basename, dirname, join } from "node:path";
 import ts from "typescript";
 import { createHash } from "node:crypto";
-import { guardRules, packageAreas, paths, scannedRuleIds } from "./config.ts";
+import { packageAreas, paths, scannedRuleIds } from "./config.ts";
 import { derivedDefinitionId } from "../../packages/platform/src/definition/derived-definition-id.ts";
 
 type Finding = { rule: string; file: string; line: number; detail: string };
@@ -37,9 +37,6 @@ const definitionValidationRun = new Promise<{
 const sourceExtensions = new Set([".ts", ".tsx", ".js", ".jsx", ".mjs", ".mts", ".sql"]);
 const findings: Finding[] = [];
 const normalize = (value: string) => value.replaceAll("\\", "/");
-const ruleTier = (rule: string) =>
-  (guardRules as Record<string, { tier: "blocking" | "warning" }>)[rule]?.tier ?? "warning";
-const isBlocking = (rule: string) => ruleTier(rule) === "blocking";
 // The generated baseline migrations are a frozen snapshot: they may not grow, and per-function
 // rules skip them.
 const baselineMigrationFiles = new Map([
@@ -1177,28 +1174,23 @@ for (const allowance of allowances)
       detail: `${allowance.rule}: ${allowance.reason}`,
     });
 
-const blocking = reported.filter((finding) => isBlocking(finding.rule));
-const warnings = reported.filter((finding) => !isBlocking(finding.rule));
 const usedAllowances = new Map<string, number>();
 for (const allowance of allowances.filter((candidate) => candidate.used))
   usedAllowances.set(allowance.rule, (usedAllowances.get(allowance.rule) ?? 0) + 1);
 
-for (const finding of warnings)
-  console.warn(`${finding.file}:${finding.line}: warning ${finding.rule}: ${finding.detail}`);
-for (const finding of blocking)
-  console.error(`${finding.file}:${finding.line}: blocking ${finding.rule}: ${finding.detail}`);
+for (const finding of reported)
+  console.error(`${finding.file}:${finding.line}: ${finding.rule}: ${finding.detail}`);
 if (definitionValidationError) console.error(definitionValidationError);
 
 const summary = [
   "## Guard summary",
   "",
-  `- Blocking findings: ${blocking.length}`,
-  `- Warning findings: ${warnings.length}`,
+  `- Findings: ${reported.length}`,
   `- Allowances used: ${[...usedAllowances].map(([rule, count]) => `${rule} ${count}`).join(", ") || "none"}`,
 ];
 const summaryText = `${summary.join("\n")}\n`;
 if (process.env.GITHUB_STEP_SUMMARY) appendFileSync(process.env.GITHUB_STEP_SUMMARY, summaryText);
 console.log(summaryText);
 
-if (blocking.length || definitionValidationError) process.exitCode = 1;
+if (reported.length || definitionValidationError) process.exitCode = 1;
 else console.log("Guard passed.");

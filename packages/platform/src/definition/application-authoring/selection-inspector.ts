@@ -9,7 +9,7 @@ import {
   type SourceItem,
   type SourcePageData,
 } from "../application-composition/source-composition";
-import { isRecord } from "../../catalogue/runtime-primitives";
+import { describeFailure, isRecord } from "../../catalogue/runtime-primitives";
 import { isStudioDraftSnapshot } from "./draft-snapshot";
 import {
   studioFlowLabel,
@@ -338,7 +338,9 @@ export const resolveStudioSelectionInspectorContext = (
     if (candidate === null) return result({ status: "missing" });
     if (candidate === undefined) return refused("ambiguous_selection");
     return resolved(parsedRoot.data, parsedSelection.kind, candidate);
-  } catch {
+  } catch (error) {
+    // Nothing here throws a refusal: a throw is a draft of a shape the platform did not expect.
+    console.error(`[studio] the selection could not be resolved: ${describeFailure(error)}`);
     return refused("invalid_context");
   }
 };
