@@ -87,6 +87,12 @@ const requestSchema = pageAddressSchema
 const refusedResponse = (): NextResponse =>
   privateResponse({ kind: "refused", committedNow: false }, 404);
 
+/** A refusal this route decides itself (no read or runner answered it): said once, then refused. */
+const refusedHere = (route: string, code: string): NextResponse => {
+  logRefusal(route, "invocation", code);
+  return refusedResponse();
+};
+
 class RolledBackInvocation extends Error {
   constructor(readonly response: NextResponse) {
     super("FLOW_INVOCATION_ROLLBACK");
@@ -126,11 +132,17 @@ export const createFlowInvocationHandler =
   async (request: NextRequest): Promise<NextResponse> => {
     const route = channel === "webmcp" ? "/api/flows/invoke/webmcp" : "/api/flows/invoke";
     try {
-      if (!fromOwnSite(request)) return privateResponse({ kind: "refused" }, 403);
+      if (!fromOwnSite(request)) {
+        logRefusal(route, "invocation", "request_not_from_own_site");
+        return privateResponse({ kind: "refused" }, 403);
+      }
       // Read before holding a database transaction: a slow upload must not pin a pooled connection.
       const read = await readJsonBody(request, maximumRequestBodyLength, requestSchema);
-      if (read.kind === "too_large") return privateResponse({ kind: "refused" }, 413);
-      if (read.kind === "unreadable") return refusedResponse();
+      if (read.kind === "too_large") {
+        logRefusal(route, "invocation", "body_too_large");
+        return privateResponse({ kind: "refused" }, 413);
+      }
+      if (read.kind === "unreadable") return refusedHere(route, "body_unreadable");
       if (read.kind === "invalid") {
         logRefusal(route, "request body", "body_schema_invalid", {
           issues: read.error.issues.map((issue) => ({
@@ -148,7 +160,7 @@ export const createFlowInvocationHandler =
           body.refresh.address.applicationKey !== body.applicationKey ||
           body.refresh.address.pageKey !== body.pageKey)
       )
-        return refusedResponse();
+        return refusedHere(route, "refresh_address_mismatch");
       let scopedRequestCompleted = false;
       // Refresh rows are read after the invocation's transaction has committed.
       let refreshAfterCommit: (() => Promise<NextResponse>) | undefined;
@@ -181,7 +193,7 @@ export const createFlowInvocationHandler =
               const page = loaded.value.releaseSet.application.content.pages.find(
                 (candidate) => candidate.key === body.pageKey,
               );
-              if (page === undefined) return refusedResponse();
+              if (page === undefined) return refusedHere(route, "page_not_in_release");
               const demand = await prepareRuntimePreviewChoices(
                 identity.session,
                 loaded.value,
@@ -369,12 +381,15 @@ export const createFlowInvocationHandler =
                   body.pageKey,
                 );
                 if (resolved.kind !== "available")
-                  return { kind: "reply" as const, response: refusedResponse() };
+                  return { kind: "reply" as const, response: refusedHere(route, "page_not_open") };
                 const plan = flowPlansOf(addressed.context.releaseSet).plans.get(
                   String(body.invocation.flowId),
                 );
                 if (plan === undefined)
-                  return { kind: "reply" as const, response: refusedResponse() };
+                  return {
+                    kind: "reply" as const,
+                    response: refusedHere(route, "flow_not_in_release"),
+                  };
                 if (
                   plan.segments.some(
                     (segment) =>

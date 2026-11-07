@@ -885,31 +885,32 @@ export const readAddressedApplicationForFlowInRequest = async (
     addressIdentity: unknown;
   }>,
 ): Promise<AddressedApplicationBundleRead> => {
-  const unavailable = (): AddressedApplicationBundleRead => ({
-    read: { kind: "unavailable" },
-    experiences: [],
-  });
+  // Every answer that is not available is said once here (the projection says its own).
+  const unavailable = (reason: string): AddressedApplicationBundleRead => {
+    answeredBeforeRequest({ kind: "unavailable" }, reason, "addressed application");
+    return { read: { kind: "unavailable" }, experiences: [] };
+  };
   if (
     bound.scope.applicationRootId === undefined ||
     isReservedTenantSegment(input.tenantShortName) ||
     !builderKeySchema.safeParse(input.pageKey).success ||
     !namespacedKeySchema.safeParse(input.applicationKey).success
   )
-    return unavailable();
+    return unavailable("invalid address");
   const identity = addressedActiveApplicationIdentitySchema.parse(input.addressIdentity);
   if (
     !sameId(identity.organizationId, bound.scope.organizationId) ||
     !sameId(identity.applicationRootId, bound.scope.applicationRootId) ||
     identity.definitionKey !== input.applicationKey
   )
-    return unavailable();
+    return unavailable("address identity does not match the request");
   const projected = await projectAddressedApplicationInRequest(
     permissions,
     bound,
     { organizationId: identity.organizationId, identity },
     input.pageKey,
   );
-  if (projected === undefined) return unavailable();
+  if (projected === undefined) return { read: { kind: "unavailable" }, experiences: [] };
   const { context, permitted } = projected;
   return {
     read: permittedApplicationsReadSchema.parse({
