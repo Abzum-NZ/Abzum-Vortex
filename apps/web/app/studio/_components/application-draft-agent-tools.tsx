@@ -3,7 +3,6 @@ import type { ApplicationWebMcpRuntime } from "@vortex/ui";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   applicationSourceDocumentSchema,
-  canonicalJson,
   describeFailure,
   moduleFieldTypeLabels,
   sourceApplicationBodySchema,
@@ -582,7 +581,7 @@ export function ApplicationDraftAgentTools({
             latest.current.lifetime !== lifetime ||
             !latest.current.isActive() ||
             latest.current.readSaved().draftRevision !== saved.draftRevision ||
-            canonicalJson(history.getState().source) !== canonicalJson(expected)
+            history.getState().source !== expected
           )
             return {
               outcome: "conflict",
