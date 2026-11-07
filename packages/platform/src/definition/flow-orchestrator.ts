@@ -35,6 +35,7 @@ import {
 } from "./flow-orchestrator-types";
 import { flowMaximumServerSeconds } from "../workflows/flow-limits";
 import { flowEntrySegmentsMatch } from "../workflows/flow-plan";
+import { describeFailure } from "../catalogue/runtime-primitives";
 
 /** Orchestrates flows with verified authority and revision-bound writes. */
 
@@ -393,7 +394,7 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
             carriedValues: input.carriedValues,
           }).forms;
         } catch (error) {
-          console.error("[flows] invalid detached segment seed", error);
+          console.info(`[flows] detached segment seed refused: ${describeFailure(error)}`);
           return refused;
         }
         const resolvedInputs: Record<string, unknown> = { ...binding.inputs };

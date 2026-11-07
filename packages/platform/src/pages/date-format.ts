@@ -1,3 +1,5 @@
+import { describeFailure } from "../catalogue/runtime-primitives";
+
 /**
  * Organisation or viewer presentation settings for dates. The host passes the locale (a BCP 47
  * tag) and IANA time zone; when it passes none, the viewer's own browser settings apply after
@@ -239,7 +241,9 @@ const relativeFormatterFor = (locale: string): Intl.RelativeTimeFormat => {
   try {
     formatter = new Intl.RelativeTimeFormat(locale, { numeric: "auto" });
   } catch (error) {
-    console.error("[display] relative time locale unsupported, using the default", error);
+    console.info(
+      `[display] relative time locale unsupported, using the default: ${describeFailure(error)}`,
+    );
     formatter = new Intl.RelativeTimeFormat(DEFAULT_LOCALE, { numeric: "auto" });
   }
   if (relativeFormatters.size >= MAXIMUM_CACHED_FORMATTERS) relativeFormatters.clear();

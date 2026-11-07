@@ -315,7 +315,7 @@ export const queryLocalDatabaseAsOwner = (
   const cli = join(findRepositoryRoot(), "node_modules", "supabase", "dist", "supabase.js");
   const result = spawnSync(
     process.execPath,
-    [cli, "db", "query", "--local", "--output", "json", ...supabaseWorkdirArguments(), sql],
+    [cli, "db", "query", "--output", "json", ...supabaseWorkdirArguments(), sql],
     { cwd: findRepositoryRoot(), encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] },
   );
   if (result.error) throw result.error;

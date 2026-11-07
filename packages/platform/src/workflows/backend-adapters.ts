@@ -4,6 +4,7 @@ import { z } from "zod";
 import type { BackendRunNamedCode } from "./backend-run-failure-codes";
 import { jsonValueSchema, type JsonValue } from "../catalogue/common";
 import { withRuntimeTransaction } from "../db/request-transaction";
+import { describeFailure } from "../catalogue/runtime-primitives";
 
 /**
  * The back-end adapter: the one place a flow run is handed to "the back end". It is simulated
@@ -186,7 +187,7 @@ export const createSimulatedBackendAdapter = (dependencies: BackendAdapterDepend
     try {
       outcome = await dependencies.execute(claimed);
     } catch (error) {
-      console.error("[backend] run failed unexpectedly", error);
+      console.error(`[backend] run failed unexpectedly: ${describeFailure(error)}`);
       outcome = { state: "failed", failureCode: "unexpected_failure" satisfies BackendRunNamedCode };
     }
     await finishRun(backendRunId, outcome);

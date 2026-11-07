@@ -22,6 +22,7 @@ import {
   withProtectedReadObserver,
   type ProtectedReadObserver,
 } from "./query-attribution";
+import { describeFailure } from "../catalogue/runtime-primitives";
 
 export type DatabaseValue = string | number | boolean | Date | Uint8Array | null;
 export type DatabaseRow = Readonly<Record<string, unknown>>;
@@ -852,7 +853,9 @@ const notifyRequestCommitted = (): void => {
     (globalThis as CommittedTransactionGlobal)[committedTransactionListenerKey]?.();
   } catch (error) {
     // The transaction has committed; scheduling failure must not report a failed write.
-    console.error("[events] could not schedule committed transaction dispatch", error);
+    console.error(
+      `[events] could not schedule committed transaction dispatch: ${describeFailure(error)}`,
+    );
   }
 };
 

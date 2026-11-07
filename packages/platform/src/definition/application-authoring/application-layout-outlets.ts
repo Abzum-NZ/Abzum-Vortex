@@ -252,7 +252,9 @@ export const editLayoutOutlet = (
       }
   } catch (error) {
     if (!(error instanceof StoredCompositionRefusal)) throw error;
-    console.error("[studio] layout outlet refused", { part: error.location, reason: error.reason });
+    console.error(
+      `[studio] layout outlet refused part=${error.location.join(".")}: ${error.reason}`,
+    );
     return refuse(
       `This change would make the layout invalid. ${error.message}.`,
       pages.map((page) => pageUse(candidate, page)),
