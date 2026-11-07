@@ -145,9 +145,9 @@ export const readQueryMembership = async (
     command.continuationToken !== undefined ||
     ids.length !== command.pageSize
   )
-    return refuseWithCause("request_invalid", "membership", "exact_ids_required");
+    return refuseWithCause("request_invalid", "membership");
   const userRefusal = userInputRefusal(command);
-  if (userRefusal !== undefined) return refuseWithCause(userRefusal, "user_input", userRefusal);
+  if (userRefusal !== undefined) return refuseWithCause(userRefusal, "user_input");
   const admitted = await admitQueryInputs(transaction, command);
   if (admitted.outcome === "refused") return admitted;
   const rows = await transaction.query<ResultRow>`
@@ -168,9 +168,7 @@ export const readQueryMembership = async (
     ) as result
   `;
   const result = membershipReadSchema.parse(one(rows));
-  return result.outcome === "refused"
-    ? refuseWithCause(result.reasonCode, "membership", result.reasonCode)
-    : result;
+  return result.outcome === "refused" ? refuseWithCause(result.reasonCode, "membership") : result;
 };
 
 export const runCommand = async (
@@ -180,22 +178,17 @@ export const runCommand = async (
   continuationKey: QueryContinuationKey,
 ): Promise<ProtectedQueryResult> => {
   const applicationRootId = scope.applicationRootId;
-  if (applicationRootId === undefined)
-    return refuseWithCause("request_invalid", "scope", "application_not_selected");
+  if (applicationRootId === undefined) return refuseWithCause("request_invalid", "scope");
   if (
     command.exactRecordIds !== undefined &&
     (command.continuationToken !== undefined || command.exactRecordIds.length !== command.pageSize)
   ) {
-    return refuseWithCause(
-      "request_invalid",
-      "exact_ids",
-      command.continuationToken !== undefined ? "exact_ids_cursor" : "exact_ids_page_size",
-    );
+    return refuseWithCause("request_invalid", "exact_ids");
   }
 
   // A user sort or filter outside the component-declared sets is refused before any read.
   const userRefusal = userInputRefusal(command);
-  if (userRefusal !== undefined) return refuseWithCause(userRefusal, "user_input", userRefusal);
+  if (userRefusal !== undefined) return refuseWithCause(userRefusal, "user_input");
 
   // A continuation is accepted only for the same actor, installation, query,
   // release and inputs it was issued for.
@@ -206,7 +199,7 @@ export const runCommand = async (
       after = decodeQueryContinuationToken(command.continuationToken, continuationKey);
     } catch (error) {
       if (error instanceof QueryContinuationTokenError)
-        return refuseWithCause("cursor_invalid", "continuation", "token_not_authentic");
+        return refuseWithCause("cursor_invalid", "continuation");
       throw error;
     }
     if (
@@ -217,7 +210,7 @@ export const runCommand = async (
       !sameId(after.queryId, command.queryId) ||
       after.direction !== direction
     )
-      return refuseWithCause("cursor_stale", "continuation", "other_scope_or_query");
+      return refuseWithCause("cursor_stale", "continuation");
   }
 
   const admitted = await admitQueryInputs(transaction, command, after?.moduleReleaseRevision);
@@ -235,7 +228,7 @@ export const runCommand = async (
     pageSize: command.pageSize,
   });
   if (after !== undefined && after.inputFingerprint !== inputFingerprint)
-    return refuseWithCause("cursor_stale", "continuation", "inputs_or_order_changed");
+    return refuseWithCause("cursor_stale", "continuation");
 
   const load = async (): Promise<ProtectedQueryResult> => {
     let cursor = after;
@@ -256,8 +249,7 @@ export const runCommand = async (
         inputValues,
         cursor,
       );
-      if (page.outcome === "refused")
-        return refuseWithCause(page.reasonCode, "page_read", page.reasonCode);
+      if (page.outcome === "refused") return refuseWithCause(page.reasonCode, "page_read");
       releaseVersion = page.moduleReleaseVersion;
       // Every call of one request reads under the same authority; the first decides the bound.
       fieldBounds ??= page.fieldBounds;
