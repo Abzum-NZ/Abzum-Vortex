@@ -12,9 +12,20 @@ import {
 } from "../../../_lib/application-home";
 import { loadOrganizationAppStoreKey } from "../../../_lib/applications-page";
 import { loadStudioCreateAccess } from "../../../_lib/studio-application-draft";
-import { matchesLiteralSearchText, splitSearchFilters } from "@vortex/platform/server";
+import { logRefusal, matchesLiteralSearchText, splitSearchFilters } from "@vortex/platform/server";
 
 type ApplicationSearchView = Awaited<ReturnType<typeof loadApplicationSearch>>;
+
+/**
+ * The one line for a frame action whose session did not resolve: a missing or ended one is an
+ * expected refusal and information; only a temporarily unavailable one is a platform fault and an
+ * error.
+ */
+const logUnanswered = (operation: string, kind: string): void => {
+  if (kind === "temporarily_unavailable")
+    console.error(`[application-frame] ${operation} failed: session ${kind}`);
+  else logRefusal("application-frame", operation, `session_${kind}`);
+};
 
 /**
  * Resolves a flow's Navigate target in another application of the same organisation to its final
@@ -35,12 +46,12 @@ export async function resolveApplicationPagePathAction(
     ) ||
     (pageKey !== undefined && (typeof pageKey !== "string" || pageKey.length === 0))
   ) {
-    console.error("[application-frame] navigate target refused: malformed address");
+    logRefusal("application-frame", "navigate target", "malformed_address");
     return undefined;
   }
   const resolution = await resolveIdentitySession();
   if (resolution.kind !== "active") {
-    console.error(`[application-frame] navigate target refused: session ${resolution.kind}`);
+    logUnanswered("navigate target", resolution.kind);
     return undefined;
   }
   const addressed = await resolveApplicationAddress(
@@ -51,7 +62,9 @@ export async function resolveApplicationPagePathAction(
     pageKey,
   );
   if (addressed.kind !== "application_page") {
-    console.error(`[application-frame] navigate target refused: address ${addressed.kind}`);
+    // A fault of the address read was logged once where it happened.
+    if (addressed.kind !== "temporarily_unavailable")
+      logRefusal("application-frame", "navigate target", `address_${addressed.kind}`);
     return undefined;
   }
   return applicationPageAddressPath(
@@ -77,12 +90,12 @@ export async function resolveApplicationHomePathByRootAction(
       (value) => typeof value !== "string" || value.length === 0,
     )
   ) {
-    console.error("[application-frame] navigate target refused: malformed address");
+    logRefusal("application-frame", "navigate target", "malformed_address");
     return { kind: "unavailable" };
   }
   const resolution = await resolveIdentitySession();
   if (resolution.kind !== "active") {
-    console.error(`[application-frame] navigate target refused: session ${resolution.kind}`);
+    logUnanswered("navigate target", resolution.kind);
     return { kind: "unavailable" };
   }
   return applicationHomePathByRoot(
@@ -99,12 +112,12 @@ export async function readApplicationSwitcherAction(
   organizationShortName: string,
 ): Promise<ApplicationSwitcherData> {
   if ([tenantShortName, organizationShortName].some((value) => typeof value !== "string")) {
-    console.error("[application-frame] switcher refused: malformed address");
+    logRefusal("application-frame", "switcher", "malformed_address");
     return { state: "unavailable", applications: [] };
   }
   const resolution = await resolveIdentitySession();
   if (resolution.kind !== "active") {
-    console.error(`[application-frame] switcher refused: session ${resolution.kind}`);
+    logUnanswered("switcher", resolution.kind);
     return { state: "unavailable", applications: [] };
   }
   try {
@@ -113,10 +126,6 @@ export async function readApplicationSwitcherAction(
       tenantShortName,
       organizationShortName,
     );
-    if (read.kind === "temporarily_unavailable")
-      console.error(
-        `[application-shell] permitted applications unavailable: cause=${read.cause ?? "cause_not_provided"}`,
-      );
     // Studio is an ordinary switcher row when the one access check says this person may build here.
     const studio =
       read.kind === "available" ? await loadStudioCreateAccess(read.organizationId) : undefined;
@@ -158,7 +167,7 @@ export async function readApplicationSwitcherAction(
           : [],
     };
   } catch (error) {
-    console.error("[application-shell] permitted applications failed", error);
+    logRefusal("application-shell", "permitted applications", "switcher_read_failed", error);
     return { state: "temporarily_unavailable", applications: [] };
   }
 }
@@ -180,12 +189,12 @@ export async function searchApplicationAction(
       (value) => typeof value !== "string",
     )
   ) {
-    console.error("[application-frame] search refused: malformed address or expression");
+    logRefusal("application-frame", "search", "malformed_address_or_expression");
     return { kind: "unavailable" };
   }
   const resolution = await resolveIdentitySession();
   if (resolution.kind !== "active") {
-    console.error(`[application-frame] search refused: session ${resolution.kind}`);
+    logUnanswered("search", resolution.kind);
     return { kind: "unavailable" };
   }
   return loadApplicationSearch(

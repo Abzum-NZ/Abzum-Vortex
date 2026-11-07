@@ -17,12 +17,13 @@ const writeApplicationDraft = async (
   try {
     const resolved = await resolveIdentitySession();
     if (resolved.kind !== "active") {
-      console.error(
-        `[studio] application draft ${mode} refused STUDIO_DRAFT_${mode.toUpperCase()}_SESSION_NOT_ACTIVE: ${resolved.kind}`,
-      );
-      return resolved.kind === "temporarily_unavailable"
-        ? { kind: "temporarily_unavailable" }
-        : { kind: "refused", reason: "session_ended" };
+      const line = `[studio] application draft ${mode} refused STUDIO_DRAFT_${mode.toUpperCase()}_SESSION_NOT_ACTIVE: ${resolved.kind}`;
+      if (resolved.kind === "temporarily_unavailable") {
+        console.error(line);
+        return { kind: "temporarily_unavailable" };
+      }
+      console.info(line);
+      return { kind: "refused", reason: "session_ended" };
     }
     const writer = createHumanApplicationDraftWriter({
       requests: humanOrganizationRequests(),

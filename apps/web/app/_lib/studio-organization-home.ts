@@ -8,6 +8,7 @@ import {
   readVisiblePersonLabels,
   type BuilderTargetFactsReader,
   type OrganizationBuilderRoot,
+  logRefusal,
 } from "@vortex/platform/server";
 import { organizationIdSchema, type OrganizationId } from "@vortex/platform/schema";
 import { resolveIdentitySession } from "../auth/_lib/session-server";
@@ -33,18 +34,17 @@ export const loadStudioOrganizationHome = async (
 ): Promise<StudioOrganizationHomeResult> => {
   const organization = organizationIdSchema.safeParse(candidateOrganizationId);
   if (!organization.success) {
-    console.error(
-      "[studio] organization home refused: invalid organization identifier",
-      organization.error,
-    );
+    logRefusal("studio", "organization home", "invalid_organization_identifier");
     return { kind: "refused", reason: "The organization address is invalid." };
   }
   const resolved = await resolveIdentitySession();
   if (resolved.kind !== "active") {
-    console.error(`[studio] organization home refused: identity session ${resolved.kind}`);
-    return resolved.kind === "temporarily_unavailable"
-      ? { kind: "temporarily_unavailable" }
-      : { kind: "refused", reason: "Sign in to open this Studio workspace." };
+    if (resolved.kind === "temporarily_unavailable") {
+      console.error("[studio] organization home failed: identity session temporarily_unavailable");
+      return { kind: "temporarily_unavailable" };
+    }
+    logRefusal("studio", "organization home", `identity_session_${resolved.kind}`);
+    return { kind: "refused", reason: "Sign in to open this Studio workspace." };
   }
 
   const result = await humanOrganizationRequests().run(
@@ -65,7 +65,7 @@ export const loadStudioOrganizationHome = async (
         await requireBuilderAuthority(organizationAuthority, { kind: "draft_change" });
       } catch (error) {
         if (error instanceof BuilderAuthorityError && error.code === "BUILDER_PERMISSION_REFUSED") {
-          console.error(`[studio] organization home refused: ${error.code}`);
+          logRefusal("studio", "organization home", error.code);
           return { kind: "refused" as const, reason: permissionRefusal };
         }
         throw error;
@@ -119,10 +119,6 @@ export const loadStudioOrganizationHome = async (
     },
   );
   if (result.kind === "available") return result.value;
-  if (result.kind === "unavailable") {
-    console.error("[studio] organization home could not resolve the protected request scope");
-    return { kind: "temporarily_unavailable" };
-  }
-  console.error(`[studio] organization home could not load: ${result.cause ?? result.kind}`);
+  // The request runner logged this answer once.
   return { kind: "temporarily_unavailable" };
 };
