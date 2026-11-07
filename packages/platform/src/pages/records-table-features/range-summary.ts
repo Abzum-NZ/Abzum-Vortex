@@ -189,8 +189,9 @@ export const createRecordsRangeSummaryService = (dependencies: RecordsRangeSumma
 
       // The one protected read of the shown page, under the person's current access.
       const read = await queries.run(session, address.selection, built.command);
+      // The query service logged every answer that is not available, once.
       if (read.kind === "temporarily_unavailable") return { kind: "unavailable" };
-      if (read.kind !== "available") return refuse(`read_${read.kind}`);
+      if (read.kind !== "available") return { kind: "refused", reason: "not_available" };
       if (read.value.outcome !== "completed")
         return refuse(`read_refused_${read.value.reasonCode}`);
       const onPage = new Map(

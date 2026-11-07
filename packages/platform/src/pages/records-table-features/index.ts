@@ -74,18 +74,36 @@ export const recordsTableRequestRefusal = (
 /** The reasons that name a definition the platform could not read: a fault, not a refusal. */
 const recordsTableFaultReasons: ReadonlySet<string> = new Set([
   "placement_metadata_unreadable",
-  "placement_contract_unreadable",
   "query_module_missing",
 ]);
 
 /**
+ * The reasons raised only after the cause was logged where it happened: the request runner logs
+ * every answer that is not available (`installation_unavailable`, `current_access_unavailable`),
+ * and `recordsTableContractOrLog` logs the unreadable setting at error (`contract_unreadable`,
+ * `placement_contract_unreadable`). The refusal still carries its reason to the caller; every
+ * logger of a refusal reason skips these, so no second line is written for one.
+ */
+const recordsTableReasonsLoggedAtSource: ReadonlySet<string> = new Set([
+  "installation_unavailable",
+  "current_access_unavailable",
+  "contract_unreadable",
+  "placement_contract_unreadable",
+]);
+
+export const recordsTableReasonLoggedAtSource = (reason: string): boolean =>
+  recordsTableReasonsLoggedAtSource.has(reason);
+
+/**
  * Logs a refused Records table request once, with its part and reason; the response stays neutral.
- * An expected refusal is information; a reason that names an unreadable definition is an error.
+ * An expected refusal is information; a reason that names an unreadable definition is an error; a
+ * reason whose cause was already logged where it happened adds no line.
  */
 export const logRecordsTableRequestRefusal = (
   refusal: RecordsTableRequestRefusal,
   where: string,
 ): void => {
+  if (recordsTableReasonLoggedAtSource(refusal.reason)) return;
   if (recordsTableFaultReasons.has(refusal.reason))
     console.error(
       `[records-table] request failed where=${where} part=${refusal.part} reason=${refusal.reason}`,

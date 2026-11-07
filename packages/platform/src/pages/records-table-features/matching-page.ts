@@ -10,6 +10,7 @@ import { sameId } from "../../catalogue/runtime-primitives";
 import { createProtectedQueryService } from "../../queries/protected-query-service";
 import { openRecordsSelection, recordsSelectionPlacement } from "../records-selection-seal";
 import { matchingQueryCommand, type RecordsTableBulkDependencies } from "./bulk-run";
+import { recordsTableReasonLoggedAtSource } from ".";
 import { loadRecordsTablePlacement } from "./placement";
 
 /** The most records one page of "every matching record" reads. */
@@ -30,7 +31,8 @@ type MatchingPage = HumanOrganizationRequestResult<
 >;
 
 const unavailable = (cause: string): MatchingPage => {
-  console.error(`[records-table] matching page unavailable cause=${cause}`);
+  if (!recordsTableReasonLoggedAtSource(cause))
+    console.error(`[records-table] matching page unavailable cause=${cause}`);
   return { kind: "available", value: { outcome: "unavailable" } };
 };
 

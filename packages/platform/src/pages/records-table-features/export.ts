@@ -58,6 +58,7 @@ import {
   type RecordsTableCommandAddress,
   type RecordsTablePlacement,
 } from "./placement";
+import { recordsTableReasonLoggedAtSource } from ".";
 import { decideRecordTypeExport } from "./record-type-access";
 import { personalFormattingAllowed } from "./conditional-formatting";
 import type { InstalledRuntimeContext } from "../../definition/installed-runtime-context";
@@ -119,6 +120,7 @@ export const createRecordsTableExportService = (dependencies: RecordsTableExport
   const bulk = createRecordsTableBulkService(dependencies);
 
   const refuse = (cause: string, detail?: string): undefined => {
+    if (recordsTableReasonLoggedAtSource(cause)) return undefined;
     console.error(
       `[records-export] request refused cause=${cause}${detail === undefined ? "" : ` ${detail}`}`,
     );

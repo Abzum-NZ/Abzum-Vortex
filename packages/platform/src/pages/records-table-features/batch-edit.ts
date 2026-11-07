@@ -1,6 +1,6 @@
 import "server-only";
 
-import { projectRecordsTableFeatures } from ".";
+import { projectRecordsTableFeatures, recordsTableReasonLoggedAtSource } from ".";
 import {
   createHumanOrganizationRequestService,
   type HumanOrganizationRequestDependencies,
@@ -69,6 +69,7 @@ type RecordsTableBatchEditPreparation =
   | Exclude<RecordsTableBatchEditResult, { kind: "saved" }>;
 
 const log = (cause: string): void => {
+  if (recordsTableReasonLoggedAtSource(cause)) return;
   console.error(`[records-table] batch edit refused cause=${cause}`);
 };
 

@@ -581,8 +581,10 @@ export const buildRecordsTableQueryCommand = (
   request: RecordsTableQueryRequest,
 ): RecordsTableQueryCommand | RecordsTableRequestRefusal => {
   const contract = recordsTableContractOrLog(request.settings, "table query");
-  if (contract === undefined || contract.columns.length === 0)
-    return recordsTableRequestRefusal("contract", "contract_unreadable");
+  // An unreadable setting was logged by recordsTableContractOrLog; no column is its own refusal.
+  if (contract === undefined) return recordsTableRequestRefusal("contract", "contract_unreadable");
+  if (contract.columns.length === 0)
+    return recordsTableRequestRefusal("columns", "no_columns_declared");
   const { state } = request;
   const declaredFieldIds = [
     ...new Set(contract.columns.map((column) => column.field.toLowerCase())),
@@ -794,11 +796,8 @@ const readGrouped = async (
     );
     if (summary.kind === "temporarily_unavailable")
       return { kind: "resolution", resolution: unavailableResult };
-    if (summary.kind !== "available")
-      return {
-        kind: "resolution",
-        resolution: refusedBecause("group", `summary_${summary.kind}`),
-      };
+    // The request runner logged an answer that is not available, once.
+    if (summary.kind !== "available") return { kind: "resolution", resolution: refused };
     if (summary.value.outcome === "refused") {
       const reason = summary.value.reasonCode;
       // A table that reads a grouped query has no flat page to fall back to.
@@ -850,11 +849,7 @@ const readGrouped = async (
   const members = await runner.groupedMembers(session, selection, memberCommand.data, decide);
   if (members.kind === "temporarily_unavailable")
     return { kind: "resolution", resolution: unavailableResult };
-  if (members.kind !== "available")
-    return {
-      kind: "resolution",
-      resolution: refusedBecause("group", `members_${members.kind}`),
-    };
+  if (members.kind !== "available") return { kind: "resolution", resolution: refused };
   if (members.value.outcome === "refused") {
     logQueryRefusal("group", "members_refused", members.value.reasonCode);
     return {
@@ -1000,8 +995,7 @@ export const createRecordsTableQueryResolver = (runner: RecordsTableQueryRunner)
       )
         result = await runner.run(session, selection, built.command, decide);
       if (result?.kind === "temporarily_unavailable") return unavailableResult;
-      if (result !== undefined && result.kind !== "available")
-        return refusedBecause("columns", `read_${result.kind}`);
+      if (result !== undefined && result.kind !== "available") return refused;
       if (result?.value.outcome === "refused") {
         logQueryRefusal("columns", "read_refused", result.value.reasonCode);
         return {
@@ -1055,11 +1049,12 @@ export const createRecordsTableQueryResolver = (runner: RecordsTableQueryRunner)
         );
         if (summary.kind === "available" && summary.value.outcome === "completed")
           totalAggregates = summary.value.aggregates;
-        else
+        // The request runner logged an answer that is not available, once.
+        else if (summary.kind === "available")
           logRecordsTableRequestRefusal(
             recordsTableRequestRefusal(
               "columns",
-              `totals_${summary.kind === "available" ? (summary.value.outcome === "refused" ? summary.value.reasonCode : "invalid") : summary.kind}`,
+              `totals_${summary.value.outcome === "refused" ? summary.value.reasonCode : "invalid"}`,
             ),
             "table_totals",
           );

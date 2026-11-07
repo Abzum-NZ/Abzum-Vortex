@@ -32,6 +32,7 @@ import {
   type RecordsTableCommandAddress,
   type RecordsTablePlacement,
 } from "./placement";
+import { recordsTableReasonLoggedAtSource } from ".";
 
 /**
  * The count behind "Select all matching records". It re-reads the installed placement and decides
@@ -59,6 +60,7 @@ export const enumerationScanLimitedCeiling = Math.ceil(
 );
 
 const refuse = (cause: string): undefined => {
+  if (recordsTableReasonLoggedAtSource(cause)) return undefined;
   console.error(`[records-table] bulk request refused cause=${cause}`);
   return undefined;
 };
@@ -184,10 +186,8 @@ export const createRecordsTableBulkService = (dependencies: RecordsTableBulkDepe
         searchableFieldIds: built.command.searchableFieldIds,
       });
       if (summary.kind === "temporarily_unavailable") return { kind: "unavailable" };
-      if (summary.kind !== "available") {
-        refuse(`selection_count_${summary.kind}`);
-        return { kind: "refused", reason: "not_available" };
-      }
+      // The query service logged every answer that is not available, once.
+      if (summary.kind !== "available") return { kind: "refused", reason: "not_available" };
       if (summary.value.outcome === "completed")
         return { kind: "counted", count: summary.value.totalRowCount };
       if (summary.value.reasonCode === "dataset_limit_exceeded") return { kind: "too_many" };

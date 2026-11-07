@@ -362,8 +362,9 @@ const projectPivot = async (request: PivotRequest): Promise<PivotResult> => {
   } catch (error) {
     return fail(`summary_threw ${describeFailure(error)}`);
   }
-  if (result.kind === "temporarily_unavailable") return fail("summary_unavailable");
-  if (result.kind !== "available") return refuse("summary_not_available");
+  // The query service logged every answer that is not available, once.
+  if (result.kind === "temporarily_unavailable") return failed;
+  if (result.kind !== "available") return refused("This pivot is not available.");
   const summary = result.value;
   if (summary.outcome === "refused") {
     logRecordsTableRequestRefusal(
