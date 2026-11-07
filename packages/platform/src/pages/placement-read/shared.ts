@@ -77,18 +77,14 @@ type PlacementFailureReason =
   | "query_binding_refused"
   | "query_binding_withheld"
   | "summary_query_threw"
-  | "subject_unavailable"
   | "detail_record_type_unavailable"
   | "detail_selection_unbound"
   | "detail_command_invalid"
-  | "detail_query_unavailable"
   | "detail_query_refused"
   | "related_list_query_unavailable"
   | "related_list_command_invalid"
-  | "related_list_unavailable"
   | "related_list_refused"
   | "launcher_query_invalid"
-  | "launcher_query_unavailable"
   | "launcher_query_refused"
   | "records_table_settings_invalid"
   | "calendar_settings_invalid"
@@ -107,7 +103,6 @@ type PlacementFailureReason =
   | "calendar_query_refused"
   | "calendar_arrangement_refused"
   | "summary_query_invalid"
-  | "summary_query_unavailable"
   | "summary_query_refused"
   | "summary_dataset_limit_exceeded"
   | "summary_value_out_of_range"
@@ -146,6 +141,15 @@ const placementRefusalReasons: ReadonlySet<PlacementFailureReason> = new Set([
 ]);
 
 /**
+ * The reasons whose answer a request had already logged, once, where it was raised (the request
+ * runner or the query service for a query answered unavailable): the placement adds no line.
+ */
+const placementAnswersLoggedElsewhere: ReadonlySet<PlacementFailureReason> = new Set([
+  "board_query_unavailable",
+  "calendar_query_unavailable",
+]);
+
+/**
  * Logs one data placement that could not be loaded, server side only: the application, page and
  * placement identities that are already in the address, and a fixed reason code. Never a message,
  * value, row, query input or secret, so the log names the failing step without leaking data.
@@ -156,6 +160,7 @@ export const logPlacementFailure = (
   reason: PlacementFailureReason,
   detail?: string,
 ): void => {
+  if (placementAnswersLoggedElsewhere.has(reason)) return;
   const where = `data placement application=${address.application.key} page=${address.pageKey} placement=${placementId}${detail === undefined ? "" : ` detail=${detail}`}`;
   // A refusal the viewer is answered is information; any other reason is a placement that could
   // not be read and is an error.

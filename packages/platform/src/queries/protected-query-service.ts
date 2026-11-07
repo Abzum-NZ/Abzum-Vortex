@@ -5,6 +5,7 @@ import {
   type HumanOrganizationRequestResult,
 } from "../access/human-organization-request";
 import type { IdentitySession, OrganizationSelectionCandidate } from "../access/identity-access";
+import { logRefusal } from "../access/request-failure";
 import {
   boardMembersCommand,
   boardColumnPagesCommandSchema,
@@ -37,6 +38,16 @@ import type { RequestDatabaseTransaction } from "../db/request-transaction";
 import type { SelectedOrganizationScope } from "../access/identity-access";
 
 export type { ProtectedQueryServiceDependencies } from "./protected-query-types";
+
+/**
+ * A read that names no application is answered unavailable before any request runs, so the
+ * request runner logged nothing: this is its one line. Every other answer that is not available
+ * was logged once by the runner, so a caller of the service never logs one again.
+ */
+const noApplicationSelected = (): Readonly<{ kind: "unavailable" }> => {
+  logRefusal("protected-query", "request", "application_not_selected");
+  return { kind: "unavailable" };
+};
 
 /**
  * A decision the caller takes inside the read's own request transaction, after a completed read
@@ -89,7 +100,7 @@ export const createProtectedQueryService = (dependencies: ProtectedQueryServiceD
         result: { kind: "available", value: refuseInvalidCommand(command.error) },
       };
     if (selection.applicationRootId === undefined)
-      return { kind: "final", result: { kind: "unavailable" } };
+      return { kind: "final", result: noApplicationSelected() };
     return {
       kind: "ready",
       person: caller,
@@ -123,7 +134,7 @@ export const createProtectedQueryService = (dependencies: ProtectedQueryServiceD
       const command = protectedQueryBoardMembersCommandSchema.safeParse(commandCandidate);
       if (!command.success)
         return { kind: "available", value: refuseInvalidCommand(command.error) };
-      if (selection.applicationRootId === undefined) return { kind: "unavailable" };
+      if (selection.applicationRootId === undefined) return noApplicationSelected();
       return requests.run(caller, selection, (transaction, scope) =>
         boardMembersCommand(transaction, scope, command.data, continuationKey),
       );
@@ -141,7 +152,7 @@ export const createProtectedQueryService = (dependencies: ProtectedQueryServiceD
       const command = boardColumnPagesCommandSchema.safeParse(commandCandidate);
       if (!command.success)
         return { kind: "available", value: refuseInvalidCommand(command.error) };
-      if (selection.applicationRootId === undefined) return { kind: "unavailable" };
+      if (selection.applicationRootId === undefined) return noApplicationSelected();
       return requests.run(caller, selection, (transaction, scope) =>
         boardColumnPagesCommand(transaction, scope, command.data, continuationKey),
       );
@@ -156,7 +167,7 @@ export const createProtectedQueryService = (dependencies: ProtectedQueryServiceD
       const command = protectedQueryGroupedMembersCommandSchema.safeParse(commandCandidate);
       if (!command.success)
         return { kind: "available", value: refuseInvalidCommand(command.error) };
-      if (selection.applicationRootId === undefined) return { kind: "unavailable" };
+      if (selection.applicationRootId === undefined) return noApplicationSelected();
       return requests.run(personCaller, selection, async (transaction, scope, issuedAt) => {
         const result = await groupedMembersCommand(
           transaction,
@@ -180,7 +191,7 @@ export const createProtectedQueryService = (dependencies: ProtectedQueryServiceD
       const command = protectedQueryTreeLevelCommandSchema.safeParse(commandCandidate);
       if (!command.success)
         return { kind: "available", value: refuseInvalidCommand(command.error) };
-      if (selection.applicationRootId === undefined) return { kind: "unavailable" };
+      if (selection.applicationRootId === undefined) return noApplicationSelected();
       return requests.run(personCaller, selection, async (transaction, scope, issuedAt) => {
         const result = await treeLevelCommand(
           transaction,
@@ -203,7 +214,7 @@ export const createProtectedQueryService = (dependencies: ProtectedQueryServiceD
       const command = protectedQuerySummaryCommandSchema.safeParse(commandCandidate);
       if (!command.success)
         return { kind: "available", value: refuseInvalidCommand(command.error) };
-      if (selection.applicationRootId === undefined) return { kind: "unavailable" };
+      if (selection.applicationRootId === undefined) return noApplicationSelected();
       return requests.run(caller, selection, async (transaction, scope, issuedAt) => {
         const result = await summariseCommand(transaction, scope, command.data);
         if (decide !== undefined && result.outcome === "completed")
@@ -219,7 +230,7 @@ export const createProtectedQueryService = (dependencies: ProtectedQueryServiceD
       const command = protectedQueryBoardSummaryCommandSchema.safeParse(commandCandidate);
       if (!command.success)
         return { kind: "available", value: refuseInvalidCommand(command.error) };
-      if (selection.applicationRootId === undefined) return { kind: "unavailable" };
+      if (selection.applicationRootId === undefined) return noApplicationSelected();
       return requests.run(caller, selection, (transaction, scope) =>
         boardSummaryCommand(transaction, scope, command.data),
       );
