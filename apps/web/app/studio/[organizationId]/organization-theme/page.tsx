@@ -43,7 +43,8 @@ export default async function StudioOrganizationThemePage({
   }
   const entry = launcher.entries.find((candidate) => candidate.organizationId === organizationId);
   if (entry === undefined) notFound();
-  // A person without Studio gets Studio's refusal here too, before any theme is read.
+  // A person without Studio gets Studio's refusal here too, before this page reads the theme or the
+  // change permission (the document root's chrome colours are the only theme read before it).
   const studio = await loadStudioFrameContext(organizationId);
   if (studio.kind !== "available")
     return (

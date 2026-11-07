@@ -72,7 +72,7 @@ export function StudioThemeChoices({
 }>) {
   return (
     <ToggleGroup
-      aria-label="Themes"
+      aria-label="Presets"
       variant="outline"
       spacing={3}
       value={selectedKey === undefined ? [] : [selectedKey]}
