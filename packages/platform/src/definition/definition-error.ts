@@ -1,7 +1,8 @@
 import { markRequestFailureLogged, requestFailureLogged } from "../access/request-failure-mark";
 import {
-  classifyThroughCauses,
+  classifyRequestFailure,
   definitionCodeClass,
+  ownFailureClass,
   type RequestFailureClass,
 } from "../access/request-failure-table";
 import { databaseCode, describeFailure } from "../catalogue/runtime-primitives";
@@ -19,6 +20,11 @@ export class DefinitionError<Code extends string = string> extends Error {
     this.name = "DefinitionError";
     this.code = code;
     this.sentence = options?.sentence;
+  }
+
+  /** A definition failure is an answer when its code is one; otherwise its cause decides. */
+  [ownFailureClass](): RequestFailureClass | undefined {
+    return definitionCodeClass(this.code);
   }
 }
 
@@ -61,10 +67,6 @@ export const classifyDatabaseError = (error: unknown): DatabaseFailureKind => {
   }
 };
 
-/** The classes of the errors this module names by their own type: a definition failure by its code. */
-const definitionFailureRules = (error: unknown): RequestFailureClass | undefined =>
-  error instanceof DefinitionError ? definitionCodeClass(error.code) : undefined;
-
 const logDefinitionFailure = (failure: RequestFailureClass, line: string): void => {
   if (failure.level === "info") console.info(line);
   else console.error(line);
@@ -84,7 +86,7 @@ export const unexpectedDefinitionFailure = <Code extends string>(
   const error = new DefinitionError(code, { cause });
   // A failure an inner source already logged is not logged again by the failure that wraps it.
   if (requestFailureLogged(cause)) return markRequestFailureLogged(error);
-  const failure = classifyThroughCauses(error, { addressed: false }, definitionFailureRules);
+  const failure = classifyRequestFailure(error, { addressed: false });
   logDefinitionFailure(
     failure,
     `[definition] ${context} ${failure.verb} (${code}): ${describeFailure(cause)}`,
@@ -95,7 +97,9 @@ export const unexpectedDefinitionFailure = <Code extends string>(
 
 /** Logs a failure that the caller turns into a typed safe outcome, so the cause stays visible. */
 export const reportUnexpectedFailure = (context: string, error: unknown): void => {
-  const failure = classifyThroughCauses(error, { addressed: false }, definitionFailureRules);
+  // A failure an inner source already logged is not logged again by the caller that reports it.
+  if (requestFailureLogged(error)) return;
+  const failure = classifyRequestFailure(error, { addressed: false });
   logDefinitionFailure(
     failure,
     `[definition] ${context} ${failure.level === "error" ? "failed unexpectedly" : failure.verb}: ${describeFailure(error)}`,

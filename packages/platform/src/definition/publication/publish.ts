@@ -81,7 +81,8 @@ import {
   classifyDatabaseError,
   unexpectedDefinitionFailure,
 } from "../definition-error";
-import { classifyRequestFailure, logClassifiedFailure } from "../../access/request-failure";
+import { logClassifiedFailure } from "../../access/request-failure";
+import { classifyRequestFailure } from "../../access/request-failure-table";
 import { markRequestFailureLogged, requestFailureLogged } from "../../access/request-failure-mark";
 import { databaseCode, describeFailure } from "../../catalogue/runtime-primitives";
 

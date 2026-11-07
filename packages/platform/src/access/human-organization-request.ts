@@ -40,8 +40,8 @@ import {
 
 import { databaseClockOf } from "./live-context";
 import { markRequestFailureLogged, requestFailureLogged } from "./request-failure-mark";
-import { classifyRequestFailure } from "./request-failure";
 import {
+  classifyRequestFailure,
   faultRequestFailure,
   refusedRequestFailure,
   type RequestFailureClass,

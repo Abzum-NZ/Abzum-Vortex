@@ -1,6 +1,6 @@
 import "server-only";
 
-import { classifyRequestFailure } from "../access/request-failure";
+import { classifyRequestFailure } from "../access/request-failure-table";
 import { describeFailure } from "../catalogue/runtime-primitives";
 
 const causes = new WeakMap<object, unknown>();

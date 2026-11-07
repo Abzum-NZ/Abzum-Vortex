@@ -42,7 +42,7 @@ import {
 } from "./builder-authority";
 import type { PlatformPermissionSource } from "./platform-permissions";
 import type { createHumanOrganizationRequestService } from "./human-organization-request";
-import { classifyRequestFailure } from "./request-failure";
+import { classifyRequestFailure } from "./request-failure-table";
 import { markRequestFailureLogged, requestFailureLogged } from "./request-failure-mark";
 import { DefinitionCompilationError } from "../definition/compilation-error";
 import { DefinitionError } from "../definition/definition-error";

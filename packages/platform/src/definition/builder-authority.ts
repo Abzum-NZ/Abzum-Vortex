@@ -1,5 +1,10 @@
 import "server-only";
 
+import {
+  ownFailureClass,
+  refusal,
+  type RequestFailureClass,
+} from "../access/request-failure-table";
 /**
  * Builder authority: the one server-side gate every builder operation passes through, whether the
  * designer, the API or MCP reaches it. Draft changes, publication, installation, upgrade,
@@ -202,6 +207,12 @@ export const builderAuthorityErrorCodes = [
 
 type BuilderAuthorityErrorCode = (typeof builderAuthorityErrorCodes)[number];
 
+const builderAuthorityClasses: Readonly<Record<BuilderAuthorityErrorCode, RequestFailureClass>> = {
+  BUILDER_PERMISSION_REFUSED: refusal(),
+  BUILDER_RECENT_AUTHENTICATION_REQUIRED: refusal("recent_authentication_required"),
+  BUILDER_MULTI_FACTOR_REQUIRED: refusal("multi_factor_required"),
+};
+
 /**
  * A builder operation was refused before any write. It carries only its code and the correlation
  * the refusal belongs to: never a permission key, a role name or another person's authority.
@@ -215,6 +226,11 @@ export class BuilderAuthorityError extends Error {
     this.name = "BuilderAuthorityError";
     this.code = code;
     this.correlationId = correlationId;
+  }
+
+  /** A builder refusal is always an answer: the person lacks the permission or a fresh sign-in. */
+  [ownFailureClass](): RequestFailureClass {
+    return builderAuthorityClasses[this.code];
   }
 }
 

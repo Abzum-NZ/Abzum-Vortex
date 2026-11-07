@@ -5,7 +5,8 @@ import type { TelemetryOutcome } from "../events/telemetry";
 /**
  * The leaf of the one classification of a failed request: the classes, the tables of codes and the
  * one walk over an error's causes. It imports only the primitives and the compiler's refusal, so
- * the request classifier and the definition failure logger both use it without an import cycle.
+ * every failure type, the request classifier and the definition failure logger use it without an
+ * import cycle.
  */
 
 /** What the person is told; the runner builds the result from it. */
@@ -73,6 +74,13 @@ const definitionErrorClasses: ReadonlyMap<string, RequestFailureClass> = new Map
   ["APPLICATION_INSTALLATION_STALE", retryable("temporarily unavailable")],
 ]);
 
+/**
+ * The key under which a failure type states its own class: a definition failure by its code, a
+ * builder refusal, an installation problem. Every walk over a cause chain reads it, so the request
+ * runner and the definition logger judge one failure by one rule set.
+ */
+export const ownFailureClass: unique symbol = Symbol.for("vortex.request-failure-class");
+
 /** The class a definition failure's own code names; undefined when the code is not an answer. */
 export const definitionCodeClass = (code: string): RequestFailureClass | undefined =>
   definitionErrorClasses.get(code);
@@ -111,21 +119,24 @@ const requestStopped = (error: unknown): boolean =>
   ((error.name === "VortexDatabaseError" && error.message === "DATABASE_REQUEST_STOPPED") ||
     error.name === "AbortError");
 
-/** What one class of error means, by an error type only its caller can name. */
-export type FailureClassRules = (error: unknown) => RequestFailureClass | undefined;
+/** A failure type that states its own class; undefined when its own kind is not an answer. */
+type ClassifiedFailure = Readonly<{
+  [ownFailureClass]: () => RequestFailureClass | undefined;
+}>;
 
-/** The class the error itself names by the shared rules, or `rules`; undefined when none does. */
+const statesOwnClass = (error: unknown): error is ClassifiedFailure =>
+  typeof error === "object" && error !== null && ownFailureClass in error;
+
+/** The class the error itself names; undefined when it names none and its cause decides. */
 const knownClass = (
   error: unknown,
   scope: Readonly<{ addressed: boolean }>,
-  rules: FailureClassRules,
 ): RequestFailureClass | undefined => {
   if (requestStopped(error)) return retryable("stopped");
   // A compiler refusal names a rule the author fixes: an answer, wherever it is caught. A failure
   // that wraps it (a failed publication) is classified by it as one of its causes.
   if (error instanceof DefinitionCompilationError) return refusal();
-  const own = rules(error);
-  if (own !== undefined) return own;
+  if (statesOwnClass(error)) return error[ownFailureClass]();
   const code = databaseCode(error);
   if (code === undefined) return undefined;
   const known = databaseCodeClasses.get(code);
@@ -140,18 +151,17 @@ const knownClass = (
 };
 
 /**
- * The one walk over an error and its causes: the class of the first the shared rules or `rules`
- * name; none means a platform fault. A wrapper such as a definition failure around a database
- * error is classified by its cause.
+ * The one classification of a failed request, by the error's class and code. An error the table
+ * does not name (a wrapper such as a definition failure around a database error) is classified by
+ * the first of its causes the table names; none means a platform fault.
  */
-export const classifyThroughCauses = (
+export const classifyRequestFailure = (
   error: unknown,
   scope: Readonly<{ addressed: boolean }>,
-  rules: FailureClassRules,
 ): RequestFailureClass => {
   let current: unknown = error;
   for (let depth = 0; depth < 5 && current !== undefined && current !== null; depth += 1) {
-    const known = knownClass(current, scope, rules);
+    const known = knownClass(current, scope);
     if (known !== undefined) return known;
     current = current instanceof Error ? current.cause : undefined;
   }

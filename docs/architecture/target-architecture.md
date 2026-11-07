@@ -145,7 +145,7 @@ Tables are private. The application calls `security definer` functions with `set
 ## 5. Errors and logging
 
 - **Platform result types.** Platform operations return either a typed result or a typed refusal. The refusal carries a stable code for the user and a `cause` for the log.
-- **Shared mapping.** Each failed request or answer is logged once, as one string line with no object beside it, where it is answered: the request runner for its answers, a read for the answers it gives, a service for failures it turns into results; a caller never logs an answer again. Expected refusals and races log at info, platform faults at error, classified by the one table in `packages/platform/src/access/request-failure.ts`.
+- **Shared mapping.** Each failed request or answer is logged once, as one string line with no object beside it, where it is answered: the request runner for its answers, a read for the answers it gives, a service for failures it turns into results; a caller never logs an answer again. Expected refusals and races log at info, platform faults at error, classified by the one table in `packages/platform/src/access/request-failure-table.ts`, where each failure type states its own class.
 - **Strict schemas stay strict, with no silent failure.**
   - When the database adds a field, update the schema in the same change.
   - Code must never handle a mismatch by quietly returning `null`.
