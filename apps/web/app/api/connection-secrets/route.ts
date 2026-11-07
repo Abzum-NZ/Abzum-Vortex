@@ -37,7 +37,9 @@ export async function POST(request: NextRequest) {
       input.organizationShortName,
       input.applicationKey,
     );
-    if (address.kind !== "application_page") return refuse(`address_${address.kind}`);
+    // The address read logged why it answered no page, once.
+    if (address.kind !== "application_page")
+      return privateJsonResponse({ outcome: "refused" }, 403);
     const result = await humanOrganizationRequests().runChange(
       identity.session,
       {

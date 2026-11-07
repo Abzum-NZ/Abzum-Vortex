@@ -269,14 +269,15 @@ const logApplicationRefusal = (applicationKey: string, reasonCodes: readonly str
   );
 
 /**
- * An answer the permitted-applications read gives before any request runs, logged once here (the
- * request runner logs its own answers): a refusal at info, a fault at error.
+ * An answer an address read gives outside the request runner (which logs its own answers), logged
+ * once here: a refusal or an expected race at info, a fault at error.
  */
 const answeredBeforeRequest = <const Answer extends Readonly<{ kind: string }>>(
   answer: Answer,
   reason: string,
+  read: "permitted applications" | "addressed application" = "permitted applications",
 ): Answer => {
-  const line = `[application-address] permitted applications read ${answer.kind}: ${reason}`;
+  const line = `[application-address] ${read} read ${answer.kind}: ${reason}`;
   if (answer.kind === "temporarily_unavailable") console.error(line);
   else console.info(line);
   return answer;
@@ -530,7 +531,10 @@ const projectPermittedApplication = async (
     typeof releaseRows[0].current_release !== "boolean"
   )
     throw new Error("APPLICATION_ADDRESS_RELEASE_UNAVAILABLE");
-  if (!releaseRows[0].current_release) return null;
+  if (!releaseRows[0].current_release) {
+    refused?.(["release_not_current"]);
+    return null;
+  }
 
   if (new Set(candidate.pages.map((page) => page.key)).size !== candidate.pages.length)
     throw new Error("APPLICATION_PAGE_ADDRESS_UNAVAILABLE");
@@ -539,7 +543,10 @@ const projectPermittedApplication = async (
     addressedPageKey === undefined
       ? undefined
       : candidate.pages.find((page) => page.key === addressedPageKey);
-  if (addressedPageKey !== undefined && addressedPage === undefined) return null;
+  if (addressedPageKey !== undefined && addressedPage === undefined) {
+    refused?.(["page_not_in_release"]);
+    return null;
+  }
 
   // A placement refresh needs its page and an open application home, not the navigation's full
   // page list. Shared permission requirements still take only one decision in this request.
@@ -812,6 +819,15 @@ export const readAddressedApplicationAtAddress = (
     applicationKeyCandidate,
   );
 
+/**
+ * The release or the application the address named is no longer the one this request reads (a
+ * republish or an uninstall between the identity read and the request): an expected race, said once.
+ */
+const addressedApplicationMoved = (): undefined => {
+  logRefusal("application-address", "addressed application", "ADDRESSED_APPLICATION_MOVED");
+  return undefined;
+};
+
 /** Projects the addressed application using its already established human scope. */
 const projectAddressedApplicationInRequest = async (
   permissions: PlatformPermissionSource,
@@ -827,7 +843,7 @@ const projectAddressedApplicationInRequest = async (
     scope.applicationRootId === undefined ||
     !sameId(scope.applicationRootId, addressedIdentity.identity.applicationRootId)
   )
-    return undefined;
+    return addressedApplicationMoved();
   const context = await createInstalledContextLoader(transaction, scope).load();
   const application = context.releaseSet.application;
   const identity = addressedIdentity.identity;
@@ -839,7 +855,7 @@ const projectAddressedApplicationInRequest = async (
     application.definitionKey !== identity.definitionKey ||
     application.releaseRevision !== context.applicationReleaseRevision
   )
-    return undefined;
+    return addressedApplicationMoved();
   const permitted = await projectPermittedApplication(
     permissions,
     transaction,
@@ -869,31 +885,32 @@ export const readAddressedApplicationForFlowInRequest = async (
     addressIdentity: unknown;
   }>,
 ): Promise<AddressedApplicationBundleRead> => {
-  const unavailable = (): AddressedApplicationBundleRead => ({
-    read: { kind: "unavailable" },
-    experiences: [],
-  });
+  // Every answer that is not available is said once here (the projection says its own).
+  const unavailable = (reason: string): AddressedApplicationBundleRead => {
+    answeredBeforeRequest({ kind: "unavailable" }, reason, "addressed application");
+    return { read: { kind: "unavailable" }, experiences: [] };
+  };
   if (
     bound.scope.applicationRootId === undefined ||
     isReservedTenantSegment(input.tenantShortName) ||
     !builderKeySchema.safeParse(input.pageKey).success ||
     !namespacedKeySchema.safeParse(input.applicationKey).success
   )
-    return unavailable();
+    return unavailable("invalid address");
   const identity = addressedActiveApplicationIdentitySchema.parse(input.addressIdentity);
   if (
     !sameId(identity.organizationId, bound.scope.organizationId) ||
     !sameId(identity.applicationRootId, bound.scope.applicationRootId) ||
     identity.definitionKey !== input.applicationKey
   )
-    return unavailable();
+    return unavailable("address identity does not match the request");
   const projected = await projectAddressedApplicationInRequest(
     permissions,
     bound,
     { organizationId: identity.organizationId, identity },
     input.pageKey,
   );
-  if (projected === undefined) return unavailable();
+  if (projected === undefined) return { read: { kind: "unavailable" }, experiences: [] };
   const { context, permitted } = projected;
   return {
     read: permittedApplicationsReadSchema.parse({
@@ -917,6 +934,10 @@ export const readAddressedApplicationForFlowInRequest = async (
  * Resolves one addressed App from the current HUMAN installed bundle and page authority.
  * A page key limits authority to a placement refresh: its page and the application home only.
  * That projection must not feed a full page, navigation, launcher or experience render.
+ *
+ * Every answer that is not available is logged once, here or in the request runner that gave it
+ * (a refusal or an expected race at info, a fault at error), so no caller logs the address again:
+ * the web layer says only its own answer, a page the person may not open or that does not exist.
  */
 export const readAddressedApplicationFromInstalledBundleAtAddress = async (
   permissions: PlatformPermissionSource,
@@ -939,24 +960,38 @@ export const readAddressedApplicationFromInstalledBundleAtAddress = async (
     experiences: [],
   });
   const session = identitySessionSchema.safeParse(sessionCandidate);
+  if (!session.success) {
+    answeredBeforeRequest({ kind: "unavailable" }, "invalid session", "addressed application");
+    return unavailable();
+  }
   const identityAuthorityId = identityAuthorityIdSchema.safeParse(identityAuthorityIdCandidate);
-  if (!session.success || !identityAuthorityId.success) return unavailable();
+  if (!identityAuthorityId.success) {
+    answeredBeforeRequest(
+      { kind: "temporarily_unavailable" },
+      "identity_authority_id_invalid",
+      "addressed application",
+    );
+    return temporarilyUnavailable("identity_authority_id_invalid");
+  }
   if (
     addressedPageKeyCandidate !== undefined &&
     !builderKeySchema.safeParse(addressedPageKeyCandidate).success
-  )
+  ) {
+    answeredBeforeRequest({ kind: "unavailable" }, "invalid page key", "addressed application");
     return unavailable();
+  }
 
-  const addressedIdentity = await readAddressedApplicationIdentityAtAddress(
+  const identityRead = await readAddressedApplicationIdentityAtAddress(
     session.data,
     tenantShortNameCandidate,
     organizationShortNameCandidate,
     identityAuthorityId.data,
     applicationKeyCandidate,
   );
-  if (addressedIdentity === undefined) return unavailable();
-  const organizationId = organizationIdSchema.safeParse(addressedIdentity.organizationId);
-  if (!organizationId.success) return unavailable();
+  if (identityRead.kind === "unavailable") return unavailable();
+  if (identityRead.kind === "temporarily_unavailable")
+    return temporarilyUnavailable(identityRead.cause);
+  const addressedIdentity = identityRead.value;
 
   const requests = createHumanOrganizationRequestService({
     identityAuthorityId: identityAuthorityId.data,
@@ -973,7 +1008,7 @@ export const readAddressedApplicationFromInstalledBundleAtAddress = async (
     >(
       session.data,
       {
-        organizationId: organizationId.data,
+        organizationId: addressedIdentity.organizationId,
         applicationRootId: addressedIdentity.identity.applicationRootId,
         ...(addressedIdentity.identity.previewInstallationId === undefined
           ? {}
@@ -988,7 +1023,7 @@ export const readAddressedApplicationFromInstalledBundleAtAddress = async (
             issuedAt,
             session: session.data,
             selection: {
-              organizationId: organizationId.data,
+              organizationId: addressedIdentity.organizationId,
               applicationRootId: addressedIdentity.identity.applicationRootId,
               ...(addressedIdentity.identity.previewInstallationId === undefined
                 ? {}
@@ -1018,7 +1053,7 @@ export const readAddressedApplicationFromInstalledBundleAtAddress = async (
           });
     const read = permittedApplicationsReadSchema.parse({
       kind: "available",
-      organizationId: organizationId.data,
+      organizationId: addressedIdentity.organizationId,
       tenantShortName: addressedIdentity.tenantShortName,
       organizationShortName: addressedIdentity.organizationShortName,
       defaultApplicationRootId: null,
@@ -1046,31 +1081,46 @@ export const readAddressedApplicationFromInstalledBundleAtAddress = async (
   }
 };
 
+/**
+ * What an identity read answers. Every answer that is not available is logged once before it
+ * returns: by the request runner when the runner gave it, otherwise where this file decided it.
+ */
+type AddressedIdentityRead<Value> =
+  | Readonly<{ kind: "available"; value: Value }>
+  | Readonly<{ kind: "unavailable" }>
+  | Readonly<{ kind: "temporarily_unavailable"; cause?: string }>;
+
+const unavailableIdentity = Object.freeze({ kind: "unavailable" as const });
+
+/** An identity answer this file decided itself: said once, at info. */
+const identityRefused = (reason: string) =>
+  answeredBeforeRequest(unavailableIdentity, reason, "addressed application");
+
+/** A request the runner answered as it logged it: the same kind, no second line. */
+const identityFromRunner = (
+  answer:
+    | Readonly<{ kind: "unavailable" }>
+    | Readonly<{ kind: "temporarily_unavailable"; cause?: string }>,
+): AddressedIdentityRead<never> =>
+  answer.kind === "temporarily_unavailable"
+    ? {
+        kind: "temporarily_unavailable",
+        ...(answer.cause === undefined ? {} : { cause: answer.cause }),
+      }
+    : unavailableIdentity;
+
 /** Resolves only the active Application identity under its exact HUMAN organization request. */
 const readAddressedActiveApplicationIdentity = async (
-  sessionCandidate: IdentitySession,
-  organizationIdCandidate: string,
-  identityAuthorityIdCandidate: IdentityAuthorityId,
-  applicationKeyCandidate: string,
-): Promise<AddressedActiveApplicationIdentity | undefined> => {
-  const session = identitySessionSchema.safeParse(sessionCandidate);
-  const organizationId = organizationIdSchema.safeParse(organizationIdCandidate);
-  const identityAuthorityId = identityAuthorityIdSchema.safeParse(identityAuthorityIdCandidate);
-  const applicationKey = namespacedKeySchema.safeParse(applicationKeyCandidate);
-  if (
-    !session.success ||
-    !organizationId.success ||
-    !identityAuthorityId.success ||
-    !applicationKey.success
-  )
-    return undefined;
-  const previewInstallationId = previewInstallationIdOfApplicationKey(applicationKey.data);
-  const requests = createHumanOrganizationRequestService({
-    identityAuthorityId: identityAuthorityId.data,
-  });
+  session: IdentitySession,
+  organizationId: z.infer<typeof organizationIdSchema>,
+  identityAuthorityId: IdentityAuthorityId,
+  applicationKey: string,
+): Promise<AddressedIdentityRead<AddressedActiveApplicationIdentity>> => {
+  const previewInstallationId = previewInstallationIdOfApplicationKey(applicationKey);
+  const requests = createHumanOrganizationRequestService({ identityAuthorityId });
   const result = await requests.runChangeWithRefusal(
-    session.data,
-    { organizationId: organizationId.data },
+    session,
+    { organizationId },
     async (transaction, scope) => {
       if (scope.applicationRootId !== undefined)
         throw new Error("APPLICATION_ADDRESS_SCOPE_UNAVAILABLE");
@@ -1078,22 +1128,25 @@ const readAddressedActiveApplicationIdentity = async (
         const { readPreviewApplicationIdentity } =
           await import("./preview-installation-repository");
         // A preview address names the preview; only a builder of its Application may open it.
+        // Opening someone else's preview, or one that expired or was removed, is an expected
+        // refusal; any other failure is the request runner's to classify and log.
         const preview = await readPreviewApplicationIdentity(
           transaction,
           previewInstallationId,
         ).catch((error: unknown) => {
-          // Opening someone else's preview is an expected refusal: information, not an error.
           if (
             error instanceof DefinitionError &&
             error.code === "PREVIEW_INSTALLATION_AUTHORITY_REFUSED"
           )
-            logRefusal("application-address", "preview identity", "PREVIEW_ADDRESS_REFUSED");
-          else
-            logRefusal("application-address", "preview identity", "PREVIEW_ADDRESS_REFUSED", error);
-          return undefined;
+            return "not_a_builder" as const;
+          throw error;
         });
-        if (preview === undefined || !sameId(preview.organizationId, organizationId.data))
-          return undefined;
+        if (preview === "not_a_builder")
+          return { refused: "preview of an application this person does not build" } as const;
+        if (preview === undefined)
+          return { refused: "no open preview at the address (expired or removed)" } as const;
+        if (!sameId(preview.organizationId, organizationId))
+          return { refused: "preview of another organisation" } as const;
         return {
           organizationId: preview.organizationId,
           applicationRootId: preview.applicationRootId,
@@ -1104,7 +1157,7 @@ const readAddressedActiveApplicationIdentity = async (
       }
       const rows = await transaction.query<AddressedIdentityRow>`
         select vortex_definition.resolve_addressed_active_application_identity(
-          ${applicationKey.data}::text
+          ${applicationKey}::text
         ) as addressed_identity
       `;
       if (rows.length !== 1 || rows[0] === undefined)
@@ -1114,8 +1167,8 @@ const readAddressedActiveApplicationIdentity = async (
       );
       if (
         !identity.success ||
-        identity.data.organizationId !== organizationId.data ||
-        identity.data.definitionKey !== applicationKey.data
+        identity.data.organizationId !== organizationId ||
+        identity.data.definitionKey !== applicationKey
       )
         throw new Error("APPLICATION_ADDRESS_IDENTITY_UNAVAILABLE");
       return identity.data;
@@ -1123,62 +1176,58 @@ const readAddressedActiveApplicationIdentity = async (
     // An address that names no application here is an answer, not a platform failure.
     (code) => (code === "P0002" ? null : undefined),
   );
-  if (result.kind !== "available" || result.value === undefined || result.value === null)
-    return undefined;
+  if (result.kind !== "available") return identityFromRunner(result);
+  if (result.value === null) return identityRefused("application not installed at the address");
+  if ("refused" in result.value) return identityRefused(result.value.refused);
   const identity: AddressedActiveApplicationIdentity = result.value;
   // A preview holding copies of live records opens only once they are decided again by the
   // builder's current live access in the installed Application; a refusal refuses the preview.
   if (identity.previewInstallationId !== undefined && identity.holdsLiveRecords) {
     const previewInstallationId = identity.previewInstallationId;
     const reconciled = await requests.run(
-      session.data,
-      { organizationId: organizationId.data, applicationRootId: identity.applicationRootId },
+      session,
+      { organizationId, applicationRootId: identity.applicationRootId },
       async (transaction) => {
         const { reconcilePreviewInstallation } = await import("./preview-installation-repository");
         await reconcilePreviewInstallation(transaction, previewInstallationId);
         return true;
       },
     );
-    if (reconciled.kind !== "available") {
-      logRefusal("application-address", "preview records", "PREVIEW_RECORDS_UNCHECKED", reconciled);
-      return undefined;
-    }
+    if (reconciled.kind !== "available") return identityFromRunner(reconciled);
   }
-  return identity;
+  return { kind: "available", value: identity };
 };
 
 /** Resolves an address to a thin current active identity before any Application-scoped read. */
 const readAddressedApplicationIdentityAtAddress = async (
-  sessionCandidate: IdentitySession,
+  session: IdentitySession,
   tenantShortNameCandidate: string,
   organizationShortNameCandidate: string,
-  identityAuthorityIdCandidate: IdentityAuthorityId,
+  identityAuthorityId: IdentityAuthorityId,
   applicationKeyCandidate: string,
 ): Promise<
-  | Readonly<{
-      organizationId: string;
+  AddressedIdentityRead<
+    Readonly<{
+      organizationId: z.infer<typeof organizationIdSchema>;
       tenantShortName: string;
       organizationShortName: string;
       accountDisplayName?: string;
       identity: AddressedActiveApplicationIdentity;
     }>
-  | undefined
+  >
 > => {
-  const session = identitySessionSchema.safeParse(sessionCandidate);
   const tenantShortName = builderKeySchema.safeParse(tenantShortNameCandidate);
   const organizationShortName = builderKeySchema.safeParse(organizationShortNameCandidate);
-  const identityAuthorityId = identityAuthorityIdSchema.safeParse(identityAuthorityIdCandidate);
   const applicationKey = namespacedKeySchema.safeParse(applicationKeyCandidate);
   if (
-    !session.success ||
     !tenantShortName.success ||
     !organizationShortName.success ||
-    !identityAuthorityId.success ||
     !applicationKey.success ||
-    isReservedTenantSegment(tenantShortNameCandidate) ||
-    Date.parse(session.data.accessTokenExpiresAt) <= Date.now()
+    isReservedTenantSegment(tenantShortNameCandidate)
   )
-    return undefined;
+    return identityRefused("invalid address");
+  if (Date.parse(session.accessTokenExpiresAt) <= Date.now())
+    return identityRefused("access token expired");
 
   try {
     const rows = await withRuntimeTransaction(
@@ -1186,46 +1235,50 @@ const readAddressedApplicationIdentityAtAddress = async (
         transaction.query<AddressedOrganizationRow>`
         select *
         from vortex_identity.read_organization_at_address(
-          ${session.data.identityId}::uuid,
+          ${session.identityId}::uuid,
           ${tenantShortName.data}::text,
           ${organizationShortName.data}::text
         )
       `,
     );
-    if (rows.length === 0) return undefined;
+    if (rows.length === 0) return identityRefused("organisation not at the address");
     if (rows.length !== 1) throw new Error("ORGANIZATION_ADDRESS_NOT_UNIQUE");
     const address = addressedOrganizationSchema.parse(rows[0]);
-    const identity = await readAddressedActiveApplicationIdentity(
-      session.data,
+    const read = await readAddressedActiveApplicationIdentity(
+      session,
       address.organization_id,
-      identityAuthorityId.data,
+      identityAuthorityId,
       applicationKey.data,
     );
+    if (read.kind !== "available") return read;
+    const identity = read.value;
     if (
-      identity === undefined ||
       identity.organizationId !== address.organization_id ||
       (identity.previewInstallationId === undefined
         ? identity.definitionKey !== applicationKey.data
         : previewApplicationKey(identity.previewInstallationId) !== applicationKey.data)
     )
-      return undefined;
-    return Object.freeze({
-      organizationId: address.organization_id,
-      tenantShortName: tenantShortName.data,
-      organizationShortName: organizationShortName.data,
-      ...(address.account_display_name === null
-        ? {}
-        : { accountDisplayName: address.account_display_name }),
-      identity,
-    });
+      return identityRefused("application identity does not match the address");
+    return {
+      kind: "available",
+      value: Object.freeze({
+        organizationId: address.organization_id,
+        tenantShortName: tenantShortName.data,
+        organizationShortName: organizationShortName.data,
+        ...(address.account_display_name === null
+          ? {}
+          : { accountDisplayName: address.account_display_name }),
+        identity,
+      }),
+    };
   } catch (error) {
-    logRefusal(
-      "application-address",
-      `application ${applicationKey.data} identity`,
-      "APPLICATION_IDENTITY_READ_FAILED",
+    // Thrown outside the request runner (which logs its own answers): said once, here.
+    const cause = describeApplicationAddressFailure(error);
+    logClassifiedFailure(
+      `[application-address] application ${applicationKey.data} identity read failed: ${cause}`,
       error,
     );
-    return undefined;
+    return { kind: "temporarily_unavailable", cause };
   }
 };
 

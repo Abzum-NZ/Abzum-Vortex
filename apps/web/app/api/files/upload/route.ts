@@ -45,15 +45,17 @@ const commandSchema = z.discriminatedUnion("operation", [
     .strict(),
   z.object({ operation: z.literal("complete"), fileId: fileIdSchema }).strict(),
 ]);
-const refuse = (code: string, status = 403, cause?: unknown) => {
-  logRefusal("files", "upload", code, cause);
-  return privateJsonResponse(
+const refusedResponse = (status: number) =>
+  privateJsonResponse(
     {
       outcome: "refused",
       message: "The file could not be uploaded. Refresh the page and try again.",
     },
     status,
   );
+const refuse = (code: string, status = 403, cause?: unknown) => {
+  logRefusal("files", "upload", code, cause);
+  return refusedResponse(status);
 };
 export async function POST(request: NextRequest) {
   try {
@@ -71,7 +73,8 @@ export async function POST(request: NextRequest) {
       input.applicationKey,
       input.pageKey,
     );
-    if (address.kind !== "application_page") return refuse("page_refused");
+    // The address read logged why it answered no page, once.
+    if (address.kind !== "application_page") return refusedResponse(403);
     const body = await readJsonBody(request, 4096, commandSchema);
     if (body.kind === "too_large") return refuse("body_too_large", 413);
     if (body.kind !== "read") return refuse(`body_${body.kind}`, 400);
