@@ -21,7 +21,7 @@ export const packageAreas: Record<string, string> = {
 };
 
 /** Every rule protects a product rule in AGENTS.md or the target architecture, or a defect that has happened. */
-export const guardRules = {
+const guardRules = {
   "query-input-name-matching": {
     description: "Query input values must come from explicit bindings through the shared resolver",
   },
