@@ -8,16 +8,7 @@ import { createVortexStyleComponentVariables } from "./vortex-style-variables";
  * A resolved style is carried on the application root; the shared stylesheet reads its theme
  * variables and style attributes there.
  */
-export const VORTEX_STYLES = [
-  "nova",
-  "vega",
-  "maia",
-  "lyra",
-  "mira",
-  "luma",
-  "sera",
-  "rhea",
-] as const;
+const VORTEX_STYLES = ["nova", "vega", "maia", "lyra", "mira", "luma", "sera", "rhea"] as const;
 
 export type VortexStyle = (typeof VORTEX_STYLES)[number];
 
