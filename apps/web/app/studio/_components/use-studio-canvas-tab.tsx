@@ -230,8 +230,7 @@ export function useStudioCanvasTab({
     () => (selectedAlias === undefined ? undefined : studioPlacementOwner(source, selectedAlias)),
     [source, selectedAlias],
   );
-  // A menu entry shows the page it opens; the Menu and Theme tabs otherwise show the home page, so
-  // their changes are seen in the application's frame.
+  // A menu entry shows the page it opens.
   const selectedEntry =
     selected?.kind === "navigation"
       ? studioMenuPosition(source, selected.navigationItemAlias)?.item
@@ -248,31 +247,25 @@ export function useStudioCanvasTab({
   const previewPageAlias = pageUsingLayout(source, layoutAlias);
   // The address names a page before the first render (the server draws it too).
   const requestedPageKey = useSearchParams().get("page");
-  // One rule for every tab: the selection's page, otherwise the page the address names, otherwise
-  // the home page.
+  // One rule for every tab, the view request's too: a selected layout's page; otherwise the
+  // selection's page, otherwise the page the address names, otherwise the home page.
   const canvasPageAlias =
-    selected?.kind === "page"
-      ? selected.pageAlias
-      : selectedOwner?.kind === "page"
-        ? selectedOwner.pageAlias
-        : layoutAlias !== undefined
-          ? previewPageAlias
-          : selectedEntry?.type === "page"
-            ? (pageAliasOfKey(selectedEntry.page) ?? pageAliasOfKey(source.body.home_page))
-            : (pageAliasOfKey(requestedPageKey ?? undefined) ??
-              pageAliasOfKey(source.body.home_page));
+    layoutAlias !== undefined
+      ? previewPageAlias
+      : ((selected?.kind === "page"
+          ? selected.pageAlias
+          : selectedOwner?.kind === "page"
+            ? selectedOwner.pageAlias
+            : selectedEntry?.type === "page"
+              ? pageAliasOfKey(selectedEntry.page)
+              : undefined) ??
+        pageAliasOfKey(requestedPageKey ?? undefined) ??
+        pageAliasOfKey(source.body.home_page));
   const canvasPage =
     canvasPageAlias === undefined
       ? undefined
       : source.body.pages.find((page) => page.id === canvasPageAlias);
   const addressRestored = useRef(false);
-  // Until the effect below has selected the page the address names, the centre is loading that
-  // page, not empty.
-  const [addressSettled, setAddressSettled] = useState(false);
-  const pageLoading =
-    !addressSettled &&
-    requestedPageKey !== null &&
-    source.body.pages.some((entry) => entry.key === requestedPageKey);
   useEffect(() => {
     const restore = () => {
       const url = new URL(window.location.href);
@@ -298,7 +291,6 @@ export function useStudioCanvasTab({
     } else if (!addressRestored.current) {
       addressRestored.current = true;
       restore();
-      setAddressSettled(true);
     } else if (canvasPage !== undefined) {
       const url = new URL(window.location.href);
       url.searchParams.set("page", canvasPage.key);
@@ -788,23 +780,17 @@ export function useStudioCanvasTab({
       {selected?.kind === "placement" && canvasPage === undefined && (
         <p>This block is part of a layout. Change it in the inspector.</p>
       )}
-      {canvasPage === undefined && pageLoading && draft.viewProblem === null && (
-        <StudioCanvasSkeleton />
+      {canvasPage === undefined && selected?.kind !== "flow" && selected?.kind !== "placement" && (
+        <Empty className="min-h-64 flex-1">
+          <EmptyHeader>
+            <EmptyMedia variant="icon">
+              <Icon name="blocks" />
+            </EmptyMedia>
+            <EmptyTitle>No page open</EmptyTitle>
+            <EmptyDescription>Choose a page in Structure, or add one.</EmptyDescription>
+          </EmptyHeader>
+        </Empty>
       )}
-      {canvasPage === undefined &&
-        !pageLoading &&
-        selected?.kind !== "flow" &&
-        selected?.kind !== "placement" && (
-          <Empty className="min-h-64 flex-1">
-            <EmptyHeader>
-              <EmptyMedia variant="icon">
-                <Icon name="blocks" />
-              </EmptyMedia>
-              <EmptyTitle>No page open</EmptyTitle>
-              <EmptyDescription>Choose a page in Structure, or add one.</EmptyDescription>
-            </EmptyHeader>
-          </Empty>
-        )}
       {canvasPage !== undefined && theme.problem.length > 0 && (
         <Alert variant="destructive">
           <AlertDescription>{theme.problem}</AlertDescription>

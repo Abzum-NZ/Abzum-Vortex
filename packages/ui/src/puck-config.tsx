@@ -827,6 +827,15 @@ const rendererKeysByCategory = (releaseByKey: ReadonlyMap<string, PlatformBlockR
 };
 
 /**
+ * Slot keys in the order Puck's slot fields are declared in: last first. Puck lists an item's slots
+ * (in the Outline, and the root's zones) in the reverse of its fields' order, because it puts each
+ * slot field first in turn, so declaring them last first shows them in the order the block, the
+ * layout or the page holds them. If a Puck upgrade lists slots in field order, drop the reverse
+ * here: the Outline order checks of the canvas tabs and outline walks catch it.
+ */
+export const puckSlotFieldOrder = <T,>(keys: readonly T[]): T[] => [...keys].reverse();
+
+/**
  * Puck's slot field of one declared slot under the key it is stored by: its name (the Outline's
  * row for a tab names the tab's key) and the blocks it takes.
  */
@@ -864,14 +873,11 @@ export function withRepeatingSlots(
     if (release === undefined || component === undefined) continue;
     const fields = { ...component.fields } as Record<string, Field>;
     const declarations = release.slots.filter((slot) => slot.repeats !== undefined);
-    // Puck lists a block's slots in the reverse of its fields' order (it puts each slot field
-    // first in turn), so the keys are declared last first, and the Outline shows the tabs in the
-    // order the page holds them (with blocks that hold the same keys in different orders, the
-    // first block's order). If a Puck upgrade lists the slots in field order, drop the reverse:
-    // the "listed in the order" check of walks/STUDIO-CANVAS-TABS/tabs.cjs catches it.
+    // The Outline shows the tabs in the order the page holds them (with blocks that hold the same
+    // keys in different orders, the first block's order).
     for (const key of Object.keys(fields))
       if (declarations.some((slot) => key.startsWith(slot.key + "_"))) delete fields[key];
-    for (const key of [...keys].reverse()) {
+    for (const key of puckSlotFieldOrder(keys)) {
       const declaration = declarations.find((slot) => key.startsWith(slot.key + "_"));
       if (declaration !== undefined) fields[key] = slotField(declaration, key, keysByCategory);
     }
@@ -901,15 +907,16 @@ function createVortexPuckConfig(
       vortex: opaque,
       ...Object.fromEntries(release.properties.map((property) => [property.key, opaque])),
     };
-    for (const slot of release.slots) {
-      const keys =
-        slot.repeats === undefined
-          ? [slot.key]
-          : repeatableSlotItemIdentities(slot, settings).map((identity) =>
-              repeatableSlotKey(slot.key, identity),
-            );
-      for (const key of keys) fields[key] = slotField(slot, key, keysByCategory);
-    }
+    const slots = release.slots.flatMap((slot) =>
+      (slot.repeats === undefined
+        ? [slot.key]
+        : repeatableSlotItemIdentities(slot, settings).map((identity) =>
+            repeatableSlotKey(slot.key, identity),
+          )
+      ).map((key) => [slot, key] as const),
+    );
+    for (const [slot, key] of puckSlotFieldOrder(slots))
+      fields[key] = slotField(slot, key, keysByCategory);
     return fields;
   };
 

@@ -38,6 +38,8 @@ export const studioViewRequest = (
   if (tab === "data" || tab === "access" || tab === "flows") return { kind: tab };
   if (tab === "releases") return { kind: "source" };
   let pageAlias = selected?.kind === "page" ? selected.pageAlias : undefined;
+  // A selected layout, or a block of one, is drawn on the page that uses it, or on none.
+  let layoutSelected = selected?.kind === "shell";
   if (selected?.kind === "placement") {
     const contains = (items: readonly SourceItem[]): boolean =>
       items.some(
@@ -54,11 +56,12 @@ export const studioViewRequest = (
     // A block of a layout is drawn on a page that uses that layout.
     if (pageAlias === undefined) {
       const layout = source.body.shells.find((shell) => contains(shell.layout.content));
+      layoutSelected = layout !== undefined;
       pageAlias = pageUsingLayout(source, layout?.id);
     }
   }
   if (selected?.kind === "shell") pageAlias = pageUsingLayout(source, selected.shellAlias);
-  if (pageAlias === undefined) {
+  if (pageAlias === undefined && !layoutSelected) {
     const findEntry = (
       items: ApplicationSourceDocument["body"]["navigation"],
     ): string | undefined => {
