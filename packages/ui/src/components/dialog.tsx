@@ -190,9 +190,7 @@ function DialogFooter({
       {...props}
     >
       {children}
-      {showCloseButton && (
-        <DialogClose render={<Button variant="outline" />}>Close</DialogClose>
-      )}
+      {showCloseButton && <DialogClose render={<Button variant="outline" />}>Close</DialogClose>}
     </div>
   );
 }
