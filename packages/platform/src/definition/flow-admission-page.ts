@@ -2,11 +2,13 @@ import "server-only";
 
 import type { BoundHumanOrganizationRequest } from "../access/human-organization-request";
 import type { PlatformPermissionSource } from "../access/platform-permissions";
+import { logRefusal } from "../access/request-failure";
 import { recordIdSchema } from "../catalogue/identifiers";
 import { isRecord, sameId } from "../catalogue/runtime-primitives";
 import { readPageSubjectInTransaction } from "../pages/page-subject-read";
 import { requireProjectedPlacement } from "../pages/projected-placement-gate";
 import { pageSubjectType } from "../pages/projected-table-placement";
+import { logRecordsTableRequestRefusal } from "../pages/records-table-features";
 import {
   projectedTableMembershipRefusal,
   recordsTableBindingRefusal,
@@ -140,7 +142,7 @@ export const admitPageGesture = async (
     }),
   );
   if (refusal !== undefined) {
-    console.error(`[flows] table binding refused: ${refusal.reason}`);
+    logRecordsTableRequestRefusal(refusal, "flow_admission");
     return false;
   }
   const recordIds = bulkRecordIds ?? (recordId === undefined ? undefined : [recordId]);
@@ -186,7 +188,8 @@ export const admitPageGesture = async (
       }),
   );
   if (membership !== undefined) {
-    console.error(`[flows] table row membership refused: ${membership}`);
+    // A refusal the query logged adds no line; any other is the answer to what was supplied.
+    if (membership.logged !== true) logRefusal("flows", "table row membership", membership.reason);
     return false;
   }
   return (
