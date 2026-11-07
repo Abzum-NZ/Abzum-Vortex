@@ -7,8 +7,10 @@ import {
   createRecordsSelectionSealer,
   createRecordsTableQueryResolver,
   createViewerSafeRecordLinkService,
+  logClassifiedFailure,
   readCurrentOrganizationRuntimeSettingsAfterAuthorization,
   readCurrentRecordOwnerGroupsAfterAuthorization,
+  requestFailureLogged,
   runtimeDatabasePoolSize,
   type HumanOrganizationRequestDependencies,
   type InstalledRuntimeContext,
@@ -119,7 +121,11 @@ export const createPlacementReadServices = (
       const read = await readCalendarSettings();
       return read.kind === "available" ? read.value.settings?.timeZone : undefined;
     } catch (error) {
-      console.error(`[page] organisation time zone unavailable: ${describeFailure(error)}`);
+      if (!requestFailureLogged(error))
+        logClassifiedFailure(
+          `[page] organisation time zone unavailable: ${describeFailure(error)}`,
+          error,
+        );
       return undefined;
     }
   };
@@ -132,15 +138,12 @@ export const createPlacementReadServices = (
         selection,
         (transaction) => readCurrentRecordOwnerGroupsAfterAuthorization(transaction),
       );
-      if (read.kind !== "available") {
-        console.error(`[page] viewer groups unavailable: kind=${read.kind}`);
-        return undefined;
-      }
+      // The request runner logged an answer that is not available, once.
+      if (read.kind !== "available") return undefined;
       return read.value.map((group) => group.groupId);
     } catch (error) {
-      console.error(
-        `[page] viewer groups unavailable: ${error instanceof Error ? error.message : "unknown"}`,
-      );
+      if (!requestFailureLogged(error))
+        logClassifiedFailure(`[page] viewer groups unavailable: ${describeFailure(error)}`, error);
       return undefined;
     }
   };
@@ -172,10 +175,8 @@ export const createPlacementReadServices = (
     (context: InstalledRuntimeContext): RecordLinkResolver =>
     async (links) => {
       const read = await recordLinks.readLabels(session, selection, context, links);
-      if (read.outcome !== "read") {
-        console.error(`[page] link titles unavailable: outcome=${read.outcome}`);
-        return undefined;
-      }
+      // The link service logged why the labels are unavailable, once.
+      if (read.outcome !== "read") return undefined;
       return projectLinks(read.labels);
     };
   // A Records table titles the links a read returned inside that read's own request transaction.

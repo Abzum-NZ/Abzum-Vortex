@@ -1,7 +1,7 @@
 import "server-only";
 
 import { createHash, randomBytes } from "node:crypto";
-import { createEventDispatcherWakeup } from "@vortex/platform/server";
+import { createEventDispatcherWakeup, markRequestFailureLogged } from "@vortex/platform/server";
 import { eventConsumers } from "./event-consumers";
 
 /**
@@ -32,8 +32,14 @@ export const createInProcessEventDispatcher = (): InProcessEventDispatcher => {
       authorization: `Bearer ${credential}`,
       body: { source: "scheduled_recovery" },
     });
-    if (response.outcome === "refused")
-      throw new Error(`The event dispatcher was refused: ${response.reason}.`);
+    // A grant the dispatcher could not use is logged, once, where it happened: the caller adds no
+    // second line for the error restating it.
+    if (response.outcome === "refused") {
+      const refusal = new Error(`The event dispatcher was refused: ${response.reason}.`);
+      throw response.reason === "dispatcher_grant_unavailable"
+        ? markRequestFailureLogged(refusal)
+        : refusal;
+    }
     if (response.outcome === "invalid_request")
       throw new Error(`The event dispatch request was invalid: ${response.code}.`);
     const { result } = response;

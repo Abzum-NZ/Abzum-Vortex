@@ -14,6 +14,7 @@ import {
   delegableRoleIds,
   flowPlansOf,
   createFlowQueryReader,
+  logFault,
   runFieldOptionsFlow,
   type OptionFilterKey,
   type RecordChoiceAdmission,
@@ -851,7 +852,8 @@ const loadFlowOptionsPage = async (
     inputs,
   );
   if (ran.kind === "temporarily_unavailable") return { kind: "temporarily_unavailable" };
-  if (ran.kind === "failed") return { kind: "refused", cause: "options_flow_failed " + ran.reason };
+  // The flow's own fault or the query's refusal was logged, once, where it was found.
+  if (ran.kind === "failed") return { kind: "refused", cause: "options_flow_failed", logged: true };
   const needle = request.search?.trim().toLowerCase() ?? "";
   const matching = ran.options.filter((option) => option.label.toLowerCase().includes(needle));
   const offset = request.continuationToken === undefined ? 0 : Number(request.continuationToken);
@@ -864,16 +866,20 @@ const loadFlowOptionsPage = async (
   const page = matching.slice(offset, offset + size);
   const next = offset + size < matching.length ? String(offset + size) : undefined;
   if (flow.type === "choice") {
-    if (page.some((option) => typeof option.value !== "string"))
-      return { kind: "refused", cause: "options_flow_failed a choice option value is not text" };
+    if (page.some((option) => typeof option.value !== "string")) {
+      logFault("field-options", `options flow ${flow.flowId}`, "choice_option_value_not_text");
+      return { kind: "refused", cause: "options_flow_failed", logged: true };
+    }
     return {
       kind: "completed",
       options: page.map((option) => ({ key: option.value as string, label: option.label })),
       ...(next === undefined ? {} : { nextContinuationToken: next }),
     };
   }
-  if (flow.target === undefined || page.some((option) => typeof option.value === "string"))
-    return { kind: "refused", cause: "options_flow_failed a link option value is not a record" };
+  if (flow.target === undefined || page.some((option) => typeof option.value === "string")) {
+    logFault("field-options", `options flow ${flow.flowId}`, "link_option_value_not_a_record");
+    return { kind: "refused", cause: "options_flow_failed", logged: true };
+  }
   return {
     kind: "completed",
     choices: page.map((option) => {

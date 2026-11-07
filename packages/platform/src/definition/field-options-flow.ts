@@ -9,6 +9,7 @@ import {
   recordTypeIdSchema,
 } from "../catalogue/identifiers";
 import type { IdentitySession, OrganizationSelectionCandidate } from "../access/identity-access";
+import { logFault } from "../access/request-failure";
 import { jsonValueSchema } from "../catalogue/common";
 import {
   continueFlowRun,
@@ -36,9 +37,13 @@ type FieldOptionsFlowOption = z.infer<typeof flowOptionSchema>;
 /** The most steps an options flow's read loop takes before the read is refused. */
 const maximumReadSteps = 20;
 
+/**
+ * `failed`: the flow could not give its options, and the failure was logged, once, where it was
+ * found: a flaw of the flow's definition here, a refused query read by the query's own line.
+ */
 type FieldOptionsFlowResult =
   | Readonly<{ kind: "options"; options: readonly FieldOptionsFlowOption[] }>
-  | Readonly<{ kind: "failed"; reason: string }>
+  | Readonly<{ kind: "failed" }>
   | Readonly<{ kind: "temporarily_unavailable" }>;
 
 /**
@@ -59,6 +64,10 @@ export const runFieldOptionsFlow = async (
   flowId: string,
   inputs: Readonly<Record<string, JsonValue>>,
 ): Promise<FieldOptionsFlowResult> => {
+  const definitionFault = (code: string): FieldOptionsFlowResult => {
+    logFault("field-options", `options flow ${flowId}`, code);
+    return { kind: "failed" };
+  };
   // A link field holds its record as a record type and a record; a flow input names the record.
   const flowInputs = Object.fromEntries(
     Object.entries(inputs).map(([name, value]) => [
@@ -79,21 +88,18 @@ export const runFieldOptionsFlow = async (
     }
     if (step.kind === "finished") {
       if (step.result.status !== "completed")
-        return { kind: "failed", reason: `options flow ${step.result.failure.code}` };
+        return definitionFault(`flow_${step.result.failure.code}`);
       const declared = step.result.outputs.options;
       const parsed = flowOptionsSchema.safeParse(declared?.value);
       return parsed.success
         ? { kind: "options", options: parsed.data }
-        : { kind: "failed", reason: "options flow output 'options' is not a list of options" };
+        : definitionFault("output_not_a_list_of_options");
     }
     if (step.kind !== "protected_task" || step.call.effect !== "read" || reads >= maximumReadSteps)
-      return { kind: "failed", reason: "options flow holds a step an options read cannot run" };
+      return definitionFault("step_not_readable");
     const { call } = step;
     if (call.taskType !== "record.query")
-      return {
-        kind: "failed",
-        reason: `options flow step ${call.taskType} cannot run in an options read`,
-      };
+      return definitionFault(`step_${call.taskType}_unsupported`);
     const queryId = queryIdSchema.safeParse(call.properties.query?.value);
     const parameters = z
       .record(builderKeySchema, jsonValueSchema)
@@ -106,7 +112,7 @@ export const runFieldOptionsFlow = async (
       .optional()
       .safeParse(call.properties.page_size?.value);
     if (!queryId.success || !parameters.success || !pageSize.success)
-      return { kind: "failed", reason: "options flow query step is invalid" };
+      return definitionFault("query_step_invalid");
     const read = await ports.queryRecords.read(ports.session, ports.selection, {
       queryId: queryId.data,
       parameters: parameters.data,
@@ -114,8 +120,7 @@ export const runFieldOptionsFlow = async (
       continuation: "",
     });
     if (read.kind === "temporarily_unavailable") return { kind: "temporarily_unavailable" };
-    if (read.kind !== "available" || read.value.outcome !== "read")
-      return { kind: "failed", reason: "options flow query is unavailable" };
+    if (read.kind !== "available" || read.value.outcome !== "read") return { kind: "failed" };
     step = resumeFlowRun(
       step.state,
       {

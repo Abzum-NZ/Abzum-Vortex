@@ -101,7 +101,7 @@ export const readApplicationSurfaceCapabilitiesInTransaction = async (
  * passes through, in the person's own request transaction: draft changes need
  * `platform.organization.definition_drafts.manage` (plus `system_applications.manage` for a
  * platform system application), and installation needs `platform.organization.applications.manage`.
- * A person who cannot be decided is offered nothing and the cause is logged.
+ * A person who cannot be decided is offered nothing; the request runner logs why, once.
  */
 export const readApplicationSurfaceCapabilities = async (
   session: IdentitySession,
@@ -114,13 +114,8 @@ export const readApplicationSurfaceCapabilities = async (
     (transaction, scope) =>
       readApplicationSurfaceCapabilitiesInTransaction(transaction, scope, dependencies.permissions),
   );
-  if (result.kind !== "available") {
-    console.error(
-      `[application-surfaces] capabilities unavailable: ${result.cause ?? result.kind}`,
-    );
-    return { kind: "unavailable" };
-  }
-  return result;
+  // The request runner logged an answer that is not available, once.
+  return result.kind === "available" ? result : { kind: "unavailable" };
 };
 
 /**
@@ -130,9 +125,7 @@ export const readApplicationSurfaceCapabilities = async (
 export const applicationSurfaceCapabilitiesOf = (
   result: HumanOrganizationRequestResult<ApplicationSurfaceCapabilities>,
 ): ApplicationSurfaceCapabilities => {
-  if (result.kind === "available") return result.value;
-  console.error(`[application-surfaces] capabilities refused: ${result.kind}`);
-  return noCapabilities;
+  return result.kind === "available" ? result.value : noCapabilities;
 };
 
 /** One failure in the capability read, logged with its cause and never turned into a silent allow. */
