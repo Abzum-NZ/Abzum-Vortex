@@ -140,7 +140,7 @@ export function StudioOrganizationTheme({
         </Tooltip>
         <h1 className="min-w-0 truncate text-sm font-medium">{organizationName}</h1>
       </header>
-      <main className="flex min-h-0 flex-1 flex-col">
+      <main className="flex min-h-0 flex-1 flex-col overflow-y-auto md:overflow-hidden">
         {unresolvable && (
           <Alert variant="destructive" className="m-4 w-auto shrink-0">
             <AlertTitle>The saved organisation theme fails the readability checks</AlertTitle>
@@ -150,8 +150,8 @@ export function StudioOrganizationTheme({
             </AlertDescription>
           </Alert>
         )}
-        <div className="grid min-h-0 flex-1 grid-cols-1 md:grid-cols-[minmax(20rem,28rem)_1fr]">
-          <div className="flex min-h-0 flex-col border-b md:border-r md:border-b-0">
+        <div className="grid flex-1 md:min-h-0 grid-cols-1 md:grid-cols-[minmax(20rem,28rem)_1fr]">
+          <div className="flex flex-col md:min-h-0 border-b md:border-r md:border-b-0">
             <StudioThemePanel
               title="Organisation theme"
               description={
