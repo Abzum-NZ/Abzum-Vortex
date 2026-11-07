@@ -75,6 +75,7 @@ import {
   zoneHandle,
   workingItem,
   commitWorking,
+  copyOfRegion,
   plainSource,
   plainSettings,
   settingsOf,
@@ -504,9 +505,11 @@ export const applyAdd = (
   )
     return { kind: "invalid" };
   plainSource(current.source);
-  if (!validContext(current)) return { kind: "invalid" };
+  // The history hands its snapshot, which is the validated source; a copy someone made is not
+  // trusted here.
+  if (!validContext(current) || !isStudioDraftSnapshot(current.source)) return { kind: "invalid" };
   const catalogue = current.catalogue;
-  const source = applicationSourceDocumentSchema.parse(current.source);
+  const source = current.source as ApplicationSourceDocument;
   const destination = parseDestination(input.destination);
   const places = addPlaces(catalogue, source, parseOwner(input.owner));
   if (places === "published") return { kind: "refused", reason: PUBLISHED_PAGE_ADD_REASON };
@@ -558,8 +561,12 @@ export const applyAdd = (
     return { kind: "invalid" };
 
   const { alias, item } = newBlockItem(catalogue, source, release, settings, query);
+  // The new block goes into a copy that shares every node the add did not touch; the history
+  // checks the whole source once.
+  const copy = copyOfRegion(source, place.region);
+  if (copy === undefined) return { kind: "invalid" };
   try {
-    placeItem(catalogue, source, place, input.index, item);
+    placeItem(catalogue, copy.source, { ...place, region: copy.region }, input.index, item);
   } catch (error) {
     if (error instanceof StoredCompositionRefusal)
       return {
@@ -568,12 +575,8 @@ export const applyAdd = (
       };
     throw error;
   }
-  syncStoredBlockDependencies(source);
-  return {
-    kind: "applied",
-    source: applicationSourceDocumentSchema.parse(source),
-    placementAlias: alias,
-  };
+  syncStoredBlockDependencies(copy.source);
+  return { kind: "applied", source: copy.source, placementAlias: alias };
 };
 
 /**
