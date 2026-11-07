@@ -6,6 +6,7 @@ import {
   type JsonObject,
 } from "./context";
 import { object, array } from "./helpers";
+import { linkRelationshipTargets } from "../module-links";
 import {
   fieldDeclaredResultType,
   typedFieldValueType,
@@ -97,9 +98,11 @@ export function sourceTypeCompatibilityRule(
           valid = false;
           continue;
         }
-        const targets = relationship.to_record_type
-          ? [String(relationship.to_record_type)]
-          : array(relationship.to_record_types).map(String);
+        const targets =
+          linkRelationshipTargets(
+            aggregateRecord as Parameters<typeof linkRelationshipTargets>[0],
+            relationship as Parameters<typeof linkRelationshipTargets>[1],
+          )?.targets ?? [];
         const ownerReference = `${source.key}:${recordKey}`;
         const aggregateField =
           settings.field === undefined ? undefined : aggregateFields.get(String(settings.field));
