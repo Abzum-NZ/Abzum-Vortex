@@ -2,6 +2,7 @@ import "server-only";
 
 import {
   createBackendRunHistoryReader,
+  logRefusal,
   type BackendRunHistoryCursor,
   type BackendRunHistoryRequest,
 } from "@vortex/platform/server";
@@ -48,12 +49,8 @@ const installedFlowNames = async (
     organizationId,
     applicationRootId,
   });
-  if (loaded.kind !== "available") {
-    console.error(
-      `[studio] back-end run history cannot name flows: installed release ${loaded.kind}`,
-    );
-    return new Map();
-  }
+  // The request runner logged an answer that is not available, once.
+  if (loaded.kind !== "available") return new Map();
   const { application, modules } = loaded.value.releaseSet;
   return new Map(
     [...application.content.flows, ...modules.flatMap((module) => module.content.flows)].map(
@@ -141,7 +138,7 @@ export const readStudioBackendRunHistory = async (
       reason: result.kind === "refused" ? "permission_missing" : "request_failed",
     };
   } catch (error) {
-    console.error("[studio] back-end run history failed", error);
+    logRefusal("studio", "back-end run history", "request_failed", error);
     return { kind: "temporarily_unavailable", reason: "request_failed" };
   }
 };

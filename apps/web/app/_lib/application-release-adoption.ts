@@ -234,7 +234,8 @@ export const readApplicationReleaseStanding = async (
       requestedFieldIds: ids.map(String),
     });
     if (read.kind !== "read") {
-      console.info(`[release-standing] App Store record ${read.kind}`);
+      // The subject reader logs a read that failed; only its neutral refusal says nothing.
+      if (read.kind === "refused") console.info("[release-standing] App Store record refused");
       return { kind: "unknown" };
     }
     const values = Object.fromEntries(

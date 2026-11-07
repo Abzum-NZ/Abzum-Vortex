@@ -2,6 +2,7 @@
 
 import { z } from "zod";
 import { applicationRootIdSchema, organizationIdSchema } from "@vortex/platform/schema";
+import { logRefusal } from "@vortex/platform/server";
 import { resolveIdentitySession } from "../auth/_lib/session-server";
 import {
   readApplicationReleaseStanding as readStanding,
@@ -112,7 +113,7 @@ export async function readApplicationReleaseStanding(
       applicationRootId: root.data,
     });
   } catch (error) {
-    console.error("[studio] release standing could not be read", error);
+    logRefusal("studio", "release standing", "read_failed", error);
     return { kind: "unknown" };
   }
 }
