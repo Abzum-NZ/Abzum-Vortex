@@ -70,7 +70,8 @@ function DialogPortal({ container, ...props }: DialogPrimitive.Portal.Props) {
 }
 
 function DialogClose({ ...props }: DialogPrimitive.Close.Props) {
-  return <DialogPrimitive.Close data-slot="dialog-close" {...props} />;
+  // After the spread: a tooltip trigger that renders this component would otherwise replace the slot.
+  return <DialogPrimitive.Close {...props} data-slot="dialog-close" />;
 }
 
 function DialogOverlay({ className, ...props }: DialogPrimitive.Backdrop.Props) {
@@ -83,18 +84,56 @@ function DialogOverlay({ className, ...props }: DialogPrimitive.Backdrop.Props) 
   );
 }
 
+const FOCUSABLE_CANDIDATES =
+  'a[href],button,input,select,textarea,summary,details,iframe,object,embed,[tabindex],[contenteditable]:not([contenteditable="false"]),audio[controls],video[controls]';
+
+/**
+ * Where focus starts: Base UI's default (`true`) when the first tabbable control is not a close
+ * control, the first control after the close controls when they come first, and the dialog itself
+ * when nothing else is tabbable, so the first Escape closes the dialog instead of a close control's
+ * tooltip. A touch open starts on the dialog, as Base UI's default does.
+ */
+function initialFocusTarget(popup: HTMLElement | null, openType: string): HTMLElement | true {
+  if (popup === null) return true;
+  if (openType === "touch") return popup;
+  let afterClose = false;
+  for (const control of popup.querySelectorAll<HTMLElement>(FOCUSABLE_CANDIDATES)) {
+    const tabbable =
+      control.tabIndex >= 0 &&
+      !control.matches(":disabled") &&
+      control.closest("[inert]") === null &&
+      control.checkVisibility();
+    if (!tabbable) continue;
+    if (control.closest('[data-slot="dialog-close"]') !== null) afterClose = true;
+    else return afterClose ? control : true;
+  }
+  return popup;
+}
+
 function DialogContent({
   className,
   children,
   showCloseButton = true,
+  ref,
   ...props
 }: DialogPrimitive.Popup.Props & {
   showCloseButton?: boolean;
 }) {
+  const popup = React.useRef<HTMLDivElement | null>(null);
+  const setPopup = React.useCallback(
+    (node: HTMLDivElement | null) => {
+      popup.current = node;
+      if (typeof ref === "function") return ref(node);
+      if (ref) ref.current = node;
+    },
+    [ref],
+  );
   return (
     <DialogPortal>
       <DialogOverlay />
       <DialogPrimitive.Popup
+        ref={setPopup}
+        initialFocus={(openType) => initialFocusTarget(popup.current, openType)}
         data-slot="dialog-content"
         className={cn(
           "cn-dialog-content fixed top-1/2 left-1/2 z-50 w-full -translate-x-1/2 -translate-y-1/2 outline-none",
