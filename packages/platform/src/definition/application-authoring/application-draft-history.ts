@@ -9,6 +9,7 @@ import {
   type StoredDefinitionDraft,
 } from "../definition-store-contracts";
 import { type ApplicationRootId, platformIdSchema } from "../../catalogue/identifiers";
+import { sameCompositionValue } from "./composition-references";
 import { shareSnapshot } from "./draft-snapshot";
 
 export type StudioStoredApplicationDraft = Extract<StoredDefinitionDraft, { kind: "application" }>;
@@ -94,34 +95,6 @@ const snapshotSource = (
 const mutableSourceCopy = (source: StudioApplicationSourceSnapshot): ApplicationSourceDocument => {
   const cloned: unknown = structuredClone(source);
   return applicationSourceDocumentSchema.parse(cloned);
-};
-
-const sameValue = (left: unknown, right: unknown): boolean => {
-  if (Object.is(left, right)) return true;
-  if (
-    left === null ||
-    right === null ||
-    typeof left !== "object" ||
-    typeof right !== "object" ||
-    Array.isArray(left) !== Array.isArray(right)
-  )
-    return false;
-
-  if (Array.isArray(left) && Array.isArray(right))
-    return (
-      left.length === right.length && left.every((value, index) => sameValue(value, right[index]))
-    );
-
-  const leftRecord = left as Record<string, unknown>;
-  const rightRecord = right as Record<string, unknown>;
-  const leftKeys = Object.keys(leftRecord);
-  const rightKeys = Object.keys(rightRecord);
-  return (
-    leftKeys.length === rightKeys.length &&
-    leftKeys.every(
-      (key) => Object.hasOwn(rightRecord, key) && sameValue(leftRecord[key], rightRecord[key]),
-    )
-  );
 };
 
 const applicationDraft = (draft: unknown): StudioStoredApplicationDraft | undefined => {
@@ -370,7 +343,7 @@ export const createStudioApplicationDraftHistoryController = (
           parsed.data.organizationId !== organizationId ||
           parsed.data.draftRevision !== expectedDraftRevision + 1 ||
           parsed.data.key !== key ||
-          !sameValue(parsed.data.source, command.source)
+          !sameCompositionValue(parsed.data.source, command.source)
         ) {
           if (parsed.success)
             console.error(
