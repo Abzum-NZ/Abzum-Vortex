@@ -85,6 +85,7 @@ export {
 } from "./navigation/account-actions";
 export type { ApplicationAccount, ApplicationAccountActions } from "./navigation/account-actions";
 export {
+  APPLICATION_MAIN_CONTENT_ID,
   ApplicationFrameHeader,
   ApplicationSwitcherContext,
   WebMcpStatus,
