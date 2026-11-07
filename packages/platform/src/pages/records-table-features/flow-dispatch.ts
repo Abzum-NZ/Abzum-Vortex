@@ -54,8 +54,11 @@ import {
   type PlacementReadEntry,
 } from "../placement-read/shared";
 
-/** Why supplied rows were not proven; `logged`: the query already logged the refusal, once. */
-type TableMembershipRefusal = Readonly<{ reason: string; logged?: true }>;
+/**
+ * Why supplied rows were not proven; `logged`: the query already logged the refusal, once; `fault`:
+ * the installed definition cannot answer, a platform fault.
+ */
+type TableMembershipRefusal = Readonly<{ reason: string; logged?: true; fault?: true }>;
 
 /** Proves supplied rows against the projected table's installed query under this request's scope. */
 const recordsTableMembershipRefusal = async (
@@ -69,9 +72,9 @@ const recordsTableMembershipRefusal = async (
   const queryId =
     typeof placement.vortex.queryId === "string" ? placement.vortex.queryId : undefined;
   const bound = queryId === undefined ? undefined : findModuleQuery(context, queryId);
-  if (bound === undefined) return { reason: "query_not_installed" };
+  if (bound === undefined) return { reason: "query_not_installed", fault: true };
   const declared = readQueryBindings(placementSettingsOf(placement));
-  if (declared.kind !== "read") return { reason: "query_bindings_malformed" };
+  if (declared.kind !== "read") return { reason: "query_bindings_malformed", fault: true };
   const resolved = await resolveQueryBindings(declared.bindings, bound.query.inputs, bindings, {});
   if (resolved.kind !== "resolved") return { reason: `query_inputs_${resolved.kind}` };
   const command = protectedQueryCommandSchema.safeParse({
@@ -82,7 +85,7 @@ const recordsTableMembershipRefusal = async (
     pageSize: recordIds.length,
     exactRecordIds: recordIds,
   });
-  if (!command.success) return { reason: "query_membership_command_invalid" };
+  if (!command.success) return { reason: "query_membership_command_invalid", fault: true };
   const result = await readQueryMembership(transaction, scope, command.data);
   // The query logged its own refusal, once.
   if (result.outcome !== "completed")

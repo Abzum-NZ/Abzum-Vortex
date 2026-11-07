@@ -2,7 +2,7 @@ import "server-only";
 
 import type { BoundHumanOrganizationRequest } from "../access/human-organization-request";
 import type { PlatformPermissionSource } from "../access/platform-permissions";
-import { logRefusal } from "../access/request-failure";
+import { logFault, logRefusal } from "../access/request-failure";
 import { recordIdSchema } from "../catalogue/identifiers";
 import { isRecord, sameId } from "../catalogue/runtime-primitives";
 import { readPageSubjectInTransaction } from "../pages/page-subject-read";
@@ -188,8 +188,14 @@ export const admitPageGesture = async (
       }),
   );
   if (membership !== undefined) {
-    // A refusal the query logged adds no line; any other is the answer to what was supplied.
-    if (membership.logged !== true) logRefusal("flows", "table row membership", membership.reason);
+    // A refusal the query logged adds no line; a definition that cannot answer is a fault; any
+    // other is the answer to what was supplied.
+    if (membership.logged !== true)
+      (membership.fault === true ? logFault : logRefusal)(
+        "flows",
+        "table row membership",
+        membership.reason,
+      );
     return false;
   }
   return (
