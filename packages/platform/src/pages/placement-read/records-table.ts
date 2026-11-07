@@ -437,16 +437,11 @@ export const readRecordsTable = async (
     );
     resolved = await readPage(undefined);
   }
+  // The table resolver (or the request runner under it) logged every answer that is not a page, once.
   if (resolved.kind === "unavailable") {
-    console.error(
-      "[page] data placement unavailable: class=protected_query code=query_unavailable",
-    );
     data[placementId] = { status: "error" };
   } else if (resolved.kind === "refused") {
     if (placeInstallationRequired(data, placementId, resolved.reasonCode)) return;
-    console.error(
-      `[page] data placement refused: class=${resolved.reasonCode === undefined ? "records_table" : "protected_query"} code=${resolved.reasonCode ?? "query_refused"}`,
-    );
     // A date group that left the supported years, and a filter or sort the table cannot apply, has
     // its own business sentence.
     data[placementId] = {
