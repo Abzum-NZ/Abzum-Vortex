@@ -182,21 +182,14 @@ function StudioBlockAdd({ name }: Readonly<{ name: string }>) {
       <span id={descriptionId} className="sr-only">
         {choice.description}
       </span>
-      {reason === undefined ? (
-        <Tooltip>
-          <TooltipTrigger render={addButton} />
-          <TooltipContent className="max-w-prose">
-            Add {choice.name}: {choice.description}
-          </TooltipContent>
-        </Tooltip>
-      ) : (
-        <Reasoned
-          reason={reason}
-          describedBy={reason === drawer.limitReason ? drawer.limitId : undefined}
-        >
-          {addButton}
-        </Reasoned>
-      )}
+      <Reasoned
+        reason={reason}
+        tip={`Add ${choice.name}: ${choice.description}`}
+        contentProps={{ className: "max-w-prose" }}
+        describedBy={reason === drawer.limitReason ? drawer.limitId : undefined}
+      >
+        {addButton}
+      </Reasoned>
     </div>
   );
 }
