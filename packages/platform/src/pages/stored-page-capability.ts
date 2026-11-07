@@ -13,7 +13,7 @@ import {
 } from "../access/organization-access-decision";
 import type { PermissionRegistryEntryCandidate } from "../access/permission-registry";
 import type { PermissionDeclaration } from "../access/permissions";
-import { type JsonValue } from "../catalogue/common";
+import type { JsonValue } from "../catalogue/common";
 import {
   applicationRootIdSchema,
   pageIdSchema,
@@ -64,7 +64,7 @@ import {
   type PageCapabilityEvaluators,
   type FixedAuthenticatedPageCapability,
 } from "./authenticated-page-capability";
-import { type ProjectedPageCapability } from "./page-capability-projection";
+import type { ProjectedPageCapability } from "./page-capability-projection";
 import { resolvePageComposition } from "./page-composition-resolution";
 import { pageSubjectFromRead, type PageSubjectReadResult } from "./page-subject-read";
 import { activeInstallationBundleStateSchema } from "../definition/active-installation-bundle-repository";
