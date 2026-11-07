@@ -125,12 +125,6 @@ export const readRecordsTableNamedActionAvailability = async (
       };
     },
   );
-  if (result.kind !== "available") {
-    logRecordsTableRequestRefusal(
-      recordsTableRequestRefusal("bulk_action", `availability_${result.kind}`),
-      request.placementId,
-    );
-    return { kind: "unavailable" };
-  }
-  return result.value;
+  // The request runner logged every answer that is not available, once.
+  return result.kind === "available" ? result.value : { kind: "unavailable" };
 };

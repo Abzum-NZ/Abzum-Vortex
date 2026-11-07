@@ -14,8 +14,6 @@ import {
   type StudioPlacementReference,
 } from "./composition-references";
 import { settingsOf } from "./application-composition-regions";
-import type { StudioSemanticSelection } from "./semantic-selection";
-import { applyStudioItemLabels } from "./application-item-labels";
 import {
   blockItem,
   cleanName,
@@ -51,7 +49,7 @@ import { ensureHomeDashboard } from "./application-home-dashboard";
 import { placeMenuShell, placementsOf } from "./application-structure";
 
 /**
- * The Structure tab's edits: add, rename and remove pages and layouts, add the pages of a record
+ * The Structure tab's edits: add and remove pages and layouts, add the pages of a record
  * type (application-record-pages.ts), and choose the home page.
  * Each edit is applied to a copy of the draft, keeps every reference intact (a removed page takes
  * its menu entries and its blocks' flow bindings with it) and is judged by the source schema
@@ -64,11 +62,6 @@ export type StudioStructureCommand =
       (Readonly<{ type: "dashboard" }> | Readonly<{ type: "form"; recordType: string }>))
   | StudioRecordPageCommand
   | Readonly<{ kind: "add_shell"; name: string }>
-  | Readonly<{
-      kind: "rename";
-      selection: Extract<StudioSemanticSelection, { kind: "page" | "shell" }>;
-      name: string;
-    }>
   | Readonly<{ kind: "remove_page"; pageAlias: string }>
   | Readonly<{ kind: "remove_shell"; shellAlias: string }>
   | Readonly<{ kind: "set_home_page"; pageAlias: string }>
@@ -310,43 +303,12 @@ const removeShell = (
   };
 };
 
-/**
- * A page or layout rename: the path-scoped label edit, so a keystroke in the Name field copies only
- * the changed path and checks only the name. It runs before the whole-draft copy below.
- */
-const renameItem = (
-  context: StudioStructureContext,
-  command: Extract<StudioStructureCommand, { kind: "rename" }>,
-): StudioStructureResult => {
-  const what = command.selection.kind === "page" ? "page" : "layout";
-  const name = cleanName(command.name, what);
-  const result = applyStudioItemLabels(
-    context.source,
-    command.selection,
-    name,
-    context.source.body.description,
-  );
-  if (result.kind === "not_found") return refuse(`That ${what} is no longer in the draft.`);
-  if (result.kind === "invalid") {
-    const issue = result.issues[0]?.message ?? "invalid";
-    return refuse(`The ${what} name was refused (${issue}). Nothing was changed.`);
-  }
-  return {
-    kind: "applied",
-    source: result.source,
-    select: command.selection,
-    details: [],
-    message: `Renamed to ${quoted(name)}.`,
-  };
-};
-
 /** Applies one Structure edit to the draft, or refuses it with a located message. */
 export const applyStudioStructureCommand = (
   context: StudioStructureContext,
   command: StudioStructureCommand,
 ): StudioStructureResult => {
   try {
-    if (command.kind === "rename") return renameItem(context, command);
     const candidate = applicationSourceDocumentSchema.parse(structuredClone(context.source));
     switch (command.kind) {
       case "add_page":
