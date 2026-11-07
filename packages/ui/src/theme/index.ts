@@ -26,7 +26,6 @@ export {
   resolveVortexStyleSelection,
   VORTEX_MENU_ACCENTS,
   VORTEX_MENU_COLORS,
-  VORTEX_STYLES,
   type VortexMenuAccent,
   type VortexMenuColor,
   type VortexStyle,

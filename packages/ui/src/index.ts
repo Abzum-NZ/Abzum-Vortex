@@ -110,7 +110,6 @@ export { placementSettings } from "./definition-error";
 export type { FieldInputControlReleaseMap } from "./registry";
 export { createThemeRootProps } from "./theme/theme-variables";
 export type { PlatformThemeTokens } from "./theme/theme-variables";
-export { VORTEX_STYLES, createVortexStyleRootProps } from "./theme/vortex-style";
 
 // Icon rendering.
 export { Icon, IconLibraryProvider } from "./icons/icon";
