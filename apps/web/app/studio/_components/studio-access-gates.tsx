@@ -4,6 +4,7 @@ import { Fragment, useMemo, useState } from "react";
 import {
   applicationUses,
   type ApplicationSourceDocument,
+  studioAccessGateChoices,
   studioAccessMenuEntries,
   studioAccessPermissions,
   studioStandardFieldPolicy,
@@ -34,7 +35,8 @@ import {
 
 /**
  * Who opens each page and sees each menu entry: one permission each, chosen from the application's
- * own named permissions. A page's menu entries follow the page when it changes, so they stay alike.
+ * own named permissions. A page's menu entry always shows for the page's permission, so only a
+ * link entry has a gate of its own.
  */
 export function StudioAccessPageGates({
   source,
@@ -47,6 +49,7 @@ export function StudioAccessPageGates({
 }>) {
   const entries = useMemo(() => studioAccessMenuEntries(source), [source]);
   const external = entries.filter((entry) => entry.type === "external");
+  const gates = useMemo(() => studioAccessGateChoices(source), [source]);
   return (
     <section aria-label="Pages and menu" className="space-y-4">
       <Card className="gap-0 py-0">
@@ -61,10 +64,10 @@ export function StudioAccessPageGates({
               <TableHead>
                 <span className="inline-flex items-center gap-1">
                   Opens for people who hold
-                  <StudioHelp hint="A page opens for people who hold its permission, and a menu entry shows for people who hold its own. Give the permission to roles in each role's page." />
+                  <StudioHelp hint="A page opens for people who hold its permission, and its menu entry shows for the same people. A link in the menu has its own permission, below. Give the permission to roles in each role's page." />
                 </span>
               </TableHead>
-              <TableHead>Its menu entries show for</TableHead>
+              <TableHead>Its menu entry</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -88,21 +91,49 @@ export function StudioAccessPageGates({
                     {own.length === 0 ? (
                       <span className="text-sm text-muted-foreground">Not in the menu</span>
                     ) : (
-                      <div className="space-y-2">
-                        {own.map((entry) => (
-                          <div key={entry.id} className="space-y-1">
-                            <p className="text-sm text-muted-foreground">{entry.label}</p>
-                            <StudioGateSelect
-                              source={source}
-                              value={entry.permission}
-                              label={`Who sees the menu entry ${entry.label}`}
-                              disabled={disabled}
-                              onGate={(gate) =>
-                                run({ kind: "set_menu_gate", alias: entry.id, gate })
-                              }
-                            />
-                          </div>
-                        ))}
+                      <div className="space-y-1">
+                        {own.map((entry) => {
+                          const gate = gates.find((choice) => choice.key === entry.permission);
+                          const follows = entry.permission === page.permission;
+                          return (
+                            <div key={entry.id} className="flex items-center gap-1">
+                              <Tooltip>
+                                <TooltipTrigger
+                                  render={
+                                    <span
+                                      tabIndex={0}
+                                      className="rounded-md text-sm text-muted-foreground"
+                                    />
+                                  }
+                                >
+                                  {own.length > 1 ? `${entry.label}: ` : ""}
+                                  {follows
+                                    ? `Shown to people who can open ${page.name}`
+                                    : `Shown to people who hold ${gate?.label ?? entry.permission}, not those who can open ${page.name}`}
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  A menu entry for a page is shown to the people who can open the
+                                  page. Change who can open the page to change both.
+                                </TooltipContent>
+                              </Tooltip>
+                              {!follows && (
+                                <StudioIconButton
+                                  label={`Show it to people who can open ${page.name}`}
+                                  disabled={disabled}
+                                  onClick={() =>
+                                    run({
+                                      kind: "set_page_gate",
+                                      pageAlias: page.id,
+                                      gate: { kind: "existing", key: page.permission },
+                                    })
+                                  }
+                                >
+                                  <Icon name="refresh" />
+                                </StudioIconButton>
+                              )}
+                            </div>
+                          );
+                        })}
                       </div>
                     )}
                   </TableCell>
