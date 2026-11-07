@@ -1,7 +1,11 @@
-import { ZodError } from "zod";
 import { markRequestFailureLogged, requestFailureLogged } from "../access/request-failure-mark";
-import { databaseCode } from "../catalogue/runtime-primitives";
-import { DefinitionCompilationError } from "./compilation-error";
+import {
+  classifyRequestFailure,
+  definitionCodeClass,
+  ownFailureClass,
+  type RequestFailureClass,
+} from "../access/request-failure-table";
+import { databaseCode, describeFailure } from "../catalogue/runtime-primitives";
 
 /**
  * The one definition failure type. `code` is the short, safe code a route boundary may show;
@@ -16,6 +20,11 @@ export class DefinitionError<Code extends string = string> extends Error {
     this.name = "DefinitionError";
     this.code = code;
     this.sentence = options?.sentence;
+  }
+
+  /** A definition failure is an answer when its code is one; otherwise its cause decides. */
+  [ownFailureClass](): RequestFailureClass | undefined {
+    return definitionCodeClass(this.code);
   }
 }
 
@@ -58,29 +67,16 @@ export const classifyDatabaseError = (error: unknown): DatabaseFailureKind => {
   }
 };
 
-const describeCause = (cause: unknown): string => {
-  if (cause instanceof ZodError)
-    return cause.issues
-      .map((issue) => `${issue.path.join(".") || "(root)"}: ${issue.message}`)
-      .join("; ");
-  const code = databaseCode(cause);
-  const message = cause instanceof Error ? cause.message : String(cause);
-  return code === undefined ? message : `database ${code}: ${message}`;
-};
-
-/** A definition rule refusing the draft (a validation answer) somewhere in this cause chain. */
-export const isValidationRefusal = (cause: unknown): boolean => {
-  let current: unknown = cause;
-  for (let depth = 0; depth < 8 && current instanceof Error; depth += 1) {
-    if (current instanceof DefinitionCompilationError) return true;
-    current = current.cause;
-  }
-  return false;
+const logDefinitionFailure = (failure: RequestFailureClass, line: string): void => {
+  if (failure.level === "info") console.info(line);
+  else console.error(line);
 };
 
 /**
- * Builds a DefinitionError for an unexpected failure and logs the real cause (database code and
- * message, or Zod issues) on the server. Expected refusals are constructed directly instead.
+ * Builds a DefinitionError for an unexpected failure and logs it on the server once, at the level
+ * the one classification gives its cause: an answer (a rule refusing the draft, a moved state, a
+ * database refusal) is information, a platform fault an error. The line names the context, the
+ * code and the safe description of the cause chain, never a message or a raw error.
  */
 export const unexpectedDefinitionFailure = <Code extends string>(
   code: Code,
@@ -90,15 +86,22 @@ export const unexpectedDefinitionFailure = <Code extends string>(
   const error = new DefinitionError(code, { cause });
   // A failure an inner source already logged is not logged again by the failure that wraps it.
   if (requestFailureLogged(cause)) return markRequestFailureLogged(error);
-  // A rule refusing the draft is an answer the author sees, not a fault: one line, no stack.
-  if (isValidationRefusal(cause))
-    console.info(`[definition] ${context} refused (${code}): ${describeCause(cause)}`);
-  else console.error(`[definition] ${context} failed (${code}): ${describeCause(cause)}`, error);
+  const failure = classifyRequestFailure(error, { addressed: false });
+  logDefinitionFailure(
+    failure,
+    `[definition] ${context} ${failure.verb} (${code}): ${describeFailure(cause)}`,
+  );
   // The request runner that catches this failure adds no second line.
   return markRequestFailureLogged(error);
 };
 
 /** Logs a failure that the caller turns into a typed safe outcome, so the cause stays visible. */
 export const reportUnexpectedFailure = (context: string, error: unknown): void => {
-  console.error(`[definition] ${context} failed unexpectedly: ${describeCause(error)}`, error);
+  // A failure an inner source already logged is not logged again by the caller that reports it.
+  if (requestFailureLogged(error)) return;
+  const failure = classifyRequestFailure(error, { addressed: false });
+  logDefinitionFailure(
+    failure,
+    `[definition] ${context} ${failure.level === "error" ? "failed unexpectedly" : failure.verb}: ${describeFailure(error)}`,
+  );
 };
