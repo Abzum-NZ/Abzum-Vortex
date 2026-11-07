@@ -1036,7 +1036,13 @@ export const readAddressedApplicationFromInstalledBundleAtAddress = async (
       ...(permitted.navigation === undefined ? {} : { navigation: permitted.navigation }),
     };
   } catch (error) {
-    return temporarilyUnavailable(describeApplicationAddressFailure(error));
+    // Thrown outside the request runner (which logs its own answers): said once, here.
+    const cause = describeApplicationAddressFailure(error);
+    logClassifiedFailure(
+      `[application-address] addressed application read failed: ${cause}`,
+      error,
+    );
+    return temporarilyUnavailable(cause);
   }
 };
 

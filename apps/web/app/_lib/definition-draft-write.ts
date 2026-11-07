@@ -2,6 +2,7 @@ import "server-only";
 
 import {
   createHumanApplicationDraftWriter,
+  logRefusal,
   type HumanApplicationDraftWriteResult,
 } from "@vortex/platform/server";
 import { resolveIdentitySession } from "../auth/_lib/session-server";
@@ -17,12 +18,12 @@ const writeApplicationDraft = async (
   try {
     const resolved = await resolveIdentitySession();
     if (resolved.kind !== "active") {
-      console.error(
-        `[studio] application draft ${mode} refused STUDIO_DRAFT_${mode.toUpperCase()}_SESSION_NOT_ACTIVE: ${resolved.kind}`,
-      );
-      return resolved.kind === "temporarily_unavailable"
-        ? { kind: "temporarily_unavailable" }
-        : { kind: "refused", reason: "session_ended" };
+      if (resolved.kind === "temporarily_unavailable") {
+        console.error(`[studio] application draft ${mode} failed: session temporarily_unavailable`);
+        return { kind: "temporarily_unavailable" };
+      }
+      logRefusal("studio", `application draft ${mode}`, `session_${resolved.kind}`);
+      return { kind: "refused", reason: "session_ended" };
     }
     const writer = createHumanApplicationDraftWriter({
       requests: humanOrganizationRequests(),

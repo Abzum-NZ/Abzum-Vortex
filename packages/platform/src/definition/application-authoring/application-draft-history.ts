@@ -174,6 +174,17 @@ const saveFailureOutcome = (error: unknown): StudioApplicationDraftSaveOutcome =
   return Object.freeze({ kind: "failed" });
 };
 
+/**
+ * Whether the port's rejection says the server already answered a failed save (and logged it once at
+ * its cause) or that the workspace closed: logged again here at error it would be a second error
+ * line for one failure. Any other rejection (a transport fault) is only known here.
+ */
+const saveFailureAlreadyLogged = (error: unknown): boolean =>
+  error !== null &&
+  typeof error === "object" &&
+  "code" in error &&
+  (error.code === "STUDIO_SAVE_FAILED" || error.code === "STUDIO_WORKSPACE_CLOSED");
+
 /** Creates one in-memory history for an Application draft and its Definition revision. */
 export const createStudioApplicationDraftHistoryController = (
   initialDraft: StudioStoredApplicationDraft,
@@ -372,7 +383,7 @@ export const createStudioApplicationDraftHistoryController = (
         }
       } catch (error) {
         outcome = saveFailureOutcome(error);
-        if (outcome.kind === "failed")
+        if (outcome.kind === "failed" && !saveFailureAlreadyLogged(error))
           console.error(`[studio] application draft save failed: ${describeFailure(error)}`);
         else
           console.info(
