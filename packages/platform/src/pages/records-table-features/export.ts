@@ -185,7 +185,8 @@ export const createRecordsTableExportService = (dependencies: RecordsTableExport
       console.error(
         `[records-table] export columns missing: code=GRID_VIEW_FIELD_VISIBILITY_MISSING recordTypeId=${recordTypeId.toLowerCase()}`,
       );
-      throw new Error("GRID_VIEW_FIELD_VISIBILITY_MISSING");
+      // This is its one line: the request runner that catches it adds none.
+      throw markRequestFailureLogged(new Error("GRID_VIEW_FIELD_VISIBILITY_MISSING"));
     }
     const authored = authoredGridLayout(placement.contract, readable);
     if (authored === undefined) return undefined;
@@ -554,7 +555,8 @@ export const createRecordsTableExportService = (dependencies: RecordsTableExport
         let titles: ReadonlyMap<string, ProjectedRecordLink> = new Map();
         if (links.length > 0) {
           const read = await resolveLinks(links);
-          if (read === undefined) throw exportFailure("link_titles_unavailable");
+          // The resolver logged its failure with its cause, once.
+          if (read === undefined) throw exportLogged("link_titles_unavailable");
           titles = read;
         }
         return rows.map((row) =>
@@ -603,6 +605,13 @@ export const createRecordsTableExportService = (dependencies: RecordsTableExport
       };
 
       /**
+       * A cancelled start logs one line: the runner's for a page read the cancel stopped, else the
+       * export's, written at once when no read was running or when the running read finished anyway.
+       */
+      let pageReadsInFlight = 0;
+      let startCancelPending = false;
+
+      /**
        * One page: the export permission and fields decided again, then up to 200 records of
        * protected reads, in the one request transaction of the page. A revocation stops the stream
        * at the next page. A scan-limited read ends its page, so the enumeration ceiling counts reads.
@@ -620,6 +629,7 @@ export const createRecordsTableExportService = (dependencies: RecordsTableExport
         }>
       > => {
         const lifetime = { signal, deadline: Date.now() + pageReadLimitMs };
+        pageReadsInFlight += 1;
         const page = await withPooledRequestLifetime(lifetime, () =>
           requests.run(session, address.selection, async (transaction, scope) => {
             const current = await decideRecordTypeExport(
@@ -653,7 +663,13 @@ export const createRecordsTableExportService = (dependencies: RecordsTableExport
             }
             return { kind: "read" as const, rows, next, scanLimited };
           }),
-        );
+        ).finally(() => {
+          pageReadsInFlight -= 1;
+        });
+        if (startCancelPending) {
+          startCancelPending = false;
+          if (page.kind === "available") logRefusal("records-export", "start", "cancelled");
+        }
         // The runner logged an answer that is not available, and the query a refused read.
         if (page.kind !== "available") throw exportLogged(`access_${page.kind}`);
         if (page.value.kind === "denied")
@@ -741,7 +757,11 @@ export const createRecordsTableExportService = (dependencies: RecordsTableExport
       } catch (cause) {
         const reason = failureReason(cause);
         if (signal.aborted) {
-          if (!requestFailureLogged(cause)) logRefusal("records-export", "start", "cancelled");
+          // None when the runner logged the page read that failed; a read still running decides.
+          if (!requestFailureLogged(cause)) {
+            if (pageReadsInFlight === 0) logRefusal("records-export", "start", "cancelled");
+            else startCancelPending = true;
+          }
           await audit(session, address, recordTypeId, columnIds, "cancelled");
           return unavailable;
         }
