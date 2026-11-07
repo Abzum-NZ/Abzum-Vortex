@@ -248,6 +248,16 @@ Abandoned prepared candidates are cleaned up.
 **Upgrade** prepares the new release set and activates it the same way. The previous release set stays
 active if anything fails.
 
+**Platform refresh.** The catalogue is code. A change to its content (a platform block, connection type
+or service operation) is applied by the platform refresh in the same update as the code: every
+application whose latest release, or any active installation's release, pins content the catalogue no
+longer holds is re-released from that release's own source, and every installation on a superseded
+release moves to the re-release. A person's unpublished draft is never published by it. Nothing
+stays superseded, so install, upgrade and restore never meet a superseded pin, and nothing asks a
+person to republish. An upgrade reads the release it replaces as evidence, without the catalogue. A
+superseded pin met at run time is a platform fault ("the platform refresh has not run"): one error
+line, and the person is told the application is temporarily unavailable.
+
 **Uninstall** withdraws the installation in one atomic step: module bindings detach (stored records
 remain) and access is withdrawn. No new work is accepted afterwards; accepted work that has not begun
 is refused or cancelled with a retained status. There is no intermediate draining state.

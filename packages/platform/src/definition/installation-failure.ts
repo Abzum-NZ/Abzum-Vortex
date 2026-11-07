@@ -14,8 +14,6 @@ const installationFailureOf = (error: unknown): InstallationProblemShape => {
   if (error instanceof InstallationProblem) return error.problem;
   if (error instanceof DefinitionError) {
     switch (error.code) {
-      case "DEFINITION_DEPENDENCY_SUPERSEDED":
-        return { kind: "refused", unavailableReason: "republish_required" };
       case "APPLICATION_INSTALLATION_STALE":
         return { kind: "conflict" };
       case "APPLICATION_INSTALLATION_STORAGE_INCOMPATIBLE":

@@ -17,7 +17,6 @@ export const flowRefusalFeedbackCodeSchema = z.enum([
   "role_settings_change_required",
   "role_key_in_use",
   "application_storage_incompatible",
-  "application_republish_required",
   "application_release_changed",
   "application_not_installed",
   "application_not_newer",
@@ -64,8 +63,6 @@ export const flowRefusalFeedbackSentences: Readonly<Record<FlowRefusalFeedbackCo
     "Accepting application role changes keeps the role settings. Use Manage roles to change its name, description, classification or assignment and activation settings.",
   application_storage_incompatible:
     "This version changes stored fields in a way existing records cannot accept. Keep every existing choice option, do not make a field required or unique, and keep field types and storage settings.",
-  application_republish_required:
-    "Republish required: this release uses superseded platform definitions. Republish the application, then install or upgrade to the new release.",
   application_release_changed:
     "A newer application version was published. Review it before trying again.",
   application_not_installed:

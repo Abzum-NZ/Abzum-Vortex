@@ -152,8 +152,6 @@ export type ApplicationReleaseStanding =
       mayInstall: boolean;
     }>
   | Readonly<{ kind: "not_published" }>
-  /** The latest release pins platform definitions since superseded: publish again. */
-  | Readonly<{ kind: "republish_required" }>
   /** The person may not manage installations here, or the review cannot be made now. */
   | Readonly<{ kind: "unknown"; appStoreHref?: string }>;
 
@@ -290,14 +288,6 @@ export const readApplicationReleaseStanding = async (
     { organizationId: scope.organizationId },
     { application_root_id: scope.applicationRootId },
   );
-  if (
-    review !== "conflict" &&
-    review !== "uncertain" &&
-    review.kind === "confirmed_failure" &&
-    review.diagnostic.code === "application_republish_required"
-  ) {
-    return { kind: "republish_required" };
-  }
   if (review === "conflict" || review === "uncertain" || review.kind !== "available") {
     // Every outcome but an uncertain one was classified, and logged once with its cause where it
     // arose: only an uncertain one is said here.

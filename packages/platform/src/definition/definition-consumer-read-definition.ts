@@ -22,7 +22,6 @@ import {
 } from "./definition-consumer-read";
 import type { ExactDefinitionDependency } from "./definition-store-contracts";
 import { stableDefinitionReleaseVersionSchema } from "./version-impact";
-import { flowRefusalFeedbackSentences } from "../workflows/flow-refusal-feedback";
 import { z } from "zod";
 import type { DefinitionPublicationCatalogue } from "./definition-publication-contracts";
 import {
@@ -293,10 +292,10 @@ export const projectStoredConsumerRelease = async (
       throw new DefinitionError("DEFINITION_DEPENDENCY_UNAVAILABLE");
     if (catalogueVerification === "invalid")
       throw new DefinitionError("DEFINITION_RELEASE_INTEGRITY_FAILED");
+    // The platform refresh re-releases what a catalogue change supersedes, so a superseded pin met
+    // here is a platform fault: the refresh has not run.
     if (catalogueVerification === "superseded")
-      throw new DefinitionError("DEFINITION_DEPENDENCY_SUPERSEDED", {
-        sentence: flowRefusalFeedbackSentences.application_republish_required,
-      });
+      throw new DefinitionError("DEFINITION_DEPENDENCY_SUPERSEDED");
   }
 
   const content =
