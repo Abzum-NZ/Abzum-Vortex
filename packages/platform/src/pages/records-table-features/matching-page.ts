@@ -10,6 +10,11 @@ import { sameId } from "../../catalogue/runtime-primitives";
 import { createProtectedQueryService } from "../../queries/protected-query-service";
 import { openRecordsSelection, recordsSelectionPlacement } from "../records-selection-seal";
 import { matchingQueryCommand, type RecordsTableBulkDependencies } from "./bulk-run";
+import {
+  logRecordsTableQueryRefusal,
+  logRecordsTableRequestRefusal,
+  recordsTableRequestRefusal,
+} from ".";
 import { loadRecordsTablePlacement } from "./placement";
 
 /** The most records one page of "every matching record" reads. */
@@ -29,9 +34,12 @@ type MatchingPage = HumanOrganizationRequestResult<
   | Readonly<{ outcome: "unavailable" }>
 >;
 
+const unavailableOutcome: MatchingPage = { kind: "available", value: { outcome: "unavailable" } };
+
+/** One line at the level its cause earns; none for a cause logged at source. */
 const unavailable = (cause: string): MatchingPage => {
-  console.error(`[records-table] matching page unavailable cause=${cause}`);
-  return { kind: "available", value: { outcome: "unavailable" } };
+  logRecordsTableRequestRefusal(recordsTableRequestRefusal("bulk_action", cause), "matching_page");
+  return unavailableOutcome;
 };
 
 /**
@@ -74,15 +82,17 @@ export const createMatchingPageReader = (dependencies: RecordsTableBulkDependenc
       pageId: addressed.pageId,
       placementId: addressed.placementId,
     });
+    // The descriptor's own refusal was logged where it was opened.
+    if (descriptor === undefined) return unavailableOutcome;
     if (
-      descriptor === undefined ||
       !sameId(descriptor.queryId, target.queryId) ||
       !sameId(descriptor.moduleRootId, String(placement.module.rootId)) ||
       !sameId(descriptor.queryId, String(placement.query.queryId))
     )
       return unavailable("descriptor_not_for_this_run");
     const built = matchingQueryCommand(placement, descriptor);
-    if (built === undefined) return unavailable("command_unavailable");
+    // The command builder logged why it could not build the query, once.
+    if (built === undefined) return unavailableOutcome;
     const result = await queries.run(session, selection, {
       ...built.command,
       pageSize: matchingPageSize,
@@ -91,7 +101,15 @@ export const createMatchingPageReader = (dependencies: RecordsTableBulkDependenc
         : { pageDirection: "forward" as const, continuationToken: target.continuation }),
     });
     if (result.kind !== "available") return result;
-    if (result.value.outcome !== "completed") return unavailable(`read_${result.value.reasonCode}`);
+    if (result.value.outcome !== "completed") {
+      logRecordsTableQueryRefusal(
+        "bulk_action",
+        "read_refused",
+        result.value.reasonCode,
+        "matching_page",
+      );
+      return unavailableOutcome;
+    }
     const recordType = placement.module.content.recordTypes.find((type) =>
       sameId(
         type.recordTypeId,

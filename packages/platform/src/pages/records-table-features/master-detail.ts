@@ -132,7 +132,8 @@ const projectRowDetail = async (request: RowDetailRequest): Promise<RowDetailRes
   if (!linked) return refuse("relationship_not_installed");
 
   const row = await request.readRecord(masterTypeId, request.parentRecordId);
-  if (row.kind === "temporarily_unavailable") return fail("row_read_unavailable");
+  // The subject read logged its own failure, once.
+  if (row.kind === "temporarily_unavailable") return failed;
   if (row.kind !== "read") return refuse("row_unreadable");
 
   // The related records query binds its inputs in the feature's own settings group.
@@ -183,8 +184,9 @@ const projectRowDetail = async (request: RowDetailRequest): Promise<RowDetailRes
   });
   if (!command.success) return refuse("query_command_invalid");
   const result = await request.queries.run(request.session, request.selection, command.data);
-  if (result.kind === "temporarily_unavailable") return fail("query_unavailable");
-  if (result.kind !== "available") return refuse("query_refused");
+  // The query service logged every answer that is not available, once.
+  if (result.kind === "temporarily_unavailable") return failed;
+  if (result.kind !== "available") return refused;
   if (result.value.outcome === "refused") {
     if (["page_size_invalid", "descriptor_invalid"].includes(result.value.reasonCode))
       return fail(`query_refused code=${result.value.reasonCode}`);

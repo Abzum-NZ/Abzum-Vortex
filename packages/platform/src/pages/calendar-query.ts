@@ -314,14 +314,13 @@ export const projectCalendarPlacement = async (
     logRefusal("calendar", "query", "calendar_query_unavailable", cause);
     queryResult = { kind: "temporarily_unavailable" as const };
   }
+  // The query service logged every answer that is not available, once, and so did the catch above.
   if (queryResult.kind === "temporarily_unavailable") {
     return { outcome: "unavailable", cause: "calendar_query_unavailable" };
   }
-  if (queryResult.kind !== "available" || queryResult.value.outcome !== "completed") {
-    return queryResult.kind === "available" && queryResult.value.outcome === "refused"
-      ? { ...refused("calendar_query_refused"), reasonCode: queryResult.value.reasonCode }
-      : refused("calendar_query_refused");
-  }
+  if (queryResult.kind === "unavailable") return refused("calendar_query_unavailable");
+  if (queryResult.value.outcome !== "completed")
+    return { ...refused("calendar_query_refused"), reasonCode: queryResult.value.reasonCode };
 
   const fieldIds = [...new Set(requestedFieldIds.map((fieldId) => fieldId.toLowerCase()))];
   const arranged = arrangeDataset({

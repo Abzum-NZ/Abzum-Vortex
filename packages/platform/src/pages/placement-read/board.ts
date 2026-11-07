@@ -113,7 +113,6 @@ export const readBoard = async (
     );
     if (narrowing.kind === "refused") {
       logRecordsTableRequestRefusal(narrowing, "board_read");
-      logPlacementFailure(read.address, placementId, "board_filter_refused", narrowing.reason);
       read.data[placementId] = { status: "refused", reason: "not_permitted" };
       return;
     }

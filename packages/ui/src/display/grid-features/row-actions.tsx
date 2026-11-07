@@ -147,13 +147,12 @@ function RowCommands({ context, row }: GridFeatureCommandProps): ReactElement | 
           </Button>
         );
         // An unavailable action stays focusable and says why on hover and focus.
-        return reason === undefined ? (
-          <Tooltip key={identity}>
-            <TooltipTrigger render={button} />
-            <TooltipContent>{action.label}</TooltipContent>
-          </Tooltip>
-        ) : (
-          <Reasoned key={identity} reason={`${action.label}: ${reason}`}>
+        return (
+          <Reasoned
+            key={identity}
+            reason={reason === undefined ? undefined : `${action.label}: ${reason}`}
+            tip={action.label}
+          >
             {button}
           </Reasoned>
         );

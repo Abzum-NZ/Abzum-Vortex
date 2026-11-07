@@ -138,38 +138,40 @@ export function StudioOrganizationTheme({
           </TooltipTrigger>
           <TooltipContent>Back to Studio</TooltipContent>
         </Tooltip>
-        <span className="min-w-0 truncate text-sm font-medium">{organizationName}</span>
+        <h1 className="min-w-0 truncate text-sm font-medium">{organizationName}</h1>
       </header>
-      {unresolvable && (
-        <Alert variant="destructive" className="m-4 w-auto shrink-0">
-          <AlertTitle>The saved organisation theme fails the readability checks</AlertTitle>
-          <AlertDescription>
-            Studio is drawn in its own theme, and applications that follow this theme cannot open.
-            Choose values the checks accept.
-          </AlertDescription>
-        </Alert>
-      )}
-      <div className="grid min-h-0 flex-1 grid-cols-1 md:grid-cols-[minmax(20rem,28rem)_1fr]">
-        <div className="flex min-h-0 flex-col border-b md:border-r md:border-b-0">
-          <StudioThemePanel
-            title="Organisation theme"
-            description={
-              canChange
-                ? "How Studio and every application of this organisation look; an application's own choices win."
-                : "Read only: changing the organisation theme needs the Manage organisation display settings permission."
-            }
-            shuffle={false}
-            selection={current}
-            options={options}
-            disabled={!canChange}
-            hidden={false}
-            onChange={change}
-          />
+      <main className="flex min-h-0 flex-1 flex-col overflow-y-auto md:overflow-hidden">
+        {unresolvable && (
+          <Alert variant="destructive" className="m-4 w-auto shrink-0">
+            <AlertTitle>The saved organisation theme fails the readability checks</AlertTitle>
+            <AlertDescription>
+              Studio is drawn in its own theme, and applications that follow this theme cannot open.
+              Choose values the checks accept.
+            </AlertDescription>
+          </Alert>
+        )}
+        <div className="grid flex-1 md:min-h-0 grid-cols-1 md:grid-cols-[minmax(20rem,28rem)_1fr]">
+          <div className="flex flex-col md:min-h-0 border-b md:border-r md:border-b-0">
+            <StudioThemePanel
+              title="Organisation theme"
+              description={
+                canChange
+                  ? "How Studio and every application of this organisation look; an application's own choices win."
+                  : "Read only: changing the organisation theme needs the Manage organisation display settings permission."
+              }
+              shuffle={false}
+              selection={current}
+              options={options}
+              disabled={!canChange}
+              hidden={false}
+              onChange={change}
+            />
+          </div>
+          <div className="flex items-start justify-center overflow-y-auto p-6">
+            <ThemePreview />
+          </div>
         </div>
-        <div className="flex items-start justify-center overflow-y-auto p-6">
-          <ThemePreview />
-        </div>
-      </div>
+      </main>
     </div>
   );
 }
