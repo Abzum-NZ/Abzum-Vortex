@@ -7,6 +7,7 @@ import type { RecordsTableFilterField } from "../../definition/application-compo
 import type { ConditionalFormattingProjection } from "../../definition/application-composition/records-table-features/projections/conditional-formatting";
 import type { RecordsTableInlineEditor } from "../../definition/application-composition/records-table-features/projections/inline-edit";
 import type { z } from "zod";
+import { logRefusal } from "../../access/request-failure";
 import type {
   RecordsTableFeatureProjection,
   recordsTableFeatureProjectionSchema,
@@ -70,14 +71,26 @@ export const recordsTableRequestRefusal = (
   reason: string,
 ): RecordsTableRequestRefusal => Object.freeze({ kind: "refused", part, reason });
 
-/** Logs a refused Records table request with its part and cause; the response stays neutral. */
+/** The reasons that name a definition the platform could not read: a fault, not a refusal. */
+const recordsTableFaultReasons: ReadonlySet<string> = new Set([
+  "placement_metadata_unreadable",
+  "placement_contract_unreadable",
+  "query_module_missing",
+]);
+
+/**
+ * Logs a refused Records table request once, with its part and reason; the response stays neutral.
+ * An expected refusal is information; a reason that names an unreadable definition is an error.
+ */
 export const logRecordsTableRequestRefusal = (
   refusal: RecordsTableRequestRefusal,
   where: string,
 ): void => {
-  console.error(
-    `[records-table] request refused where=${where} part=${refusal.part} reason=${refusal.reason}`,
-  );
+  if (recordsTableFaultReasons.has(refusal.reason))
+    console.error(
+      `[records-table] request failed where=${where} part=${refusal.part} reason=${refusal.reason}`,
+    );
+  else logRefusal("records-table", `request where=${where} part=${refusal.part}`, refusal.reason);
 };
 
 const sameField = (left: string, right: string): boolean =>

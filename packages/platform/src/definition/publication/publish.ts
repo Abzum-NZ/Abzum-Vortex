@@ -82,6 +82,9 @@ import {
   databaseErrorCode,
   unexpectedDefinitionFailure,
 } from "../definition-error";
+import { classifyRequestFailure, logClassifiedFailure } from "../../access/request-failure";
+import { markRequestFailureLogged, requestFailureLogged } from "../../access/request-failure-mark";
+import { describeFailure } from "../../catalogue/runtime-primitives";
 
 const safeRevisionSchema = z.preprocess(
   (value) => (typeof value === "string" && /^\d+$/.test(value) ? Number(value) : value),
@@ -1294,6 +1297,22 @@ class DatabasePublicationTransaction
   }
 }
 
+/**
+ * A database failure the repository does not name: logged once here, at the level its class
+ * decides (an access refusal or a race is information, a fault an error), and marked so the
+ * publisher and the request runner that catch it add no second line.
+ */
+const repositoryFailure = (error: unknown): DefinitionError => {
+  if (!requestFailureLogged(error))
+    logClassifiedFailure(
+      `[definition] publication repository ${classifyRequestFailure(error, { addressed: false }).verb} (DEFINITION_PUBLICATION_FAILED): ${describeFailure(error)}`,
+      error,
+    );
+  return markRequestFailureLogged(
+    new DefinitionError("DEFINITION_PUBLICATION_FAILED", { cause: error }),
+  );
+};
+
 const safeRepositoryOperation = async <Result>(
   operation: () => Promise<Result>,
   source?: StoredDefinitionSource,
@@ -1319,18 +1338,10 @@ const safeRepositoryOperation = async <Result>(
           throw new DefinitionError("DEFINITION_PUBLICATION_AUTHORITY_UNAVAILABLE", {
             cause: error,
           });
-        throw unexpectedDefinitionFailure(
-          "DEFINITION_PUBLICATION_FAILED",
-          error,
-          "publication repository",
-        );
+        throw repositoryFailure(error);
       }
       default:
-        throw unexpectedDefinitionFailure(
-          "DEFINITION_PUBLICATION_FAILED",
-          error,
-          "publication repository",
-        );
+        throw repositoryFailure(error);
     }
   }
 };
