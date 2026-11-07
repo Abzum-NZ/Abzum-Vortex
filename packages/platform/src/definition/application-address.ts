@@ -1128,8 +1128,8 @@ const readAddressedActiveApplicationIdentity = async (
         const { readPreviewApplicationIdentity } =
           await import("./preview-installation-repository");
         // A preview address names the preview; only a builder of its Application may open it.
-        // Opening someone else's preview is an expected refusal, said once at information; any
-        // other failure is the request runner's to classify and log.
+        // Opening someone else's preview, or one that expired or was removed, is an expected
+        // refusal; any other failure is the request runner's to classify and log.
         const preview = await readPreviewApplicationIdentity(
           transaction,
           previewInstallationId,
@@ -1137,13 +1137,14 @@ const readAddressedActiveApplicationIdentity = async (
           if (
             error instanceof DefinitionError &&
             error.code === "PREVIEW_INSTALLATION_AUTHORITY_REFUSED"
-          ) {
-            logRefusal("application-address", "preview identity", "PREVIEW_ADDRESS_REFUSED");
-            return undefined;
-          }
+          )
+            return "not_a_builder" as const;
           throw error;
         });
-        if (preview === undefined) return undefined;
+        if (preview === "not_a_builder")
+          return { refused: "preview of an application this person does not build" } as const;
+        if (preview === undefined)
+          return { refused: "no open preview at the address (expired or removed)" } as const;
         if (!sameId(preview.organizationId, organizationId))
           return { refused: "preview of another organisation" } as const;
         return {
@@ -1176,8 +1177,6 @@ const readAddressedActiveApplicationIdentity = async (
     (code) => (code === "P0002" ? null : undefined),
   );
   if (result.kind !== "available") return identityFromRunner(result);
-  // The preview refusal above said itself; the install lookup answers null without a line.
-  if (result.value === undefined) return unavailableIdentity;
   if (result.value === null) return identityRefused("application not installed at the address");
   if ("refused" in result.value) return identityRefused(result.value.refused);
   const identity: AddressedActiveApplicationIdentity = result.value;

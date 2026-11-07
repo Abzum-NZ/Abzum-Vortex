@@ -167,9 +167,15 @@ export const createFlowInvocationHandler =
       const outcome = await withRuntimeTransaction(
         async (transaction) => {
           const identity = await resolveIdentitySession(transaction);
-          if (identity.kind === "temporarily_unavailable")
+          // The session resolver answers without a line; the route says it once.
+          if (identity.kind === "temporarily_unavailable") {
+            console.error(`[${route}] invocation failed: session temporarily_unavailable`);
             return privateResponse({ kind: "unavailable" }, 503);
-          if (identity.kind !== "active") return privateResponse({ kind: "refused" }, 401);
+          }
+          if (identity.kind !== "active") {
+            logRefusal(route, "invocation", `session_${identity.kind}`);
+            return privateResponse({ kind: "refused" }, 401);
+          }
 
           const execute = async (
             address: Extract<
