@@ -106,7 +106,7 @@ export const createProtectedQueryService = (dependencies: ProtectedQueryServiceD
       kind: "ready",
       person: caller,
       read: async (transaction, scope) =>
-        answeredOnce(await runCommand(transaction, scope, command.data, continuationKey)),
+        answeredOnce(await runCommand(transaction, scope, command.data, continuationKey), "table"),
     };
   };
 
@@ -138,7 +138,10 @@ export const createProtectedQueryService = (dependencies: ProtectedQueryServiceD
         return { kind: "available", value: refuseInvalidCommand(command.error) };
       if (selection.applicationRootId === undefined) return noApplicationSelected();
       return requests.run(caller, selection, async (transaction, scope) =>
-        answeredOnce(await boardMembersCommand(transaction, scope, command.data, continuationKey)),
+        answeredOnce(
+          await boardMembersCommand(transaction, scope, command.data, continuationKey),
+          "board_members",
+        ),
       );
     },
     async boardColumnPages(
@@ -158,6 +161,7 @@ export const createProtectedQueryService = (dependencies: ProtectedQueryServiceD
       return requests.run(caller, selection, async (transaction, scope) =>
         answeredOnce(
           await boardColumnPagesCommand(transaction, scope, command.data, continuationKey),
+          "board_columns",
         ),
       );
     },
@@ -181,6 +185,7 @@ export const createProtectedQueryService = (dependencies: ProtectedQueryServiceD
             command.data,
             continuationKey,
           ),
+          "grouped",
         );
         if (decide !== undefined && result.outcome === "completed")
           await decide(transaction, scope, issuedAt, result.rows);
@@ -201,6 +206,7 @@ export const createProtectedQueryService = (dependencies: ProtectedQueryServiceD
       return requests.run(personCaller, selection, async (transaction, scope, issuedAt) => {
         const result = answeredOnce(
           await treeLevelCommand(transaction, scope, personCaller, command.data, continuationKey),
+          "tree_level",
         );
         if (decide !== undefined && result.outcome === "completed")
           await decide(transaction, scope, issuedAt, result.rows);
@@ -218,7 +224,10 @@ export const createProtectedQueryService = (dependencies: ProtectedQueryServiceD
         return { kind: "available", value: refuseInvalidCommand(command.error) };
       if (selection.applicationRootId === undefined) return noApplicationSelected();
       return requests.run(caller, selection, async (transaction, scope, issuedAt) => {
-        const result = answeredOnce(await summariseCommand(transaction, scope, command.data));
+        const result = answeredOnce(
+          await summariseCommand(transaction, scope, command.data),
+          "summary",
+        );
         if (decide !== undefined && result.outcome === "completed")
           await decide(transaction, scope, issuedAt, [], result);
         return result;
@@ -234,7 +243,7 @@ export const createProtectedQueryService = (dependencies: ProtectedQueryServiceD
         return { kind: "available", value: refuseInvalidCommand(command.error) };
       if (selection.applicationRootId === undefined) return noApplicationSelected();
       return requests.run(caller, selection, async (transaction, scope) =>
-        answeredOnce(await boardSummaryCommand(transaction, scope, command.data)),
+        answeredOnce(await boardSummaryCommand(transaction, scope, command.data), "board_summary"),
       );
     },
   });

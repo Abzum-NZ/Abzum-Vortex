@@ -32,6 +32,7 @@ import {
   type ConditionalFormattingContext,
 } from "./records-table-features";
 import type { IdentitySession, OrganizationSelectionCandidate } from "../access/identity-access";
+import { logRefusal } from "../access/request-failure";
 import type { JsonValue } from "../catalogue/common";
 import { describeFailure, sameId } from "../catalogue/runtime-primitives";
 import type { ProjectedItem } from "../definition/application-composition/page-composition";
@@ -250,7 +251,8 @@ const metricValue = (
 ): BoardMetric["value"] | undefined => {
   if (result === undefined) return undefined;
   if (result.outcome === "refused") {
-    console.error("[board] total refused", { part: "aggregate", reason: result.reasonCode });
+    // A total the reader may not see, or one over several currencies, is an answer: information.
+    logRefusal("board", "total part=aggregate", result.reasonCode);
     return { kind: "unavailable" };
   }
   if (aggregate.operation === "count" || aggregate.operation === "distinct_count")

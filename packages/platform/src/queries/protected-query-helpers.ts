@@ -2,6 +2,7 @@ import "server-only";
 
 import type { z, ZodError } from "zod";
 import type { DatabaseRow, RequestDatabaseTransaction } from "../db/request-transaction";
+import { logRefusal } from "../access/request-failure";
 import { markRequestFailureLogged, requestFailureLogged } from "../access/request-failure-mark";
 import type {
   ProtectedQueryRefusalReasonCode,
@@ -29,29 +30,27 @@ export const refusal = (
 });
 
 /**
- * The one line of a refused answer, where the answer is made: the part of the request and the
- * reason code, never a value or a message. Every refusal is information (the answer is expected:
- * a stale position, an input the page cannot run, a forbidden read, an application not installed)
- * except a stored query descriptor that cannot be read, which is a platform fault. The answer is
- * marked logged, so the exit of the service logs only the answers it did not already log.
+ * The refusals that say the platform cannot run its own query: a stored descriptor it cannot read,
+ * or an answer of the query that breaks the contract of the arrangement reading it.
  */
-const logRefused = (part: string, reasonCode: string): void => {
-  const line = `[protected-query] request part=${part} refused: code=${reasonCode}`;
-  if (reasonCode === "descriptor_invalid") console.error(line);
-  else console.info(line);
-};
+const faultReasonCodes: ReadonlySet<string> = new Set(["descriptor_invalid", "dataset_invalid"]);
 
 /**
- * Passes an answer through the exit of a protected query: a refused answer nobody logged yet (the
- * database returned it, or it is a literal of a query mode) is logged once and marked; an answer
- * already logged, and every completed answer, pass unchanged.
+ * Passes an answer through an exit of a protected query, where the answer is made: a refused answer
+ * nobody logged yet is logged once, as its part and reason code (never a value or a message), and
+ * marked; an answer already logged, and every completed answer, pass unchanged. Every refusal is
+ * information (a stale position, an input the page cannot run, a forbidden read, an application
+ * not installed) except the platform faults above, which are errors.
  */
 export const answeredOnce = <Answer extends Readonly<{ outcome: string; reasonCode?: string }>>(
   answer: Answer,
-  part = "result",
+  part: string,
 ): Answer => {
   if (answer.outcome !== "refused" || requestFailureLogged(answer)) return answer;
-  logRefused(part, answer.reasonCode ?? "unknown");
+  const reasonCode = answer.reasonCode ?? "unknown";
+  if (faultReasonCodes.has(reasonCode))
+    console.error(`[protected-query] request part=${part} refused: code=${reasonCode}`);
+  else logRefusal("protected-query", `request part=${part}`, reasonCode);
   return markRequestFailureLogged(answer);
 };
 
