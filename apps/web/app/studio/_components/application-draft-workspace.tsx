@@ -440,9 +440,7 @@ function ExistingApplicationWorkspace(props: ExistingProps) {
               tabs={studioRailTabs}
               activeTab={tab}
               onTabChange={setTab}
-              selectionKey={
-                draft.selected === null ? "" : studioSemanticSelectionKey(draft.selected)
-              }
+              selectionKey={`${draft.selected === null ? "" : studioSemanticSelectionKey(draft.selected)}${tab === "data" ? data.inspectorKey : ""}`}
               topBar={
                 <StudioHeader
                   frame={place.frame}
