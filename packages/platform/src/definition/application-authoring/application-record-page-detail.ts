@@ -34,6 +34,7 @@ import {
   type StudioStructureContext,
 } from "./application-structure-common";
 import type { SourceItem } from "../application-composition/source-composition";
+import { linkRelationshipTargets } from "../module-links";
 
 /** One related list card of the record detail block, in the block's own setting shape. */
 type RelatedList = Readonly<{
@@ -56,7 +57,8 @@ const relatedLists = (
     for (const child of module.record_types)
       for (const relationship of child.relationships.filter(
         (entry) =>
-          entry.to_record_type === resolved.qualified && entry.cardinality === "many_to_one",
+          entry.cardinality === "many_to_one" &&
+          linkRelationshipTargets(child, entry)?.targets[0] === resolved.qualified,
       )) {
         let childResolved: Resolved;
         try {

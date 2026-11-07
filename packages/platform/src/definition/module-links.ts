@@ -53,6 +53,32 @@ type InlineRecordTypeIncomingLink = InlineRecordTypeLink &
     recordPluralName: string;
   }>;
 
+/**
+ * What a relationship's link field declares: the record types it links to, as `module:record`, and
+ * what happens to a record whose linked record is deleted. The field's settings own both; the
+ * relationship only names the field. A relationship whose field is missing or is no link has none.
+ */
+export const linkRelationshipTargets = (
+  recordType: Readonly<{
+    fields: readonly Readonly<{ key: string; type: string; settings: unknown }>[];
+  }>,
+  relationship: Readonly<{ from_field: string }>,
+):
+  | Readonly<{ targets: readonly string[]; onParentDelete: Relationship["on_parent_delete"] }>
+  | undefined => {
+  const field = recordType.fields.find((candidate) => candidate.key === relationship.from_field);
+  if (field?.type !== "link" && field?.type !== "link_to_one_of_several") return undefined;
+  const settings = field.settings as {
+    target?: string;
+    targets?: string[];
+    on_parent_delete: Relationship["on_parent_delete"];
+  };
+  return {
+    targets: field.type === "link" ? [String(settings.target)] : [...(settings.targets ?? [])],
+    onParentDelete: settings.on_parent_delete,
+  };
+};
+
 const linksOf = (record: RecordType): InlineRecordTypeLink[] =>
   record.fields.flatMap((field) => {
     if (field.type !== "link" && field.type !== "link_to_one_of_several") return [];
@@ -60,20 +86,18 @@ const linksOf = (record: RecordType): InlineRecordTypeLink[] =>
       (candidate) => candidate.from_field === field.key,
     );
     if (relationship === undefined) return [];
-    const settings = field.settings as {
-      target?: string;
-      targets?: string[];
-      reverse_name?: string;
-    };
+    const link = linkRelationshipTargets(record, relationship);
+    if (link === undefined) return [];
+    const settings = field.settings as { reverse_name?: string };
     return [
       {
         fieldKey: field.key,
         label: field.label,
         type: field.type,
-        targets: field.type === "link" ? [String(settings.target)] : [...(settings.targets ?? [])],
+        targets: link.targets,
         cardinality: relationship.cardinality,
         reverseName: settings.reverse_name,
-        onParentDelete: relationship.on_parent_delete,
+        onParentDelete: link.onParentDelete,
       },
     ];
   });
