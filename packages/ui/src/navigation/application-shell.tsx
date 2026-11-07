@@ -523,14 +523,15 @@ function ApplicationSwitcher({
   );
 }
 
-const mainContentId = "vortex-main-content";
+/** The id of the page's one `<main>`: the skip link targets it, in a running application and in Studio's editor. */
+export const APPLICATION_MAIN_CONTENT_ID = "vortex-main-content";
 
 /**
  * Moves focus to the page's own content: its first heading or control outside the navigation,
  * or the content region itself when it has neither.
  */
 const skipToPageContent = (event: MouseEvent<HTMLAnchorElement>): void => {
-  const main = document.getElementById(mainContentId);
+  const main = document.getElementById(APPLICATION_MAIN_CONTENT_ID);
   if (main === null) return;
   event.preventDefault();
   const target = [
@@ -575,7 +576,7 @@ export function ApplicationFrameHeader({
     <header className="sticky top-0 z-20 flex min-h-16 w-full shrink-0 flex-wrap items-center gap-x-[var(--vortex-space-sm)] gap-y-[var(--vortex-space-xs)] bg-background/95 px-[var(--vortex-space-md)] backdrop-blur supports-[backdrop-filter]:bg-background/80 lg:h-16 lg:flex-nowrap">
       {/* The first stop for keyboard users: past the header and the navigation to the page. */}
       <a
-        href={`#${mainContentId}`}
+        href={`#${APPLICATION_MAIN_CONTENT_ID}`}
         onClick={skipToPageContent}
         className="sr-only bg-background px-[var(--vortex-space-md)] py-[var(--vortex-space-sm)] text-sm font-medium text-foreground focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-50"
       >
@@ -648,7 +649,7 @@ export function ApplicationShellRoot({
           runtime={runtime}
         />
         <main
-          id={mainContentId}
+          id={APPLICATION_MAIN_CONTENT_ID}
           tabIndex={-1}
           data-vortex-application-shell-content=""
           className="vortex-puck-slot min-w-0 flex-1"
