@@ -1,9 +1,9 @@
 import "server-only";
 
-import { logRefusal } from "@vortex/platform/schema";
 import {
   parseComponentBootstrapTarget,
   renderComponentBootstrapDocument,
+  logRefusal,
 } from "@vortex/platform/server";
 import {
   configuredComponentOrigin,

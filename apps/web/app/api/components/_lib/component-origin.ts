@@ -1,8 +1,8 @@
 import "server-only";
 
-import { logRefusal } from "@vortex/platform/schema";
 import { requestMatchesConfiguredSite } from "../../../auth/_lib/session-request-state";
 import { requiredEnvironmentValue } from "../../../_lib/server-configuration";
+import { logRefusal } from "@vortex/platform/server";
 
 let componentOrigin: string | undefined;
 

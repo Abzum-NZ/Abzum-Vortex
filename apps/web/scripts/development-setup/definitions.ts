@@ -16,6 +16,7 @@ import type { DatabaseRow, RequestDatabaseTransaction } from "@vortex/platform/s
 import {
   createDatabaseDefinitionPublicationService,
   createDatabaseDefinitionPublicationRepository,
+  createDefinitionHistoryService,
   createDefinitionStore,
   type OrganizationBuilderRoot,
   applicationModuleSources,
@@ -186,7 +187,7 @@ const applicationsInPublicationOrder = (
  * requirements of the saved source exactly as every draft write does, and preparing the
  * publication then checks the saved draft and its identities as one.
  */
-const readLiveDraft = async (
+export const readLiveDraft = async (
   transaction: RequestDatabaseTransaction,
   rootId: string,
 ): Promise<{ draftRevision: number; source: unknown } | undefined> => {
@@ -378,56 +379,146 @@ export const publishShippedDefinitions = async (
   return published;
 };
 
-/**
- * Publishes one Studio-built application's current draft through the ordinary publication service,
- * as the setup's definition actor, against the current definition contract and platform catalogue:
- * it becomes the release that replaces an installed release that no longer verifies. Any
- * unpublished work in the draft is published with it.
- */
-export const publishStudioApplicationDraft = async (
+/** The live draft of a Studio-built application as the platform refresh remembers it. */
+export type StudioDraftState = Readonly<{
+  draftRevision: number;
+  source: unknown;
+  sourceFingerprint: string;
+}>;
+
+/** The Studio draft as stored, with the fingerprint of its source, or undefined without a draft. */
+export const readStudioDraft = async (
   facts: SystemContextFacts,
-  root: OrganizationBuilderRoot,
-  log: (message: string) => void,
+  rootId: string,
+): Promise<StudioDraftState | undefined> => {
+  const live = await inSystemTransaction(mintSystemContext(facts), (transaction) =>
+    readLiveDraft(transaction, rootId),
+  );
+  return live === undefined
+    ? undefined
+    : { ...live, sourceFingerprint: fingerprintCanonicalValue(live.source) };
+};
+
+/** The source fingerprint one release was published from. */
+export const readReleaseSourceFingerprint = async (
+  facts: SystemContextFacts,
+  rootId: string,
+  releaseRevision: number,
+): Promise<string> => {
+  const context = mintSystemContext(facts);
+  const metadata = await inSystemTransaction(context, (transaction) =>
+    createDefinitionHistoryService(
+      developmentPublicationCatalogue,
+      transaction,
+      developmentBuilderAuthority(facts.organizationId),
+    ).readMetadata(context, { kind: "application", rootId, releaseRevision }),
+  );
+  return metadata.metadata.sourceFingerprint;
+};
+
+/** Writes a source over the draft on the observed draft revision; a racing change refuses. */
+export const saveStudioDraft = async (
+  facts: SystemContextFacts,
+  rootId: string,
+  expectedDraftRevision: number,
+  source: unknown,
+): Promise<StoredDefinitionDraft> => {
+  const context = mintSystemContext(facts);
+  const saved = await inSystemTransaction(context, (transaction) =>
+    createDefinitionStore(
+      transaction,
+      developmentBuilderAuthority(facts.organizationId),
+      platformPermissionSource,
+    ).saveDraft({ rootId, expectedDraftRevision, source }),
+  );
+  await restageOwnedModuleDrafts(context, saved);
+  return saved;
+};
+
+/**
+ * Copies one release's own authored source into the draft (the history service's restore, as the
+ * setup's definition actor) on the observed draft revision; a racing change refuses.
+ */
+export const restoreStudioRelease = async (
+  facts: SystemContextFacts,
+  rootId: string,
+  targetReleaseRevision: number,
+  expectedDraftRevision: number,
+): Promise<StoredDefinitionDraft> => {
+  const context = mintSystemContext(facts);
+  const restored = await inSystemTransaction(context, (transaction) =>
+    createDefinitionHistoryService(
+      developmentPublicationCatalogue,
+      transaction,
+      developmentBuilderAuthority(facts.organizationId),
+    ).restoreDraft(context, {
+      kind: "application",
+      rootId,
+      targetReleaseRevision,
+      expectedDraftRevision,
+    }),
+  );
+  await restageOwnedModuleDrafts(context, restored);
+  return restored;
+};
+
+/**
+ * Prepares and publishes one Studio draft revision against the current definition contract and
+ * platform catalogue, as the setup's definition actor. The one publication step of the platform
+ * refresh: the draft revision is the one observed, so a racing change makes it refuse.
+ */
+export const publishStudioDraft = async (
+  facts: SystemContextFacts,
+  rootId: string,
+  draftRevision: number,
+  releaseNote: string,
 ): Promise<PublishedRelease> => {
   const authority = developmentBuilderAuthority(facts.organizationId);
   const context: SessionContext = mintSystemContext(facts);
-  const live = await inSystemTransaction(context, (transaction) =>
-    readLiveDraft(transaction, root.rootId),
-  );
-  if (live === undefined) throw new Error(`Studio draft is missing for ${root.key}`);
-  // Save the draft as it stands, so its identity requirements are its own.
-  const saved = await inSystemTransaction(context, (transaction) =>
-    createDefinitionStore(transaction, authority, platformPermissionSource).saveDraft({
-      rootId: root.rootId,
-      expectedDraftRevision: live.draftRevision,
-      source: live.source,
-    }),
-  );
-  await restageOwnedModuleDrafts(context, saved);
   const prepared = await inSystemTransaction(context, (transaction) =>
     createDatabaseDefinitionPublicationService(
       developmentPublicationCatalogue,
       transaction,
       authority,
-    ).prepare(context, { rootId: root.rootId, expectedDraftRevision: saved.draftRevision }),
+    ).prepare(context, { rootId, expectedDraftRevision: draftRevision }),
   );
   const published = await inSystemTransaction(context, (transaction) =>
     createDatabaseDefinitionPublicationService(
       developmentPublicationCatalogue,
       transaction,
       authority,
-    ).publish(context, {
-      confirmation: prepared.confirmation,
-      releaseNote:
-        "Republished on the current definition contract and platform catalogue by the setup refresh",
-    }),
-  );
-  log(
-    `published Studio application ${root.key} ${published.releaseVersion} (revision ${published.releaseRevision}) from its current draft, including any unpublished work in it`,
+    ).publish(context, { confirmation: prepared.confirmation, releaseNote }),
   );
   return {
     rootId: published.rootId,
     releaseRevision: published.releaseRevision,
     releaseVersion: published.releaseVersion,
   };
+};
+
+/**
+ * The contract step of the platform refresh: a release published under an earlier definition
+ * contract has no reader, so the draft, converted by the step's migration, is the only source left.
+ * It is published as it stands, with any unpublished work in it: the contract migration rewrites
+ * every draft's source, so a draft without unpublished work cannot be told apart afterwards.
+ */
+export const publishConvertedStudioDraft = async (
+  facts: SystemContextFacts,
+  root: OrganizationBuilderRoot,
+  log: (message: string) => void,
+): Promise<PublishedRelease> => {
+  const live = await readStudioDraft(facts, root.rootId);
+  if (live === undefined) throw new Error(`Studio draft is missing for ${root.key}`);
+  // Save the draft as it stands, so its identity requirements are its own.
+  const saved = await saveStudioDraft(facts, root.rootId, live.draftRevision, live.source);
+  const published = await publishStudioDraft(
+    facts,
+    root.rootId,
+    saved.draftRevision,
+    "Republished on the current definition contract by the platform refresh",
+  );
+  log(
+    `published ${root.key} ${published.releaseVersion} (revision ${published.releaseRevision}) from its converted draft as it stands, with any unpublished work in it, because its release predates the current definition contract`,
+  );
+  return published;
 };

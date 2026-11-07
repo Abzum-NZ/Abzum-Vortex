@@ -15,7 +15,7 @@ import {
   type ComponentBundleObjectStore,
   type ComponentBundleRefusalReason,
 } from "./component-bundle-storage";
-import { logRefusal } from "../catalogue/runtime-primitives";
+import { logRefusal } from "../access/request-failure";
 
 /**
  * The canonical HTTP status of each serving refusal. A missing bundle is 404; a

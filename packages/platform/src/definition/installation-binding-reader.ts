@@ -179,11 +179,14 @@ export const readInstallationReleaseSet = async (
       purpose,
     ).read({ applicationRootId: rootId, applicationReleaseRevision: releaseRevision });
   } catch (error) {
-    if (error instanceof DefinitionError && error.code === "DEFINITION_DEPENDENCY_SUPERSEDED")
-      installationProblem("DEFINITION_DEPENDENCY_SUPERSEDED", "refused", "republish_required", {
-        cause: error,
-      });
-    if (!(error instanceof DefinitionError) || error.code === "DEFINITION_READ_FAILED")
+    // A pin the catalogue no longer holds, or holds with other content, means the platform
+    // refresh has not run: a fault like a failed read, never an answer about the release.
+    if (
+      !(error instanceof DefinitionError) ||
+      error.code === "DEFINITION_READ_FAILED" ||
+      error.code === "DEFINITION_DEPENDENCY_SUPERSEDED" ||
+      error.code === "DEFINITION_DEPENDENCY_UNAVAILABLE"
+    )
       installationProblem("release_set_read_failed", "temporarily_unavailable", undefined, {
         cause: error,
       });

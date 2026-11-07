@@ -1,7 +1,5 @@
 import "server-only";
 
-import { logRefusal } from "@vortex/platform/schema";
-
 import { AsyncResource } from "node:async_hooks";
 import { ADDRCONFIG, ALL, V4MAPPED, lookup as nativeLookup } from "node:dns";
 import type { LookupAddress, LookupOptions } from "node:dns";
@@ -14,6 +12,7 @@ import {
   type NativeLookupState,
   type OwnedNetworkLookup,
 } from "./owned-network-lookup";
+import { logRefusal } from "@vortex/platform/server";
 
 const nativeLookupLimit = 32;
 const supportedHints = ADDRCONFIG | ALL | V4MAPPED;

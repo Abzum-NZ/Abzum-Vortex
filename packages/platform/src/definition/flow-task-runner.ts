@@ -885,6 +885,9 @@ export const createFlowTaskRunner = (
       effectKey: { runId: state.runId, taskPath: call.taskPath, iteration: call.iteration },
     });
     const outcome: FlowTaskOutcome = executed.outcome;
+    // The operation's port logged this failure at its cause; the run-ended line must not repeat it.
+    if (executed.outcome === "failed" && executed.logged === true)
+      run.refusalLoggedTaskIds.push(call.taskId);
     // Read results keep their outputs for later tasks but do not count as committed changes.
     const operationSucceeded = executed.outcome === "completed" || executed.outcome === "committed";
     const outputs: Record<string, JsonValue> = operationSucceeded

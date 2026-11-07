@@ -1,6 +1,6 @@
 import "server-only";
 
-import { databaseCode } from "../catalogue/runtime-primitives";
+import { databaseCode, describeFailure } from "../catalogue/runtime-primitives";
 import { BuilderAuthorityError } from "../definition/builder-authority";
 import { DefinitionError, isValidationRefusal } from "../definition/definition-error";
 import { FirstInstallUnavailable } from "../definition/installation-first-install";
@@ -60,7 +60,6 @@ const definitionErrorClasses: ReadonlyMap<string, RequestFailureClass> = new Map
   ["DEFINITION_NO_CHANGE", refusal()],
   ["DEFINITION_CONTEXT_REFUSED", refusal()],
   ["DEFINITION_DRAFT_STALE_OR_MISSING", refusal()],
-  ["DEFINITION_DEPENDENCY_SUPERSEDED", refusal()],
   ["RECORD_STORAGE_INCOMPATIBLE", refusal()],
   ["APPLICATION_INSTALLATION_STORAGE_INCOMPATIBLE", refusal()],
   ["APPLICATION_INSTALLATION_PERMISSION_REFUSED", refusal()],
@@ -94,14 +93,16 @@ const builderAuthorityClasses: Readonly<
 const installationProblemClass = (problem: InstallationProblem["problem"]): RequestFailureClass => {
   if (problem.kind === "authentication_required") return refusal("recent_authentication_required");
   if (problem.kind === "multi_factor_required") return refusal("multi_factor_required");
-  // A named state (republish required, not installed, storage incompatible, ...) is an answer.
+  // A named state (not installed, storage incompatible, ...) is an answer.
   if (problem.unavailableReason !== undefined || problem.kind === "refused") return refusal();
   return problem.kind === "conflict" ? retryable("temporarily unavailable") : fault();
 };
 
 /**
  * A request its caller abandoned (the browser left the page) is stopped on purpose. The database
- * layer raises it as a plain error named for its layer, and the platform as an abort.
+ * layer raises it as a plain error named for its layer, and the platform as an abort. A connection
+ * reset is not matched here: the database pool and outbound calls raise the same `ECONNRESET`, and
+ * those are faults; the one reader of a client's upload says its own stop.
  */
 const requestStopped = (error: unknown): boolean =>
   error instanceof Error &&
@@ -161,4 +162,16 @@ export const classifyRequestFailure = (
 export const logClassifiedFailure = (line: string, error: unknown): void => {
   if (classifyRequestFailure(error, { addressed: false }).level === "info") console.info(line);
   else console.error(line);
+};
+
+/**
+ * The one server-side line for a refusal or a caught failure: the route or service, the operation,
+ * a stable reason code and, when there is one, the safe description of its cause (class names and
+ * codes only). Ids may be part of `op`; personal data, values and secrets never are. Without a
+ * cause it is an expected refusal and information; with one the cause's class decides the level.
+ */
+export const logRefusal = (route: string, op: string, code: string, cause?: unknown): void => {
+  const message = `[${route}] ${op} refused: code=${code}`;
+  if (cause === undefined) console.info(message);
+  else logClassifiedFailure(`${message} cause=${describeFailure(cause)}`, cause);
 };

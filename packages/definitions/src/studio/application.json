@@ -825,7 +825,7 @@
                   "then": {
                     "op": "literal",
                     "type": "json",
-                    "value": ["Review", "Release note", "Verify", "Publish", "Install", "Done"]
+                    "value": ["Review", "Release note", "Publish", "Install", "Done"]
                   },
                   "else": {
                     "op": "literal",
@@ -935,7 +935,7 @@
                   "then": {
                     "op": "literal",
                     "type": "json",
-                    "value": ["Review", "Release note", "Verify", "Publish", "Install", "Done"]
+                    "value": ["Review", "Release note", "Publish", "Install", "Done"]
                   },
                   "else": {
                     "op": "literal",
@@ -1340,7 +1340,6 @@
                                     "value": [
                                       "Review",
                                       "Release note",
-                                      "Verify",
                                       "Publish",
                                       "Install",
                                       "Done"
@@ -1457,7 +1456,6 @@
                                     "value": [
                                       "Review",
                                       "Release note",
-                                      "Verify",
                                       "Publish",
                                       "Install",
                                       "Done"
@@ -1704,7 +1702,6 @@
                                             "value": [
                                               "Review",
                                               "Release note",
-                                              "Verify",
                                               "Publish",
                                               "Install",
                                               "Done"
@@ -2345,7 +2342,6 @@
                                     "value": [
                                       "Review",
                                       "Release note",
-                                      "Verify",
                                       "Publish",
                                       "Install",
                                       "Done"
@@ -2462,7 +2458,6 @@
                                     "value": [
                                       "Review",
                                       "Release note",
-                                      "Verify",
                                       "Publish",
                                       "Install",
                                       "Done"
@@ -2710,7 +2705,6 @@
                                             "value": [
                                               "Review",
                                               "Release note",
-                                              "Verify",
                                               "Publish",
                                               "Install",
                                               "Done"
@@ -3138,7 +3132,6 @@
                                     "value": [
                                       "Review",
                                       "Release note",
-                                      "Verify",
                                       "Publish",
                                       "Install",
                                       "Done"
@@ -3255,7 +3248,6 @@
                                     "value": [
                                       "Review",
                                       "Release note",
-                                      "Verify",
                                       "Publish",
                                       "Install",
                                       "Done"
@@ -3503,7 +3495,6 @@
                                             "value": [
                                               "Review",
                                               "Release note",
-                                              "Verify",
                                               "Publish",
                                               "Install",
                                               "Done"
@@ -7190,7 +7181,7 @@
                 "kind": "literal",
                 "literal": {
                   "type": "json",
-                  "value": ["Review", "Release note", "Verify", "Publish", "Install", "Done"]
+                  "value": ["Review", "Release note", "Publish", "Install", "Done"]
                 }
               },
               "step": {
@@ -7268,7 +7259,7 @@
                 "kind": "literal",
                 "literal": {
                   "type": "json",
-                  "value": ["Review", "Release note", "Verify", "Publish", "Install", "Done"]
+                  "value": ["Review", "Release note", "Publish", "Install", "Done"]
                 }
               },
               "step": {
@@ -7561,14 +7552,7 @@
                             "kind": "literal",
                             "literal": {
                               "type": "json",
-                              "value": [
-                                "Review",
-                                "Release note",
-                                "Verify",
-                                "Publish",
-                                "Install",
-                                "Done"
-                              ]
+                              "value": ["Review", "Release note", "Publish", "Install", "Done"]
                             }
                           },
                           "step": {
@@ -7674,21 +7658,14 @@
                             "kind": "literal",
                             "literal": {
                               "type": "json",
-                              "value": [
-                                "Review",
-                                "Release note",
-                                "Verify",
-                                "Publish",
-                                "Install",
-                                "Done"
-                              ]
+                              "value": ["Review", "Release note", "Publish", "Install", "Done"]
                             }
                           },
                           "step": {
                             "kind": "literal",
                             "literal": {
                               "type": "text",
-                              "value": "Verify"
+                              "value": "Publish"
                             }
                           },
                           "working": {
@@ -7759,14 +7736,7 @@
                             "kind": "literal",
                             "literal": {
                               "type": "json",
-                              "value": [
-                                "Review",
-                                "Release note",
-                                "Verify",
-                                "Publish",
-                                "Install",
-                                "Done"
-                              ]
+                              "value": ["Review", "Release note", "Publish", "Install", "Done"]
                             }
                           },
                           "step": {
@@ -7902,7 +7872,6 @@
                                       "value": [
                                         "Review",
                                         "Release note",
-                                        "Verify",
                                         "Publish",
                                         "Install",
                                         "Done"

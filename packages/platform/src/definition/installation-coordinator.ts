@@ -15,7 +15,7 @@ import {
   type PreparedApplicationRoleTemplates,
 } from "../access/organization-access-catalogue";
 import type { ApplicationRootId, ModuleRootId, OrganizationId } from "../catalogue/identifiers";
-import { sameId, logRefusal } from "../catalogue/runtime-primitives";
+import { sameId } from "../catalogue/runtime-primitives";
 import type { SystemApplicationBoundReleaseSetResult } from "./definition-consumer-read";
 import type { ModuleContribution } from "./module-contracts";
 import {
@@ -82,6 +82,7 @@ import {
   changeContributions,
   requireLifecycleResult,
 } from "./installation-coordinator-state";
+import { logRefusal } from "../access/request-failure";
 
 /**
  * The App-owned protected Application lifecycle: prepare, install or deliberately upgrade to one
@@ -417,17 +418,11 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
     }
   };
 
-  /**
-   * Whether a release read failed with this code: the release predates the current definition
-   * contract (RELEASE_CONTRACT_SUPERSEDED), or a platform definition it pins was superseded
-   * (DEFINITION_DEPENDENCY_SUPERSEDED).
-   */
-  const releaseReadFailedWith = (
-    error: unknown,
-    code: "RELEASE_CONTRACT_SUPERSEDED" | "DEFINITION_DEPENDENCY_SUPERSEDED",
-  ): boolean => {
+  /** Whether a release read failed because the release predates the current definition contract. */
+  const releaseReadFailedWithSupersededContract = (error: unknown): boolean => {
     for (let cause: unknown = error; cause instanceof Error; cause = cause.cause)
-      if (cause instanceof DefinitionError && cause.code === code) return true;
+      if (cause instanceof DefinitionError && cause.code === "RELEASE_CONTRACT_SUPERSEDED")
+        return true;
     return false;
   };
 
@@ -447,21 +442,26 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
         await readReleaseSet(session, target, "replace_or_remove"),
       );
     } catch (error) {
-      if (releaseReadFailedWith(error, "RELEASE_CONTRACT_SUPERSEDED")) return "superseded";
+      if (releaseReadFailedWithSupersededContract(error)) return "superseded";
       throw error;
     }
   };
 
-  /** Loads the exact Application and its resolved Module pin set, never the latest release. */
+  /**
+   * Loads the exact Application and its resolved Module pin set, never the latest release. The
+   * release to install or switch to is consumed (its pins must verify); the release an upgrade
+   * replaces is read as evidence only.
+   */
   const readExactRelease = async (
     session: IdentitySession,
     target: ReleaseTarget,
+    purpose: "consume" | "replace_or_remove" = "consume",
   ): Promise<ExactRelease> => {
     let releaseSet: SystemApplicationBoundReleaseSetResult;
     let preparedTemplates: PreparedApplicationRoleTemplates;
     try {
       if (humanDefinitionAccess !== undefined) {
-        releaseSet = await humanDefinitionAccess.readReleaseSet(session, target, "consume");
+        releaseSet = await humanDefinitionAccess.readReleaseSet(session, target, purpose);
         preparedTemplates = await humanDefinitionAccess.prepareRegistrationCandidate(
           target,
           releaseSet,
@@ -474,12 +474,16 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
             applicationRootId: target.applicationRootId,
             applicationReleaseRevision: target.applicationReleaseRevision,
           },
-          "consume",
+          purpose,
         );
-        preparedTemplates = await roleTemplates.prepareRegistrationCandidate(context, {
-          applicationRootId: target.applicationRootId,
-          releaseRevision: target.applicationReleaseRevision,
-        });
+        preparedTemplates = await roleTemplates.prepareRegistrationCandidate(
+          context,
+          {
+            applicationRootId: target.applicationRootId,
+            releaseRevision: target.applicationReleaseRevision,
+          },
+          purpose,
+        );
       } else {
         throw fail("APPLICATION_INSTALLATION_RELEASE_UNAVAILABLE");
       }
@@ -867,20 +871,18 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
         request.expectedActiveReleaseRevision === null ||
         request.expectedActiveReleaseRevision >= request.applicationReleaseRevision
           ? null
-          : await readExactRelease(verifiedSession.data, {
-              organizationId: request.organizationId,
-              applicationRootId: request.applicationRootId,
-              applicationReleaseRevision: request.expectedActiveReleaseRevision,
-            }).catch((error: unknown) => {
-              // A prior release of an earlier contract, or on superseded platform definitions, has
-              // no registered authority to preserve: this upgrade replaces it.
-              if (releaseReadFailedWith(error, "RELEASE_CONTRACT_SUPERSEDED")) return null;
-              if (releaseReadFailedWith(error, "DEFINITION_DEPENDENCY_SUPERSEDED")) {
-                console.info(
-                  `[installation] prior release ${request.expectedActiveReleaseRevision} uses superseded platform definitions: replaced by release ${request.applicationReleaseRevision}`,
-                );
-                return null;
-              }
+          : await readExactRelease(
+              verifiedSession.data,
+              {
+                organizationId: request.organizationId,
+                applicationRootId: request.applicationRootId,
+                applicationReleaseRevision: request.expectedActiveReleaseRevision,
+              },
+              "replace_or_remove",
+            ).catch((error: unknown) => {
+              // A prior release of an earlier contract has no registered authority to preserve:
+              // this upgrade replaces it.
+              if (releaseReadFailedWithSupersededContract(error)) return null;
               logRefusal("installation", "prior release read", "prior_release_unreadable", error);
               return null;
             });

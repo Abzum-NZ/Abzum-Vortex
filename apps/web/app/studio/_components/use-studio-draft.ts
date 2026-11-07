@@ -1,4 +1,5 @@
 "use client";
+import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { whenNotDragging, type StudioDragGate } from "@vortex/ui/studio/puck-provider";
 import {
@@ -378,8 +379,9 @@ export function useStudioDraft({
     sourceFingerprint: draft.sourceFingerprint,
     generation: 0,
   }));
+  const addressPageKey = useSearchParams().get("page");
   const request: StudioViewRequest = {
-    ...studioViewRequest(tab, selected, parsed(state.source)),
+    ...studioViewRequest(tab, selected, parsed(state.source), addressPageKey ?? undefined),
     ...(tab === "structure" && creation !== undefined ? { creation } : {}),
   };
   const requestKey = JSON.stringify(request);

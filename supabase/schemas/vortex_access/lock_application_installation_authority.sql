@@ -91,3 +91,5 @@ REVOKE ALL ON FUNCTION vortex_access.lock_application_installation_authority(jso
 GRANT ALL ON FUNCTION vortex_access.lock_application_installation_authority(jsonb) TO vortex_owner;
 
 grant execute on function vortex_access.lock_application_installation_authority(jsonb) to postgres;
+
+grant execute on function vortex_access.lock_application_installation_authority(jsonb) to vortex_history_purger;

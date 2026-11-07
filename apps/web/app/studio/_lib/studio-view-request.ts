@@ -32,10 +32,14 @@ export const studioViewRequest = (
   tab: string,
   selected: StudioSemanticSelection | null,
   source: ApplicationSourceDocument,
+  /** The page the address names (its `page` setting), when it has one. */
+  addressPageKey?: string,
 ): StudioViewRequest => {
   if (tab === "data" || tab === "access" || tab === "flows") return { kind: tab };
   if (tab === "releases") return { kind: "source" };
   let pageAlias = selected?.kind === "page" ? selected.pageAlias : undefined;
+  // A selected layout, or a block of one, is drawn on the page that uses it, or on none.
+  let layoutSelected = selected?.kind === "shell";
   if (selected?.kind === "placement") {
     const contains = (items: readonly SourceItem[]): boolean =>
       items.some(
@@ -52,11 +56,12 @@ export const studioViewRequest = (
     // A block of a layout is drawn on a page that uses that layout.
     if (pageAlias === undefined) {
       const layout = source.body.shells.find((shell) => contains(shell.layout.content));
+      layoutSelected = layout !== undefined;
       pageAlias = pageUsingLayout(source, layout?.id);
     }
   }
   if (selected?.kind === "shell") pageAlias = pageUsingLayout(source, selected.shellAlias);
-  if (pageAlias === undefined) {
+  if (pageAlias === undefined && !layoutSelected) {
     const findEntry = (
       items: ApplicationSourceDocument["body"]["navigation"],
     ): string | undefined => {
@@ -74,10 +79,14 @@ export const studioViewRequest = (
       }
       return undefined;
     };
-    const entryPage = findEntry(source.body.navigation);
-    const pageKey =
-      entryPage ?? (tab === "menu" || tab === "theme" ? source.body.home_page : undefined);
-    pageAlias = source.body.pages.find((page) => page.key === pageKey)?.id;
+    // One rule for every tab, the same the canvas follows: the selection's page, otherwise the page
+    // the address names, otherwise the home page.
+    const pageOf = (key: string | undefined) =>
+      source.body.pages.find((page) => page.key === key)?.id;
+    pageAlias =
+      pageOf(findEntry(source.body.navigation)) ??
+      pageOf(addressPageKey) ??
+      pageOf(source.body.home_page);
   }
   return tab === "theme"
     ? { kind: "theme", ...(pageAlias === undefined ? {} : { pageAlias }) }

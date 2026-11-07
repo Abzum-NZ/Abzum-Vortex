@@ -306,3 +306,23 @@ export const resolveFirstOwnerIdentity = async (
     "No local account has that email. Sign up in the local web application first, then re-run.",
   );
 };
+
+/** One read-only query as the local database owner, for the setup checks that no runtime role may make. */
+export const queryLocalDatabaseAsOwner = (
+  sql: string,
+  failure: string,
+): readonly Readonly<Record<string, unknown>>[] => {
+  const cli = join(findRepositoryRoot(), "node_modules", "supabase", "dist", "supabase.js");
+  const result = spawnSync(
+    process.execPath,
+    [cli, "db", "query", "--local", "--output", "json", ...supabaseWorkdirArguments(), sql],
+    { cwd: findRepositoryRoot(), encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] },
+  );
+  if (result.error) throw result.error;
+  if (result.status !== 0) throw new Error(`${failure}: ${result.stderr.trim()}`);
+  const output: unknown = JSON.parse(result.stdout);
+  const rows =
+    typeof output === "object" && output !== null && "rows" in output ? output.rows : undefined;
+  if (!Array.isArray(rows)) throw new Error(`${failure}: the query returned no rows list.`);
+  return rows;
+};

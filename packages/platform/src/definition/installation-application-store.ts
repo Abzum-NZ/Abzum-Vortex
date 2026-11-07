@@ -146,14 +146,26 @@ type ApplicationStoreRoleSummary = Readonly<{
   lines: string[];
 }>;
 
-/** A standard record permission's operation and the record types it covers. */
+// A record page's permission (`application-record-page-shared.ts`) lets people reach the operation of
+// the same name, so the role lists it in that record type's one line instead of repeating it.
+const pageOpenPermission = /^Allows opening the (?:(creation|editing) )?pages of (.+?) in .+\.$/u;
+const pageDeletePermission = /^Allows deleting (.+?) in .+ from their pages\.$/u;
+
+/** A standard or record page permission's operation and the record types it covers. */
 const standardOperationOf = (
   label: string,
 ): Readonly<{ operation: string; records: string }> | undefined => {
-  const match = standardPermission.exec(label);
-  return match === null
-    ? undefined
-    : { operation: (match[1] ?? "").replaceAll("_", " "), records: match[2] ?? "" };
+  const standard = standardPermission.exec(label);
+  if (standard !== null)
+    return { operation: (standard[1] ?? "").replaceAll("_", " "), records: standard[2] ?? "" };
+  const opened = pageOpenPermission.exec(label);
+  if (opened !== null)
+    return {
+      operation: opened[1] === "creation" ? "create" : opened[1] === "editing" ? "update" : "read",
+      records: opened[2] ?? "",
+    };
+  const deleted = pageDeletePermission.exec(label);
+  return deleted === null ? undefined : { operation: "soft delete", records: deleted[1] ?? "" };
 };
 
 /** The words a person uses for a set of standard operations, in the order they are listed. */
@@ -214,6 +226,25 @@ const unavailable = (reason: UnavailableReason): ApplicationStoreResult => ({
   value: reviewOutputs({ change: "unavailable", reason }),
 });
 
+/**
+ * A temporary failure is logged once at its cause: the request runner logged (and marked) what it
+ * caught; anything else is logged here, so the protected-operation executor and the flow add no line.
+ */
+const loggedOnce = (
+  operation: string,
+  error: unknown,
+  result: ApplicationStoreResult,
+): ApplicationStoreResult => {
+  if (
+    result !== "conflict" &&
+    result !== "uncertain" &&
+    result.kind === "temporarily_unavailable" &&
+    !requestFailureLogged(error)
+  )
+    logClassifiedFailure(`[installation] ${operation}: ${describeFailure(error)}`, error);
+  return result;
+};
+
 /** The review's answer to a failure: a named unavailability the flow explains, or the failure itself. */
 const reviewFailure = (error: unknown): ApplicationStoreResult => {
   if (error instanceof FirstInstallUnavailable) {
@@ -241,9 +272,11 @@ const reviewFailure = (error: unknown): ApplicationStoreResult => {
       break;
   }
   // A review changes nothing, so a state that moved while it read is a failure to read, not a conflict.
-  return problem.kind === "conflict"
-    ? { kind: "temporarily_unavailable" }
-    : commandFailure(problem);
+  return loggedOnce(
+    "application review failed",
+    error,
+    problem.kind === "conflict" ? { kind: "temporarily_unavailable" } : commandFailure(problem),
+  );
 };
 
 /**
@@ -260,12 +293,6 @@ const namedRefusalCodes: Readonly<
 
 /** A command's failure: a conflict, a refusal (permission or eligibility) or a temporary failure. */
 const commandFailure = (problem: InstallationProblemShape): ApplicationStoreResult => {
-  if (problem.unavailableReason === "republish_required")
-    return {
-      kind: "confirmed_failure",
-      outcome: "refused",
-      diagnostic: { code: "application_republish_required" },
-    };
   if (problem.unavailableReason === "storage_incompatible")
     return {
       kind: "confirmed_failure",
@@ -318,7 +345,11 @@ const commandFailureOf = (error: unknown): ApplicationStoreResult => {
       );
     return releaseChanged();
   }
-  return commandFailure(classifyInstallationFailure(error));
+  return loggedOnce(
+    "application command failed",
+    error,
+    commandFailure(classifyInstallationFailure(error)),
+  );
 };
 
 /**

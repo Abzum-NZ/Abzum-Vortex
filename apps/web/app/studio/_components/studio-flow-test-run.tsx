@@ -75,11 +75,11 @@ function TraceStep({ step, flowKey }: Readonly<{ step: Step; flowKey: string }>)
       <ItemContent>
         <div className="flex flex-wrap items-center gap-2">
           <span className="font-medium">{titleOf(step.taskType)}</span>
-          <code className="text-xs text-muted-foreground">
-            {step.flow === flowKey || step.taskType === "after_save_subscriber"
-              ? step.taskId
-              : `${step.flow} / ${step.taskId}`}
-          </code>
+          {step.taskType === "after_save_subscriber" ? (
+            <span className="text-xs text-muted-foreground">{step.taskId}</span>
+          ) : step.flow === flowKey ? null : (
+            <span className="text-xs text-muted-foreground">in {step.flow}</span>
+          )}
           <Badge variant="outline">{locationLabels[step.location]}</Badge>
           <Badge variant={ended ? "destructive" : "secondary"}>
             {step.outcome.replace("_", " ")}

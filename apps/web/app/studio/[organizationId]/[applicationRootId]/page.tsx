@@ -81,15 +81,22 @@ export default async function StudioApplicationPage({
   searchParams,
 }: {
   params: Promise<{ organizationId: string; applicationRootId: string }>;
-  searchParams: Promise<{ tab?: string; section?: string; module?: string; record?: string }>;
+  searchParams: Promise<{
+    tab?: string;
+    page?: string;
+    section?: string;
+    module?: string;
+    record?: string;
+  }>;
 }) {
   const [{ organizationId, applicationRootId }, query] = await Promise.all([params, searchParams]);
-  const { tab, section, module, record } = query;
+  const { tab, page, section, module, record } = query;
   const session = await continueStudioSession();
   if (session.kind === "temporarily_unavailable")
     return <StudioUnavailable subject="Application draft" result={session} />;
   const initial = await loadStudioApplicationDraft(organizationId, applicationRootId);
   if (initial.kind !== "available")
+<<<<<<< HEAD
     return (
       <StudioUnavailable
         subject="Application draft"
@@ -98,6 +105,13 @@ export default async function StudioApplicationPage({
       />
     );
   const request = studioViewRequest(tab ?? "structure", null, initial.draft.source);
+||||||| 8634f1a72
+    return <StudioUnavailable subject="Application draft" result={initial} />;
+  const request = studioViewRequest(tab ?? "structure", null, initial.draft.source);
+=======
+    return <StudioUnavailable subject="Application draft" result={initial} />;
+  const request = studioViewRequest(tab ?? "structure", null, initial.draft.source, page);
+>>>>>>> origin/main
   const result =
     request.kind === "source"
       ? initial
