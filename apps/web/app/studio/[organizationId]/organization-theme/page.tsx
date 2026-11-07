@@ -32,15 +32,14 @@ export default async function StudioOrganizationThemePage({
   if (resolved.kind === "temporarily_unavailable")
     return <StudioUnavailable subject="Studio" result={resolved} />;
   const launcher = await loadOrganizationLauncher(resolved.session);
-  if (launcher.kind !== "available") {
-    console.error(`[studio] organization theme could not list organisations: ${launcher.kind}`);
+  // The launcher read logs each of its answers that is not available, once.
+  if (launcher.kind !== "available")
     return (
       <StudioUnavailable
         subject="The organisation theme"
         result={{ kind: "temporarily_unavailable" }}
       />
     );
-  }
   const entry = launcher.entries.find((candidate) => candidate.organizationId === organizationId);
   if (entry === undefined) notFound();
   // A person without Studio gets Studio's refusal here too, before this page reads the theme or the

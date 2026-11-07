@@ -2,6 +2,7 @@ import "server-only";
 
 import {
   createBackendRunHistoryReader,
+  logRefusal,
   type BackendRunHistoryCursor,
   type BackendRunHistoryRequest,
 } from "@vortex/platform/server";
@@ -48,12 +49,8 @@ const installedFlowNames = async (
     organizationId,
     applicationRootId,
   });
-  if (loaded.kind !== "available") {
-    console.error(
-      `[studio] back-end run history cannot name flows: installed release ${loaded.kind}`,
-    );
-    return new Map();
-  }
+  // The request runner logged an answer that is not available, once.
+  if (loaded.kind !== "available") return new Map();
   const { application, modules } = loaded.value.releaseSet;
   return new Map(
     [...application.content.flows, ...modules.flatMap((module) => module.content.flows)].map(
@@ -104,9 +101,15 @@ export const readStudioBackendRunHistory = async (
   if (!organization.success || !root.success) return { kind: "refused", reason: "request_invalid" };
   try {
     const resolved = await resolveIdentitySession();
-    if (resolved.kind === "temporarily_unavailable")
+    // A missing or ended session is an expected refusal; an unavailable one is a platform fault.
+    if (resolved.kind === "temporarily_unavailable") {
+      console.error("[studio] back-end run history failed: session temporarily_unavailable");
       return { kind: "temporarily_unavailable", reason: "session_unavailable" };
-    if (resolved.kind !== "active") return { kind: "refused", reason: "session_ended" };
+    }
+    if (resolved.kind !== "active") {
+      logRefusal("studio", "back-end run history", `session_${resolved.kind}`);
+      return { kind: "refused", reason: "session_ended" };
+    }
     const result = await createBackendRunHistoryReader({
       requests: humanOrganizationRequests(),
     }).read(resolved.session, organization.data, root.data, request);
@@ -141,7 +144,7 @@ export const readStudioBackendRunHistory = async (
       reason: result.kind === "refused" ? "permission_missing" : "request_failed",
     };
   } catch (error) {
-    console.error("[studio] back-end run history failed", error);
+    logRefusal("studio", "back-end run history", "request_failed", error);
     return { kind: "temporarily_unavailable", reason: "request_failed" };
   }
 };
