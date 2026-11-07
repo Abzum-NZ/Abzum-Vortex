@@ -1,7 +1,7 @@
 import "server-only";
 
 import { describeFailure, organizationIdSchema } from "@vortex/platform/schema";
-import { readVisiblePersonLabels } from "@vortex/platform/server";
+import { logRefusal, readVisiblePersonLabels } from "@vortex/platform/server";
 import { resolveIdentitySession } from "../auth/_lib/session-server";
 import { humanOrganizationRequests } from "./server-composition";
 import type { StudioPersonLabel } from "./studio-application-restore-contracts";
@@ -18,9 +18,10 @@ export async function readStudioPersonLabel(
   try {
     const resolved = await resolveIdentitySession();
     if (resolved.kind !== "active") {
-      console.error(
-        `[studio] person label session is not active: STUDIO_PERSON_LABEL_SESSION_${resolved.kind.toUpperCase()}`,
-      );
+      // A missing or ended session is an expected refusal; an unavailable one is a platform fault.
+      if (resolved.kind === "temporarily_unavailable")
+        console.error("[studio] person label failed: session temporarily_unavailable");
+      else logRefusal("studio", "person label", `session_${resolved.kind}`);
       return { kind: "unavailable" };
     }
     const result = await humanOrganizationRequests().run(
@@ -29,12 +30,8 @@ export async function readStudioPersonLabel(
       async (transaction): Promise<ReadonlyMap<string, string>> =>
         readVisiblePersonLabels(transaction, [organizationAccountId]),
     );
-    if (result.kind !== "available") {
-      console.error(
-        `[studio] person label read was not available: STUDIO_PERSON_LABEL_READ_${result.kind.toUpperCase()}`,
-      );
-      return { kind: "unavailable" };
-    }
+    // The request runner logged an answer that is not available, once.
+    if (result.kind !== "available") return { kind: "unavailable" };
     const name = result.value.get(organizationAccountId.toLowerCase());
     return name === undefined ? { kind: "restricted" } : { kind: "named", name };
   } catch (error) {

@@ -87,4 +87,5 @@ export {
   type HumanDefinitionPublicationPreparationResult,
   type HumanDefinitionPublicationResult,
 } from "./definition-publication";
-export { logRefusal } from "./request-failure";
+export { logClassifiedFailure, logFault, logRefusal } from "./request-failure";
+export { markRequestFailureLogged, requestFailureLogged } from "./request-failure-mark";

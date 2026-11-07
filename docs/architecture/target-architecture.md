@@ -152,4 +152,4 @@ Tables are private. The application calls `security definer` functions with `set
 
 ## 6. Guardrails that keep it this way
 
-Static checks run with `pnpm guard`. They are lint-style rules, not tests. `tooling/guard/config.ts` is the list of rules and their tiers.
+Static checks run with `pnpm guard`. They are lint-style rules, not tests. `tooling/guard/config.ts` is the list of rules; every rule blocks.

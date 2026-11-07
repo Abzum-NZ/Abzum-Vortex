@@ -3,16 +3,16 @@ import "server-only";
 import {
   createApplicationReleaseAdoptionTargetService,
   createBuilderAuthority,
-  createPageSubjectReader,
   readBuilderApplicationOrigin,
   readCurrentOrganizationAppStoreAddressAfterAuthorization,
+  readPageSubjectInTransaction,
 } from "@vortex/platform/server";
 import type { ApplicationRootId, IdentitySession, OrganizationId } from "@vortex/platform/schema";
 import { describeFailure } from "@vortex/platform/schema";
 import { applicationPageAddressPath } from "./address-paths";
 import { pageSubjectParameter } from "./application-page/placement-helpers";
 import { applicationStoreService } from "./application-store-service";
-import { humanOrganizationRequests } from "./server-composition";
+import { humanOrganizationRequests, humanOrganizationRequestsFor } from "./server-composition";
 import { platformPermissionSource } from "./platform-permission-source";
 import { loadPermittedApplicationsAtAddress } from "./organization-context";
 import { applicationHomePathByRoot } from "./application-home";
@@ -228,13 +228,23 @@ export const readApplicationReleaseStanding = async (
       console.error("[release-standing] App Store application fields unavailable");
       return { kind: "unknown" };
     }
-    const read = await createPageSubjectReader(dependencies).read(session, selection, {
-      recordTypeId: type.recordTypeId,
-      recordId: scope.applicationRootId,
-      requestedFieldIds: ids.map(String),
-    });
+    // The subject read runs under the runner itself, so the runner's own answer (which it logged)
+    // and the read's neutral refusal (which nothing logged) stay apart.
+    const subject = await humanOrganizationRequestsFor(dependencies).run(
+      session,
+      selection,
+      (transaction) =>
+        readPageSubjectInTransaction(transaction, {
+          recordTypeId: type.recordTypeId,
+          recordId: scope.applicationRootId,
+          requestedFieldIds: ids.map(String),
+        }),
+    );
+    if (subject.kind !== "available") return { kind: "unknown" };
+    const read = subject.value;
     if (read.kind !== "read") {
-      console.info(`[release-standing] App Store record ${read.kind}`);
+      // The read logged a failure once; only its neutral refusal is said here.
+      if (read.kind === "refused") console.info("[release-standing] App Store record refused");
       return { kind: "unknown" };
     }
     const values = Object.fromEntries(

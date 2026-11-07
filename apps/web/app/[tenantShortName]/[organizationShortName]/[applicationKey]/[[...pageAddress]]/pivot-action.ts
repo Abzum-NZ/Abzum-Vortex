@@ -1,6 +1,11 @@
 "use server";
 
-import { containedComponentIdSchema, revisionSchema } from "@vortex/platform/schema";
+import {
+  containedComponentIdSchema,
+  describeFailure,
+  revisionSchema,
+} from "@vortex/platform/schema";
+import { logClassifiedFailure, requestFailureLogged } from "@vortex/platform/server";
 import { z } from "zod";
 import { continueSessionOrEnd } from "../../../../auth/_lib/session-redirect";
 import { resolveIdentitySession } from "../../../../auth/_lib/session-server";
@@ -63,7 +68,8 @@ export async function readPivot(input: unknown): Promise<PivotLoadResult> {
       },
     );
   } catch (error) {
-    console.error("[page] pivot read failed", error);
+    if (!requestFailureLogged(error))
+      logClassifiedFailure(`[page] pivot read failed: ${describeFailure(error)}`, error);
     return { kind: "temporarily_unavailable" };
   }
 }
