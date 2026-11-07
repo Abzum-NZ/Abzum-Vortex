@@ -264,9 +264,10 @@ const change = (
   }
   if (page !== undefined) {
     if (item.type !== "page") refuse("Only a page entry opens a page.");
-    next.page = requirePage(candidate, page).key;
-    if (page !== (item.type === "page" ? item.page : undefined))
-      requireUnlisted(candidate, page, "Choose a page that is not in the menu yet.");
+    const key = requirePage(candidate, page).key;
+    if (item.type === "page" && key !== item.page)
+      requireUnlisted(candidate, key, "Choose a page that is not in the menu yet.");
+    next.page = key;
   }
   if (address !== undefined) {
     if (item.type !== "external") refuse("Only a link entry opens an address.");

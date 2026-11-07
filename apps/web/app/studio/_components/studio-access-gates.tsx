@@ -116,6 +116,21 @@ export function StudioAccessPageGates({
                                   page. Change who can open the page to change both.
                                 </TooltipContent>
                               </Tooltip>
+                              {!follows && (
+                                <StudioIconButton
+                                  label={`Show it to people who can open ${page.name}`}
+                                  disabled={disabled}
+                                  onClick={() =>
+                                    run({
+                                      kind: "set_page_gate",
+                                      pageAlias: page.id,
+                                      gate: { kind: "existing", key: page.permission },
+                                    })
+                                  }
+                                >
+                                  <Icon name="refresh" />
+                                </StudioIconButton>
+                              )}
                             </div>
                           );
                         })}
