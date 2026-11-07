@@ -274,33 +274,33 @@ export const readSummaryOrChart = async (
     data[placementId] = { status: "error" };
     return;
   }
+  // The query service logged every answer that is not available, once: these add no line.
   if (summaryResult.kind === "temporarily_unavailable") {
-    logPlacementFailure(address, placementId, "summary_query_unavailable");
     data[placementId] = { status: "error" };
     return;
   }
-  if (summaryResult.kind !== "available" || summaryResult.value.outcome !== "completed") {
-    const refusal =
-      summaryResult.kind === "available" && summaryResult.value.outcome === "refused"
-        ? summaryResult.value
-        : undefined;
-    if (placeInstallationRequired(data, placementId, refusal?.reasonCode)) return;
+  if (summaryResult.kind === "unavailable") {
+    data[placementId] = { status: "refused", reason: "not_permitted" };
+    return;
+  }
+  if (summaryResult.value.outcome !== "completed") {
+    const { reasonCode } = summaryResult.value;
+    if (placeInstallationRequired(data, placementId, reasonCode)) return;
     logPlacementFailure(
       address,
       placementId,
-      refusal?.reasonCode === "dataset_limit_exceeded"
+      reasonCode === "dataset_limit_exceeded"
         ? "summary_dataset_limit_exceeded"
-        : refusal?.reasonCode === "value_out_of_range"
+        : reasonCode === "value_out_of_range"
           ? "summary_value_out_of_range"
           : "summary_query_refused",
-      refusal?.reasonCode ?? summaryResult.kind,
+      reasonCode,
     );
     data[placementId] = {
       status: "refused",
       reason:
-        refusal?.reasonCode === "dataset_limit_exceeded" ||
-        refusal?.reasonCode === "value_out_of_range"
-          ? refusal.reasonCode
+        reasonCode === "dataset_limit_exceeded" || reasonCode === "value_out_of_range"
+          ? reasonCode
           : "not_permitted",
     };
     return;
