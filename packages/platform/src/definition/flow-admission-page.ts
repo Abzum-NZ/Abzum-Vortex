@@ -90,7 +90,8 @@ export const admitPageGesture = async (
       ![...source[1]].some((id) => sameId(id, binding.controlId)) ||
       state.subject === undefined
     ) {
-      console.error("[flows] row form source or subject unavailable");
+      // The browser names the source table and the record: an expected refusal.
+      logRefusal("flows", "row form admission", "row_form_source_or_subject_unavailable");
       return false;
     }
     tableId = source[0];
@@ -113,7 +114,7 @@ export const admitPageGesture = async (
       const candidate = inputs.record_id;
       const parsed = recordIdSchema.safeParse(isRecord(candidate) ? candidate.recordId : candidate);
       if (!parsed.success) {
-        console.error("[flows] table row selection invalid");
+        logRefusal("flows", "table row admission", "row_selection_invalid");
         return false;
       }
       recordId = parsed.data;
@@ -159,7 +160,9 @@ export const admitPageGesture = async (
       ? undefined
       : await readPageSubjectInTransaction(bound.transaction, subject);
   if (subject !== undefined && held?.kind !== "read") {
-    console.error("[flows] page subject unavailable for control proof");
+    // A subject read that failed logged its own line, once; a subject the person may not read now
+    // is an expected refusal.
+    if (held?.kind === "refused") logRefusal("flows", "control proof", "page_subject_refused");
     return false;
   }
   const membership = await projectedTableMembershipRefusal(

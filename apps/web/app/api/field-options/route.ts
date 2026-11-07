@@ -120,8 +120,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         );
       case "reload":
         return privateResponse({ kind: "reload" }, 409);
+      // The request runner, or the catch that answered it, logged why, once.
       case "temporarily_unavailable":
-        logRefusal("field-options", "options page", "temporarily_unavailable");
         return privateResponse({ kind: "temporarily_unavailable" }, 503);
       default: {
         // A cause may name the fields involved after its code; those stay in the log only. A
