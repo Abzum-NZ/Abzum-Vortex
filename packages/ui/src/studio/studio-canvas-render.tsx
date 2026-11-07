@@ -4,6 +4,7 @@ import { Item, ItemContent, ItemDescription, ItemTitle } from "../components/ite
 import { Component, useMemo, type ReactElement, type ReactNode } from "react";
 import {
   placementWrapperGeometry,
+  puckSlotFieldOrder,
   releasesByRendererKey,
   withRepeatingSlots,
 } from "../puck-config";
@@ -615,7 +616,10 @@ export const studioCanvasConfig = (
     // (no defaults, no settings) beside one slot per content slot of the page's shell.
     root: {
       fields: {
-        ...Object.fromEntries(slots.map(([key, label]) => [key, { type: "slot", label }])),
+        // In Puck's slot field order, so the Outline lists the zones in the layout's order.
+        ...Object.fromEntries(
+          puckSlotFieldOrder(slots).map(([key, label]) => [key, { type: "slot", label }]),
+        ),
         vortex: studioVortexField,
       },
       render: (props: Parameters<typeof StudioCanvasRoot>[0]) => (

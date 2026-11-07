@@ -209,6 +209,8 @@ export function StudioOutlinePanel({
       : owner.children.find((child) => child.key === studioShownByFlowsKey(owner.key));
   return (
     <StudioPanelShell
+      title="Outline"
+      description="Every block on the open page, in order. Choose one to select it."
       hidden={hidden}
       search={
         pageOpen ? (
