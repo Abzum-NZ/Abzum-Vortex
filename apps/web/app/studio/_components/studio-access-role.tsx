@@ -317,7 +317,9 @@ export function StudioAccessRoleEditor({
           </div>
         ) : (
           <div className="flex min-w-0 items-center gap-2">
-            <h2 className="truncate text-xl font-semibold tracking-tight">{role.name}</h2>
+            <h2 className="min-w-0 text-xl font-semibold tracking-tight break-words">
+              {role.name}
+            </h2>
             {role.default_member === true && (
               <>
                 <Badge variant="outline">Default</Badge>

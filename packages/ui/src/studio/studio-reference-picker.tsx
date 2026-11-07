@@ -1,5 +1,5 @@
 "use client";
-import { useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   Combobox,
   ComboboxCollection,
@@ -14,6 +14,7 @@ import {
 } from "../components/combobox";
 import { InputGroup, InputGroupAddon } from "../components/input-group";
 import { Badge } from "../components/badge";
+import { Tooltip, TooltipContent, TooltipTrigger } from "../components/tooltip";
 import { Lock } from "lucide-react";
 
 export type StudioReferencePickerOption = Readonly<{
@@ -65,8 +66,28 @@ export function StudioReferencePicker({
   "aria-describedby"?: string | undefined;
   "aria-invalid"?: boolean | undefined;
 }>) {
+  // The trigger is named for the field it opens (its label or aria-label), as the link input names its own.
+  const [fieldName, setFieldName] = useState<string>();
   const [open, setOpen] = useState(false);
   const input = useRef<HTMLInputElement>(null);
+  const ariaLabel = accessibility["aria-label"];
+  useEffect(() => {
+    // Read from the field's own tree: a pane drawn into a host that is not on screen yet (a closed
+    // narrow sheet) has no `labels`, but its label sits beside it in the same tree.
+    const root = input.current?.getRootNode();
+    const element =
+      input.current?.labels?.[0] ??
+      (id !== undefined && (root instanceof Document || root instanceof Element)
+        ? root.querySelector(`label[for="${CSS.escape(id)}"]`)
+        : null);
+    const label = element?.textContent?.trim();
+    const name = ariaLabel ?? (label === "" ? undefined : label);
+    // A field with neither a label nor aria-label is the caller's fault: logged once, never named silently.
+    if (name === undefined)
+      console.error(`Reference picker ${id ?? ""} has no label or aria-label`);
+    setFieldName(name);
+  }, [ariaLabel, id]);
+  const choicesName = fieldName === undefined ? "Show choices" : `Show choices for ${fieldName}`;
   const [query, setSearchText] = useState("");
   const setQuery = (text: string): void => {
     setSearchText(text);
@@ -141,7 +162,10 @@ export function StudioReferencePicker({
           aria-invalid={accessibility["aria-invalid"] || !known}
         />
         <InputGroupAddon align="inline-end">
-          <ComboboxTrigger aria-label="Show choices" />
+          <Tooltip>
+            <TooltipTrigger render={<ComboboxTrigger aria-label={choicesName} />} />
+            <TooltipContent>{choicesName}</TooltipContent>
+          </Tooltip>
         </InputGroupAddon>
       </InputGroup>
       <ComboboxContent>

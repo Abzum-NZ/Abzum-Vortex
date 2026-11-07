@@ -91,6 +91,7 @@ export {
   WebMcpStatus,
 } from "./navigation/application-shell";
 export type {
+  ApplicationFrameCommands,
   ApplicationFrameTopBar,
   ApplicationShellRuntime,
   ApplicationSwitcherData,
