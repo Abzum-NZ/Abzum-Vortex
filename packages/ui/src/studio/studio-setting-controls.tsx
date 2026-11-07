@@ -442,7 +442,7 @@ function ListControl({
         items={items.map((item, index) => {
           const entryKey = keys.current[index]!;
           const heading = entryHeading(item, property.item, choices, identity?.key);
-          // A required setting of the entry that has no value says so on its own control.
+          // A required text of the entry that was cleared says so on its own control.
           const problems =
             item.kind !== "group"
               ? undefined
@@ -451,7 +451,10 @@ function ListControl({
                     ? []
                     : entryProperty.properties
                         .filter(
-                          (child) => child.required && !Object.hasOwn(item.properties, child.key),
+                          (child) =>
+                            child.kind === "text" &&
+                            child.required &&
+                            !Object.hasOwn(item.properties, child.key),
                         )
                         .map((child) => [child.key, `${child.label} needs a value.`]),
                 );
