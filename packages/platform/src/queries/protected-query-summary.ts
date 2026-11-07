@@ -129,10 +129,9 @@ export const summariseCommand = async (
   scope: SelectedOrganizationScope,
   command: ProtectedQuerySummaryCommand,
 ): Promise<ProtectedQuerySummaryResult> => {
-  if (scope.applicationRootId === undefined)
-    return refuseWithCause("request_invalid", "scope", "application_not_selected");
+  if (scope.applicationRootId === undefined) return refuseWithCause("request_invalid", "scope");
   const userRefusal = filterInputRefusal(command);
-  if (userRefusal !== undefined) return refuseWithCause(userRefusal, "filter", userRefusal);
+  if (userRefusal !== undefined) return refuseWithCause(userRefusal, "filter");
 
   const admitted = await admitQueryInputs(transaction, command);
   if (admitted.outcome === "refused") return admitted;
@@ -184,10 +183,9 @@ export const boardSummaryCommand = async (
   scope: SelectedOrganizationScope,
   command: ProtectedQueryBoardSummaryCommand,
 ): Promise<ProtectedQueryBoardSummaryResult> => {
-  if (scope.applicationRootId === undefined)
-    return refuseWithCause("request_invalid", "scope", "application_not_selected");
+  if (scope.applicationRootId === undefined) return refuseWithCause("request_invalid", "scope");
   const userRefusal = filterInputRefusal(command);
-  if (userRefusal !== undefined) return refuseWithCause(userRefusal, "filter", userRefusal);
+  if (userRefusal !== undefined) return refuseWithCause(userRefusal, "filter");
 
   const admitted = await admitQueryInputs(transaction, command);
   if (admitted.outcome === "refused") return admitted;
