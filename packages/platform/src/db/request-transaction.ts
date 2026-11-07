@@ -810,21 +810,36 @@ const createRuntimePostgresClient = (configuration: RuntimeDatabaseConfiguration
     onnotice: logDatabaseNotice,
   });
 
-const loadClient = (): Sql =>
-  createRuntimePostgresClient(parseRuntimeDatabaseConfiguration(process.env));
+// One runtime pool per process: a development server evaluates this module again for every route
+// bundle it compiles, and a pool held in a module variable would then open a second pool of up to
+// ten connections that nothing closes. The pool lives on the process global instead, keyed by every
+// configuration value its options are built from. A changed configuration starts ending the old
+// pool and makes a new one: transactions open on the old pool get five seconds to finish.
+const runtimePoolKey = Symbol.for("vortex.runtimeDatabasePool");
+type RuntimePoolHolder = Readonly<{ identity: string; client: Sql }>;
+type RuntimePoolGlobal = typeof globalThis & { [runtimePoolKey]?: RuntimePoolHolder };
 
-let client: Sql | undefined;
+const runtimeClient = (): Sql => {
+  const configuration = parseRuntimeDatabaseConfiguration(process.env);
+  const identity = JSON.stringify(configuration);
+  const scope = globalThis as RuntimePoolGlobal;
+  const held = scope[runtimePoolKey];
+  if (held?.identity === identity) return held.client;
+  if (held !== undefined) void held.client.end({ timeout: 5 });
+  const client = createRuntimePostgresClient(configuration);
+  scope[runtimePoolKey] = { identity, client };
+  return client;
+};
+
+const defaultRuntimeTransaction = async <Result>(
+  operation: (transaction: TransactionDriver) => Promise<Result>,
+) => createPostgresDriver(runtimeClient()).transaction(operation);
+
 const defaultRuntimeRunner = createRuntimeTransactionRunner({
-  transaction: async <Result>(operation: (transaction: TransactionDriver) => Promise<Result>) => {
-    client ??= loadClient();
-    return createPostgresDriver(client).transaction(operation);
-  },
+  transaction: defaultRuntimeTransaction,
 });
 const defaultResolvedRequestRunner = createResolvedRequestTransactionRunner({
-  transaction: async <Result>(operation: (transaction: TransactionDriver) => Promise<Result>) => {
-    client ??= loadClient();
-    return createPostgresDriver(client).transaction(operation);
-  },
+  transaction: defaultRuntimeTransaction,
 });
 
 /** Runs one operation in the current runtime transaction, or in a new one when none is owned. */
