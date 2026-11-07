@@ -137,7 +137,8 @@ type ProtectedOperationFailure =
   | Readonly<{ outcome: "refused" | "validation"; diagnostic?: FlowRefusalFeedback }>
   | Readonly<{ outcome: "conflict"; diagnostic?: FlowRefusalFeedback }>
   | Readonly<{ outcome: "uncertain" }>
-  | Readonly<{ outcome: "failed" }>;
+  /** `logged`: the operation's port already logged this failure once, at its cause. */
+  | Readonly<{ outcome: "failed"; logged?: true }>;
 
 type ProtectedOperationExecution =
   | Readonly<{
@@ -556,8 +557,10 @@ const runTenantOrganizationCreation = async (
             outcome: result.code === "invalid_command" ? "validation" : "refused",
             diagnostic: flowRefusalFeedbackSchema.parse({ code: result.code }),
           } as const;
-        if (result.code === "operation_unavailable")
+        if (result.code === "operation_unavailable") {
+          console.error("[protected-operation] create organisation failed: operation_unavailable");
           return { kind: "temporarily_unavailable" } as const;
+        }
         return { kind: "unavailable" } as const;
       }
       return {
@@ -1400,10 +1403,9 @@ export const createProtectedOperationExecutor = (
           };
         return refuse("operation_unavailable");
       }
-      if (result.kind === "temporarily_unavailable") {
-        logRefusal("protected-operation", operationName(), "operation_temporarily_unavailable");
-        return { outcome: "failed" };
-      }
+      // Every port answers `temporarily_unavailable` only after logging the fault once at its
+      // cause (the request runner, or the port itself), so the executor and the flow add no line.
+      if (result.kind === "temporarily_unavailable") return { outcome: "failed", logged: true };
       const outputs = declaredOutputs(registered.descriptor, result.value);
       if (outputs === undefined) {
         logRefusal("protected-operation", operationName(), "declared_outputs_missing");
