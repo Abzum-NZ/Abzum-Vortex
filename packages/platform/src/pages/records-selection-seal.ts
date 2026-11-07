@@ -2,6 +2,7 @@ import "server-only";
 
 import { z } from "zod";
 import type { IdentitySession, OrganizationSelectionCandidate } from "../access/identity-access";
+import { logRefusal } from "../access/request-failure";
 import { jsonValueSchema, type JsonValue } from "../catalogue/common";
 import {
   applicationRootIdSchema,
@@ -186,7 +187,8 @@ export const recordsSelectionPlacement = (
 /**
  * Opens a sealed descriptor for the person it was sealed for, in the same organisation,
  * application and installed release, for the same placement, within its lifetime. Anything else
- * (a tampered or foreign token, another person, a newer release) is refused, with the cause logged.
+ * (a tampered or foreign token, another person, a newer release) is refused, with the cause logged
+ * once at info: an expected refusal, so the caller adds no line of its own.
  */
 export const openRecordsSelection = (
   token: string,
@@ -196,7 +198,7 @@ export const openRecordsSelection = (
   now: () => number = Date.now,
 ): RecordsSelectionDescriptor | undefined => {
   const refuse = (cause: string): undefined => {
-    console.error(`[records-selection] descriptor refused cause=${cause}`);
+    logRefusal("records-selection", "descriptor", cause);
     return undefined;
   };
   const opening = openToken(key, purpose, token);

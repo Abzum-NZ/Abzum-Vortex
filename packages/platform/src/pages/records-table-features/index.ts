@@ -8,6 +8,7 @@ import type { ConditionalFormattingProjection } from "../../definition/applicati
 import type { RecordsTableInlineEditor } from "../../definition/application-composition/records-table-features/projections/inline-edit";
 import type { z } from "zod";
 import { logRefusal } from "../../access/request-failure";
+import { isInstallationRequired } from "../../queries/protected-query-contracts";
 import type {
   RecordsTableFeatureProjection,
   recordsTableFeatureProjectionSchema,
@@ -47,6 +48,7 @@ export type RecordsTableRequestPart =
   | "cursor"
   | "bulk_action"
   | "batch_edit"
+  | "export"
   | typeof recordsTableInlineEditEvent
   | typeof recordsTableRowEditEvent
   | "row_action"
@@ -75,14 +77,16 @@ export const recordsTableRequestRefusal = (
 const recordsTableFaultReasons: ReadonlySet<string> = new Set([
   "placement_metadata_unreadable",
   "query_module_missing",
+  // Every pasted title was resolved or refused before this check: one left over is a defect.
+  "link_title_unresolved",
 ]);
 
 /**
  * The reasons raised only after the cause was logged where it happened: the request runner logs
  * every answer that is not available (`installation_unavailable`, `current_access_unavailable`),
  * and `recordsTableContractOrLog` logs the unreadable setting at error (`contract_unreadable`,
- * `placement_contract_unreadable`). The refusal still carries its reason to the caller; every
- * logger of a refusal reason skips these, so no second line is written for one.
+ * `placement_contract_unreadable`). The refusal still carries its reason to the caller; the one
+ * Records table logger below skips these, so no second line is written for one.
  */
 const recordsTableReasonsLoggedAtSource: ReadonlySet<string> = new Set([
   "installation_unavailable",
@@ -90,9 +94,6 @@ const recordsTableReasonsLoggedAtSource: ReadonlySet<string> = new Set([
   "contract_unreadable",
   "placement_contract_unreadable",
 ]);
-
-export const recordsTableReasonLoggedAtSource = (reason: string): boolean =>
-  recordsTableReasonsLoggedAtSource.has(reason);
 
 /**
  * Logs a refused Records table request once, with its part and reason; the response stays neutral.
@@ -103,12 +104,26 @@ export const logRecordsTableRequestRefusal = (
   refusal: RecordsTableRequestRefusal,
   where: string,
 ): void => {
-  if (recordsTableReasonLoggedAtSource(refusal.reason)) return;
+  if (recordsTableReasonsLoggedAtSource.has(refusal.reason)) return;
   if (recordsTableFaultReasons.has(refusal.reason))
     console.error(
       `[records-table] request failed where=${where} part=${refusal.part} reason=${refusal.reason}`,
     );
   else logRefusal("records-table", `request where=${where} part=${refusal.part}`, refusal.reason);
+};
+
+/**
+ * Logs the protected query's own refusal of one read of a Records table, once at info, except a
+ * preview that needs the application installed: the protected query already logged that one.
+ */
+export const logRecordsTableQueryRefusal = (
+  part: RecordsTableRequestPart,
+  read: string,
+  reasonCode: string,
+  where: string,
+): void => {
+  if (!isInstallationRequired(reasonCode))
+    logRecordsTableRequestRefusal(recordsTableRequestRefusal(part, `${read} ${reasonCode}`), where);
 };
 
 const sameField = (left: string, right: string): boolean =>

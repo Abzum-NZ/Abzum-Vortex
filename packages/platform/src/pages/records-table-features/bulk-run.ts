@@ -32,7 +32,12 @@ import {
   type RecordsTableCommandAddress,
   type RecordsTablePlacement,
 } from "./placement";
-import { recordsTableReasonLoggedAtSource } from ".";
+import {
+  logRecordsTableQueryRefusal,
+  logRecordsTableRequestRefusal,
+  recordsTableRequestRefusal,
+  type RecordsTableRequestRefusal,
+} from ".";
 
 /**
  * The count behind "Select all matching records". It re-reads the installed placement and decides
@@ -59,9 +64,12 @@ export const enumerationScanLimitedCeiling = Math.ceil(
   recordsSelectionCountCeiling / tableReadCandidatesPerRequest,
 );
 
-const refuse = (cause: string): undefined => {
-  if (recordsTableReasonLoggedAtSource(cause)) return undefined;
-  console.error(`[records-table] bulk request refused cause=${cause}`);
+/** One line at the level its cause earns; none for a cause logged at source. */
+const refuse = (cause: string | RecordsTableRequestRefusal): undefined => {
+  logRecordsTableRequestRefusal(
+    typeof cause === "string" ? recordsTableRequestRefusal("bulk_action", cause) : cause,
+    "bulk_request",
+  );
   return undefined;
 };
 
@@ -103,7 +111,7 @@ export const matchingQueryCommand = (
     fieldDateTypes: fieldDateTypesOf(placement.module),
     fieldLinkTypes: fieldLinkTypesOf(placement.module),
   });
-  if (built.kind === "refused") return refuse(`command_${built.part}_${built.reason}`);
+  if (built.kind === "refused") return refuse(built);
   return built;
 };
 
@@ -147,6 +155,7 @@ export const createRecordsTableBulkService = (dependencies: RecordsTableBulkDepe
       pageId: address.pageId,
       placementId,
     });
+    // The descriptor's own refusal was logged where it was opened.
     if (descriptor === undefined) return undefined;
     if (
       !sameId(descriptor.moduleRootId, String(placement.module.rootId)) ||
@@ -191,7 +200,12 @@ export const createRecordsTableBulkService = (dependencies: RecordsTableBulkDepe
       if (summary.value.outcome === "completed")
         return { kind: "counted", count: summary.value.totalRowCount };
       if (summary.value.reasonCode === "dataset_limit_exceeded") return { kind: "too_many" };
-      console.error(`[records-table] selection count refused code=${summary.value.reasonCode}`);
+      logRecordsTableQueryRefusal(
+        "bulk_action",
+        "count_refused",
+        summary.value.reasonCode,
+        "bulk_request",
+      );
       return { kind: "refused", reason: "not_available" };
     },
   });

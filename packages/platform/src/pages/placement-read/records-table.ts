@@ -426,17 +426,13 @@ export const readRecordsTable = async (
   );
   // A shared link opened by another account, or after an access, release, sort, filter or column
   // change, no longer matches its sealed cursor (invalid or stale): it opens the first page
-  // without an error.
+  // without an error. The resolver logged the refused position once.
   if (
     fromAddress &&
     resolved.kind === "refused" &&
     (resolved.reasonCode === "cursor_invalid" || resolved.reasonCode === "cursor_stale")
-  ) {
-    console.warn(
-      `[page] table page address reopened at page one: application=${address.application.key} page=${address.pageKey} placement=${placementId} cause=${resolved.reasonCode}`,
-    );
+  )
     resolved = await readPage(undefined);
-  }
   // The table resolver (or the request runner under it) logged every answer that is not a page, once.
   if (resolved.kind === "unavailable") {
     data[placementId] = { status: "error" };

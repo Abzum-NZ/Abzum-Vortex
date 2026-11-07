@@ -58,7 +58,12 @@ import {
   type RecordsTableCommandAddress,
   type RecordsTablePlacement,
 } from "./placement";
-import { recordsTableReasonLoggedAtSource } from ".";
+import {
+  logRecordsTableQueryRefusal,
+  logRecordsTableRequestRefusal,
+  recordsTableRequestRefusal,
+  type RecordsTableRequestRefusal,
+} from ".";
 import { decideRecordTypeExport } from "./record-type-access";
 import { personalFormattingAllowed } from "./conditional-formatting";
 import type { InstalledRuntimeContext } from "../../definition/installed-runtime-context";
@@ -119,10 +124,11 @@ export const createRecordsTableExportService = (dependencies: RecordsTableExport
   const queries = createProtectedQueryService(dependencies);
   const bulk = createRecordsTableBulkService(dependencies);
 
-  const refuse = (cause: string, detail?: string): undefined => {
-    if (recordsTableReasonLoggedAtSource(cause)) return undefined;
-    console.error(
-      `[records-export] request refused cause=${cause}${detail === undefined ? "" : ` ${detail}`}`,
+  /** One line at the level its cause earns; none for a cause logged at source. */
+  const refuse = (cause: string | RecordsTableRequestRefusal): undefined => {
+    logRecordsTableRequestRefusal(
+      typeof cause === "string" ? recordsTableRequestRefusal("export", cause) : cause,
+      "export",
     );
     return undefined;
   };
@@ -262,7 +268,8 @@ export const createRecordsTableExportService = (dependencies: RecordsTableExport
       pageId: address.pageId,
       placementId: request.placementId,
     });
-    if (descriptor === undefined) return refuse("descriptor_unopened");
+    // The descriptor's own refusal was logged where it was opened.
+    if (descriptor === undefined) return undefined;
     if (
       !sameId(descriptor.moduleRootId, String(placement.module.rootId)) ||
       !sameId(descriptor.queryId, String(placement.query.queryId))
@@ -354,10 +361,8 @@ export const createRecordsTableExportService = (dependencies: RecordsTableExport
           ),
         };
       });
-      if (decided.kind !== "available") {
-        refuse(`access_${decided.kind}`);
-        return unavailable;
-      }
+      // The request runner logged an answer that is not available, once.
+      if (decided.kind !== "available") return unavailable;
       if (decided.value.kind === "refused") {
         refuse(decided.value.reason);
         await audit(session, address, recordTypeId, [], "refused");
@@ -450,7 +455,7 @@ export const createRecordsTableExportService = (dependencies: RecordsTableExport
         fieldLinkTypes: fieldLinkTypesOf(placement.module),
       });
       if (built.kind === "refused") {
-        refuse(`command_${built.part}_${built.reason}`);
+        refuse(built);
         await audit(session, address, recordTypeId, columnIds, "refused");
         return notAvailable;
       }
@@ -479,8 +484,8 @@ export const createRecordsTableExportService = (dependencies: RecordsTableExport
           token: request.selection.token,
         });
         if (counted.kind === "unavailable") return unavailable;
+        // The count logged its own refusal, once.
         if (counted.kind === "refused") {
-          refuse("count_refused");
           await audit(session, address, recordTypeId, columnIds, "refused");
           return notAvailable;
         }
@@ -501,8 +506,15 @@ export const createRecordsTableExportService = (dependencies: RecordsTableExport
             pageSize: batch.length,
             exactRecordIds: batch,
           });
-          if (read.kind !== "available" || read.value.outcome !== "completed") {
-            refuse("exclusion_unreadable");
+          // The query service logged an answer that is not available; its own refusal is logged here.
+          if (read.kind !== "available") return unavailable;
+          if (read.value.outcome === "refused") {
+            logRecordsTableQueryRefusal(
+              "export",
+              "exclusion_refused",
+              read.value.reasonCode,
+              "export",
+            );
             return unavailable;
           }
           stillExcluded += read.value.rows.length;
@@ -510,7 +522,7 @@ export const createRecordsTableExportService = (dependencies: RecordsTableExport
         expected = Math.max(0, counted.count - stillExcluded);
       }
       if (expected > maxRows) {
-        refuse("selection_over_row_limit", `expected=${expected} limit=${maxRows}`);
+        refuse(`selection_over_row_limit expected=${expected} limit=${maxRows}`);
         await audit(session, address, recordTypeId, columnIds, "refused");
         return { kind: "refused", reason: "too_many", limit: maxRows, count: expected };
       }
