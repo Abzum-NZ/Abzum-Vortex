@@ -593,6 +593,9 @@ export type ApplicationFrameTopBar = Exclude<
   { kind: "default" }
 >["presentation"]["topBar"];
 
+/** A surface's own header commands, from one list: as the bar's icon buttons and as the narrow bar's menu items. */
+export type ApplicationFrameCommands = Readonly<{ bar: ReactNode; menu: ReactNode }>;
+
 const compactHeaderQuery = "(max-width: 767px)";
 const subscribeCompactHeader = (notify: () => void) => {
   const list = window.matchMedia(compactHeaderQuery);
@@ -611,9 +614,8 @@ const useCompactHeader = (): boolean =>
  * The shared application frame top bar: breadcrumb, organisation and application switchers,
  * appearance control and account menu, in the one height and styling, on one row at every width.
  * A surface that has its own commands (Studio's editor) gives `status`, which stays on the bar,
- * and its commands twice from one list: `actions` (the bar's icon buttons) and `menuActions`
- * (the same commands as menu items), of which the narrow bar draws the second inside the More
- * menu beside the agent tools.
+ * and `commands` drawn two ways from one list: `bar` (icon buttons) and `menu` (the same commands
+ * as menu items), which the narrow bar draws inside the More menu beside the agent tools.
  */
 export function ApplicationFrameHeader({
   shellName,
@@ -621,20 +623,19 @@ export function ApplicationFrameHeader({
   collapsibleSidebar = false,
   runtime,
   status,
-  actions,
-  menuActions,
+  commands,
 }: Readonly<{
   shellName: string;
   topBar: ApplicationFrameTopBar;
   collapsibleSidebar?: boolean;
   runtime: ApplicationShellRuntime | undefined;
   status?: ReactNode;
-  actions?: ReactNode;
-  menuActions?: ReactNode;
+  commands?: ApplicationFrameCommands | undefined;
 }>): ReactElement {
   const compact = useCompactHeader();
   const webMcp = runtime?.webMcp;
-  const more = compact && (menuActions !== undefined || webMcp !== undefined);
+  const webMcpWords = webMcp === undefined ? undefined : describeWebMcp(webMcp);
+  const more = compact && (commands !== undefined || webMcp !== undefined);
   return (
     <header className="sticky top-0 z-20 flex h-16 w-full shrink-0 flex-nowrap items-center gap-x-[var(--vortex-space-sm)] bg-background/95 px-[var(--vortex-space-md)] backdrop-blur supports-[backdrop-filter]:bg-background/80">
       {/* The first stop for keyboard users: past the header and the navigation to the page. */}
@@ -649,15 +650,15 @@ export function ApplicationFrameHeader({
       {topBar.breadcrumbs ? <Breadcrumbs shellName={shellName} runtime={runtime} /> : null}
       <div className="ms-auto flex min-w-0 items-center justify-end gap-[var(--vortex-space-xs)]">
         {status}
-        {compact ? null : actions}
-        {webMcp !== undefined && compact ? (
+        {compact ? null : commands?.bar}
+        {webMcpWords !== undefined && compact ? (
           <span
             role="status"
             aria-live="polite"
-            data-vortex-webmcp={describeWebMcp(webMcp).state}
+            data-vortex-webmcp={webMcpWords.state}
             className="sr-only"
           >
-            {describeWebMcp(webMcp).label}
+            {webMcpWords.label}
           </span>
         ) : null}
         {more ? (
@@ -684,8 +685,8 @@ export function ApplicationFrameHeader({
               <TooltipContent>More actions</TooltipContent>
             </Tooltip>
             <DropdownMenuContent align="end" className="min-w-56">
-              {menuActions}
-              {menuActions !== undefined && webMcp !== undefined ? <DropdownMenuSeparator /> : null}
+              {commands?.menu}
+              {commands !== undefined && webMcp !== undefined ? <DropdownMenuSeparator /> : null}
               {webMcp === undefined ? null : <WebMcpMenuItems runtime={webMcp} />}
             </DropdownMenuContent>
           </DropdownMenu>

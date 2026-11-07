@@ -70,11 +70,15 @@ export function StudioReferencePicker({
   const [fieldName, setFieldName] = useState<string>();
   const [open, setOpen] = useState(false);
   const input = useRef<HTMLInputElement>(null);
+  const ariaLabel = accessibility["aria-label"];
   useEffect(() => {
-    setFieldName(
-      accessibility["aria-label"] ?? input.current?.labels?.[0]?.textContent?.trim() ?? undefined,
-    );
-  }, [accessibility]);
+    const label = input.current?.labels?.[0]?.textContent?.trim();
+    const name = ariaLabel ?? (label === "" ? undefined : label);
+    // A field with neither a label nor aria-label is the caller's fault: logged once, never named silently.
+    if (name === undefined)
+      console.error(`Reference picker ${id ?? ""} has no label or aria-label`);
+    setFieldName(name);
+  }, [ariaLabel, id]);
   const choicesName = fieldName === undefined ? "Show choices" : `Show choices for ${fieldName}`;
   const [query, setSearchText] = useState("");
   const setQuery = (text: string): void => {

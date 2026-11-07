@@ -6,6 +6,7 @@ import {
   ApplicationFrameHeader,
   ApplicationSwitcherContext,
   type ApplicationAccount,
+  type ApplicationFrameCommands,
   type ApplicationFrameTopBar,
   type ApplicationShellRuntime,
   type ApplicationSwitcherSource,
@@ -43,13 +44,12 @@ export type StudioFrameDefinition = Readonly<{
   studioHref: string;
 }>;
 
-/** The shared application frame top bar for any Studio surface; `actions` are its own commands. */
+/** The shared application frame top bar for any Studio surface; `commands` are its own. */
 export function StudioFrameBar({
   frame,
   pageName,
   status,
-  actions,
-  menuActions,
+  commands,
   agentTools,
 }: Readonly<{
   frame: StudioFrameDefinition;
@@ -57,8 +57,7 @@ export function StudioFrameBar({
   /** Stays on the bar at every width. */
   status?: ReactNode;
   /** The surface's commands as icon buttons, and the same commands as menu items for the narrow bar. */
-  actions?: ReactNode;
-  menuActions?: ReactNode;
+  commands?: ApplicationFrameCommands;
   /** The browser agent tools' state, shown where every application's header shows it. */
   agentTools?: ApplicationWebMcpRuntime | undefined;
 }>) {
@@ -103,8 +102,7 @@ export function StudioFrameBar({
           topBar={frame.topBar}
           runtime={runtime}
           status={status}
-          actions={actions}
-          menuActions={menuActions}
+          commands={commands}
         />
       </ApplicationSwitcherContext.Provider>
     </ApplicationAccountActionsProvider>
@@ -351,8 +349,10 @@ export function StudioHeader({
       frame={frame}
       pageName={applicationName}
       status={saveState}
-      actions={<StudioHeaderButtons {...commands} />}
-      menuActions={<StudioHeaderMenuItems {...commands} />}
+      commands={{
+        bar: <StudioHeaderButtons {...commands} />,
+        menu: <StudioHeaderMenuItems {...commands} />,
+      }}
       agentTools={agentTools}
     />
   );
