@@ -1,5 +1,6 @@
 import type { Data, PuckAction } from "@puckeditor/core";
 import {
+  sameCompositionValue,
   StoredCompositionRefusal,
   storedPageDataFromPuck,
   storedShellReservations,
@@ -14,12 +15,7 @@ import {
   type StudioSettingsEdit,
 } from "@vortex/platform/schema";
 import type { Breakpoint } from "../definition-error";
-import {
-  pageDataJson,
-  puckZoneItems,
-  withoutEmptyPuckZones,
-  type StudioPuckLocate,
-} from "./studio-canvas-data";
+import { puckZoneItems, withoutEmptyPuckZones, type StudioPuckLocate } from "./studio-canvas-data";
 import { studioCrossSlotReason, studioScreenOfBreakpoint } from "./studio-canvas-screen";
 
 /** The Puck actions that change the page's data; Studio's classifier reads these, in order. */
@@ -159,7 +155,7 @@ export const classifyCanvasChange = ({
         // A layout keeps its content slots empty: they hold the blocks of its pages.
         shell === undefined ? undefined : storedShellReservations(shell),
       );
-      if (pageDataJson(data) === pageDataJson(before)) return { kind: "unchanged" };
+      if (sameCompositionValue(data, before, true)) return { kind: "unchanged" };
       const [first] = actions;
       const duplicated =
         first?.type === "duplicate" ? itemAt(first.sourceZone, first.sourceIndex) : undefined;

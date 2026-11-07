@@ -105,7 +105,7 @@ export const addStudioFlowShownForm = (
     placeItem(catalogue, source, found.place, found.place.region.zone.items.length, item);
   } catch (error) {
     if (!(error instanceof StoredCompositionRefusal)) throw error;
-    console.error(
+    console.info(
       `[studio] the form for a flow step could not be added part=${error.location.join(".")}: ${error.reason}`,
     );
     return { ok: false, reason: `The form can't go on that page. ${error.message}.` };

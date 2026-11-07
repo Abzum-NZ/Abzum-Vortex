@@ -6,6 +6,7 @@ import {
   readSourceItem,
   sourceItemTree,
   releaseSettingDeclarations,
+  sameCompositionValue,
   sourcePageZones,
   storedItemRelease,
   validateStoredZone,
@@ -14,7 +15,6 @@ import {
   type SourceItem,
   type SourceZonedData,
   type StoredReservations,
-  type SourcePageZone,
   isStudioDraftSnapshot,
   type StudioCompositionDestination,
   slotDeclaration,
@@ -22,7 +22,6 @@ import {
 
 /** One compiled zone of the page (a content slot, or the default zone): its items, exactly as the published definition holds them. */
 export type StudioCanvasCompiledSlot = readonly CompiledItem[];
-type StudioCanvasSourceSlot = SourcePageZone;
 export type StudioCanvasCompiledSettings = Readonly<
   Record<string, Readonly<Record<string, unknown>>>
 >;
@@ -327,18 +326,6 @@ export const withoutEmptyPuckZones = (candidate: Data): Data => {
 };
 
 /**
- * The canonical form of an authored zone for comparison. A zone with no responsive order carries
- * `order: undefined`, and optional item metadata may be absent; JSON drops both, so equal zones
- * compare equal and canonicalJson never sees an undefined property.
- */
-const zoneJson = (zone: StudioCanvasSourceSlot): string =>
-  canonicalJson(JSON.parse(JSON.stringify(zone)) as unknown);
-
-/** A page's (or guided step's) data as canonical text, to compare two of them. */
-export const pageDataJson = (data: SourceZonedData): string =>
-  canonicalJson(JSON.parse(JSON.stringify(data)) as unknown);
-
-/**
  * Why a page is not editable on the canvas: the stored data of one of its zones does not pass the
  * stored composition check, or its compiled version does not match it. Such a page is shown
  * read-only rather than risking a silent change to the definition.
@@ -358,7 +345,7 @@ export const storedDataProblem = (
         validateStoredZone(catalogue, zone, reservations);
         continue;
       }
-      if (zoneJson(validateStoredZone(catalogue, zone, reservations)) !== zoneJson(zone))
+      if (!sameCompositionValue(validateStoredZone(catalogue, zone, reservations), zone))
         return "STUDIO_CANVAS_STORED_DATA_MISMATCH: the stored content reads back differently";
     }
     return undefined;
