@@ -17,6 +17,9 @@ import { humanOrganizationRequests } from "../../../_lib/server-composition";
 
 export const dynamic = "force-dynamic";
 
+/** A refusal here says what the editor address says for the same person: their account lacks the permission. */
+const refused = { kind: "refused", reason: "permission_missing" } as const;
+
 /**
  * One organisation's theme: the editor for the selection every application of the organisation
  * follows where it chose nothing of its own, and Studio draws with.
@@ -46,7 +49,7 @@ export default async function StudioOrganizationThemePage({
     return (
       <StudioUnavailable
         subject="The organisation theme"
-        result={studio}
+        result={studio.kind === "refused" ? refused : studio}
         organizationId={organizationId}
       />
     );
@@ -56,7 +59,7 @@ export default async function StudioOrganizationThemePage({
   const unavailable = (kind: "unavailable" | "refused" | "temporarily_unavailable") => (
     <StudioUnavailable
       subject="The organisation theme"
-      result={{ kind: kind === "unavailable" ? "refused" : kind }}
+      result={kind === "temporarily_unavailable" ? { kind } : refused}
       organizationId={organizationId}
     />
   );
