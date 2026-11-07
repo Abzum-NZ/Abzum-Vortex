@@ -17,6 +17,7 @@ import { Spinner } from "@vortex/ui/components/spinner";
 import { Button } from "@vortex/ui/components/button";
 import { Separator } from "@vortex/ui/components/separator";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@vortex/ui/components/tooltip";
+import { Reasoned } from "@vortex/ui/components/reasoned";
 import { Kbd } from "@vortex/ui/components/kbd";
 import type { StudioInstallControl } from "./use-studio-releases-tab";
 import { signOut } from "../../auth/actions";
@@ -37,20 +38,26 @@ export type StudioFrameDefinition = Readonly<{
   studioHref: string;
 }>;
 
+/**
+ * One icon command. Unavailable, it stays the focusable, named button (`Reasoned`: aria-disabled,
+ * described by the reason, activation swallowed), so focus never leaves it and it says why.
+ */
 function IconAction({
   tip,
   shortcut,
-  disabled,
+  disabledReason,
   ...props
 }: ComponentProps<typeof Button> & {
   tip: string;
   shortcut?: string;
+  /** Why the command cannot be used right now; absent when it can. */
+  disabledReason?: string | undefined;
 }) {
+  const button = <Button {...props} />;
+  if (disabledReason !== undefined) return <Reasoned reason={disabledReason}>{button}</Reasoned>;
   return (
     <Tooltip>
-      <TooltipTrigger render={<span className="inline-flex" tabIndex={disabled ? 0 : undefined} />}>
-        <Button disabled={disabled} {...props} />
-      </TooltipTrigger>
+      <TooltipTrigger render={button} />
       <TooltipContent>
         {tip}
         {shortcut !== undefined && <Kbd>{shortcut}</Kbd>}
@@ -169,6 +176,7 @@ const StudioHeaderCommands = memo(function StudioHeaderCommands({
     <>
       <IconAction
         tip="Application settings"
+        id="studio-application-settings"
         type="button"
         variant="ghost"
         size="icon-sm"
@@ -178,37 +186,39 @@ const StudioHeaderCommands = memo(function StudioHeaderCommands({
         <Icon name="sliders-horizontal" />
       </IconAction>
       <IconAction
-        tip={
-          undoDisabled
-            ? "Resolve the blocked draft before undoing"
-            : canUndo
-              ? "Undo"
-              : "No changes to undo"
-        }
+        tip="Undo"
+        id="studio-undo"
         shortcut="Ctrl Z"
         type="button"
         variant="ghost"
         size="icon-sm"
         aria-label="Undo"
-        disabled={!canUndo || undoDisabled}
+        disabledReason={
+          undoDisabled
+            ? "Resolve the blocked draft before undoing"
+            : canUndo
+              ? undefined
+              : "No changes to undo"
+        }
         onClick={onUndo}
       >
         <Icon name="undo" />
       </IconAction>
       <IconAction
-        tip={
-          undoDisabled
-            ? "Resolve the blocked draft before redoing"
-            : canRedo
-              ? "Redo"
-              : "No changes to redo"
-        }
+        tip="Redo"
+        id="studio-redo"
         shortcut="Ctrl Shift Z"
         type="button"
         variant="ghost"
         size="icon-sm"
         aria-label="Redo"
-        disabled={!canRedo || undoDisabled}
+        disabledReason={
+          undoDisabled
+            ? "Resolve the blocked draft before redoing"
+            : canRedo
+              ? undefined
+              : "No changes to redo"
+        }
         onClick={onRedo}
       >
         <Icon name="redo" />
@@ -237,41 +247,47 @@ const StudioHeaderCommands = memo(function StudioHeaderCommands({
           aria-label={
             install === "install" ? "Install in this organisation" : "Upgrade this organisation"
           }
+          id="studio-install"
           aria-busy={installPending}
-          disabled={installPending}
+          disabledReason={installPending ? "Preparing the install" : undefined}
           onClick={onInstall}
         >
           {installPending ? <Spinner /> : <Icon name="package-plus" />}
         </IconAction>
       ) : null}
       <IconAction
-        tip={
-          previewDisabled
-            ? "Resolve the blocked draft before previewing"
-            : "Run the saved draft in a new tab"
-        }
+        tip="Run the saved draft in a new tab"
+        id="studio-preview"
         type="button"
         variant="ghost"
         size="icon-sm"
         aria-label="Preview"
         aria-busy={previewPending}
-        disabled={previewDisabled || previewPending}
+        disabledReason={
+          previewDisabled
+            ? "Resolve the blocked draft before previewing"
+            : previewPending
+              ? "Preparing the preview"
+              : undefined
+        }
         onClick={onPreview}
       >
         {previewPending ? <Spinner /> : <Icon name="eye" />}
       </IconAction>
       <IconAction
-        tip={
-          publishDisabled
-            ? "Resolve the blocked draft before publishing"
-            : "Publish the saved draft as a new version"
-        }
+        tip="Publish the saved draft as a new version"
         id="studio-publish"
         type="button"
         size="icon-sm"
         aria-label="Publish"
         aria-busy={publishPending}
-        disabled={publishDisabled || publishPending}
+        disabledReason={
+          publishDisabled
+            ? "Resolve the blocked draft before publishing"
+            : publishPending
+              ? "Preparing the publish"
+              : undefined
+        }
         onClick={onPublish}
       >
         {publishPending ? <Spinner /> : <Icon name="upload" />}
