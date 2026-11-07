@@ -50,9 +50,7 @@ export type InstallFacts = Readonly<{
   state: SetupState;
 }>;
 
-const definitionReader = (
-  _facts: Omit<InstallFacts, "releases">,
-): PermissionRegistryDefinitionSetReader => ({
+const definitionReader: PermissionRegistryDefinitionSetReader = {
   read: (context, command, purpose) =>
     inSystemTransaction(context, (transaction) =>
       createDatabaseSystemApplicationBoundReleaseSetService(
@@ -60,7 +58,7 @@ const definitionReader = (
         transaction,
       ).read(context, command, purpose),
     ),
-});
+};
 
 export const coordinatorDependencies = (
   facts: Omit<InstallFacts, "releases">,
@@ -69,7 +67,7 @@ export const coordinatorDependencies = (
     identityAuthorityId: facts.identityAuthorityId,
   }),
   definitionSystemContext: () => mintSystemContext(facts.system),
-  definitionReader: definitionReader(facts),
+  definitionReader,
   resolveModuleContributions,
   builderAuthority: (_transaction, scope) => developmentBuilderAuthority(scope.organizationId),
   containsCustomComponents: releaseSetContainsCustomComponents,

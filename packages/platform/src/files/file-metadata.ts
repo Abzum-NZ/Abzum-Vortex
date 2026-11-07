@@ -20,6 +20,7 @@ export const sanitizeFileDisplayName = (rawFilename: string, fallbackExtension =
   const basename = rawFilename.split(/[/\\]/).pop() ?? rawFilename;
 
   const sanitized = basename
+    // eslint-disable-next-line no-control-regex -- Removes control characters from a user supplied file name.
     .replace(/[\u0000-\u001F\u007F-\u009F]/g, "")
     .replace(/[<>:"/\\|?*]/g, "_")
     .trim();

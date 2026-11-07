@@ -45,7 +45,7 @@ import {
   faultRequestFailure,
   refusedRequestFailure,
   type RequestFailureClass,
-} from "./request-failure";
+} from "./request-failure-table";
 
 type ResolvedRequestTransactionRunner = <Scope, Result>(
   resolve: (transaction: RequestDatabaseTransaction) => Promise<ResolvedRequestContext<Scope>>,

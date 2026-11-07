@@ -12,6 +12,13 @@ import {
 } from "./builder-authority";
 import { markRequestFailureLogged } from "../access/request-failure-mark";
 import {
+  fault,
+  ownFailureClass,
+  refusal,
+  retryable,
+  type RequestFailureClass,
+} from "../access/request-failure-table";
+import {
   LiveContextRefused,
   readLiveHumanContext,
   type LiveHumanContext,
@@ -85,6 +92,16 @@ export class InstallationProblem extends Error {
     super(`${problem.kind}: ${detail}`, options);
     this.name = "InstallationProblem";
     this.code = detail;
+  }
+
+  /** A named state or a refusal is an answer, a moved state is tried again, anything else a fault. */
+  [ownFailureClass](): RequestFailureClass {
+    const problem = this.problem;
+    if (problem.kind === "authentication_required")
+      return refusal("recent_authentication_required");
+    if (problem.kind === "multi_factor_required") return refusal("multi_factor_required");
+    if (problem.unavailableReason !== undefined || problem.kind === "refused") return refusal();
+    return problem.kind === "conflict" ? retryable("temporarily unavailable") : fault();
   }
 }
 

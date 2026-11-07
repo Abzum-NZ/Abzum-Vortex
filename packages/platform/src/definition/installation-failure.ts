@@ -2,7 +2,7 @@ import "server-only";
 
 import { requestFailureLogged } from "../access/request-failure-mark";
 import { describeFailure } from "../catalogue/runtime-primitives";
-import { classifyRequestFailure } from "../access/request-failure";
+import { classifyRequestFailure } from "../access/request-failure-table";
 import { InstallationProblem, type InstallationProblemShape } from "./installation-authority";
 import { DefinitionError, classifyDatabaseError } from "./definition-error";
 
