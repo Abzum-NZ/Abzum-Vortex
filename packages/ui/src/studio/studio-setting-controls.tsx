@@ -395,7 +395,7 @@ function ListControl({
       .replace(/[̀-ͯ]/g, "")
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, "_")
-      .replace(/^_+|_+$/g, "") || "option";
+      .replace(/^_+|_+$/g, "") || itemName.replace(/[^a-z0-9]+/g, "_");
   // An identity starts with a letter and does not end on a separator, wherever it is cut.
   const base = (
     identity !== undefined && !/^[a-z]/.test(slug)
@@ -407,7 +407,7 @@ function ListControl({
   let generated = base;
   for (let suffix = 2; taken.has(generated); suffix += 1) {
     const ending = `_${suffix}`;
-    generated = `${base.slice(0, maximum - ending.length)}${ending}`;
+    generated = `${base.slice(0, maximum - ending.length).replace(/_+$/, "")}${ending}`;
   }
   const write = (next: SourceBlockPropertyValueContract[], nextKeys: string[]) => {
     keys.current = nextKeys;
@@ -442,7 +442,7 @@ function ListControl({
         items={items.map((item, index) => {
           const entryKey = keys.current[index]!;
           const heading = entryHeading(item, property.item, choices, identity?.key);
-          // A required text of the entry that was cleared says so on its own control.
+          // A required text the entry lacks (cleared, or never given) says so on its own control.
           const problems =
             item.kind !== "group"
               ? undefined
