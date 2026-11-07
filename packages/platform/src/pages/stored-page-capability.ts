@@ -449,10 +449,10 @@ export const createStoredPageCapabilityService = (
   };
   const requests = createHumanOrganizationRequestService(requestDependencies);
   const boundActions = placementNamedActions(context);
-  // Application and Module flows, one per identity: an ambiguous release is refused, not run.
 
-  // Undefined means the release does not hold the page; `project` logs that once, as a fault, when
-  // the person's access is proved (callers name pages of this release).
+  // Undefined means the release does not hold the page. Every caller names a page of this release,
+  // so `project` logs it once as a fault when the person's access is proved; the in-transaction
+  // projections answer undefined and their callers decide the line.
   const load = async (pageId: string): Promise<FixedAuthenticatedPageCapability | undefined> => {
     const identity = resolveInstalledPageIdentity(context, { pageId });
     if (identity === undefined) return undefined;

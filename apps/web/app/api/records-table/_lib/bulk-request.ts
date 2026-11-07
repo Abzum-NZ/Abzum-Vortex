@@ -163,7 +163,8 @@ export const resolveBulkRequest = async <Body extends { pageKey: string; placeme
   }).project(identity.session, runtimeContextSelection(context));
   if (projected.kind === "temporarily_unavailable")
     return { kind: "response", response: privateResponse({ kind: "unavailable" }, 503) };
-  // The runner and the service log every other answer; only a page refused for the viewer is new.
+  // The runner or the service already logged every other answer; a page refused for the viewer has
+  // no line yet.
   if (projected.kind !== "available") return rejected("not_available", 403);
   if (projected.value === undefined)
     return refused("page_refused_for_viewer", "not_available", 403);
