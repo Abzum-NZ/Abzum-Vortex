@@ -609,6 +609,8 @@ export function StudioFrame<Key extends string>({
     previousSelection.current = selectionKey;
   }, [selectionKey, inspectorEditsSelection, dockInspector, focused, hasInspector, hosts]);
   const active = tabs.find((tab) => tab.key === activeTab);
+  // The open tab names the panel region (docked or peeking) and the page's one level-1 heading.
+  const panelName = active === undefined ? "Panel" : `${active.label} panel`;
   // One panel width for every rail tab, so the canvas does not move or resize when the tab changes.
   const width = widthOf("panel", viewport < 1440 ? 16 : viewport >= 1920 ? 18 : 17);
   const inspectorWidth = widthOf("inspector", viewport >= 1920 ? 24 : viewport >= 1440 ? 22 : 20);
@@ -783,7 +785,7 @@ export function StudioFrame<Key extends string>({
               ref={setOverlayHost}
               id="studio-panel-overlay"
               role="complementary"
-              aria-label={`${active?.label ?? ""} panel`}
+              aria-label={panelName}
               aria-hidden={!overlayPanel}
               data-studio-panel-overlay=""
               className={cn(
@@ -796,14 +798,18 @@ export function StudioFrame<Key extends string>({
             />
           )}
         </div>
-        {/* The page's one main landmark and its one level-1 heading: the skip link lands here. The panels and
-            their resize handles are inside it (a separator outside every landmark is an axe `region`
-            violation); the panels are named regions, not asides, which a main may not contain. */}
+        {/* The page's one main landmark and its one level-1 heading: the skip link lands here.
+            The panels and their resize handles are inside it (a separator outside every landmark is
+            an axe `region` violation); the panel, canvas and inspector are named regions, not
+            asides, which a main may not contain. */}
         <main
           id={APPLICATION_MAIN_CONTENT_ID}
           tabIndex={-1}
           className="flex min-h-0 min-w-0 flex-1 outline-none"
         >
+          <h1 className="sr-only">
+            {active === undefined ? applicationName : `${applicationName}: ${active.label}`}
+          </h1>
           <ResizablePanelGroup
             orientation="horizontal"
             onLayoutChanged={layoutChanged}
@@ -818,14 +824,10 @@ export function StudioFrame<Key extends string>({
                   size={width}
                   limits={panelLimits}
                 >
-                  <section
-                    ref={setDockHost}
-                    aria-label={`${active?.label ?? ""} panel`}
-                    className="h-full min-h-0"
-                  />
+                  <section ref={setDockHost} aria-label={panelName} className="h-full min-h-0" />
                 </SidePanel>
                 <ResizableHandle
-                  aria-label={`Resize the ${active?.label ?? ""} panel`}
+                  aria-label={`Resize the ${panelName}`}
                   onPointerDownCapture={() => {
                     movedHandle.current = "panel";
                   }}
@@ -834,10 +836,10 @@ export function StudioFrame<Key extends string>({
               </>
             )}
             <ResizablePanel id="studio-canvas" minSize="20rem">
-              <div className="flex h-full min-h-0 min-w-0 flex-col bg-background">
-                <h1 className="sr-only">
-                  {applicationName}: {active?.label}
-                </h1>
+              <section
+                aria-label="Canvas"
+                className="flex h-full min-h-0 min-w-0 flex-col bg-background"
+              >
                 {canvas({
                   inspectorOpen:
                     hasInspector && (dockInspector ? inspectorOpen : narrowInspectorOpen),
@@ -845,7 +847,7 @@ export function StudioFrame<Key extends string>({
                   focused,
                   focusCanvas,
                 })}
-              </div>
+              </section>
             </ResizablePanel>
             {showInspector && (
               <>
