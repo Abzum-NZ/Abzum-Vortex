@@ -16,7 +16,6 @@ import { Icon } from "@vortex/ui/icons";
 import { Spinner } from "@vortex/ui/components/spinner";
 import { Button } from "@vortex/ui/components/button";
 import { Separator } from "@vortex/ui/components/separator";
-import { Tooltip, TooltipTrigger, TooltipContent } from "@vortex/ui/components/tooltip";
 import { Reasoned } from "@vortex/ui/components/reasoned";
 import { Kbd } from "@vortex/ui/components/kbd";
 import type { StudioInstallControl } from "./use-studio-releases-tab";
@@ -53,16 +52,18 @@ function IconAction({
   /** Why the command cannot be used right now; absent when it can. */
   disabledReason?: string | undefined;
 }) {
-  const button = <Button {...props} />;
-  if (disabledReason !== undefined) return <Reasoned reason={disabledReason}>{button}</Reasoned>;
   return (
-    <Tooltip>
-      <TooltipTrigger render={button} />
-      <TooltipContent>
-        {tip}
-        {shortcut !== undefined && <Kbd>{shortcut}</Kbd>}
-      </TooltipContent>
-    </Tooltip>
+    <Reasoned
+      reason={disabledReason}
+      tip={
+        <>
+          {tip}
+          {shortcut !== undefined && <Kbd>{shortcut}</Kbd>}
+        </>
+      }
+    >
+      <Button {...props} />
+    </Reasoned>
   );
 }
 

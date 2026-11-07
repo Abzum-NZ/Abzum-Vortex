@@ -24,12 +24,19 @@ type ReasonedProps = Readonly<{
  */
 export function Reasoned({
   reason,
+  tip,
   describedBy,
   onRefused,
   contentProps,
   children,
 }: Readonly<{
   reason: string | undefined;
+  /**
+   * What the tooltip says while the control is available. A control whose availability changes
+   * under the person's hands (it goes busy when pressed) passes it, so the control keeps one place
+   * in the tree and keeps the keyboard focus when it becomes unavailable.
+   */
+  tip?: ReactNode;
   /** An attempted use while unavailable; the caller shows the reason where it belongs. */
   onRefused?: (() => void) | undefined;
   /** The id of an element on the page that already says the reason (one Alert for many controls). */
@@ -39,28 +46,34 @@ export function Reasoned({
   children: ReactElement<ReasonedProps>;
 }>) {
   const id = useId();
-  if (reason === undefined) return children;
+  const content = reason ?? tip;
+  if (content === undefined) return children;
   const { children: inner } = children.props as { children?: ReactNode };
-  const swallowed = cloneElement(children, {
-    "aria-disabled": true,
-    "aria-describedby": [children.props["aria-describedby"], describedBy ?? id]
-      .filter((entry) => entry !== undefined)
-      .join(" "),
-    "data-reasoned": "",
-    onClick: (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-      onRefused?.();
-    },
-    ...(children.props.onCheckedChange === undefined ? {} : { onCheckedChange: () => undefined }),
-  });
+  const swallowed =
+    reason === undefined
+      ? children
+      : cloneElement(children, {
+          "aria-disabled": true,
+          "aria-describedby": [children.props["aria-describedby"], describedBy ?? id]
+            .filter((entry) => entry !== undefined)
+            .join(" "),
+          "data-reasoned": "",
+          onClick: (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            onRefused?.();
+          },
+          ...(children.props.onCheckedChange === undefined
+            ? {}
+            : { onCheckedChange: () => undefined }),
+        });
   return (
     <>
       <Tooltip>
         <TooltipTrigger render={swallowed}>{inner}</TooltipTrigger>
-        <TooltipContent {...contentProps}>{reason}</TooltipContent>
+        <TooltipContent {...contentProps}>{content}</TooltipContent>
       </Tooltip>
-      {describedBy === undefined ? (
+      {reason !== undefined && describedBy === undefined ? (
         <span id={id} className="sr-only">
           {reason}
         </span>
