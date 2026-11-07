@@ -8,7 +8,6 @@ import type { ConditionalFormattingProjection } from "../../definition/applicati
 import type { RecordsTableInlineEditor } from "../../definition/application-composition/records-table-features/projections/inline-edit";
 import type { z } from "zod";
 import { logRefusal } from "../../access/request-failure";
-import { isInstallationRequired } from "../../queries/protected-query-contracts";
 import type {
   RecordsTableFeatureProjection,
   recordsTableFeatureProjectionSchema,
@@ -110,20 +109,6 @@ export const logRecordsTableRequestRefusal = (
       `[records-table] request failed where=${where} part=${refusal.part} reason=${refusal.reason}`,
     );
   else logRefusal("records-table", `request where=${where} part=${refusal.part}`, refusal.reason);
-};
-
-/**
- * Logs the protected query's own refusal of one read of a Records table, once at info, except a
- * preview that needs the application installed: the protected query already logged that one.
- */
-export const logRecordsTableQueryRefusal = (
-  part: RecordsTableRequestPart,
-  read: string,
-  reasonCode: string,
-  where: string,
-): void => {
-  if (!isInstallationRequired(reasonCode))
-    logRecordsTableRequestRefusal(recordsTableRequestRefusal(part, `${read} ${reasonCode}`), where);
 };
 
 const sameField = (left: string, right: string): boolean =>

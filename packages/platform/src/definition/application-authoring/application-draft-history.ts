@@ -232,8 +232,10 @@ export const createStudioApplicationDraftHistoryController = (
     for (const listener of [...listeners]) {
       try {
         listener(state);
-      } catch {
-        // A subscriber must not interrupt a state transition or strand an in-flight save.
+      } catch (error) {
+        // A subscriber must not interrupt a state transition or strand an in-flight save: it is
+        // said once and the others are still told.
+        console.error(`[studio] a draft history listener failed: ${describeFailure(error)}`);
       }
     }
   };

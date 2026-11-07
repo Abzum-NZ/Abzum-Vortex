@@ -36,7 +36,6 @@ import { openRecordsSelection } from "../records-selection-seal";
 import { formatDecimal, formatMoney } from "../value-format";
 import { loadRecordsTablePlacement, type RecordsTableCommandAddress } from "./placement";
 import {
-  logRecordsTableQueryRefusal,
   logRecordsTableRequestRefusal,
   recordsTableRequestRefusal,
   type RecordsTableRequestRefusal,
@@ -195,12 +194,7 @@ export const createRecordsRangeSummaryService = (dependencies: RecordsRangeSumma
       if (read.kind === "temporarily_unavailable") return { kind: "unavailable" };
       if (read.kind !== "available") return { kind: "refused", reason: "not_available" };
       if (read.value.outcome !== "completed") {
-        logRecordsTableQueryRefusal(
-          "range_summary",
-          "read_refused",
-          read.value.reasonCode,
-          "range-summary",
-        );
+        // The query logged its own refusal, once.
         return { kind: "refused", reason: "not_available" };
       }
       const onPage = new Map(

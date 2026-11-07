@@ -10,11 +10,7 @@ import { sameId } from "../../catalogue/runtime-primitives";
 import { createProtectedQueryService } from "../../queries/protected-query-service";
 import { openRecordsSelection, recordsSelectionPlacement } from "../records-selection-seal";
 import { matchingQueryCommand, type RecordsTableBulkDependencies } from "./bulk-run";
-import {
-  logRecordsTableQueryRefusal,
-  logRecordsTableRequestRefusal,
-  recordsTableRequestRefusal,
-} from ".";
+import { logRecordsTableRequestRefusal, recordsTableRequestRefusal } from ".";
 import { loadRecordsTablePlacement } from "./placement";
 
 /** The most records one page of "every matching record" reads. */
@@ -102,12 +98,7 @@ export const createMatchingPageReader = (dependencies: RecordsTableBulkDependenc
     });
     if (result.kind !== "available") return result;
     if (result.value.outcome !== "completed") {
-      logRecordsTableQueryRefusal(
-        "bulk_action",
-        "read_refused",
-        result.value.reasonCode,
-        "matching_page",
-      );
+      // The query logged its own refusal, once.
       return unavailableOutcome;
     }
     const recordType = placement.module.content.recordTypes.find((type) =>

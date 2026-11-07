@@ -13,7 +13,7 @@ import {
 import type { RecordsTableBatchEditResult } from "../pages/records-table-batch-edit-request";
 import type { JsonValue } from "../catalogue/common";
 import { recordIdSchema, recordTypeIdSchema } from "../catalogue/identifiers";
-import { logRefusal } from "../access/request-failure";
+import { logFault, logRefusal } from "../access/request-failure";
 import { requestFailureLogged } from "../access/request-failure-mark";
 import { isRecord, sameId } from "../catalogue/runtime-primitives";
 import { walkPageComposition, type PlacementVisitor } from "../pages/placement-walk";
@@ -209,7 +209,7 @@ const refused: FlowBindingEndpointResult = Object.freeze({ kind: "refused", comm
 
 /**
  * Platform faults that carry no cause (a seam not supplied, a bound flow not planned). Each is one
- * error line in the refusal's shape; `logRefusal` has no fault level for a failure without a cause.
+ * error line through `logFault`.
  */
 const faultCodes: ReadonlySet<string> = new Set([
   "FLOW_INVOKE_RUN_START_UNAVAILABLE",
@@ -224,7 +224,7 @@ const faultCodes: ReadonlySet<string> = new Set([
  * cause decides its level, and a cause the place that raised it already logged adds no line.
  */
 const refuse = (code: string, cause?: unknown): FlowBindingEndpointResult => {
-  if (faultCodes.has(code)) console.error(`[flows] binding invoke refused: code=${code}`);
+  if (faultCodes.has(code)) logFault("flows", "binding invoke", code);
   else if (!requestFailureLogged(cause)) logRefusal("flows", "binding invoke", code, cause);
   return refused;
 };

@@ -75,6 +75,7 @@ import {
   zoneHandle,
   workingItem,
   commitWorking,
+  copyOfRegion,
   plainSource,
   plainSettings,
   settingsOf,
@@ -360,7 +361,7 @@ export const describeStudioCompositionAddTargets = (
     plainSource(context.source);
     if (!validContext(context)) return { kind: "invalid" };
     // A history snapshot is the validated source, so the places are read from it as it is; only a
-    // copy someone made is parsed. The add command parses at every write.
+    // copy someone made is parsed. The add command reads its source the same way.
     const places = addPlaces(
       context.catalogue,
       isStudioDraftSnapshot(context.source)
@@ -506,7 +507,11 @@ export const applyAdd = (
   plainSource(current.source);
   if (!validContext(current)) return { kind: "invalid" };
   const catalogue = current.catalogue;
-  const source = applicationSourceDocumentSchema.parse(current.source);
+  // The history hands its snapshot, which is the validated source and is read as it is; a copy
+  // someone made (a command run on another command's output) is parsed first.
+  const source = isStudioDraftSnapshot(current.source)
+    ? (current.source as ApplicationSourceDocument)
+    : applicationSourceDocumentSchema.parse(current.source);
   const destination = parseDestination(input.destination);
   const places = addPlaces(catalogue, source, parseOwner(input.owner));
   if (places === "published") return { kind: "refused", reason: PUBLISHED_PAGE_ADD_REASON };
@@ -558,8 +563,12 @@ export const applyAdd = (
     return { kind: "invalid" };
 
   const { alias, item } = newBlockItem(catalogue, source, release, settings, query);
+  // The new block goes into a copy that shares every node the add did not touch; the history
+  // checks the whole source once.
+  const copy = copyOfRegion(source, place.region);
+  if (copy === undefined) return { kind: "invalid" };
   try {
-    placeItem(catalogue, source, place, input.index, item);
+    placeItem(catalogue, copy.source, { ...place, region: copy.region }, input.index, item);
   } catch (error) {
     if (error instanceof StoredCompositionRefusal)
       return {
@@ -568,12 +577,8 @@ export const applyAdd = (
       };
     throw error;
   }
-  syncStoredBlockDependencies(source);
-  return {
-    kind: "applied",
-    source: applicationSourceDocumentSchema.parse(source),
-    placementAlias: alias,
-  };
+  syncStoredBlockDependencies(copy.source);
+  return { kind: "applied", source: copy.source, placementAlias: alias };
 };
 
 /**
