@@ -1,7 +1,12 @@
 import "server-only";
 
+import { cache } from "react";
 import { readCurrentOrganizationAppStoreAddressAfterAuthorization } from "@vortex/platform/server";
-import type { IdentitySession, OrganizationId } from "@vortex/platform/schema";
+import {
+  organizationSelectionCandidateSchema,
+  type IdentitySession,
+  type OrganizationId,
+} from "@vortex/platform/schema";
 import { applicationPageAddressPath } from "./address-paths";
 import { humanOrganizationRequests } from "./server-composition";
 
@@ -16,29 +21,54 @@ export type ApplicationsPageOrganization = Readonly<{
 }>;
 
 /**
- * The organisation's App Store application key, as the runtime settings name it; absent when the
- * organisation names none or it cannot be read now (the cause is logged, never shown as an address).
+ * The organisation's App Store address, as its runtime settings name it: one read per request and
+ * organisation, shared by Studio's frame, the release standing, the Applications link and the
+ * application links. A read that is not available was logged once by the request runner; an
+ * address that is not set (or names no application) is a configuration an administrator fixes.
  */
+export type OrganizationAppStoreAddress =
+  | Readonly<{ kind: "available"; key: string }>
+  | Readonly<{ kind: "not_configured"; invalid: boolean }>
+  | Readonly<{ kind: "refused" | "temporarily_unavailable" }>;
+
+export const loadOrganizationAppStoreAddress = cache(
+  async (
+    session: IdentitySession,
+    organizationId: string,
+  ): Promise<OrganizationAppStoreAddress> => {
+    const result = await humanOrganizationRequests().run(
+      session,
+      organizationSelectionCandidateSchema.parse({ organizationId }),
+      (transaction) => readCurrentOrganizationAppStoreAddressAfterAuthorization(transaction),
+    );
+    if (result.kind !== "available")
+      return { kind: result.kind === "temporarily_unavailable" ? result.kind : "refused" };
+    return result.value === null || result.value === "invalid"
+      ? { kind: "not_configured", invalid: result.value === "invalid" }
+      : { kind: "available", key: result.value };
+  },
+);
+
+/** The organisation's App Store application key; absent when it names none or cannot be read now. */
 export const loadOrganizationAppStoreKey = async (
   session: IdentitySession,
   organizationId: OrganizationId,
 ): Promise<string | undefined> => {
-  const result = await humanOrganizationRequests().run(
-    session,
-    { organizationId },
-    async (transaction) => {
-      const key = await readCurrentOrganizationAppStoreAddressAfterAuthorization(transaction);
-      return key === null || key === "invalid" ? undefined : key;
-    },
-  );
-  if (result.kind !== "available") {
-    console.error(
-      `[applications-page] App Store address ${result.kind === "unavailable" ? (result.cause ?? result.kind) : result.kind}`,
-    );
-    return undefined;
-  }
-  return result.value;
+  const address = await loadOrganizationAppStoreAddress(session, organizationId);
+  return address.kind === "available" ? address.key : undefined;
 };
+
+/** The Applications page of one organisation whose App Store is `key`. */
+export const applicationsPageHref = (
+  organization: Omit<ApplicationsPageOrganization, "organizationId">,
+  key: string,
+): string =>
+  applicationPageAddressPath(
+    organization.tenantShortName,
+    organization.organizationShortName,
+    key,
+    applicationsPageKey,
+  );
 
 /**
  * The Applications page of one organisation. Every former Studio home link names this final page,
@@ -49,14 +79,7 @@ export const loadApplicationsPageHref = async (
   organization: ApplicationsPageOrganization,
 ): Promise<string | undefined> => {
   const key = await loadOrganizationAppStoreKey(session, organization.organizationId);
-  return key === undefined
-    ? undefined
-    : applicationPageAddressPath(
-        organization.tenantShortName,
-        organization.organizationShortName,
-        key,
-        applicationsPageKey,
-      );
+  return key === undefined ? undefined : applicationsPageHref(organization, key);
 };
 
 /** The first organisation whose Applications page this person can be sent to, in launcher order. */

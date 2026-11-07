@@ -37,6 +37,8 @@ import {
 } from "./builder-authority";
 import type { PlatformPermissionSource } from "./platform-permissions";
 import type { createHumanOrganizationRequestService } from "./human-organization-request";
+import { classifyRequestFailure } from "./request-failure";
+import { markRequestFailureLogged, requestFailureLogged } from "./request-failure-mark";
 import { DefinitionCompilationError } from "../definition/compilation-error";
 import { DefinitionError } from "../definition/definition-error";
 import { isVersionImpactRefusal } from "../definition/version-impact-error";
@@ -242,12 +244,26 @@ const causeSummary = (error: unknown): string => {
   return parts.join(" <- ") || typeof error;
 };
 
-/** Classifies a failure and logs one line with its stable reason code and cause chain. */
+/**
+ * Classifies a failure and logs one line with its stable reason code and cause chain: an expected
+ * refusal, conflict or no-change answer at information, only a platform fault at error.
+ */
 const safeFailure = (error: unknown, operation: string): Failure => {
   const failure = classifyFailure(error);
-  console.error(
-    `[publication] ${operation} ${failure.kind} reason=${failure.reason ?? "none"} cause=${causeSummary(error)}`,
-  );
+  // The place that raised it logged it once already (the publication repository, a compiler
+  // refusal): no second line.
+  if (requestFailureLogged(error)) return failure;
+  const line = `[publication] ${operation} ${failure.kind} reason=${failure.reason ?? "none"} cause=${causeSummary(error)}`;
+  // Only an unexpected failure is classified by its cause: a database refusal or a race is still
+  // information, any other cause is a platform fault.
+  if (
+    failure.kind === "temporarily_unavailable" &&
+    classifyRequestFailure(error, { addressed: false }).level === "error"
+  )
+    console.error(line);
+  else console.info(line);
+  // The request runner that catches this error next adds no second line.
+  markRequestFailureLogged(error);
   return failure;
 };
 
@@ -282,7 +298,7 @@ export const createHumanDefinitionPublisher = (
     // Only an Application is published; its inline Modules are released inside its publication.
     const root = applicationRootIdSchema.safeParse(supplied?.rootId);
     if (!organization.success || supplied === undefined || !root.success) {
-      console.error(`[publication] ${mode} refused reason=command_invalid cause=schema/none`);
+      console.info(`[publication] ${mode} refused reason=command_invalid cause=schema/none`);
       return { kind: "refused", reason: "command_invalid" };
     }
     let command = { rootId: root.data, expectedDraftRevision: supplied.expectedDraftRevision };
@@ -422,7 +438,7 @@ export const createHumanDefinitionPublisher = (
               error.code === "BUILDER_RECENT_AUTHENTICATION_REQUIRED")) ||
           databaseRecentSignInRefusal(error)
         )
-          throw new ExpectedBuilderPublicationRefusal();
+          throw markRequestFailureLogged(new ExpectedBuilderPublicationRefusal());
         // Throw through runChange: even a post-append result mismatch must roll back.
         throw error;
       }
@@ -435,8 +451,8 @@ export const createHumanDefinitionPublisher = (
     );
     if (result.kind === "available") return { kind: "available", value: result.value };
     if (failure !== undefined) return failure;
+    // The request runner logged this answer once.
     const reason = result.kind === "unavailable" ? "organization_unavailable" : "request_failed";
-    console.error(`[publication] ${mode} request ${result.kind} reason=${reason}`);
     return result.kind === "unavailable"
       ? { kind: "refused", reason }
       : { kind: "temporarily_unavailable", reason };
