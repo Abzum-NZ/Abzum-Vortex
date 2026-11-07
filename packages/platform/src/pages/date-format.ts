@@ -63,7 +63,8 @@ const formatters = new Map<string, Intl.DateTimeFormat>();
 export function formatLocaleNumber(value: number, locale = DEFAULT_LOCALE): string {
   try {
     return new Intl.NumberFormat(locale).format(value);
-  } catch {
+  } catch (error) {
+    if (!(error instanceof RangeError)) throw error;
     return new Intl.NumberFormat(DEFAULT_LOCALE).format(value);
   }
 }
@@ -138,7 +139,8 @@ const formatterFor = (
   let formatter: Intl.DateTimeFormat;
   try {
     formatter = new Intl.DateTimeFormat(locale, { ...parts, timeZone });
-  } catch {
+  } catch (error) {
+    if (!(error instanceof RangeError)) throw error;
     formatter = new Intl.DateTimeFormat(DEFAULT_LOCALE, { ...parts, timeZone: DEFAULT_TIME_ZONE });
   }
   if (formatters.size >= MAXIMUM_CACHED_FORMATTERS) formatters.clear();
