@@ -33,6 +33,8 @@ import {
   protectedQueryResultSchema,
   type ProtectedQueryBoardSelector,
 } from "./protected-query-contracts";
+import { markRequestFailureLogged, requestFailureLogged } from "../access/request-failure-mark";
+import { answeredOnce } from "./protected-query-helpers";
 import type { createProtectedQueryService } from "./protected-query-service";
 import { aggregateSupportsFieldType, computeAggregates } from "./exact-aggregation";
 
@@ -44,6 +46,15 @@ const refusal = (reasonCode: ArrangementRefusalReasonCode): ArrangementRefusal =
   outcome: "refused",
   reasonCode,
 });
+
+/**
+ * A refusal of the protected query the board arrangement passes on as a new answer: it keeps the
+ * query's mark, so a refusal the query logged is not logged again at the arrangement's exit.
+ */
+const passedOn = (answer: unknown, reasonCode: ArrangementRefusalReasonCode): ArrangementRefusal =>
+  requestFailureLogged(answer)
+    ? markRequestFailureLogged(refusal(reasonCode))
+    : refusal(reasonCode);
 
 const lower = (id: string): string => id.toLowerCase();
 const codeUnitOrder = (left: string, right: string): number =>
@@ -610,7 +621,7 @@ const validateProtectedBoardPage = (
 ): ProtectedBoardArrangementPage | ArrangementRefusal => {
   const parsed = protectedQueryResultSchema.safeParse(value);
   if (!parsed.success) return refusal("dataset_invalid");
-  if (parsed.data.outcome === "refused") return refusal(parsed.data.reasonCode);
+  if (parsed.data.outcome === "refused") return passedOn(value, parsed.data.reasonCode);
 
   if (
     lower(parsed.data.moduleRootId) !== lower(command.moduleRootId) ||
@@ -636,12 +647,8 @@ const validateProtectedBoardPage = (
   return page.data;
 };
 
-/**
- * Composes one protected summary of the requested columns with their bounded member pages. A read names the columns on screen and reads their first pages in one
- * protected operation; a continuation reads one column. A column not named keeps a null page. The
- * summary and member operation have separate snapshots.
- */
-export const arrangeProtectedBoard = async (
+/** The protected board arrangement; `arrangeProtectedBoard` below is its one exit. */
+const composeProtectedBoard = async (
   queries: ProtectedBoardService,
   caller: ProtectedBoardSummaryArguments[0],
   selection: ProtectedBoardSummaryArguments[1],
@@ -670,7 +677,10 @@ export const arrangeProtectedBoard = async (
   const summaryResult = protectedQueryBoardSummaryResultSchema.safeParse(producedSummary.value);
   if (!summaryResult.success) return { kind: "available", value: refusal("dataset_invalid") };
   if (summaryResult.data.outcome === "refused")
-    return { kind: "available", value: refusal(summaryResult.data.reasonCode) };
+    return {
+      kind: "available",
+      value: passedOn(producedSummary.value, summaryResult.data.reasonCode),
+    };
 
   const summary = summaryResult.data;
   if (
@@ -728,7 +738,10 @@ export const arrangeProtectedBoard = async (
     });
     if (producedPages.kind !== "available") return producedPages;
     if (producedPages.value.outcome === "refused")
-      return { kind: "available", value: refusal(producedPages.value.reasonCode) };
+      return {
+        kind: "available",
+        value: passedOn(producedPages.value, producedPages.value.reasonCode),
+      };
     if (producedPages.value.pages.length !== selectors.length)
       return { kind: "available", value: refusal("dataset_invalid") };
     for (const [index, selector] of selectors.entries()) {
@@ -779,4 +792,19 @@ export const arrangeProtectedBoard = async (
   });
   if (!completed.success) return { kind: "available", value: refusal("dataset_invalid") };
   return { kind: "available", value: completed.data };
+};
+
+/**
+ * Composes one protected summary of the requested columns with their bounded member pages. A read names the columns on screen and reads their first pages in one
+ * protected operation; a continuation reads one column. A column not named keeps a null page. The
+ * summary and member operation have separate snapshots. Its own refusals are logged once at its
+ * one exit; a refusal of the protected query it passes on was logged by the query.
+ */
+export const arrangeProtectedBoard = async (
+  ...args: Parameters<typeof composeProtectedBoard>
+): ReturnType<typeof composeProtectedBoard> => {
+  const result = await composeProtectedBoard(...args);
+  return result.kind === "available"
+    ? { kind: "available", value: answeredOnce(result.value, "board_arrangement") }
+    : result;
 };

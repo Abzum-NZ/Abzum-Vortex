@@ -5,6 +5,7 @@ import type {
   BoundHumanOrganizationRequest,
   HumanOrganizationRequestResult,
 } from "../access/human-organization-request";
+import { answeredOnce } from "./protected-query-helpers";
 import type { createProtectedQueryService } from "./protected-query-service";
 import type { IdentitySession, OrganizationSelectionCandidate } from "../access/identity-access";
 import type { JsonValue } from "../catalogue/common";
@@ -100,6 +101,14 @@ type RecordChoiceRead =
       reasonCode: ProtectedQueryRefusalReasonCode | "request_invalid";
     }>;
 
+/** A refused read of choices, logged once where it is answered (the query's own refusals already were). */
+const refused = (
+  reasonCode: Extract<RecordChoiceRead, { outcome: "refused" }>["reasonCode"],
+): Readonly<{ kind: "available"; value: Extract<RecordChoiceRead, { outcome: "refused" }> }> => ({
+  kind: "available",
+  value: answeredOnce({ outcome: "refused", reasonCode }, "record_choices"),
+});
+
 /**
  * A further decision on the records one page of choices holds, such as the delegation decision of
  * an option filter. It returns the choices that stay offered.
@@ -180,10 +189,6 @@ export const createRecordChoiceReader = (queries: RecordChoiceQueryRunner) =>
       const parsed = recordChoiceCommandSchema.safeParse(candidate);
       const record = recordIdSchema.safeParse(selected.recordId);
       const type = recordTypeIdSchema.safeParse(selected.recordTypeId);
-      const invalid = () => ({
-        kind: "available" as const,
-        value: { outcome: "refused" as const, reasonCode: "request_invalid" as const },
-      });
       if (
         !parsed.success ||
         !record.success ||
@@ -193,11 +198,11 @@ export const createRecordChoiceReader = (queries: RecordChoiceQueryRunner) =>
         parsed.data.continuationToken !== undefined ||
         (parsed.data.narrowedBy !== undefined && parsed.data.targets.length > 1)
       )
-        return invalid();
+        return refused("request_invalid");
       const targets = parsed.data.targets.filter((target) =>
         sameId(target.recordTypeId, type.data),
       );
-      if (targets.length !== 1) return invalid();
+      if (targets.length !== 1) return refused("request_invalid");
       const prepareRead = queries.prepareRead;
       return createRecordChoiceReader({
         run: async (session, selection, command) => {
@@ -223,10 +228,6 @@ export const createRecordChoiceReader = (queries: RecordChoiceQueryRunner) =>
       const parsed = recordChoiceCommandSchema.safeParse(candidate);
       const record = recordIdSchema.safeParse(selected.recordId);
       const type = recordTypeIdSchema.safeParse(selected.recordTypeId);
-      const invalid = () => ({
-        kind: "available" as const,
-        value: { outcome: "refused" as const, reasonCode: "request_invalid" as const },
-      });
       if (
         !parsed.success ||
         !record.success ||
@@ -235,11 +236,11 @@ export const createRecordChoiceReader = (queries: RecordChoiceQueryRunner) =>
         parsed.data.continuationToken !== undefined ||
         (parsed.data.narrowedBy !== undefined && parsed.data.targets.length > 1)
       )
-        return invalid();
+        return refused("request_invalid");
       const targets = parsed.data.targets.filter((target) =>
         sameId(target.recordTypeId, type.data),
       );
-      if (targets.length !== 1) return invalid();
+      if (targets.length !== 1) return refused("request_invalid");
       return createRecordChoiceReader({
         run: (runSession, runSelection, command) =>
           queries.run(runSession, runSelection, {
@@ -287,12 +288,11 @@ export const createRecordChoiceReader = (queries: RecordChoiceQueryRunner) =>
       admit?: RecordChoiceAdmission,
     ): Promise<HumanOrganizationRequestResult<RecordChoiceRead>> {
       const parsed = recordChoiceCommandSchema.safeParse(candidate);
-      if (!parsed.success)
-        return { kind: "available", value: { outcome: "refused", reasonCode: "request_invalid" } };
+      if (!parsed.success) return refused("request_invalid");
       const command = parsed.data;
       const several = command.targets.length > 1;
       if ((command.narrowedBy !== undefined || command.sourceQuery !== undefined) && several)
-        return { kind: "available", value: { outcome: "refused", reasonCode: "request_invalid" } };
+        return refused("request_invalid");
       let positions: Positions | undefined;
       if (command.continuationToken !== undefined) {
         positions = several
@@ -304,7 +304,7 @@ export const createRecordChoiceReader = (queries: RecordChoiceQueryRunner) =>
             command.targets.some((target) => sameId(target.recordTypeId, position.recordTypeId)),
           )
         )
-          return { kind: "available", value: { outcome: "refused", reasonCode: "cursor_invalid" } };
+          return refused("cursor_invalid");
       }
       const read =
         positions === undefined
@@ -356,7 +356,7 @@ export const createRecordChoiceReader = (queries: RecordChoiceQueryRunner) =>
         if (result.kind !== "available") return result;
         const page = result.value;
         if (page.outcome !== "completed")
-          return { kind: "available", value: { outcome: "refused", reasonCode: page.reasonCode } };
+          return { kind: "available", value: answeredOnce(page, "record_choices") };
         for (const row of page.rows)
           choices.push(
             Object.freeze({
