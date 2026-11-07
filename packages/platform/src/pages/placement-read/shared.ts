@@ -110,8 +110,6 @@ type PlacementFailureReason =
   | "chart_settings_invalid"
   | "chart_group_invalid"
   | "chart_measure_invalid"
-  | "placement_read_failed"
-  | "choice_settings_invalid"
   | "link_initial_value_invalid"
   | "link_initial_value_unavailable"
   | "link_titles_unavailable"
