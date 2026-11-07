@@ -14,10 +14,10 @@ import {
   type PreviewSeedResult,
 } from "./preview-installation-contracts";
 import type { DatabaseRow, RequestDatabaseTransaction } from "../db/request-transaction";
+import { databaseCode } from "../catalogue/runtime-primitives";
 import {
   DefinitionError,
   classifyDatabaseError,
-  databaseErrorCode,
   unexpectedDefinitionFailure,
 } from "./definition-error";
 import type { PreviewReleasePlan } from "./preview-release-plan";
@@ -41,7 +41,7 @@ type SeedRow = DatabaseRow & { readonly seeded: unknown };
 const mapFailure = (error: unknown): DefinitionError<PreviewInstallationRepositoryErrorCode> => {
   if (error instanceof DefinitionError) return error;
   // The preview's records cannot take the draft's change; a new preview is provisioned instead.
-  if (databaseErrorCode(error) === "V3201")
+  if (databaseCode(error) === "V3201")
     return new DefinitionError("PREVIEW_INSTALLATION_SHAPE_INCOMPATIBLE", { cause: error });
   switch (classifyDatabaseError(error)) {
     case "invalid":

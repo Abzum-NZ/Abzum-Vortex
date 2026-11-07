@@ -2,18 +2,14 @@ import "server-only";
 
 import type { PreparedApplicationPermissionRegistration } from "../access/permission-registry";
 import type { ApplicationRootId, OrganizationId } from "../catalogue/identifiers";
-import { sameId } from "../catalogue/runtime-primitives";
+import { databaseCode, sameId } from "../catalogue/runtime-primitives";
 import {
   activeApplicationInstallationSchema,
   type ActiveApplicationInstallation,
 } from "../files/storage";
 import type { SystemApplicationBoundReleaseSetResult } from "./definition-consumer-read";
 import { prepareApplicationPermissionRegistrationForHumanRequest } from "../access/permission-registry-definition-adapter";
-import {
-  DefinitionError,
-  databaseErrorCode,
-  unexpectedDefinitionFailure,
-} from "./definition-error";
+import { DefinitionError, unexpectedDefinitionFailure } from "./definition-error";
 import {
   noInstalledRecordContributions,
   withInstalledRecordContributions,
@@ -81,7 +77,7 @@ const failure = (code: InstalledRuntimeContextErrorCode, cause: unknown) =>
   new DefinitionError(code, { cause });
 
 const installationFailure = (error: unknown): DefinitionError<InstalledRuntimeContextErrorCode> => {
-  switch (databaseErrorCode(error)) {
+  switch (databaseCode(error)) {
     case "ACTIVE_APPLICATION_CONTEXT_REFUSED":
       return failure("INSTALLED_RUNTIME_CONTEXT_REFUSED", error);
     case "ACTIVE_APPLICATION_INSTALLATION_UNAVAILABLE":

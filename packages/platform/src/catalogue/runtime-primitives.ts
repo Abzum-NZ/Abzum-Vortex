@@ -55,10 +55,12 @@ export const unavailableError = (message: string, code?: string, cause?: unknown
   return error;
 };
 
-export const databaseCode = (error: unknown): string | undefined =>
-  typeof error === "object" && error !== null && "code" in error
-    ? String((error as { readonly code?: unknown }).code)
-    : undefined;
+/** The error's own code; undefined when it has none (an error may declare an optional code). */
+export const databaseCode = (error: unknown): string | undefined => {
+  if (typeof error !== "object" || error === null || !("code" in error)) return undefined;
+  const code = (error as { readonly code?: unknown }).code;
+  return code === undefined || code === null ? undefined : String(code);
+};
 
 /**
  * A safe server-side description of a failed request: only the error class name and code of the
@@ -71,10 +73,12 @@ export const describeFailure = (error: unknown): string => {
   for (let depth = 0; depth < 5 && current !== undefined && current !== null; depth += 1) {
     const name = current instanceof Error ? current.name : typeof current;
     const code = databaseCode(current);
-    // A database error's message is its stable cause code (never row data), so it stays in the log.
-    // A schema mismatch is described by the failing paths and issue codes, never the values.
+    // A database error's message is its stable cause code (never row data), and a compiler
+    // refusal's is its registered rule code, so both stay in the log. A schema mismatch is
+    // described by the failing paths and issue codes, never the values.
     const detail =
-      current instanceof Error && name === "VortexDatabaseError"
+      current instanceof Error &&
+      (name === "VortexDatabaseError" || name === "DefinitionCompilationError")
         ? `:${current.message}`
         : isRecord(current) && Array.isArray(current.issues)
           ? `:${current.issues

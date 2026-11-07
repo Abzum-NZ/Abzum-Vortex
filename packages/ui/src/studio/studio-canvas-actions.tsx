@@ -17,7 +17,6 @@ import {
 } from "react";
 import { Button } from "../components/button";
 import { ButtonGroup, ButtonGroupSeparator, ButtonGroupText } from "../components/button-group";
-import { Tooltip, TooltipContent, TooltipTrigger } from "../components/tooltip";
 import { Icon } from "../icons";
 import { isElement } from "../lib/dom";
 import { Reasoned, type ReasonedTooltipProps } from "../components/reasoned";
@@ -69,17 +68,10 @@ function BarAction({ label, reason, onAct, tooltip, stop, onStop, children }: Ba
       onClick={onAct}
     />
   );
-  if (reason !== undefined)
-    return (
-      <Reasoned reason={reason} contentProps={tooltip}>
-        {cloneElement(button, undefined, children)}
-      </Reasoned>
-    );
   return (
-    <Tooltip>
-      <TooltipTrigger render={button}>{children}</TooltipTrigger>
-      <TooltipContent {...tooltip}>{label}</TooltipContent>
-    </Tooltip>
+    <Reasoned reason={reason} tip={label} contentProps={tooltip}>
+      {cloneElement(button, undefined, children)}
+    </Reasoned>
   );
 }
 

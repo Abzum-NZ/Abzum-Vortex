@@ -10,6 +10,11 @@ import type { ProtectedQueryCommand } from "../../queries/protected-query-contra
 import type { createProtectedQueryService } from "../../queries/protected-query-service";
 import { titleText } from "../../queries/record-choices";
 import type { PlacementModule } from "../placement-read/shared";
+import {
+  logRecordsTableQueryRefusal,
+  logRecordsTableRequestRefusal,
+  recordsTableRequestRefusal,
+} from ".";
 
 /**
  * Pasted link titles of one batch, resolved to the records they name. Every link cell the paste
@@ -117,7 +122,10 @@ export const resolveLinkTitles = async (
     cause: LinkTitleProblem["cause"],
     message: string,
   ): void => {
-    console.error(`[records-table] batch edit refused cause=${cause} field=${cell.field}`);
+    logRecordsTableRequestRefusal(
+      recordsTableRequestRefusal("batch_edit", `${cause} field=${cell.field}`),
+      "batch_edit",
+    );
     problems.push({ recordId: cell.recordId, field: cell.field, cause, message });
   };
 
@@ -256,15 +264,14 @@ export const resolveLinkTitles = async (
           ...(token === undefined ? {} : { continuationToken: token }),
         } as ProtectedQueryCommand;
         const result = await dependencies.queries.run(session, selection, command);
-        if (result.kind !== "available" || result.value.outcome !== "completed") {
-          console.error(
-            `[records-table] batch edit refused cause=link_title_read field=${field} outcome=${
-              result.kind !== "available"
-                ? result.kind
-                : result.value.outcome === "refused"
-                  ? `refused:${result.value.reasonCode}`
-                  : result.value.outcome
-            }`,
+        // The query service logged an answer that is not available; its own refusal is logged here.
+        if (result.kind !== "available") return "unavailable";
+        if (result.value.outcome === "refused") {
+          logRecordsTableQueryRefusal(
+            "batch_edit",
+            `link_title_read field=${field}`,
+            result.value.reasonCode,
+            "batch_edit",
           );
           return "unavailable";
         }

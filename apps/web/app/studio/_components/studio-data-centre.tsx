@@ -580,13 +580,26 @@ export function StudioDataCentre({
 }>) {
   const module =
     selection === null ? undefined : modules.find((item) => item.key === selection.moduleKey);
-  if (selection === null || module === undefined) return <StudioDataEmpty onCreate={onCreate} />;
+  // The centre holds the Data tab's one empty state: nothing to pick yet, or nothing picked.
+  const noRecordTypes = (list: readonly StudioDataModule[]) =>
+    list.every((item) => item.recordTypes.length === 0);
+  const emptyFor = (list: readonly StudioDataModule[]) => (
+    <StudioDataEmpty
+      {...(noRecordTypes(list)
+        ? {
+            title: "No record types yet",
+            description: "Add a record type to start defining your data.",
+          }
+        : {})}
+      onCreate={onCreate}
+    />
+  );
+  if (selection === null || module === undefined) return emptyFor(modules);
   if (selection.kind === "module")
     return (
       <div className="mx-auto w-full max-w-4xl space-y-6 px-8 py-6">
-        <h2 className="text-xl font-semibold tracking-tight">{module.name}</h2>
         {module.recordTypes.length === 0 ? (
-          <StudioDataEmpty onCreate={onCreate} />
+          emptyFor([module])
         ) : (
           <Card className="gap-0 py-0">
             <Table>
@@ -661,17 +674,14 @@ export function StudioDataCentre({
   );
   return (
     <div className="mx-auto w-full max-w-4xl space-y-6 px-8 py-6">
-      <div className="flex flex-wrap items-center gap-3">
-        <h2 className="text-xl font-semibold tracking-tight">
-          {query?.label ?? record.pluralName}
-        </h2>
-        {module.ownerApplication === undefined ? null : (
+      {module.ownerApplication === undefined ? null : (
+        <div>
           <Badge variant="outline">
             <Icon name="shield" />
             Read-only
           </Badge>
-        )}
-      </div>
+        </div>
+      )}
       {module.ownerApplication === undefined ? null : (
         <Alert variant="info">
           <AlertTitle>Read-only record type</AlertTitle>
@@ -701,7 +711,7 @@ export function StudioDataCentre({
             <TabsTrigger value="search">Search</TabsTrigger>
           </TabsList>
           <TabsContent value="fields" className="space-y-6">
-            <div className="flex items-center justify-between gap-3">
+            <div className="flex flex-wrap items-center justify-between gap-3">
               <h3 className="text-base font-semibold">
                 Fields{" "}
                 <span className="text-sm font-normal text-muted-foreground">
@@ -710,7 +720,7 @@ export function StudioDataCentre({
                     : null}
                 </span>
               </h3>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <ToggleGroup
                   aria-label="Which fields to list"
                   variant="outline"

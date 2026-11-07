@@ -11,12 +11,7 @@ import { Badge } from "@vortex/ui/components/badge";
 import { Button } from "@vortex/ui/components/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@vortex/ui/components/tooltip";
 import { StudioPanelShell, StudioSearchBox, StudioSection } from "./studio-frame";
-import {
-  StudioNavEmpty,
-  StudioNavItem,
-  StudioNavTree,
-  type StudioNavNode,
-} from "./studio-nav-tree";
+import { StudioNavItem, StudioNavTree, type StudioNavNode } from "./studio-nav-tree";
 import type { StudioModuleOwnerApplication } from "./module-fields-editor";
 import type { StudioDataModule } from "../_lib/studio-data-model";
 import type { StudioDataSelection } from "@vortex/platform/schema";
@@ -96,11 +91,16 @@ export function StudioDataPanel({
       selection: StudioDataSelection,
       children?: readonly StudioNavNode[],
       meta?: string,
+      hint?: string,
     ): StudioNavNode => ({
       key,
       label,
       icon:
-        selection.kind === "module" || selection.kind === "record_type" ? "database" : "panel-left",
+        selection.kind === "module" || selection.kind === "record_type"
+          ? "database"
+          : selection.kind === "query"
+            ? "list-tree"
+            : "panel-left",
       defaultExpanded:
         selection.kind !== "record_type" ||
         (selected !== null &&
@@ -111,6 +111,7 @@ export function StudioDataPanel({
       onSelect: () => onSelect(selection),
       children,
       meta,
+      ...(hint === undefined ? {} : { props: { hint } }),
     });
     return {
       ...node(
@@ -144,6 +145,7 @@ export function StudioDataPanel({
                     `${module.key}:query:${query.key}`,
                     query.label,
                     { kind: "query", moduleKey: module.key, queryKey: query.key },
+                    undefined,
                     undefined,
                     "Query",
                   ),
@@ -207,13 +209,6 @@ export function StudioDataPanel({
         />
       }
     >
-      {owned.every((module) => module.recordTypes.length === 0) && (
-        <StudioNavEmpty
-          title="No record types yet"
-          description="Add a record type to start defining your data."
-          icon="database"
-        />
-      )}
       {ownedShown.length > 0 && (
         <StudioSection title="This application" count={ownedShown.length} storageKey="data:owned">
           <StudioNavTree
