@@ -16,16 +16,12 @@ import {
   type RuntimeTransactionRunner,
 } from "../db/request-transaction";
 
-/** @knipignore */
-export const organizationAccountErrorCodes = [
-  "INVALID_ORGANIZATION_ACCOUNT_COMMAND",
-  "INVALID_ORGANIZATION_ACCOUNT_STORAGE_RESULT",
-  "ORGANIZATION_ACCOUNT_CONTEXT_REFUSED",
-  "ORGANIZATION_ACCOUNT_STALE_OR_UNAVAILABLE",
-  "ORGANIZATION_ACCOUNT_OPERATION_FAILED",
-] as const;
-
-type OrganizationAccountErrorCode = (typeof organizationAccountErrorCodes)[number];
+type OrganizationAccountErrorCode =
+  | "INVALID_ORGANIZATION_ACCOUNT_COMMAND"
+  | "INVALID_ORGANIZATION_ACCOUNT_STORAGE_RESULT"
+  | "ORGANIZATION_ACCOUNT_CONTEXT_REFUSED"
+  | "ORGANIZATION_ACCOUNT_STALE_OR_UNAVAILABLE"
+  | "ORGANIZATION_ACCOUNT_OPERATION_FAILED";
 
 class OrganizationAccountError extends Error {
   readonly code: OrganizationAccountErrorCode;

@@ -44,32 +44,13 @@ export default tseslint.config(
     ],
     rules: { "@typescript-eslint/no-this-alias": "off" },
   },
-  // These expressions deliberately reject ASCII control characters in user supplied text.
-  {
-    files: [
-      "packages/platform/src/files/application-attachment-blocks.ts",
-      "packages/platform/src/files/file-metadata.ts",
-      "packages/ui/src/components/notice.tsx",
-    ],
-    rules: { "no-control-regex": "off" },
-  },
   // Object rest removes these fields before forwarding the remaining product data.
   {
     files: [
       "apps/web/app/_lib/definition-catalogue.ts",
       "packages/platform/src/files/file-metadata.ts",
-      "packages/platform/src/pages/stored-page-capability.ts",
     ],
     rules: { "@typescript-eslint/no-unused-vars": ["error", { ignoreRestSiblings: true }] },
-  },
-  // Public callback signatures retain these named but unused arguments.
-  {
-    files: [
-      "apps/web/scripts/development-setup/install.ts",
-      "packages/ui/src/layout-styles.ts",
-      "packages/ui/src/navigation/account-actions.tsx",
-    ],
-    rules: { "@typescript-eslint/no-unused-vars": ["error", { argsIgnorePattern: "^_" }] },
   },
   // postgres.Options uses the library's empty generic parameter to select its default shape.
   {

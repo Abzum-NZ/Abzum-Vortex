@@ -20,17 +20,13 @@ import {
   type RuntimeTransactionRunner,
 } from "../db/request-transaction";
 
-/** @knipignore */
-export const accessVersionErrorCodes = [
-  "INVALID_ACCESS_VERSION_COMMAND",
-  "INVALID_ACCESS_VERSION_STORAGE_RESULT",
-  "ACCESS_VERSION_SCOPE_UNAVAILABLE",
-  "ACCESS_VERSION_STALE_OR_UNAVAILABLE",
-  "ACCESS_VERSION_EXHAUSTED",
-  "ACCESS_VERSION_OPERATION_FAILED",
-] as const;
-
-type AccessVersionErrorCode = (typeof accessVersionErrorCodes)[number];
+type AccessVersionErrorCode =
+  | "INVALID_ACCESS_VERSION_COMMAND"
+  | "INVALID_ACCESS_VERSION_STORAGE_RESULT"
+  | "ACCESS_VERSION_SCOPE_UNAVAILABLE"
+  | "ACCESS_VERSION_STALE_OR_UNAVAILABLE"
+  | "ACCESS_VERSION_EXHAUSTED"
+  | "ACCESS_VERSION_OPERATION_FAILED";
 
 class AccessVersionError extends Error {
   readonly code: AccessVersionErrorCode;
