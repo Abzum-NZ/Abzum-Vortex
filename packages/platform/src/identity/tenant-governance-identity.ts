@@ -1,7 +1,6 @@
 import "server-only";
 
 import { identitySessionSchema, type IdentitySession } from "../access/identity-access";
-import { markRequestFailureLogged } from "../access/request-failure-mark";
 import { databaseCode, databaseTimestamp, databaseRevision } from "../catalogue/runtime-primitives";
 import {
   createTenantOrganizationCommandSchema,
@@ -30,7 +29,7 @@ import {
   type DatabaseRow,
   type RequestDatabaseTransaction,
 } from "../db/request-transaction";
-import { logRefusedOperations, refusedBy } from "./log-refused-operations";
+import { logRefusedOperations, refusedBy, refusedLoggedElsewhere } from "./log-refused-operations";
 
 type Runner = <Result>(
   operation: (transaction: RequestDatabaseTransaction) => Promise<Result>,
@@ -63,10 +62,13 @@ type OrganizationCreationRow = DatabaseRow & {
 };
 // A poisoned request-bound transaction is logged once by the request boundary that aborts on it.
 export const transactionPoisonErrorName = "TenantGovernanceTransactionPoisoned";
+// The wrapper logs the cause once; the request boundary that aborts on a poisoned transaction logs
+// that failure itself, so its refusal adds no line.
+const mutationRefusal = <const Result extends object>(result: Result, error: unknown): Result =>
+  error instanceof Error && error.name === transactionPoisonErrorName
+    ? refusedLoggedElsewhere(result)
+    : refusedBy(result, error);
 const mutationCode = (error: unknown) => {
-  // The wrapper logs the cause once; the request boundary logs a poisoned transaction itself.
-  if (error instanceof Error && error.name === transactionPoisonErrorName)
-    markRequestFailureLogged(error);
   switch (databaseCode(error)) {
     case "V3001":
       return "duplicate_conflict" as const;
@@ -145,7 +147,7 @@ export const createTenantGovernanceService = (
           organizationCreationResult(rows.length === 1 ? rows[0] : undefined),
         );
       } catch (error) {
-        return refusedBy(
+        return mutationRefusal(
           {
             outcome: "refused",
             operation: "create_tenant_organization",
@@ -177,7 +179,7 @@ export const createTenantGovernanceService = (
           organizationMutationResult(rows.length === 1 ? rows[0] : undefined),
         );
       } catch (error) {
-        return refusedBy(
+        return mutationRefusal(
           {
             outcome: "refused",
             operation: "rename_tenant_organization",
@@ -209,7 +211,7 @@ export const createTenantGovernanceService = (
           organizationMutationResult(rows.length === 1 ? rows[0] : undefined),
         );
       } catch (error) {
-        return refusedBy(
+        return mutationRefusal(
           {
             outcome: "refused",
             operation: "reparent_tenant_organization",
@@ -241,7 +243,7 @@ export const createTenantGovernanceService = (
           organizationMutationResult(rows.length === 1 ? rows[0] : undefined),
         );
       } catch (error) {
-        return refusedBy(
+        return mutationRefusal(
           {
             outcome: "refused",
             operation: "suspend_tenant_organization",
@@ -273,7 +275,7 @@ export const createTenantGovernanceService = (
           organizationMutationResult(rows.length === 1 ? rows[0] : undefined),
         );
       } catch (error) {
-        return refusedBy(
+        return mutationRefusal(
           {
             outcome: "refused",
             operation: "reactivate_tenant_organization",

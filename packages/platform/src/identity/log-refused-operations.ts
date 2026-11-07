@@ -1,10 +1,10 @@
 import "server-only";
 
 import { classifyRequestFailure } from "../access/request-failure";
-import { requestFailureLogged } from "../access/request-failure-mark";
 import { describeFailure } from "../catalogue/runtime-primitives";
 
 const causes = new WeakMap<object, unknown>();
+const loggedElsewhere = new WeakSet<object>();
 
 /**
  * A refusal an operation answered because a database call failed: the wrapper below logs it once
@@ -12,6 +12,15 @@ const causes = new WeakMap<object, unknown>();
  */
 export const refusedBy = <const Result extends object>(result: Result, cause: unknown): Result => {
   causes.set(result, cause);
+  return result;
+};
+
+/**
+ * A refusal whose failure the request boundary that aborts on it logs itself: the wrapper below
+ * adds no line. Returns the same result.
+ */
+export const refusedLoggedElsewhere = <const Result extends object>(result: Result): Result => {
+  loggedElsewhere.add(result);
   return result;
 };
 
@@ -38,9 +47,8 @@ export const logRefusedOperations = <
         "outcome" in result &&
         result.outcome === "refused"
       ) {
+        if (loggedElsewhere.has(result)) return result;
         const cause = causes.get(result);
-        // The request boundary already logged a failure it aborted on.
-        if (requestFailureLogged(cause)) return result;
         const detail = result as { operation?: unknown; code?: unknown };
         const line = `[identity] refused ${prefix}_${String(detail.operation ?? name).toUpperCase()}_${String(detail.code ?? "unspecified").toUpperCase()}`;
         if (cause === undefined) console.info(line);

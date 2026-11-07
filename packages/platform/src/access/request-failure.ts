@@ -127,9 +127,10 @@ const knownClass = (
 ): RequestFailureClass | undefined => {
   if (requestStopped(error)) return retryable("stopped");
   if (error instanceof DefinitionError) {
-    // A failed publication is a compiler refusal (a rule naming what to fix) or a fault.
+    // A failed publication is a compiler refusal (a rule naming what to fix); otherwise its cause
+    // decides (a database refusal or race is an answer, anything else a fault).
     if (error.code === "DEFINITION_PUBLICATION_FAILED")
-      return isValidationRefusal(error.cause) ? refusal() : fault();
+      return isValidationRefusal(error.cause) ? refusal() : undefined;
     return definitionErrorClasses.get(error.code);
   }
   if (error instanceof BuilderAuthorityError) return builderAuthorityClasses[error.code];
