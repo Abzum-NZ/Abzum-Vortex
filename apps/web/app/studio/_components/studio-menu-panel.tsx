@@ -31,6 +31,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@vortex/ui/components/t
 import { cn } from "@vortex/ui/lib/utils";
 import {
   studioMenuPageChoices,
+  studioMenuPageEntries,
   studioMenuPosition,
   type StudioMenuCommand,
   type StudioMenuItem,
@@ -44,6 +45,31 @@ import { useStudioDraftText } from "./use-studio-draft-text";
 
 /** What the last edit said, and the menu it was said on: any later change of the menu takes it away. */
 type Feedback = Readonly<{ kind: "applied" | "refused"; message: string; menu: string }>;
+
+/**
+ * The page choices of one menu control. A page has one menu entry, so a page that is in the menu
+ * is disabled with where it is said in its label (a screen reader reads it); in the heading form
+ * a page at the top level stays choosable, and its entry moves under the new heading.
+ */
+const pageOptions = (
+  source: ApplicationSourceDocument,
+  pages: ReturnType<typeof studioMenuPageChoices>,
+  except: string | null,
+  movable: boolean,
+) => {
+  const listed = studioMenuPageEntries(source);
+  return pages.map((page) => {
+    const entry = page.key === except ? undefined : listed.get(page.key);
+    if (entry === undefined) return { value: page.key, label: page.label };
+    if (movable && entry.heading === null)
+      return { value: page.key, label: `${page.label} (its menu entry moves under the heading)` };
+    return {
+      value: page.key,
+      label: `${page.label} (already in the menu${entry.heading === null ? "" : ` under ${entry.heading}`})`,
+      disabled: true,
+    };
+  });
+};
 
 const kindWords = (item: StudioMenuItem) =>
   item.type === "heading" ? "Heading" : item.type === "page" ? "Page" : "Link";
@@ -447,7 +473,7 @@ export function StudioMenuPanel({
                       disabled={disabled}
                       options={[
                         { value: "", label: "Choose a page…" },
-                        ...pages.map((page) => ({ value: page.key, label: page.label })),
+                        ...pageOptions(source, pages, null, true),
                       ]}
                       onChange={(value) => setFirstPage(value)}
                     />
@@ -479,7 +505,7 @@ export function StudioMenuPanel({
                 disabled={disabled}
                 options={[
                   { value: "", label: "Choose a page" },
-                  ...pages.map((page) => ({ value: page.key, label: page.label })),
+                  ...pageOptions(source, pages, null, false),
                 ]}
                 onChange={(value) => setNewPage(value)}
               />
@@ -679,7 +705,7 @@ function StudioMenuEntryEditor({
               {...control}
               value={item.page}
               disabled={disabled}
-              options={pages.map((page) => ({ value: page.key, label: page.label }))}
+              options={pageOptions(source, pages, item.page, false)}
               onChange={(value) =>
                 change({ kind: "change", alias: item.id, changes: { page: value } })
               }
