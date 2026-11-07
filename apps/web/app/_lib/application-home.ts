@@ -27,10 +27,8 @@ export const applicationHomePathByRoot = async (
     tenantShortName,
     organizationShortName,
   );
-  if (read.kind !== "available") {
-    console.error(`[application-home] applications ${read.kind}`);
-    return { kind: "unavailable" };
-  }
+  // The permitted-applications read logged every answer that is not available, once.
+  if (read.kind !== "available") return { kind: "unavailable" };
   const application = read.applications.find(
     (candidate) => candidate.applicationRootId.toLowerCase() === applicationRootId.toLowerCase(),
   );
