@@ -1,5 +1,6 @@
 import { z } from "zod";
-import { databaseErrorCode, DefinitionError } from "./definition-error";
+import { databaseCode } from "../catalogue/runtime-primitives";
+import { DefinitionError } from "./definition-error";
 
 const retiredIdentitySchema = z
   .object({
@@ -15,7 +16,7 @@ export const identityRetiredFailure = (
   source?: unknown,
 ): DefinitionError | undefined => {
   if (
-    databaseErrorCode(cause) !== "23505" ||
+    databaseCode(cause) !== "23505" ||
     !(cause instanceof Error) ||
     !("constraint_name" in cause) ||
     cause.constraint_name !== "source_identity_alias_retired"

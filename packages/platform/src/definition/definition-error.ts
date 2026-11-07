@@ -1,5 +1,6 @@
 import { ZodError } from "zod";
 import { markRequestFailureLogged, requestFailureLogged } from "../access/request-failure-mark";
+import { databaseCode } from "../catalogue/runtime-primitives";
 import { DefinitionCompilationError } from "./compilation-error";
 
 /**
@@ -18,12 +19,6 @@ export class DefinitionError<Code extends string = string> extends Error {
   }
 }
 
-/** The Postgres SQLSTATE of a database failure, when the error carries one. */
-export const databaseErrorCode = (error: unknown): string | undefined =>
-  typeof error === "object" && error !== null && "code" in error
-    ? String((error as { readonly code?: unknown }).code)
-    : undefined;
-
 /** The closed set of database failure kinds that services map to their own safe codes. */
 type DatabaseFailureKind =
   | "refused"
@@ -41,7 +36,7 @@ type DatabaseFailureKind =
  * database SQLSTATE is classified, so stored-data failures use their own typed errors instead.
  */
 export const classifyDatabaseError = (error: unknown): DatabaseFailureKind => {
-  switch (databaseErrorCode(error)) {
+  switch (databaseCode(error)) {
     case "42501":
       return "refused";
     case "40001":
@@ -68,9 +63,9 @@ const describeCause = (cause: unknown): string => {
     return cause.issues
       .map((issue) => `${issue.path.join(".") || "(root)"}: ${issue.message}`)
       .join("; ");
-  const databaseCode = databaseErrorCode(cause);
+  const code = databaseCode(cause);
   const message = cause instanceof Error ? cause.message : String(cause);
-  return databaseCode === undefined ? message : `database ${databaseCode}: ${message}`;
+  return code === undefined ? message : `database ${code}: ${message}`;
 };
 
 /** A definition rule refusing the draft (a validation answer) somewhere in this cause chain. */
