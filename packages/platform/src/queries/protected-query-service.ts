@@ -26,7 +26,7 @@ import {
 } from "./protected-query-contracts";
 import { groupedMembersCommand } from "./protected-query-grouped";
 import { treeLevelCommand } from "./protected-query-tree";
-import { refuseInvalidCommand } from "./protected-query-helpers";
+import { answeredOnce, refuseInvalidCommand } from "./protected-query-helpers";
 import { summariseCommand, boardSummaryCommand } from "./protected-query-summary";
 import { runCommand } from "./protected-query-table";
 import type { ProtectedQueryServiceDependencies } from "./protected-query-types";
@@ -42,7 +42,8 @@ export type { ProtectedQueryServiceDependencies } from "./protected-query-types"
 /**
  * A read that names no application is answered unavailable before any request runs, so the
  * request runner logged nothing: this is its one line. Every other answer that is not available
- * was logged once by the runner, so a caller of the service never logs one again.
+ * was logged once by the runner, and every refused answer of a read is logged once by the query
+ * itself (`answeredOnce`), so a caller of the service never logs an answer again.
  */
 const noApplicationSelected = (): Readonly<{ kind: "unavailable" }> => {
   logRefusal("protected-query", "request", "application_not_selected");
@@ -104,7 +105,8 @@ export const createProtectedQueryService = (dependencies: ProtectedQueryServiceD
     return {
       kind: "ready",
       person: caller,
-      read: (transaction, scope) => runCommand(transaction, scope, command.data, continuationKey),
+      read: async (transaction, scope) =>
+        answeredOnce(await runCommand(transaction, scope, command.data, continuationKey), "table"),
     };
   };
 
@@ -135,8 +137,11 @@ export const createProtectedQueryService = (dependencies: ProtectedQueryServiceD
       if (!command.success)
         return { kind: "available", value: refuseInvalidCommand(command.error) };
       if (selection.applicationRootId === undefined) return noApplicationSelected();
-      return requests.run(caller, selection, (transaction, scope) =>
-        boardMembersCommand(transaction, scope, command.data, continuationKey),
+      return requests.run(caller, selection, async (transaction, scope) =>
+        answeredOnce(
+          await boardMembersCommand(transaction, scope, command.data, continuationKey),
+          "board_members",
+        ),
       );
     },
     async boardColumnPages(
@@ -153,8 +158,11 @@ export const createProtectedQueryService = (dependencies: ProtectedQueryServiceD
       if (!command.success)
         return { kind: "available", value: refuseInvalidCommand(command.error) };
       if (selection.applicationRootId === undefined) return noApplicationSelected();
-      return requests.run(caller, selection, (transaction, scope) =>
-        boardColumnPagesCommand(transaction, scope, command.data, continuationKey),
+      return requests.run(caller, selection, async (transaction, scope) =>
+        answeredOnce(
+          await boardColumnPagesCommand(transaction, scope, command.data, continuationKey),
+          "board_columns",
+        ),
       );
     },
     async groupedMembers(
@@ -169,12 +177,15 @@ export const createProtectedQueryService = (dependencies: ProtectedQueryServiceD
         return { kind: "available", value: refuseInvalidCommand(command.error) };
       if (selection.applicationRootId === undefined) return noApplicationSelected();
       return requests.run(personCaller, selection, async (transaction, scope, issuedAt) => {
-        const result = await groupedMembersCommand(
-          transaction,
-          scope,
-          personCaller,
-          command.data,
-          continuationKey,
+        const result = answeredOnce(
+          await groupedMembersCommand(
+            transaction,
+            scope,
+            personCaller,
+            command.data,
+            continuationKey,
+          ),
+          "grouped",
         );
         if (decide !== undefined && result.outcome === "completed")
           await decide(transaction, scope, issuedAt, result.rows);
@@ -193,12 +204,9 @@ export const createProtectedQueryService = (dependencies: ProtectedQueryServiceD
         return { kind: "available", value: refuseInvalidCommand(command.error) };
       if (selection.applicationRootId === undefined) return noApplicationSelected();
       return requests.run(personCaller, selection, async (transaction, scope, issuedAt) => {
-        const result = await treeLevelCommand(
-          transaction,
-          scope,
-          personCaller,
-          command.data,
-          continuationKey,
+        const result = answeredOnce(
+          await treeLevelCommand(transaction, scope, personCaller, command.data, continuationKey),
+          "tree_level",
         );
         if (decide !== undefined && result.outcome === "completed")
           await decide(transaction, scope, issuedAt, result.rows);
@@ -216,7 +224,10 @@ export const createProtectedQueryService = (dependencies: ProtectedQueryServiceD
         return { kind: "available", value: refuseInvalidCommand(command.error) };
       if (selection.applicationRootId === undefined) return noApplicationSelected();
       return requests.run(caller, selection, async (transaction, scope, issuedAt) => {
-        const result = await summariseCommand(transaction, scope, command.data);
+        const result = answeredOnce(
+          await summariseCommand(transaction, scope, command.data),
+          "summary",
+        );
         if (decide !== undefined && result.outcome === "completed")
           await decide(transaction, scope, issuedAt, [], result);
         return result;
@@ -231,8 +242,8 @@ export const createProtectedQueryService = (dependencies: ProtectedQueryServiceD
       if (!command.success)
         return { kind: "available", value: refuseInvalidCommand(command.error) };
       if (selection.applicationRootId === undefined) return noApplicationSelected();
-      return requests.run(caller, selection, (transaction, scope) =>
-        boardSummaryCommand(transaction, scope, command.data),
+      return requests.run(caller, selection, async (transaction, scope) =>
+        answeredOnce(await boardSummaryCommand(transaction, scope, command.data), "board_summary"),
       );
     },
   });

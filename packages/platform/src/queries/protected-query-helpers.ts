@@ -2,12 +2,13 @@ import "server-only";
 
 import type { z, ZodError } from "zod";
 import type { DatabaseRow, RequestDatabaseTransaction } from "../db/request-transaction";
-import {
-  isInstallationRequired,
-  type ProtectedQueryRefusalReasonCode,
-  type ProtectedQueryResult,
-  type ProtectedQueryCommand,
-  type ProtectedQuerySummaryCommand,
+import { logRefusal } from "../access/request-failure";
+import { markRequestFailureLogged, requestFailureLogged } from "../access/request-failure-mark";
+import type {
+  ProtectedQueryRefusalReasonCode,
+  ProtectedQueryResult,
+  ProtectedQueryCommand,
+  ProtectedQuerySummaryCommand,
 } from "./protected-query-contracts";
 import { inputsReadSchema } from "./protected-query-read-schemas";
 import {
@@ -29,40 +30,44 @@ export const refusal = (
 });
 
 /**
- * A refusal the engine answers with: the client sees only the neutral reason code; the part of the
- * request and the cause are logged here so a refusal never goes without one. A stale continuation
- * (the records or release moved since the page loaded), an input value the page cannot run and a
- * preview of a system projection that is not installed are expected answers and are logged as
- * information, here only; every other refusal is an error.
+ * The refusals that say the platform cannot run its own query: a stored descriptor it cannot read,
+ * or an answer of the query that breaks the contract of the arrangement reading it.
  */
+const faultReasonCodes: ReadonlySet<string> = new Set(["descriptor_invalid", "dataset_invalid"]);
+
+/**
+ * Passes an answer through an exit of a protected query, where the answer is made: a refused answer
+ * nobody logged yet is logged once, as its part and reason code (never a value or a message), and
+ * marked; an answer already logged, and every completed answer, pass unchanged. Every refusal is
+ * information (a stale position, an input the page cannot run, a forbidden read, an application
+ * not installed) except the platform faults above, which are errors.
+ */
+export const answeredOnce = <Answer extends Readonly<{ outcome: string; reasonCode?: string }>>(
+  answer: Answer,
+  part: string,
+): Answer => {
+  if (answer.outcome !== "refused" || requestFailureLogged(answer)) return answer;
+  const reasonCode = answer.reasonCode ?? "unknown";
+  if (faultReasonCodes.has(reasonCode))
+    console.error(`[protected-query] request part=${part} refused: code=${reasonCode}`);
+  else logRefusal("protected-query", `request part=${part}`, reasonCode);
+  return markRequestFailureLogged(answer);
+};
+
+/** A refusal the engine answers with: the part of the request it refused and its reason code. */
 export const refuseWithCause = (
   reasonCode: ProtectedQueryRefusalReasonCode,
   part: string,
-  cause: string,
-): Extract<ProtectedQueryResult, { outcome: "refused" }> => {
-  const expected =
-    reasonCode === "cursor_stale" ||
-    reasonCode === "input_invalid" ||
-    isInstallationRequired(reasonCode);
-  (expected ? console.info : console.error)("[protected-query] request refused", {
-    part,
-    reason: reasonCode,
-    cause,
-  });
-  return refusal(reasonCode);
-};
+): Extract<ProtectedQueryResult, { outcome: "refused" }> => answeredOnce(refusal(reasonCode), part);
 
 /** A command that does not parse is refused; the issues' codes and paths (never values) are logged. */
 export const refuseInvalidCommand = (
   error: ZodError,
-): Extract<ProtectedQueryResult, { outcome: "refused" }> => {
-  console.error("[protected-query] request refused", {
-    part: "command",
-    reason: "request_invalid",
-    issues: error.issues.map(({ code, path }) => ({ code, path })),
-  });
-  return refusal("request_invalid");
-};
+): Extract<ProtectedQueryResult, { outcome: "refused" }> =>
+  answeredOnce(
+    refusal("request_invalid"),
+    `command issues=${error.issues.map(({ code, path }) => `${code}@${path.join(".")}`).join(",")}`,
+  );
 
 export const one = (rows: readonly ResultRow[]): unknown => {
   if (rows.length !== 1 || rows[0] === undefined) throw new Error("PROTECTED_QUERY_RESULT_INVALID");
@@ -128,7 +133,7 @@ export const normalizeConditionFieldIdentifiers = (condition: unknown): unknown 
 /**
  * The admission every protected query mode runs before its SQL: the query's declared inputs, the
  * continuation's release (when the request continues one), the declarations and the caller's
- * values. A refusal is logged with its cause.
+ * values. A refusal is logged once, with its part.
  */
 export const admitQueryInputs = async (
   transaction: RequestDatabaseTransaction,
@@ -143,16 +148,14 @@ export const admitQueryInputs = async (
   | Extract<ProtectedQueryResult, { outcome: "refused" }>
 > => {
   const declared = await readInputs(transaction, command);
-  if (declared.outcome === "refused")
-    return refuseWithCause(declared.reasonCode, "query_inputs", declared.reasonCode);
+  if (declared.outcome === "refused") return refuseWithCause(declared.reasonCode, "query_inputs");
   if (
     continuedReleaseRevision !== undefined &&
     continuedReleaseRevision !== declared.moduleReleaseRevision
   )
-    return refuseWithCause("cursor_stale", "continuation", "release_changed");
+    return refuseWithCause("cursor_stale", "continuation");
   const declarations = parseQueryInputDeclarations(declared.inputs);
-  if (declarations === undefined)
-    return refuseWithCause("descriptor_invalid", "query_inputs", "declarations_unreadable");
+  if (declarations === undefined) return refuseWithCause("descriptor_invalid", "query_inputs");
   try {
     return {
       outcome: "admitted",
@@ -161,7 +164,7 @@ export const admitQueryInputs = async (
     };
   } catch (error) {
     if (error instanceof QueryInputRefusalError)
-      return refuseWithCause("input_invalid", "query_inputs", error.message);
+      return refuseWithCause("input_invalid", "query_inputs");
     throw error;
   }
 };
