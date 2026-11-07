@@ -84,6 +84,7 @@ import {
 } from "./application-composition-regions";
 import { FORM_CONTAINER_KEY, NESTED_FORM_REASON } from "./application-composition-forms";
 import type { StudioPlacementDescriber } from "./semantic-outline";
+import { describeFailure } from "../../catalogue/runtime-primitives";
 
 /**
  * What the author calls the entry of a repeating slot (a tab) that is stored under `slotKey`: its
@@ -374,7 +375,9 @@ export const describeStudioCompositionAddTargets = (
         ? { kind: places }
         : { kind: "available", targets: Object.freeze(places.map((place) => place.target)) };
   } catch (error) {
-    console.error("[studio] the places for a new block could not be read", error);
+    console.error(
+      `[studio] the places for a new block could not be read: ${describeFailure(error)}`,
+    );
     return { kind: "invalid" };
   }
 };
