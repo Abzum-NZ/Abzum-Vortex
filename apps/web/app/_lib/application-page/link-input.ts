@@ -399,7 +399,7 @@ type RecordChoicePageResult =
       nextContinuationToken?: string;
     }>
   | Readonly<{ kind: "reload" }>
-  /** `logged`: the request runner or the query already logged this refusal, once. */
+  /** `logged`: the request runner, the query or the options flow already logged this, once. */
   | Readonly<{ kind: "refused"; cause: string; logged?: true }>
   | Readonly<{ kind: "temporarily_unavailable" }>;
 
@@ -852,7 +852,7 @@ const loadFlowOptionsPage = async (
     inputs,
   );
   if (ran.kind === "temporarily_unavailable") return { kind: "temporarily_unavailable" };
-  // The flow's own fault or the query's refusal was logged, once, where it was found.
+  // The flow's own fault or refusal, or its query's, was logged, once, where it was found.
   if (ran.kind === "failed") return { kind: "refused", cause: "options_flow_failed", logged: true };
   const needle = request.search?.trim().toLowerCase() ?? "";
   const matching = ran.options.filter((option) => option.label.toLowerCase().includes(needle));

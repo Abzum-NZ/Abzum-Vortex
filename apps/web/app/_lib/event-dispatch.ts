@@ -1,7 +1,11 @@
 import "server-only";
 
 import { createHash, randomBytes } from "node:crypto";
-import { createEventDispatcherWakeup, markRequestFailureLogged } from "@vortex/platform/server";
+import {
+  createEventDispatcherWakeup,
+  logFault,
+  markRequestFailureLogged,
+} from "@vortex/platform/server";
 import { eventConsumers } from "./event-consumers";
 
 /**
@@ -32,16 +36,21 @@ export const createInProcessEventDispatcher = (): InProcessEventDispatcher => {
       authorization: `Bearer ${credential}`,
       body: { source: "scheduled_recovery" },
     });
-    // A grant the dispatcher could not use is logged, once, where it happened: the caller adds no
-    // second line for the error restating it.
+    // The dispatcher's answer is logged once with its code (a grant it could not use, where that
+    // was found): the caller adds no second line for the error restating it.
     if (response.outcome === "refused") {
-      const refusal = new Error(`The event dispatcher was refused: ${response.reason}.`);
-      throw response.reason === "dispatcher_grant_unavailable"
-        ? markRequestFailureLogged(refusal)
-        : refusal;
+      if (response.reason !== "dispatcher_grant_unavailable")
+        logFault("events", "in-process dispatch", `refused_${response.reason}`);
+      throw markRequestFailureLogged(
+        new Error(`The event dispatcher was refused: ${response.reason}.`),
+      );
     }
-    if (response.outcome === "invalid_request")
-      throw new Error(`The event dispatch request was invalid: ${response.code}.`);
+    if (response.outcome === "invalid_request") {
+      logFault("events", "in-process dispatch", `invalid_${response.code}`);
+      throw markRequestFailureLogged(
+        new Error(`The event dispatch request was invalid: ${response.code}.`),
+      );
+    }
     const { result } = response;
     if (result.status === "interrupted" || result.status === "partial_failure")
       throw new Error(`Event delivery did not complete: ${JSON.stringify(result)}.`);

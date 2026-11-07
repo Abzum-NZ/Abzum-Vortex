@@ -9,7 +9,7 @@ import {
   recordTypeIdSchema,
 } from "../catalogue/identifiers";
 import type { IdentitySession, OrganizationSelectionCandidate } from "../access/identity-access";
-import { logFault } from "../access/request-failure";
+import { logFault, logRefusal } from "../access/request-failure";
 import { jsonValueSchema } from "../catalogue/common";
 import {
   continueFlowRun,
@@ -39,7 +39,8 @@ const maximumReadSteps = 20;
 
 /**
  * `failed`: the flow could not give its options, and the failure was logged, once, where it was
- * found: a flaw of the flow's definition here, a refused query read by the query's own line.
+ * found: a flaw of the flow's definition or a run the flow refused here, a refused query read by
+ * the query's own line.
  */
 type FieldOptionsFlowResult =
   | Readonly<{ kind: "options"; options: readonly FieldOptionsFlowOption[] }>
@@ -87,8 +88,15 @@ export const runFieldOptionsFlow = async (
       continue;
     }
     if (step.kind === "finished") {
-      if (step.result.status !== "completed")
-        return definitionFault(`flow_${step.result.failure.code}`);
+      if (step.result.status !== "completed") {
+        const { outcome, code } = step.result.failure;
+        // A run the flow refused (a required input the person has not filled in yet, a refusing
+        // rule) is an expected answer; any other end is a fault.
+        if (outcome !== "refused" && outcome !== "validation" && outcome !== "conflict")
+          return definitionFault(`flow_${code}`);
+        logRefusal("field-options", `options flow ${flowId}`, `flow_${code}`);
+        return { kind: "failed" };
+      }
       const declared = step.result.outputs.options;
       const parsed = flowOptionsSchema.safeParse(declared?.value);
       return parsed.success
