@@ -28,7 +28,7 @@ import { STUDIO_RAIL_BODY_CLASS, StudioPanelShell } from "./studio-frame";
 import { StudioInspectorHeader, StudioInspectorHeaderSlot } from "./studio-inspector";
 import { StudioField } from "./studio-field";
 import { StudioDataPanel } from "./studio-data-panel";
-import { StudioDataCentre, StudioDataEmpty } from "./studio-data-centre";
+import { StudioDataCentre } from "./studio-data-centre";
 import { StudioRecordTypeDialog } from "./studio-record-type-dialog";
 import { StudioModuleDialog } from "./studio-module-dialog";
 import { StudioReferencesAlert, StudioUsedIn } from "./studio-used-in";
@@ -630,7 +630,6 @@ export function StudioDataCentreView({ model }: Readonly<{ model: StudioDataMode
     />
   ) : showingSearch ? (
     <div className="mx-auto w-full max-w-4xl space-y-6 px-8 py-6">
-      <h2 className="text-xl font-semibold tracking-tight">Search settings</h2>
       <StudioSearchOverview
         source={source}
         modules={modules}
@@ -761,12 +760,7 @@ export function StudioDataInspectorView({ model }: Readonly<{ model: StudioDataM
     setSortableOnly(true);
   };
   const inspectorBody =
-    current === null || module === undefined ? (
-      <StudioDataEmpty
-        title="Nothing selected"
-        description="Select a field or record type to change it."
-      />
-    ) : !isOwned ? (
+    current === null || module === undefined ? null : !isOwned ? (
       <ReadOnlyInspector
         key={JSON.stringify(current)}
         module={module}
@@ -805,7 +799,7 @@ export function StudioDataInspectorView({ model }: Readonly<{ model: StudioDataM
     ) : current.kind === "record_type" ? (
       adding?.scope === scope ? (
         <div className="space-y-4">
-          <StudioInspectorHeader title="New field" kind="Record type" />
+          <StudioInspectorHeader title="New field" kind={targetLabel(scope)} />
           <ModuleFieldsEditor
             key={`${scope}:${adding.type}`}
             source={source}
@@ -984,8 +978,9 @@ export function StudioDataDialogs({ model }: Readonly<{ model: StudioDataModel }
         edit={edit}
         onClose={() => setCreating(false)}
         onCreated={(moduleKey, recordKey) => {
-          select({ kind: "record_type", moduleKey, recordKey });
+          // The home dashboard fills first: a Structure command ends by selecting what it changed.
           fillHome(`${moduleKey}:${recordKey}`);
+          select({ kind: "record_type", moduleKey, recordKey });
         }}
       />
       <StudioQuerySheet

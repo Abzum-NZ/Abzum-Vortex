@@ -14,7 +14,6 @@ import {
   type StudioPlacementDescriber,
   type StudioSemanticOutline,
   type StudioSemanticSelection,
-  studioPageLayoutPlan,
   type StudioStructureResult,
   applyStudioStructureCommand,
   type StudioStructureCommand,
@@ -99,28 +98,21 @@ export type StudioStructureCommandRunner = ReturnType<typeof useStudioStructureC
  */
 export function useStudioStructureTab({
   draft,
-  catalogue,
-  describePlacement,
   structure,
   outline,
   hidden,
-  openAccessPages,
   form,
   onFormChange,
 }: Readonly<{
   draft: StudioDraft;
-  catalogue: ImmutablePlatformBlockCatalogue;
-  describePlacement: StudioPlacementDescriber;
   structure: StudioStructureCommandRunner;
   outline: StudioSemanticOutline;
   hidden: boolean;
   form: StudioStructureForm;
   onFormChange: (form: StudioStructureForm) => void;
-  /** Opens Access on its Pages and menu view, where who can open a page is set. */
-  openAccessPages: () => void;
 }>) {
   const { source, selected } = draft;
-  const { command, preview, publishedFields } = structure;
+  const { command, preview } = structure;
   const homePage = source.body.pages.find((page) => page.key === source.body.home_page);
   const selectionKey = selected === null ? "" : studioSemanticSelectionKey(selected);
 
@@ -144,17 +136,8 @@ export function useStudioStructureTab({
           form={form}
           onFormChange={onFormChange}
           source={source}
-          selected={selected}
           onCommand={command}
           onPreview={preview}
-          onLayoutPlan={(pageAlias, shellAlias) =>
-            studioPageLayoutPlan(
-              { source, catalogue, describePlacement, publishedFields, rootId: draft.state.rootId },
-              pageAlias,
-              shellAlias,
-            )
-          }
-          onOpenAccess={openAccessPages}
           disabled={draft.locked || (form === "record" && draft.view.published === null)}
         />
       }

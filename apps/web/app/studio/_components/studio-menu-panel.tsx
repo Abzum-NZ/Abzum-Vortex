@@ -42,7 +42,12 @@ import { StudioPanelShell, StudioSection } from "./studio-frame";
 import { StudioField } from "./studio-field";
 import { useStudioDraftText } from "./use-studio-draft-text";
 
-type Feedback = Readonly<{ kind: "applied" | "refused"; message: string }>;
+/** What the last edit said; an applied one holds the menu it made, so Undo or Redo takes its line away. */
+type Feedback = Readonly<{
+  kind: "applied" | "refused";
+  message: string;
+  menu?: string | undefined;
+}>;
 
 const kindWords = (item: StudioMenuItem) =>
   item.type === "heading" ? "Heading" : item.type === "page" ? "Page" : "Link";
@@ -88,10 +93,19 @@ export function StudioMenuPanel({
   const [firstPage, setFirstPage] = useState("");
   const pages = useMemo(() => studioMenuPageChoices(source), [source]);
   const library = source.body.theme.selection.icon_library;
+  const menuNow = useMemo(() => JSON.stringify(source.body.navigation), [source.body.navigation]);
+  const shownFeedback =
+    feedback !== null && (feedback.menu === undefined || feedback.menu === menuNow)
+      ? feedback
+      : null;
 
   const run = (command: StudioMenuCommand, merge?: string): boolean => {
     const result = onCommand(command, merge);
-    setFeedback({ kind: result.kind, message: result.message });
+    setFeedback({
+      kind: result.kind,
+      message: result.message,
+      menu: result.kind === "applied" ? JSON.stringify(result.source.body.navigation) : undefined,
+    });
     return result.kind === "applied";
   };
   const selected = selectedAlias === null ? undefined : studioMenuPosition(source, selectedAlias);
@@ -524,12 +538,12 @@ export function StudioMenuPanel({
               Drop here to move it to the end of the menu
             </Item>
           )}
-          {feedback !== null && (
+          {shownFeedback !== null && (
             <Alert
-              variant={feedback.kind === "refused" ? "destructive" : "default"}
-              role={feedback.kind === "refused" ? "alert" : "status"}
+              variant={shownFeedback.kind === "refused" ? "destructive" : "default"}
+              role={shownFeedback.kind === "refused" ? "alert" : "status"}
             >
-              <AlertDescription>{feedback.message}</AlertDescription>
+              <AlertDescription>{shownFeedback.message}</AlertDescription>
             </Alert>
           )}
           {confirmDialog}

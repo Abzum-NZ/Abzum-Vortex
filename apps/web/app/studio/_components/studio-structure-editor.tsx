@@ -1,14 +1,9 @@
 "use client";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import {
-  sourcePageShell,
   type ApplicationSourceDocument,
-  type ApplicationUsePlace,
-  type StudioSemanticSelection,
   studioRecordPageChoices,
-  type StudioPageLayoutPlan,
   type StudioStructureResult,
-  studioAccessGateChoices,
   studioStructureDefaultShell,
   studioStructureShellChoices,
   type StudioStructureCommand,
@@ -22,121 +17,53 @@ import {
   DropdownMenuTrigger,
 } from "@vortex/ui/components/dropdown-menu";
 import { Checkbox } from "@vortex/ui/components/checkbox";
-import { useConfirm } from "@vortex/ui/components/confirm-dialog";
 import { Input } from "@vortex/ui/components/input";
 import { Label } from "@vortex/ui/components/label";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-} from "@vortex/ui/components/dialog";
-import { studioNotice } from "./studio-save-state";
 import { StudioLimitNote, Reasoned, studioLimitReason } from "@vortex/ui/studio";
-import { StudioInspectorActions } from "@vortex/ui/studio";
 import { StudioOptionControl } from "@vortex/ui/studio";
 import { StudioField } from "./studio-field";
 import { StudioRecordPageForm } from "./studio-record-page-form";
-import { StudioPlaceList } from "./studio-used-in";
-import { useStudioDraftText } from "./use-studio-draft-text";
-import { StudioPageLayoutDialog } from "./studio-page-layout-dialog";
+import { useStudioStructureRun } from "./use-studio-structure-run";
 
-type Refusal = Readonly<{
-  message: string;
-  where?: readonly ApplicationUsePlace[] | undefined;
-}>;
 export type StudioStructureForm = "none" | "page" | "record" | "shell";
 
 /**
- * The Structure tab's controls: add a page or a layout, and rename, remove or make home the page or
- * layout selected in the tree. Each control sends one command; a refusal uses the shared toast
- * region with a way to inspect references, and nothing changes.
+ * The Structure tab's controls: add a page, a page for a record type or a layout. Each control sends
+ * one command; a refusal uses the shared toast region with a way to inspect references, and nothing
+ * changes. The selected page's or layout's own settings are in the inspector.
  */
 export function StudioStructureEditor({
   source,
-  selected,
   disabled,
   onCommand,
   onPreview,
-  onLayoutPlan,
-  onOpenAccess,
   form,
   onFormChange,
 }: Readonly<{
   form: StudioStructureForm;
   onFormChange: (form: StudioStructureForm) => void;
   source: ApplicationSourceDocument;
-  selected: StudioSemanticSelection | null;
   disabled: boolean;
   /** One Structure edit; `merge` joins a run of edits to one value (typing a name) into one Undo step. */
   onCommand: (command: StudioStructureCommand, merge?: string) => StudioStructureResult;
   /** Runs a command on the current draft without keeping it, for a preview of what it adds. */
   onPreview: (command: StudioStructureCommand) => StudioStructureResult;
-  onLayoutPlan: (pageAlias: string, shellAlias: string | null) => StudioPageLayoutPlan;
-  /** Opens the Access tab, where who can open a page is set. */
-  onOpenAccess: () => void;
 }>) {
-  const [confirm, confirmDialog] = useConfirm();
   const setForm = onFormChange;
-  const [refusal, setRefusal] = useState<Refusal | null>(null);
-  const [showReferences, setShowReferences] = useState(false);
+  const structure = useStudioStructureRun(onCommand);
   const [newName, setNewName] = useState("");
   const [pageKind, setPageKind] = useState<"dashboard" | "form">("dashboard");
   const [recordType, setRecordType] = useState("");
   const [shellChoice, setShellChoice] = useState("");
   const [addToMenu, setAddToMenu] = useState(true);
-  const [layoutChange, setLayoutChange] = useState<{
-    pageAlias: string;
-    shellAlias: string | null;
-  } | null>(null);
   const choices = useMemo(() => studioStructureShellChoices(source), [source]);
 
-  const page =
-    selected?.kind === "page"
-      ? source.body.pages.find((entry) => entry.id === selected.pageAlias)
-      : undefined;
-  const shell =
-    selected?.kind === "shell"
-      ? source.body.shells.find((entry) => entry.id === selected.shellAlias)
-      : undefined;
-  const target = page ?? shell;
-  const what = page !== undefined ? "page" : "layout";
-  const gate =
-    page === undefined
-      ? undefined
-      : studioAccessGateChoices(source).find((choice) => choice.key === page.permission);
-  const pageShell = page === undefined ? null : sourcePageShell(page.composition);
-  const movingPage = source.body.pages.find((entry) => entry.id === layoutChange?.pageAlias);
-
-  const run = (command: StudioStructureCommand, merge?: string): boolean => {
-    const result = onCommand(command, merge);
-    if (result.kind === "refused") {
-      const hasReferences = result.where !== undefined && result.where.length > 0;
-      studioNotice("Nothing was changed", "error", undefined, {
-        id: "studio-structure-refusal",
-        description: <span className="text-muted-foreground">{result.message}</span>,
-        duration: Infinity,
-        closeButton: true,
-        action: {
-          label: hasReferences ? "Show me where" : "Dismiss",
-          onClick: () => {
-            if (hasReferences) {
-              setRefusal(result);
-              setShowReferences(true);
-            }
-          },
-        },
-      });
-    }
-    return result.kind === "applied";
-  };
+  const run = structure.run;
   useEffect(() => {
     setNewName("");
     setPageKind("dashboard");
     setRecordType("");
-    setRefusal(null);
-    setShowReferences(false);
+    structure.reset();
     setAddToMenu(true);
     setShellChoice(studioStructureDefaultShell(source) ?? "");
     // Opening a form starts a fresh command, independent of later draft changes.
@@ -159,36 +86,6 @@ export function StudioStructureEditor({
         : run({ kind: "add_shell", name: newName });
     if (applied) setForm("none");
   };
-  const rename = useStudioDraftText(target?.name ?? "", (next) =>
-    next.trim().length === 0
-      ? `Enter a name for the ${what}.`
-      : selected?.kind === "page" || selected?.kind === "shell"
-        ? run(
-            { kind: "rename", selection: selected, name: next },
-            `structure-name:${target?.id ?? ""}`,
-          ) || ""
-        : "",
-  );
-  const remove = async () => {
-    if (target === undefined) return;
-    if (
-      !(await confirm({
-        title: `Remove the ${what} “${target.name}”?`,
-        description:
-          page !== undefined
-            ? "The page, its blocks and its menu entries leave the draft. Undo brings them back."
-            : "The layout and its blocks leave the draft. Undo brings them back.",
-        confirmLabel: `Remove ${what}`,
-      }))
-    )
-      return;
-    run(
-      page !== undefined
-        ? { kind: "remove_page", pageAlias: page.id }
-        : { kind: "remove_shell", shellAlias: shell!.id },
-    );
-  };
-
   return (
     <div className="space-y-4">
       {form === "record" && (
@@ -313,122 +210,7 @@ export function StudioStructureEditor({
           </div>
         </form>
       )}
-      {target !== undefined && (
-        <section key={target.id} className="space-y-4" aria-label={`Selected ${what}`}>
-          <div className="flex items-center justify-between gap-2">
-            <p className="text-sm font-medium">
-              {page !== undefined ? "Selected page" : "Selected layout"}
-              {page !== undefined && page.key === source.body.home_page && (
-                <span className="text-muted-foreground"> · home page</span>
-              )}
-            </p>
-            <StudioInspectorActions
-              actions={[
-                {
-                  label: page !== undefined ? "Delete page" : "Delete layout",
-                  destructive: true,
-                  disabled,
-                  onSelect: () => {
-                    void remove();
-                  },
-                },
-              ]}
-            />
-          </div>
-          <StudioField
-            label="Name"
-            error={rename.problem === "" ? undefined : rename.problem}
-            onUndo={rename.reset}
-          >
-            {(control) => (
-              <Input
-                {...control}
-                value={rename.text}
-                maxLength={60}
-                disabled={disabled}
-                onChange={(event) => rename.change(event.target.value)}
-              />
-            )}
-          </StudioField>
-          <div className="flex flex-wrap gap-2">
-            {page !== undefined && page.key !== source.body.home_page && (
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                disabled={disabled}
-                onClick={() => run({ kind: "set_home_page", pageAlias: page.id })}
-              >
-                Make home page
-              </Button>
-            )}
-          </div>
-          {page !== undefined && (
-            <StudioField label="Layout" hint="Choose where your blocks go when you change layout.">
-              {(control) => (
-                <StudioOptionControl
-                  {...control}
-                  value={pageShell ?? ""}
-                  disabled={disabled}
-                  options={choices.map((choice) => ({
-                    value: choice.shellAlias ?? "",
-                    label: choice.label,
-                  }))}
-                  onChange={(value) => {
-                    const shellAlias = value === "" ? null : value;
-                    if (shellAlias !== pageShell)
-                      setLayoutChange({ pageAlias: page.id, shellAlias });
-                  }}
-                />
-              )}
-            </StudioField>
-          )}
-          {page !== undefined && (
-            <div className="space-y-1">
-              <p className="text-sm font-medium">Who can open it</p>
-              <p className="text-sm text-muted-foreground">
-                {gate === undefined
-                  ? "This page names a permission the application does not declare."
-                  : `People who hold “${gate.label}”: ${gate.roles.length === 0 ? "no role holds it yet" : gate.roles.join(", ")}.`}
-              </p>
-              <Button type="button" size="sm" variant="outline" onClick={onOpenAccess}>
-                <Icon name="shield" />
-                Change in Access
-              </Button>
-            </div>
-          )}
-        </section>
-      )}
-      <Dialog open={showReferences} onOpenChange={setShowReferences}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Where it is used</DialogTitle>
-            <DialogDescription>{refusal?.message}</DialogDescription>
-          </DialogHeader>
-          <StudioPlaceList
-            places={refusal?.where ?? []}
-            label="Where it is used"
-            onBeforeOpen={() => setShowReferences(false)}
-          />
-        </DialogContent>
-      </Dialog>
-      {layoutChange !== null && movingPage !== undefined && (
-        <StudioPageLayoutDialog
-          key={`${layoutChange.pageAlias}:${layoutChange.shellAlias ?? ""}`}
-          pageAlias={layoutChange.pageAlias}
-          pageName={movingPage.name}
-          shellAlias={layoutChange.shellAlias}
-          layoutName={
-            choices.find((choice) => choice.shellAlias === layoutChange.shellAlias)!.label
-          }
-          plan={onLayoutPlan(layoutChange.pageAlias, layoutChange.shellAlias)}
-          disabled={disabled}
-          onPreview={onPreview}
-          onCommand={onCommand}
-          onClose={() => setLayoutChange(null)}
-        />
-      )}
-      {confirmDialog}
+      {structure.dialog}
     </div>
   );
 }

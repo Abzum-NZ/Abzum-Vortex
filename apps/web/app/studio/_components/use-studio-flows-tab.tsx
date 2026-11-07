@@ -791,5 +791,7 @@ export function useStudioFlowsTab({
     </>
   );
 
-  return { panel, centre, inspector, placementWorkflows, deleteActions, deleteNotice };
+  // The centre's title: the chosen flow, else the tab's name.
+  const title = flowSelection === null ? "Flows" : (labels.get(selectionKey) ?? "Flow");
+  return { panel, centre, inspector, title, placementWorkflows, deleteActions, deleteNotice };
 }

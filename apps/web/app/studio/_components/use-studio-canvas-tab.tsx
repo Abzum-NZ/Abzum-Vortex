@@ -66,6 +66,7 @@ import { StudioQuerySheet } from "./studio-query-sheet";
 import { StudioCanvasToolbar, type StudioCanvasZoom } from "./studio-canvas-toolbar";
 import { StudioPanelShell } from "./studio-frame";
 import { StudioInspector } from "./studio-inspector";
+import type { useStudioStructureSettings } from "./studio-structure-settings";
 import { StudioLayoutOutlets, StudioLayoutOutletUses } from "./studio-layout-outlets";
 import type { StudioStructureCommandRunner } from "./use-studio-structure-tab";
 import { StudioUsedIn } from "./studio-used-in";
@@ -123,6 +124,7 @@ export function useStudioCanvasTab({
   catalogue,
   describePlacement,
   structure,
+  structureSettings,
   fieldInputControlReleases,
   platformThemeTokens,
   outline,
@@ -141,6 +143,8 @@ export function useStudioCanvasTab({
   describePlacement: StudioPlacementDescriber;
   /** The Structure command runner the Layout inspector edits through. */
   structure: StudioStructureCommandRunner;
+  /** The selected page's or layout's settings and Delete, from the Structure commands. */
+  structureSettings: ReturnType<typeof useStudioStructureSettings>;
   fieldInputControlReleases: FieldInputControlReleaseMap | null;
   platformThemeTokens: PlatformThemeTokens | null;
   outline: StudioSemanticOutline;
@@ -472,9 +476,13 @@ export function useStudioCanvasTab({
     selected?.kind === "page"
       ? source.body.pages.find((page) => page.id === selected.pageAlias)
       : undefined;
+  const selectedShell =
+    selected?.kind === "shell"
+      ? source.body.shells.find((shell) => shell.id === selected.shellAlias)
+      : undefined;
   const editable =
     inspector.status === "resolved" &&
-    (selected?.kind === "application" || selectedPage !== undefined);
+    (selected?.kind === "application" || selectedPage !== undefined || selectedShell !== undefined);
   // The inspector's name and description of the selected item: a run of typing is one Undo step.
   const setLabels = (name: string, description: string): string | true => {
     const selection = draft.selection.getSelection();
@@ -493,7 +501,7 @@ export function useStudioCanvasTab({
         ? result.message
         : result.kind === "invalid"
           ? name.trim().length === 0
-            ? `Enter a name for the ${selection?.kind === "application" ? "application" : "page"}.`
+            ? `Enter a name for the ${selection?.kind === "application" ? "application" : selection?.kind === "shell" ? "layout" : "page"}.`
             : selection?.kind === "application"
               ? "Enter a name and description within their length limits."
               : "Enter a name of at most 60 characters."
@@ -602,7 +610,9 @@ export function useStudioCanvasTab({
         : selected === null
           ? undefined
           : selected.kind === "navigation"
-            ? "Change this menu entry in the Menu tab."
+            ? tab === "menu"
+              ? "Edit this entry with its settings button in the list."
+              : "Change this menu entry in the Menu tab."
             : selected.kind === "shell"
               ? undefined
               : selected.kind === "role"
@@ -632,19 +642,29 @@ export function useStudioCanvasTab({
           ? {
               isApplication: selected?.kind === "application",
               label:
-                selected?.kind === "application" ? source.body.name : (selectedPage?.name ?? ""),
+                selected?.kind === "application"
+                  ? source.body.name
+                  : (selectedPage?.name ?? selectedShell?.name ?? ""),
               description: source.body.description,
               disabled: draft.locked,
               onLabel: (value) => setLabels(value, source.body.description),
               onDescription: (value) =>
                 setLabels(
-                  selected?.kind === "application" ? source.body.name : (selectedPage?.name ?? ""),
+                  selected?.kind === "application"
+                    ? source.body.name
+                    : (selectedPage?.name ?? selectedShell?.name ?? ""),
                   value,
                 ),
             }
           : undefined
       }
-      extraActions={selected?.kind === "flow" ? flowDeleteActions : []}
+      extraActions={
+        selected?.kind === "flow"
+          ? flowDeleteActions
+          : selected?.kind === "page" || selected?.kind === "shell"
+            ? structureSettings.actions
+            : []
+      }
       note={inspectorNote}
     >
       {selected?.kind === "shell" &&
@@ -689,6 +709,8 @@ export function useStudioCanvasTab({
           }
         />
       )}
+      {selected?.kind === "page" && inspector.status === "resolved" && structureSettings.settings}
+      {(selected?.kind === "page" || selected?.kind === "shell") && structureSettings.dialogs}
       {selected?.kind === "page" && inspector.status === "resolved" && (
         <StudioPageValuesPanel
           source={source}
