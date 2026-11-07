@@ -84,6 +84,13 @@ export const resolveBulkRequest = async <Body extends { pageKey: string; placeme
   bodySchema: z.ZodType<Body>,
   maximumRequestBodyLength = defaultMaximumRequestBodyLength,
 ): Promise<ResolvedBulkRequest<Body>> => {
+  const rejected = (
+    reason: RecordsTableRequestRejection["reason"],
+    status: number,
+  ): ResolvedBulkRequest<Body> => {
+    const refusal: RecordsTableRequestRejection = { kind: "refused", reason };
+    return { kind: "response", response: privateResponse(refusal, status) };
+  };
   const refused = (
     code: string,
     reason: RecordsTableRequestRejection["reason"],
@@ -91,8 +98,7 @@ export const resolveBulkRequest = async <Body extends { pageKey: string; placeme
     cause?: unknown,
   ): ResolvedBulkRequest<Body> => {
     logRefusal(route, "records table bulk request", code, cause);
-    const refusal: RecordsTableRequestRejection = { kind: "refused", reason };
-    return { kind: "response", response: privateResponse(refusal, status) };
+    return rejected(reason, status);
   };
   if (!isOwnSiteJsonRequest(request))
     return refused("request_not_from_own_site", "not_available", 403);
@@ -136,8 +142,8 @@ export const resolveBulkRequest = async <Body extends { pageKey: string; placeme
   );
   if (address.kind === "temporarily_unavailable")
     return { kind: "response", response: privateResponse({ kind: "unavailable" }, 503) };
-  if (address.kind !== "application_page")
-    return refused(`address_${address.kind}`, "not_available", 403);
+  // The address read logged why it answered no page, once.
+  if (address.kind !== "application_page") return rejected("not_available", 403);
   const context = address.installedContext;
   if (context === undefined) return refused("installation_unavailable", "not_available", 403);
   const page = context.releaseSet.application.content.pages.find(
