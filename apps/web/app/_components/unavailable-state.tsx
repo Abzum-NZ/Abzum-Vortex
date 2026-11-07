@@ -1,6 +1,6 @@
 import type { ReactElement } from "react";
 import { NavigationLink } from "@vortex/ui/routing";
-import { Button } from "@vortex/ui/components/button";
+import { buttonVariants } from "@vortex/ui/components/button";
 import {
   Empty,
   EmptyContent,
@@ -63,13 +63,9 @@ export function UnavailableState({
           {way.kind === "retry" ? (
             <TryAgainButton {...(way.reset === undefined ? {} : { reset: way.reset })} />
           ) : (
-            <Button
-              variant="outline"
-              nativeButton={false}
-              render={<NavigationLink href={way.href} />}
-            >
+            <NavigationLink href={way.href} className={buttonVariants({ variant: "outline" })}>
               {way.label}
-            </Button>
+            </NavigationLink>
           )}
         </EmptyContent>
       </Empty>
