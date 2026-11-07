@@ -7,7 +7,9 @@ import {
   type InstalledRuntimeContext,
   type HumanOrganizationRequestDependencies,
   type PageSubjectReadResult,
+  logClassifiedFailure,
   logRefusal,
+  requestFailureLogged,
 } from "@vortex/platform/server";
 import { ATTACHMENT_LIST_BLOCK_RELEASE } from "@vortex/platform/server";
 import {
@@ -17,6 +19,7 @@ import {
   type BlockPropertyValueContract,
   type IdentitySession,
   type OrganizationSelectionCandidate,
+  describeFailure,
   isRecord,
   sameId,
 } from "@vortex/platform/schema";
@@ -180,10 +183,11 @@ export const readAttachmentListPlacement = async (input: {
               },
             };
           } catch (cause) {
-            console.error(
-              `[page] attachment placement unavailable: placement=${placementId} reason=file_read_failed`,
-              cause,
-            );
+            if (!requestFailureLogged(cause))
+              logClassifiedFailure(
+                `[page] attachment placement unavailable: placement=${placementId} reason=file_read_failed: ${describeFailure(cause)}`,
+                cause,
+              );
             return { kind: "unavailable" };
           }
         },
@@ -191,21 +195,15 @@ export const readAttachmentListPlacement = async (input: {
       return { kind: "projected" as const, subject: currentSubject, projection };
     },
   );
+  // The request runner logged an answer that is not available, once, and so did the subject read.
   if (currentAttachments.kind === "temporarily_unavailable") {
-    console.error(
-      `[page] attachment placement unavailable: placement=${placementId} reason=request_temporarily_unavailable`,
-    );
     data[placementId] = { status: "error" };
   } else if (currentAttachments.kind === "unavailable") {
-    logRefusal("page", `attachment placement ${placementId}`, "request_scope_unavailable");
     data[placementId] = { status: "refused", reason: "not_permitted" };
   } else if (currentAttachments.value.kind === "stale") {
     logRefusal("page", `attachment placement ${placementId}`, "request_scope_stale");
     data[placementId] = { status: "refused", reason: "not_permitted" };
   } else if (currentAttachments.value.subject.kind === "temporarily_unavailable") {
-    console.error(
-      `[page] attachment placement unavailable: placement=${placementId} reason=subject_read_temporarily_unavailable`,
-    );
     data[placementId] = { status: "error" };
   } else if (currentAttachments.value.kind === "subject") {
     logRefusal("page", `attachment placement ${placementId}`, "subject_read_refused");

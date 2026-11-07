@@ -26,6 +26,7 @@ import {
   gridViewPlacement,
   listGridViewShareTargets,
   listGridViews,
+  markRequestFailureLogged,
   personalFormattingAllowed,
   resetGridView,
   saveGridView,
@@ -166,10 +167,7 @@ const openGridPage = async (addressInput: unknown, placementId: string) => {
     permissions: platformPermissionSource,
     selection: { pageId: String(page.pageId) },
   }).project(identity.session, runtimeContextSelection(context));
-  if (projected.kind !== "available") {
-    console.error(`[page] grid placement access unavailable: kind=${projected.kind}`);
-    return undefined;
-  }
+  if (projected.kind !== "available") return undefined;
   const placement =
     projected.value === undefined
       ? undefined
@@ -234,12 +232,7 @@ export async function commitGridLayout(
       ? { outcome: "saved", revision: outcome.revision }
       : conflictResult(outcome);
   });
-  if (result.kind !== "available") {
-    console.error(
-      `[page] grid layout not stored: code=GRID_LAYOUT_WRITE_FAILED kind=${result.kind}`,
-    );
-    return unavailable;
-  }
+  if (result.kind !== "available") return unavailable;
   return result.value;
 }
 
@@ -355,7 +348,7 @@ export async function commitGridView(
           console.error(
             `[page] grid view columns missing: code=GRID_VIEW_FIELD_VISIBILITY_MISSING recordTypeId=${openedRecordTypeId}`,
           );
-          throw new Error("GRID_VIEW_FIELD_VISIBILITY_MISSING");
+          throw markRequestFailureLogged(new Error("GRID_VIEW_FIELD_VISIBILITY_MISSING"));
         }
         const authored = authoredGridLayout(placement.contract, readable);
         if (authored === undefined) return { outcome: "unavailable" };
@@ -451,9 +444,6 @@ export async function commitGridView(
       }
     }
   });
-  if (result.kind !== "available") {
-    console.error(`[page] grid view not stored: code=GRID_VIEW_WRITE_FAILED kind=${result.kind}`);
-    return { outcome: "unavailable" };
-  }
+  if (result.kind !== "available") return { outcome: "unavailable" };
   return result.value;
 }

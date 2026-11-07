@@ -2,6 +2,8 @@ import "server-only";
 
 import { AsyncLocalStorage } from "node:async_hooks";
 import { after } from "next/server";
+import { describeFailure } from "@vortex/platform/schema";
+import { logClassifiedFailure, requestFailureLogged } from "@vortex/platform/server";
 import { createInProcessEventDispatcher } from "./event-dispatch";
 
 const dispatcherContext = new AsyncLocalStorage<boolean>();
@@ -21,7 +23,11 @@ const dispatch = (): Promise<void> => {
         try {
           await dispatcher.dispatchOnce();
         } catch (error) {
-          console.error("[events] committed transaction dispatch failed", error);
+          if (!requestFailureLogged(error))
+            logClassifiedFailure(
+              `[events] committed transaction dispatch failed: ${describeFailure(error)}`,
+              error,
+            );
         }
       } while (queued);
     } finally {

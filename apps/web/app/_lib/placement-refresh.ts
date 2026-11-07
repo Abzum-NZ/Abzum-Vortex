@@ -3,8 +3,10 @@ import { withPageReadAttribution } from "./page-read-attribution";
 import {
   boardColumnReadRequestSchema,
   containedComponentIdSchema,
+  describeFailure,
   revisionSchema,
 } from "@vortex/platform/schema";
+import { logClassifiedFailure, requestFailureLogged } from "@vortex/platform/server";
 import { z } from "zod";
 import { continueSessionOrEnd } from "../auth/_lib/session-redirect";
 import { resolveIdentitySession } from "../auth/_lib/session-server";
@@ -188,7 +190,8 @@ async function readApplicationPlacements(
       includeContent,
     );
   } catch (error) {
-    console.error("[page] placement refresh failed", error);
+    if (!requestFailureLogged(error))
+      logClassifiedFailure(`[page] placement refresh failed: ${describeFailure(error)}`, error);
     return {
       kind: "available",
       data: Object.fromEntries(

@@ -1,6 +1,7 @@
 import "server-only";
 
 import type { JsonValue } from "../catalogue/common";
+import { logFault } from "../access/request-failure";
 import { sameId } from "../catalogue/runtime-primitives";
 import { createMatchingPageReader } from "../pages/records-table-features/matching-page";
 import { createProtectedQueryService } from "../queries/protected-query-service";
@@ -53,8 +54,10 @@ export const createFlowQueryReader = (
         !sameId(selection.organizationId, installation.organizationId) ||
         selection.applicationRootId === undefined ||
         !sameId(selection.applicationRootId, installation.applicationRootId)
-      )
+      ) {
+        logFault("flows", "query read", "selection_outside_installation");
         return { kind: "unavailable" };
+      }
       if (target.matching !== undefined)
         return matching(session, selection, {
           queryId: target.queryId,
@@ -68,7 +71,10 @@ export const createFlowQueryReader = (
           .map((query) => ({ moduleRootId: module.rootId, query })),
       );
       const declared = matches[0];
-      if (matches.length !== 1 || declared === undefined) return { kind: "unavailable" };
+      if (matches.length !== 1 || declared === undefined) {
+        logFault("flows", "query read", "query_not_declared");
+        return { kind: "unavailable" };
+      }
       const result = await queries.run(session, selection, {
         moduleRootId: declared.moduleRootId,
         queryId: declared.query.queryId,
@@ -91,7 +97,10 @@ export const createFlowQueryReader = (
       const recordType = (installation.modules ?? [])
         .flatMap((module) => module.content.recordTypes)
         .find((type) => sameId(type.recordTypeId, recordTypeId));
-      if (recordType === undefined) return { kind: "unavailable" };
+      if (recordType === undefined) {
+        logFault("flows", "query read", "record_type_not_declared");
+        return { kind: "unavailable" };
+      }
       const keyOfField = new Map(
         recordType.fields.map((field) => [field.fieldId.toLowerCase(), field.key] as const),
       );

@@ -4,11 +4,13 @@ import { createHash } from "node:crypto";
 import { z } from "zod";
 import {
   createInstalledContextLoader,
+  logClassifiedFailure,
   readAddressedApplicationAtAddress,
+  requestFailureLogged,
   requireInstalledRuntimeContext,
   resolvePermittedApplicationAddress,
 } from "@vortex/platform/server";
-import { sameId, type IdentitySession } from "@vortex/platform/schema";
+import { describeFailure, sameId, type IdentitySession } from "@vortex/platform/schema";
 import {
   searchInstalledApplication,
   sealApplicationSearchCursor,
@@ -86,7 +88,11 @@ export const loadApplicationSearch = async (
         if (!parsed.success || parsed.data.query !== query) return invalidCursor;
         after = parsed.data;
       } catch (error) {
-        console.error("[application-search] invalid continuation", error);
+        if (!requestFailureLogged(error))
+          logClassifiedFailure(
+            `[application-search] invalid continuation: ${describeFailure(error)}`,
+            error,
+          );
         return invalidCursor;
       }
     }

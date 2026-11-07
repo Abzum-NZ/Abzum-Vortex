@@ -57,12 +57,8 @@ export const createOptionMembershipCheck = (
         String(source.flowId),
         inputsOf(source, valueOf),
       );
-      if (ran.kind !== "options") {
-        console.error(
-          `[record] options flow of ${String(field.fieldId)} could not be run: ${ran.kind === "failed" ? ran.reason : ran.kind}`,
-        );
-        return false;
-      }
+      // The flow, its query or the request runner logged why it gave no options, once.
+      if (ran.kind !== "options") return false;
       return ran.options.some((option) =>
         typeof option.value === "string"
           ? option.value === value
