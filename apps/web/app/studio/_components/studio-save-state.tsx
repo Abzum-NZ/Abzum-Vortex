@@ -141,7 +141,7 @@ export function StudioSaveState({ draft }: Readonly<{ draft: StudioDraft }>) {
           <Popover>
             <PopoverTrigger aria-label={`${label}: show save details`} render={chip}>
               {chipIcon}
-              {label}
+              <span className="max-md:sr-only">{label}</span>
             </PopoverTrigger>
             <PopoverContent data-studio-save-state className="space-y-3">
               <PopoverTitle>Your latest change is not saved</PopoverTitle>
@@ -183,7 +183,7 @@ export function StudioSaveState({ draft }: Readonly<{ draft: StudioDraft }>) {
           <Tooltip>
             <TooltipTrigger render={chip}>
               {chipIcon}
-              {label}
+              <span className="max-md:sr-only">{label}</span>
             </TooltipTrigger>
             <TooltipContent>
               {busy ? (

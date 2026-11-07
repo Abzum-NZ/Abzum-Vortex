@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useMemo, type ComponentProps, type ReactNode } from "react";
+import { memo, useMemo, type ReactNode } from "react";
 import {
   ApplicationAccountActionsProvider,
   ApplicationFrameHeader,
@@ -17,6 +17,12 @@ import { Spinner } from "@vortex/ui/components/spinner";
 import { Button } from "@vortex/ui/components/button";
 import { Separator } from "@vortex/ui/components/separator";
 import { Reasoned } from "@vortex/ui/components/reasoned";
+import {
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuShortcut,
+} from "@vortex/ui/components/dropdown-menu";
+import type { VortexIconName } from "@vortex/ui/icons";
 import { Kbd } from "@vortex/ui/components/kbd";
 import type { StudioInstallControl } from "./use-studio-releases-tab";
 import { signOut } from "../../auth/actions";
@@ -37,46 +43,22 @@ export type StudioFrameDefinition = Readonly<{
   studioHref: string;
 }>;
 
-/**
- * One icon command. Unavailable, it stays the focusable, named button (`Reasoned`: aria-disabled,
- * described by the reason, activation swallowed), so focus never leaves it and it says why.
- */
-function IconAction({
-  tip,
-  shortcut,
-  disabledReason,
-  ...props
-}: ComponentProps<typeof Button> & {
-  tip: string;
-  shortcut?: string;
-  /** Why the command cannot be used right now; absent when it can. */
-  disabledReason?: string | undefined;
-}) {
-  return (
-    <Reasoned
-      reason={disabledReason}
-      tip={
-        <>
-          {tip}
-          {shortcut !== undefined && <Kbd>{shortcut}</Kbd>}
-        </>
-      }
-    >
-      <Button {...props} />
-    </Reasoned>
-  );
-}
-
 /** The shared application frame top bar for any Studio surface; `actions` are its own commands. */
 export function StudioFrameBar({
   frame,
   pageName,
+  status,
   actions,
+  menuActions,
   agentTools,
 }: Readonly<{
   frame: StudioFrameDefinition;
   pageName: string;
+  /** Stays on the bar at every width. */
+  status?: ReactNode;
+  /** The surface's commands as icon buttons, and the same commands as menu items for the narrow bar. */
   actions?: ReactNode;
+  menuActions?: ReactNode;
   /** The browser agent tools' state, shown where every application's header shows it. */
   agentTools?: ApplicationWebMcpRuntime | undefined;
 }>) {
@@ -120,7 +102,9 @@ export function StudioFrameBar({
           shellName={frame.shellName}
           topBar={frame.topBar}
           runtime={runtime}
+          status={status}
           actions={actions}
+          menuActions={menuActions}
         />
       </ApplicationSwitcherContext.Provider>
     </ApplicationAccountActionsProvider>
@@ -151,11 +135,24 @@ type StudioHeaderCommandProps = Readonly<{
   publishPending: boolean;
 }>;
 
-/**
- * The draft's commands as icon buttons. They take values and callbacks that keep their identity
- * between keystrokes, so typing in the draft does not draw them again.
- */
-const StudioHeaderCommands = memo(function StudioHeaderCommands({
+/** One draft command, drawn as an icon button on the bar and as an item of the More menu. */
+type StudioCommand = Readonly<{
+  key: string;
+  /** Names the button and is the menu item's text. */
+  label: string;
+  tip: string;
+  icon: VortexIconName;
+  shortcut?: string;
+  /** Why it cannot be used right now; absent when it can. */
+  reason?: string | undefined;
+  busy?: boolean;
+  primary?: boolean;
+  /** A running application is opened by its link; every other command runs. */
+  href?: string;
+  onSelect?: () => void;
+}>;
+
+const studioCommands = ({
   onApplication,
   canUndo,
   canRedo,
@@ -172,129 +169,162 @@ const StudioHeaderCommands = memo(function StudioHeaderCommands({
   onPublish,
   publishDisabled,
   publishPending,
-}: StudioHeaderCommandProps) {
+}: StudioHeaderCommandProps): readonly StudioCommand[] => [
+  {
+    key: "studio-application-settings",
+    label: "Application settings",
+    tip: "Application settings",
+    icon: "sliders-horizontal",
+    onSelect: onApplication,
+  },
+  {
+    key: "studio-undo",
+    label: "Undo",
+    tip: "Undo",
+    shortcut: "Ctrl Z",
+    icon: "undo",
+    reason: undoDisabled
+      ? "Resolve the blocked draft before undoing"
+      : canUndo
+        ? undefined
+        : "No changes to undo",
+    onSelect: onUndo,
+  },
+  {
+    key: "studio-redo",
+    label: "Redo",
+    tip: "Redo",
+    shortcut: "Ctrl Shift Z",
+    icon: "redo",
+    reason: undoDisabled
+      ? "Resolve the blocked draft before redoing"
+      : canRedo
+        ? undefined
+        : "No changes to redo",
+    onSelect: onRedo,
+  },
+  ...(install === "open" && applicationHref !== undefined
+    ? [
+        {
+          key: "studio-open",
+          label: "Open the application",
+          tip: "Open the application",
+          icon: "app-window" as const,
+          href: applicationHref,
+        },
+      ]
+    : install === "install" || install === "upgrade"
+      ? [
+          {
+            key: "studio-install",
+            label:
+              install === "install" ? "Install in this organisation" : "Upgrade this organisation",
+            tip:
+              install === "install"
+                ? "Install the published version in this organisation"
+                : "Upgrade this organisation to the published version",
+            icon: "package-plus" as const,
+            busy: installPending,
+            reason: installPending ? "Preparing the install" : undefined,
+            onSelect: onInstall,
+          },
+        ]
+      : []),
+  {
+    key: "studio-preview",
+    label: "Preview",
+    tip: "Run the saved draft in a new tab",
+    icon: "eye",
+    busy: previewPending,
+    reason: previewDisabled
+      ? "Resolve the blocked draft before previewing"
+      : previewPending
+        ? "Preparing the preview"
+        : undefined,
+    onSelect: onPreview,
+  },
+  {
+    key: "studio-publish",
+    label: "Publish",
+    tip: "Publish the saved draft as a new version",
+    icon: "upload",
+    primary: true,
+    busy: publishPending,
+    reason: publishDisabled
+      ? "Resolve the blocked draft before publishing"
+      : publishPending
+        ? "Preparing the publish"
+        : undefined,
+    onSelect: onPublish,
+  },
+];
+
+/**
+ * The draft's commands as icon buttons. Unavailable, one stays the focusable, named button
+ * (`Reasoned`: aria-disabled, described by the reason, activation swallowed), so focus never leaves
+ * it and it says why. They take values and callbacks that keep their identity between keystrokes,
+ * so typing in the draft does not draw them again.
+ */
+const StudioHeaderButtons = memo(function StudioHeaderButtons(commands: StudioHeaderCommandProps) {
   return (
     <>
-      <IconAction
-        tip="Application settings"
-        id="studio-application-settings"
-        type="button"
-        variant="ghost"
-        size="icon-sm"
-        aria-label="Application settings"
-        onClick={onApplication}
-      >
-        <Icon name="sliders-horizontal" />
-      </IconAction>
-      <IconAction
-        tip="Undo"
-        id="studio-undo"
-        shortcut="Ctrl Z"
-        type="button"
-        variant="ghost"
-        size="icon-sm"
-        aria-label="Undo"
-        disabledReason={
-          undoDisabled
-            ? "Resolve the blocked draft before undoing"
-            : canUndo
-              ? undefined
-              : "No changes to undo"
-        }
-        onClick={onUndo}
-      >
-        <Icon name="undo" />
-      </IconAction>
-      <IconAction
-        tip="Redo"
-        id="studio-redo"
-        shortcut="Ctrl Shift Z"
-        type="button"
-        variant="ghost"
-        size="icon-sm"
-        aria-label="Redo"
-        disabledReason={
-          undoDisabled
-            ? "Resolve the blocked draft before redoing"
-            : canRedo
-              ? undefined
-              : "No changes to redo"
-        }
-        onClick={onRedo}
-      >
-        <Icon name="redo" />
-      </IconAction>
-      {install === "open" && applicationHref !== undefined ? (
-        <IconAction
-          tip="Open the application"
-          variant="ghost"
-          size="icon-sm"
-          nativeButton={false}
-          aria-label="Open the application"
-          render={<NavigationLink href={applicationHref} />}
-        >
-          <Icon name="app-window" />
-        </IconAction>
-      ) : install === "install" || install === "upgrade" ? (
-        <IconAction
+      {studioCommands(commands).map((command) => (
+        <Reasoned
+          key={command.key}
+          reason={command.reason}
           tip={
-            install === "install"
-              ? "Install the published version in this organisation"
-              : "Upgrade this organisation to the published version"
+            <>
+              {command.tip}
+              {command.shortcut !== undefined && <Kbd>{command.shortcut}</Kbd>}
+            </>
           }
-          type="button"
-          variant="ghost"
-          size="icon-sm"
-          aria-label={
-            install === "install" ? "Install in this organisation" : "Upgrade this organisation"
-          }
-          id="studio-install"
-          aria-busy={installPending}
-          disabledReason={installPending ? "Preparing the install" : undefined}
-          onClick={onInstall}
         >
-          {installPending ? <Spinner /> : <Icon name="package-plus" />}
-        </IconAction>
-      ) : null}
-      <IconAction
-        tip="Run the saved draft in a new tab"
-        id="studio-preview"
-        type="button"
-        variant="ghost"
-        size="icon-sm"
-        aria-label="Preview"
-        aria-busy={previewPending}
-        disabledReason={
-          previewDisabled
-            ? "Resolve the blocked draft before previewing"
-            : previewPending
-              ? "Preparing the preview"
-              : undefined
-        }
-        onClick={onPreview}
-      >
-        {previewPending ? <Spinner /> : <Icon name="eye" />}
-      </IconAction>
-      <IconAction
-        tip="Publish the saved draft as a new version"
-        id="studio-publish"
-        type="button"
-        size="icon-sm"
-        aria-label="Publish"
-        aria-busy={publishPending}
-        disabledReason={
-          publishDisabled
-            ? "Resolve the blocked draft before publishing"
-            : publishPending
-              ? "Preparing the publish"
-              : undefined
-        }
-        onClick={onPublish}
-      >
-        {publishPending ? <Spinner /> : <Icon name="upload" />}
-      </IconAction>
+          <Button
+            id={command.href === undefined ? command.key : undefined}
+            variant={command.primary === true ? "default" : "ghost"}
+            size="icon-sm"
+            aria-label={command.label}
+            aria-busy={command.busy}
+            {...(command.href === undefined
+              ? { type: "button" as const, onClick: command.onSelect }
+              : { nativeButton: false, render: <NavigationLink href={command.href} /> })}
+          >
+            {command.busy === true ? <Spinner /> : <Icon name={command.icon} />}
+          </Button>
+        </Reasoned>
+      ))}
       <Separator orientation="vertical" className="mx-1 h-6" />
     </>
+  );
+});
+
+/** The same commands inside the narrow bar's More menu; an unavailable one is disabled and says why. */
+const StudioHeaderMenuItems = memo(function StudioHeaderMenuItems(
+  commands: StudioHeaderCommandProps,
+) {
+  return (
+    <DropdownMenuGroup>
+      {studioCommands(commands).map((command) => (
+        <DropdownMenuItem
+          key={command.key}
+          disabled={command.reason !== undefined}
+          {...(command.href === undefined
+            ? { onClick: command.onSelect }
+            : { render: <NavigationLink href={command.href} /> })}
+        >
+          <Icon name={command.icon} />
+          <span className="flex flex-col">
+            {command.label}
+            {command.reason === undefined ? null : (
+              <span className="text-xs font-normal text-muted-foreground">{command.reason}</span>
+            )}
+          </span>
+          {command.shortcut === undefined ? null : (
+            <DropdownMenuShortcut>{command.shortcut}</DropdownMenuShortcut>
+          )}
+        </DropdownMenuItem>
+      ))}
+    </DropdownMenuGroup>
   );
 });
 
@@ -316,17 +346,13 @@ export function StudioHeader({
   saveState: ReactNode;
 }> &
   StudioHeaderCommandProps) {
-  const actions = (
-    <>
-      {saveState}
-      <StudioHeaderCommands {...commands} />
-    </>
-  );
   return (
     <StudioFrameBar
       frame={frame}
       pageName={applicationName}
-      actions={actions}
+      status={saveState}
+      actions={<StudioHeaderButtons {...commands} />}
+      menuActions={<StudioHeaderMenuItems {...commands} />}
       agentTools={agentTools}
     />
   );

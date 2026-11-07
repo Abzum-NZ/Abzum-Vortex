@@ -14,6 +14,7 @@ import {
 } from "../components/combobox";
 import { InputGroup, InputGroupAddon } from "../components/input-group";
 import { Badge } from "../components/badge";
+import { Tooltip, TooltipContent, TooltipTrigger } from "../components/tooltip";
 import { Lock } from "lucide-react";
 
 export type StudioReferencePickerOption = Readonly<{
@@ -65,6 +66,11 @@ export function StudioReferencePicker({
   "aria-describedby"?: string | undefined;
   "aria-invalid"?: boolean | undefined;
 }>) {
+  // The trigger is named for the field it opens, as the link input names its own.
+  const choicesName =
+    accessibility["aria-label"] === undefined
+      ? "Show choices"
+      : `Show choices for ${accessibility["aria-label"]}`;
   const [open, setOpen] = useState(false);
   const input = useRef<HTMLInputElement>(null);
   const [query, setSearchText] = useState("");
@@ -141,7 +147,10 @@ export function StudioReferencePicker({
           aria-invalid={accessibility["aria-invalid"] || !known}
         />
         <InputGroupAddon align="inline-end">
-          <ComboboxTrigger aria-label="Show choices" />
+          <Tooltip>
+            <TooltipTrigger render={<ComboboxTrigger aria-label={choicesName} />} />
+            <TooltipContent>{choicesName}</TooltipContent>
+          </Tooltip>
         </InputGroupAddon>
       </InputGroup>
       <ComboboxContent>
