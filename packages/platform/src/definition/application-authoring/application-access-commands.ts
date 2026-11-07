@@ -702,7 +702,7 @@ const judged = (candidate: Source): Source => {
   const parsed = applicationSourceDocumentSchema.safeParse(candidate);
   if (parsed.success) return parsed.data;
   const issue = parsed.error.issues[0]!;
-  console.error(
+  console.info(
     `[studio] access edit refused by the source schema: ${issue.path.join(".")}=${issue.code}`,
   );
   return refuse(
@@ -891,20 +891,20 @@ const setPageGate = (
   const page =
     candidate.body.pages.find((entry) => entry.id === command.pageAlias) ??
     refuse("That page is no longer in the draft.");
-  const previous = page.permission;
   const gate = gateKey(candidate, command.gate);
-  if (gate.key === previous)
+  // The page's menu entries always show for the page's permission, so they follow it.
+  const entries = studioAccessMenuEntries(candidate).filter(
+    (entry) => entry.type === "page" && entry.page === page.key,
+  );
+  const followed = entries.filter((entry) => entry.permission !== gate.key);
+  if (gate.key === page.permission && followed.length === 0)
     refuse(`${quoted(page.name)} already opens with ${quoted(gate.label)}.`);
   (page as { permission: string }).permission = gate.key;
-  // The menu entries that opened the page with its old permission follow it, so they stay consistent.
-  const followed = studioAccessMenuEntries(candidate).filter(
-    (entry) => entry.type === "page" && entry.page === page.key && entry.permission === previous,
-  );
   for (const entry of followed) (entry as { permission: string }).permission = gate.key;
   return applied(
     candidate,
     `${quoted(page.name)} now opens for people who hold ${quoted(gate.label)}` +
-      `${followed.length === 0 ? "" : `, and so do its ${followed.length === 1 ? "menu entry" : `${followed.length} menu entries`}`}.${createdWords(gate)}`,
+      `${entries.length === 0 ? "" : `, and so ${entries.length === 1 ? "does its menu entry" : `do its ${entries.length} menu entries`}`}.${createdWords(gate)}`,
   );
 };
 
@@ -915,19 +915,19 @@ const setMenuGate = (
   const entry =
     studioAccessMenuEntries(candidate).find((item) => item.id === command.alias) ??
     refuse("That menu entry is no longer in the draft.");
+  if (entry.type === "page") {
+    const page = pageOf(candidate.body, entry.page);
+    refuse(
+      `The menu entry ${quoted(entry.label)} shows for people who can open ${quoted(page?.name ?? entry.label)}. Change who can open the page instead.`,
+    );
+  }
   const gate = gateKey(candidate, command.gate);
   if (gate.key === entry.permission)
     refuse(`${quoted(entry.label)} is already shown with ${quoted(gate.label)}.`);
   (entry as { permission: string }).permission = gate.key;
-  const page = entry.type === "page" ? pageOf(candidate.body, entry.page) : undefined;
-  const differs = page !== undefined && page.permission !== gate.key;
   return applied(
     candidate,
-    `The menu entry ${quoted(entry.label)} now shows for people who hold ${quoted(gate.label)}.` +
-      (differs
-        ? ` Its page ${quoted(page.name)} still opens with another permission, so check both match.`
-        : "") +
-      createdWords(gate),
+    `The menu entry ${quoted(entry.label)} now shows for people who hold ${quoted(gate.label)}.${createdWords(gate)}`,
   );
 };
 
