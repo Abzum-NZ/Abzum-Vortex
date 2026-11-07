@@ -526,7 +526,7 @@ export function ApplicationReleaseHistory({
             </div>
             <ItemGroup className="gap-2 md:hidden" aria-label="Published versions">
               {page.entries.map((entry) => (
-                <Item key={entry.releaseRevision} variant="outline" size="sm">
+                <Item key={entry.releaseRevision} variant="outline" size="sm" role="listitem">
                   <ItemContent>
                     <ItemTitle>
                       {entry.releaseVersion}

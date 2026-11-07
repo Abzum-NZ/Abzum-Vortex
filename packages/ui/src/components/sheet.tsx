@@ -56,10 +56,15 @@ function SheetContent({
   side?: "top" | "right" | "bottom" | "left";
   showCloseButton?: boolean;
 }) {
+  // Focus starts on the sheet itself, which its title names, never on its first control: a first
+  // control with a tooltip opens it on focus, and Escape would close the tooltip before the sheet.
+  const popup = React.useRef<HTMLDivElement>(null);
   return (
     <SheetPortal>
       <SheetOverlay />
       <SheetPrimitive.Popup
+        ref={popup}
+        initialFocus={popup}
         data-slot="sheet-content"
         data-side={side}
         className={cn(
