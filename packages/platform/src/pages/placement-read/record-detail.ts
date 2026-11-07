@@ -144,9 +144,9 @@ const readRecordForDetail = async (
       sameId(String(recordType.recordTypeId), recordTypeId),
     ),
   );
+  // The subject read logged its own failure (the request runner or its catch), once.
   const record = await readRecord();
   if (record.kind === "temporarily_unavailable") {
-    logPlacementFailure(read.address, placementId, "subject_unavailable");
     read.data[placementId] = { status: "error" };
     return;
   }
@@ -240,17 +240,11 @@ const readRelatedLists = async (
       continue;
     }
     const result = await read.services.queries.run(read.session, read.selection, command.data);
-    if (result.kind === "temporarily_unavailable") {
-      logPlacementFailure(read.address, placementId, "related_list_unavailable");
-      continue;
-    }
-    if (result.kind !== "available" || result.value.outcome !== "completed") {
-      const reasonCode =
-        result.kind === "available" && result.value.outcome === "refused"
-          ? result.value.reasonCode
-          : undefined;
+    // The query service logged every answer that is not available, once.
+    if (result.kind !== "available") continue;
+    if (result.value.outcome !== "completed") {
       // A list that needs the application installed is left out like any refused list.
-      if (!isInstallationRequired(reasonCode))
+      if (!isInstallationRequired(result.value.reasonCode))
         logPlacementFailure(read.address, placementId, "related_list_refused");
       continue;
     }
@@ -322,17 +316,17 @@ export const readQueryDetail = async (
     return;
   }
   const result = await read.services.queries.run(read.session, read.selection, command.data);
+  // The query service logged every answer that is not available, once.
   if (result.kind === "temporarily_unavailable") {
-    logPlacementFailure(read.address, placementId, "detail_query_unavailable");
     read.data[placementId] = { status: "error" };
     return;
   }
-  if (result.kind !== "available" || result.value.outcome !== "completed") {
-    const reasonCode =
-      result.kind === "available" && result.value.outcome === "refused"
-        ? result.value.reasonCode
-        : undefined;
-    if (placeInstallationRequired(read.data, placementId, reasonCode)) return;
+  if (result.kind === "unavailable") {
+    read.data[placementId] = { status: "refused", reason: "not_permitted" };
+    return;
+  }
+  if (result.value.outcome !== "completed") {
+    if (placeInstallationRequired(read.data, placementId, result.value.reasonCode)) return;
     logPlacementFailure(read.address, placementId, "detail_query_refused");
     read.data[placementId] = { status: "refused", reason: "not_permitted" };
     return;
