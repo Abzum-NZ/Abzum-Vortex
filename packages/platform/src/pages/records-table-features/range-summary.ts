@@ -36,6 +36,7 @@ import { openRecordsSelection } from "../records-selection-seal";
 import { formatDecimal, formatMoney } from "../value-format";
 import { loadRecordsTablePlacement, type RecordsTableCommandAddress } from "./placement";
 import {
+  logRecordsTableQueryRefusal,
   logRecordsTableRequestRefusal,
   recordsTableRequestRefusal,
   type RecordsTableRequestRefusal,
@@ -133,7 +134,8 @@ export const createRecordsRangeSummaryService = (dependencies: RecordsRangeSumma
         pageId: address.pageId,
         placementId: request.placementId,
       });
-      if (descriptor === undefined) return refuse("descriptor_unreadable");
+      // The descriptor's own refusal was logged where it was opened.
+      if (descriptor === undefined) return { kind: "refused", reason: "not_available" };
       if (
         !sameId(descriptor.moduleRootId, String(placement.module.rootId)) ||
         !sameId(descriptor.queryId, String(placement.query.queryId))
@@ -185,14 +187,22 @@ export const createRecordsRangeSummaryService = (dependencies: RecordsRangeSumma
         fieldDateTypes: fieldDateTypesOf(placement.module),
         fieldLinkTypes: fieldLinkTypesOf(placement.module),
       });
-      if (built.kind === "refused") return refuse(`command_${built.part}_${built.reason}`);
+      if (built.kind === "refused") return refusedBy(built);
 
       // The one protected read of the shown page, under the person's current access.
       const read = await queries.run(session, address.selection, built.command);
+      // The query service logged every answer that is not available, once.
       if (read.kind === "temporarily_unavailable") return { kind: "unavailable" };
-      if (read.kind !== "available") return refuse(`read_${read.kind}`);
-      if (read.value.outcome !== "completed")
-        return refuse(`read_refused_${read.value.reasonCode}`);
+      if (read.kind !== "available") return { kind: "refused", reason: "not_available" };
+      if (read.value.outcome !== "completed") {
+        logRecordsTableQueryRefusal(
+          "range_summary",
+          "read_refused",
+          read.value.reasonCode,
+          "range-summary",
+        );
+        return { kind: "refused", reason: "not_available" };
+      }
       const onPage = new Map(
         read.value.rows.map((row) => [String(row.recordId).toLowerCase(), row]),
       );
