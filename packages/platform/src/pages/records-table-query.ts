@@ -55,7 +55,6 @@ import type { LinkFieldType } from "./cell-projection";
 import {
   conditionalFormattingFieldIds,
   personalFormattingRules,
-  logRecordsTableQueryRefusal,
   logRecordsTableRequestRefusal,
   recordsTableNarrowingContractRefusal,
   recordsTableNarrowingRefusal,
@@ -788,7 +787,6 @@ const readGrouped = async (
       if (!group.required && reason === "dataset_limit_exceeded")
         return { kind: "flat", groups: { status: "too_many" } };
       if (!group.required && reason === "field_unbounded") return { kind: "flat", withheld: true };
-      logRecordsTableQueryRefusal("group", "summary_refused", reason, "table_read");
       return { kind: "resolution", resolution: { kind: "refused", reasonCode: reason } };
     }
     fieldBounds = summary.value.fieldBounds;
@@ -835,7 +833,6 @@ const readGrouped = async (
     return { kind: "resolution", resolution: unavailableResult };
   if (members.kind !== "available") return { kind: "resolution", resolution: refused };
   if (members.value.outcome === "refused") {
-    logRecordsTableQueryRefusal("group", "members_refused", members.value.reasonCode, "table_read");
     return {
       kind: "resolution",
       resolution: { kind: "refused", reasonCode: members.value.reasonCode },
@@ -981,12 +978,6 @@ export const createRecordsTableQueryResolver = (runner: RecordsTableQueryRunner)
       if (result?.kind === "temporarily_unavailable") return unavailableResult;
       if (result !== undefined && result.kind !== "available") return refused;
       if (result?.value.outcome === "refused") {
-        logRecordsTableQueryRefusal(
-          "columns",
-          "read_refused",
-          result.value.reasonCode,
-          "table_read",
-        );
         return {
           kind: "refused",
           reasonCode: result.value.reasonCode,

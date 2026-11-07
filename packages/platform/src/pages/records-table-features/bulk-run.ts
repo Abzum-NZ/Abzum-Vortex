@@ -33,7 +33,6 @@ import {
   type RecordsTablePlacement,
 } from "./placement";
 import {
-  logRecordsTableQueryRefusal,
   logRecordsTableRequestRefusal,
   recordsTableRequestRefusal,
   type RecordsTableRequestRefusal,
@@ -200,12 +199,7 @@ export const createRecordsTableBulkService = (dependencies: RecordsTableBulkDepe
       if (summary.value.outcome === "completed")
         return { kind: "counted", count: summary.value.totalRowCount };
       if (summary.value.reasonCode === "dataset_limit_exceeded") return { kind: "too_many" };
-      logRecordsTableQueryRefusal(
-        "bulk_action",
-        "count_refused",
-        summary.value.reasonCode,
-        "bulk_request",
-      );
+      // The query logged its own refusal, once.
       return { kind: "refused", reason: "not_available" };
     },
   });

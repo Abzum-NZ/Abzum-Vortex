@@ -10,11 +10,7 @@ import type { ProtectedQueryCommand } from "../../queries/protected-query-contra
 import type { createProtectedQueryService } from "../../queries/protected-query-service";
 import { titleText } from "../../queries/record-choices";
 import type { PlacementModule } from "../placement-read/shared";
-import {
-  logRecordsTableQueryRefusal,
-  logRecordsTableRequestRefusal,
-  recordsTableRequestRefusal,
-} from ".";
+import { logRecordsTableRequestRefusal, recordsTableRequestRefusal } from ".";
 
 /**
  * Pasted link titles of one batch, resolved to the records they name. Every link cell the paste
@@ -264,17 +260,9 @@ export const resolveLinkTitles = async (
           ...(token === undefined ? {} : { continuationToken: token }),
         } as ProtectedQueryCommand;
         const result = await dependencies.queries.run(session, selection, command);
-        // The query service logged an answer that is not available; its own refusal is logged here.
+        // The query service logged every answer that is not available or refused, once.
         if (result.kind !== "available") return "unavailable";
-        if (result.value.outcome === "refused") {
-          logRecordsTableQueryRefusal(
-            "batch_edit",
-            `link_title_read field=${field}`,
-            result.value.reasonCode,
-            "batch_edit",
-          );
-          return "unavailable";
-        }
+        if (result.value.outcome === "refused") return "unavailable";
         for (const row of result.value.rows) {
           const title = titleText(valueOf(row.values, titleFieldId) as JsonValue | undefined);
           const parent = narrowed ? referenceOf(valueOf(row.values, filterFieldId)) : undefined;
